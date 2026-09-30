@@ -1,0 +1,1 @@
+This application is a personal, non-commercial project provided as-is, without warranty of any kind. It is not a medical device and does not provide medical advice. By authorizing access, you agree that your Oura data will be used only to display insights to you. Access can be revoked at any time through your Oura account settings. Contact: willgeiken1@icloud.com
