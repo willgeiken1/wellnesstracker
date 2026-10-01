@@ -2,3 +2,4 @@
 tokens.json
 .venv/
 __pycache__/
+supabase/.temp/
