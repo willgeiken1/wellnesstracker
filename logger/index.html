@@ -49,7 +49,7 @@ h1, h2, h3, h4 { margin: 0; }
 .page-sub { color: var(--muted); font-size: 15px; margin-top: 2px; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
 
-#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(21, 23, 26, .94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--line); padding-bottom: var(--safe-bottom); }
+#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(5, 1fr); background: rgba(21, 23, 26, .94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--line); padding-bottom: var(--safe-bottom); }
 .tab { height: var(--tabs-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .tab svg { width: 24px; height: 24px; }
 .tab[aria-current="page"] { color: var(--green); }
@@ -249,7 +249,84 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .wo-actions { display: flex; gap: 6px; }
 .btn.small.cancel { background: rgba(255, 90, 78, .15); color: var(--red); }
 #toast { display: flex; align-items: center; justify-content: center; gap: 14px; }
-#toast button { font-weight: 700; color: #0A7A3D; padding: 4px 6px; }
+#toast { pointer-events: none; }
+#toast button { font-weight: 700; color: #0A7A3D; padding: 4px 6px; pointer-events: auto; }
+.sheet-x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 18px; background: var(--raised); color: var(--muted); font-size: 20px; line-height: 1; }
+/* ---------- Recovery + Insights ---------- */
+.seg2 { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
+.seg2 button { height: 40px; border-radius: 9px; font-weight: 600; color: var(--muted); }
+.seg2 button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+.card { background: var(--surface); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+.card h4 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0; }
+.sub.small { font-size: 13px; margin-top: 8px; }
+.card .btn { margin-top: 12px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.demo-banner { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: rgba(242,193,46,.12); color: #F2C12E; border-radius: 12px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+.demo-banner button { color: #F2C12E; font-weight: 700; white-space: nowrap; padding: 4px; }
+.ready { display: grid; grid-template-columns: 108px 1fr; gap: 16px; align-items: center; }
+.ring { width: 108px; height: 108px; }
+.ring-bg { fill: none; stroke: var(--raised); stroke-width: 9; }
+.ring-fg { fill: none; stroke: var(--green); stroke-width: 9; stroke-linecap: round; }
+.ring.ok .ring-fg { stroke: var(--green-lo); } .ring.down .ring-fg { stroke: var(--red); }
+.ring-v { fill: var(--text); font-family: var(--display); font-weight: 700; font-size: 34px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.stat { background: var(--surface); border-radius: 14px; padding: 12px 14px; }
+.card .stat, #sheet .stat { background: var(--raised); }
+.stat b { display: block; font-family: var(--display); font-weight: 700; font-size: 28px; line-height: 1.1; }
+.stat b small { font-size: 15px; color: var(--muted); font-weight: 600; }
+.stat > span { color: var(--muted); font-size: 13px; }
+.stages { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 10px 0; gap: 2px; }
+.stages i, .legend2 i { display: block; height: 100%; }
+.s-deep { background: #3D7BE0; } .s-rem { background: #8E7CF0; } .s-light { background: #7FB3F5; } .s-awake { background: #8E959E; }
+.legend2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 14px; color: var(--muted); }
+.legend2 i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.range { display: flex; gap: 6px; }
+.range button { height: 32px; padding: 0 12px; border-radius: 16px; background: var(--surface); font-size: 14px; font-weight: 600; color: var(--muted); }
+.range button[aria-pressed="true"] { background: var(--text); color: #111; }
+.chart { width: 100%; height: auto; display: block; margin-top: 6px; }
+.chart .ax { fill: var(--muted); font-size: 10px; font-family: var(--body); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .guide { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.chart .ln { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .ln.alt { stroke: #7FB3F5; } .chart .ln-dot { fill: var(--green); } .chart .ln.alt-dot { fill: #7FB3F5; }
+.chart .bar { fill: var(--green); opacity: .85; } .chart .bar.soft { fill: #7FB3F5; opacity: .7; }
+.mini-l { color: var(--muted); font-size: 13px; margin-top: 12px; }
+.rcard { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; width: 100%; text-align: left; background: var(--surface); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; }
+.rcard-n { width: 56px; height: 56px; border-radius: 28px; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 24px; border: 4px solid var(--green); }
+.rcard-n.ok { border-color: var(--green-lo); } .rcard-n.down { border-color: var(--red); }
+.rcard-t { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--muted); line-height: 1.35; }
+.rcard-t b { color: var(--text); font-size: 16px; }
+.rcard-s { font-size: 13px; }
+.lifts { padding-top: 4px; padding-bottom: 4px; }
+.lift { display: grid; grid-template-columns: 1fr 92px; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.lift:last-child { border-bottom: 0; }
+.lift > span { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.lift b { font-weight: 600; }
+.lift-p { color: var(--muted); font-size: 13px; }
+.chip-s { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 10px; }
+.chip-s.up { background: var(--green-soft); color: var(--green); }
+.chip-s.flat { background: rgba(242,193,46,.14); color: #F2C12E; }
+.chip-s.down { background: rgba(255,90,78,.14); color: var(--red); }
+.chip-s.wait { background: var(--raised); color: var(--muted); }
+.spark { width: 92px; height: 34px; } .spark path { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke: var(--muted); }
+.spark.up path { stroke: var(--green); } .spark.flat path { stroke: #F2C12E; } .spark.down path { stroke: var(--red); }
+.cmp { display: grid; gap: 10px; margin-top: 14px; }
+.cmp-row { display: grid; grid-template-columns: 118px 1fr 52px; align-items: center; gap: 8px; font-size: 14px; }
+.cmp-bar { height: 12px; border-radius: 6px; background: var(--raised); position: relative; overflow: hidden; }
+.cmp-bar i { position: absolute; top: 0; bottom: 0; } .cmp-bar i.pos { background: var(--green); } .cmp-bar i.neg { background: var(--red); }
+.cmp-bar b { position: absolute; left: 50%; top: 0; bottom: 0; width: 1.5px; background: var(--muted); }
+.cmp-v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vol { display: grid; gap: 8px; margin-top: 12px; }
+.vol-row { display: grid; grid-template-columns: 96px 1fr 36px; gap: 8px; align-items: center; font-size: 14px; }
+.vol-row b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vol-bar { height: 10px; border-radius: 5px; background: var(--raised); position: relative; overflow: hidden; }
+.vol-bar em { position: absolute; left: 40%; width: 40%; top: 0; bottom: 0; background: rgba(47,210,122,.16); }
+.vol-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--muted); }
+.vol-bar i.in { background: var(--green); } .vol-bar i.under { background: var(--green-lo); opacity: .7; } .vol-bar i.over { background: #F2C12E; }
+.pp { margin-top: 12px; } .pp-bar { height: 12px; border-radius: 6px; background: #7FB3F5; overflow: hidden; } .pp-bar i { display: block; height: 100%; background: var(--green); }
+.pp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 6px; }
+.warn { color: #F2C12E; }
 #toast { position: fixed; left: 16px; right: 16px; top: calc(12px + var(--safe-top)); z-index: 30; background: var(--text); color: #111; padding: 14px 16px; border-radius: 12px; font-weight: 500; text-align: center; max-width: 520px; margin: 0 auto; }
 
 @media (prefers-reduced-motion: reduce) { #timer-bar, .body .mus, .erow.shifting { transition: none; } }
@@ -261,7 +338,8 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 <nav id="tabs" aria-label="Sections">
   <button class="tab" data-action="tab" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
   <button class="tab" data-action="tab" data-tab="workouts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/></svg>Workouts</button>
-  <button class="tab" data-action="tab" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>History</button>
+  <button class="tab" data-action="tab" data-tab="recovery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>Recovery</button>
+  <button class="tab" data-action="tab" data-tab="insights"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>Insights</button>
   <button class="tab" data-action="tab" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h8M16 7h4M4 12h2M10 12h10M4 17h10M18 17h2"/><circle cx="14" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="17" r="2"/></svg>Settings</button>
 </nav>
 
@@ -393,7 +471,8 @@ function migrate(d) {
       entries
     };
   });
-  return { version: 2, workouts, sessions, plan: d.plan || {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null };
+  return { version: 2, workouts, sessions, plan: d.plan || {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
+    oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo };
 }
 
 function load() {
@@ -401,7 +480,8 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) { const m = migrate(JSON.parse(raw)); if (m) return m; }
   } catch (e) { /* start fresh */ }
-  return { version: 2, workouts: copy(DEFAULT_WORKOUTS), sessions: [], plan: {}, restSeconds: 120, lastExport: null };
+  return { version: 2, workouts: copy(DEFAULT_WORKOUTS), sessions: [], plan: {}, restSeconds: 120, lastExport: null,
+    oura: { connected: false, lastSync: null, days: {} }, demo: false };
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -413,7 +493,7 @@ let state = load();
 state.sessions.forEach((s) => { if (!s.finishedAt && s.date < today()) s.finishedAt = s.date + "T23:59:00"; });
 save();
 
-const ui = { tab: "home", detail: null, weekOffset: 0, open: null, drafts: {}, sheet: null, sd: {}, workoutOpen: false };
+const ui = { tab: "home", wseg: "routines", range: 14, detail: null, weekOffset: 0, open: null, drafts: {}, sheet: null, sd: {}, workoutOpen: false };
 
 const workoutById = (id) => state.workouts.find((w) => w.id === id);
 const activeSession = () => state.sessions.find((s) => !s.finishedAt);
@@ -463,13 +543,348 @@ const I = {
   grip: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`
 };
 
+/* ================= Oura + insights ================= */
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+const e1rm = (s) => (s.w ? s.w * (1 + s.r / 30) : null);           // Epley estimate
+const fmtHM = (sec) => `${Math.floor(sec / 3600)}h ${String(Math.round((sec % 3600) / 60)).padStart(2, "0")}m`;
+const signed = (v, d = 1) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(d)}`;
+
+/* Realistic sample month so Recovery and Insights can be explored before Oura is connected.
+   Deterministic, and kept completely separate from real workouts. */
+let DEMO = null;
+function makeDemo() {
+  let seed = 20260930;
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const N = 56, end = today(), days = {}, sessions = [];
+  const hrvBase = 58;
+  for (let i = N - 1; i >= 0; i--) {
+    const d = addDays(end, -i), dow = parseDay(d).getDay(), work = dow >= 1 && dow <= 5;
+    let sleepH = work ? 6.5 + rnd() * 1.3 : 7.3 + rnd() * 1.4;
+    if (rnd() < 0.12) sleepH -= 1.2;
+    const hrv = Math.round(hrvBase + (sleepH - 7) * 6 + (rnd() - 0.5) * 10 - (work ? 2 : 0) - (i < 14 ? 7 : 0));
+    const rhr = Math.round(54 - (sleepH - 7) * 1.5 + (rnd() - 0.5) * 4 + (i < 9 ? 1.5 : 0));
+    const total = Math.round(sleepH * 3600);
+    const deep = Math.round(total * (0.15 + rnd() * 0.07)), rem = Math.round(total * (0.19 + rnd() * 0.07)), awake = Math.round(total * (0.04 + rnd() * 0.04));
+    days[d] = {
+      date: d, total, deep, rem, awake, light: total - deep - rem - awake,
+      sleepScore: clamp(Math.round(72 + (sleepH - 7) * 12 + (rnd() - 0.5) * 8), 40, 98),
+      readiness: clamp(Math.round(76 + (sleepH - 7) * 9 + (hrv - hrvBase) * 0.6 + (rnd() - 0.5) * 8), 45, 98),
+      hrv, rhr, temp: Math.round((rnd() - 0.5) * 0.6 * 100) / 100,
+      steps: Math.round(work ? 13000 + rnd() * 6000 : 5000 + rnd() * 5000)
+    };
+  }
+  const base = { "Smith Machine Incline Bench Press": 135, "Chest Press Machine": 160, "Pec Fly Machine": 110, "Shoulder Press Machine": 100,
+    "Cable Lateral Raise": 20, "Cable Tricep Pulldown": 50, "Lat Pulldown Machine": 140, "Seated Row Machine": 130, "Plate Loaded Low Row": 180,
+    "Preacher Curl Machine": 60, "Rope Hammer Curl": 40, "Seated Leg Press Machine": 360, "Barbell Romanian Deadlift (RDL)": 185,
+    "Seated Leg Curl Machine": 110, "Seated Leg Extension Machine": 130, "Calf Raises": 180 };
+  const rate = { "Shoulder Press Machine": 0, "Cable Lateral Raise": 0, "Seated Leg Curl Machine": -0.004 };
+  const order = ["push", "pull", "legs"];
+  let k = 0;
+  for (let i = N - 1; i >= 1; i--) {
+    const d = addDays(end, -i);
+    if (parseDay(d).getDay() === 0 || rnd() < 0.07) continue;
+    const wid = order[k++ % 3];
+    const w = DEFAULT_WORKOUTS.find((x) => x.id === wid);
+    const prevSteps = (days[addDays(d, -1)] || {}).steps || 9000;
+    const form = 1 + 0.0035 * (days[d].readiness - 78) - (prevSteps > 15000 ? 0.025 : 0) + (rnd() - 0.5) * 0.02;
+    const weeks = (N - 1 - i) / 7;
+    const entries = w.exercises.filter((e) => base[e.name]).map((e) => {
+      const W = Math.round(base[e.name] * (1 + (rate[e.name] ?? 0.008) * weeks) / 5) * 5;
+      const sets = [0, 1, 2].map((j) => ({ w: W, r: clamp(Math.round(8 + (form - 1) * 35 - j * 0.7 + (rnd() - 0.5)), 4, 15) }));
+      return { exercise: e.name, muscles: [...e.muscles], sets };
+    });
+    sessions.push({ id: "demo" + i, date: d, workoutId: w.id, name: w.name, startedAt: d + "T17:00:00", finishedAt: d + "T18:10:00", entries });
+  }
+  return { sessions, oura: days };
+}
+function src() {
+  if (state.demo) { if (!DEMO) DEMO = makeDemo(); return DEMO; }
+  return { sessions: state.sessions.filter((s) => s.finishedAt && setCount(s) > 0), oura: (state.oura && state.oura.days) || {} };
+}
+function latestOura(oura) {
+  const keys = Object.keys(oura).sort();
+  if (!keys.length) return null;
+  const t = today();
+  return oura[t] || oura[keys[keys.length - 1]];
+}
+function readinessLevel(r) {
+  if (r >= 85) return { cls: "up", word: "Primed", tip: "Good day to push for a heavier set or a PR." };
+  if (r >= 70) return { cls: "ok", word: "Good", tip: "Train as planned." };
+  return { cls: "down", word: "Low", tip: "Recovery is low. Consider lighter weights or fewer sets today." };
+}
+
+/* ---------- Analysis ---------- */
+function liftSeries(sessions) {
+  const m = {};
+  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => s.entries.forEach((e) => {
+    const vals = e.sets.map(e1rm).filter((v) => v != null);
+    if (!vals.length) return;
+    const best = e.sets.reduce((b, x) => (e1rm(x) || 0) > (e1rm(b) || 0) ? x : b, e.sets[0]);
+    (m[e.exercise] = m[e.exercise] || []).push({ date: s.date, v: Math.max(...vals), top: best });
+  }));
+  return m;
+}
+function liftStatus(series) {
+  if (series.length < 4) return { cls: "wait", label: `Collecting data (${series.length}/4)`, pct: null };
+  const cutoff = addDays(today(), -42);
+  let pts = series.filter((p) => p.date >= cutoff);
+  if (pts.length < 4) pts = series.slice(-6);
+  const t0 = parseDay(pts[0].date);
+  const xs = pts.map((p) => (parseDay(p.date) - t0) / 86400000), ys = pts.map((p) => p.v);
+  const mx = avg(xs), my = avg(ys);
+  const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0) || 1;
+  const slope = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / den;
+  const pctWeek = slope * 7 / my * 100;
+  const span = xs[xs.length - 1] - xs[0];
+  const pct = slope * span / (my - slope * (mx - xs[0])) * 100;
+  const best = Math.max(...series.map((p) => p.v));
+  const sincePR = series.length - 1 - series.map((p) => p.v).lastIndexOf(best);
+  let cls, label;
+  if (pctWeek >= 0.4) { cls = "up"; label = "Progressing"; }
+  else if (pctWeek <= -0.6) { cls = "down"; label = "Declining"; }
+  else if (sincePR >= 3) { cls = "flat"; label = "Plateau"; }
+  else { cls = "up"; label = "Holding steady"; }
+  return { cls, label, pct, pctWeek, best, sincePR, weeks: Math.max(1, Math.round(span / 7)) };
+}
+/* Each session scored against that lift's previous 3 sessions, averaged across lifts (in %) */
+function sessionPerf(sessions) {
+  const hist = {}, out = [];
+  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => {
+    const ratios = [];
+    s.entries.forEach((e) => {
+      const vals = e.sets.map(e1rm).filter((v) => v != null);
+      if (!vals.length) return;
+      const v = Math.max(...vals), prev = (hist[e.exercise] || []).slice(-3);
+      if (prev.length >= 2) ratios.push(v / avg(prev) - 1);
+      (hist[e.exercise] = hist[e.exercise] || []).push(v);
+    });
+    if (ratios.length) out.push({ date: s.date, perf: avg(ratios) * 100 });
+  });
+  return out;
+}
+function effect(perfs, valueOf, buckets) {
+  return buckets.map((b) => {
+    const xs = perfs.filter((p) => { const v = valueOf(p.date); return v != null && b.test(v); }).map((p) => p.perf);
+    return { label: b.label, avg: avg(xs), n: xs.length };
+  });
+}
+function effectCard(title, rows, sentence, need) {
+  const max = Math.max(4, ...rows.filter((r) => r.n >= 3).map((r) => Math.abs(r.avg)));
+  return `<div class="card"><h4>${title}</h4><p class="sub">${sentence || need}</p>
+    <div class="cmp">${rows.map((r) => {
+      const ok = r.n >= 3, v = ok ? r.avg : 0, w = Math.min(50, Math.abs(v) / max * 50);
+      return `<div class="cmp-row"><span>${r.label}</span>
+        <div class="cmp-bar"><i class="${v >= 0 ? "pos" : "neg"}" style="left:${v >= 0 ? 50 : 50 - w}%;width:${ok ? w : 0}%"></i><b></b></div>
+        <span class="cmp-v">${ok ? signed(v) + "%" : `n=${r.n}`}</span></div>`;
+    }).join("")}</div></div>`;
+}
+function compareSentence(rows, better, worse) {
+  const hi = rows[rows.length - 1], lo = rows[0];
+  if (hi.n < 3 || lo.n < 3) return null;
+  const d = hi.avg - lo.avg;
+  if (Math.abs(d) < 1) return `So far there's little difference between ${worse} and ${better}.`;
+  return d > 0 ? `You lift about ${d.toFixed(1)}% stronger ${better} than ${worse}.`
+               : `Surprisingly, you've lifted ${Math.abs(d).toFixed(1)}% better ${worse} than ${better}.`;
+}
+
+/* ---------- Charts (hand-drawn SVG, no libraries) ---------- */
+function chartSVG({ labels, series, h = 130, yMin, yMax, guide, fmt = (v) => Math.round(v) }) {
+  const W = 340, P = { l: 30, r: 8, t: 10, b: 20 }, n = labels.length, iw = W - P.l - P.r, ih = h - P.t - P.b;
+  const all = series.flatMap((s) => s.data.filter((v) => v != null)).concat(guide != null ? [guide] : []);
+  if (!all.length) return "";
+  let lo = yMin ?? Math.min(...all), hi = yMax ?? Math.max(...all);
+  if (yMin == null || yMax == null) { const pad = (hi - lo) * 0.12 || 1; if (yMin == null) lo -= pad; if (yMax == null) hi += pad; }
+  const X = (i) => P.l + (n === 1 ? iw / 2 : i * iw / (n - 1));
+  const Y = (v) => P.t + ih - (v - lo) / (hi - lo) * ih;
+  let g = "";
+  [0, 0.5, 1].forEach((f) => { const v = lo + (hi - lo) * f; g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${P.l - 5}" y="${Y(v) + 3}" text-anchor="end">${fmt(v)}</text>`; });
+  [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i).forEach((i) =>
+    g += `<text class="ax" x="${X(i)}" y="${h - 5}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}">${fmtDate(labels[i], { month: "short", day: "numeric" })}</text>`);
+  if (guide != null) g += `<line class="guide" x1="${P.l}" x2="${W - P.r}" y1="${Y(guide)}" y2="${Y(guide)}"/>`;
+  series.forEach((s) => {
+    if (s.type === "bar") {
+      const bw = Math.max(2, iw / n * 0.6);
+      s.data.forEach((v, i) => { if (v == null) return; const y = Y(Math.max(v, lo)); g += `<rect class="${s.cls || "bar"}" x="${X(i) - bw / 2}" y="${y}" width="${bw}" height="${Math.max(0, Y(lo) - y)}" rx="1.5"/>`; });
+    } else {
+      let d = "", started = false;
+      s.data.forEach((v, i) => { if (v == null) { started = false; return; } d += `${started ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; started = true; });
+      g += `<path class="${s.cls || "ln"}" d="${d}"/>`;
+      const li = s.data.map((v, i) => v != null ? i : -1).filter((i) => i >= 0).pop();
+      if (li != null) g += `<circle class="${s.cls || "ln"}-dot" cx="${X(li)}" cy="${Y(s.data[li])}" r="3"/>`;
+    }
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${h}" role="img">${g}</svg>`;
+}
+function sparkSVG(vals, cls) {
+  if (vals.length < 2) return `<svg class="spark" viewBox="0 0 92 34"></svg>`;
+  const lo = Math.min(...vals), hi = Math.max(...vals), r = hi - lo || 1;
+  const d = vals.map((v, i) => `${i ? "L" : "M"}${(i / (vals.length - 1) * 88 + 2).toFixed(1)},${(30 - (v - lo) / r * 26).toFixed(1)}`).join("");
+  return `<svg class="spark ${cls}" viewBox="0 0 92 34"><path d="${d}"/></svg>`;
+}
+function ringSVG(v, cls) {
+  const C = 2 * Math.PI * 44;
+  return `<svg class="ring ${cls}" viewBox="0 0 108 108" role="img" aria-label="Readiness ${v}">
+    <circle cx="54" cy="54" r="44" class="ring-bg"/><circle cx="54" cy="54" r="44" class="ring-fg" stroke-dasharray="${C * v / 100} ${C}" transform="rotate(-90 54 54)"/>
+    <text x="54" y="60" text-anchor="middle" class="ring-v">${v}</text></svg>`;
+}
+const demoBanner = () => state.demo ? `<div class="demo-banner"><span>Showing sample data. Your real workouts aren't affected.</span><button data-action="demo-off">Turn off</button></div>` : "";
+
+/* ---------- Screens ---------- */
+function readinessCardHTML() {
+  const o = latestOura(src().oura);
+  if (!o) return "";
+  const lv = readinessLevel(o.readiness);
+  return `<button class="rcard" data-action="tab" data-tab="recovery">
+    <span class="rcard-n ${lv.cls}">${o.readiness}</span>
+    <span class="rcard-t"><b>Readiness · ${lv.word}</b><span>${lv.tip}</span><span class="rcard-s">Slept ${fmtHM(o.total)} · HRV ${o.hrv} ms${state.demo ? " · sample data" : ""}</span></span></button>`;
+}
+
+function recoveryHTML() {
+  const S = src(), o = S.oura, keys = Object.keys(o).sort();
+  const head = `<div class="page-head"><div><h1 class="page-title">Recovery</h1><div class="page-sub">From your Oura Ring</div></div></div>${demoBanner()}`;
+  if (!keys.length) return head + `<div class="card connect"><h4>Connect your Oura Ring</h4>
+      <p class="sub">Once connected, your sleep, readiness, HRV and resting heart rate sync here every day and feed your Insights.</p>
+      <button class="btn block" disabled>Connect Oura (available after setup)</button>
+      <p class="sub small">This needs the Supabase step we're doing next, which keeps your Oura login private.</p>
+      <button class="btn primary block" data-action="demo-on">Preview with sample data</button></div>`;
+  const t = latestOura(o), lv = readinessLevel(t.readiness);
+  const base = avg(keys.slice(-30).map((k) => o[k].hrv));
+  const range = keys.slice(-(ui.range || 14));
+  const stage = (k, c, lab) => `<i class="${c}" style="width:${(t[k] / (t.total + t.awake) * 100).toFixed(1)}%"></i>`;
+  const tempF = t.temp * 1.8;
+  return head + `
+    <div class="card ready">${ringSVG(t.readiness, lv.cls)}
+      <div><h4>Readiness · ${lv.word}</h4><p class="sub">${lv.tip}</p>
+      <p class="sub small">${t.date === today() ? "Today" : fmtDate(t.date)}</p></div></div>
+    <div class="stats">
+      <div class="stat"><b>${t.sleepScore}</b><span>Sleep score</span></div>
+      <div class="stat"><b>${fmtHM(t.total)}</b><span>Total sleep</span></div>
+      <div class="stat"><b>${t.hrv}<small> ms</small></b><span>HRV · ${signed(t.hrv - base, 0)} vs 30-day avg</span></div>
+      <div class="stat"><b>${t.rhr}<small> bpm</small></b><span>Lowest resting HR</span></div>
+      <div class="stat"><b>${signed(tempF, 1)}°F</b><span>Body temperature</span></div>
+      <div class="stat"><b>${o[addDays(t.date, -1)] ? (o[addDays(t.date, -1)].steps / 1000).toFixed(1) + "k" : "–"}</b><span>Steps yesterday</span></div>
+    </div>
+    <div class="card"><h4>Last night</h4>
+      <div class="stages">${stage("deep", "s-deep")}${stage("rem", "s-rem")}${stage("light", "s-light")}${stage("awake", "s-awake")}</div>
+      <div class="legend2"><span><i class="s-deep"></i>Deep ${fmtHM(t.deep)}</span><span><i class="s-rem"></i>REM ${fmtHM(t.rem)}</span><span><i class="s-light"></i>Light ${fmtHM(t.light)}</span><span><i class="s-awake"></i>Awake ${Math.round(t.awake / 60)}m</span></div></div>
+    <div class="sec-h" style="margin-top:22px"><h3>Trends</h3><div class="range">${[14, 30].map((r) =>
+      `<button data-action="range" data-r="${r}" aria-pressed="${(ui.range || 14) === r}">${r} days</button>`).join("")}</div></div>
+    <div class="card"><h4>Readiness</h4>${chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].readiness), cls: "ln" }], yMin: 40, yMax: 100 })}</div>
+    <div class="card"><h4>Sleep</h4>${chartSVG({ labels: range, series: [{ type: "bar", data: range.map((k) => o[k].total / 3600) }], yMin: 0, yMax: 10, guide: 7.5, fmt: (v) => v.toFixed(0) + "h" })}
+      <p class="sub small">Dashed line: 7.5 hours</p></div>
+    <div class="card"><h4>HRV</h4>${chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].hrv), cls: "ln" }], guide: base })}
+      <p class="sub small">Dashed line: your 30-day average (${Math.round(base)} ms). Higher generally means better recovered.</p></div>
+    <div class="card"><h4>Resting heart rate</h4>${chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].rhr), cls: "ln alt" }] })}</div>`;
+}
+
+function insightsHTML() {
+  const S = src(), sessions = S.sessions, o = S.oura;
+  const nights = Object.keys(o).length;
+  const head = `<div class="page-head"><div><h1 class="page-title">Insights</h1>
+    <div class="page-sub">From ${pl(sessions.length, "workout")}${nights ? ` and ${pl(nights, "night")} of Oura data` : ""}</div></div></div>${demoBanner()}`;
+  if (sessions.length < 3) return head + `<div class="card"><h4>Keep logging</h4>
+    <p class="sub">Insights start appearing after a few workouts and get more reliable every week. Lift trends need 4 sessions of a lift; sleep and readiness comparisons need Oura connected.</p>
+    ${state.demo ? "" : `<button class="btn primary block" data-action="demo-on" style="margin-top:12px">Preview with sample data</button>`}</div>`;
+
+  // 1. Lift progress
+  const series = liftSeries(sessions);
+  const order = { down: 0, flat: 1, up: 2, wait: 3 };
+  const lifts = Object.entries(series).map(([name, s]) => ({ name, s, st: liftStatus(s) }))
+    .sort((a, b) => order[a.st.cls] - order[b.st.cls] || b.s.length - a.s.length);
+  const counts = { up: 0, flat: 0, down: 0 };
+  lifts.forEach((l) => { if (counts[l.st.cls] != null) counts[l.st.cls]++; });
+  const liftsHTML = lifts.map((l) => `<button class="lift" data-action="lift" data-name="${esc(l.name)}">
+      <span><b>${esc(l.name)}</b><span class="chip-s ${l.st.cls}">${l.st.label}</span>
+      ${l.st.pct != null ? `<span class="lift-p">${signed(l.st.pct)}% est. 1RM over ${pl(l.st.weeks, "week")}</span>` : ""}</span>
+      ${sparkSVG(l.s.map((p) => p.v), l.st.cls)}</button>`).join("");
+
+  // 2. What affects your lifts
+  const perfs = sessionPerf(sessions);
+  const rd = effect(perfs, (d) => o[d] ? o[d].readiness : null, [
+    { label: "Readiness < 70", test: (v) => v < 70 }, { label: "70–84", test: (v) => v >= 70 && v < 85 }, { label: "85+", test: (v) => v >= 85 }]);
+  const sl = effect(perfs, (d) => o[d] ? o[d].total / 3600 : null, [
+    { label: "Under 6.5h", test: (v) => v < 6.5 }, { label: "6.5–7.5h", test: (v) => v >= 6.5 && v < 7.5 }, { label: "7.5h+", test: (v) => v >= 7.5 }]);
+  const wk = effect(perfs, (d) => { const p = o[addDays(d, -1)]; return p ? p.steps : null; }, [
+    { label: "After 15k+ steps", test: (v) => v >= 15000 }, { label: "After < 15k", test: (v) => v < 15000 }]);
+  const need = nights ? "Needs at least 3 sessions in each group to compare." : "Connect Oura to unlock this.";
+  const wkSentence = (() => { const a = wk[0], b = wk[1]; if (a.n < 3 || b.n < 3) return null; const d = b.avg - a.avg;
+    return Math.abs(d) < 1 ? "Busy days on your feet don't seem to affect the next day's lifts so far."
+      : d > 0 ? `After heavy days on your feet (15k+ steps, like a long warehouse shift), your lifts run about ${d.toFixed(1)}% lower the next day.`
+              : `Interestingly, you've lifted ${Math.abs(d).toFixed(1)}% better after your busiest days.`; })();
+
+  // 3. Training load vs HRV (last 8 weeks)
+  const mon = mondayOf(today()), weeks = [...Array(8)].map((_, i) => addDays(mon, (i - 7) * 7));
+  const wSets = weeks.map((w) => sessions.filter((s) => s.date >= w && s.date <= addDays(w, 6)).reduce((n, s) => n + setCount(s), 0));
+  const wHrv = weeks.map((w) => avg([...Array(7)].map((_, i) => o[addDays(w, i)]).filter(Boolean).map((x) => x.hrv)));
+  const hrvBase = avg(Object.keys(o).sort().slice(-30).map((k) => o[k].hrv));
+  const lastFull = 6; // last complete week
+  let loadMsg = nights ? "Your training volume and recovery look balanced." : "Connect Oura to compare training volume with recovery.";
+  if (nights && wHrv[lastFull] != null && hrvBase) {
+    const prevSets = avg(wSets.slice(2, lastFull).filter((x) => x > 0)) || 0;
+    if (wHrv[lastFull] < hrvBase * 0.92 && wSets[lastFull] >= prevSets) loadMsg = `<b class="warn">Possible fatigue building:</b> last week's HRV averaged ${Math.round(wHrv[lastFull])} ms, below your ${Math.round(hrvBase)} ms baseline, while volume stayed high. A lighter week could help.`;
+    else if (wHrv[lastFull] > hrvBase * 1.05) loadMsg = "HRV is above your baseline: you're recovering well from your current volume.";
+  }
+
+  // 4. Weekly sets per muscle (4-week average)
+  const from = addDays(today(), -27), msets = {};
+  sessions.filter((s) => s.date >= from).forEach((s) => s.entries.forEach((e) => e.muscles.forEach((m, i) => msets[m] = (msets[m] || 0) + e.sets.length * (i === 0 ? 1 : 0.5) / 4)));
+  const mrows = Object.keys(MUSCLES).map((k) => ({ k, v: msets[k] || 0 })).sort((a, b) => b.v - a.v);
+  const volHTML = mrows.map((r) => `<div class="vol-row"><span>${MUSCLES[r.k]}</span>
+      <div class="vol-bar"><em></em><i class="${r.v >= 10 && r.v <= 20 ? "in" : r.v > 20 ? "over" : r.v > 0 ? "under" : ""}" style="width:${Math.min(100, r.v / 25 * 100)}%"></i></div>
+      <b>${r.v ? r.v.toFixed(r.v < 10 ? 1 : 0) : "–"}</b></div>`).join("");
+
+  // 5. Push / pull balance
+  const push = ["chest", "frontDelts", "triceps"].reduce((n, k) => n + (msets[k] || 0), 0);
+  const pull = ["lats", "upperBack", "rearDelts", "biceps"].reduce((n, k) => n + (msets[k] || 0), 0);
+  const ratio = pull ? push / pull : null;
+  const ppMsg = ratio == null ? "Log some pull work to compare." : ratio > 1.25 ? `You're doing ${ratio.toFixed(1)}× more pushing than pulling. Many lifters aim for roughly even to protect the shoulders.`
+    : ratio < 0.8 ? "You're doing noticeably more pulling than pushing." : "Pushing and pulling are well balanced.";
+
+  return head + `
+    <div class="sec-h"><h3>Lift progress</h3><span class="sec-sub">${counts.up} up · ${counts.flat} flat · ${counts.down} down</span></div>
+    <div class="card lifts">${liftsHTML || `<p class="sub">Log weighted sets to see trends.</p>`}</div>
+    <div class="sec-h" style="margin-top:22px"><h3>What affects your lifts</h3></div>
+    <p class="sub" style="margin:-6px 0 10px">Each bar shows how strong your sessions were compared with your recent average for those lifts.</p>
+    ${effectCard("Readiness", rd, compareSentence(rd, "on 85+ readiness days", "on days under 70"), need)}
+    ${effectCard("Sleep the night before", sl, compareSentence(sl, "after 7.5+ hours of sleep", "after less than 6.5"), need)}
+    ${effectCard("Work the day before", wk, wkSentence, need)}
+    <div class="sec-h" style="margin-top:22px"><h3>Training load vs recovery</h3></div>
+    <div class="card"><p class="sub">${loadMsg}</p>
+      <div class="mini-l">Sets per week</div>${chartSVG({ labels: weeks, series: [{ type: "bar", data: wSets }], h: 100, yMin: 0 })}
+      ${nights ? `<div class="mini-l">Average HRV (ms)</div>${chartSVG({ labels: weeks, series: [{ data: wHrv, cls: "ln" }], h: 100, guide: hrvBase })}` : ""}</div>
+    <div class="sec-h" style="margin-top:22px"><h3>Weekly sets per muscle</h3><span class="sec-sub">4-week average</span></div>
+    <div class="card"><p class="sub">The shaded zone is 10–20 sets a week, a range commonly recommended for muscle growth. Muscles an exercise works secondarily count as half a set.</p><div class="vol">${volHTML}</div></div>
+    <div class="card"><h4>Push / pull balance</h4><p class="sub">${ppMsg}</p>
+      <div class="pp"><div class="pp-bar"><i style="width:${push + pull ? push / (push + pull) * 100 : 50}%"></i></div>
+      <div class="pp-l"><span>Push ${push.toFixed(0)} sets/wk</span><span>Pull ${pull.toFixed(0)} sets/wk</span></div></div></div>
+    <p class="hint">These patterns show what tends to go together in your data, not proof of what causes what. They get more reliable the more you log.</p>`;
+}
+
+function liftSheetHTML(name) {
+  const S = src(), s = liftSeries(S.sessions)[name] || [], st = liftStatus(s);
+  const labels = s.map((p) => p.date);
+  const rd = labels.map((d) => S.oura[d] ? S.oura[d].readiness : null);
+  return `<h3>${esc(name)}</h3><span class="chip-s ${st.cls}">${st.label}</span>
+    <div class="mini-l" style="margin-top:14px">Estimated 1-rep max (lb)</div>
+    ${chartSVG({ labels, series: [{ data: s.map((p) => p.v), cls: "ln" }], h: 150 })}
+    ${rd.some((v) => v != null) ? `<div class="mini-l">Readiness that morning</div>${chartSVG({ labels, series: [{ type: "bar", data: rd, cls: "bar soft" }], h: 80, yMin: 40, yMax: 100 })}` : ""}
+    <div class="stats" style="margin-top:12px">
+      <div class="stat"><b>${s.length ? Math.round(st.best || Math.max(...s.map((p) => p.v))) : "–"}</b><span>Best est. 1RM</span></div>
+      <div class="stat"><b>${s.length ? fmtSet(s[s.length - 1].top) : "–"}</b><span>Last top set</span></div>
+      <div class="stat"><b>${s.length}</b><span>Sessions</span></div>
+      <div class="stat"><b>${st.sincePR != null ? st.sincePR : "–"}</b><span>Sessions since best</span></div></div>
+    <p class="sub small" style="margin-top:12px">Estimated 1RM uses your best set each session: weight × (1 + reps ÷ 30). It lets sets with different reps be compared.</p>`;
+}
+
 /* ================= Rendering ================= */
 function render() {
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-current", t.dataset.tab === ui.tab ? "page" : "false"));
   const v = $("#view");
   if (ui.tab === "home") v.innerHTML = homeHTML();
   else if (ui.tab === "workouts") v.innerHTML = ui.detail && workoutById(ui.detail) ? detailHTML() : workoutsHTML();
-  else if (ui.tab === "history") v.innerHTML = historyHTML();
+  else if (ui.tab === "recovery") v.innerHTML = recoveryHTML();
+  else if (ui.tab === "insights") v.innerHTML = insightsHTML();
   else v.innerHTML = settingsHTML();
   renderWorkout();
   renderSheet();
@@ -536,7 +951,7 @@ function homeHTML() {
   return `
     <div class="page-head"><div><h1 class="page-title">${fmtDate(t, { weekday: "long" })}</h1>
       <div class="page-sub">${fmtDate(t, { month: "long", day: "numeric" })}</div></div></div>
-    ${hero}
+    ${readinessCardHTML()}${hero}
     <section class="sec">
       <div class="sec-h"><h3>${weekLabel}</h3>
         <div class="week-nav">
@@ -557,8 +972,11 @@ function homeHTML() {
 }
 
 function workoutsHTML() {
+  const seg = `<div class="seg2" role="tablist"><button data-action="wseg" data-seg="routines" aria-pressed="${ui.wseg === "routines"}">Routines</button>
+    <button data-action="wseg" data-seg="history" aria-pressed="${ui.wseg === "history"}">History</button></div>`;
+  if (ui.wseg === "history") return `<div class="page-head"><div><h1 class="page-title">Workouts</h1></div></div>` + seg + historyHTML(true);
   return `<div class="page-head"><div><h1 class="page-title">Workouts</h1><div class="page-sub">Tap one to edit or start it</div></div>
-      <button class="btn small" data-action="new-workout">New</button></div>
+      <button class="btn small" data-action="new-workout">New</button></div>${seg}
     ${state.workouts.map((w) => {
       const ms = [...new Set(w.exercises.flatMap((e) => e.muscles))].map((m) => MUSCLES[m]).filter(Boolean);
       return `<button class="wcard" data-action="open-w" data-id="${esc(w.id)}">
@@ -586,9 +1004,10 @@ function detailHTML() {
     <div class="start-bar"><button class="btn primary block" data-action="start" data-id="${esc(w.id)}">Start ${esc(w.name)}</button></div>`;
 }
 
-function historyHTML() {
+function historyHTML(embedded) {
   const list = finished().filter((s) => setCount(s) > 0);
-  const head = `<div class="page-head"><div><h1 class="page-title">History</h1><div class="page-sub">${pl(list.length, "workout")} logged</div></div></div>`;
+  const head = embedded ? `<p class="sub" style="margin:0 0 10px">${pl(list.length, "workout")} logged</p>`
+    : `<div class="page-head"><div><h1 class="page-title">History</h1><div class="page-sub">${pl(list.length, "workout")} logged</div></div></div>`;
   if (!list.length) return head + `<p class="empty" style="padding-left:0">Finished workouts show up here. Start one from Home or Workouts.</p>`;
   return head + `<ul class="hist">${list.map((s) => {
     const dur = s.startedAt && s.finishedAt ? fmtDur(new Date(s.finishedAt) - new Date(s.startedAt)) : "";
@@ -609,6 +1028,12 @@ function settingsHTML() {
     <div class="group-label">Rest timer</div>
     <div class="group"><div class="seg">${[60, 90, 120, 180].map((s) =>
       `<button data-action="rest" data-s="${s}" aria-pressed="${state.restSeconds === s}">${fmtTime(s)}</button>`).join("")}</div></div>
+    <div class="group-label">Oura Ring</div>
+    <div class="group">
+      <div class="set-row"><span>Connection</span><span class="sub">${state.oura && state.oura.connected ? "Connected" : "Not connected yet"}</span></div>
+      <button class="set-row" data-action="${state.demo ? "demo-off" : "demo-on"}"><span>Preview with sample data</span><span class="sub">${state.demo ? "On" : "Off"}</span></button>
+    </div>
+    <p class="hint">Connecting Oura comes with the Supabase setup. Sample data fills Recovery and Insights so you can explore them now. It never mixes with your real workouts.</p>
     <div class="group-label">Backup</div>
     <div class="group">
       <button class="set-row" data-action="export"><span>Export workouts</span><span class="sub">Last: ${lastExp}</span></button>
@@ -677,6 +1102,8 @@ function renderSheet() {
       ${state.workouts.map((w) => `<button class="opt" data-action="set-plan" data-id="${esc(w.id)}" aria-pressed="${cur === w.id}"><span>${esc(w.name)}</span><span class="sec-sub">${pl(w.exercises.length, "exercise")}</span></button>`).join("")}
       <button class="opt" data-action="set-plan" data-id="rest" aria-pressed="${cur === "rest"}"><span>Rest day</span></button>
       ${cur ? `<button class="opt clear" data-action="set-plan" data-id="">Clear plan</button>` : ""}`;
+  } else if (ui.sheet === "lift") {
+    inner = liftSheetHTML(ui.sd.name);
   } else if (ui.sheet === "exercise") {
     const editing = ui.sd.idx >= 0;
     inner = `<h3>${editing ? "Edit exercise" : "Add exercise"}</h3>
@@ -689,7 +1116,8 @@ function renderSheet() {
         <button class="btn primary" data-action="ex-save">${editing ? "Save" : "Add exercise"}</button></div>`;
   }
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
-    <div class="sheet-card" role="dialog" aria-modal="true"><div class="grabber"></div>${inner}</div>`;
+    <div class="sheet-card" role="dialog" aria-modal="true"><div class="grabber"></div>
+    <button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>${inner}</div>`;
 }
 
 /* ================= Rest timer ================= */
@@ -836,7 +1264,7 @@ function deleteSet(i, j) {
 
 async function exportData() {
   const data = JSON.stringify({ app: "liftlog", version: 2, exportedAt: new Date().toISOString(),
-    restSeconds: state.restSeconds, workouts: state.workouts, plan: state.plan, sessions: state.sessions }, null, 2);
+    restSeconds: state.restSeconds, workouts: state.workouts, plan: state.plan, sessions: state.sessions, oura: state.oura }, null, 2);
   const name = `workouts-${today()}.json`;
   const file = new File([data], name, { type: "application/json" });
   let shared = false;
@@ -938,7 +1366,12 @@ document.addEventListener("click", async (ev) => {
   const i = b.dataset.i != null ? +b.dataset.i : null;
 
   switch (a) {
-    case "tab": ui.tab = b.dataset.tab; if (ui.tab !== "workouts") ui.detail = null; render(); window.scrollTo(0, 0); break;
+    case "tab": {
+      const same = ui.tab === b.dataset.tab;           // tapping the current tab again returns to its top level
+      ui.tab = b.dataset.tab;
+      if (ui.tab !== "workouts" || same) ui.detail = null;
+      render(); window.scrollTo(0, 0); break;
+    }
     case "week": ui.weekOffset += +b.dataset.d; render(); break;
     case "plan": ui.sheet = "plan"; ui.sd = { date: b.dataset.date }; renderSheet(); break;
     case "set-plan":
@@ -966,6 +1399,11 @@ document.addEventListener("click", async (ev) => {
       save(); render(); toast("Workout cancelled. Nothing was saved."); break;
     }
     case "dlg-ok": closeDialog(true); break;
+    case "wseg": ui.wseg = b.dataset.seg; ui.detail = null; render(); break;
+    case "range": ui.range = +b.dataset.r; render(); break;
+    case "lift": ui.sheet = "lift"; ui.sd = { name: b.dataset.name }; renderSheet(); break;
+    case "demo-on": state.demo = true; save(); render(); toast("Showing sample data in Recovery and Insights."); break;
+    case "demo-off": state.demo = false; save(); render(); toast("Sample data off."); break;
     case "dlg-cancel": closeDialog(false); break;
     case "toast-undo": { const f = toastUndo; toastUndo = null; $("#toast").hidden = true; if (f) f(); break; }
     case "toggle": {
