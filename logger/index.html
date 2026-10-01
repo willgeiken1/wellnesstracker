@@ -327,6 +327,7 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .pp { margin-top: 12px; } .pp-bar { height: 12px; border-radius: 6px; background: #7FB3F5; overflow: hidden; } .pp-bar i { display: block; height: 100%; background: var(--green); }
 .pp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 6px; }
 .warn { color: #F2C12E; }
+.link-inline { color: var(--green); font-size: inherit; font-weight: 600; padding: 0; }
 #toast { position: fixed; left: 16px; right: 16px; top: calc(12px + var(--safe-top)); z-index: 30; background: var(--text); color: #111; padding: 14px 16px; border-radius: 12px; font-weight: 500; text-align: center; max-width: 520px; margin: 0 auto; }
 
 @media (prefers-reduced-motion: reduce) { #timer-bar, .body .mus, .erow.shifting { transition: none; } }
@@ -362,6 +363,7 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 <div id="dialog" hidden></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 "use strict";
 const BODY = {"front": [{"m": "base", "d": "M100,54L90,55L64,85L60,126L61,136L64,140L65.5,148L67,156L69,163L68,170L66.6,178L66.6,194L70,200L78,208L88,214L100,222Z"}, {"m": null, "d": "M100.0,54.0C98.3,54.2 91.9,53.3 90.0,55.0C88.1,56.7 88.5,61.2 88.5,64.0C88.5,66.8 88.9,69.3 90.0,72.0C91.1,74.7 93.3,77.3 95.0,80.0C96.7,82.7 99.2,86.7 100.0,88.0C100.0,82.3 100.0,59.7 100.0,54.0Z"}, {"m": "traps", "d": "M88.5,64.0C87.1,65.7 83.1,71.0 80.0,74.0C76.9,77.0 72.7,80.2 70.0,82.0C67.3,83.8 65.0,84.5 64.0,85.0C64.3,85.3 65.7,86.7 66.0,87.0C68.0,86.2 74.0,84.5 78.0,82.0C82.0,79.5 88.0,73.7 90.0,72.0C89.8,70.7 88.8,65.3 88.5,64.0Z"}, {"m": "chest", "d": "M100.0,88.0C97.7,87.8 90.3,87.5 86.0,87.0C81.7,86.5 77.3,85.0 74.0,85.0C70.7,85.0 67.3,86.7 66.0,87.0C65.2,88.8 62.2,94.2 61.0,98.0C59.8,101.8 59.2,105.3 59.0,110.0C58.8,114.7 59.8,123.3 60.0,126.0C61.2,126.3 64.2,127.8 67.0,128.0C69.8,128.2 73.8,127.7 77.0,127.0C80.2,126.3 84.5,124.5 86.0,124.0C88.3,123.3 97.7,120.7 100.0,120.0C100.0,114.7 100.0,93.3 100.0,88.0Z"}, {"m": "sideDelts", "d": "M64.0,85.0C62.5,85.2 57.7,85.3 55.0,86.0C52.3,86.7 50.0,87.3 48.0,89.0C46.0,90.7 44.2,93.3 43.0,96.0C41.8,98.7 41.2,102.0 40.8,105.0C40.3,108.0 40.4,111.2 40.3,114.0C40.2,116.8 40.5,119.7 40.3,122.0C40.1,124.3 39.2,127.0 39.0,128.0C39.8,128.3 43.2,129.7 44.0,130.0C44.0,127.7 43.5,120.3 44.0,116.0C44.5,111.7 45.5,108.0 47.0,104.0C48.5,100.0 50.2,95.2 53.0,92.0C55.8,88.8 62.2,86.2 64.0,85.0Z"}, {"m": "frontDelts", "d": "M64.0,85.0C62.2,86.2 55.8,88.8 53.0,92.0C50.2,95.2 48.5,100.0 47.0,104.0C45.5,108.0 44.5,111.7 44.0,116.0C43.5,120.3 44.0,127.7 44.0,130.0C45.3,129.7 49.3,128.7 52.0,128.0C54.7,127.3 58.7,126.3 60.0,126.0C59.8,123.3 58.8,114.7 59.0,110.0C59.2,105.3 59.8,101.8 61.0,98.0C62.2,94.2 65.2,88.8 66.0,87.0C65.7,86.7 64.3,85.3 64.0,85.0Z"}, {"m": "biceps", "d": "M44.0,130.0C45.3,129.7 49.3,128.7 52.0,128.0C54.7,127.3 58.7,126.3 60.0,126.0C60.2,127.7 60.8,134.3 61.0,136.0C60.3,137.7 57.9,143.0 57.0,146.0C56.1,149.0 56.3,151.7 55.5,154.0C54.7,156.3 52.6,159.0 52.0,160.0C50.3,160.5 45.2,163.2 42.0,163.0C38.8,162.8 34.5,159.7 33.0,159.0C33.5,157.5 34.8,153.2 36.0,150.0C37.2,146.8 38.7,143.3 40.0,140.0C41.3,136.7 43.3,131.7 44.0,130.0Z"}, {"m": "triceps", "d": "M39.0,128.0C38.7,129.7 37.5,135.0 37.0,138.0C36.5,141.0 36.7,143.3 36.0,146.0C35.3,148.7 34.2,151.7 33.0,154.0C31.8,156.3 29.7,159.0 29.0,160.0C29.7,159.8 32.3,159.2 33.0,159.0C33.5,157.5 34.8,153.2 36.0,150.0C37.2,146.8 38.7,143.3 40.0,140.0C41.3,136.7 43.3,131.7 44.0,130.0C43.2,129.7 39.8,128.3 39.0,128.0Z"}, {"m": "forearms", "d": "M29.0,160.0C29.7,159.8 32.3,159.2 33.0,159.0C34.5,159.7 38.8,162.8 42.0,163.0C45.2,163.2 50.3,160.5 52.0,160.0C51.8,161.7 51.3,167.0 50.5,170.0C49.7,173.0 49.0,175.3 47.4,178.0C45.8,180.7 43.4,183.2 41.0,186.0C38.6,188.8 34.3,193.5 33.0,195.0C30.6,194.8 20.9,194.2 18.5,194.0C18.9,192.7 20.4,188.7 21.0,186.0C21.6,183.3 21.2,180.7 22.0,178.0C22.8,175.3 24.8,173.0 26.0,170.0C27.2,167.0 28.5,161.7 29.0,160.0Z"}, {"m": null, "d": "M18.5,194.0C17.6,194.5 14.8,195.7 13.0,197.0C11.2,198.3 9.2,200.2 8.0,202.0C6.8,203.8 5.8,206.7 6.0,208.0C6.2,209.3 8.0,210.3 9.0,210.0C10.0,209.7 11.8,205.3 12.0,206.0C12.2,206.7 10.3,211.7 10.0,214.0C9.7,216.3 9.7,218.7 10.0,220.0C10.3,221.3 11.3,222.7 12.0,222.0C12.7,221.3 13.7,215.8 14.0,216.0C14.3,216.2 13.5,221.7 14.0,223.0C14.5,224.3 16.3,225.0 17.0,224.0C17.7,223.0 17.5,217.2 18.0,217.0C18.5,216.8 19.2,222.0 20.0,223.0C20.8,224.0 22.5,224.2 23.0,223.0C23.5,221.8 22.5,216.5 23.0,216.0C23.5,215.5 25.2,219.7 26.0,220.0C26.8,220.3 27.5,220.3 28.0,218.0C28.5,215.7 28.2,209.8 29.0,206.0C29.8,202.2 32.3,196.8 33.0,195.0C30.6,194.8 20.9,194.2 18.5,194.0Z"}, {"m": "abs", "d": "M100.0,120.0C97.7,120.7 88.3,123.3 86.0,124.0C85.5,126.3 83.7,132.7 83.0,138.0C82.3,143.3 82.0,150.0 82.0,156.0C82.0,162.0 82.5,168.3 83.0,174.0C83.5,179.7 83.8,185.0 85.0,190.0C86.2,195.0 89.2,201.7 90.0,204.0C91.0,205.3 95.0,210.7 96.0,212.0C96.7,212.7 99.3,215.3 100.0,216.0C100.0,200.0 100.0,136.0 100.0,120.0Z"}, {"m": "obliques", "d": "M60.0,126.0C61.2,126.3 64.2,127.8 67.0,128.0C69.8,128.2 73.8,127.7 77.0,127.0C80.2,126.3 84.5,124.5 86.0,124.0C85.5,126.3 83.7,132.7 83.0,138.0C82.3,143.3 82.0,150.0 82.0,156.0C82.0,162.0 82.5,168.3 83.0,174.0C83.5,179.7 83.8,185.0 85.0,190.0C86.2,195.0 89.2,201.7 90.0,204.0C87.7,203.0 79.9,199.7 76.0,198.0C72.1,196.3 68.2,194.7 66.6,194.0C66.6,192.7 66.6,188.7 66.6,186.0C66.6,183.3 66.4,180.7 66.6,178.0C66.8,175.3 67.6,172.5 68.0,170.0C68.4,167.5 68.8,164.2 69.0,163.0C68.7,161.8 67.6,158.5 67.0,156.0C66.4,153.5 66.0,150.7 65.5,148.0C65.0,145.3 64.8,142.0 64.0,140.0C63.2,138.0 61.5,136.7 61.0,136.0C60.8,134.3 60.2,127.7 60.0,126.0Z"}, {"m": null, "d": "M66.6,194.0C68.2,194.7 72.1,196.3 76.0,198.0C79.9,199.7 87.7,203.0 90.0,204.0C91.0,205.3 95.0,210.7 96.0,212.0C96.7,212.7 99.3,215.3 100.0,216.0C100.0,217.0 100.0,221.0 100.0,222.0C99.0,221.5 95.0,219.5 94.0,219.0C93.0,218.2 90.7,215.8 88.0,214.0C85.3,212.2 81.0,210.3 78.0,208.0C75.0,205.7 71.3,201.3 70.0,200.0C69.4,199.0 67.2,195.0 66.6,194.0Z"}, {"m": "abductors", "d": "M66.6,194.0C67.2,195.0 69.4,199.0 70.0,200.0C69.0,202.3 66.0,208.3 64.0,214.0C62.0,219.7 59.2,230.7 58.3,234.0C58.4,232.7 58.4,228.7 58.8,226.0C59.1,223.3 59.9,220.7 60.4,218.0C60.9,215.3 61.4,212.7 62.0,210.0C62.6,207.3 63.2,204.7 64.0,202.0C64.8,199.3 66.2,195.3 66.6,194.0Z"}, {"m": "quads", "d": "M70.0,200.0C71.3,201.3 75.0,205.7 78.0,208.0C81.0,210.3 85.3,212.2 88.0,214.0C90.7,215.8 93.0,218.2 94.0,219.0C93.0,221.2 89.3,226.8 88.0,232.0C86.7,237.2 86.2,244.7 86.0,250.0C85.8,255.3 87.0,260.0 87.0,264.0C87.0,268.0 86.4,272.3 86.3,274.0C86.2,275.3 85.9,280.7 85.8,282.0C84.8,281.8 82.3,281.2 80.0,281.0C77.7,280.8 74.3,280.8 72.0,281.0C69.7,281.2 67.8,281.8 66.0,282.0C64.2,282.2 62.2,282.0 61.4,282.0C61.1,280.7 60.2,276.7 59.8,274.0C59.4,271.3 59.1,268.7 58.8,266.0C58.5,263.3 58.0,260.7 57.8,258.0C57.5,255.3 57.4,252.7 57.3,250.0C57.2,247.3 57.1,244.7 57.3,242.0C57.5,239.3 58.1,235.3 58.3,234.0C59.2,230.7 62.0,219.7 64.0,214.0C66.0,208.3 69.0,202.3 70.0,200.0Z"}, {"m": "adductors", "d": "M94.0,219.0C95.0,219.5 99.0,221.5 100.0,222.0C99.5,222.7 97.8,224.0 97.2,226.0C96.6,228.0 96.9,231.3 96.6,234.0C96.3,236.7 95.9,239.3 95.6,242.0C95.3,244.7 95.1,247.3 94.6,250.0C94.1,252.7 93.4,255.3 92.5,258.0C91.6,260.7 90.4,263.3 89.4,266.0C88.4,268.7 86.8,272.7 86.3,274.0C86.4,272.3 87.0,268.0 87.0,264.0C87.0,260.0 85.8,255.3 86.0,250.0C86.2,244.7 86.7,237.2 88.0,232.0C89.3,226.8 93.0,221.2 94.0,219.0Z"}, {"m": null, "d": "M61.4,282.0C62.2,282.0 64.2,282.2 66.0,282.0C67.8,281.8 69.7,281.2 72.0,281.0C74.3,280.8 77.7,280.8 80.0,281.0C82.3,281.2 84.8,281.8 85.8,282.0C85.7,283.3 85.5,287.3 85.2,290.0C84.9,292.7 84.4,296.7 84.2,298.0C83.2,298.2 80.9,298.8 78.0,299.0C75.1,299.2 69.9,299.2 67.0,299.0C64.1,298.8 61.5,298.2 60.4,298.0C60.7,296.7 62.2,292.7 62.4,290.0C62.6,287.3 61.6,283.3 61.4,282.0Z"}, {"m": "calves", "d": "M60.4,298.0C61.5,298.2 64.1,298.8 67.0,299.0C69.9,299.2 75.1,299.2 78.0,299.0C80.9,298.8 83.2,298.2 84.2,298.0C83.8,299.3 82.3,303.3 82.0,306.0C81.7,308.7 82.1,311.3 82.1,314.0C82.1,316.7 82.2,319.3 82.1,322.0C82.0,324.7 82.0,327.3 81.6,330.0C81.2,332.7 79.8,336.7 79.5,338.0C79.1,339.3 77.7,343.3 76.9,346.0C76.1,348.7 75.4,351.3 74.9,354.0C74.4,356.7 74.2,359.3 73.8,362.0C73.4,364.7 73.0,368.7 72.8,370.0C70.8,370.0 62.9,370.0 60.9,370.0C60.7,368.7 60.1,364.7 59.8,362.0C59.4,359.3 59.1,356.7 58.8,354.0C58.5,351.3 58.1,348.7 57.8,346.0C57.4,343.3 56.9,339.3 56.7,338.0C56.5,336.7 55.9,332.7 55.7,330.0C55.5,327.3 55.6,324.7 55.7,322.0C55.8,319.3 55.9,316.7 56.2,314.0C56.6,311.3 57.1,308.7 57.8,306.0C58.5,303.3 60.0,299.3 60.4,298.0Z"}, {"m": null, "d": "M60.9,370.0C60.5,371.3 59.4,375.3 58.8,378.0C58.2,380.7 58.3,383.3 57.3,386.0C56.3,388.7 54.5,391.5 53.0,394.0C51.5,396.5 48.2,399.0 48.0,401.0C47.8,403.0 50.0,405.0 52.0,406.0C54.0,407.0 57.3,407.3 60.0,407.0C62.7,406.7 65.7,405.7 68.0,404.0C70.3,402.3 72.8,400.0 74.0,397.0C75.2,394.0 74.8,389.2 75.0,386.0C75.2,382.8 75.3,380.7 74.9,378.0C74.5,375.3 73.2,371.3 72.8,370.0C70.8,370.0 62.9,370.0 60.9,370.0Z"}], "back": [{"m": "base", "d": "M100,50L92,52L64,85L60,126L61,136L64,140L65.5,148L67,156L69,163L68,170L66.6,178L66.6,194L64,202L62,210L60.4,218L58.8,226L58.3,234L100,230Z"}, {"m": "traps", "d": "M92.0,52.0C91.4,53.7 90.5,58.3 88.5,62.0C86.5,65.7 83.1,70.7 80.0,74.0C76.9,77.3 72.7,80.2 70.0,82.0C67.3,83.8 65.0,84.5 64.0,85.0C65.0,86.8 68.0,92.2 70.0,96.0C72.0,99.8 74.2,104.0 76.0,108.0C77.8,112.0 80.2,118.0 81.0,120.0C82.2,122.7 85.7,130.7 88.0,136.0C90.3,141.3 93.0,147.5 95.0,152.0C97.0,156.5 99.2,161.2 100.0,163.0C100.0,144.2 101.3,68.5 100.0,50.0C98.7,31.5 93.3,51.7 92.0,52.0Z"}, {"m": "sideDelts", "d": "M64.0,85.0C62.5,85.2 57.7,85.3 55.0,86.0C52.3,86.7 50.0,87.3 48.0,89.0C46.0,90.7 44.2,93.3 43.0,96.0C41.8,98.7 41.2,102.0 40.8,105.0C40.3,108.0 40.4,111.2 40.3,114.0C40.2,116.8 40.5,119.7 40.3,122.0C40.1,124.3 39.2,127.0 39.0,128.0C39.8,128.3 43.2,129.7 44.0,130.0C44.0,128.0 43.5,122.0 44.0,118.0C44.5,114.0 45.3,110.0 47.0,106.0C48.7,102.0 51.2,97.5 54.0,94.0C56.8,90.5 62.3,86.5 64.0,85.0Z"}, {"m": "rearDelts", "d": "M64.0,85.0C62.3,86.5 56.8,90.5 54.0,94.0C51.2,97.5 48.7,102.0 47.0,106.0C45.3,110.0 44.5,114.0 44.0,118.0C43.5,122.0 44.0,128.0 44.0,130.0C45.3,129.7 49.3,128.7 52.0,128.0C54.7,127.3 58.7,126.3 60.0,126.0C60.0,123.7 59.7,116.7 60.0,112.0C60.3,107.3 61.3,102.5 62.0,98.0C62.7,93.5 63.7,87.2 64.0,85.0Z"}, {"m": "upperBack", "d": "M64.0,85.0C63.7,87.2 62.7,93.5 62.0,98.0C61.3,102.5 60.3,107.3 60.0,112.0C59.7,116.7 60.0,123.7 60.0,126.0C61.2,126.3 64.5,128.0 67.0,128.0C69.5,128.0 72.7,127.3 75.0,126.0C77.3,124.7 80.0,121.0 81.0,120.0C80.2,118.0 77.8,112.0 76.0,108.0C74.2,104.0 72.0,99.8 70.0,96.0C68.0,92.2 65.0,86.8 64.0,85.0Z"}, {"m": "lats", "d": "M60.0,126.0C60.2,127.7 60.8,134.3 61.0,136.0C61.5,136.7 63.2,138.0 64.0,140.0C64.8,142.0 65.0,145.3 65.5,148.0C66.0,150.7 66.4,153.5 67.0,156.0C67.6,158.5 68.7,161.8 69.0,163.0C70.5,165.2 74.8,172.5 78.0,176.0C81.2,179.5 86.3,182.7 88.0,184.0C88.8,183.3 91.5,182.0 93.0,180.0C94.5,178.0 95.8,174.8 97.0,172.0C98.2,169.2 99.5,164.5 100.0,163.0C99.2,161.2 97.0,156.5 95.0,152.0C93.0,147.5 90.3,141.3 88.0,136.0C85.7,130.7 82.2,122.7 81.0,120.0C80.0,121.0 77.3,124.7 75.0,126.0C72.7,127.3 69.5,128.0 67.0,128.0C64.5,128.0 61.2,126.3 60.0,126.0Z"}, {"m": "lowerBack", "d": "M100.0,163.0C99.5,164.5 98.2,169.2 97.0,172.0C95.8,174.8 94.5,178.0 93.0,180.0C91.5,182.0 88.8,183.3 88.0,184.0C89.0,185.0 92.0,188.7 94.0,190.0C96.0,191.3 99.0,191.7 100.0,192.0C100.0,187.2 100.0,167.8 100.0,163.0Z"}, {"m": "obliques", "d": "M69.0,163.0C68.8,164.2 68.4,167.5 68.0,170.0C67.6,172.5 66.8,175.3 66.6,178.0C66.4,180.7 66.6,183.3 66.6,186.0C66.6,188.7 66.6,192.7 66.6,194.0C68.2,193.3 72.4,191.7 76.0,190.0C79.6,188.3 86.0,185.0 88.0,184.0C86.3,182.7 81.2,179.5 78.0,176.0C74.8,172.5 70.5,165.2 69.0,163.0Z"}, {"m": "abductors", "d": "M66.6,194.0C66.2,195.3 64.8,199.3 64.0,202.0C63.2,204.7 62.3,208.7 62.0,210.0C63.3,209.3 67.0,208.3 70.0,206.0C73.0,203.7 77.0,199.7 80.0,196.0C83.0,192.3 86.7,186.0 88.0,184.0C86.0,185.0 79.6,188.3 76.0,190.0C72.4,191.7 68.2,193.3 66.6,194.0Z"}, {"m": "glutes", "d": "M88.0,184.0C89.0,185.0 92.0,188.7 94.0,190.0C96.0,191.3 99.0,191.7 100.0,192.0C100.0,198.3 100.0,223.7 100.0,230.0C98.3,231.2 94.0,235.8 90.0,237.0C86.0,238.2 80.3,237.8 76.0,237.0C71.7,236.2 67.0,232.5 64.0,232.0C61.0,231.5 59.2,233.7 58.3,234.0C58.4,232.7 58.4,228.7 58.8,226.0C59.1,223.3 59.9,220.7 60.4,218.0C60.9,215.3 61.7,211.3 62.0,210.0C63.3,209.3 67.0,208.3 70.0,206.0C73.0,203.7 77.0,199.7 80.0,196.0C83.0,192.3 86.7,186.0 88.0,184.0Z"}, {"m": "hamstrings", "d": "M58.3,234.0C59.2,233.7 61.0,231.5 64.0,232.0C67.0,232.5 71.7,236.2 76.0,237.0C80.3,237.8 86.0,238.2 90.0,237.0C94.0,235.8 98.3,231.2 100.0,230.0C99.4,230.7 97.3,232.0 96.6,234.0C95.9,236.0 95.9,239.3 95.6,242.0C95.3,244.7 95.1,247.3 94.6,250.0C94.1,252.7 93.4,255.3 92.5,258.0C91.6,260.7 90.4,263.3 89.4,266.0C88.4,268.7 86.9,271.3 86.3,274.0C85.7,276.7 85.9,280.7 85.8,282.0C84.5,282.8 81.0,286.2 78.0,287.0C75.0,287.8 70.8,287.8 68.0,287.0C65.2,286.2 62.5,282.8 61.4,282.0C61.1,280.7 60.2,276.7 59.8,274.0C59.4,271.3 59.1,268.7 58.8,266.0C58.5,263.3 58.0,260.7 57.8,258.0C57.5,255.3 57.4,252.7 57.3,250.0C57.2,247.3 57.1,244.7 57.3,242.0C57.5,239.3 58.1,235.3 58.3,234.0Z"}, {"m": "triceps", "d": "M39.0,128.0C38.7,129.7 37.5,135.0 37.0,138.0C36.5,141.0 36.7,143.3 36.0,146.0C35.3,148.7 34.2,151.7 33.0,154.0C31.8,156.3 29.7,159.0 29.0,160.0C30.8,160.7 36.2,164.0 40.0,164.0C43.8,164.0 50.0,160.7 52.0,160.0C52.6,159.0 54.7,156.3 55.5,154.0C56.3,151.7 56.1,149.0 57.0,146.0C57.9,143.0 60.3,137.7 61.0,136.0C60.8,134.3 60.2,127.7 60.0,126.0C58.7,126.3 54.7,127.3 52.0,128.0C49.3,128.7 45.3,129.7 44.0,130.0C43.2,129.7 39.8,128.3 39.0,128.0Z"}, {"m": "forearms", "d": "M29.0,160.0C30.8,160.7 36.2,164.0 40.0,164.0C43.8,164.0 50.0,160.7 52.0,160.0C51.8,161.7 51.3,167.0 50.5,170.0C49.7,173.0 49.0,175.3 47.4,178.0C45.8,180.7 43.4,183.2 41.0,186.0C38.6,188.8 34.3,193.5 33.0,195.0C30.6,194.8 20.9,194.2 18.5,194.0C18.9,192.7 20.4,188.7 21.0,186.0C21.6,183.3 21.2,180.7 22.0,178.0C22.8,175.3 24.8,173.0 26.0,170.0C27.2,167.0 28.5,161.7 29.0,160.0Z"}, {"m": null, "d": "M18.5,194.0C17.6,194.5 14.8,195.7 13.0,197.0C11.2,198.3 9.2,200.2 8.0,202.0C6.8,203.8 5.8,206.7 6.0,208.0C6.2,209.3 8.0,210.3 9.0,210.0C10.0,209.7 11.8,205.3 12.0,206.0C12.2,206.7 10.3,211.7 10.0,214.0C9.7,216.3 9.7,218.7 10.0,220.0C10.3,221.3 11.3,222.7 12.0,222.0C12.7,221.3 13.7,215.8 14.0,216.0C14.3,216.2 13.5,221.7 14.0,223.0C14.5,224.3 16.3,225.0 17.0,224.0C17.7,223.0 17.5,217.2 18.0,217.0C18.5,216.8 19.2,222.0 20.0,223.0C20.8,224.0 22.5,224.2 23.0,223.0C23.5,221.8 22.5,216.5 23.0,216.0C23.5,215.5 25.2,219.7 26.0,220.0C26.8,220.3 27.5,220.3 28.0,218.0C28.5,215.7 28.2,209.8 29.0,206.0C29.8,202.2 32.3,196.8 33.0,195.0C30.6,194.8 20.9,194.2 18.5,194.0Z"}, {"m": "calves", "d": "M61.4,282.0C62.5,282.8 65.2,286.2 68.0,287.0C70.8,287.8 75.0,287.8 78.0,287.0C81.0,286.2 84.5,282.8 85.8,282.0C85.7,283.3 85.5,287.3 85.2,290.0C84.9,292.7 84.4,296.7 84.2,298.0C83.8,299.3 82.3,303.3 82.0,306.0C81.7,308.7 82.1,311.3 82.1,314.0C82.1,316.7 82.2,319.3 82.1,322.0C82.0,324.7 82.0,327.3 81.6,330.0C81.2,332.7 79.8,336.7 79.5,338.0C78.6,339.5 76.2,345.5 74.0,347.0C71.8,348.5 68.9,348.5 66.0,347.0C63.1,345.5 58.2,339.5 56.7,338.0C56.5,336.7 55.9,332.7 55.7,330.0C55.5,327.3 55.6,324.7 55.7,322.0C55.8,319.3 55.9,316.7 56.2,314.0C56.6,311.3 57.1,308.7 57.8,306.0C58.5,303.3 60.0,299.3 60.4,298.0C60.7,296.7 62.2,292.7 62.4,290.0C62.6,287.3 61.6,283.3 61.4,282.0Z"}, {"m": "calves", "d": "M56.7,338.0C58.2,339.5 63.1,345.5 66.0,347.0C68.9,348.5 71.8,348.5 74.0,347.0C76.2,345.5 78.6,339.5 79.5,338.0C79.1,339.3 77.7,343.3 76.9,346.0C76.1,348.7 75.4,351.3 74.9,354.0C74.4,356.7 74.2,359.3 73.8,362.0C73.4,364.7 73.0,368.7 72.8,370.0C70.8,370.0 62.9,370.0 60.9,370.0C60.7,368.7 60.1,364.7 59.8,362.0C59.4,359.3 59.1,356.7 58.8,354.0C58.5,351.3 58.1,348.7 57.8,346.0C57.4,343.3 56.9,339.3 56.7,338.0Z"}, {"m": null, "d": "M60.9,370.0C60.6,371.7 59.5,376.3 59.0,380.0C58.5,383.7 57.8,388.3 58.0,392.0C58.2,395.7 58.7,399.7 60.0,402.0C61.3,404.3 63.8,405.7 66.0,406.0C68.2,406.3 71.3,405.7 73.0,404.0C74.7,402.3 75.7,399.3 76.0,396.0C76.3,392.7 75.5,388.3 75.0,384.0C74.5,379.7 73.2,372.3 72.8,370.0C70.8,370.0 62.9,370.0 60.9,370.0Z"}]};
@@ -472,7 +474,8 @@ function migrate(d) {
     };
   });
   return { version: 2, workouts, sessions, plan: d.plan || {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
-    oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo };
+    oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo,
+    deleted: d.deleted || [], updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null };
 }
 
 function load() {
@@ -484,6 +487,8 @@ function load() {
     oura: { connected: false, lastSync: null, days: {} }, demo: false };
 }
 function save() {
+  state.updatedAt = Date.now();
+  try { schedulePush(); } catch (e) { /* cloud not ready yet */ }
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
   catch (e) { toast("Couldn't save on this phone. Export a backup from Settings now."); }
 }
@@ -603,11 +608,10 @@ function src() {
   return { sessions: state.sessions.filter((s) => s.finishedAt && setCount(s) > 0), oura: (state.oura && state.oura.days) || {} };
 }
 function latestOura(oura) {
-  const keys = Object.keys(oura).sort();
-  if (!keys.length) return null;
-  const t = today();
-  return oura[t] || oura[keys[keys.length - 1]];
+  const keys = Object.keys(oura).filter((k) => oura[k] && oura[k].readiness != null).sort();
+  return keys.length ? oura[keys[keys.length - 1]] : null;
 }
+const dash = (v, f) => (v == null || Number.isNaN(v) ? "–" : f(v));
 function readinessLevel(r) {
   if (r >= 85) return { cls: "up", word: "Primed", tip: "Good day to push for a heavier set or a PR." };
   if (r >= 70) return { cls: "ok", word: "Good", tip: "Train as planned." };
@@ -737,44 +741,51 @@ function readinessCardHTML() {
   const lv = readinessLevel(o.readiness);
   return `<button class="rcard" data-action="tab" data-tab="recovery">
     <span class="rcard-n ${lv.cls}">${o.readiness}</span>
-    <span class="rcard-t"><b>Readiness · ${lv.word}</b><span>${lv.tip}</span><span class="rcard-s">Slept ${fmtHM(o.total)} · HRV ${o.hrv} ms${state.demo ? " · sample data" : ""}</span></span></button>`;
+    <span class="rcard-t"><b>Readiness · ${lv.word}</b><span>${lv.tip}</span><span class="rcard-s">Slept ${dash(o.total, fmtHM)} · HRV ${dash(o.hrv, (v) => v + " ms")}${state.demo ? " · sample data" : ""}</span></span></button>`;
 }
 
 function recoveryHTML() {
   const S = src(), o = S.oura, keys = Object.keys(o).sort();
-  const head = `<div class="page-head"><div><h1 class="page-title">Recovery</h1><div class="page-sub">From your Oura Ring</div></div></div>${demoBanner()}`;
-  if (!keys.length) return head + `<div class="card connect"><h4>Connect your Oura Ring</h4>
-      <p class="sub">Once connected, your sleep, readiness, HRV and resting heart rate sync here every day and feed your Insights.</p>
-      <button class="btn block" disabled>Connect Oura (available after setup)</button>
-      <p class="sub small">This needs the Supabase step we're doing next, which keeps your Oura login private.</p>
-      <button class="btn primary block" data-action="demo-on">Preview with sample data</button></div>`;
-  const t = latestOura(o), lv = readinessLevel(t.readiness);
-  const base = avg(keys.slice(-30).map((k) => o[k].hrv));
+  const status = !state.demo && state.oura.connected
+    ? `<div class="page-sub">${ui.ouraSyncing ? "Syncing…" : syncedAgo() || "From your Oura Ring"} · <button class="link-inline" data-action="oura-sync">Sync now</button></div>`
+    : `<div class="page-sub">From your Oura Ring</div>`;
+  const head = `<div class="page-head"><div><h1 class="page-title">Recovery</h1>${status}</div></div>${demoBanner()}`;
+  const t = latestOura(o);
+  if (!t && !state.demo && state.oura.connected) return head + `<div class="card"><h4>${ui.ouraSyncing ? "Pulling your Oura data…" : "No Oura data yet"}</h4>
+      <p class="sub">${ui.ouraSyncing ? "The first sync brings in about four months of history and can take a moment." : state.oura.lastError ? "Last sync problem: " + esc(state.oura.lastError) : "Make sure your ring has synced with the Oura app, then tap Sync now."}</p>
+      <button class="btn primary block" data-action="oura-sync">Sync now</button></div>`;
+  if (!t) return head + `<div class="card connect"><h4>Connect your Oura Ring</h4>
+      <p class="sub">Your sleep, readiness, HRV and resting heart rate will sync here every day and feed your Insights.</p>
+      <button class="btn primary block" data-action="oura-connect">${session ? "Connect Oura" : "Sign in to connect Oura"}</button>
+      <p class="sub small">You'll approve access on Oura's own page. Your Oura login is stored privately on the server, never in the app.</p>
+      <button class="btn block" data-action="demo-on">Preview with sample data</button></div>`;
+  const lv = readinessLevel(t.readiness);
+  const base = avg(keys.slice(-30).map((k) => o[k].hrv).filter((v) => v != null));
   const range = keys.slice(-(ui.range || 14));
-  const stage = (k, c, lab) => `<i class="${c}" style="width:${(t[k] / (t.total + t.awake) * 100).toFixed(1)}%"></i>`;
-  const tempF = t.temp * 1.8;
+  const stage = (k, c) => `<i class="${c}" style="width:${((t[k] || 0) / ((t.total || 1) + (t.awake || 0)) * 100).toFixed(1)}%"></i>`;
+  const prevDay = o[addDays(t.date, -1)];
   return head + `
     <div class="card ready">${ringSVG(t.readiness, lv.cls)}
       <div><h4>Readiness · ${lv.word}</h4><p class="sub">${lv.tip}</p>
       <p class="sub small">${t.date === today() ? "Today" : fmtDate(t.date)}</p></div></div>
     <div class="stats">
-      <div class="stat"><b>${t.sleepScore}</b><span>Sleep score</span></div>
-      <div class="stat"><b>${fmtHM(t.total)}</b><span>Total sleep</span></div>
-      <div class="stat"><b>${t.hrv}<small> ms</small></b><span>HRV · ${signed(t.hrv - base, 0)} vs 30-day avg</span></div>
-      <div class="stat"><b>${t.rhr}<small> bpm</small></b><span>Lowest resting HR</span></div>
-      <div class="stat"><b>${signed(tempF, 1)}°F</b><span>Body temperature</span></div>
-      <div class="stat"><b>${o[addDays(t.date, -1)] ? (o[addDays(t.date, -1)].steps / 1000).toFixed(1) + "k" : "–"}</b><span>Steps yesterday</span></div>
+      <div class="stat"><b>${dash(t.sleepScore, (v) => v)}</b><span>Sleep score</span></div>
+      <div class="stat"><b>${dash(t.total, fmtHM)}</b><span>Total sleep</span></div>
+      <div class="stat"><b>${dash(t.hrv, (v) => v + "<small> ms</small>")}</b><span>HRV${t.hrv != null && base ? " · " + signed(t.hrv - base, 0) + " vs 30-day avg" : ""}</span></div>
+      <div class="stat"><b>${dash(t.rhr, (v) => v + "<small> bpm</small>")}</b><span>Lowest resting HR</span></div>
+      <div class="stat"><b>${dash(t.temp, (v) => signed(v * 1.8, 1) + "°F")}</b><span>Body temperature</span></div>
+      <div class="stat"><b>${dash(prevDay && prevDay.steps, (v) => (v / 1000).toFixed(1) + "k")}</b><span>Steps yesterday</span></div>
     </div>
-    <div class="card"><h4>Last night</h4>
+    ${t.total ? `<div class="card"><h4>Last night</h4>
       <div class="stages">${stage("deep", "s-deep")}${stage("rem", "s-rem")}${stage("light", "s-light")}${stage("awake", "s-awake")}</div>
-      <div class="legend2"><span><i class="s-deep"></i>Deep ${fmtHM(t.deep)}</span><span><i class="s-rem"></i>REM ${fmtHM(t.rem)}</span><span><i class="s-light"></i>Light ${fmtHM(t.light)}</span><span><i class="s-awake"></i>Awake ${Math.round(t.awake / 60)}m</span></div></div>
+      <div class="legend2"><span><i class="s-deep"></i>Deep ${fmtHM(t.deep)}</span><span><i class="s-rem"></i>REM ${fmtHM(t.rem)}</span><span><i class="s-light"></i>Light ${fmtHM(t.light)}</span><span><i class="s-awake"></i>Awake ${Math.round((t.awake || 0) / 60)}m</span></div></div>` : ""}
     <div class="sec-h" style="margin-top:22px"><h3>Trends</h3><div class="range">${[14, 30].map((r) =>
       `<button data-action="range" data-r="${r}" aria-pressed="${(ui.range || 14) === r}">${r} days</button>`).join("")}</div></div>
     <div class="card"><h4>Readiness</h4>${chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].readiness), cls: "ln" }], yMin: 40, yMax: 100 })}</div>
-    <div class="card"><h4>Sleep</h4>${chartSVG({ labels: range, series: [{ type: "bar", data: range.map((k) => o[k].total / 3600) }], yMin: 0, yMax: 10, guide: 7.5, fmt: (v) => v.toFixed(0) + "h" })}
+    <div class="card"><h4>Sleep</h4>${chartSVG({ labels: range, series: [{ type: "bar", data: range.map((k) => o[k].total != null ? o[k].total / 3600 : null) }], yMin: 0, yMax: 10, guide: 7.5, fmt: (v) => v.toFixed(0) + "h" })}
       <p class="sub small">Dashed line: 7.5 hours</p></div>
     <div class="card"><h4>HRV</h4>${chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].hrv), cls: "ln" }], guide: base })}
-      <p class="sub small">Dashed line: your 30-day average (${Math.round(base)} ms). Higher generally means better recovered.</p></div>
+      <p class="sub small">Dashed line: your 30-day average (${dash(base, Math.round)} ms). Higher generally means better recovered.</p></div>
     <div class="card"><h4>Resting heart rate</h4>${chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].rhr), cls: "ln alt" }] })}</div>`;
 }
 
@@ -803,9 +814,9 @@ function insightsHTML() {
   const perfs = sessionPerf(sessions);
   const rd = effect(perfs, (d) => o[d] ? o[d].readiness : null, [
     { label: "Readiness < 70", test: (v) => v < 70 }, { label: "70–84", test: (v) => v >= 70 && v < 85 }, { label: "85+", test: (v) => v >= 85 }]);
-  const sl = effect(perfs, (d) => o[d] ? o[d].total / 3600 : null, [
+  const sl = effect(perfs, (d) => o[d] && o[d].total != null ? o[d].total / 3600 : null, [
     { label: "Under 6.5h", test: (v) => v < 6.5 }, { label: "6.5–7.5h", test: (v) => v >= 6.5 && v < 7.5 }, { label: "7.5h+", test: (v) => v >= 7.5 }]);
-  const wk = effect(perfs, (d) => { const p = o[addDays(d, -1)]; return p ? p.steps : null; }, [
+  const wk = effect(perfs, (d) => { const p = o[addDays(d, -1)]; return p && p.steps != null ? p.steps : null; }, [
     { label: "After 15k+ steps", test: (v) => v >= 15000 }, { label: "After < 15k", test: (v) => v < 15000 }]);
   const need = nights ? "Needs at least 3 sessions in each group to compare." : "Connect Oura to unlock this.";
   const wkSentence = (() => { const a = wk[0], b = wk[1]; if (a.n < 3 || b.n < 3) return null; const d = b.avg - a.avg;
@@ -816,8 +827,8 @@ function insightsHTML() {
   // 3. Training load vs HRV (last 8 weeks)
   const mon = mondayOf(today()), weeks = [...Array(8)].map((_, i) => addDays(mon, (i - 7) * 7));
   const wSets = weeks.map((w) => sessions.filter((s) => s.date >= w && s.date <= addDays(w, 6)).reduce((n, s) => n + setCount(s), 0));
-  const wHrv = weeks.map((w) => avg([...Array(7)].map((_, i) => o[addDays(w, i)]).filter(Boolean).map((x) => x.hrv)));
-  const hrvBase = avg(Object.keys(o).sort().slice(-30).map((k) => o[k].hrv));
+  const wHrv = weeks.map((w) => avg([...Array(7)].map((_, i) => o[addDays(w, i)]).filter(Boolean).map((x) => x.hrv).filter((v) => v != null)));
+  const hrvBase = avg(Object.keys(o).sort().slice(-30).map((k) => o[k].hrv).filter((v) => v != null));
   const lastFull = 6; // last complete week
   let loadMsg = nights ? "Your training volume and recovery look balanced." : "Connect Oura to compare training volume with recovery.";
   if (nights && wHrv[lastFull] != null && hrvBase) {
@@ -875,6 +886,163 @@ function liftSheetHTML(name) {
       <div class="stat"><b>${s.length}</b><span>Sessions</span></div>
       <div class="stat"><b>${st.sincePR != null ? st.sincePR : "–"}</b><span>Sessions since best</span></div></div>
     <p class="sub small" style="margin-top:12px">Estimated 1RM uses your best set each session: weight × (1 + reps ÷ 30). It lets sets with different reps be compared.</p>`;
+}
+
+/* ================= Cloud: account, backup, Oura ================= */
+const SB_URL = "https://pvodxxmfgflvgvbdotlv.supabase.co";
+const SB_KEY = "sb_publishable_V8kPahG0KFWgaRVhEHuHrA_iQmEGOpZ";   // publishable key: designed to be public
+let sb = null, session = null, pushTimer = null, ouraBusy = false;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "liftlog-auth" } });
+  }
+} catch (e) { sb = null; }   // offline or blocked: the app keeps working locally
+
+function schedulePush() {
+  if (!sb || !session) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(cloudPush, 1500);
+}
+async function cloudPush() {
+  if (!sb || !session) return;
+  const blob = { workouts: state.workouts, sessions: state.sessions, plan: state.plan, restSeconds: state.restSeconds,
+                 deleted: state.deleted || [], updatedAt: state.updatedAt || Date.now() };
+  try {
+    const { error } = await sb.from("user_data").upsert({ user_id: session.user.id, data: blob, updated_at: new Date().toISOString() });
+    if (!error) { state.lastCloud = Date.now(); localStorage.setItem(KEY, JSON.stringify(state)); }
+  } catch (e) { /* offline: the next save or app open retries */ }
+}
+/* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
+function mergeRemote(r) {
+  const deleted = new Set([...(state.deleted || []), ...(r.deleted || [])]);
+  const byId = new Map();
+  [...(r.sessions || []), ...state.sessions].forEach((s) => {
+    if (!s || deleted.has(s.id)) return;
+    const cur = byId.get(s.id);
+    if (!cur || setCount(s) > setCount(cur) || (s.finishedAt && !cur.finishedAt && setCount(s) >= setCount(cur))) byId.set(s.id, s);
+  });
+  state.sessions = [...byId.values()];
+  if ((r.updatedAt || 0) > (state.updatedAt || 0)) {
+    if (Array.isArray(r.workouts) && r.workouts.length) state.workouts = r.workouts;
+    if (r.plan) state.plan = r.plan;
+    if (r.restSeconds) state.restSeconds = r.restSeconds;
+  }
+  state.deleted = [...deleted];
+}
+async function cloudPull() {
+  if (!sb || !session) return;
+  try {
+    const { data, error } = await sb.from("user_data").select("data").eq("user_id", session.user.id).maybeSingle();
+    if (error) return;
+    if (data && data.data) mergeRemote(data.data);
+    save();
+    render();
+  } catch (e) { /* offline */ }
+}
+
+async function ouraRefresh(force) {
+  if (!sb || !session || ouraBusy) return;
+  ouraBusy = true;
+  try {
+    const { data: c } = await sb.from("oura_connections").select("*").eq("user_id", session.user.id).maybeSingle();
+    state.oura.connected = !!c;
+    state.oura.lastError = c ? c.last_error : null;
+    if (c) {
+      const stale = !c.last_sync || Date.now() - new Date(c.last_sync).getTime() > 3 * 3600_000;
+      if (force || stale) {
+        ui.ouraSyncing = true; render();
+        const { error } = await sb.functions.invoke("oura-sync", { body: { days: c.last_sync ? 14 : 120 } });
+        ui.ouraSyncing = false;
+        if (error) toast("Couldn't sync Oura right now. Try Sync now in Settings.");
+      }
+      const { data: rows } = await sb.from("oura_days").select("day, data").eq("user_id", session.user.id).gte("day", addDays(today(), -150));
+      if (rows) {
+        const days = {};
+        rows.forEach((r) => { days[r.day] = r.data; });
+        state.oura.days = days;
+        state.oura.lastSync = Date.now();
+      }
+    }
+    save();
+  } catch (e) { ui.ouraSyncing = false; }
+  ouraBusy = false;
+  render();
+}
+
+async function initCloud() {
+  if (!sb) return;
+  try {
+    const { data } = await sb.auth.getSession();
+    session = data.session;
+    sb.auth.onAuthStateChange((_event, s) => { session = s; });
+    if (session) { await cloudPull(); await ouraRefresh(false); }
+    else render();
+  } catch (e) { /* offline */ }
+}
+
+async function signIn(mode) {
+  if (!sb) { toast("Can't reach the server. Check your connection."); return; }
+  const email = ($("#authEmail") || {}).value?.trim();
+  const password = ($("#authPw") || {}).value || "";
+  if (!email || !email.includes("@")) { toast("Enter your email address."); return; }
+  if (password.length < 6) { toast("Passwords need at least 6 characters."); return; }
+  const btn = $('[data-action="auth-go"]');
+  if (btn) { btn.disabled = true; btn.textContent = "One moment…"; }
+  const res = mode === "signup" ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
+  if (res.error) {
+    if (btn) { btn.disabled = false; btn.textContent = mode === "signup" ? "Create account" : "Sign in"; }
+    toast(res.error.message);
+    return;
+  }
+  if (!res.data.session) { toast("Check your email to confirm your account, then sign in."); ui.sheet = null; render(); return; }
+  session = res.data.session;
+  ui.sheet = null;
+  toast(mode === "signup" ? "Account created. Your workouts are backing up." : "Signed in.");
+  await cloudPull();
+  await ouraRefresh(false);
+}
+async function signOut() {
+  if (sb) { try { await sb.auth.signOut(); } catch (e) {} }
+  session = null;
+  state.oura = { connected: false, lastSync: null, days: {} };
+  save(); render();
+  toast("Signed out. Your workouts are still saved on this phone.");
+}
+async function connectOura() {
+  if (!sb) { toast("Can't reach the server. Check your connection."); return; }
+  if (!session) { ui.sheet = "auth"; ui.sd = { mode: "signin", email: "" }; renderSheet(); toast("Sign in first, then connect Oura."); return; }
+  const { data, error } = await sb.functions.invoke("oura-connect", { body: {} });
+  if (error || !data || !data.url) { toast("Couldn't start the Oura connection. Check that the functions are deployed."); return; }
+  state.demo = false; save();
+  window.location.href = data.url;
+}
+async function disconnectOura() {
+  if (!(await ask({ title: "Disconnect Oura?", body: "Your Oura data will be removed from Lift Log. You can reconnect any time.", ok: "Disconnect", danger: true }))) return;
+  const { error } = await sb.functions.invoke("oura-connect", { body: { action: "disconnect" } });
+  if (error) { toast("Couldn't disconnect right now."); return; }
+  state.oura = { connected: false, lastSync: null, days: {} };
+  save(); render(); toast("Oura disconnected.");
+}
+
+/* After Oura's login page sends you back here */
+(function handleOuraReturn() {
+  const p = new URLSearchParams(location.search).get("oura");
+  if (!p) return;
+  history.replaceState(null, "", location.pathname);
+  const ok = p === "connected";
+  setTimeout(() => ask({
+    title: ok ? "Oura connected" : "Oura wasn't connected",
+    body: ok ? "If there's a Done button in the corner, tap it to go back to Lift Log. Your Oura data loads there automatically."
+             : p === "expired" ? "That login took too long. Open Recovery and tap Connect Oura again."
+             : "The connection was cancelled or didn't finish. Open Recovery and tap Connect Oura to try again.",
+    ok: "OK", cancel: "Close"
+  }), 300);
+})();
+
+function syncedAgo() {
+  if (!state.oura.lastSync) return "";
+  const m = Math.round((Date.now() - state.oura.lastSync) / 60000);
+  return m < 1 ? "Synced just now" : m < 60 ? `Synced ${m} min ago` : `Synced ${Math.round(m / 60)} h ago`;
 }
 
 /* ================= Rendering ================= */
@@ -1028,12 +1196,23 @@ function settingsHTML() {
     <div class="group-label">Rest timer</div>
     <div class="group"><div class="seg">${[60, 90, 120, 180].map((s) =>
       `<button data-action="rest" data-s="${s}" aria-pressed="${state.restSeconds === s}">${fmtTime(s)}</button>`).join("")}</div></div>
+    <div class="group-label">Account</div>
+    <div class="group">${session
+      ? `<div class="set-row"><span>Signed in</span><span class="sub">${esc(session.user.email || "")}</span></div>
+         <div class="set-row"><span>Cloud backup</span><span class="sub">${state.lastCloud ? "On · saved " + new Date(state.lastCloud).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "On"}</span></div>
+         <button class="set-row" data-action="sign-out"><span>Sign out</span></button>`
+      : `<button class="set-row" data-action="auth-open"><span>Sign in or create an account</span>${I.chevR}</button>`}</div>
+    ${session ? "" : `<p class="hint">An account backs up your workouts to the cloud and lets you connect Oura.</p>`}
     <div class="group-label">Oura Ring</div>
     <div class="group">
-      <div class="set-row"><span>Connection</span><span class="sub">${state.oura && state.oura.connected ? "Connected" : "Not connected yet"}</span></div>
+      ${state.oura.connected
+        ? `<div class="set-row"><span>Connection</span><span class="sub">Connected</span></div>
+           <button class="set-row" data-action="oura-sync"><span>Sync now</span><span class="sub">${ui.ouraSyncing ? "Syncing…" : syncedAgo()}</span></button>
+           <button class="set-row" data-action="oura-disconnect"><span style="color:var(--red)">Disconnect Oura</span></button>`
+        : `<button class="set-row" data-action="oura-connect"><span>${session ? "Connect Oura" : "Sign in to connect Oura"}</span>${I.chevR}</button>`}
       <button class="set-row" data-action="${state.demo ? "demo-off" : "demo-on"}"><span>Preview with sample data</span><span class="sub">${state.demo ? "On" : "Off"}</span></button>
     </div>
-    <p class="hint">Connecting Oura comes with the Supabase setup. Sample data fills Recovery and Insights so you can explore them now. It never mixes with your real workouts.</p>
+    <p class="hint">Sample data fills Recovery and Insights for exploring. It never mixes with your real workouts or Oura data.</p>
     <div class="group-label">Backup</div>
     <div class="group">
       <button class="set-row" data-action="export"><span>Export workouts</span><span class="sub">Last: ${lastExp}</span></button>
@@ -1102,6 +1281,16 @@ function renderSheet() {
       ${state.workouts.map((w) => `<button class="opt" data-action="set-plan" data-id="${esc(w.id)}" aria-pressed="${cur === w.id}"><span>${esc(w.name)}</span><span class="sec-sub">${pl(w.exercises.length, "exercise")}</span></button>`).join("")}
       <button class="opt" data-action="set-plan" data-id="rest" aria-pressed="${cur === "rest"}"><span>Rest day</span></button>
       ${cur ? `<button class="opt clear" data-action="set-plan" data-id="">Clear plan</button>` : ""}`;
+  } else if (ui.sheet === "auth") {
+    const up = ui.sd.mode === "signup";
+    inner = `<h3>${up ? "Create account" : "Sign in"}</h3>
+      <p class="sub" style="margin:-6px 0 14px">${up ? "Your workouts on this phone will be backed up to your new account." : "Sign in to back up your workouts and connect Oura."}</p>
+      <label class="field-label" for="authEmail">Email</label>
+      <input class="text-in" id="authEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" value="${esc(ui.sd.email || "")}">
+      <label class="field-label" for="authPw">Password${up ? " (6+ characters)" : ""}</label>
+      <input class="text-in" id="authPw" type="password" autocomplete="${up ? "new-password" : "current-password"}">
+      <button class="btn primary block" data-action="auth-go">${up ? "Create account" : "Sign in"}</button>
+      <button class="link-btn" style="display:block;margin:10px auto 0" data-action="auth-mode">${up ? "Already have an account? Sign in" : "New here? Create an account"}</button>`;
   } else if (ui.sheet === "lift") {
     inner = liftSheetHTML(ui.sd.name);
   } else if (ui.sheet === "exercise") {
@@ -1166,7 +1355,12 @@ function tick() {
   }
 }
 setInterval(tick, 500);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+let lastWake = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  render();
+  if (Date.now() - lastWake > 60_000) { lastWake = Date.now(); try { cloudPull().then(() => ouraRefresh(false)); } catch (e) {} }
+});
 
 /* ================= Actions ================= */
 let toastUndo = null;
@@ -1218,6 +1412,7 @@ function openWorkout() { ui.workoutOpen = true; ui.sheet = null; render(); $("#w
 function finishSession(s, quiet) {
   if (!setCount(s)) {
     state.sessions = state.sessions.filter((x) => x !== s);
+    state.deleted = [...(state.deleted || []), s.id];
     if (!quiet) toast("Workout discarded. No sets were logged.");
   } else {
     s.finishedAt = new Date().toISOString();
@@ -1340,12 +1535,14 @@ document.addEventListener("pointerup", endDrag);
 document.addEventListener("pointercancel", endDrag);
 
 document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && (ev.target.id === "authPw" || ev.target.id === "authEmail")) { ev.preventDefault(); signIn(ui.sd.mode); }
   if (ev.key === "Enter" && ev.target.id === "dlg-in") { ev.preventDefault(); closeDialog(true); }
   if (ev.key === "Escape" && !$("#dialog").hidden) closeDialog(false);
 });
 document.addEventListener("input", (ev) => {
   const el = ev.target;
   if (el.id === "exName") { ui.sd.name = el.value; return; }
+  if (el.id === "authEmail") { ui.sd.email = el.value; return; }
   if (!el.dataset.field || el.dataset.i == null) return;
   const s = activeSession(); if (!s) return;
   const e = liveExercises(s)[+el.dataset.i];
@@ -1395,6 +1592,7 @@ document.addEventListener("click", async (ev) => {
       const ok = await ask({ title: `Cancel ${s.name}?`, body: n ? `The ${pl(n, "set")} you logged in this workout will be deleted. This can't be undone.` : "Nothing has been logged yet.", ok: "Cancel workout", cancel: "Keep going", danger: true });
       if (!ok) break;
       state.sessions = state.sessions.filter((x) => x !== s);
+      state.deleted = [...(state.deleted || []), s.id];
       stopTimer(); ui.workoutOpen = false; ui.open = null; ui.drafts = {};
       save(); render(); toast("Workout cancelled. Nothing was saved."); break;
     }
@@ -1402,6 +1600,13 @@ document.addEventListener("click", async (ev) => {
     case "wseg": ui.wseg = b.dataset.seg; ui.detail = null; render(); break;
     case "range": ui.range = +b.dataset.r; render(); break;
     case "lift": ui.sheet = "lift"; ui.sd = { name: b.dataset.name }; renderSheet(); break;
+    case "auth-open": ui.sheet = "auth"; ui.sd = { mode: "signin", email: "" }; renderSheet(); break;
+    case "auth-mode": ui.sd.mode = ui.sd.mode === "signup" ? "signin" : "signup"; renderSheet(); break;
+    case "auth-go": await signIn(ui.sd.mode); break;
+    case "sign-out": if (await ask({ title: "Sign out?", body: "Your workouts stay on this phone and in your backup.", ok: "Sign out" })) await signOut(); break;
+    case "oura-connect": await connectOura(); break;
+    case "oura-sync": await ouraRefresh(true); break;
+    case "oura-disconnect": await disconnectOura(); break;
     case "demo-on": state.demo = true; save(); render(); toast("Showing sample data in Recovery and Insights."); break;
     case "demo-off": state.demo = false; save(); render(); toast("Sample data off."); break;
     case "dlg-cancel": closeDialog(false); break;
@@ -1495,6 +1700,7 @@ document.addEventListener("click", async (ev) => {
       const s = state.sessions.find((x) => x.id === b.dataset.id);
       if (!s || !(await ask({ title: `Delete this ${s.name} workout?`, body: `${fmtDate(s.date)}, ${pl(setCount(s), "set")}. This can't be undone.`, ok: "Delete", danger: true }))) break;
       state.sessions = state.sessions.filter((x) => x !== s);
+      state.deleted = [...(state.deleted || []), s.id];
       save(); render(); break;
     }
     case "rest": state.restSeconds = +b.dataset.s; save(); render(); break;
@@ -1504,6 +1710,7 @@ document.addEventListener("click", async (ev) => {
 });
 
 render();
+initCloud();
 </script>
 </body>
 </html>
