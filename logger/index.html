@@ -498,6 +498,10 @@ body.timer-on:not(.in-workout) .start-bar { bottom: calc(var(--tabs-h) + var(--s
   --nav-bg: rgba(30,30,34,.92); --nav-border: #2E2E34; --nav-icon: #C9C9CE; --pill-border: #3A3A41;
   --panel: #F4F4F1; --panel-ink: #141414; --panel-btn: #E4E4DE; --panel-track: #E1E1DB; --ph: #5D646C;
 }
+:root { --c4: #FFD3A8; }
+:root[data-accent="sea"]  { --c4: #CEDFCC; }
+:root[data-accent="dusk"] { --c4: #FFE0B8; }
+:root[data-accent="sand"] { --c4: #F9E3CC; }
 :root[data-accent="sea"]  { --green: #67B39F; --green-lo: #CEDFCC; --green-soft: rgba(103,179,159,.16); --lav: #A9D3C4; --pink: #E1EDDD; }
 :root[data-accent="dusk"] { --green: #A9B8FF; --green-lo: #DDE3FF; --green-soft: rgba(169,184,255,.16); --lav: #CDBEF3; --pink: #F3CAD6; }
 :root[data-accent="sand"] { --green: #F4BE8C; --green-lo: #F9E3CC; --green-soft: rgba(244,190,140,.16); --lav: #E7D3BC; --pink: #CBDCC4; }
@@ -676,6 +680,46 @@ select.text-in { -webkit-appearance: none; appearance: none; }
 .spin { width: 44px; height: 44px; margin: 24px auto 12px; border-radius: 50%; border: 4px solid var(--raised); border-top-color: var(--green); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+
+/* food: day view, colorful meals, recent, calendar */
+.cal-btn { background: var(--surface); }
+.cal-btn svg { width: 22px; height: 22px; }
+.day-nav { display: flex; align-items: center; justify-content: space-between; margin: -4px -8px 8px; font-weight: 700; }
+.log-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin: 2px 0 14px; }
+.snap { display: flex; align-items: center; justify-content: center; gap: 10px; height: 58px; border-radius: 29px; background: var(--green); color: var(--ink); font-weight: 800; font-size: 17px; }
+.snap svg { width: 24px; height: 24px; }
+.mini-act { height: 58px; padding: 0 16px; border-radius: 29px; background: var(--surface); font-weight: 700; font-size: 15px; }
+.meal-card { border-radius: 24px; padding: 14px 16px 8px; margin-bottom: 10px; color: var(--ink); }
+.m-breakfast { background: var(--pink); } .m-lunch { background: var(--green); } .m-dinner { background: var(--lav); } .m-snacks { background: var(--c4); }
+.meal-card .meal-h { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-bottom: 4px; }
+.meal-card h4 { font-family: var(--display); font-weight: 600; font-size: 19px; margin: 0; color: var(--ink); }
+.mc-kcal { font-size: 13px; font-weight: 700; color: rgba(20,20,20,.6); }
+.mc-add { width: 38px; height: 38px; border-radius: 19px; background: rgba(255,255,255,.6); color: var(--ink); font-size: 24px; font-weight: 500; line-height: 1; }
+.meal-card .fe { border-top: 1px solid rgba(20,20,20,.12); color: var(--ink); }
+.meal-card .fe-m, .meal-card .fe-n em { color: rgba(20,20,20,.6); }
+.mc-empty { margin: 4px 0 8px; font-size: 14px; color: rgba(20,20,20,.5); }
+#food-swipe.slide-l { animation: slideL .22s ease-out; } #food-swipe.slide-r { animation: slideR .22s ease-out; }
+@keyframes slideL { from { transform: translateX(40px); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes slideR { from { transform: translateX(-40px); opacity: .3; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #food-swipe.slide-l, #food-swipe.slide-r { animation: none; } }
+.meal-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.meal-seg button { padding: 0 6px; font-size: 13.5px; }
+.rq-card { padding: 4px 6px 4px 14px; }
+.rq-row { display: grid; grid-template-columns: 1fr 52px; align-items: center; border-bottom: 1px solid var(--line); }
+.rq-row:last-child { border-bottom: 0; }
+.rq-main { text-align: left; padding: 12px 0; display: grid; gap: 3px; } .rq-main b { font-weight: 600; font-size: 15.5px; } .rq-main span { color: var(--muted); font-size: 13px; }
+.rq-plus { width: 42px; height: 42px; border-radius: 21px; background: var(--green); color: var(--ink); font-size: 24px; font-weight: 600; justify-self: center; line-height: 1; }
+.fcal-day { position: relative; aspect-ratio: 1; border-radius: 12px; background: var(--raised); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+.fcal-day:disabled { opacity: .35; }
+.fcal-day i { position: absolute; bottom: 6px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 3px; background: var(--accent-text); }
+.fcal-day.hit { background: var(--green); color: var(--ink); } .fcal-day.hit i { background: var(--ink); }
+.fcal-day.today { box-shadow: inset 0 0 0 2px var(--text); } .fcal-day.sel { box-shadow: inset 0 0 0 2.5px var(--lav); }
+.fcal-key { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 13px; margin-top: 12px; }
+.fcal-key i { display: inline-block; vertical-align: -1px; margin-right: 6px; }
+.k-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--accent-text); } .k-hit { width: 12px; height: 12px; border-radius: 4px; background: var(--green); }
+#food-rq { background: var(--surface); }
+.reanalyze { margin: 8px 0 4px; } .reanalyze summary { color: var(--accent-text); font-weight: 600; font-size: 14px; cursor: pointer; padding: 6px 0; }
+.reanalyze .text-in { margin: 8px 0; }
 
 /* appearance controls */
 .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; }
@@ -857,7 +901,7 @@ let state = load();
 state.sessions.forEach((s) => { if (!s.finishedAt && s.date < today()) s.finishedAt = s.date + "T23:59:00"; });
 save();
 
-const ui = { iseg: "trends", prevTab: "home", foodDay: null, onboard: false, pf: {}, tab: "home", wseg: "routines", range: 14, detail: null, weekOffset: 0, open: null, drafts: {}, sheet: null, sd: {}, workoutOpen: false };
+const ui = { fseg: "day", qMeal: null, rq: "", fcMonth: null, iseg: "trends", prevTab: "home", foodDay: null, onboard: false, pf: {}, tab: "home", wseg: "routines", range: 14, detail: null, weekOffset: 0, open: null, drafts: {}, sheet: null, sd: {}, workoutOpen: false };
 
 const workoutById = (id) => state.workouts.find((w) => w.id === id);
 const activeSession = () => state.sessions.find((s) => !s.finishedAt);
@@ -2224,33 +2268,90 @@ function calRingSVG(have, goal) {
   return `<svg class="cal-ring" viewBox="0 0 124 124" aria-hidden="true"><circle cx="62" cy="62" r="52" class="ring-bg"/>
     <circle cx="62" cy="62" r="52" class="ring-fg" stroke-dasharray="${C * f} ${C}" transform="rotate(-90 62 62)"/></svg>`;
 }
+function autoMeal(date) {
+  if (date && date !== today()) return "snacks";
+  const h = new Date().getHours() + new Date().getMinutes() / 60;
+  return h < 10.5 ? "breakfast" : h < 15 ? "lunch" : h < 21 ? "dinner" : "snacks";
+}
+const ICON_CAL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`;
+const ICON_CAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8h3.5l1.8-3h5.4l1.8 3H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
 function foodHTML() {
-  const d = ui.foodDay || today(), T = targets(), tot = dayTotals(d);
-  const isToday = d === today();
-  const left = T ? T.kcal - tot.kcal : null;
+  const d = ui.foodDay || today(), isToday = d === today();
+  const seg = `<div class="seg2" role="tablist" style="margin-bottom:14px">
+    <button data-action="fseg" data-s="day" aria-pressed="${ui.fseg !== "recent"}">Day</button>
+    <button data-action="fseg" data-s="recent" aria-pressed="${ui.fseg === "recent"}">Recent</button></div>`;
   const head = `<div class="page-head"><div><h1 class="page-title">Food</h1>
-      <div class="page-sub">${isToday ? "Today" : fmtDate(d, { weekday: "long", month: "short", day: "numeric" })}</div></div>
-    <div class="week-nav"><button class="icon-btn" data-action="food-day" data-d="-1" aria-label="Previous day">${I.chevL}</button>
-      <button class="icon-btn" data-action="food-day" data-d="1" aria-label="Next day" ${isToday ? "disabled" : ""}><span style="transform:scaleX(-1);display:grid">${I.chevL}</span></button></div></div>`;
+      <div class="page-sub">${ui.fseg === "recent" ? "Tap a meal to log it today" : isToday ? "Today" : fmtDate(d, { weekday: "long", month: "short", day: "numeric" })}</div></div>
+    <button class="icon-btn cal-btn" data-action="food-cal" aria-label="Open calendar">${ICON_CAL}</button></div>`;
+  if (ui.fseg === "recent") return head + seg + recentFoodHTML() + `<input type="file" id="food-file" accept="image/*" capture="environment" hidden>`;
+  const T = targets(), tot = dayTotals(d), left = T ? T.kcal - tot.kcal : null;
+  const nav = `<div class="day-nav"><button class="icon-btn" data-action="food-day" data-d="-1" aria-label="Previous day">${I.chevL}</button>
+    <span>${isToday ? "Today" : fmtDate(d, { weekday: "short", month: "short", day: "numeric" })}</span>
+    <button class="icon-btn" data-action="food-day" data-d="1" aria-label="Next day" ${isToday ? "disabled" : ""}><span style="transform:scaleX(-1);display:grid">${I.chevL}</span></button></div>`;
   const summary = T ? `<div class="card food-sum">
       <div class="fs-ring">${calRingSVG(tot.kcal, T.kcal)}<div class="fs-mid"><b>${r0(Math.abs(left)).toLocaleString()}</b><span>${left >= 0 ? "cal left" : "cal over"}</span></div></div>
-      <div class="fs-macros">
-        <div class="fs-cal">${r0(tot.kcal).toLocaleString()} / ${T.kcal.toLocaleString()} cal</div>
-        ${macroBar("Protein", tot.p, T.p, "p")}${macroBar("Carbs", tot.c, T.c, "c")}${macroBar("Fat", tot.f, T.f, "f")}
-      </div></div>`
+      <div class="fs-macros"><div class="fs-cal">${r0(tot.kcal).toLocaleString()} / ${T.kcal.toLocaleString()} cal</div>
+        ${macroBar("Protein", tot.p, T.p, "p")}${macroBar("Carbs", tot.c, T.c, "c")}${macroBar("Fat", tot.f, T.f, "f")}</div></div>`
     : `<div class="card"><h4>Set up your profile</h4><p class="sub">Your targets come from your height, weight, age and activity. Finish your profile in Settings to get them.</p></div>`;
+  const actions = isToday ? `<div class="log-row">
+      <button class="snap" data-action="food-snap">${ICON_CAM}<span>Snap a meal</span></button>
+      <button class="mini-act" data-action="food-quick-barcode">Scan</button>
+      <button class="mini-act" data-action="food-quick-manual">Manual</button></div>` : "";
   const meals = MEALS.map(([k, label]) => {
     const list = dayEntries(d).filter((e) => e.meal === k);
+    if (!isToday && !list.length) return "";
     const kc = list.reduce((n, e) => n + entryTotals(e).kcal, 0);
-    return `<div class="card meal"><div class="meal-h"><h4>${label}</h4><span class="sub">${list.length ? r0(kc).toLocaleString() + " cal" : ""}</span>
-        <button class="btn small" data-action="food-add" data-meal="${k}" aria-label="Add to ${label}">Add</button></div>
-      ${list.map((e) => { const x = entryTotals(e); return `<button class="fe" data-action="food-edit" data-id="${e.id}">
+    return `<div class="meal-card m-${k}"><div class="meal-h"><h4>${label}</h4><span class="mc-kcal">${list.length ? r0(kc).toLocaleString() + " cal" : ""}</span>
+        ${isToday ? `<button class="mc-add" data-action="food-add" data-meal="${k}" aria-label="Add to ${label}">+</button>` : ""}</div>
+      ${list.length ? list.map((e) => { const x = entryTotals(e); return `<button class="fe" data-action="food-edit" data-id="${e.id}">
         <span class="fe-n">${esc(e.name)}${(e.servings || 1) !== 1 ? ` <em>× ${fmtNum(e.servings)}</em>` : ""}</span><b>${r0(x.kcal)}</b>
-        <span class="fe-m">P ${r0(x.p)} · C ${r0(x.c)} · F ${r0(x.f)}${e.src === "photo" ? " · estimated from photo" : ""}</span></button>`; }).join("")}</div>`;
+        <span class="fe-m">P ${r0(x.p)} · C ${r0(x.c)} · F ${r0(x.f)}</span></button>`; }).join("") : `<p class="mc-empty">Nothing yet</p>`}</div>`;
   }).join("");
-  return head + summary + meals + foodHistoryHTML() +
+  const none = !isToday && !dayEntries(d).length ? `<div class="card"><p class="sub">Nothing was logged on this day.</p></div>` : "";
+  return head + seg + `<div id="food-swipe">${nav}${summary}${actions}${meals}${none}</div>` + (isToday ? foodHistoryHTML() : "") +
     `<button class="link-btn" data-action="food-targets" style="display:block;margin:14px auto 0">${T ? `Targets: ${T.kcal.toLocaleString()} cal · ${T.p} g protein · Edit` : "Edit targets"}</button>
     <input type="file" id="food-file" accept="image/*" capture="environment" hidden>`;
+}
+function recentFoodHTML() {
+  const meal = ui.qMeal || autoMeal();
+  const q = (ui.rq || "").toLowerCase();
+  const fav = food().saved.filter((x) => !q || x.name.toLowerCase().includes(q));
+  const favNames = new Set(food().saved.map((x) => x.name.toLowerCase()));
+  const seen = new Set(), recent = [];
+  Object.keys(food().days).sort().reverse().forEach((dd) => [...dayEntries(dd)].reverse().forEach((e) => {
+    const k = e.name.toLowerCase();
+    if (!seen.has(k) && !favNames.has(k) && recent.length < 25 && (!q || k.includes(q))) { seen.add(k); recent.push(e); }
+  }));
+  const row = (x, kind) => { const t = entryTotals(x); return `<div class="rq-row">
+    <button class="rq-main" data-action="food-quick" data-kind="${kind}" data-id="${x.id}" aria-label="Log ${esc(x.name)} to ${meal}">
+      <b>${esc(x.name)}</b><span>${r0(t.kcal)} cal · P ${r0(t.p)} · C ${r0(t.c)} · F ${r0(t.f)}</span></button>
+    <button class="rq-plus" data-action="food-quick" data-kind="${kind}" data-id="${x.id}" aria-label="Log ${esc(x.name)}">+</button></div>`; };
+  return `<span class="field-label">Log to</span>
+    <div class="seg2 meal-seg">${MEALS.map(([k, l]) => `<button data-action="qmeal" data-m="${k}" aria-pressed="${meal === k}">${l}</button>`).join("")}</div>
+    <input class="text-in" id="food-rq" placeholder="Search your foods" autocomplete="off" value="${esc(ui.rq || "")}">
+    ${fav.length ? `<div class="mini-l">Favorites</div><div class="card rq-card">${fav.map((x) => row(x, "fav")).join("")}</div>` : ""}
+    ${recent.length ? `<div class="mini-l">Recent</div><div class="card rq-card">${recent.map((x) => row(x, "recent")).join("")}</div>` : ""}
+    ${!fav.length && !recent.length ? `<div class="card"><p class="sub">${q ? "No foods match that search." : "Foods you log show up here so you can re-log them with one tap. Tick \"Save as a favorite\" when logging to pin a meal to the top."}</p></div>` : ""}`;
+}
+/* Calendar: dot = something logged; filled with the theme highlight = protein goal hit */
+function foodCalSheetHTML() {
+  const month = ui.fcMonth || (ui.foodDay || today()).slice(0, 7), first = month + "-01", fd = parseDay(first);
+  const daysIn = new Date(fd.getFullYear(), fd.getMonth() + 1, 0).getDate(), lead = (fd.getDay() + 6) % 7, T = targets();
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push(`<span class="cal-pad"></span>`);
+  for (let k = 1; k <= daysIn; k++) {
+    const d = `${month}-${String(k).padStart(2, "0")}`, logged = dayEntries(d).length > 0;
+    const hit = logged && T && dayTotals(d).p >= T.p * 0.95;
+    cells.push(`<button class="fcal-day${logged ? " logged" : ""}${hit ? " hit" : ""}${d === today() ? " today" : ""}${d === (ui.foodDay || today()) ? " sel" : ""}" data-action="food-cal-day" data-date="${d}" ${d > today() ? "disabled" : ""}
+      aria-label="${fmtDate(d, { month: "long", day: "numeric" })}${hit ? ", protein goal hit" : logged ? ", food logged" : ""}"><span>${k}</span>${logged ? "<i></i>" : ""}</button>`);
+  }
+  return `<div class="sec-h" style="margin:0 40px 10px 0"><h3>${fmtDate(first, { month: "long", year: "numeric" })}</h3>
+      <div class="week-nav"><button class="icon-btn" data-action="food-cal-month" data-d="-1" aria-label="Previous month">${I.chevL}</button>
+      <button class="icon-btn" data-action="food-cal-month" data-d="1" aria-label="Next month" ${month >= today().slice(0, 7) ? "disabled" : ""}><span style="transform:scaleX(-1);display:grid">${I.chevL}</span></button></div></div>
+    <div class="cal-head">${["M", "T", "W", "T", "F", "S", "S"].map((x) => `<span>${x}</span>`).join("")}</div>
+    <div class="cal">${cells.join("")}</div>
+    <div class="fcal-key"><span><i class="k-dot"></i>Food logged</span><span><i class="k-hit"></i>Protein goal hit</span></div>
+    <button class="btn primary block" data-action="food-cal-day" data-date="${today()}" style="margin-top:14px">Go to today</button>`;
 }
 function foodHistoryHTML() {
   const days = [...Array(14)].map((_, i) => addDays(today(), i - 13));
@@ -2305,13 +2406,17 @@ function foodReviewSheetHTML() {
   if (ui.sd.error) return `<h3>Couldn't analyze that</h3><p class="sub">${esc(ui.sd.error)}</p>
     <button class="btn primary block" data-action="food-photo">Try another photo</button><button class="btn block" data-action="food-manual" style="margin-top:8px">Enter manually</button>`;
   const t = reviewTotals(), items = ui.sd.items || [];
-  return `<h3>Review: ${label}</h3>
+  return `<h3>Review your meal</h3>
+    <div class="seg2 meal-seg">${MEALS.map(([k, l]) => `<button data-action="review-meal" data-m="${k}" aria-pressed="${ui.sd.meal === k}">${l}</button>`).join("")}</div>
     ${ui.sd.notes ? `<p class="sub" style="margin:-6px 0 12px">${esc(ui.sd.notes)}</p>` : ""}
     ${items.length ? items.map(itemRow).join("") : `<p class="sub">No foods found. Add one below or try another photo.</p>`}
     <button class="link-btn" data-action="fi-add">Add a food</button>
+    ${ui.sd.image ? `<details class="reanalyze"${ui.sd.hint ? " open" : ""}><summary>Something off? Add a note and re-analyze</summary>
+      <input class="text-in" id="food-hint" autocomplete="off" placeholder="Cooked in butter, 2 scoops of rice" value="${esc(ui.sd.hint || "")}">
+      <button class="btn block" data-action="food-reanalyze">Re-analyze (uses 1 photo)</button></details>` : ""}
     <div class="fr-total"><b>${r0(t.kcal)} cal</b><span>P ${r0(t.p)} · C ${r0(t.c)} · F ${r0(t.f)}</span></div>
     <label class="swap-keep"><input type="checkbox" id="food-fav" ${ui.sd.fav ? "checked" : ""}> Save as a favorite meal</label>
-    <button class="btn primary block" data-action="food-review-save" ${items.length ? "" : "disabled"}>Save to ${label}</button>`;
+    <button class="btn primary block" data-action="food-review-save" ${items.length ? "" : "disabled"}>Save to ${MEALS.find((m) => m[0] === ui.sd.meal)[1]}</button>`;
 }
 function foodManualSheetHTML() {
   const e = ui.sd.edit ? dayEntries(ui.foodDay || today()).find((x) => x.id === ui.sd.edit) : null;
@@ -2394,11 +2499,12 @@ function compressForAI(file) {
     const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.readAsDataURL(blob);
   }));
 }
-async function analyzeFoodPhoto(file) {
-  ui.sheet = "food-review"; ui.sd = { ...ui.sd, loading: true, error: null, items: [] }; renderSheet();
+async function analyzeFoodPhoto(file, reuse) {
+  ui.sheet = "food-review"; ui.sd = { meal: autoMeal(), ...ui.sd, loading: true, error: null, items: [] }; renderSheet();
   try {
     if (!sb || !session) throw new Error("Sign in (Settings → Account) to use food photos.");
-    const image = await compressForAI(file);
+    const image = reuse || await compressForAI(file);
+    ui.sd.image = image;
     const { data, error } = await sb.functions.invoke("food-photo", { body: { image, hint: ui.sd.hint || "" } });
     if (error) {
       let msg = "Couldn't reach the food analysis service. Check your connection and try again.";
@@ -2822,6 +2928,7 @@ function renderSheet() {
   } else if (ui.sheet === "food-saved") { inner = foodSavedSheetHTML();
   } else if (ui.sheet === "food-barcode") { inner = foodBarcodeSheetHTML();
   } else if (ui.sheet === "food-targets") { inner = targetsSheetHTML();
+  } else if (ui.sheet === "food-cal") { inner = foodCalSheetHTML();
   } else if (ui.sheet === "phday") {
     inner = daySheetHTML();
   } else if (ui.sheet === "summary") {
@@ -3100,9 +3207,26 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && ev.target.id === "dlg-in") { ev.preventDefault(); closeDialog(true); }
   if (ev.key === "Escape" && !$("#dialog").hidden) closeDialog(false);
 });
+let swipe = null;
+document.addEventListener("touchstart", (ev) => {
+  if (ui.tab !== "food" || ui.fseg === "recent" || ui.sheet || ev.touches.length !== 1 || !ev.target.closest("#food-swipe")) { swipe = null; return; }
+  swipe = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, t: Date.now() };
+}, { passive: true });
+document.addEventListener("touchend", (ev) => {
+  if (!swipe) return;
+  const dx = ev.changedTouches[0].clientX - swipe.x, dy = ev.changedTouches[0].clientY - swipe.y;
+  const quick = Date.now() - swipe.t < 700;
+  swipe = null;
+  if (!quick || Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
+  const cur = ui.foodDay || today(), next = addDays(cur, dx < 0 ? 1 : -1);
+  if (next > today()) return;
+  ui.foodDay = next === today() ? null : next;
+  render();
+  const el = $("#food-swipe"); if (el) { el.classList.remove("slide-l", "slide-r"); void el.offsetWidth; el.classList.add(dx < 0 ? "slide-l" : "slide-r"); }
+}, { passive: true });
 document.addEventListener("change", (ev) => {
   if (ev.target.id === "ph-file") onPhotoFile(ev.target.files[0]);
-  if (ev.target.id === "food-file" && ev.target.files[0]) analyzeFoodPhoto(ev.target.files[0]);
+  if (ev.target.id === "food-file" && ev.target.files[0]) { if (!ui.sd || !ui.sd.meal) ui.sd = { meal: autoMeal() }; ui.sd.image = null; ui.sd.hint = ui.sheet === "food-photo" ? ui.sd.hint : ""; analyzeFoodPhoto(ev.target.files[0]); }
   if (ev.target.id === "food-fav") ui.sd.fav = ev.target.checked;
 });
 document.addEventListener("input", (ev) => {
@@ -3116,6 +3240,8 @@ document.addEventListener("input", (ev) => {
     if (tot) tot.innerHTML = `<b>${r0(t.kcal)} cal</b><span>P ${r0(t.p)} · C ${r0(t.c)} · F ${r0(t.f)}</span>`;
     return;
   }
+  if (el.id === "food-rq") { ui.rq = el.value; const pos = el.selectionStart; render(); const n = $("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  if (el.id === "food-hint") { ui.sd.hint = el.value; return; }
   if (el.id === "food-q") { ui.sd.q = el.value; const pos = el.selectionStart; renderSheet(); const n = $("#food-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "bc-amt") { ui.sd.amt = el.value; const pos = el.selectionStart; renderSheet(); const n = $("#bc-amt"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.dataset.pf) { ui.pf[el.dataset.pf] = el.value; return; }
@@ -3185,9 +3311,33 @@ document.addEventListener("click", async (ev) => {
     case "range": ui.range = +b.dataset.r; render(); break;
     case "lift": ui.sheet = "lift"; ui.sd = { name: b.dataset.name }; renderSheet(); break;
     case "iseg": ui.iseg = b.dataset.s; render(); break;
+    case "fseg": ui.fseg = b.dataset.s; render(); window.scrollTo(0, 0); break;
+    case "qmeal": ui.qMeal = b.dataset.m; render(); break;
+    case "review-meal": ui.sd.meal = b.dataset.m; renderSheet(); break;
+    case "food-snap": { ui.sd = { meal: autoMeal() }; const inp = $("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
+    case "food-quick-barcode": ui.sheet = "food-barcode"; ui.sd = { meal: autoMeal() }; renderSheet(); startBarcode(); break;
+    case "food-quick-manual": ui.sheet = "food-manual"; ui.sd = { meal: autoMeal() }; renderSheet(); break;
+    case "food-reanalyze": { ui.sd.hint = (($("#food-hint") || {}).value || "").trim(); analyzeFoodPhoto(null, ui.sd.image); break; }
+    case "food-quick": {
+      let src = null;
+      if (b.dataset.kind === "fav") src = food().saved.find((x) => x.id === b.dataset.id);
+      else Object.values(food().days).forEach((l) => l.forEach((e) => { if (e.id === b.dataset.id) src = e; }));
+      if (!src) break;
+      const meal = ui.qMeal || autoMeal(), keepDay = ui.foodDay;
+      ui.foodDay = today();
+      const e = addEntry(meal, src.name, src.base, src.servings || 1, "saved", src.items);
+      ui.foodDay = keepDay;
+      render();
+      const label = MEALS.find((m) => m[0] === meal)[1];
+      toast(`${src.name} added to ${label}.`, () => { food().days[today()] = dayEntries(today()).filter((x) => x.id !== e.id); food().deleted.push(e.id); foodTouch(); render(); });
+      break;
+    }
+    case "food-cal": ui.sheet = "food-cal"; ui.fcMonth = (ui.foodDay || today()).slice(0, 7); renderSheet(); break;
+    case "food-cal-month": { const d = parseDay(ui.fcMonth + "-01"); d.setMonth(d.getMonth() + +b.dataset.d); ui.fcMonth = iso(d).slice(0, 7); renderSheet(); break; }
+    case "food-cal-day": ui.foodDay = b.dataset.date === today() ? null : b.dataset.date; ui.fseg = "day"; ui.sheet = null; render(); window.scrollTo(0, 0); break;
     case "food-day": { const d = addDays(ui.foodDay || today(), +b.dataset.d); ui.foodDay = d > today() ? today() : d; render(); break; }
     case "food-add": ui.sheet = "food-add"; ui.sd = { meal: b.dataset.meal }; renderSheet(); break;
-    case "food-photo": ui.sheet = "food-photo"; ui.sd = { meal: ui.sd.meal || "snacks", hint: "" }; renderSheet(); break;
+    case "food-photo": { ui.sd = { meal: ui.sd.meal || autoMeal(), hint: "" }; ui.sheet = null; renderSheet(); const inp = $("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
     case "food-photo-go": { ui.sd.hint = (($("#food-hint") || {}).value || "").trim(); const inp = $("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
     case "food-manual": ui.sheet = "food-manual"; ui.sd = { meal: ui.sd.meal || "snacks" }; renderSheet(); break;
     case "food-edit": ui.sheet = "food-manual"; ui.sd = { edit: b.dataset.id }; renderSheet(); break;
