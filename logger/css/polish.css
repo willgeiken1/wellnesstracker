@@ -1,0 +1,261 @@
+/* Depth, the fixed five-slot tab bar, and the page stage.
+   Loaded last so it layers on the existing theme without changing behavior. */
+
+:root {
+  --tabbar-h: 64px;
+  --tabbar-inset: 10px;
+  --tabs-h: calc(var(--tabbar-h) + var(--tabbar-inset));
+  --r-sm: 14px;
+  --r-md: 20px;
+  --r-lg: 26px;
+  --r-xl: 28px;
+  --elev-1: 0 1px 1px rgba(0, 0, 0, .22);
+  --elev-2: 0 14px 32px rgba(0, 0, 0, .28);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, .08);
+  --inset-lo: inset 0 -1px 0 rgba(0, 0, 0, .28);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 42%);
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .4 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --pad-x: max(16px, calc((100% - 640px) / 2));
+  --pad-top: calc(14px + var(--safe-top));
+  --pad-bot: calc(var(--tabs-h) + 110px + var(--safe-bottom));
+}
+
+:root[data-mode="light"] {
+  --elev-1: 0 1px 2px rgba(20, 20, 20, .05);
+  --elev-2: 0 12px 28px rgba(20, 20, 20, .07);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, .95);
+  --inset-lo: inset 0 -1px 0 rgba(20, 20, 20, .05);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, .65), rgba(255, 255, 255, 0) 46%);
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+  background: var(--bg);
+}
+
+.pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  background: var(--bg);
+  max-width: none;
+  margin: 0;
+  padding: var(--pad-top) var(--pad-x) var(--pad-bot);
+  transform: translate3d(100%, 0, 0);
+}
+
+.pane[data-pane="home"] { transform: translate3d(0, 0, 0); }
+
+#view {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  max-width: none;
+  margin: 0;
+  padding: var(--pad-top) var(--pad-x) var(--pad-bot);
+}
+
+body.timer-on:not(.in-workout) .pane,
+body.timer-on:not(.in-workout) #view {
+  padding-bottom: calc(var(--tabs-h) + 190px + var(--safe-bottom));
+}
+
+/* ---------- fixed tab bar: five equal slots, labels always visible ---------- */
+#tabs {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--tabbar-inset) + var(--safe-bottom));
+  height: var(--tabbar-h);
+  z-index: 8;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0;
+  padding: 0;
+  border-radius: 22px;
+  background-color: var(--nav-bg);
+  background-image: var(--sheen), var(--noise);
+  background-blend-mode: normal, overlay;
+  border: 1px solid var(--nav-border);
+  box-shadow:
+    var(--inset-hi),
+    inset 0 -1px 0 rgba(0, 0, 0, .18),
+    0 1px 1px rgba(0, 0, 0, .18),
+    0 16px 36px rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  overflow: hidden;
+}
+
+#tabs::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: var(--noise);
+  opacity: .28;
+  mix-blend-mode: overlay;
+}
+
+#tab-bubble {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  height: calc(100% - 10px);
+  width: calc(20% - 8px);
+  border-radius: 17px;
+  background: var(--lav);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0) 58%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -1px 0 rgba(0, 0, 0, .08),
+    0 6px 14px rgba(0, 0, 0, .16);
+  z-index: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+#tabs .tab {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 6px 2px 5px;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  color: var(--nav-icon);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.05;
+}
+
+#tabs .tab svg {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+#tabs .tab span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#tabs .tab[aria-current="page"] {
+  background: transparent;
+  color: var(--ink);
+  padding: 6px 2px 5px;
+}
+
+#tabs .tab[aria-current="page"] span {
+  display: block;
+  font-size: 11px;
+}
+
+@media (max-width: 380px) {
+  #tabs .tab[aria-current="page"] span,
+  #tabs .tab span { display: block; font-size: 9px; }
+  #tabs .tab[aria-current="page"] { padding: 6px 2px 5px; }
+}
+
+:root[data-mode="light"] #tabs {
+  box-shadow:
+    var(--inset-hi),
+    0 1px 1px rgba(20, 20, 20, .04),
+    0 12px 28px rgba(20, 20, 20, .12);
+}
+
+/* ---------- layered surfaces ---------- */
+.card,
+.group,
+.stat,
+.hist li,
+.erow,
+.bodies,
+.lift-card,
+.nudge,
+.sheet-card,
+.dlg,
+.opt,
+.cal-day,
+.fcal-day {
+  box-shadow: var(--inset-hi), var(--inset-lo), var(--elev-1), var(--elev-2);
+}
+
+.card,
+.group,
+.hist li,
+.erow,
+.bodies,
+.lift-card,
+.nudge,
+.sheet-card {
+  background-image: var(--sheen), var(--noise);
+  background-blend-mode: normal, soft-light;
+}
+
+.hero,
+.wcard,
+.rcard {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .42),
+    inset 0 -1px 0 rgba(0, 0, 0, .06),
+    0 1px 2px rgba(0, 0, 0, .08),
+    0 16px 32px rgba(0, 0, 0, .16);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, 0) 48%), var(--noise);
+  background-blend-mode: normal, soft-light;
+}
+
+.stat {
+  background-image: var(--sheen);
+}
+
+:root[data-mode="light"] .hero,
+:root[data-mode="light"] .wcard,
+:root[data-mode="light"] .rcard {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    0 1px 2px rgba(20, 20, 20, .05),
+    0 14px 28px rgba(20, 20, 20, .08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tab-bubble { transition: none !important; }
+}

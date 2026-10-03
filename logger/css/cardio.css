@@ -1,0 +1,42 @@
+/* css/cardio.css — split from logger/index.html; keep this order. */
+/* cardio */
+.cw { display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: center; }
+.cw-ring { position: relative; width: 108px; height: 108px; }
+.cw-ring svg { width: 108px; height: 108px; }
+.cw-bg { fill: none; stroke: var(--raised); stroke-width: 9; } .cw-fg { fill: none; stroke: var(--lav); stroke-width: 9; stroke-linecap: round; }
+.cw-ring > span { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.cw-ring b { font-family: var(--display); font-weight: 600; font-size: 24px; line-height: 1; } .cw-ring small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.cw-right { display: grid; gap: 8px; }
+.cw-label { color: var(--muted); font-size: 13px; }
+.cw-btn { display: flex; justify-content: space-between; align-items: center; height: 44px; padding: 0 12px 0 16px; border-radius: 22px; background: var(--raised); font-weight: 700; font-size: 15px; text-align: left; }
+.cw-btn .chev { width: 18px; height: 18px; }
+.cw-btn.new { background: var(--lav); color: var(--ink); justify-content: center; padding: 0 16px; }
+.cw-live { font-family: var(--display); font-weight: 600; font-size: 28px; font-variant-numeric: tabular-nums; }
+#cardio-live { position: fixed; inset: 0; z-index: 13; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(40px + var(--safe-bottom)); }
+.cl-body { max-width: 640px; margin: 0 auto; padding: 22px 16px; }
+.cl-time { font-family: var(--display); font-weight: 600; font-size: 76px; text-align: center; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+.cl-kcal { text-align: center; color: var(--muted); margin: 10px 0 20px; } .cl-kcal b { color: var(--text); font-size: 20px; }
+.cl-now { display: grid; gap: 6px; text-align: center; } .cl-now b { font-family: var(--display); font-weight: 600; font-size: 26px; }
+.cl-now .btn { margin-top: 10px; }
+.cl-seg { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.cl-seg:last-child { border-bottom: 0; } .cl-seg span { color: var(--muted); } .cl-seg em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ca-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+.ca-actions .btn { padding: 0 10px; font-size: 15px; }
+.ca-card { padding: 4px 8px 4px 12px; }
+.ca-row { display: grid; grid-template-columns: 1fr auto 46px; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }
+.ca-row:last-child { border-bottom: 0; }
+.ca-main { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; text-align: left; padding: 10px 0; }
+.ca-ic { font-size: 22px; text-align: center; } .ca-main b { display: block; font-weight: 600; } .ca-main em { font-style: normal; color: var(--muted); font-size: 13px; }
+.ca-log { height: 34px; padding: 0 12px; border-radius: 17px; border: 1.5px solid var(--pill-border); font-size: 13px; font-weight: 700; color: var(--muted); }
+.ca-go { width: 42px; height: 42px; border-radius: 21px; background: var(--lav); color: var(--ink); font-size: 15px; }
+.ca-hist { display: flex; justify-content: space-between; width: 100%; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; text-align: left; }
+.ca-hist:last-child { border-bottom: 0; } .ca-hist span { color: var(--muted); }
+.ma-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
+.ma { display: grid; gap: 4px; justify-items: center; padding: 10px 2px; border-radius: 16px; background: var(--raised); font-size: 11.5px; font-weight: 700; }
+.ma span { font-size: 24px; } .ma[aria-pressed="true"] { background: var(--lav); color: var(--ink); }
+.cf-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+.cf-grid .step-row { background: var(--raised); }
+.cl-segcard { background: var(--raised); border-radius: 18px; padding: 10px 12px 12px; margin-top: 10px; }
+.cl-segcard .step-row { background: var(--bg); }
+.cl-seghead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.burn { margin: -2px 2px 12px; font-size: 14px; font-weight: 600; } .burn span { color: var(--muted); font-weight: 500; }

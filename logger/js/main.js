@@ -1,0 +1,26 @@
+import { app } from "./runtime.js";
+import "./data/body.js";
+import "./data/state.js";
+import "./shared/icons.js";
+import "./shared/analyze.js";
+import "./pages/insights.js";
+import "./shared/cloud.js";
+import "./shared/profile.js";
+import "./pages/goals.js";
+import "./pages/session.js";
+import "./pages/progress.js";
+import "./pages/food.js";
+import "./pages/cardio.js";
+import "./shared/platform.js";
+import "./shared/muscles.js";
+import "./shared/widgets.js";
+import "./pages/workouts.js";
+import "./pages/settings.js";
+import "./pages/home.js";
+import "./shell/workout.js";
+import "./shell/timer.js";
+import "./shell/actions.js";
+import "./shell/pager.js";
+
+app.render();
+app.initCloud();

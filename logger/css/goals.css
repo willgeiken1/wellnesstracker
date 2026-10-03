@@ -1,0 +1,32 @@
+/* css/goals.css — split from logger/index.html; keep this order. */
+/* goals + PRs */
+.goal-pill { height: 34px; padding: 0 12px; border-radius: 17px; border: 1.5px solid var(--pill-border); font-size: 13px; font-weight: 700; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.goal-pill.on { border-color: transparent; background: var(--surface); color: var(--text); padding-left: 4px; }
+.wring { width: 26px; height: 26px; }
+.wring-bg { fill: none; stroke: var(--raised); stroke-width: 5; }
+.wring-fg { fill: none; stroke: var(--green); stroke-width: 5; stroke-linecap: round; }
+.goal-line { margin-top: 10px; font-size: 14px; } .goal-line b { color: var(--accent-text); }
+.goal-week { display: grid; grid-template-columns: 74px 1fr; gap: 14px; align-items: center; }
+.gw-ring { position: relative; width: 74px; height: 74px; } .gw-ring .wring { width: 74px; height: 74px; }
+.gw-ring b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-weight: 600; font-size: 18px; }
+.goal-week .goal-line { margin-top: 2px; }
+.goals { padding-top: 6px; padding-bottom: 6px; }
+.goal-inline { background: var(--raised); margin-top: 14px; display: grid; gap: 8px; }
+.goal-row { display: grid; gap: 7px; width: 100%; text-align: left; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.goal-row:last-child { border-bottom: 0; }
+.goal-top { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; } .goal-top span { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.goal-bar { height: 10px; border-radius: 5px; background: var(--raised); overflow: hidden; } .goal-bar i { display: block; height: 100%; border-radius: 5px; background: var(--lav); } .goal-bar i.done { background: var(--green); }
+.goal-eta { color: var(--muted); font-size: 13px; }
+.seg7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.seg7 button { height: 48px; border-radius: 16px; background: var(--raised); font-weight: 700; font-size: 17px; }
+.seg7 button[aria-pressed="true"] { background: var(--green); color: var(--ink); }
+.prs { padding-top: 4px; padding-bottom: 4px; }
+.pr-row { display: grid; gap: 8px; width: 100%; text-align: left; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.pr-row:last-child { border-bottom: 0; } .pr-row b { font-weight: 600; }
+.pr-cells { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pr-cells span { background: var(--raised); border-radius: 14px; padding: 8px 10px; font-family: var(--display); font-weight: 600; font-size: 16px; }
+.pr-cells em { display: block; font-style: normal; font-family: var(--body); font-weight: 600; font-size: 11.5px; color: var(--muted); }
+.pr-cells small { display: block; font-family: var(--body); font-weight: 500; font-size: 12px; color: var(--muted); }
+.rate { margin: 12px 0 0; font-size: 15px; } .rate span { color: var(--muted); }
+.dir-seg { margin-top: 12px; } .dir-seg button { height: 34px; padding: 0 14px; font-size: 13px; }
+select.text-in { -webkit-appearance: none; appearance: none; }
