@@ -1,7 +1,7 @@
 // Insight service worker.
 // Network-first for same-origin files so a deploy is never stuck behind a stale cache.
 // The cache is only the offline fallback. CACHE name changes drop old copies on activate.
-const CACHE = "insight-shell-v3";
+const CACHE = "insight-shell-v4";
 const SHELL = ["./", "./apple-touch-icon.png", "./css/appearance.css", "./css/base.css", "./css/cardio.css", "./css/food.css", "./css/goals.css", "./css/platform.css", "./css/polish.css", "./css/progress.css", "./css/session.css", "./css/theme.css", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./index.html", "./js/data/body.js", "./js/data/state.js", "./js/main.js", "./js/pages/cardio.js", "./js/pages/food.js", "./js/pages/goals.js", "./js/pages/home.js", "./js/pages/insights.js", "./js/pages/progress.js", "./js/pages/session.js", "./js/pages/settings.js", "./js/pages/workouts.js", "./js/runtime.js", "./js/shared/analyze.js", "./js/shared/cloud.js", "./js/shared/icons.js", "./js/shared/muscles.js", "./js/shared/platform.js", "./js/shared/profile.js", "./js/shared/widgets.js", "./js/shell/actions.js", "./js/shell/pager.js", "./js/shell/timer.js", "./js/shell/workout.js", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -23,7 +23,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   event.respondWith((async () => {
     try {
-      const fresh = await fetch(req);
+      // Revalidate with the server. A plain fetch() would reuse a cached index.html
+      // and leave an updated install on the previous shell.
+      const fresh = await fetch(new Request(req, { cache: "no-cache" }));
       if (fresh && fresh.ok && (fresh.type === "basic" || fresh.type === "default")) {
         const cache = await caches.open(CACHE);
         cache.put(req, fresh.clone());

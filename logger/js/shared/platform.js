@@ -16,6 +16,18 @@ window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); app.
 window.addEventListener("appinstalled", () => { app.installPrompt = null; app.toast("Insight is installed. Open it from your home screen."); if (app.ui.tab === "settings") app.render(); });
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  // Reload once when an already-controlling worker is replaced, so an open
+  // home-screen install picks up a new shell instead of keeping the old page.
+  try { sessionStorage.removeItem("insight-reloaded"); } catch (e) {}
+  const hadWorker = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadWorker) return;
+    try {
+      if (sessionStorage.getItem("insight-reloaded")) return;
+      sessionStorage.setItem("insight-reloaded", "1");
+    } catch (e) {}
+    location.reload();
+  });
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
 }
 
