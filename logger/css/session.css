@@ -1,0 +1,21 @@
+/* css/session.css — split from logger/index.html; keep this order. */
+/* at the gym */
+.sugg { background: var(--bg); border-radius: 18px; padding: 12px 14px; margin-bottom: 12px; box-shadow: inset 4px 0 0 var(--lav); }
+.sugg.up { box-shadow: inset 4px 0 0 var(--green); } .sugg.down { box-shadow: inset 4px 0 0 var(--pink); }
+.sugg-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sugg b { font-family: var(--display); font-weight: 600; font-size: 15px; }
+.sugg > span { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+.tags { display: flex; gap: 8px; margin-top: 12px; }
+.tags button { height: 36px; padding: 0 14px; border-radius: 18px; border: 1.5px solid var(--pill-border); font-size: 14px; font-weight: 600; color: var(--muted); }
+.tags button[aria-pressed="true"] { background: var(--lav); border-color: var(--lav); color: var(--ink); }
+.tags button[data-t="failure"][aria-pressed="true"] { background: var(--pink); border-color: var(--pink); }
+.set-badges { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: 2px; }
+.badge { font-family: var(--body); font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 8px; background: var(--raised); color: var(--muted); }
+.badge.pr { background: var(--green); color: var(--ink); } .badge.fail { background: var(--pink); color: var(--ink); }
+.set-n.wu { color: var(--lav); font-weight: 700; }
+.panel-top { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+.swap-keep { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: -4px 0 14px; }
+.swap-keep input { width: 20px; height: 20px; accent-color: var(--accent-text); }
+#toast.pr { background: var(--green); color: var(--ink); font-weight: 700; }
+.wi-list li.pr-li { grid-template-columns: 1fr auto; padding: 6px 0; }
+.pr-li small { grid-column: 1 / -1; color: var(--muted); font-size: 13px; margin-top: -2px; }

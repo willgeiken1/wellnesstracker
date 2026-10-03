@@ -1,0 +1,54 @@
+/* css/appearance.css — split from logger/index.html; keep this order. */
+/* ================= Appearance: accent palettes + light/dark ================= */
+:root {
+  --accent-text: var(--green); --accent-line: var(--green);
+  --nav-bg: rgba(30,30,34,.92); --nav-border: #2E2E34; --nav-icon: #C9C9CE; --pill-border: #3A3A41;
+  --panel: #F4F4F1; --panel-ink: #141414; --panel-btn: #E4E4DE; --panel-track: #E1E1DB; --ph: #5D646C;
+}
+:root { --c4: #FFD3A8; }
+:root[data-accent="sea"]  { --c4: #CEDFCC; }
+:root[data-accent="dusk"] { --c4: #FFE0B8; }
+:root[data-accent="sand"] { --c4: #F9E3CC; }
+:root[data-accent="sea"]  { --green: #67B39F; --green-lo: #CEDFCC; --green-soft: rgba(103,179,159,.16); --lav: #A9D3C4; --pink: #E1EDDD; }
+:root[data-accent="dusk"] { --green: #A9B8FF; --green-lo: #DDE3FF; --green-soft: rgba(169,184,255,.16); --lav: #CDBEF3; --pink: #F3CAD6; }
+:root[data-accent="sand"] { --green: #F4BE8C; --green-lo: #F9E3CC; --green-soft: rgba(244,190,140,.16); --lav: #E7D3BC; --pink: #CBDCC4; }
+
+:root[data-mode="light"] {
+  --bg: #F3F4F1; --surface: #FFFFFF; --raised: #ECEDE9; --line: #E3E4DF; --text: #141414; --muted: #6E7073;
+  --muscle: #D9DBD6; --skin: #E7E8E4; --base: #E7E8E4;
+  --nav-bg: rgba(255,255,255,.95); --nav-border: #E3E4DF; --nav-icon: #55575B; --pill-border: #D3D4CF;
+  --panel: #1B1B1F; --panel-ink: #F4F4F1; --panel-btn: #2C2C31; --panel-track: #34343A; --ph: #A3A5A8;
+  --accent-text: #5E7A00; --accent-line: #7FA30C;
+}
+:root[data-mode="light"][data-accent="sea"]  { --accent-text: #2D6876; --accent-line: #2D6876; }
+:root[data-mode="light"][data-accent="dusk"] { --accent-text: #4654B8; --accent-line: #5B69D0; }
+:root[data-mode="light"][data-accent="sand"] { --accent-text: #9A5622; --accent-line: #C27434; }
+
+/* colors that now follow the theme */
+#tabs { background: var(--nav-bg); border-color: var(--nav-border); }
+.tab { color: var(--nav-icon); }
+.seg2 button, .range button { border-color: var(--pill-border); }
+.seg2 button[aria-pressed="true"], .range button[aria-pressed="true"] { border-color: var(--green); }
+#timer { background: var(--panel); color: var(--panel-ink); }
+#timer-track { background: var(--panel-track); }
+.timer-lbl { color: var(--panel-ink); opacity: .6; }
+#timer-time { color: var(--panel-ink); }
+.timer-btns button { background: var(--panel-btn); color: var(--panel-ink); }
+#timer.done, #timer.done #timer-time, #timer.done .timer-btns button { color: var(--ink); }
+#toast { background: var(--text); color: var(--bg); }
+.step-row input::placeholder, .note::placeholder { color: var(--ph); }
+.link-inline { color: var(--accent-text); }
+.mgrid li.hit b { color: var(--accent-text); }
+.chip-s.up { color: var(--accent-text); }
+.chart .ln { stroke: var(--accent-line); } .chart .ln-dot { fill: var(--accent-line); }
+.spark.up path { stroke: var(--accent-line); }
+:root[data-mode="light"] .wk.done .wk-w,
+:root[data-mode="light"] .chip-s.flat,
+:root[data-mode="light"] .demo-banner, :root[data-mode="light"] .demo-banner button { color: var(--text); }
+:root[data-mode="light"] .warn { color: #A26B00; }
+:root[data-mode="light"] .spark.flat path { stroke: #8A8D92; }
+:root[data-mode="light"] .chart .ln.alt { stroke: var(--accent-line); } :root[data-mode="light"] .chart .ln.alt-dot { fill: var(--accent-line); }
+:root[data-mode="light"] #tabs { box-shadow: 0 10px 28px rgba(0,0,0,.12); }
+:root[data-mode="light"] .card, :root[data-mode="light"] .stat, :root[data-mode="light"] .group,
+:root[data-mode="light"] .erow, :root[data-mode="light"] .hist li, :root[data-mode="light"] .bodies,
+:root[data-mode="light"] .lift-card { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
