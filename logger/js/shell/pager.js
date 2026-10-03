@@ -111,6 +111,15 @@ window.scrollBy = function (x, y) {
 };
 
 app.render = function () {
+  if (app.needsLock && app.needsLock()) {
+    document.body.classList.add("locked");
+    if (app.renderLock) app.renderLock(false);
+    return;
+  }
+  document.body.classList.remove("locked");
+  document.documentElement.classList.remove("lock-first");
+  const lock = document.getElementById("lock");
+  if (lock && !lock.hidden) { lock.hidden = true; lock.innerHTML = ""; delete lock.dataset.mode; }
   const tab = app.ui.tab;
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-current", t.dataset.tab === tab ? "page" : "false"));
   const pager = app.TAB_ORDER.includes(tab);

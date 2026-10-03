@@ -168,7 +168,11 @@ function migrate(d) {
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },
     muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: d.machineNotes || {}, measurements: d.measurements || {},
-    cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 } };
+    cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 },
+    appLock: d.appLock && typeof d.appLock === "object" ? d.appLock : { enabled: false, updatedAt: 0 },
+    purges: Array.isArray(d.purges) ? d.purges : [],
+    checkins: d.checkins || null,
+    checkinDeleted: Array.isArray(d.checkinDeleted) ? d.checkinDeleted : [] };
 }
 app.migrate = migrate;
 
@@ -178,7 +182,7 @@ function load() {
     if (raw) { const m = app.migrate(JSON.parse(raw)); if (m) return m; }
   } catch (e) { /* start fresh */ }
   return { version: 2, workouts: app.copy(app.DEFAULT_WORKOUTS), sessions: [], plan: {}, restSeconds: 120, lastExport: null,
-    oura: { connected: false, lastSync: null, days: {} }, demo: false };
+    oura: { connected: false, lastSync: null, days: {} }, demo: false, appLock: { enabled: false, updatedAt: 0 }, purges: [], checkins: null, checkinDeleted: [] };
 }
 app.load = load;
 

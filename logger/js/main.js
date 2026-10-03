@@ -15,6 +15,7 @@ import "./shared/platform.js";
 import "./shared/muscles.js";
 import "./shared/widgets.js";
 import "./pages/workouts.js";
+import "./pages/privacy.js";
 import "./pages/settings.js";
 import "./pages/home.js";
 import "./shell/workout.js";

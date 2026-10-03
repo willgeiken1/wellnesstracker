@@ -1,6 +1,6 @@
 # Insight Privacy Policy
 
-_Last updated: October 2, 2026_
+_Last updated: October 3, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. This page explains, in plain language, what information Insight handles, where it goes, and the choices you have.
 
@@ -18,12 +18,12 @@ Insight is a personal fitness app built and run by an individual developer as a 
 
 **Oura Ring data.** Only if you connect your ring. Insight reads your sleep, readiness, heart rate variability, resting heart rate, body temperature, and step data. The login tokens that let Insight fetch this are kept in a private table that the app itself cannot read; only Insight's server functions can use them.
 
-**Usage counts.** A simple count of how many food photos you analyze per day, used to enforce a daily limit.
+**Usage counts.** A count of how many AI food estimates you request per day, used to enforce a daily limit.
 
 ## Who else handles your information
 
 - **Supabase** provides Insight's database, sign-in, photo storage, and server functions. Your account data, backups, and photos are stored there.
-- **Anthropic** analyzes meal photos. When you use "Snap your plate," a resized copy of the photo, and any note you type with it, is sent through Insight's server to Anthropic's Claude service to estimate the foods and their nutrition. Insight does not keep the photo. Anthropic handles it under its own terms and privacy policy.
+- **Anthropic** estimates nutrition. When you use "Snap your plate," a resized copy of the photo, and any note you type with it, is sent through Insight's server to Anthropic's Claude service. A written meal description you submit for an estimate is sent the same way. Insight does not keep the photo or the description after the estimate comes back. Anthropic handles that content under its own terms and privacy policy.
 - **Open Food Facts** looks up packaged foods. When you scan or type a barcode, only the barcode number is sent.
 - **Oura** supplies your ring data when you choose to connect it, using your permission.
 - **GitHub Pages** hosts the app's files. **Google Fonts** and public code libraries (jsDelivr, and unpkg when the barcode scanner loads) deliver fonts and code to your browser. Like any website, these services can see your IP address and basic browser information when your device downloads from them.
@@ -42,13 +42,16 @@ A copy of your data is kept in your browser on your device so Insight works offl
 ## Your choices
 
 - **Edit or delete your information** inside the app: profile, workouts, sets, food entries, goals, cardio sessions, and photos can all be changed or deleted.
+- **Delete a date range** in Settings → Privacy. This removes workouts, food logs, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and stored Oura days between the two dates you pick. Your account, routines, and saved meals stay. Oura's own copy of your ring data is not deleted. A later sync will not bring those days back into Insight.
+- **Export your data** in Settings → Privacy. Insight downloads a zip of CSV files (workouts, sets, food, measurements, weigh-ins, cardio, Oura days, goals, and a list of progress photos). The photo image files are not in the zip.
+- **App lock** in Settings → Privacy. Optional. When it is on, this phone asks for Face ID, Touch ID, or the device passcode before showing Insight. If the device can't do that, Insight asks for a 6-digit code instead. Insight never receives your face, fingerprint, or device passcode. If that unlock isn't available, sign in again with your email and password to open the app. That does not delete anything.
 - **Disconnect Oura** in Settings. This removes the Oura login tokens and the Oura data Insight stored. You can also remove Insight's access from your Oura account.
-- **Delete your account.** Insight does not yet have a delete-account button. To have your account and everything stored with it removed, including workouts, food, cardio, Oura data, and photos, contact the address below.
-- **Sign out** at any time in Settings. Signing out does not erase the copy kept in your browser; clear your browser's site data to remove it.
+- **Delete your account** in Settings → Privacy. You confirm by typing DELETE. This permanently removes your sign-in and everything stored with the account, including workouts, food, cardio, measurements, Oura data, and photos, and it erases the copy on that phone. You can also email the address below.
+- **Sign out** at any time in Settings. Signing out does not erase the copy kept in your browser; clear your browser's site data, or use Erase this phone in Privacy when you are signed out, to remove it.
 
 ## How long data is kept
 
-Until you delete it or ask for your account to be deleted.
+Until you delete it, delete the date range it falls in, or delete your account.
 
 ## Children
 

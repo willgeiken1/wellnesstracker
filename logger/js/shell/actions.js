@@ -305,6 +305,7 @@ document.addEventListener("click", async (ev) => {
   if (!b) return;
   const a = b.dataset.action;
   const i = b.dataset.i != null ? +b.dataset.i : null;
+  if (app.needsLock && app.needsLock() && a.indexOf("lock-") !== 0) { ev.preventDefault(); return; }
 
   switch (a) {
     case "tab": {
@@ -833,6 +834,25 @@ document.addEventListener("click", async (ev) => {
       app.save(); app.render(); break;
     }
     case "rest": app.state.restSeconds = +b.dataset.s; app.save(); app.render(); break;
+    case "priv-summary": app.ui.sheet = "priv-summary"; app.ui.sd = {}; app.renderSheet(); break;
+    case "priv-export": await app.exportAllData(); break;
+    case "priv-range": app.ui.sheet = "priv-range"; app.ui.sd = { from: "", to: "" }; app.renderSheet(); break;
+    case "priv-range-go": {
+      const from = (app.ui.sd && app.ui.sd.from) || ((app.$("#purge-from") || {}).value || "");
+      const to = (app.ui.sd && app.ui.sd.to) || ((app.$("#purge-to") || {}).value || "");
+      await app.purgeRange(from, to);
+      break;
+    }
+    case "priv-lock": if (app.lockState().enabled) await app.disableAppLock(); else await app.enableAppLock(); break;
+    case "priv-pass-save": await app.savePasscodeLock(); break;
+    case "priv-delete": app.ui.sheet = "priv-delete"; app.ui.sd = {}; app.renderSheet(); setTimeout(() => { const f = app.$("#del-confirm"); if (f) f.focus(); }, 60); break;
+    case "priv-delete-go": await app.deleteAccount(); break;
+    case "lock-bio": await app.unlockWithBiometric(); break;
+    case "lock-relogin": app.ui.lockMode = "relogin"; app.ui.lockMsg = ""; app.renderLock(true); break;
+    case "lock-back": app.ui.lockMode = app.lockState().method === "passcode" ? "passcode" : "main"; app.ui.lockMsg = ""; app.renderLock(true); break;
+    case "lock-show-pass": app.ui.lockMode = "passcode"; app.ui.lockMsg = ""; app.renderLock(true); break;
+    case "lock-code-go": await app.unlockWithPasscode(); break;
+    case "lock-signin": await app.unlockWithPassword(); break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
   }

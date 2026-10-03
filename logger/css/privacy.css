@@ -1,0 +1,83 @@
+/* Privacy center and the app-lock gate. */
+
+.hint a, .sheet-card a, .priv-intro a { color: var(--accent-text); font-weight: 700; }
+.priv-intro h4 { margin-bottom: 6px; }
+.priv-intro .link-inline { display: inline-block; margin-top: 10px; font-weight: 700; }
+.priv-intro .sub { margin-top: 0; }
+
+.priv-block { margin: 14px 0; }
+.priv-block b { display: block; font-size: 15px; margin-bottom: 4px; }
+.priv-block .sub { margin: 0; }
+
+.priv-list { margin: 0 0 14px; padding-left: 18px; color: var(--muted); }
+.priv-list li { margin: 4px 0; }
+
+.confirm-in { font-weight: 700; letter-spacing: .08em; }
+
+#lock {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: calc(28px + var(--safe-top)) 22px calc(28px + var(--safe-bottom));
+  background: var(--bg);
+  background-image: var(--sheen), var(--noise);
+  background-blend-mode: normal, soft-light;
+  overflow-y: auto;
+}
+#lock[hidden] { display: none !important; }
+
+.lock-card { width: min(100%, 420px); }
+.lock-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--lav);
+  color: var(--ink);
+  box-shadow: var(--inset-hi), var(--elev-1);
+  margin-bottom: 16px;
+}
+.lock-card h1 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 34px;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+  margin: 0 0 8px;
+}
+.lock-msg {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  color: var(--text);
+  box-shadow: var(--inset-hi), var(--elev-1);
+}
+.lock-alt { display: block; margin: 14px auto 0; }
+.lock-foot { margin-top: 18px; }
+
+body.locked #stage,
+body.locked #view,
+body.locked #tabs,
+body.locked #sheet,
+body.locked #workout,
+body.locked #cardio-live,
+body.locked #timer,
+body.locked #onboard,
+body.locked #toast {
+  visibility: hidden !important;
+}
+
+html.lock-first #stage,
+html.lock-first #view,
+html.lock-first #tabs { visibility: hidden; }
+
+#lock { animation: lock-in .28s ease; }
+@keyframes lock-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  #lock { animation: none; }
+}

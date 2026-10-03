@@ -112,6 +112,10 @@ function renderSheet() {
   } else if (app.ui.sheet === "ms-edit") { inner = app.machineEditSheetHTML();
   } else if (app.ui.sheet === "meas-log") { inner = app.measLogSheetHTML();
   } else if (app.ui.sheet === "meas-detail") { inner = app.measDetailSheetHTML();
+  } else if (app.ui.sheet === "priv-summary") { inner = app.summarySheetHTML();
+  } else if (app.ui.sheet === "priv-range") { inner = app.rangeSheetHTML();
+  } else if (app.ui.sheet === "priv-delete") { inner = app.deleteSheetHTML();
+  } else if (app.ui.sheet === "priv-passcode") { inner = app.passcodeSheetHTML();
   } else if (app.ui.sheet === "live-add") {
     inner = app.liveAddSheetHTML();
   } else if (app.ui.sheet === "picker") {

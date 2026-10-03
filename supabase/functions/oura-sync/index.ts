@@ -91,8 +91,19 @@ async function syncUser(userId: string, daysBack: number) {
   });
   for (const a of activity) day(a.day).steps = a.steps ?? null;
 
+  // A privacy date-range delete must stay deleted. Skip those days and drop any copy already stored.
+  let blocked: { from?: string; to?: string }[] = [];
+  try {
+    const { data: ud } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
+    blocked = Array.isArray(ud?.data?.purges) ? ud.data.purges : [];
+  } catch { /* still save the rest of the sync */ }
+  const purged = (day: string) => blocked.some((p) => p && p.from && p.to && day >= p.from && day <= p.to);
+  for (const p of blocked) {
+    if (p && p.from && p.to) await admin.from("oura_days").delete().eq("user_id", userId).gte("day", p.from).lte("day", p.to);
+  }
+
   const now = new Date().toISOString();
-  const rows = Object.values(days).map((d: any) => ({ user_id: userId, day: d.date, data: d, updated_at: now }));
+  const rows = Object.values(days).filter((d: any) => !purged(d.date)).map((d: any) => ({ user_id: userId, day: d.date, data: d, updated_at: now }));
   if (rows.length) {
     const { error } = await admin.from("oura_days").upsert(rows, { onConflict: "user_id,day" });
     if (error) throw new Error(error.message);

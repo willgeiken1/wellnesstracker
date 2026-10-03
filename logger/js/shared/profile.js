@@ -168,6 +168,7 @@ function renderOnboard() {
 app.renderOnboard = renderOnboard;
 
 function checkProfileGate() {
+  if (app.needsLock && app.needsLock()) { app.ui.onboard = false; app.renderOnboard(); return; }
   if (app.session && !app.profileComplete()) {
     if (!app.ui.onboard) { app.ui.onboard = true; app.startProfileDraft(); }
   } else app.ui.onboard = false;
