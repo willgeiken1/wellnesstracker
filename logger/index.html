@@ -840,6 +840,31 @@ div.wcard { display: flex; justify-content: space-between; align-items: center; 
 .switch[aria-checked="true"] { background: var(--green); } .switch[aria-checked="true"] i { transform: translateX(20px); background: var(--ink); }
 .side-l { font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--accent-text); margin: 8px 2px 2px; }
 
+/* compact logger */
+#workout .ex-head { padding: 11px 16px; }
+#workout .panel { padding: 0 16px 14px; }
+#workout .panel-top { margin: -2px 0 4px; }
+#workout .sugg { padding: 9px 12px; margin-bottom: 8px; border-radius: 14px; }
+#workout .sugg b { font-size: 14px; } #workout .sugg > span { font-size: 12.5px; margin-top: 2px; }
+#workout .sets { margin: 0 0 8px; }
+#workout .sets li { min-height: 38px; }
+#workout .set-v { font-size: 16px; }
+#workout .set-edit { min-height: 38px; }
+#workout .uni-row { margin: 0 2px 6px; font-size: 14px; }
+#workout .switch { width: 44px; height: 26px; border-radius: 13px; }
+#workout .switch i { width: 20px; height: 20px; border-radius: 10px; }
+#workout .switch[aria-checked="true"] i { transform: translateX(18px); }
+#workout .side-l { margin: 4px 2px 0; font-size: 11px; }
+#workout .steppers { gap: 10px; }
+#workout .stepper label { font-size: 12.5px; margin-bottom: 4px; }
+#workout .step-row { height: 44px; grid-template-columns: 38px 1fr 38px; border-radius: 14px; }
+#workout .step-row button { font-size: 21px; }
+#workout .step-row input { font-size: 19px; }
+#workout .note { height: 38px; margin-top: 8px; border-radius: 12px; font-size: 15px; padding: 0 12px; }
+#workout .tags { margin-top: 8px; gap: 6px; }
+#workout .tags button { height: 30px; padding: 0 12px; font-size: 13px; }
+#workout .log { height: 46px; margin-top: 10px; font-size: 16px; border-radius: 23px; }
+
 /* appearance controls */
 .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; }
 .sw { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 18px; background: var(--raised); font-weight: 600; font-size: 15px; text-align: left; }
@@ -955,6 +980,13 @@ const mondayOf = (s) => { const d = parseDay(s); const w = (d.getDay() + 6) % 7;
 const fmtNum = (n) => (Math.round(n * 100) / 100).toString();
 const fmtSide = (x) => `${x.w == null ? "BW" : fmtNum(x.w)} × ${x.r}`;
 const fmtSet = (s) => s.uni ? `L ${fmtSide(s.uni.l)} · R ${fmtSide(s.uni.r)}` : fmtSide(s);
+const BW_RE = /\b(pull[- ]?ups?|chin[- ]?ups?|chest to bar|dips?|push[- ]?ups?|muscle[- ]?ups?|inverted rows?|ring rows?|bodyweight|body weight|air squats?|pistol|nordic|planks?|sit[- ]?ups?|crunch(es)?|leg raises?|knee raises?|hanging|l-sit|dragon flag|hollow|dead bug|mountain climbers?|burpees?|lunges?|step[- ]?ups?|glute bridges?|back extensions?|superman|handstand|wall walk|bar hang|windshield wipers?|jumps?|bounds?|copenhagen|scap pull)\b/i;
+const LOADED_RE = /\b(barbell|dumbbell|smith|machine|cable|kettlebell|ez|trap bar|landmine|plate|band(ed)?|weighted|sled|medicine ball)\b/i;
+// "BW" (bodyweight) only makes sense for movements you can do without a load.
+function canBW(name) {
+  if (state.sessions.some((s) => s.entries.some((e) => e.exercise === name && e.sets.some((x) => x.w == null)))) return true;
+  return BW_RE.test(name) && !LOADED_RE.test(name);
+}
 const isUni = (name) => !!(state.uniEx && state.uniEx[name]);
 // A unilateral set is represented by its weaker side, so PRs and progression need both sides to improve.
 function uniSet(l, r) {
@@ -2175,7 +2207,7 @@ function seSteppers(wid, rid, x) {
   return `<div class="steppers">
       <div class="stepper"><label for="${wid}">Weight (${wUnit()})</label><div class="step-row">
         <button data-action="se-step" data-f="${wid}" data-d="-${wStep()}" aria-label="Weight minus ${wStep()}">−</button>
-        <input id="${wid}" inputmode="decimal" autocomplete="off" placeholder="BW" value="${x.w == null ? "" : fmtNum(x.w)}">
+        <input id="${wid}" inputmode="decimal" autocomplete="off" placeholder="${canBW(ui.sd.ex) ? "BW" : "0"}" value="${x.w == null ? "" : fmtNum(x.w)}">
         <button data-action="se-step" data-f="${wid}" data-d="${wStep()}" aria-label="Weight plus ${wStep()}">+</button></div></div>
       <div class="stepper"><label for="${rid}">Reps</label><div class="step-row">
         <button data-action="se-step" data-f="${rid}" data-d="-1" aria-label="Reps minus 1">−</button>
@@ -2190,7 +2222,7 @@ function setEditSheetHTML() {
     ${x.uni ? `<div class="side-l">Left</div>${seSteppers("se-w", "se-r", x.uni.l)}<div class="side-l">Right</div>${seSteppers("se-wR", "se-rR", x.uni.r)}` : `<div class="steppers">
       <div class="stepper"><label for="se-w">Weight (${wUnit()})</label><div class="step-row">
         <button data-action="se-step" data-f="se-w" data-d="-${wStep()}" aria-label="Weight minus ${wStep()}">−</button>
-        <input id="se-w" inputmode="decimal" autocomplete="off" placeholder="BW" value="${x.w == null ? "" : fmtNum(x.w)}">
+        <input id="se-w" inputmode="decimal" autocomplete="off" placeholder="${canBW(e.exercise) ? "BW" : "0"}" value="${x.w == null ? "" : fmtNum(x.w)}">
         <button data-action="se-step" data-f="se-w" data-d="${wStep()}" aria-label="Weight plus ${wStep()}">+</button></div></div>
       <div class="stepper"><label for="se-r">Reps</label><div class="step-row">
         <button data-action="se-step" data-f="se-r" data-d="-1" aria-label="Reps minus 1">−</button>
@@ -3724,7 +3756,7 @@ function exerciseHTML(s, e, i) {
       ${x.note ? `<span class="set-note">${esc(x.note)}</span>` : ""}</li>`).join("")}</ol>` : ""}
       <div class="uni-row"><span id="uni-l-${i}">Unilateral</span>
         <button class="switch" role="switch" aria-checked="${isUni(e.name)}" aria-labelledby="uni-l-${i}" data-action="uni" data-i="${i}"><i></i></button></div>
-      ${isUni(e.name) ? `<div class="side-l">Left</div>${stepPair(i, d, "w", "r")}<div class="side-l">Right</div>${stepPair(i, d, "wR", "rR")}` : stepPair(i, d, "w", "r")}
+      ${isUni(e.name) ? `<div class="side-l">Left</div>${stepPair(i, d, "w", "r", canBW(e.name))}<div class="side-l">Right</div>${stepPair(i, d, "wR", "rR", canBW(e.name))}` : stepPair(i, d, "w", "r", canBW(e.name))}
       <input class="note" data-field="note" data-i="${i}" autocomplete="off" placeholder="Note (optional)" value="${esc(d.note)}">
       <div class="tags" role="group" aria-label="Set type">
         <button data-action="tag" data-t="warmup" data-i="${i}" aria-pressed="${d.tag === "warmup"}">Warm-up</button>
@@ -3927,11 +3959,11 @@ function finishSession(s, quiet) {
   save();
 }
 
-function stepPair(i, d, wf, rf) {
+function stepPair(i, d, wf, rf, bw) {
   return `<div class="steppers">
         <div class="stepper"><label for="${wf}-${i}">Weight (${wUnit()})</label><div class="step-row">
           <button data-action="step" data-field="${wf}" data-d="-${wStep()}" data-i="${i}" aria-label="Weight minus ${wStep()}">−</button>
-          <input id="${wf}-${i}" data-field="${wf}" data-i="${i}" inputmode="decimal" autocomplete="off" placeholder="BW" value="${esc(d[wf] || "")}">
+          <input id="${wf}-${i}" data-field="${wf}" data-i="${i}" inputmode="decimal" autocomplete="off" placeholder="${bw ? "BW" : "0"}" value="${esc(d[wf] || "")}">
           <button data-action="step" data-field="${wf}" data-d="${wStep()}" data-i="${i}" aria-label="Weight plus ${wStep()}">+</button></div></div>
         <div class="stepper"><label for="${rf}-${i}">Reps</label><div class="step-row">
           <button data-action="step" data-field="${rf}" data-d="-1" data-i="${i}" aria-label="Reps minus 1">−</button>
@@ -3942,9 +3974,10 @@ function stepPair(i, d, wf, rf) {
 function logSet(i) {
   const s = activeSession(); if (!s) return;
   const e = liveExercises(s)[i];
-  const d = draftFor(s, e.name), uni = isUni(e.name);
+  const d = draftFor(s, e.name), uni = isUni(e.name), bw = canBW(e.name);
   const side = (wv, rv, label) => {
     const wRaw = String(wv == null ? "" : wv).trim(), w = wRaw === "" ? null : parseFloat(wRaw), r = parseInt(rv, 10);
+    if (wRaw === "" && !bw) { toast(`Enter the ${label ? label.toLowerCase() : ""}weight.`); return null; }
     if (wRaw !== "" && (isNaN(w) || w < 0)) { toast(`${label}weight needs to be a number. Leave it blank for bodyweight.`); return null; }
     if (!r || r < 1) { toast(`Enter ${label ? label.toLowerCase() : "your "}reps first.`); return null; }
     return { w, r };
@@ -4390,6 +4423,7 @@ document.addEventListener("click", async (ev) => {
       const t = findSetTarget(ui.sd); if (!t) break;
       const readSide = (wid, rid) => {
         const wRaw = (($("#" + wid) || {}).value || "").trim(), w = wRaw === "" ? null : parseFloat(wRaw), r = parseInt(($("#" + rid) || {}).value, 10);
+        if (wRaw === "" && !canBW(t.e.exercise)) { toast("Enter the weight."); return null; }
         if (wRaw !== "" && (isNaN(w) || w < 0)) { toast("Weight needs to be a number. Leave it blank for bodyweight."); return null; }
         if (!r || r < 1) { toast("Enter the reps."); return null; }
         return { w, r };
@@ -4494,15 +4528,24 @@ document.addEventListener("click", async (ev) => {
     case "dlg-cancel": closeDialog(false); break;
     case "toast-undo": { const f = toastUndo; toastUndo = null; $("#toast").hidden = true; if (f) f(); break; }
     case "toggle": {
+      const wo = $("#workout"), before = $("#wo-list").children[i] ? $("#wo-list").children[i].getBoundingClientRect().top : null;
       ui.open = ui.open === i ? null : i; renderWorkout(); tick();
-      if (ui.open != null) { const li = $("#wo-list").children[i]; if (li) li.scrollIntoView({ block: "start", behavior: "smooth" }); }
+      const li = $("#wo-list").children[i];
+      if (li && before != null) wo.scrollTop += li.getBoundingClientRect().top - before;      // tapped row stays put
+      if (li && ui.open != null) {
+        const topBar = $(".wo-top").getBoundingClientRect().bottom + 6;
+        const tm = $("#timer"), bottom = (tm && !tm.hidden ? tm.getBoundingClientRect().top : innerHeight) - 10;
+        const r = li.getBoundingClientRect();
+        if (r.bottom > bottom) wo.scrollTop += Math.min(r.bottom - bottom, Math.max(0, r.top - topBar));   // only as far as needed, never past the header
+        else if (r.top < topBar) wo.scrollTop -= topBar - r.top;
+      }
       break;
     }
     case "step": {
       const s = activeSession(); if (!s) break;
       const e = liveExercises(s)[i], d = draftFor(s, e.name), f = b.dataset.field, step = +b.dataset.d;
       const next = Math.max(0, (parseFloat(d[f]) || 0) + step);
-      d[f] = f[0] === "w" && next === 0 && step < 0 ? "" : fmtNum(next);
+      d[f] = f[0] === "w" && next === 0 && step < 0 && canBW(e.name) ? "" : fmtNum(next);
       const input = document.getElementById(`${f}-${i}`);
       if (input) input.value = d[f];
       break;
