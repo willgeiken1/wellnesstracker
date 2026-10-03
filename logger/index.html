@@ -686,7 +686,7 @@ select.text-in { -webkit-appearance: none; appearance: none; }
 /* food: day view, colorful meals, recent, calendar */
 .cal-btn { background: var(--surface); }
 .cal-btn svg { width: 22px; height: 22px; }
-.day-nav { display: flex; align-items: center; justify-content: space-between; margin: -4px -8px 8px; font-weight: 700; }
+.day-nav { display: flex; align-items: center; justify-content: space-between; margin: -4px -8px 8px; font-weight: 700; min-height: 48px; touch-action: pan-y; }
 .log-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin: 2px 0 14px; }
 .snap { display: flex; align-items: center; justify-content: center; gap: 10px; height: 58px; border-radius: 29px; background: var(--green); color: var(--ink); font-weight: 800; font-size: 17px; }
 .snap svg { width: 24px; height: 24px; }
@@ -865,6 +865,30 @@ div.wcard { display: flex; justify-content: space-between; align-items: center; 
 #workout .tags button { height: 30px; padding: 0 12px; font-size: 13px; }
 #workout .log { height: 46px; margin-top: 10px; font-size: 16px; border-radius: 23px; }
 
+/* tab bubble */
+#tab-bubble { position: absolute; left: 0; top: 7px; height: 48px; border-radius: 24px; background: var(--lav); z-index: 0; pointer-events: none;
+  transition: transform .42s cubic-bezier(.34,1.32,.5,1), width .42s cubic-bezier(.34,1.32,.5,1), opacity .2s; will-change: transform, width; }
+#tabs .tab { position: relative; z-index: 1; }
+#tabs .tab[aria-current="page"] { background: transparent; }
+@media (prefers-reduced-motion: reduce) { #tab-bubble { transition: none; } }
+/* machine settings */
+.seg2 .gear-btn { margin-left: auto; width: 40px; height: 40px; color: var(--muted); }
+.panel-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ms-chip, .ms-add { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 64%; height: 30px; padding: 0 10px; border-radius: 15px; font-size: 13px; font-weight: 600; }
+.ms-chip { background: var(--raised); color: var(--text); } .ms-add { color: var(--muted); padding-left: 0; }
+.ms-chip svg, .ms-add svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.ms-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-row { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; text-align: left; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.ms-row b { display: block; font-weight: 600; } .ms-row em { font-style: normal; color: var(--muted); font-size: 13px; }
+.ms-text { height: auto; min-height: 84px; padding: 12px 14px; resize: none; font-size: 16px; line-height: 1.4; }
+/* measurements */
+.meas { padding-top: 4px; padding-bottom: 4px; }
+.m-row { display: grid; grid-template-columns: 1fr 64px auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.m-row:last-child { border-bottom: 0; } .m-name { font-weight: 600; }
+.m-spark { width: 60px; height: 20px; } .m-spark polyline { fill: none; stroke: var(--accent-line); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.m-val { text-align: right; } .m-val b { font-family: var(--display); font-weight: 600; font-size: 17px; } .m-val small { color: var(--muted); font-weight: 500; }
+.m-val em { display: block; font-style: normal; color: var(--muted); font-size: 12px; }
+
 /* appearance controls */
 .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; }
 .sw { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 18px; background: var(--raised); font-weight: 600; font-size: 15px; text-align: left; }
@@ -878,7 +902,7 @@ div.wcard { display: flex; justify-content: space-between; align-items: center; 
 <body>
 <main id="view"></main>
 
-<nav id="tabs" aria-label="Sections">
+<nav id="tabs" aria-label="Sections"><span id="tab-bubble" aria-hidden="true"></span>
   <button class="tab" data-action="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
   <button class="tab" data-action="tab" data-tab="workouts" aria-label="Workouts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/></svg><span>Workouts</span></button>
   <button class="tab" data-action="tab" data-tab="food" aria-label="Food"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/></svg><span>Food</span></button>
@@ -1043,7 +1067,7 @@ function migrate(d) {
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },
-    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {},
+    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: d.machineNotes || {}, measurements: d.measurements || {},
     cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 } };
 }
 
@@ -1505,7 +1529,7 @@ function schedulePush() {
 }
 async function cloudPush() {
   if (!sb || !session) return;
-  const blob = { uniEx: state.uniEx || {}, layout: state.layout || {}, muscleMode: state.muscleMode, settingsAt: state.settingsAt || 0, cardio: state.cardio ? { ...state.cardio, live: null } : null, food: state.food, goals: state.goals, theme: state.theme, profile: state.profile, workouts: state.workouts, sessions: state.sessions, plan: state.plan, restSeconds: state.restSeconds,
+  const blob = { machineNotes: state.machineNotes || {}, measurements: state.measurements || {}, uniEx: state.uniEx || {}, layout: state.layout || {}, muscleMode: state.muscleMode, settingsAt: state.settingsAt || 0, cardio: state.cardio ? { ...state.cardio, live: null } : null, food: state.food, goals: state.goals, theme: state.theme, profile: state.profile, workouts: state.workouts, sessions: state.sessions, plan: state.plan, restSeconds: state.restSeconds,
                  deleted: state.deleted || [], updatedAt: state.updatedAt || Date.now() };
   try {
     const { error } = await sb.from("user_data").upsert({ user_id: session.user.id, data: blob, updated_at: new Date().toISOString() });
@@ -1528,7 +1552,8 @@ function mergeRemote(r) {
   if (r.goals && (!state.goals || (r.goals.updatedAt || 0) > (state.goals.updatedAt || 0))) state.goals = r.goals;
   if (r.food) mergeFood(r.food);
   if (r.cardio) mergeCardio(r.cardio);
-  if ((r.settingsAt || 0) > (state.settingsAt || 0)) { if (r.muscleMode) state.muscleMode = r.muscleMode; if (r.layout) state.layout = r.layout; if (r.uniEx) state.uniEx = r.uniEx; state.settingsAt = r.settingsAt; }
+  if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) meas()[d] = m; });
+  if ((r.settingsAt || 0) > (state.settingsAt || 0)) { if (r.muscleMode) state.muscleMode = r.muscleMode; if (r.layout) state.layout = r.layout; if (r.uniEx) state.uniEx = r.uniEx; if (r.machineNotes) state.machineNotes = r.machineNotes; state.settingsAt = r.settingsAt; }
   if (r.profile) {
     const lp = state.profile;
     const wDel = new Set([...((lp && lp.wDel) || []), ...(r.profile.wDel || [])]);
@@ -2404,6 +2429,7 @@ function photosHTML() {
   const bw = bodyweightCardHTML();
   return `${pageHead("Progress", "Bodyweight and progress photos")}
     ${bw || `<div class="sec-h"><h3>Bodyweight</h3></div><div class="card"><p class="sub">Log weigh-ins to see your trend and weekly rate.</p><button class="btn primary block" data-action="weigh-open" style="margin-top:12px">Log weigh-in</button></div>`}
+    ${measurementsHTML()}
     <div class="sec-h" style="margin-top:22px"><h3>Photos</h3>
       <div style="display:flex;gap:8px"><button class="btn small ${PH.compare ? "primary" : ""}" data-action="ph-compare">${PH.compare ? "Done" : "Compare"}</button>
       <button class="btn small primary" data-action="ph-add-today">Add</button></div></div>
@@ -3486,6 +3512,160 @@ let wEatUntil = 0;
 document.addEventListener("click", (ev) => { if (performance.now() < wEatUntil) { wEatUntil = 0; ev.stopPropagation(); ev.preventDefault(); } }, true);
 document.addEventListener("contextmenu", (ev) => { if (ev.target.closest(".wdgs, .wcard")) ev.preventDefault(); });
 
+/* ================= Tab motion: bubble + slide + swipe ================= */
+const GEAR_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+const TAB_ORDER = ["home", "workouts", "food", "progress", "insights"];
+const reduceMotion = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function tabRect(id) {
+  const nav = $("#tabs"), b = nav && nav.querySelector(`.tab[data-tab="${id}"]`);
+  if (!b) return null;
+  const n = nav.getBoundingClientRect(), r = b.getBoundingClientRect();
+  return { x: r.left - n.left, w: r.width };
+}
+function placeBubble(from, to, p, animate) {
+  const bub = $("#tab-bubble"); if (!bub) return;
+  const a = tabRect(from), b = to ? tabRect(to) : null;
+  if (!a) { bub.style.opacity = "0"; return; }
+  bub.style.opacity = "1";
+  const t = b ? Math.max(0, Math.min(1, p)) : 0;
+  const x = a.x + ((b ? b.x : a.x) - a.x) * t, w = a.w + ((b ? b.w : a.w) - a.w) * t;
+  const stretch = b ? Math.sin(Math.PI * t) * 26 : 0;            // the bubble stretches mid-way, like liquid
+  bub.style.transition = animate && !reduceMotion() ? "" : "none";
+  bub.style.width = `${w + stretch}px`;
+  bub.style.transform = `translateX(${x - stretch / 2}px)`;
+}
+function syncBubble(animate) {
+  const cur = TAB_ORDER.includes(ui.tab) ? ui.tab : null;
+  const bub = $("#tab-bubble"); if (!bub) return;
+  if (!cur) { bub.style.opacity = "0"; return; }
+  requestAnimationFrame(() => placeBubble(cur, null, 0, animate));
+  clearTimeout(syncBubble.t);
+  syncBubble.t = setTimeout(() => { if (!tsw) placeBubble(ui.tab, null, 0, true); }, 380);   // tabs finish resizing, then settle exactly
+}
+document.addEventListener("transitionend", (ev) => { if (ev.target.classList && ev.target.classList.contains("tab") && !tsw && TAB_ORDER.includes(ui.tab)) placeBubble(ui.tab, null, 0, true); });
+function slideIn(dir) {
+  if (!dir || reduceMotion()) return;
+  const v = $("#view");
+  try { v.animate([{ transform: `translateX(${dir * 46}px)`, opacity: .35 }, { transform: "none", opacity: 1 }], { duration: 230, easing: "cubic-bezier(.2,.8,.3,1)" }); } catch (e) {}
+}
+function tabSwipeAllowed(ev) {
+  if (!TAB_ORDER.includes(ui.tab) || ui.edit || ui.sheet || ui.workoutOpen || ui.cardioOpen || ui.detail) return false;
+  if (ev.touches.length !== 1) return false;
+  const t = ev.target;
+  if (t.closest("input, textarea, select, .wdg-grip, .timeline, .switch, #tabs")) return false;
+  if (ui.tab === "food" && ui.fseg !== "recent" && t.closest(".day-nav")) return false;   // the date bar on Food swipes between days
+  return true;
+}
+let tsw = null;
+document.addEventListener("touchstart", (ev) => {
+  if (!tabSwipeAllowed(ev)) { tsw = null; return; }
+  const t = ev.touches[0];
+  tsw = { x: t.clientX, y: t.clientY, t: Date.now(), lock: null, dx: 0, idx: TAB_ORDER.indexOf(ui.tab) };
+}, { passive: true });
+document.addEventListener("touchmove", (ev) => {
+  if (!tsw) return;
+  const t = ev.touches[0], dx = t.clientX - tsw.x, dy = t.clientY - tsw.y;
+  if (!tsw.lock) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    tsw.lock = Math.abs(dx) > Math.abs(dy) * 1.3 ? "h" : "v";
+  }
+  if (tsw.lock !== "h") return;
+  ev.preventDefault();
+  const target = tsw.idx + (dx < 0 ? 1 : -1), valid = target >= 0 && target < TAB_ORDER.length;
+  tsw.dx = valid ? dx : dx * 0.25;                                  // rubber-band at the first and last tab
+  $("#view").style.transform = `translateX(${tsw.dx}px)`;
+  $("#view").style.transition = "none";
+  placeBubble(TAB_ORDER[tsw.idx], valid ? TAB_ORDER[target] : null, Math.abs(dx) / innerWidth * 1.4, false);
+}, { passive: false });
+document.addEventListener("touchend", () => {
+  if (!tsw) return;
+  const s = tsw; tsw = null;
+  if (s.lock !== "h") return;
+  const v = $("#view"), dir = s.dx < 0 ? 1 : -1, target = s.idx + dir;
+  const fast = Math.abs(s.dx) / Math.max(1, Date.now() - s.t) > 0.5;
+  const go = target >= 0 && target < TAB_ORDER.length && (Math.abs(s.dx) > innerWidth * 0.25 || (fast && Math.abs(s.dx) > 40));
+  v.style.transition = reduceMotion() ? "none" : "transform .18s ease-out";
+  if (!go) { v.style.transform = ""; placeBubble(TAB_ORDER[s.idx], null, 0, true); return; }
+  v.style.transform = `translateX(${-dir * innerWidth * 0.5}px)`;
+  setTimeout(() => {
+    v.style.transition = "none"; v.style.transform = "";
+    const btn = $(`#tabs .tab[data-tab="${TAB_ORDER[target]}"]`); if (btn) btn.click();
+  }, reduceMotion() ? 0 : 140);
+});
+document.addEventListener("touchcancel", () => { if (tsw && tsw.lock === "h") { $("#view").style.transform = ""; syncBubble(true); } tsw = null; });
+window.addEventListener("resize", () => syncBubble(false));
+
+/* ================= Machine settings notes ================= */
+const machineNote = (name) => (state.machineNotes && state.machineNotes[name]) || "";
+function allRoutineExercises() {
+  const seen = new Set(), out = [];
+  state.workouts.forEach((w) => w.exercises.forEach((e) => { if (!seen.has(e.name)) { seen.add(e.name); out.push({ name: e.name, routine: w.name }); } }));
+  return out;
+}
+function machineListSheetHTML() {
+  const q = (ui.sd.q || "").trim().toLowerCase();
+  const byRoutine = {};
+  allRoutineExercises().filter((e) => !q || e.name.toLowerCase().includes(q)).forEach((e) => (byRoutine[e.routine] = byRoutine[e.routine] || []).push(e));
+  const rows = Object.entries(byRoutine).map(([r, list]) => `<div class="mini-l">${esc(r)}</div>` + list.map((e) => {
+    const n = machineNote(e.name);
+    return `<button class="ms-row" data-action="ms-edit" data-name="${esc(e.name)}"><span><b>${esc(e.name)}</b><em>${n ? esc(n) : "No settings saved"}</em></span>${I.chevR}</button>`;
+  }).join("")).join("");
+  return `<h3>Machine settings</h3><p class="sub" style="margin:-6px 0 12px">Save how you set up each machine (seat height, pads, pin positions). It shows on that exercise during your workout.</p>
+    <input class="text-in" id="ms-q" type="search" autocomplete="off" placeholder="Search your exercises" value="${esc(ui.sd.q || "")}">
+    ${rows || `<p class="sub">No exercises match.</p>`}`;
+}
+function machineEditSheetHTML() {
+  const n = ui.sd.name;
+  return `<h3>${esc(n)}</h3><label class="field-label" for="ms-text">Machine settings</label>
+    <textarea class="text-in ms-text" id="ms-text" rows="3" placeholder="e.g. Seat 5, back pad 3, handles on the middle setting">${esc(machineNote(n))}</textarea>
+    <div class="sheet-actions">${machineNote(n) ? `<button class="btn danger" data-action="ms-clear">Clear</button>` : ""}<button class="btn primary" data-action="ms-save">Save</button></div>
+    ${ui.sd.back ? `<button class="link-btn" data-action="ms-list" style="display:block;margin:10px auto 0">Back to all exercises</button>` : ""}`;
+}
+
+/* ================= Body measurements ================= */
+const MEAS = [["chest", "Chest"], ["waist", "Waist"], ["hips", "Hips"], ["arms", "Arms"], ["thighs", "Thighs"], ["calves", "Calves"], ["neck", "Neck"]];
+const lenUnit = () => (units() === "metric" ? "cm" : "in");
+const cmToDisp = (cm) => (units() === "metric" ? cm : cm / 2.54);
+const dispToCm = (v) => (units() === "metric" ? v : v * 2.54);
+function meas() { state.measurements = state.measurements || {}; return state.measurements; }   // { date: { vals: {key: cm}, at } }
+function measSeries(key) {
+  return Object.keys(meas()).sort().map((d) => ({ date: d, cm: meas()[d].vals[key] })).filter((p) => p.cm != null);
+}
+function measurementsHTML() {
+  const rows = MEAS.map(([k, label]) => {
+    const s = measSeries(k);
+    if (!s.length) return "";
+    const last = s[s.length - 1], first = s[0], ch = cmToDisp(last.cm) - cmToDisp(first.cm);
+    const pts = s.slice(-12).map((p) => cmToDisp(p.cm)), lo = Math.min(...pts), hi = Math.max(...pts);
+    const spark = pts.length > 1 ? `<svg class="m-spark" viewBox="0 0 60 20" aria-hidden="true"><polyline points="${pts.map((v, i) => `${(i / (pts.length - 1)) * 58 + 1},${hi === lo ? 10 : 18 - (v - lo) / (hi - lo) * 16}`).join(" ")}"/></svg>` : "";
+    return `<button class="m-row" data-action="meas-detail" data-k="${k}"><span class="m-name">${label}</span>${spark}
+      <span class="m-val"><b>${fmtNum(Math.round(cmToDisp(last.cm) * 10) / 10)}<small> ${lenUnit()}</small></b>${s.length > 1 ? `<em>${signed(ch, 1)} since ${fmtDate(first.date, { month: "short", day: "numeric" })}</em>` : `<em>${fmtDate(last.date, { month: "short", day: "numeric" })}</em>`}</span></button>`;
+  }).join("");
+  return `<div class="sec-h" style="margin-top:22px"><h3>Measurements</h3><button class="link-inline" data-action="meas-log">Log</button></div>
+    <div class="card meas">${rows || `<p class="sub">Track your waist, chest, arms and more. On a bulk, arms and chest going up while your waist stays steady is a good sign the weight is muscle.</p>
+      <button class="btn primary block" data-action="meas-log" style="margin-top:12px">Log measurements</button>`}</div>`;
+}
+function measLogSheetHTML() {
+  const d = ui.sd.date || today(), cur = (meas()[d] || {}).vals || {};
+  const lastOf = (k) => { const s = measSeries(k); return s.length ? s[s.length - 1].cm : null; };
+  return `<h3>Log measurements</h3>
+    <label class="field-label" for="ms-date">Date</label><input class="text-in" id="ms-date" type="date" max="${today()}" value="${d}">
+    <p class="sub small" style="margin:-6px 0 10px">In ${lenUnit() === "in" ? "inches" : "centimeters"}. Fill in whichever you measured; blanks are skipped.</p>
+    <div class="fm-grid">${MEAS.map(([k, label]) => {
+      const v = cur[k] != null ? cur[k] : null, prev = lastOf(k);
+      return `<label><span>${label}</span><input class="text-in" id="mz-${k}" inputmode="decimal" placeholder="${prev != null ? fmtNum(Math.round(cmToDisp(prev) * 10) / 10) : "—"}" value="${v != null ? fmtNum(Math.round(cmToDisp(v) * 10) / 10) : ""}"></label>`;
+    }).join("")}</div>
+    <button class="btn primary block" data-action="meas-save">Save</button>
+    <p class="sub small">Tip: measure at the same time of day, relaxed, with the tape snug but not tight.</p>`;
+}
+function measDetailSheetHTML() {
+  const k = ui.sd.k, label = (MEAS.find((m) => m[0] === k) || [])[1], s = measSeries(k);
+  return `<h3>${label}</h3>
+    ${s.length > 1 ? chartSVG({ labels: s.map((p) => p.date), series: [{ data: s.map((p) => Math.round(cmToDisp(p.cm) * 10) / 10), cls: "ln" }], h: 110 }) : ""}
+    <ul class="wi-list">${[...s].reverse().map((p) => `<li><span>${fmtDate(p.date, { month: "short", day: "numeric", year: "numeric" })}</span><b>${fmtNum(Math.round(cmToDisp(p.cm) * 10) / 10)} ${lenUnit()}</b>
+      <button class="set-x" data-action="meas-del" data-date="${p.date}" aria-label="Delete ${label} from ${fmtDate(p.date)}">×</button></li>`).join("")}</ul>`;
+}
+
 /* ================= Appearance ================= */
 const ACCENTS = [
   { id: "citrus", name: "Citrus", c: ["#D5F56B", "#C7B5FA", "#F5BEDB"] },
@@ -3528,6 +3708,7 @@ function render() {
   else v.innerHTML = settingsHTML();
   if (ui.edit && ui.edit !== editPage()) ui.edit = null;
   if (ui.edit) v.insertAdjacentHTML("beforeend", doneButtonHTML());
+  syncBubble(true);
   renderWorkout();
   renderCardioLive();
   renderSheet();
@@ -3609,7 +3790,7 @@ function homeHTML() {
 
 function workoutsHTML() {
   const seg = `<div class="seg2" role="tablist"><button data-action="wseg" data-seg="routines" aria-pressed="${ui.wseg === "routines"}">Routines</button>
-    <button data-action="wseg" data-seg="history" aria-pressed="${ui.wseg === "history"}">History</button></div>`;
+    <button data-action="wseg" data-seg="history" aria-pressed="${ui.wseg === "history"}">History</button><button class="icon-btn gear-btn" data-action="ms-list" aria-label="Machine settings">${GEAR_SVG}</button></div>`;
   const plus = `<button class="plus-btn" data-action="new-workout" aria-label="New workout">${PLUS_SVG}</button>`;
   if (ui.wseg === "history") return pageHead("Workouts", "", { below: plus }) + seg + historyHTML(true);
   if (ui.edit === "routines") return `${pageHead("Workouts", "Drag to reorder · × to delete", { below: plus })}${seg}${routinesEditHTML()}`;
@@ -3748,7 +3929,7 @@ function exerciseHTML(s, e, i) {
     const d = draftFor(s, e.name);
     const worked = done.filter(isWork).length;
     let wi = 0;
-    html += `<div class="panel"><div class="panel-top"><button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
+    html += `<div class="panel"><div class="panel-top">${machineNote(e.name) ? `<button class="ms-chip" data-action="ms-edit" data-name="${esc(e.name)}" aria-label="Machine settings: ${esc(machineNote(e.name))}">${GEAR_SVG}<span>${esc(machineNote(e.name))}</span></button>` : `<button class="ms-add" data-action="ms-edit" data-name="${esc(e.name)}">${GEAR_SVG}<span>Machine settings</span></button>`}<button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
       ${worked ? "" : suggestionHTML(suggestion(e.name, s.id), i)}
       ${done.length ? `<ol class="sets">${done.map((x, j) => `
       <li><span class="set-n${x.tag === "warmup" ? " wu" : ""}">${x.tag === "warmup" ? "W" : ++wi}</span><button class="set-v set-edit" data-action="set-edit" data-i="${i}" data-s="${j}" aria-label="Edit set ${j + 1}">${fmtSet(x)}${x.tag === "failure" || (x.pr && x.pr.length) ? `<span class="set-badges">${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}</span>` : ""}</button>
@@ -3822,6 +4003,10 @@ function renderSheet() {
     inner = liftSheetHTML(ui.sd.name);
   } else if (ui.sheet === "w-add") {
     inner = addSheetHTML();
+  } else if (ui.sheet === "ms-list") { inner = machineListSheetHTML();
+  } else if (ui.sheet === "ms-edit") { inner = machineEditSheetHTML();
+  } else if (ui.sheet === "meas-log") { inner = measLogSheetHTML();
+  } else if (ui.sheet === "meas-detail") { inner = measDetailSheetHTML();
   } else if (ui.sheet === "live-add") {
     inner = liveAddSheetHTML();
   } else if (ui.sheet === "picker") {
@@ -4104,7 +4289,7 @@ document.addEventListener("keydown", (ev) => {
 });
 let swipe = null;
 document.addEventListener("touchstart", (ev) => {
-  if (ui.tab !== "food" || ui.fseg === "recent" || ui.sheet || ev.touches.length !== 1 || !ev.target.closest("#food-swipe")) { swipe = null; return; }
+  if (ui.tab !== "food" || ui.fseg === "recent" || ui.sheet || ev.touches.length !== 1 || !ev.target.closest(".day-nav")) { swipe = null; return; }
   swipe = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, t: Date.now() };
 }, { passive: true });
 document.addEventListener("touchend", (ev) => {
@@ -4124,6 +4309,7 @@ document.addEventListener("toggle", (ev) => {
 }, true);
 document.addEventListener("change", (ev) => {
   if (ev.target.id === "swap-routine" || ev.target.id === "add-routine") ui.sd.routine = ev.target.checked;
+  if (ev.target.id === "ms-date" && ui.sheet === "meas-log") { ui.sd.date = ev.target.value || today(); renderSheet(); }
   if (ev.target.id === "avatar-file" && ev.target.files[0]) {
     squarePhoto(ev.target.files[0], 160).then((url) => { state.profile = state.profile || {}; state.profile.photo = url; state.profile.updatedAt = Date.now(); save(); render(); toast("Profile photo updated."); })
       .catch(() => toast("Couldn't read that photo. Try another one."));
@@ -4143,6 +4329,7 @@ document.addEventListener("input", (ev) => {
     if (tot) tot.innerHTML = `<b>${r0(t.kcal)} cal</b><span>P ${r0(t.p)} · C ${r0(t.c)} · F ${r0(t.f)}</span>`;
     return;
   }
+  if (el.id === "ms-q") { ui.sd.q = el.value; const pos = el.selectionStart; renderSheet(); const n = $("#ms-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "pick-q") { ui.sd.q = el.value; const pos = el.selectionStart; renderSheet(); const n = $("#pick-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-rq") { ui.rq = el.value; const pos = el.selectionStart; render(); const n = $("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { ui.sd.hint = el.value; return; }
@@ -4177,13 +4364,16 @@ document.addEventListener("click", async (ev) => {
       if (to === "recovery") { to = "insights"; ui.iseg = "recovery"; }   // Recovery now lives inside Insights
       if (to === "photos") to = "progress";
       const same = ui.tab === to;           // tapping the current tab again returns to its top level
+      const fromI = TAB_ORDER.indexOf(ui.tab), toI = TAB_ORDER.indexOf(to);
       if (to === "settings" && ui.tab !== "settings") ui.prevTab = ui.tab;
       ui.edit = null;
       ui.tab = to;
       if (same && to === "insights") ui.iseg = "trends";
       if (same && to === "food") ui.foodDay = null;
       if (ui.tab !== "workouts" || same) ui.detail = null;
-      render(); window.scrollTo(0, 0); break;
+      render(); window.scrollTo(0, 0);
+      if (!same && fromI >= 0 && toI >= 0) slideIn(toI > fromI ? 1 : -1);
+      break;
     }
     case "week": ui.weekOffset += +b.dataset.d; render(); break;
     case "plan": ui.sheet = "plan"; ui.sd = { date: b.dataset.date }; renderSheet(); break;
@@ -4610,6 +4800,40 @@ document.addEventListener("click", async (ev) => {
     case "r-remove": deleteRoutine(b.dataset.w); break;
     case "w-add": ui.sheet = "w-add"; ui.sd = {}; renderSheet(); break;
     case "w-add-one": showWidget(ui.edit, b.dataset.w); ui.sheet = null; render(); toast(`${WIDGETS[ui.edit][b.dataset.w]} added.`); break;
+    case "ms-list": ui.sheet = "ms-list"; ui.sd = { q: "" }; renderSheet(); break;
+    case "ms-edit": { const back = ui.sheet === "ms-list"; ui.sheet = "ms-edit"; ui.sd = { name: b.dataset.name, back }; renderSheet(); setTimeout(() => { const t = $("#ms-text"); if (t) t.focus(); }, 60); break; }
+    case "ms-save": case "ms-clear": {
+      const txt = a === "ms-clear" ? "" : (($("#ms-text") || {}).value || "").trim();
+      state.machineNotes = state.machineNotes || {};
+      if (txt) state.machineNotes[ui.sd.name] = txt; else delete state.machineNotes[ui.sd.name];
+      state.settingsAt = Date.now(); save();
+      toast(txt ? `Saved settings for ${ui.sd.name}.` : "Settings cleared.");
+      if (ui.sd.back) { ui.sheet = "ms-list"; ui.sd = { q: "" }; } else ui.sheet = null;
+      renderSheet(); renderWorkout(); tick(); break;
+    }
+    case "meas-log": ui.sheet = "meas-log"; ui.sd = { date: today() }; renderSheet(); break;
+    case "meas-detail": ui.sheet = "meas-detail"; ui.sd = { k: b.dataset.k }; renderSheet(); break;
+    case "meas-save": {
+      const date = ($("#ms-date") || {}).value || today();
+      if (date > today()) { toast("That date is in the future."); break; }
+      const vals = { ...(((meas()[date] || {}).vals) || {}) }; let n = 0, bad = false;
+      MEAS.forEach(([k]) => {
+        const raw = (($("#mz-" + k) || {}).value || "").trim(); if (!raw) return;
+        const v = parseFloat(raw);
+        if (!(v > 0) || v > (units() === "metric" ? 300 : 120)) { bad = true; return; }
+        vals[k] = Math.round(dispToCm(v) * 10) / 10; n++;
+      });
+      if (bad) { toast("Check the numbers. One looks off."); break; }
+      if (!n) { toast("Enter at least one measurement."); break; }
+      meas()[date] = { vals, at: Date.now() }; save(); ui.sheet = null; render(); toast(`Saved ${pl(n, "measurement")}.`); break;
+    }
+    case "meas-del": {
+      const d = b.dataset.date, m = meas()[d]; if (!m) break;
+      const k = ui.sd.k, old = m.vals[k];
+      delete m.vals[k]; m.at = Date.now(); save(); renderSheet(); render();
+      toast("Deleted.", () => { m.vals[k] = old; m.at = Date.now(); save(); renderSheet(); render(); });
+      break;
+    }
     case "live-add-open": ui.sheet = "live-add"; ui.sd = { q: "", routine: false }; renderSheet(); break;
     case "live-add": liveAdd(b.dataset.name); break;
     case "live-add-new": { const n = (($("#live-new") || {}).value || "").trim(); if (!n) { toast("Type an exercise name."); break; } liveAdd(n); break; }
@@ -4636,6 +4860,7 @@ document.addEventListener("click", async (ev) => {
       if (ui.sd.idx >= 0) {
         const old = w.exercises[ui.sd.idx];
         if (old.name !== name) {
+          if (state.machineNotes && state.machineNotes[old.name] != null) { state.machineNotes[name] = state.machineNotes[old.name]; delete state.machineNotes[old.name]; }
           if (goals().lifts[old.name]) { goals().lifts[name] = goals().lifts[old.name]; delete goals().lifts[old.name]; goals().updatedAt = Date.now(); }
           // keep history linked to the renamed exercise
           state.sessions.forEach((s) => s.entries.forEach((e) => { if (e.exercise === old.name) e.exercise = name; }));
