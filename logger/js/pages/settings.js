@@ -2,7 +2,12 @@ import { app } from "../runtime.js";
 
 /* Settings, appearance, measurements, machine notes. */
 /* ================= Machine settings notes ================= */
-const machineNote = (name) => (app.state.machineNotes && app.state.machineNotes[name]) || "";
+function machineNote(name) {
+  const v = app.state.machineNotes && app.state.machineNotes[name];
+  if (typeof v === "string") return v;
+  if (!v || typeof v !== "object" || v.gone) return "";
+  return v.text || "";
+}
 app.machineNote = machineNote;
 
 function allRoutineExercises() {
@@ -30,7 +35,7 @@ function machineEditSheetHTML() {
   const n = app.ui.sd.name;
   return `<h3>${app.esc(n)}</h3><label class="field-label" for="ms-text">Machine settings</label>
     <textarea class="text-in ms-text" id="ms-text" rows="3" placeholder="e.g. Seat 5, back pad 3, handles on the middle setting">${app.esc(app.machineNote(n))}</textarea>
-    <div class="sheet-actions">${app.machineNote(n) ? `<button class="btn danger" data-action="ms-clear">Clear</button>` : ""}<button class="btn primary" data-action="ms-save">Save</button></div>
+    <div class="sheet-actions"><button class="btn primary" data-action="ms-save">Save</button></div>
     ${app.ui.sd.back ? `<button class="link-btn" data-action="ms-list" style="display:block;margin:10px auto 0">Back to all exercises</button>` : ""}`;
 }
 app.machineEditSheetHTML = machineEditSheetHTML;

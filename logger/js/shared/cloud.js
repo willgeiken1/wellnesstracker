@@ -32,6 +32,10 @@ app.schedulePush = schedulePush;
 
 async function cloudPush() {
   if (!app.sb || !app.session) return;
+  try {
+    const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
+    if (!error && data && data.data) app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, data.data.machineNotes);
+  } catch (e) { /* offline: send this phone's copy; the next pull merges */ }
   const blob = { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
                  deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(),
                  appLock: app.state.appLock || { enabled: false, updatedAt: 0 }, purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
@@ -68,7 +72,8 @@ function mergeRemote(r) {
   if (r.food) app.mergeFood(r.food);
   if (r.cardio) app.mergeCardio(r.cardio);
   if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = app.meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) app.meas()[d] = m; });
-  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) { if (r.muscleMode) app.state.muscleMode = r.muscleMode; if (r.layout) app.state.layout = r.layout; if (r.uniEx) app.state.uniEx = r.uniEx; if (r.machineNotes) app.state.machineNotes = r.machineNotes; app.state.settingsAt = r.settingsAt; }
+  app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, r.machineNotes);
+  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) { if (r.muscleMode) app.state.muscleMode = r.muscleMode; if (r.layout) app.state.layout = r.layout; if (r.uniEx) app.state.uniEx = r.uniEx; app.state.settingsAt = r.settingsAt; }
   if (r.profile) {
     const lp = app.state.profile;
     const wDel = new Set([...((lp && lp.wDel) || []), ...(r.profile.wDel || [])]);

@@ -135,6 +135,35 @@ function lookupMuscles(name, workouts) {
 }
 app.lookupMuscles = lookupMuscles;
 
+/* A note is { text, at }. Older saves stored a plain string; at 0 lets a real edit win without inventing a time from settingsAt. */
+function normalizeMachineNotes(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  Object.entries(raw).forEach(([k, v]) => {
+    if (typeof v === "string") {
+      const text = v.trim();
+      if (text) out[k] = { text, at: 0 };
+    } else if (v && typeof v === "object") {
+      const at = typeof v.at === "number" && v.at > 0 ? v.at : 0;
+      if (v.gone) out[k] = { text: "", at, gone: true };
+      else if (typeof v.text === "string" && v.text.trim()) out[k] = { text: v.text.trim(), at };
+    }
+  });
+  return out;
+}
+app.normalizeMachineNotes = normalizeMachineNotes;
+
+/* Per note, the newer edit wins. A missing key never deletes the other side's note. Ties stay with this phone. */
+function mergeMachineNotes(local, remote) {
+  const out = app.normalizeMachineNotes(local);
+  Object.entries(app.normalizeMachineNotes(remote)).forEach(([k, b]) => {
+    const a = out[k];
+    if (!a || (b.at || 0) > (a.at || 0)) out[k] = b;
+  });
+  return out;
+}
+app.mergeMachineNotes = mergeMachineNotes;
+
 /* Accepts the original v1 format and the current one */
 function migrate(d) {
   if (!d || !Array.isArray(d.sessions)) return null;
@@ -167,7 +196,7 @@ function migrate(d) {
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },
-    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: d.machineNotes || {}, measurements: d.measurements || {},
+    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: app.normalizeMachineNotes(d.machineNotes), measurements: d.measurements || {},
     cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 },
     brief: d.brief && typeof d.brief === "object" && !Array.isArray(d.brief) ? d.brief : null,
     appLock: d.appLock && typeof d.appLock === "object" ? d.appLock : { enabled: false, updatedAt: 0 },
