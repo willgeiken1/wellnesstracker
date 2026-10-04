@@ -63,26 +63,53 @@ function paint(tab) {
   finally { app.ui.tab = saved; }
 }
 
+let moveGen = 0;
+
+function readVisualIndex() {
+  const w = stageWidth();
+  const el = document.querySelector("#pane-home") || paneEls()[0];
+  if (!el || !w) return app.motion.index;
+  const tr = getComputedStyle(el).transform;
+  if (!tr || tr === "none") return app.motion.index;
+  const m = tr.match(/matrix3d\(([^)]+)\)/) || tr.match(/matrix\(([^)]+)\)/);
+  if (!m) return app.motion.index;
+  const parts = m[1].split(",").map(Number);
+  const x = parts.length === 16 ? parts[12] : parts[4];
+  return Number.isFinite(x) ? -x / w : app.motion.index;
+}
+
+function dropAnims() {
+  moveGen++;
+  paneEls().forEach((el) => {
+    el.getAnimations().forEach((a) => { a.onfinish = null; a.cancel(); });
+  });
+  app.motion.animating = false;
+}
+
 function moveTo(activeIndex, duration) {
   const w = stageWidth();
   const panes = paneEls();
+  const gen = ++moveGen;
   let pending = 0;
   panes.forEach((el, i) => {
     const target = `translate3d(${(i - activeIndex) * w}px,0,0)`;
     const from = getComputedStyle(el).transform;
-    el.getAnimations().forEach((a) => a.cancel());
+    el.getAnimations().forEach((a) => { a.onfinish = null; a.cancel(); });
     if (!duration || app.reduceMotion()) {
       el.style.transform = target;
       return;
     }
-    el.style.transform = from && from !== "none" ? from : target;
+    const fromT = from && from !== "none" ? from : target;
+    el.style.transform = fromT;
     pending++;
     const anim = el.animate(
-      [{ transform: from && from !== "none" ? from : target }, { transform: target }],
+      [{ transform: fromT }, { transform: target }],
       { duration, easing: "cubic-bezier(.22,.9,.24,1)", fill: "forwards" }
     );
     anim.onfinish = () => {
+      if (gen !== moveGen) return;
       el.style.transform = target;
+      anim.onfinish = null;
       anim.cancel();
       pending--;
       if (pending <= 0) app.motion.animating = false;
@@ -93,8 +120,8 @@ function moveTo(activeIndex, duration) {
 
 function dragTo(fromIndex, dx) {
   const w = stageWidth();
+  dropAnims();
   paneEls().forEach((el, i) => {
-    el.getAnimations().forEach((a) => a.cancel());
     el.style.transform = `translate3d(${(i - fromIndex) * w + dx}px,0,0)`;
   });
 }
@@ -164,7 +191,7 @@ app.render = function () {
     moveTo(to, 0);
     app.motion.index = to;
   }
-  app.syncBubble(!app.motion.dragging);
+  if (!app.motion.dragging) app.syncBubble(true);
   app.renderWorkout();
   app.renderCardioLive();
   app.renderSheet();
@@ -224,7 +251,9 @@ function moveGesture(x, y, ev) {
     gesture.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "h" : "v";
     if (gesture.lock === "h") {
       app.motion.dragging = true;
-      app.motion.animating = false;
+      // Grab the pixels on screen. A slide may still be catching up to ui.tab.
+      gesture.origin = readVisualIndex();
+      gesture.grabDx = Math.sign(dx) * 10;
       noteNeighbor(dx < 0 ? 1 : -1);
     }
   }
@@ -236,9 +265,17 @@ function moveGesture(x, y, ev) {
   const valid = ni >= 0 && ni < app.TAB_ORDER.length;
   const adx = valid ? dx : dx * 0.28;
   gesture.dx = adx;
-  dragTo(gesture.idx, adx);
-  const progress = valid ? clamp(-adx / gesture.w, -1, 1) : clamp(-adx / gesture.w, -0.18, 0.18);
-  app.placeBubble(gesture.idx + progress, false);
+  const mid = gesture.origin != null && Math.abs(gesture.origin - gesture.idx) > 0.02;
+  if (mid) {
+    const since = dx - gesture.grabDx;
+    const visualDx = valid ? since : since * 0.28;
+    dragTo(gesture.origin, visualDx);
+    app.placeBubble(gesture.origin - visualDx / gesture.w, false);
+  } else {
+    dragTo(gesture.idx, adx);
+    const progress = valid ? clamp(-adx / gesture.w, -1, 1) : clamp(-adx / gesture.w, -0.18, 0.18);
+    app.placeBubble(gesture.idx + progress, false);
+  }
 }
 
 /* One page move. The stage already has both panes, so this continues from the
@@ -286,7 +323,7 @@ app.goTab = function (to, opts = {}) {
   window.scrollTo(0, 0);
   if (pagerMove) {
     app.motion.hold = false;
-    app.pageTransition(toI, { ...opts, fromIndex: fromI });
+    app.pageTransition(toI, { fromIndex: fromI, ...opts });
   }
 };
 
@@ -304,10 +341,11 @@ function endGesture() {
   const valid = ni >= 0 && ni < app.TAB_ORDER.length && Math.sign(projected) === Math.sign(g.dx || projected);
   const commit = valid && Math.abs(projected) > g.w * 0.22;
   const target = commit ? ni : g.idx;
-  if (commit) app.goTab(app.TAB_ORDER[target], { startDx: g.dx, velocity: vel, fromIndex: g.idx });
+  const visualNow = readVisualIndex();
+  if (commit) app.goTab(app.TAB_ORDER[target], { startDx: 0, velocity: vel, fromIndex: visualNow });
   else {
     const dur = app.reduceMotion() ? 0 : clamp(Math.abs(g.dx) / Math.max(Math.abs(vel), 0.45), 160, 420);
-    app.pageTransition(g.idx, { duration: dur, fromIndex: g.idx });
+    app.pageTransition(g.idx, { duration: dur, fromIndex: visualNow });
     app.syncBubble(true);
   }
   // Swallow the click the finger lets go on, after the tab change above has run.
