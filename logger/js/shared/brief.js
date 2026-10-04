@@ -41,8 +41,9 @@ export function briefHeadline({ proteinLowDays, readiness, focus, effectRows, li
 }
 app.briefHeadline = briefHeadline;
 
-function briefPrefs() {
-  const b = app.state.brief && typeof app.state.brief === "object" && !Array.isArray(app.state.brief) ? app.state.brief : {};
+function briefPrefs(state) {
+  const source = state || app.state;
+  const b = source.brief && typeof source.brief === "object" && !Array.isArray(source.brief) ? source.brief : {};
   const known = new Set(BRIEF_METRICS.map((m) => m[0]));
   const order = [];
   (Array.isArray(b.order) ? b.order : []).forEach((id) => { if (known.has(id) && !order.includes(id)) order.push(id); });
@@ -333,13 +334,8 @@ function briefPaintEmpty(state) {
   if (typeof app.visibleHomeIds !== "function") return false;
   const tiles = new Set(app.visibleHomeIds(state));
   if (!tiles.has("brief") || !tiles.has("headline")) return false;
-  const prev = app.state;
-  if (state && state !== prev) app.state = state;
-  let enabled = [];
-  try {
-    const prefs = app.briefPrefs();
-    enabled = prefs.order.filter((id) => !prefs.hidden.includes(id));
-  } finally { if (state && state !== prev) app.state = prev; }
+  const prefs = app.briefPrefs(state);
+  const enabled = prefs.order.filter((id) => !prefs.hidden.includes(id));
   if (!enabled.length) return false;
   const covered = {
     pattern: tiles.has("pattern"),
