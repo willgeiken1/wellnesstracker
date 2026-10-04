@@ -18,7 +18,7 @@ const CONFIDENCE_WEIGHT = { low: 1, medium: 2, high: 3 };
 const METRICS = {
   readiness: { label: "readiness", better: "higher" },
   sleepScore: { label: "sleep score", better: "higher" },
-  sleepHours: { label: "sleep", better: "higher" },
+  sleepHours: { label: "sleep time", better: "higher" },
   deepHours: { label: "deep sleep", better: "higher" },
   remHours: { label: "REM sleep", better: "higher" },
   lightHours: { label: "light sleep" },
@@ -46,7 +46,12 @@ const METRICS = {
 const OURA_IDS = new Set(["readiness", "sleepScore", "sleepHours", "deepHours", "remHours", "lightHours", "awakeMin", "steps", "hrv", "rhr", "temp"]);
 
 export const DISPLAY_LIMIT = 8;
+export const SEE_ALL_LIMIT = 25;
 export const DAYS_FOR_A_PATTERN = MIN_PER_GROUP * 2;
+
+/* Outcomes worth showing. Other series can still be factors.
+   Weight is only an outcome when the person has a gain or lose goal. */
+const OUTCOME_IDS = new Set(["readiness", "sleepScore", "sleepHours", "deepHours", "hrv", "rhr", "liftPerf", "weight"]);
 
 const BOOLEAN_PHRASE = {
   workedOut: "you work out",
@@ -240,12 +245,28 @@ function isOura(id, extra) {
   return !!(extra && extra.has(id));
 }
 
-/* Same-night Oura pairs, and a workout type against that same session's
-   volume or strength. Next-day pairs stay, because those are different days. */
+function isTrainingFactor(factor) {
+  const id = String(factor && factor.id || "");
+  return id === "workedOut" || id.indexOf("workout:") === 0;
+}
+
+function isTrainingOutcome(outcome) {
+  return outcome === "workoutVolume" || outcome === "liftPerf" || String(outcome || "").indexOf("workout:") === 0;
+}
+
+/* Same-night Oura pairs tell one story twice. A workout type or "worked out"
+   against volume, strength, or another workout type is just the training
+   split, same day or next day. Recovery outcomes stay. */
 export function suppressedStory(factor, outcome, lag, ouraExtra) {
   if (lag === 0 && isOura(factor.source || factor.id, ouraExtra) && isOura(outcome, ouraExtra)) return true;
-  if (lag === 0 && String(factor.id).indexOf("workout:") === 0 && (outcome === "workoutVolume" || outcome === "liftPerf")) return true;
+  if (isTrainingFactor(factor) && isTrainingOutcome(outcome)) return true;
   return false;
+}
+
+function outcomeAllowed(id, weightDir) {
+  if (!OUTCOME_IDS.has(id)) return false;
+  if (id === "weight") return weightDir === "gain" || weightDir === "lose";
+  return true;
 }
 
 function preferredDirection(outcome, weightDir) {
@@ -537,6 +558,26 @@ function numericSeries(days) {
   return Object.keys(found);
 }
 
+function factorPhrase(id, label, verb) {
+  if (id === "sleepHours") return { median: "you sleep more than usual", tertile: "you get a long night of sleep" };
+  if (id === "deepHours") return { median: "your deep sleep is longer than usual", tertile: "you get a lot of deep sleep" };
+  if (id === "steps") return { median: "you get more steps than usual", tertile: "you get a lot of steps" };
+  if (id === "workoutVolume") return { median: "your workout is heavier than usual", tertile: "you have a heavy workout" };
+  if (id === "calories") return { median: "you eat more than usual", tertile: "your calories are in the top third" };
+  return {
+    median: "your " + label + " " + verb + " above your usual",
+    tertile: "your " + label + " " + verb + " in the top third",
+  };
+}
+
+function tertileTail(source) {
+  if (source === "sleepHours") return " than on your shorter nights";
+  if (source === "deepHours") return " than on nights with less deep sleep";
+  if (source === "steps") return " than on your lower-step days";
+  if (source === "workoutVolume") return " than on your lighter workouts";
+  return " than on your lower days";
+}
+
 function buildFactors(days, phrases) {
   const factors = [];
   const dates = Object.keys(days);
@@ -576,6 +617,7 @@ function buildFactors(days, phrases) {
     const meta = metricMeta(id);
     const label = meta.label;
     const verb = meta.plural ? "are" : "is";
+    const said = factorPhrase(id, label, verb);
 
     const med = quantile(sorted, 0.5);
     const medianValues = {};
@@ -592,7 +634,7 @@ function buildFactors(days, phrases) {
         id: id + ":median",
         source: id,
         kind: "median",
-        phrase: "your " + label + " " + verb + " above your usual",
+        phrase: said.median,
         values: medianValues,
       });
     }
@@ -612,7 +654,7 @@ function buildFactors(days, phrases) {
           id: id + ":tertile",
           source: id,
           kind: "tertile",
-          phrase: "your " + label + " " + verb + " in the top third",
+          phrase: said.tertile,
           values: tertileValues,
         });
       }
@@ -669,21 +711,25 @@ function formatAbs(v) {
   return places === 10 ? t.toFixed(1) : String(t);
 }
 
+function changeWords(result) {
+  const useAbs = !!metricMeta(result.outcome).absolute || result.percent == null || Math.abs(result.meanWithout) < 1;
+  if (useAbs) {
+    const shown = formatAbs(result.diff);
+    if (shown === "0") return "about the same";
+    const unit = result.outcome === "liftPerf" ? " points" : "";
+    return shown + unit + (result.diff > 0 ? " higher" : " lower");
+  }
+  const shown = formatPercent(result.percent);
+  if (shown === "0") return "about the same";
+  return shown + "% " + (result.percent > 0 ? "higher" : "lower");
+}
+
 export function sentenceFor(result) {
   const meta = metricMeta(result.outcome);
   const verb = meta.plural ? "are" : "is";
-  const useAbs = !!meta.absolute || result.percent == null || Math.abs(result.meanWithout) < 1;
-  let change;
-  if (useAbs) {
-    const shown = formatAbs(result.diff);
-    const unit = result.outcome === "liftPerf" && shown !== "0" ? " points" : "";
-    change = shown === "0" ? "about the same" : shown + unit + (result.diff > 0 ? " higher" : " lower");
-  } else {
-    const shown = formatPercent(result.percent);
-    change = shown === "0" ? "about the same" : shown + "% " + (result.percent > 0 ? "higher" : "lower");
-  }
+  const change = changeWords(result);
   const when = result.lag > 0 ? "On days after " : "On days ";
-  const tail = result.kind === "tertile" && change !== "about the same" ? " than on days in the bottom third" : "";
+  const tail = result.kind === "tertile" && change !== "about the same" ? tertileTail(result.source) : "";
   const meaning = result.valence === "good" ? ", which is a good sign" : result.valence === "bad" ? ", which is working against you" : "";
   const n = result.nWith;
   const body = when + result.phrase + ", your " + meta.label + " " + verb + " " + change + tail + meaning;
@@ -693,12 +739,53 @@ export function sentenceFor(result) {
   };
 }
 
+function yesterdayClause(phrase) {
+  const known = {
+    "you work out": "You worked out yesterday",
+    "you do cardio": "You did cardio yesterday",
+    "you eat late": "You ate late yesterday",
+    "your protein is over target": "Your protein was over target yesterday",
+    "your calories are over target": "Your calories were over target yesterday",
+    "your carbs are over target": "Your carbs were over target yesterday",
+    "your fat is over target": "Your fat was over target yesterday",
+    "you sleep more than usual": "You slept more than usual yesterday",
+    "you get a long night of sleep": "You got a long night of sleep yesterday",
+    "your deep sleep is longer than usual": "Your deep sleep was longer than usual yesterday",
+    "you get a lot of deep sleep": "You got a lot of deep sleep yesterday",
+    "you get more steps than usual": "You got more steps than usual yesterday",
+    "you get a lot of steps": "You got a lot of steps yesterday",
+    "your workout is heavier than usual": "Your workout was heavier than usual yesterday",
+    "you have a heavy workout": "You had a heavy workout yesterday",
+    "you eat more than usual": "You ate more than usual yesterday",
+  };
+  if (known[phrase]) return known[phrase];
+  const workout = /^you do a (.+) workout$/.exec(phrase || "");
+  if (workout) return "You did a " + workout[1] + " workout yesterday";
+  if (phrase && phrase.indexOf("your ") === 0) {
+    const body = phrase.charAt(0).toUpperCase() + phrase.slice(1);
+    return body.replace(" is ", " was ").replace(" are ", " were ") + " yesterday";
+  }
+  return null;
+}
+
+/* One line for the morning brief. A pattern set off by yesterday is worded
+   as what happened, then what tends to follow. */
+export function todayLine(result) {
+  if (!result) return "";
+  const change = changeWords(result);
+  if (result.because === "yesterday" && change !== "about the same") {
+    const clause = yesterdayClause(result.phrase);
+    if (clause) return clause + "; on days like this your " + metricMeta(result.outcome).label + " tends to be " + change + ".";
+  }
+  return result.lead || result.sentence || "";
+}
+
 function evaluate(days, phrases, options, ouraExtra) {
   const minN = options.minPerGroup == null ? MIN_PER_GROUP : options.minPerGroup;
   const lags = options.lags || [0, 1];
   const weightDir = options.weightDir || null;
   const factors = buildFactors(days, phrases || {});
-  const outcomes = numericSeries(days).filter((id) => !options.outcomes || options.outcomes.indexOf(id) !== -1);
+  const outcomes = numericSeries(days).filter((id) => outcomeAllowed(id, weightDir) && (!options.outcomes || options.outcomes.indexOf(id) !== -1));
   const results = [];
 
   outcomes.forEach((outcome) => {
@@ -770,10 +857,53 @@ function isPrebuilt(input) {
   return true;
 }
 
-/* The Insights list hides low confidence. The engine still returns those rows
-   so a caller can see what was too weak to show. */
+function viewGroup(row) {
+  return row && (row.valence === "good" || row.valence === "bad") ? 0 : 1;
+}
+
+/* The Insights list hides low confidence, then puts a good or bad pattern
+   ahead of a neutral one. Strength still orders each group. */
 export function findingsForView(rows) {
-  return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
+  return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).slice().sort((a, b) => viewGroup(a) - viewGroup(b) || b.strength - a.strength || Math.abs(b.percent || 0) - Math.abs(a.percent || 0) || (b.nWith + b.nWithout) - (a.nWith + a.nWithout));
+}
+
+function samplesOf(days, id) {
+  const samples = [];
+  Object.keys(days || {}).forEach((date) => {
+    const n = finite(days[date] && days[date][id]);
+    if (n != null) samples.push(n);
+  });
+  samples.sort((a, b) => a - b);
+  return samples;
+}
+
+function factorActive(days, row, date) {
+  const bucket = days[date];
+  if (!bucket || !row) return false;
+  if (row.kind === "boolean") return bucket[row.factor] === true;
+  const n = finite(bucket[row.source]);
+  if (n == null) return false;
+  const sorted = samplesOf(days, row.source);
+  if (sorted.length < 4 || sorted[0] === sorted[sorted.length - 1]) return false;
+  if (row.kind === "median") return n > quantile(sorted, 0.5);
+  if (row.kind === "tertile") {
+    const highCut = quantile(sorted, 2 / 3);
+    const lowCut = quantile(sorted, 1 / 3);
+    return highCut > lowCut && n >= highCut;
+  }
+  return false;
+}
+
+/* A high or medium finding that fits today. Yesterday's trigger on a next-day
+   pattern comes first. Otherwise the top good or bad finding. */
+export function pickForToday(rows, input, today) {
+  const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
+  const ranked = findingsForView(rows).filter((r) => r.valence === "good" || r.valence === "bad");
+  if (!today || !ranked.length) return ranked[0] ? { ...ranked[0], because: "overall" } : null;
+  const yesterday = addDays(today, -1);
+  const triggered = ranked.find((r) => r.lag === 1 && factorActive(days, r, yesterday));
+  if (triggered) return { ...triggered, because: "yesterday" };
+  return { ...ranked[0], because: "overall" };
 }
 
 export function loggedDays(input) {

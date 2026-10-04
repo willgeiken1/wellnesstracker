@@ -1,9 +1,12 @@
 import { app } from "../runtime.js";
+import { pickForToday, todayLine } from "./correlate.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
-   The headline uses readiness, lift status, and effect() — no network. */
+   The headline uses readiness, lift status, and effect() — no network.
+   The pattern line is one correlation that fits today. It stays on the device. */
 
 const BRIEF_METRICS = [
+  ["pattern", "What affects you"],
   ["oura", "Readiness and sleep"],
   ["train", "Today's training"],
   ["food", "Yesterday's food"],
@@ -176,10 +179,31 @@ function weightMetric() {
   return { id: "weight", label: "Weight", value: `${app.signed(r.perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
 }
 
+function patternMetric() {
+  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return null;
+  let row = null;
+  try {
+    const src = app.correlationSource();
+    row = pickForToday(app.correlations(), src, app.today());
+  } catch (e) { row = null; }
+  if (!row) return null;
+  const line = todayLine(row);
+  if (!line) return null;
+  const good = row.valence === "good";
+  return {
+    id: "pattern",
+    label: good ? "Good for you" : "Working against you",
+    value: line,
+    meta: "What affects you",
+    tone: good ? "up" : "down",
+    link: "affects",
+  };
+}
+
 function briefMetrics() {
-  const byId = { oura: ouraMetric(), train: trainMetric(), food: foodMetric(), week: weekMetric(), weight: weightMetric() };
+  const byId = { pattern: patternMetric(), oura: ouraMetric(), train: trainMetric(), food: foodMetric(), week: weekMetric(), weight: weightMetric() };
   const prefs = app.briefPrefs();
-  return prefs.order.filter((id) => !prefs.hidden.includes(id)).map((id) => byId[id]);
+  return prefs.order.filter((id) => !prefs.hidden.includes(id)).map((id) => byId[id]).filter(Boolean);
 }
 app.briefMetrics = briefMetrics;
 
@@ -201,6 +225,14 @@ function briefTodayHeadline() {
 app.briefTodayHeadline = briefTodayHeadline;
 
 function metricHTML(m) {
+  if (m.link === "affects") {
+    return `<li class="brief-metric span${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
+      <button class="brief-hit" data-action="open-affects">
+        <span class="brief-l">${app.esc(m.label)}</span>
+        <span class="brief-line">${app.esc(m.value)}</span>
+        <span class="brief-m">${app.esc(m.meta || "What affects you")}</span>
+      </button></li>`;
+  }
   const bar = m.bar != null ? `<span class="brief-bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, m.bar)).toFixed(1)}%"></i></span>` : "";
   return `<li class="brief-metric${m.empty ? " empty" : ""}${m.low ? " low" : ""}${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
     <span class="brief-l">${app.esc(m.label)}</span><b>${app.esc(m.value)}</b>
@@ -228,12 +260,14 @@ function briefHTML() {
   }
   const expanded = prefs.size === "expanded";
   const items = app.briefMetrics();
+  const visible = prefs.order.filter((id) => !prefs.hidden.includes(id));
+  const body = items.length ? `<ul class="brief-metrics">${items.map(metricHTML).join("")}</ul>` : (visible.length ? "" : `<p class="brief-note">All metrics are off. Edit the brief to turn one on.</p>`);
   return `<section class="card brief${expanded ? " expanded" : ""}" data-brief-size="${prefs.size}" aria-label="Morning brief">
     <div class="brief-top"><p class="brief-k">Morning brief</p><div class="brief-tools">
       <button data-action="brief-size" aria-pressed="${expanded}">${expanded ? "Compact" : "Expand"}</button>
       <button data-action="brief-edit">Edit</button></div></div>
     <h2 class="brief-h">${app.esc(app.briefTodayHeadline())}</h2>
-    ${items.length ? `<ul class="brief-metrics">${items.map(metricHTML).join("")}</ul>` : `<p class="brief-note">All metrics are off. Edit the brief to turn one on.</p>`}
+    ${body}
   </section>`;
 }
 app.briefHTML = briefHTML;

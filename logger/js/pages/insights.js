@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, findingsForView, loggedDays } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, findingsForView, loggedDays } from "../shared/correlate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -106,9 +106,10 @@ function affectsHTML() {
     return head + `<div class="card aff-empty"><h4>${title}</h4><p class="sub">${affectsEmpty(days)}</p></div>`;
   }
   const open = !!app.ui.affectsAll;
-  const shown = open ? rows : rows.slice(0, DISPLAY_LIMIT);
-  const more = rows.length > DISPLAY_LIMIT;
-  const toggle = more ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + DISPLAY_LIMIT : "See all " + rows.length}</button>` : "";
+  const capped = rows.slice(0, SEE_ALL_LIMIT);
+  const shown = open ? capped : capped.slice(0, DISPLAY_LIMIT);
+  const more = capped.length > DISPLAY_LIMIT;
+  const toggle = more ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + DISPLAY_LIMIT : "See all " + capped.length}</button>` : "";
   return head + shown.map(affectsCard).join("") + toggle;
 }
 app.affectsHTML = affectsHTML;

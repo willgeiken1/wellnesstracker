@@ -92,6 +92,12 @@
 :root[data-mode="light"] .brief-metric.low .brief-bar i,
 :root[data-mode="light"] .brief-metric.tone-down .brief-bar i { background: #C46B8A; }
 :root[data-mode="light"] .brief-metric.tone-down b { color: #8E3D5C; }
+.brief-metric.span { grid-column: 1 / -1; }
+.brief-hit { display: grid; gap: 2px; width: 100%; text-align: left; }
+.brief-line { font-weight: 600; font-size: 15px; line-height: 1.35; letter-spacing: -.015em; color: var(--text); }
+.brief-metric.tone-up .brief-l { color: var(--accent-text); }
+.brief-metric.tone-down .brief-l { color: var(--red); }
+:root[data-mode="light"] .brief-metric.tone-down .brief-l { color: #8E3D5C; }
 @media (prefers-reduced-motion: reduce) {
   .brief-row.dragging { box-shadow: none; }
 }

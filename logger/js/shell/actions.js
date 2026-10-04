@@ -347,6 +347,7 @@ document.addEventListener("click", async (ev) => {
     case "lift": app.ui.sheet = "lift"; app.ui.sd = { name: b.dataset.name }; app.renderSheet(); break;
     case "iseg": app.ui.iseg = b.dataset.s; app.render(); break;
     case "affects-more": app.ui.affectsAll = !app.ui.affectsAll; app.render(); break;
+    case "open-affects": app.ui.iseg = "trends"; app.goTab("insights"); break;
     case "install-app": { if (!app.installPrompt) break; const p = app.installPrompt; app.installPrompt = null; try { await p.prompt(); } catch (e) {} app.render(); break; }
     case "cardio-open": {
       const changed = app.ui.tab !== "cardio";
