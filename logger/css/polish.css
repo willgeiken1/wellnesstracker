@@ -158,6 +158,7 @@ body.timer-on:not(.in-workout) #view {
   font-weight: 700;
   letter-spacing: -.02em;
   line-height: 1.05;
+  transition: none;
 }
 
 #tabs .tab svg {
@@ -191,7 +192,7 @@ body.timer-on:not(.in-workout) #view {
 
 @media (max-width: 380px) {
   #tabs .tab[aria-current="page"] span,
-  #tabs .tab span { display: block; font-size: 9px; }
+  #tabs .tab span { display: block; font-size: 10px; }
   #tabs .tab[aria-current="page"] { padding: 6px 2px 5px; }
 }
 
@@ -258,4 +259,17 @@ body.timer-on:not(.in-workout) #view {
 
 @media (prefers-reduced-motion: reduce) {
   #tab-bubble { transition: none !important; }
+  .pane { transition: none !important; }
 }
+
+/* insight widgets */
+.ins-verdict { font-family: var(--display); font-weight: 600; font-size: 18px; letter-spacing: -.02em; line-height: 1.25; }
+.ins-lift + .ins-lift { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ins-lift-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ins-lift-h b { font-weight: 700; font-size: 15.5px; }
+.ins-factors { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.ins-factors li { font-size: 14.5px; line-height: 1.4; }
+.ins-why { color: var(--muted); font-size: 13.5px; line-height: 1.45; margin: 12px 0 0; }
+.ins-routine { margin-top: 14px; }
+.ins-routine b { display: block; margin-bottom: 8px; }
+.ins-card .btn { margin-top: 14px; }

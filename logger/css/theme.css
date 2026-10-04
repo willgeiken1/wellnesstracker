@@ -23,15 +23,15 @@ body { letter-spacing: -.005em; }
 /* avatar */
 .avatar { width: 46px; height: 46px; border-radius: 23px; background: var(--lav); color: var(--ink); font-family: var(--display); font-weight: 600; font-size: 17px; flex: 0 0 auto; }
 
-/* floating pill navigation */
-#tabs { left: 14px; right: 14px; bottom: calc(12px + var(--safe-bottom)); height: 64px; padding: 0 8px; border-radius: 32px;
-  background: rgba(30,30,34,.92); border: 1px solid #2E2E34; box-shadow: 0 14px 34px rgba(0,0,0,.5);
-  display: flex; justify-content: space-between; align-items: center; }
-.tab { height: 48px; min-width: 48px; padding: 0 12px; border-radius: 24px; flex-direction: row; gap: 8px; color: #C9C9CE; font-size: 0; }
+/* floating tab bar: five equal slots, label always visible (polish.css is the final layer) */
+#tabs { left: 14px; right: 14px; bottom: calc(12px + var(--safe-bottom)); height: 64px; padding: 0; border-radius: 32px;
+  background: var(--nav-bg); border: 1px solid var(--nav-border); box-shadow: 0 14px 34px rgba(0,0,0,.5);
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; justify-content: stretch; }
+.tab { height: 100%; min-width: 0; width: auto; padding: 6px 2px 5px; border-radius: 0; flex-direction: column; gap: 2px; color: var(--nav-icon); font-size: 11px; transition: none; }
 .tab svg { width: 22px; height: 22px; }
-.tab span { display: none; }
-.tab[aria-current="page"] { background: var(--lav); color: var(--ink); padding: 0 16px 0 13px; }
-.tab[aria-current="page"] span { display: inline; font-size: 14px; font-weight: 700; }
+.tab span { display: block; font-size: 11px; font-weight: 700; }
+.tab[aria-current="page"] { background: transparent; color: var(--ink); padding: 6px 2px 5px; }
+.tab[aria-current="page"] span { display: block; font-size: 11px; font-weight: 700; }
 
 /* buttons, pills */
 .btn { border-radius: 26px; font-weight: 700; }

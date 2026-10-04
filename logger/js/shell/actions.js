@@ -311,23 +311,8 @@ document.addEventListener("click", async (ev) => {
   if (app.needsLock && app.needsLock() && a.indexOf("lock-") !== 0) { ev.preventDefault(); return; }
 
   switch (a) {
-    case "tab": {
-      let to = b.dataset.tab;
-      if (to === "recovery") { to = "insights"; app.ui.iseg = "recovery"; }   // Recovery now lives inside Insights
-      if (to === "photos") to = "progress";
-      const same = app.ui.tab === to;           // tapping the current tab again returns to its top level
-      const fromI = app.TAB_ORDER.indexOf(app.ui.tab), toI = app.TAB_ORDER.indexOf(to);
-      if (to === "settings" && app.ui.tab !== "settings") app.ui.prevTab = app.ui.tab;
-      app.ui.edit = null;
-      app.ui.briefEdit = false;
-      app.ui.tab = to;
-      if (same && to === "insights") app.ui.iseg = "trends";
-      if (same && to === "food") app.ui.foodDay = null;
-      if (app.ui.tab !== "workouts" || same) app.ui.detail = null;
-      app.render(); window.scrollTo(0, 0);
-      if (!same && fromI >= 0 && toI >= 0) app.slideIn(toI > fromI ? 1 : -1);
-      break;
-    }
+    case "tab": app.goTab(b.dataset.tab); break;
+    case "use-maint": app.applyRealMaintenance(); break;
     case "week": app.ui.weekOffset += +b.dataset.d; app.render(); break;
     case "plan": app.ui.sheet = "plan"; app.ui.sd = { date: b.dataset.date }; app.renderSheet(); break;
     case "set-plan":

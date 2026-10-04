@@ -20,14 +20,23 @@ app.placeBubble = function (indexFloat, animate) {
   const nav = document.getElementById("tabs");
   const bub = document.getElementById("tab-bubble");
   if (!nav || !bub) return;
-  if (indexFloat == null || indexFloat < 0) { bub.style.opacity = "0"; return; }
-  const slot = nav.clientWidth / app.TAB_ORDER.length;
+  if (indexFloat == null || Number.isNaN(indexFloat)) { bub.style.opacity = "0"; return; }
+  const n = app.TAB_ORDER.length;
+  const slot = nav.clientWidth / n;
   const inset = 4;
-  const w = Math.max(0, slot - inset * 2);
-  const x = indexFloat * slot + inset;
-  bub.style.width = `${w}px`;
+  const base = Math.max(0, slot - inset * 2);
+  const idx = clamp(indexFloat, -0.22, n - 1 + 0.22);
+  const nearest = clamp(Math.round(idx), 0, n - 1);
+  const dist = Math.min(0.5, Math.abs(idx - nearest));
+  // Mid-swipe the bubble widens, then settles. At a slot it is exactly inset by 4px.
+  const stretch = animate ? 0 : Math.sin(dist / 0.5 * Math.PI) * slot * 0.16;
+  const w = base + stretch;
+  let x = (idx + 0.5) * slot - w / 2;
+  x = clamp(x, 2, Math.max(2, nav.clientWidth - w - 2));
+  const spring = "transform .38s cubic-bezier(.33,1.22,.45,1), width .38s cubic-bezier(.33,1.22,.45,1)";
   bub.style.opacity = "1";
-  bub.style.transition = animate && !app.reduceMotion() ? "transform .42s cubic-bezier(.22,.8,.24,1)" : "none";
+  bub.style.transition = animate && !app.reduceMotion() ? spring : "none";
+  bub.style.width = `${w}px`;
   bub.style.transform = `translate3d(${x}px,0,0)`;
 };
 app.syncBubble = function (animate) {
@@ -70,7 +79,7 @@ function moveTo(activeIndex, duration) {
     pending++;
     const anim = el.animate(
       [{ transform: from && from !== "none" ? from : target }, { transform: target }],
-      { duration, easing: "cubic-bezier(.16,.84,.28,1)", fill: "forwards" }
+      { duration, easing: "cubic-bezier(.22,.9,.24,1)", fill: "forwards" }
     );
     anim.onfinish = () => {
       el.style.transform = target;
@@ -147,8 +156,8 @@ app.render = function () {
       const id = app.TAB_ORDER[i];
       if (id !== tab && i !== from) paint(id);
     }
-    const dist = Math.abs(to - from) * stageWidth();
-    const dur = app.reduceMotion() ? 0 : Math.min(520, 300 + Math.abs(to - from) * 40);
+    const steps = Math.abs(to - from);
+    const dur = app.reduceMotion() ? 0 : Math.min(420, 280 + Math.max(0, steps - 1) * 40);
     app.motion.index = to;
     moveTo(to, dur);
   } else if (pager && !app.motion.dragging && !app.motion.animating && !app.motion.hold) {
@@ -232,6 +241,55 @@ function moveGesture(x, y, ev) {
   app.placeBubble(gesture.idx + progress, false);
 }
 
+/* One page move. The stage already has both panes, so this continues from the
+   current transform (a finger offset, or the resting slot) instead of cloning a ghost. */
+app.pageTransition = function (toIndex, opts = {}) {
+  document.querySelectorAll(".page-ghost").forEach((el) => el.remove());
+  const fromIndex = opts.fromIndex != null ? opts.fromIndex : app.motion.index;
+  let dur = opts.duration;
+  if (dur == null) {
+    if (app.reduceMotion()) dur = 0;
+    else if (opts.startDx != null) {
+      const w = stageWidth();
+      const remaining = Math.abs((fromIndex - toIndex) * w - opts.startDx);
+      dur = clamp(remaining / Math.max(Math.abs(opts.velocity || 0), 0.45), 160, 420);
+    } else {
+      const steps = Math.abs(toIndex - fromIndex);
+      dur = Math.min(420, 280 + Math.max(0, steps - 1) * 40);
+    }
+  }
+  app.motion.index = toIndex;
+  moveTo(toIndex, dur);
+};
+
+app.goTab = function (to, opts = {}) {
+  if (to === "recovery") { to = "insights"; app.ui.iseg = "recovery"; }
+  if (to === "photos") to = "progress";
+  const fromI = app.TAB_ORDER.indexOf(app.ui.tab);
+  const same = app.ui.tab === to;
+  if (to === "settings" && app.ui.tab !== "settings") app.ui.prevTab = app.ui.tab;
+  app.ui.edit = null;
+  app.ui.briefEdit = false;
+  app.ui.tab = to;
+  if (same && to === "insights") app.ui.iseg = "trends";
+  if (same && to === "food") app.ui.foodDay = null;
+  if (app.ui.tab !== "workouts" || same) app.ui.detail = null;
+  const toI = app.TAB_ORDER.indexOf(to);
+  const pagerMove = !same && fromI >= 0 && toI >= 0;
+  if (pagerMove) {
+    const lo = Math.min(fromI, toI), hi = Math.max(fromI, toI);
+    for (let i = lo; i <= hi; i++) if (i !== toI && i !== fromI) paint(app.TAB_ORDER[i]);
+    app.motion.hold = true;
+    app.motion.index = toI;
+  }
+  app.render();
+  window.scrollTo(0, 0);
+  if (pagerMove) {
+    app.motion.hold = false;
+    app.pageTransition(toI, { ...opts, fromIndex: fromI });
+  }
+};
+
 function endGesture() {
   if (!gesture) return;
   const g = gesture;
@@ -246,16 +304,10 @@ function endGesture() {
   const valid = ni >= 0 && ni < app.TAB_ORDER.length && Math.sign(projected) === Math.sign(g.dx || projected);
   const commit = valid && Math.abs(projected) > g.w * 0.22;
   const target = commit ? ni : g.idx;
-  const remaining = Math.abs((g.idx - target) * g.w - g.dx);
-  const dur = app.reduceMotion() ? 0 : clamp(remaining / Math.max(Math.abs(vel), 0.45), 170, 440);
-  app.motion.hold = true;
-  app.motion.index = target;
-  moveTo(target, dur);
-  app.motion.hold = false;
-  if (commit) {
-    const btn = document.querySelector(`#tabs .tab[data-tab="${app.TAB_ORDER[target]}"]`);
-    if (btn) btn.click();
-  } else {
+  if (commit) app.goTab(app.TAB_ORDER[target], { startDx: g.dx, velocity: vel, fromIndex: g.idx });
+  else {
+    const dur = app.reduceMotion() ? 0 : clamp(Math.abs(g.dx) / Math.max(Math.abs(vel), 0.45), 160, 420);
+    app.pageTransition(g.idx, { duration: dur, fromIndex: g.idx });
     app.syncBubble(true);
   }
   // Swallow the click the finger lets go on, after the tab change above has run.
@@ -286,7 +338,7 @@ document.addEventListener("touchcancel", () => {
   const g = gesture;
   gesture = null;
   app.motion.dragging = false;
-  if (g.lock === "h") { moveTo(g.idx, app.reduceMotion() ? 0 : 200); app.syncBubble(true); }
+  if (g.lock === "h") { app.pageTransition(g.idx, { duration: app.reduceMotion() ? 0 : 200, fromIndex: g.idx }); app.syncBubble(true); }
 });
 
 document.addEventListener("pointerdown", (ev) => {
@@ -307,7 +359,7 @@ document.addEventListener("pointercancel", (ev) => {
   const g = gesture;
   gesture = null;
   app.motion.dragging = false;
-  if (g.lock === "h") moveTo(g.idx, 0);
+  if (g.lock === "h") { app.pageTransition(g.idx, { duration: app.reduceMotion() ? 0 : 200, fromIndex: g.idx }); app.syncBubble(true); }
 });
 
 document.addEventListener("click", (ev) => {
