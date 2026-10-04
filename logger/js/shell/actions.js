@@ -810,8 +810,13 @@ document.addEventListener("click", async (ev) => {
       app.saveBrief({ ...p, hidden: [...hidden] }); if (app.capture) app.capture("morning_brief_customized"); app.render(); break;
     }
     case "usage-share": {
-      const next = !(app.usageSharingOn && app.usageSharingOn());
-      if (app.applyUsageSharing) app.applyUsageSharing(next);
+      const next = !(app.analyticsOn && app.analyticsOn());
+      if (app.applyAnalyticsSharing) app.applyAnalyticsSharing(next);
+      break;
+    }
+    case "crash-share": {
+      const next = !(app.crashReportsOn ? app.crashReportsOn() : true);
+      if (app.applyCrashSharing) app.applyCrashSharing(next);
       break;
     }
     case "w-remove": app.hideWidget(app.ui.edit, b.dataset.w); break;
@@ -900,13 +905,15 @@ document.addEventListener("click", async (ev) => {
     case "w-add-one": app.showWidget(app.ui.edit, b.dataset.w); app.ui.sheet = null; app.render(); app.toast(`${app.WIDGETS[app.ui.edit][b.dataset.w]} added.`); break;
     case "ms-list": app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; app.renderSheet(); break;
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }
+    case "ms-clear":
     case "ms-save": {
-      const txt = ((app.$("#ms-text") || {}).value || "").trim();
-      if (!txt) { app.toast("Type the machine settings to save."); break; }
+      // Saving an empty note clears it. A clear is a tombstone so other phones drop the note too.
+      const name = app.ui.sd.name;
+      const txt = a === "ms-clear" ? "" : ((app.$("#ms-text") || {}).value || "").trim();
       app.state.machineNotes = app.state.machineNotes || {};
-      app.state.machineNotes[app.ui.sd.name] = { text: txt, at: Date.now() };
+      app.state.machineNotes[name] = txt ? { text: txt, at: Date.now() } : { text: "", at: Date.now(), gone: true };
       app.save();
-      app.toast(`Saved settings for ${app.ui.sd.name}.`);
+      app.toast(txt ? `Saved settings for ${name}.` : `Cleared settings for ${name}.`);
       if (app.ui.sd.back) { app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; } else app.ui.sheet = null;
       app.renderSheet(); app.renderWorkout(); app.tick(); break;
     }
@@ -1004,6 +1011,7 @@ document.addEventListener("click", async (ev) => {
     case "priv-delete": app.ui.sheet = "priv-delete"; app.ui.sd = {}; app.renderSheet(); setTimeout(() => { const f = app.$("#del-confirm"); if (f) f.focus(); }, 60); break;
     case "priv-delete-go": await app.deleteAccount(); break;
     case "lock-bio": await app.unlockWithBiometric(); break;
+    case "lock-setup": await app.setupDeviceLock(); break;
     case "lock-relogin": app.ui.lockMode = "relogin"; app.ui.lockMsg = ""; app.renderLock(true); break;
     case "lock-back": app.ui.lockMode = app.lockState().method === "passcode" ? "passcode" : "main"; app.ui.lockMsg = ""; app.renderLock(true); break;
     case "lock-show-pass": app.ui.lockMode = "passcode"; app.ui.lockMsg = ""; app.renderLock(true); break;

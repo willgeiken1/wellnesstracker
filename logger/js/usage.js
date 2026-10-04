@@ -1,10 +1,14 @@
 import { app } from "./runtime.js";
 import { sentryUserId } from "./sentry-scrub.js";
-import { setUsageSdkOptOut, setUsageSharing, usageSdkNeedsOptIn, usageSharingOn } from "./usage-pref.js";
-import { sanitizeCapture, sanitizePosthogEvent } from "./usage-events.js";
+import { analyticsOn, crashReportsOn, resolveAnalyticsPref, setAnalytics, setCrashReports, setUsageSdkOptOut, usageSdkNeedsOptIn } from "./usage-pref.js";
+import { onDevHost, pushCapped, sanitizeCapture, sanitizePosthogEvent } from "./usage-events.js";
 
-/* PostHog is loaded only while sharing is on. A CDN failure leaves the stub
-   in place and does not affect the rest of the app. */
+/* main.js imports this before data/state.js, so app data has not been written
+   yet. This settles the analytics default once for the device. */
+resolveAnalyticsPref();
+
+/* PostHog is loaded only while analytics is on and never on a dev host.
+   A CDN failure leaves the stub in place and does not affect the rest of the app. */
 
 const POSTHOG_KEY = "phc_mrhCyaL8ahxYYfzBgYFnr5U98Cb6zk67HRfkv52o6Uhm";
 const POSTHOG_HOST = "https://us.i.posthog.com";
@@ -15,6 +19,11 @@ let pendingSession = null;
 let hadUser = false;
 let identifiedId = null;
 let posthogQueued = false;
+let posthogUnavailable = false;
+
+function posthogAllowed() {
+  return !posthogUnavailable && analyticsOn() && !onDevHost();
+}
 
 function posthogOptions() {
   return {
@@ -50,7 +59,12 @@ function installStub() {
     script.crossOrigin = "anonymous";
     script.dataset.usage = "1";
     script.src = String(config.api_host || POSTHOG_HOST).replace(".i.posthog.com", "-assets.i.posthog.com") + "/static/array.js";
-    script.onerror = function () {};
+    script.onerror = function () {
+      // Ad blocker or offline: stop queueing for the rest of this page load.
+      posthogUnavailable = true;
+      stub.length = 0;
+      if (target !== stub) target.length = 0;
+    };
     const first = document.getElementsByTagName("script")[0];
     if (first && first.parentNode) first.parentNode.insertBefore(script, first);
     else (document.head || document.documentElement).appendChild(script);
@@ -67,7 +81,8 @@ function installStub() {
     target.people.toString = function () { return target.toString(1) + ".people (stub)"; };
     STUB_METHODS.split(" ").forEach((method) => {
       target[method] = function () {
-        target.push([method].concat(Array.prototype.slice.call(arguments, 0)));
+        if (posthogUnavailable) return;
+        pushCapped(target, [method].concat(Array.prototype.slice.call(arguments, 0)));
       };
     });
     stub._i.push([key, config, name]);
@@ -78,7 +93,7 @@ function installStub() {
 
 function applyIdentity() {
   const ph = window.posthog;
-  if (!ph || !usageSharingOn()) return;
+  if (!ph || !posthogAllowed()) return;
   const id = sentryUserId(pendingSession && pendingSession.user && pendingSession.user.id);
   if (id && typeof ph.identify === "function") {
     if (id !== identifiedId) ph.identify(id);
@@ -92,10 +107,10 @@ function applyIdentity() {
 }
 
 function ensurePosthog() {
-  if (!usageSharingOn()) return;
+  if (!posthogAllowed()) return;
   const ph = installStub();
   if (!ph || typeof ph.init !== "function") return;
-  if (!posthogQueued) {
+  if (!posthogQueued && !ph.__loaded) {
     posthogQueued = true;
     ph.init(POSTHOG_KEY, posthogOptions());
   }
@@ -107,7 +122,7 @@ function ensurePosthog() {
 }
 
 function capture(name, props) {
-  if (!usageSharingOn()) return;
+  if (!posthogAllowed()) return;
   const clean = sanitizeCapture(name, props);
   if (!clean) return;
   ensurePosthog();
@@ -125,34 +140,39 @@ app.noteTab = noteTab;
 
 function syncUsageUser(session) {
   pendingSession = session || null;
-  if (!usageSharingOn()) return;
+  if (!posthogAllowed()) return;
   ensurePosthog();
   applyIdentity();
 }
 app.syncUsageUser = syncUsageUser;
 
-function startServices() {
-  if (!usageSharingOn()) return;
-  if (app.startSentry) app.startSentry();
-  ensurePosthog();
-}
-
-function stopServices() {
+function stopAnalytics() {
   setUsageSdkOptOut(true);
   const ph = window.posthog;
   if (ph && typeof ph.opt_out_capturing === "function") {
     try { ph.opt_out_capturing(); } catch (e) {}
   }
-  if (app.stopSentry) app.stopSentry();
 }
 
-function applyUsageSharing(on) {
-  setUsageSharing(!!on);
-  if (on) startServices();
-  else stopServices();
+/* Share usage analytics (PostHog). */
+function applyAnalyticsSharing(on) {
+  setAnalytics(!!on);
+  if (on) ensurePosthog();
+  else stopAnalytics();
   if (typeof app.render === "function") app.render();
 }
-app.applyUsageSharing = applyUsageSharing;
-app.usageSharingOn = () => usageSharingOn();
+app.applyAnalyticsSharing = applyAnalyticsSharing;
+app.analyticsOn = () => analyticsOn();
 
-if (usageSharingOn()) startServices();
+/* Send crash reports (Sentry). */
+function applyCrashSharing(on) {
+  setCrashReports(!!on);
+  if (on) { if (app.startSentry) app.startSentry(); }
+  else if (app.stopSentry) app.stopSentry();
+  if (typeof app.render === "function") app.render();
+}
+app.applyCrashSharing = applyCrashSharing;
+app.crashReportsOn = () => crashReportsOn();
+
+if (crashReportsOn() && app.startSentry) app.startSentry();
+if (analyticsOn()) ensurePosthog();
