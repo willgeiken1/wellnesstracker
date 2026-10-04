@@ -907,9 +907,11 @@ document.addEventListener("click", async (ev) => {
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }
     case "ms-clear":
     case "ms-save": {
-      // Saving an empty note clears it. A clear is a tombstone so other phones drop the note too.
+      // Only the Clear button clears, so an accidental empty save can't wipe a note.
+      // A clear is a tombstone so other phones drop the note too.
       const name = app.ui.sd.name;
       const txt = a === "ms-clear" ? "" : ((app.$("#ms-text") || {}).value || "").trim();
+      if (!txt && a !== "ms-clear") { app.toast("Type the machine settings to save, or tap Clear."); break; }
       app.state.machineNotes = app.state.machineNotes || {};
       app.state.machineNotes[name] = txt ? { text: txt, at: Date.now() } : { text: "", at: Date.now(), gone: true };
       app.save();
