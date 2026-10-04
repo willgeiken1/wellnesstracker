@@ -567,7 +567,8 @@ function isHomeV2(raw) {
   return !!(raw && raw.v === 2 && Array.isArray(raw.items));
 }
 
-/* Known catalog ids, first occurrence only. Null, blanks, duplicates, and unknown ids drop out. */
+/* Known catalog ids, first occurrence only. Null, blanks, duplicates, and unknown ids drop out.
+   TODO: setHomeLayout drops unknown ids. Revisit in the step 4 editor. */
 function widgetIds(list) {
   const out = [];
   (Array.isArray(list) ? list : []).forEach((id) => {

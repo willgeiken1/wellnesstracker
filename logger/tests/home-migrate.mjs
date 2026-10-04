@@ -275,7 +275,7 @@ function regressions() {
 }
 
 const PG_USER = process.env.PG_USER || "postgres";
-const PG_DATABASE = process.env.PG_DATABASE;
+const PG_DATABASE = process.env.PG_DATABASE || "notes_merge";
 
 function pgArgs(extra) {
   return ["-u", PG_USER, "psql", "-d", PG_DATABASE, "-v", "ON_ERROR_STOP=1", ...extra];
@@ -290,9 +290,7 @@ function rpcCases() {
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
-  pgSql(`insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change, is_sso_user, is_anonymous)
-    values ('00000000-0000-0000-0000-000000000000', '${uid}', 'authenticated', 'authenticated', 'home-migrate@example.com', '', now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), '', '', '', '', false, false)
-    on conflict (id) do nothing`);
+  pgSql(`insert into auth.users (id) values ('${uid}') on conflict (id) do nothing`);
   pgSql(`delete from public.user_data where user_id = '${uid}'`);
   const claim = `select set_config('request.jwt.claim.sub', '${uid}', false)`;
   const call = (payload) => pgSql(`${claim}; select public.merge_user_data('${JSON.stringify(payload).replace(/'/g, "''")}'::jsonb)->>'layout';`);
@@ -449,7 +447,7 @@ async function browserCases() {
   await a.page.screenshot({ path: `${ART}/home_v2_migrated.png`, fullPage: true });
   const flagOn = await a.page.evaluate(() => window.app.HOME_REGISTRY_PAINT === true);
   if (!flagOn) {
-    check("registry paint stays off, so Home keeps the legacy order", true);
+    check("flag off keeps the old Home order", eq(loaded.widgets, ["today", "brief", "cardio", "week", "map-basic"]), loaded.widgets);
   } else {
     await a.page.evaluate(() => {
       const html = window.app.renderHomeWidgets(window.app.getHomeLayout(window.app.state), window.app.snapshotFromApp());
@@ -507,7 +505,50 @@ async function browserCases() {
   });
   check("corrupt remote layout does not throw", corrupt.ok === true && corrupt.same === true, corrupt);
 
-  check("no console errors", a.errors.length === 0 && b.errors.length === 0, [...a.errors, ...b.errors]);
+  const day = new Date().toLocaleDateString("en-CA");
+  const upgraded = await boot(browser, {
+    version: 2,
+    sessions: [],
+    settingsAt: 200,
+    muscleMode: "basic",
+    theme: { mode: "dark", accent: "citrus" },
+    oura: {
+      connected: true,
+      lastSync: 1,
+      days: { [day]: { date: day, readiness: 82, sleepScore: 74, total: 27000, hrv: 45 } },
+    },
+    layout: {
+      home: {
+        order: ["today", "brief", "cardio", "readiness", "week"],
+        hidden: ["map-adv"],
+      },
+    },
+    brief: {
+      order: ["oura", "train", "week"],
+      hidden: ["food", "weight", "pattern"],
+      size: "compact",
+      updatedAt: 150,
+    },
+  });
+  const home = await upgraded.page.evaluate(() => {
+    const homeV2 = window.app.state.layout.homeV2;
+    const brief = document.querySelector("#pane-home .wdg[data-w='brief'] [data-metric='oura']");
+    return {
+      flag: window.app.HOME_REGISTRY_PAINT === true,
+      migrated: !!(homeV2 && homeV2.v === 2 && Array.isArray(homeV2.items)),
+      widgets: [...document.querySelectorAll("#pane-home .wdg")].map((el) => el.dataset.w),
+      strip: document.querySelectorAll("#pane-home .oura-wait, #pane-home [data-hw], #pane-home .home-v2").length,
+      card: !!document.querySelector("#pane-home .wdg[data-w='readiness'] .rcard"),
+      brief: brief ? brief.textContent : "",
+    };
+  });
+  check(
+    "upgraded custom home matches main while the flag is off",
+    home.flag === false && home.migrated && eq(home.widgets, ["today", "brief", "cardio", "readiness", "week", "map-basic"]) && home.strip === 0 && home.card && /82/.test(home.brief) && /Sleep 74/.test(home.brief),
+    home
+  );
+
+  check("no console errors", a.errors.length === 0 && b.errors.length === 0 && upgraded.errors.length === 0, [...a.errors, ...b.errors, ...upgraded.errors]);
   await browser.close();
 }
 

@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { HOME_WIDGETS, getHomeLayout, homeAwaitingSync } from "./home-widgets.js";
+import { HOME_REGISTRY_PAINT, HOME_WIDGETS, getHomeLayout, homeAwaitingSync } from "./home-widgets.js";
 
 /* Home Oura gating.
    hasOura is the ring or sample data.
@@ -35,6 +35,7 @@ export function seedOuraWidgets(layout) {
     items: [...missing, ...items],
     hidden: hidden.slice(),
     ouraSeeded: true,
+    // TODO: the first Oura seed can beat another phone's edit made seconds earlier.
     updatedAt: Date.now(),
   };
 }
@@ -56,6 +57,9 @@ export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
 }
 
 export function ouraWidgetShowing(state, id) {
+  const homeV2 = state && state.layout && state.layout.homeV2;
+  const ouraV2 = HOME_REGISTRY_PAINT && !!(homeV2 && homeV2.v === 2 && Array.isArray(homeV2.items));
+  if (!ouraV2) return false;
   return visibleHomeIds(state).includes(id);
 }
 

@@ -96,20 +96,22 @@ function homeHTML() {
   const t = app.today();
   const homeV2 = app.state.layout && app.state.layout.homeV2;
   const hasV2 = !!(homeV2 && homeV2.v === 2 && Array.isArray(homeV2.items));
+  const ouraV2 = HOME_REGISTRY_PAINT && hasV2;
   const head = `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
   const nudge = app.weighReminderHTML();
-  if (HOME_REGISTRY_PAINT && hasV2) return head + nudge + app.renderHomeWidgets(app.getHomeLayout(app.state), app.snapshotFromApp());
+  if (ouraV2) return head + nudge + app.renderHomeWidgets(app.getHomeLayout(app.state), app.snapshotFromApp());
   const live = { live: true };
-  const readiness = hasV2 ? "" : app.readinessCardHTML();
+  const readiness = ouraV2 ? "" : app.readinessCardHTML();
   const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}<!--w:readiness-->${readiness}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
     <!--w:week-->${app.HOME_WIDGETS["this-week"].render(live)}
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>
     <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`);
   /* The nudge stays outside .wdgs. A child with no data-w is saved as a blank id. */
-  return head + (hasV2 ? gatedOuraStripHTML(app.state) : "") + nudge + stack;
+  const strip = ouraV2 ? gatedOuraStripHTML(app.state) : "";
+  return head + strip + nudge + stack;
 }
 app.visibleHomeIds = visibleHomeIds;
 app.homeHTML = homeHTML;

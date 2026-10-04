@@ -432,7 +432,8 @@ test("a saved homeV2 still paints the legacy stack, and the weigh-in nudge stays
   try {
     const html = app.homeHTML();
     assert.match(html, /Morning brief/);
-    assert.doesNotMatch(html, /class="home-v2"/);
+    assert.match(html, /class="card">Readiness/);
+    assert.doesNotMatch(html, /class="home-v2"|oura-wait|data-hw=/);
     assert.match(html, /class="nudge"/);
     const stack = wdgsBlock(html);
     assert.match(stack, /data-w="brief"/);

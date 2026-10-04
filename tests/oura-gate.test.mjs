@@ -292,7 +292,7 @@ function readinessHits(html) {
   };
 }
 
-test("hiding readiness on a v2 home shows it at most once", () => {
+test("a saved homeV2 keeps the readiness card and the brief while the flag is off", () => {
   stubHomeShell();
   const day = { date: "2026-10-04", readiness: 70, sleepScore: 81 };
   app.state = state({
@@ -301,37 +301,29 @@ test("hiding readiness on a v2 home shows it at most once", () => {
     workouts: [],
     plan: {},
   });
-  const hidden = readinessHits(app.homeHTML());
-  assert.equal(hidden.tile, 0);
-  assert.equal(hidden.card, 0);
-  assert.equal(hidden.brief, 1);
-  assert.equal(hidden.tile + hidden.card + hidden.brief, 1);
+  const hits = readinessHits(app.homeHTML());
+  assert.equal(hits.tile, 0);
+  assert.equal(hits.card, 1);
+  assert.equal(hits.brief, 1);
   assert.equal(ouraWidgetShowing(app.state, "readiness"), false);
+  assert.equal(ouraWidgetShowing(app.state, "sleep-score"), false);
   assert.equal(ouraMetric().value, "70");
-  assert.equal(ouraMetric().meta, null);
-
-  app.state.layout.homeV2.hidden = [];
-  const shown = readinessHits(app.homeHTML());
-  assert.equal(shown.tile, 1);
-  assert.equal(shown.card, 0);
-  assert.equal(shown.brief, 0);
+  assert.equal(ouraMetric().meta, "Sleep 81");
 });
 
-test("the brief drops sleep when the sleep-score tile is visible", () => {
+test("the brief keeps sleep while the registry is not painted", () => {
   stubHomeShell();
   app.state = state({
     oura: { connected: true, days: { "2026-10-04": { date: "2026-10-04", readiness: 70, sleepScore: 72 } } },
-    layout: { homeV2: layout(["readiness", "sleep-score"], { hidden: ["readiness"], ouraSeeded: true }) },
+    layout: { homeV2: layout(["readiness", "sleep-score"], { ouraSeeded: true }) },
     workouts: [],
     plan: {},
   });
   const shown = ouraMetric();
   assert.equal(shown.value, "70");
-  assert.equal(shown.meta, null);
-  assert.doesNotMatch(`${shown.meta || ""} ${shown.sub}`, /Sleep/);
-  app.state.layout.homeV2.hidden = ["readiness", "sleep-score"];
-  const hiddenTile = ouraMetric();
-  assert.equal(hiddenTile.meta, "Sleep 72");
+  assert.equal(shown.meta, "Sleep 72");
+  assert.match(shown.meta, /Sleep/);
+  assert.equal(ouraWidgetShowing(app.state, "sleep-score"), false);
 });
 
 test("the OAuth dialog sends people to Settings", () => {
