@@ -105,14 +105,11 @@ export function scrubBreadcrumb(breadcrumb) {
     };
     return next;
   }
-  if (category === "console") {
-    next.message = typeof breadcrumb.message === "string" ? scrubString(breadcrumb.message).slice(0, 180) : undefined;
-    return next;
-  }
   if (category.startsWith("ui.")) {
     next.message = category;
     return next;
   }
-  if (typeof breadcrumb.message === "string") next.message = scrubString(breadcrumb.message).slice(0, 180);
+  /* Console text and hand-added breadcrumb messages can be food logs, notes, or emails.
+     Keep the category so the trail is still useful, and drop the content. */
   return next;
 }

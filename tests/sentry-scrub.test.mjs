@@ -58,8 +58,17 @@ test("ui and custom breadcrumbs do not keep user content", () => {
     message: "logged grilled salmon for ada@example.com",
     data: { grams: 180 },
   });
-  assert.equal(custom.message.includes("ada@example.com"), false);
+  assert.equal(custom.message, undefined);
   assert.equal(custom.data, undefined);
+  assert.equal(JSON.stringify(custom).includes("salmon"), false);
+  assert.equal(JSON.stringify(custom).includes("ada@example.com"), false);
+  const logged = scrubBreadcrumb({
+    category: "console",
+    level: "error",
+    message: "meal chicken breast for ada@example.com",
+  });
+  assert.equal(logged.message, undefined);
+  assert.equal(JSON.stringify(logged).includes("chicken"), false);
 });
 
 test("events keep a user id only and drop request bodies, headers, and queries", () => {
