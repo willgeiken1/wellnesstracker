@@ -1,0 +1,743 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { app } from "../logger/js/runtime.js";
+import "../logger/js/shared/analyze.js";
+import {
+  DAYS_FOR_A_PATTERN,
+  DISPLAY_LIMIT,
+  LATE_HOUR,
+  addDays,
+  confidenceOf,
+  correlate,
+  effect,
+  extractDays,
+  findingsForView,
+  loggedDays,
+  factorFamily,
+  FAMILY_CAP,
+  listFindings,
+  OUTCOME_CAP,
+  pickForToday,
+  SEE_ALL_LIMIT,
+  studentP,
+  suppressedStory,
+  todayLine,
+  valenceOf,
+  welch,
+} from "../logger/js/shared/correlate.js";
+
+function dateAt(i, start = "2026-01-05") {
+  return addDays(start, i);
+}
+
+function fill(n, assign, start) {
+  const days = {};
+  for (let i = 0; i < n; i++) days[dateAt(i, start)] = assign(i);
+  return days;
+}
+
+/* 0,1 workout, 2,3 rest, repeating. Lag 1 is independent of lag 0. */
+function worked(i) {
+  return i % 4 < 2;
+}
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gauss(rnd) {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rnd();
+  while (v === 0) v = rnd();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function legacyEffect(perfs, valueOf, buckets) {
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  return buckets.map((b) => {
+    const xs = perfs.filter((p) => {
+      const v = valueOf(p.date);
+      return v != null && b.test(v);
+    }).map((p) => p.perf);
+    return { label: b.label, avg: avg(xs), n: xs.length };
+  });
+}
+
+test("student's t and Welch's test match known values", () => {
+  assert.ok(Math.abs(studentP(2.085963447, 20) - 0.05) < 0.001);
+  assert.ok(Math.abs(studentP(2.228138852, 10) - 0.05) < 0.001);
+  assert.equal(studentP(0, 20), 1);
+  assert.equal(studentP(Infinity, 20), 0);
+
+  const flat = welch([5, 5, 5, 5, 5, 5, 5], [5, 5, 5, 5, 5, 5, 5]);
+  assert.equal(flat.diff, 0);
+  assert.equal(flat.p, 1);
+
+  const split = welch([1, 2, 2, 3, 1, 2, 2], [8, 9, 9, 10, 8, 9, 9]);
+  assert.ok(split.diff < 0);
+  assert.ok(split.p < 0.001);
+});
+
+test("effect() bucket averages stay the same for the Insights screen", () => {
+  const perfs = [
+    { date: "2026-01-01", perf: 2 },
+    { date: "2026-01-02", perf: 4 },
+    { date: "2026-01-03", perf: -1 },
+    { date: "2026-01-04", perf: 8 },
+    { date: "2026-01-05", perf: 1.5 },
+  ];
+  const valueOf = (d) => ({ "2026-01-01": 60, "2026-01-02": 90, "2026-01-03": 72, "2026-01-04": 88, "2026-01-05": null })[d];
+  const buckets = [
+    { label: "Readiness < 70", test: (v) => v < 70 },
+    { label: "70–84", test: (v) => v >= 70 && v < 85 },
+    { label: "85+", test: (v) => v >= 85 },
+    { label: "Under 6.5h", test: (v) => v < 6.5 },
+  ];
+  const rows = effect(perfs, valueOf, buckets);
+  assert.deepEqual(rows, legacyEffect(perfs, valueOf, buckets));
+  assert.equal(rows[0].label, "Readiness < 70");
+  assert.equal(rows[0].n, 1);
+  assert.equal(rows[0].avg, 2);
+  assert.equal(rows[1].n, 1);
+  assert.equal(rows[1].avg, -1);
+  assert.equal(rows[2].n, 2);
+  assert.equal(rows[2].avg, 6);
+  assert.equal(rows[3].n, 0);
+  assert.equal(rows[3].avg, null);
+  assert.deepEqual(app.effect(perfs, valueOf, buckets), rows);
+});
+
+test("a planted next-day effect is found and worded in plain language", () => {
+  const days = fill(48, (i) => {
+    const row = { workedOut: worked(i) };
+    if (i > 0) row.readiness = worked(i - 1) ? 53 : 50;
+    return row;
+  });
+  const hit = correlate({ days }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
+  assert.ok(hit);
+  assert.equal(hit.nWith, 24);
+  assert.equal(hit.nWithout, 23);
+  assert.equal(hit.percent, 6);
+  assert.equal(hit.confidence, "high");
+  assert.equal(hit.valence, "good");
+  assert.equal(hit.lead, "On days after you work out, your readiness is 6% higher.");
+  assert.equal(hit.sentence, "On days after you work out, your readiness is 6% higher (high confidence, 24 days).");
+  assert.doesNotMatch(hit.sentence, /which is a good sign|which is working against you/);
+
+  const sameDay = correlate({ days }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 0);
+  assert.equal(sameDay, undefined);
+});
+
+test("lag 0 and lag 1 do not borrow each other's effect", () => {
+  const days = fill(48, (i) => ({ workedOut: worked(i), readiness: worked(i) ? 53 : 50 }));
+  const rows = correlate({ days });
+  const same = rows.find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 0);
+  const next = rows.find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
+  assert.equal(same, undefined);
+  assert.equal(next.confidence, "low");
+  assert.ok(Math.abs(next.percent) < 1);
+
+  const lower = fill(48, (i) => {
+    const row = { workedOut: worked(i) };
+    if (i > 0) row.readiness = worked(i - 1) ? 47 : 50;
+    return row;
+  });
+  const down = correlate({ days: lower }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
+  assert.equal(down.valence, "bad");
+  assert.equal(down.sentence, "On days after you work out, your readiness is 6% lower (high confidence, 24 days).");
+  assert.doesNotMatch(down.sentence, /working against you/);
+});
+
+test("noise does not produce a confident result", () => {
+  const rnd = mulberry32(11);
+  const days = fill(48, () => ({
+    readiness: 75 + gauss(rnd) * 6,
+    steps: 8000 + gauss(rnd) * 1800,
+  }));
+  const rows = correlate({ days }).filter((r) => r.outcome === "readiness" || r.outcome === "steps");
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((r) => r.confidence === "low"));
+  assert.ok(rows.every((r) => Math.abs(r.effect) < 0.8));
+});
+
+test("groups smaller than 7 days are dropped", () => {
+  const thin = fill(26, (i) => ({ workedOut: i < 6, readiness: i < 6 ? 90 : 60 }));
+  assert.equal(correlate({ days: thin }).some((r) => r.factor === "workedOut"), false);
+
+  const enough = fill(14, (i) => ({ workedOut: i < 7, weight: i < 7 ? 82 : 80 }));
+  const hit = correlate({ days: enough }, { weightDir: "gain" }).find((r) => r.factor === "workedOut" && r.outcome === "weight" && r.lag === 0);
+  assert.ok(hit);
+  assert.equal(hit.nWith, 7);
+  assert.equal(hit.nWithout, 7);
+  assert.equal(hit.confidence, "medium");
+});
+
+test("missing outcomes and missing factors are skipped, not treated as zero", () => {
+  const holes = fill(30, (i) => {
+    const long = i % 2 === 0;
+    const row = { sleepHours: long ? 8 : 6 };
+    if (i % 7 !== 0) row.liftPerf = long ? 8 : 2;
+    return row;
+  });
+  const hit = correlate({ days: holes }).find((r) => r.source === "sleepHours" && r.outcome === "liftPerf" && r.lag === 0);
+  assert.ok(hit);
+  assert.equal(hit.nWith, 12);
+  assert.ok(hit.diff > 5);
+
+  const absent = {};
+  for (let i = 0; i < 30; i++) {
+    const row = { liftPerf: i < 10 ? 8 : 2 };
+    if (i < 20) row.sleepHours = i < 10 ? 8 : 6;
+    absent[dateAt(i)] = row;
+  }
+  const kept = correlate({ days: absent }).find((r) => r.source === "sleepHours" && r.outcome === "liftPerf" && r.lag === 0);
+  assert.equal(kept.nWith, 10);
+  assert.equal(kept.nWithout, 10);
+  assert.ok(Math.abs(kept.meanWith - 8) < 1e-9);
+  assert.ok(Math.abs(kept.meanWithout - 2) < 1e-9);
+
+  const blank = fill(20, () => ({ workedOut: true }));
+  assert.equal(correlate({ days: blank }).length, 0);
+});
+
+test("circular pairs are left out, and median versus tertile keeps the stronger split", () => {
+  const days = fill(40, (i) => {
+    const high = i % 2 === 0;
+    const row = {
+      calories: high ? 3200 : 1800,
+      caloriesOverTarget: high,
+      protein: 140 + (i % 5) * 3,
+      workedOut: high,
+      workoutVolume: high ? 12000 : 0,
+    };
+    if (i > 0) row.readiness = (i - 1) % 2 === 0 ? 86 : 60;
+    return row;
+  });
+  const rows = correlate({ days });
+  assert.equal(rows.some((r) => r.outcome === "calories" && (r.factor === "caloriesOverTarget" || r.source === "calories")), false);
+  assert.equal(rows.some((r) => r.factor === "workedOut" && r.outcome === "workoutVolume"), false);
+  assert.equal(rows.some((r) => r.source === "workoutVolume" && r.outcome === "workoutVolume"), false);
+  assert.equal(rows.some((r) => r.outcome === "protein" || r.outcome === "calories" || r.outcome === "workoutVolume"), false);
+  assert.equal(rows.some((r) => r.factor === "caloriesOverTarget" && r.outcome === "readiness" && r.lag === 0), false);
+  assert.ok(rows.some((r) => r.factor === "caloriesOverTarget" && r.outcome === "readiness" && r.lag === 1));
+
+  const sleep = fill(42, (i) => ({
+    sleepHours: 6 + (i % 3) * 1.2,
+    readiness: 60 + (i % 3) * 12 + (i % 2),
+  }));
+  const slept = correlate({ days: sleep });
+  const sameNight = slept.filter((r) => r.source === "sleepHours" && r.outcome === "readiness" && r.lag === 0);
+  assert.equal(sameNight.length, 0);
+  const splits = slept.filter((r) => r.lag === 1 && ((r.source === "sleepHours" && r.outcome === "readiness") || (r.source === "readiness" && r.outcome === "sleepHours")));
+  assert.equal(splits.length, 1);
+  assert.ok(splits[0].kind === "median" || splits[0].kind === "tertile");
+});
+
+test("a stronger effect ranks above a weaker one", () => {
+  const days = fill(42, (i) => ({
+    boost: i % 2 === 0,
+    meh: i % 3 === 0,
+    readiness: (i % 2 === 0 ? 88 : 58) + (i % 5) * 0.4,
+    sleepScore: (i % 3 === 0 ? 72 : 70) + (i % 4) * 0.2,
+  }));
+  const rows = correlate({ days, phrases: { boost: "you push hard", meh: "you take it easy" } });
+  const strong = rows.find((r) => r.factor === "boost" && r.outcome === "readiness" && r.lag === 0);
+  const weak = rows.find((r) => r.factor === "meh" && r.outcome === "sleepScore" && r.lag === 0);
+  assert.ok(strong.strength > weak.strength);
+  assert.ok(rows.indexOf(strong) < rows.indexOf(weak));
+  assert.equal(strong.valence, "good");
+  assert.match(strong.sentence, /^On days you push hard, your readiness is \d+% higher \(high confidence, 21 days\)\.$/);
+  assert.doesNotMatch(strong.sentence, /which is a good sign/);
+});
+
+test("user data becomes daily factors, including late meals and targets", () => {
+  const { days, phrases } = extractDays({
+    sessions: [
+      {
+        date: "2026-03-02",
+        finishedAt: "2026-03-02T18:00:00",
+        workoutId: "push",
+        name: "Push",
+        entries: [{ sets: [{ w: 100, r: 8, tag: "warmup" }, { w: 100, r: 5 }, { w: 100, r: 5 }] }],
+      },
+      {
+        date: "2026-03-02",
+        finishedAt: "2026-03-02T19:00:00",
+        workoutId: "push",
+        name: "Push",
+        entries: [{ sets: [{ w: 40, r: 10 }] }],
+      },
+      { date: "2026-03-01", entries: [{ sets: [{ w: 200, r: 5 }] }] },
+    ],
+    oura: {
+      days: {
+        "2026-03-01": { readiness: 80, total: 8 * 3600, deep: 3600, rem: 5400, steps: 12000, sleepScore: 88, hrv: 55, rhr: 50, temp: 0.1, activityScore: 90 },
+        "2026-03-02": { readiness: 70, total: 6 * 3600, steps: 4000, awake: 1800 },
+      },
+    },
+    food: {
+      days: {
+        "2026-03-01": [{ base: { kcal: 2000, p: 100, c: 200, f: 60 }, servings: 1, at: "2026-03-01T18:00:00" }],
+        "2026-03-02": [{ base: { kcal: 1500, p: 100, c: 150, f: 40 }, servings: 2, at: "2026-03-02T21:15:00" }],
+      },
+      targets: { kcal: 2500, p: 150, c: 250, f: 70 },
+    },
+    profile: { weighIns: [{ date: "2026-03-01", kg: 81.2 }] },
+    cardio: { sessions: [{ date: "2026-03-02", kcal: 240, segments: [{ min: 20 }, { min: 5 }] }] },
+    measurements: { "2026-03-01": { vals: { waist: 84, arms: 35 }, at: 1 } },
+    checkins: [{ date: "2026-03-01", mood: 2, energy: 7, note: "tired" }],
+  });
+
+  const rest = days["2026-03-01"];
+  const train = days["2026-03-02"];
+  assert.equal(rest.workedOut, false);
+  assert.equal(rest.readiness, 80);
+  assert.equal(rest.sleepHours, 8);
+  assert.equal(rest.deepHours, 1);
+  assert.equal(rest.steps, 12000);
+  assert.equal(rest.activityScore, 90);
+  assert.equal(rest.calories, 2000);
+  assert.equal(rest.proteinOverTarget, false);
+  assert.equal(rest.lateEating, false);
+  assert.equal(rest.weight, 81.2);
+  assert.equal(rest.waist, 84);
+  assert.equal(rest.didCardio, false);
+  assert.equal(rest.checkin_energy, 7);
+  assert.equal(rest.checkin_mood, undefined);
+  assert.equal(rest.mood, undefined);
+  assert.equal(train.workedOut, true);
+  assert.equal(train.workoutVolume, 1400);
+  assert.equal(train["workout:push"], true);
+  assert.equal(rest["workout:push"], undefined);
+  assert.equal(train.calories, 3000);
+  assert.equal(train.protein, 200);
+  assert.equal(train.proteinOverTarget, true);
+  assert.equal(train.caloriesOverTarget, true);
+  assert.equal(train.lateEating, true);
+  assert.equal(train.cardioMin, 25);
+  assert.equal(train.cardioKcal, 240);
+  assert.equal(train.awakeMin, 30);
+  assert.equal(phrases["workout:push"], "you do a push workout");
+
+  const noClock = extractDays({
+    foodDays: { "2026-05-01": [{ base: { kcal: 500, p: 20, c: 40, f: 10 }, servings: 1 }] },
+    oura: { "2026-05-01": { readiness: 60, total: 20000 } },
+  });
+  assert.equal(noClock.days["2026-05-01"].lateEating, undefined);
+  assert.equal(noClock.days["2026-05-01"].proteinOverTarget, undefined);
+});
+
+test("confidence rises only when the sample and the test both support it", () => {
+  assert.equal(confidenceOf(0.01, 20, 18), "high");
+  assert.equal(confidenceOf(0.01, 8, 12), "medium");
+  assert.equal(confidenceOf(0.08, 12, 12), "medium");
+  assert.equal(confidenceOf(0.2, 30, 30), "low");
+  assert.equal(confidenceOf(0.01, 6, 40), null);
+});
+
+test("a full month of series stays on the device and finishes quickly", () => {
+  const rnd = mulberry32(3);
+  const days = fill(120, (i) => ({
+    readiness: 70 + gauss(rnd) * 8,
+    sleepHours: 7 + gauss(rnd) * 0.8,
+    sleepScore: 75 + gauss(rnd) * 8,
+    steps: 9000 + gauss(rnd) * 2500,
+    hrv: 55 + gauss(rnd) * 8,
+    rhr: 54 + gauss(rnd) * 3,
+    calories: 2600 + gauss(rnd) * 300,
+    protein: 160 + gauss(rnd) * 25,
+    carbs: 280 + gauss(rnd) * 40,
+    fat: 75 + gauss(rnd) * 12,
+    workedOut: i % 2 === 0,
+    workoutVolume: i % 2 === 0 ? 9000 + rnd() * 2000 : undefined,
+  }));
+  const started = performance.now();
+  const rows = correlate({ days });
+  assert.ok(performance.now() - started < 250);
+  assert.ok(rows.length > 0);
+  rows.forEach((r) => {
+    assert.ok(r.nWith >= 7 && r.nWithout >= 7);
+    assert.match(r.sentence, /\((low|medium|high) confidence, \d+ days\)\.$/);
+  });
+});
+
+test("same-night Oura pairs and same-day workout types are filtered out", () => {
+  assert.equal(LATE_HOUR, 21);
+  assert.equal(DAYS_FOR_A_PATTERN, 14);
+  assert.equal(DISPLAY_LIMIT, 8);
+  assert.equal(SEE_ALL_LIMIT, 25);
+
+  assert.equal(suppressedStory({ id: "sleepHours", source: "sleepHours" }, "sleepScore", 0, null), true);
+  assert.equal(suppressedStory({ id: "hrv", source: "hrv" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "rhr", source: "rhr" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "steps", source: "steps" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "sleepHours", source: "sleepHours" }, "readiness", 1, null), false);
+  assert.equal(suppressedStory({ id: "workedOut", source: "workoutVolume" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "workedOut" }, "hrv", 1, null), false);
+  assert.equal(suppressedStory({ id: "workedOut" }, "rhr", 1, null), false);
+  assert.equal(suppressedStory({ id: "workedOut" }, "sleepHours", 1, null), false);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "workoutVolume", 0, null), true);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "liftPerf", 0, null), true);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "workoutVolume", 1, null), true);
+  assert.equal(suppressedStory({ id: "workout:pull" }, "liftPerf", 1, null), true);
+  assert.equal(suppressedStory({ id: "workedOut" }, "liftPerf", 0, null), true);
+  assert.equal(suppressedStory({ id: "workedOut" }, "liftPerf", 1, null), true);
+  assert.equal(suppressedStory({ id: "workedOut" }, "workoutVolume", 1, null), true);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "workout:push", 1, null), true);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "readiness", 1, null), false);
+  assert.equal(suppressedStory({ id: "workout:legs" }, "sleepScore", 1, null), false);
+  const extra = new Set(["activityScore"]);
+  assert.equal(suppressedStory({ id: "activityScore", source: "activityScore" }, "readiness", 0, extra), true);
+  assert.equal(suppressedStory({ id: "activityScore", source: "activityScore" }, "readiness", 1, extra), false);
+
+  const oura = { days: {} };
+  const sessions = [];
+  const liftPerf = {};
+  for (let i = 0; i < 28; i++) {
+    const date = dateAt(i);
+    const high = i % 2 === 0;
+    oura.days[date] = {
+      readiness: high ? 86 : 58,
+      sleepScore: high ? 90 : 52,
+      total: (high ? 8 : 5.5) * 3600,
+      hrv: high ? 72 : 40,
+      rhr: high ? 48 : 62,
+      steps: high ? 12000 : 4000,
+      activityScore: high ? 95 : 40,
+    };
+    sessions.push({
+      date,
+      finishedAt: date + "T18:00:00",
+      workoutId: high ? "legs" : "push",
+      name: high ? "Legs" : "Push",
+      entries: [{ sets: [{ w: high ? 200 : 80, r: 5 }, { w: high ? 180 : 70, r: 5 }] }],
+    });
+    liftPerf[date] = high ? 8 : 1;
+  }
+  const rows = correlate({ oura, sessions, liftPerf });
+  const ouraId = (id) => ["readiness", "sleepScore", "sleepHours", "steps", "hrv", "rhr", "activityScore"].includes(id);
+  assert.equal(rows.some((r) => r.lag === 0 && ouraId(r.source || r.factor) && ouraId(r.outcome)), false);
+  const dropped = ["lightHours", "remHours", "awakeMin", "temp", "steps", "workoutVolume", "cardioMin", "cardioKcal", "waist", "arms", "chest", "calories", "protein"];
+  assert.equal(rows.some((r) => dropped.includes(r.outcome)), false);
+  assert.equal(rows.some((r) => r.factor === "workout:legs" && (r.outcome === "workoutVolume" || r.outcome === "liftPerf")), false);
+  assert.equal(rows.some((r) => r.factor === "workedOut" && (r.outcome === "workoutVolume" || r.outcome === "liftPerf")), false);
+  assert.ok(rows.some((r) => r.lag === 1 && ((r.source === "sleepHours" && r.outcome === "readiness") || (r.source === "readiness" && r.outcome === "sleepHours"))));
+  assert.equal(rows.some((r) => r.factor === "workout:legs" && r.outcome === "readiness" && r.lag === 0), false);
+  assert.ok(rows.some((r) => r.factor === "workout:legs" && r.outcome === "readiness" && r.lag === 1));
+  assert.equal(rows.some((r) => r.outcome === "weight"), false);
+  const trained = rows.find((r) => r.factor === "workedOut" && r.outcome === "readiness");
+  assert.equal(trained, undefined);
+
+  const rest = correlate({
+    oura,
+    sessions: sessions.filter((_, i) => i % 2 === 0),
+    liftPerf,
+  });
+  assert.equal(rest.some((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 0), false);
+  const kept = rest.find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
+  assert.ok(kept);
+  assert.equal(kept.valence, "bad");
+});
+
+test("a finding is marked good, bad, or neutral from the outcome", () => {
+  assert.equal(valenceOf("readiness", 3, 6, null), "good");
+  assert.equal(valenceOf("sleepScore", -4, -5, null), "bad");
+  assert.equal(valenceOf("hrv", 2, 4, null), "good");
+  assert.equal(valenceOf("liftPerf", 1.2, null, null), "good");
+  assert.equal(valenceOf("rhr", 4, 8, null), "bad");
+  assert.equal(valenceOf("rhr", -3, -6, null), "good");
+  assert.equal(valenceOf("awakeMin", 12, 20, null), "bad");
+  assert.equal(valenceOf("awakeMin", -8, -15, null), "good");
+  assert.equal(valenceOf("steps", 1000, 12, null), "neutral");
+  assert.equal(valenceOf("readiness", 0.1, 0.2, null), "neutral");
+  assert.equal(valenceOf("weight", 1, 2, null), "neutral");
+  assert.equal(valenceOf("weight", 1, 2, "gain"), "good");
+  assert.equal(valenceOf("weight", 1, 2, "lose"), "bad");
+  assert.equal(valenceOf("weight", -1, -2, "lose"), "good");
+
+  const days = fill(28, (i) => {
+    const row = { workedOut: i % 2 === 0, weight: i % 2 === 0 ? 82 : 80 };
+    if (i > 0) row.rhr = (i - 1) % 2 === 0 ? 60 : 50;
+    return row;
+  });
+  assert.equal(correlate({ days }).some((r) => r.outcome === "weight"), false);
+  const gain = correlate({ days }, { weightDir: "gain" }).find((r) => r.factor === "workedOut" && r.outcome === "weight" && r.lag === 0);
+  assert.equal(gain.valence, "good");
+  assert.match(gain.lead, /higher\.$/);
+  assert.doesNotMatch(gain.lead, /which is a good sign/);
+  const lose = correlate({ days }, { weightDir: "lose" }).find((r) => r.factor === "workedOut" && r.outcome === "weight" && r.lag === 0);
+  assert.equal(lose.valence, "bad");
+  assert.match(lose.sentence, /higher/);
+  assert.doesNotMatch(lose.sentence, /working against you/);
+  assert.equal(correlate({ days }).find((r) => r.factor === "workedOut" && r.outcome === "rhr" && r.lag === 0), undefined);
+  const pulse = correlate({ days }).find((r) => r.factor === "workedOut" && r.outcome === "rhr" && r.lag === 1);
+  assert.equal(pulse.valence, "bad");
+  assert.match(pulse.lead, /higher\.$/);
+  assert.doesNotMatch(pulse.lead, /working against you/);
+
+  const strong = fill(20, (i) => ({ sleptWell: i % 2 === 0, liftPerf: i % 2 === 0 ? 4.82 : 0 }));
+  const lift = correlate({ days: strong, phrases: { sleptWell: "you sleep well" } }).find((r) => r.factor === "sleptWell" && r.outcome === "liftPerf" && r.lag === 0);
+  assert.equal(lift.lead, "On days you sleep well, your strength is 4.8 points higher.");
+  assert.equal(correlate({ days: strong, phrases: { sleptWell: "you sleep well" } }).some((r) => r.factor === "workedOut"), false);
+});
+
+test("the Insights list hides low confidence and counts logged days", () => {
+  const rnd = mulberry32(11);
+  const days = fill(48, (i) => {
+    const row = { workedOut: worked(i), steps: 8000 + gauss(rnd) * 1800 };
+    if (i > 0) row.readiness = worked(i - 1) ? 53 : 50;
+    return row;
+  });
+  const rows = correlate({ days });
+  const shown = findingsForView(rows);
+  assert.ok(rows.some((r) => r.confidence === "low"));
+  assert.ok(shown.length > 0);
+  assert.ok(shown.every((r) => r.confidence === "high" || r.confidence === "medium"));
+  assert.equal(shown.some((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 0), false);
+  assert.equal(loggedDays({ days }), 48);
+  assert.equal(loggedDays({}), 0);
+  assert.equal(loggedDays({ days: { "2026-01-01": { readiness: 70 }, skip: { readiness: 1 } } }), 1);
+});
+
+test("good and bad findings rank ahead of a plain pattern, and See all stops at 25", () => {
+  const rows = [
+    { confidence: "high", valence: "neutral", strength: 9, percent: 20, nWith: 20, nWithout: 20 },
+    { confidence: "medium", valence: "good", strength: 2, percent: 3, nWith: 10, nWithout: 10 },
+    { confidence: "low", valence: "good", strength: 30, percent: 40, nWith: 8, nWithout: 8 },
+    { confidence: "high", valence: "bad", strength: 4, percent: 8, nWith: 18, nWithout: 18 },
+    { confidence: "high", valence: "good", strength: 3, percent: 5, nWith: 16, nWithout: 16 },
+  ];
+  const view = findingsForView(rows);
+  assert.deepEqual(view.map((r) => r.strength), [4, 3, 2, 9]);
+  const many = [];
+  for (let i = 0; i < 40; i++) many.push({ confidence: "high", valence: i % 2 ? "good" : "neutral", strength: 40 - i, percent: 1, nWith: 14, nWithout: 14 });
+  assert.equal(findingsForView(many).length, 40);
+  assert.equal(findingsForView(many).slice(0, SEE_ALL_LIMIT).length, 25);
+  assert.equal(findingsForView(many).slice(0, SEE_ALL_LIMIT).every((r, i, list) => i === 0 || viewGroupOrder(list[i - 1]) <= viewGroupOrder(r)), true);
+});
+
+function viewGroupOrder(row) {
+  return row.valence === "good" || row.valence === "bad" ? 0 : 1;
+}
+
+test("sleep wording stays natural, and the brief uses yesterday when it fits", () => {
+  const slept = fill(48, (i) => {
+    const long = i % 2 === 0;
+    const row = { sleepHours: long ? 8 : 6 };
+    if (i > 0) row.readiness = (i - 1) % 2 === 0 ? 80 : 60;
+    return row;
+  });
+  const sleep = correlate({ days: slept }).find((r) => r.source === "sleepHours" && r.outcome === "readiness" && r.lag === 1 && r.kind === "median");
+  assert.ok(sleep);
+  assert.equal(sleep.lead, "On days after you sleep more than usual, your readiness is 33% higher.");
+
+  const days = fill(48, (i) => {
+    const row = { workedOut: worked(i) };
+    if (i > 0) row.readiness = worked(i - 1) ? 53 : 50;
+    return row;
+  });
+  const rows = correlate({ days });
+  const picked = pickForToday(rows, { days }, dateAt(1));
+  assert.equal(picked.factor, "workedOut");
+  assert.equal(picked.outcome, "readiness");
+  assert.equal(picked.lag, 1);
+  assert.equal(picked.because, "yesterday");
+  assert.equal(todayLine(picked), "You worked out yesterday; on days like this your readiness tends to be 6% higher.");
+
+  const quiet = pickForToday(rows, { days }, dateAt(4));
+  assert.equal(quiet.because, "overall");
+  assert.match(todayLine(quiet), /^On days after you work out, your readiness is 6% higher/);
+
+  const late = fill(40, (i) => ({
+    lateEating: i % 2 === 0,
+    workedOut: i % 3 === 0,
+    sleepScore: i > 0 && (i - 1) % 2 === 0 ? 88 : 70,
+    readiness: i % 3 === 0 ? 90 : 62,
+  }));
+  const mixed = correlate({ days: late });
+  const day = dateAt(2);
+  assert.equal(late[dateAt(1)].lateEating, false);
+  assert.equal(late[dateAt(1)].workedOut, false);
+  const neither = pickForToday(mixed, { days: late }, day);
+  assert.equal(neither.because, "overall");
+  const on = dateAt(1);
+  assert.equal(late[dateAt(0)].lateEating, true);
+  const fromMeal = pickForToday(mixed, { days: late }, on);
+  assert.equal(fromMeal.because, "yesterday");
+  assert.equal(fromMeal.factor, "lateEating");
+  assert.match(todayLine(fromMeal), /^You ate late yesterday; on days like this your sleep score tends to be \d+% higher\.$/);
+});
+
+test("a later factor cannot explain that morning, and the next day can", () => {
+  assert.equal(suppressedStory({ id: "workedOut", source: "workoutVolume" }, "sleepHours", 0, null), true);
+  assert.equal(suppressedStory({ id: "workedOut", source: "workoutVolume" }, "hrv", 0, null), true);
+  assert.equal(suppressedStory({ id: "workedOut", source: "workoutVolume" }, "rhr", 0, null), true);
+  assert.equal(suppressedStory({ id: "liftPerf:median", source: "liftPerf" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "liftPerf:median", source: "liftPerf" }, "sleepScore", 1, null), false);
+  assert.equal(suppressedStory({ id: "lateEating" }, "sleepScore", 0, null), true);
+  assert.equal(suppressedStory({ id: "calories:median", source: "calories" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "steps", source: "steps" }, "readiness", 0, null), true);
+  assert.equal(suppressedStory({ id: "sleepHours:median", source: "sleepHours" }, "liftPerf", 0, null), false);
+  assert.equal(suppressedStory({ id: "readiness:median", source: "readiness" }, "liftPerf", 0, null), false);
+
+  const days = fill(40, (i) => {
+    const train = i % 2 === 0;
+    const row = {
+      workedOut: train,
+      lateEating: train,
+      calories: train ? 3200 : 1800,
+      steps: train ? 14000 : 4000,
+      "workout:legs": train,
+    };
+    if (i > 0) {
+      const after = (i - 1) % 2 === 0;
+      row.readiness = after ? 86 : 60;
+      row.sleepScore = after ? 90 : 64;
+      row.hrv = after ? 70 : 42;
+      row.rhr = after ? 48 : 58;
+    }
+    return row;
+  });
+  const rows = correlate({ days, phrases: { "workout:legs": "you do a legs workout" } });
+  ["workedOut", "lateEating", "workout:legs"].forEach((factor) => {
+    assert.equal(rows.some((r) => r.factor === factor && r.lag === 0 && (r.outcome === "readiness" || r.outcome === "sleepScore" || r.outcome === "hrv" || r.outcome === "rhr" || r.outcome === "sleepHours")), false);
+    assert.ok(rows.some((r) => r.factor === factor && r.lag === 1 && r.outcome === "readiness"), factor);
+  });
+  assert.equal(rows.some((r) => r.source === "calories" && r.lag === 0 && r.outcome === "readiness"), false);
+  assert.equal(rows.some((r) => r.source === "steps" && r.lag === 0 && r.outcome === "readiness"), false);
+  assert.ok(rows.some((r) => r.source === "calories" && r.lag === 1 && r.outcome === "readiness"));
+  assert.ok(rows.some((r) => r.source === "steps" && r.lag === 1 && (r.outcome === "readiness" || r.outcome === "sleepScore")));
+  const morning = fill(20, (i) => ({ sleepHours: i % 2 === 0 ? 8 : 6, liftPerf: i % 2 === 0 ? 8 : 2 }));
+  const lifted = correlate({ days: morning });
+  assert.ok(lifted.some((r) => r.source === "sleepHours" && r.outcome === "liftPerf" && r.lag === 0));
+  assert.equal(lifted.some((r) => r.source === "liftPerf" && r.outcome === "sleepHours" && r.lag === 0), false);
+  assert.equal(rows.some((r) => /which is a good sign|which is working against you/.test(r.sentence)), false);
+});
+
+test("mirror pairs collapse to the stronger temporally valid direction", () => {
+  const days = fill(40, (i) => {
+    const high = i % 2 === 0;
+    return { sleepHours: high ? 8 : 6, liftPerf: high ? 8 : 2 };
+  });
+  const rows = correlate({ days });
+  const pair = rows.filter((r) => {
+    const a = r.source || String(r.factor).replace(/:(median|tertile)$/, "");
+    return (a === "sleepHours" && r.outcome === "liftPerf") || (a === "liftPerf" && r.outcome === "sleepHours");
+  });
+  assert.equal(pair.length, 1);
+  assert.equal(pair[0].source, "sleepHours");
+  assert.equal(pair[0].outcome, "liftPerf");
+  assert.equal(pair[0].lag, 0);
+  assert.equal(rows.some((r) => r.source === "liftPerf" && r.outcome === "sleepHours"), false);
+});
+
+test("the top 8 allow at most 2 cards per outcome and 3 per factor family", () => {
+  assert.equal(OUTCOME_CAP, 2);
+  assert.equal(FAMILY_CAP, 3);
+  const outcomes = ["liftPerf", "readiness", "sleepScore", "hrv", "rhr"];
+  const factors = [
+    { factor: "sleepHours:median", source: "sleepHours" },
+    { factor: "sleepScore:median", source: "sleepScore" },
+    { factor: "deepHours:median", source: "deepHours" },
+    { factor: "lightHours:median", source: "lightHours" },
+    { factor: "hrv:median", source: "hrv" },
+    { factor: "rhr:median", source: "rhr" },
+    { factor: "readiness:median", source: "readiness" },
+    { factor: "workedOut", source: "workoutVolume" },
+    { factor: "workoutVolume:tertile", source: "workoutVolume" },
+    { factor: "liftPerf:median", source: "liftPerf" },
+    { factor: "didCardio", source: "cardioMin" },
+    { factor: "calories:median", source: "calories" },
+    { factor: "protein:median", source: "protein" },
+    { factor: "lateEating" },
+    { factor: "steps:median", source: "steps" },
+  ];
+  const rows = [];
+  let strength = 200;
+  outcomes.forEach((outcome) => {
+    factors.forEach((f) => {
+      if (f.source === outcome) return;
+      rows.push({
+        confidence: "high",
+        valence: "good",
+        strength: strength--,
+        percent: 10,
+        nWith: 20,
+        nWithout: 20,
+        outcome,
+        factor: f.factor,
+        source: f.source,
+        lag: 1,
+      });
+    });
+  });
+  const listed = listFindings(rows);
+  const top = listed.slice(0, DISPLAY_LIMIT);
+  const byOutcome = {};
+  const byFamily = {};
+  top.forEach((r) => {
+    byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1;
+    const family = factorFamily(r);
+    byFamily[family] = (byFamily[family] || 0) + 1;
+    assert.ok(family === "sleep" || family === "training" || family === "food" || family === "hrv" || family === "rhr" || family === "readiness" || family === "steps");
+  });
+  assert.equal(top.length, DISPLAY_LIMIT);
+  Object.values(byOutcome).forEach((n) => assert.ok(n <= OUTCOME_CAP));
+  Object.values(byFamily).forEach((n) => assert.ok(n <= FAMILY_CAP));
+  const seen = top.map((r) => r.outcome);
+  assert.ok(new Set(seen).size >= 4);
+  const all = listed.slice(0, SEE_ALL_LIMIT);
+  assert.equal(all.length, SEE_ALL_LIMIT);
+  assert.ok(all.filter((r) => r.outcome === "liftPerf").length > OUTCOME_CAP);
+  assert.deepEqual(all.slice(0, DISPLAY_LIMIT), top);
+});
+
+test("the Insights screen still calls effect(), and the engine does not phone home", () => {
+  const insights = readFileSync(new URL("../logger/js/pages/insights.js", import.meta.url), "utf8");
+  const analyze = readFileSync(new URL("../logger/js/shared/analyze.js", import.meta.url), "utf8");
+  const engine = readFileSync(new URL("../logger/js/shared/correlate.js", import.meta.url), "utf8");
+  const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
+  const brief = readFileSync(new URL("../logger/js/shared/brief.js", import.meta.url), "utf8");
+  const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
+  const events = readFileSync(new URL("../logger/js/usage-events.js", import.meta.url), "utf8");
+  const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
+  assert.match(insights, /app\.effect\(/);
+  assert.match(insights, /What affects your lifts/);
+  assert.match(insights, /Lift progress/);
+  assert.match(insights, /app\.effectCard\(/);
+  assert.match(insights, /class="card aff-card/);
+  assert.match(insights, /correlations, not causes/);
+  assert.match(insights, /data-action="affects-more"/);
+  assert.doesNotMatch(insights, /capture\(|posthog|sentry/i);
+  assert.match(actions, /case "affects-more"/);
+  assert.match(events, /insights_opened:\s*\(\)\s*=>\s*\(\{\}\)/);
+  assert.match(brief, /app\.effect\(/);
+  assert.match(analyze, /bucketEffect/);
+  assert.match(analyze, /app\.correlations/);
+  assert.match(analyze, /weightDir/);
+  assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
+  assert.match(sw, /insight-shell-v19/);
+  assert.match(sentry, /insight-shell-v19/);
+  assert.match(insights, /listFindings/);
+  assert.match(insights, /SEE_ALL_LIMIT/);
+  assert.match(engine, /mergeMirrors/);
+  assert.match(engine, /MORNING_IDS/);
+  assert.doesNotMatch(engine, /which is a good sign|which is working against you/);
+  assert.match(brief, /pickForToday/);
+  assert.match(brief, /open-affects/);
+  assert.match(brief, /\["pattern", "What affects you"\]/);
+  assert.match(actions, /case "open-affects"/);
+  assert.match(brief, /app\.capture\("morning_brief_customized"\)/);
+  assert.doesNotMatch(brief, /capture\([^)]*(readiness|sleep|hrv|sentence|lead)/);
+  assert.match(sw, /js\/shared\/correlate\.js/);
+  assert.match(sw, /css\/polish\.css/);
+});

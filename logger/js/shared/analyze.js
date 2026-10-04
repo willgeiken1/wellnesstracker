@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { correlate as runCorrelations, effect as bucketEffect } from "./correlate.js";
 
 /* Charts and the numbers behind Insights. */
 /* ================= Oura + insights ================= */
@@ -174,13 +175,46 @@ function sessionPerf(sessions) {
 }
 app.sessionPerf = sessionPerf;
 
+/* Bucket averages for the Insights screen. The general engine lives in correlate.js. */
 function effect(perfs, valueOf, buckets) {
-  return buckets.map((b) => {
-    const xs = perfs.filter((p) => { const v = valueOf(p.date); return v != null && b.test(v); }).map((p) => p.perf);
-    return { label: b.label, avg: app.avg(xs), n: xs.length };
-  });
+  return bucketEffect(perfs, valueOf, buckets);
 }
 app.effect = effect;
+
+/* Daily correlations for later screens. Nothing here is rendered, and nothing is sent off the device. */
+function correlationSource() {
+  const S = app.src();
+  const demo = !!(app.state && app.state.demo);
+  let targets = null;
+  if (!demo && typeof app.targets === "function") {
+    try { targets = app.targets(); } catch (e) { targets = null; }
+  }
+  let liftPerf = null;
+  if (typeof app.sessionPerf === "function") {
+    try { liftPerf = app.sessionPerf(S.sessions || []); } catch (e) { liftPerf = null; }
+  }
+  return {
+    sessions: S.sessions || [],
+    oura: S.oura || {},
+    foodDays: demo ? (S.foodDays || {}) : ((app.state && app.state.food && app.state.food.days) || {}),
+    targets,
+    weighIns: demo ? (S.weighIns || []) : (typeof app.weighIns === "function" ? app.weighIns() : []),
+    cardioSessions: demo ? [] : ((app.state && app.state.cardio && app.state.cardio.sessions) || []),
+    measurements: demo ? (S.measurements || {}) : ((app.state && app.state.measurements) || {}),
+    checkins: demo ? null : (app.state && app.state.checkins),
+    liftPerf,
+  };
+}
+app.correlationSource = correlationSource;
+
+function correlations(options) {
+  const opts = { ...(options || {}) };
+  if (opts.weightDir == null && typeof app.goals === "function") {
+    try { opts.weightDir = app.goals().weightDir || null; } catch (e) { opts.weightDir = null; }
+  }
+  return runCorrelations(correlationSource(), opts);
+}
+app.correlations = correlations;
 
 function effectCard(title, rows, sentence, need) {
   const max = Math.max(4, ...rows.filter((r) => r.n >= 3).map((r) => Math.abs(r.avg)));

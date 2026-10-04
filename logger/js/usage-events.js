@@ -10,6 +10,7 @@
    readiness_plan_toggled     { mode }    normal or readiness
    privacy_export                         a data export finished
    insights_opened                        the insights tab was opened
+   weekly_report_opened                   a weekly report was opened
 
    PostHog's own $identify, $create_alias, $opt_in, and $opt_out may pass.
    $set and $set_once are removed so an email cannot ride along with identify.
@@ -33,6 +34,7 @@ const FEATURE = {
   readiness_plan_toggled: (props) => (READINESS_MODES.includes(props.mode) ? { mode: props.mode } : null),
   privacy_export: () => ({}),
   insights_opened: () => ({}),
+  weekly_report_opened: () => ({}),
 };
 
 const IDENTITY_EVENTS = new Set(["$identify", "$create_alias", "$opt_in", "$opt_out"]);

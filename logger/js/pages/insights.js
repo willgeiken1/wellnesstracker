@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays } from "../shared/correlate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -61,6 +62,7 @@ function recoveryHTML(embedded) {
 app.recoveryHTML = recoveryHTML;
 
 function insightsWrapHTML() {
+  if (app.ui.weekOpen && app.ui.iseg !== "recovery" && app.weekReportHTML) return app.weekReportHTML(app.ui.weekOpen);
   const seg = `<div class="seg2" role="tablist" style="margin-bottom:16px">
     <button data-action="iseg" data-s="trends" aria-pressed="${app.ui.iseg !== "recovery"}">Trends</button>
     <button data-action="iseg" data-s="recovery" aria-pressed="${app.ui.iseg === "recovery"}">Recovery</button></div>`;
@@ -68,11 +70,58 @@ function insightsWrapHTML() {
 }
 app.insightsWrapHTML = insightsWrapHTML;
 
+function affectsCard(r) {
+  const tone = r.valence === "good" ? "good" : r.valence === "bad" ? "bad" : "neutral";
+  const mark = tone === "good" ? "Good for you" : tone === "bad" ? "Working against you" : "Just a pattern";
+  const conf = r.confidence === "high" ? "High confidence" : "Medium confidence";
+  const hi = r.confidence === "high" ? " hi" : "";
+  return `<article class="card aff-card ${tone}">
+    <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
+    <p class="aff-s">${app.esc(r.lead || r.sentence)}</p>
+    <div class="aff-chips"><span class="aff-chip${hi}">${conf}</span><span class="aff-chip">${app.pl(r.nWith, "day")}</span></div>
+  </article>`;
+}
+
+function affectsEmpty(days) {
+  if (days <= 0) return "Log sleep, workouts, or meals for about two weeks. A comparison needs at least 7 days on each side.";
+  if (days < DAYS_FOR_A_PATTERN) {
+    const more = DAYS_FOR_A_PATTERN - days;
+    return `You have ${app.pl(days, "day")} logged. About ${app.pl(more, "more day")} of sleep, workouts, or meals and the first patterns can show up.`;
+  }
+  return "Nothing stands out strongly yet. Keep logging. A pattern needs at least 7 days on each side, and a gap big enough to trust.";
+}
+
+/* What affects you. Correlations only, and no health values leave the phone. */
+function affectsHTML() {
+  let rows = [];
+  let days = 0;
+  try {
+    const src = app.correlationSource();
+    days = loggedDays(src);
+    rows = listFindings(app.correlations());
+  } catch (e) { rows = []; }
+  const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
+  const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;
+  if (!rows.length) {
+    const title = days < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet";
+    return head + `<div class="card aff-empty"><h4>${title}</h4><p class="sub">${affectsEmpty(days)}</p></div>`;
+  }
+  const open = !!app.ui.affectsAll;
+  const capped = rows.slice(0, SEE_ALL_LIMIT);
+  const shown = open ? capped : capped.slice(0, DISPLAY_LIMIT);
+  const more = capped.length > DISPLAY_LIMIT;
+  const toggle = more ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + DISPLAY_LIMIT : "See all " + capped.length}</button>` : "";
+  return head + shown.map(affectsCard).join("") + toggle;
+}
+app.affectsHTML = affectsHTML;
+
 function insightsHTML(embedded) {
   const S = app.src(), sessions = S.sessions, o = S.oura;
   const nights = Object.keys(o).length;
   const head = `<p class="sub" style="margin:-4px 0 14px">From ${app.pl(sessions.length, "workout")}${nights ? ` and ${app.pl(nights, "night")} of Oura data` : ""}</p>${app.demoBanner()}`;
-  if (sessions.length < 3) return head + (app.state.demo ? "" : app.goalsSectionHTML(app.liftSeries(sessions))) + `<div class="card"><h4>Keep logging</h4>
+  const reports = app.weeklyListHTML ? app.weeklyListHTML() : "";
+  const affects = app.affectsHTML();
+  if (sessions.length < 3) return head + reports + affects + (app.state.demo ? "" : app.goalsSectionHTML(app.liftSeries(sessions))) + `<div class="card"><h4>Keep logging</h4>
     <p class="sub">Insights start appearing after a few workouts and get more reliable every week. Lift trends need 4 sessions of a lift; sleep and readiness comparisons need Oura connected.</p>
     ${app.state.demo ? "" : `<button class="btn primary block" data-action="demo-on" style="margin-top:12px">Preview with sample data</button>`}</div>`;
 
@@ -132,7 +181,7 @@ function insightsHTML(embedded) {
   const ppMsg = ratio == null ? "Log some pull work to compare." : ratio > 1.25 ? `You're doing ${ratio.toFixed(1)}× more pushing than pulling. Many lifters aim for roughly even to protect the shoulders.`
     : ratio < 0.8 ? "You're doing noticeably more pulling than pushing." : "Pushing and pulling are well balanced.";
 
-  return head + app.widgetize("trends", `<!--w:goals-->${app.state.demo ? "" : app.goalsSectionHTML(series)}
+  return head + reports + affects + app.widgetize("trends", `<!--w:goals-->${app.state.demo ? "" : app.goalsSectionHTML(series)}
     <!--w:lifts--><div class="sec-h"><h3>Lift progress</h3><span class="sec-sub">${counts.up} up · ${counts.flat} flat · ${counts.down} down</span></div>
     <div class="card lifts">${liftsHTML || `<p class="sub">Log weighted sets to see trends.</p>`}</div>
     <!--w:prs-->${app.prBoardHTML(sessions)}
