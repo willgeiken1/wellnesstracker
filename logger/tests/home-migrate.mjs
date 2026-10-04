@@ -548,7 +548,34 @@ async function browserCases() {
     home
   );
 
-  check("no console errors", a.errors.length === 0 && b.errors.length === 0 && upgraded.errors.length === 0, [...a.errors, ...b.errors, ...upgraded.errors]);
+  const due = await boot(browser, {
+    version: 2,
+    sessions: [],
+    settingsAt: 1,
+    muscleMode: "basic",
+    theme: { mode: "dark", accent: "citrus" },
+    profile: {
+      name: "Ada Lovelace",
+      dob: "1990-01-01",
+      sex: "female",
+      units: "kg",
+      heightCm: 170,
+      weighIns: [{ date: "2020-01-01", kg: 70 }],
+    },
+  });
+  const nudge = await due.page.evaluate(() => {
+    const brief = document.querySelector("#pane-home .wdg[data-w='brief']");
+    const button = document.querySelector("#pane-home .nudge");
+    const stack = document.querySelector("#pane-home .wdgs");
+    return {
+      text: button ? button.textContent : "",
+      insideBrief: !!(brief && button && brief.contains(button)),
+      aboveStack: !!(button && stack && button.compareDocumentPosition(stack) & Node.DOCUMENT_POSITION_FOLLOWING && !stack.contains(button)),
+    };
+  });
+  check("weigh-in nudge renders inside the brief when one is due", nudge.insideBrief && !nudge.aboveStack && /Time for a weigh-in/.test(nudge.text), nudge);
+
+  check("no console errors", a.errors.length === 0 && b.errors.length === 0 && upgraded.errors.length === 0 && due.errors.length === 0, [...a.errors, ...b.errors, ...upgraded.errors, ...due.errors]);
   await browser.close();
 }
 

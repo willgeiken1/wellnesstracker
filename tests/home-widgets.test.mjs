@@ -381,7 +381,7 @@ function loadWidgets() {
   return widgetLoad;
 }
 
-test("a saved homeV2 still paints the legacy stack, and the weigh-in nudge stays outside it", async () => {
+test("a saved homeV2 still paints the legacy stack, and the weigh-in nudge sits inside the brief", async () => {
   assert.equal(HOME_REGISTRY_PAINT, false);
   await loadWidgets();
   const prev = {
@@ -436,13 +436,14 @@ test("a saved homeV2 still paints the legacy stack, and the weigh-in nudge stays
     assert.doesNotMatch(html, /class="home-v2"|oura-wait|data-hw=/);
     assert.match(html, /class="nudge"/);
     const stack = wdgsBlock(html);
-    assert.match(stack, /data-w="brief"/);
-    assert.doesNotMatch(stack, /class="nudge"/);
-    assert.ok(html.indexOf('class="nudge"') < html.indexOf('class="wdgs"'));
+    const briefAt = stack.indexOf('data-w="brief"');
+    const nudgeAt = stack.indexOf('class="nudge"');
+    const nextAt = stack.indexOf('data-w="today"');
+    assert.ok(briefAt >= 0 && nudgeAt > briefAt && nextAt > nudgeAt);
+    assert.ok(html.indexOf('class="nudge"') > html.indexOf('class="wdgs"'));
     app.state.layout.home.hidden = ["brief", "map-adv"];
     const hiddenBrief = app.homeHTML();
-    assert.doesNotMatch(wdgsBlock(hiddenBrief), /class="nudge"|data-w="brief"/);
-    assert.match(hiddenBrief, /class="nudge"/);
+    assert.doesNotMatch(hiddenBrief, /class="nudge"|data-w="brief"/);
   } finally {
     app.state = prev.state;
     app.ui = prev.ui;

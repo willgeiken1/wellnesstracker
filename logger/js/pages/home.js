@@ -100,18 +100,16 @@ function homeHTML() {
   const head = `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
-  const nudge = app.weighReminderHTML();
-  if (ouraV2) return head + nudge + app.renderHomeWidgets(app.getHomeLayout(app.state), app.snapshotFromApp());
+  if (ouraV2) return head + app.renderHomeWidgets(app.getHomeLayout(app.state), app.snapshotFromApp());
   const live = { live: true };
   const readiness = ouraV2 ? "" : app.readinessCardHTML();
-  const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}<!--w:readiness-->${readiness}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
+  const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${readiness}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
     <!--w:week-->${app.HOME_WIDGETS["this-week"].render(live)}
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>
     <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`);
-  /* The nudge stays outside .wdgs. A child with no data-w is saved as a blank id. */
   const strip = ouraV2 ? gatedOuraStripHTML(app.state) : "";
-  return head + strip + nudge + stack;
+  return head + strip + stack;
 }
 app.visibleHomeIds = visibleHomeIds;
 app.homeHTML = homeHTML;
