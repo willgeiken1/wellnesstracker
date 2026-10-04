@@ -180,7 +180,7 @@ document.addEventListener("pointerup", (ev) => {
   if (!app.wdrag) return;
   const { box, el } = app.wdrag; app.wdrag = null;
   el.classList.remove("dragging"); el.style.transform = "";
-  const ids = [...box.children].map((c) => c.dataset.w), page = box.dataset.page;
+  const ids = [...box.children].map((c) => c.dataset.w).filter(Boolean), page = box.dataset.page;
   if (page === "routines") { app.state.workouts.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); app.save(); }
   else { const L = app.layoutOf(page); L.order = [...ids, ...(L.order || []).filter((x) => !ids.includes(x))]; app.layoutTouch(); }
   app.render();

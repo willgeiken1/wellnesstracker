@@ -155,7 +155,8 @@ h1, h2, h3, h4 { margin: 0; }
 .mgrid li.hit b { color: var(--green); }
 .mgrid li.hit-lo { color: var(--text); }
 .mgrid li.hit-lo b { color: var(--green-lo); }
-.legend { display: flex; gap: 16px; justify-content: center; color: var(--muted); font-size: 13px; padding: 4px 0 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; color: var(--muted); font-size: 13px; padding: 4px 2px 2px; max-width: 100%; }
+.legend span { white-space: nowrap; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--muscle); }
 .legend i.lo { background: var(--green-lo); }
 .legend i.hi { background: var(--green); }
