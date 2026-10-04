@@ -57,12 +57,13 @@ function dropBefore(stamp: number | null, before: number | null | undefined, now
   return stamp == null || stamp > now + CLOCK_SKEW_MS || stamp <= before;
 }
 
-function copyWDelAt(src: unknown): Record<string, number> {
+function copyWDelAt(src: unknown, now = Date.now()): Record<string, number> {
   const out: Record<string, number> = {};
   if (!src || typeof src !== "object" || Array.isArray(src)) return out;
   for (const [d, v] of Object.entries(src as Bag)) {
     const t = timeMs(v);
-    if (t != null) out[d] = t;
+    if (t == null) continue;
+    out[d] = t > now + CLOCK_SKEW_MS ? now - 1 : t;
   }
   return out;
 }
@@ -160,7 +161,7 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
 
   if (data.profile && typeof data.profile === "object") {
     const wDel = new Set<string>(data.profile.wDel || []);
-    const wDelAt = copyWDelAt(data.profile.wDelAt);
+    const wDelAt = copyWDelAt(data.profile.wDelAt, now);
     const kept: Bag[] = [];
     let profileChanged = false;
     for (const x of data.profile.weighIns || []) {
@@ -219,11 +220,13 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
   return data;
 }
 
-/* A stamp more than a minute ahead is ignored so it cannot win Math.max.
-   If nothing usable remains, an unknown future delete is stored as just before
-   now. That removes range logs made before a device first sees the purge and
-   keeps logs made after. Removing the earlier logs is the privacy-safe
-   direction. The client stores this same instant, so a merge cannot extend it. */
+/* A stored stamp more than a minute ahead is ignored so it cannot win Math.max.
+   A fresh request that far ahead is a delete happening now, stored as just
+   before now, so it still moves an older cutoff forward. If nothing usable
+   remains, an unknown future delete is stored as just before now. That removes
+   range logs made before a device first sees the purge and keeps logs made
+   after. Removing the earlier logs is the privacy-safe direction. The client
+   stores this same instant, so a merge cannot extend it. */
 function usableStamp(t: number | null, now: number): number | null {
   if (t == null || !(t > 0)) return null;
   if (t > now + CLOCK_SKEW_MS) return null;
@@ -232,7 +235,7 @@ function usableStamp(t: number | null, now: number): number | null {
 
 function settleCutoff(prevRaw: number | null, reqRaw: number | null, now: number): number {
   const prev = usableStamp(prevRaw, now) || 0;
-  const req = usableStamp(reqRaw, now) || 0;
+  const req = usableStamp(reqRaw, now) || (reqRaw && reqRaw > now + CLOCK_SKEW_MS ? now - 1 : 0);
   const next = Math.max(prev, req);
   if (next) return next;
   const raw = Math.max(prevRaw || 0, reqRaw || 0);

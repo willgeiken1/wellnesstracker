@@ -278,6 +278,26 @@ test("re-logging a weigh-in beats a legacy wDel still on the other phone", () =>
   }
 });
 
+test("a fast-clock weigh-in delete does not block re-logging", () => {
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  const fast = now + 86_400_000;
+  const date = "2026-10-04";
+  const deleted = { weighIns: [], wDel: [date], wDelAt: { [date]: fast }, updatedAt: fast };
+  const relogged = {
+    weighIns: [{ date, kg: 68, at: now }],
+    wDel: [],
+    wDelAt: { [date]: now - 1 },
+    updatedAt: now,
+  };
+  for (const merged of [mergeWeighIns(relogged, deleted, [], now), mergeWeighIns(deleted, relogged, [], now)]) {
+    assert.equal(merged.weighIns.find((w) => w.date === date).kg, 68);
+    assert.equal(merged.wDel.includes(date), false);
+    assert.equal(merged.wDelAt[date], undefined);
+  }
+  const tomb = mergeWeighIns({ weighIns: [], wDel: [], updatedAt: now }, deleted, [], now);
+  assert.equal(tomb.wDelAt[date], now - 1);
+});
+
 test("a deletedAt a year ahead does not erase a weigh-in logged now", () => {
   const now = Date.parse("2026-10-04T16:00:00Z");
   const ahead = now + 365 * 24 * 3600 * 1000;
@@ -692,6 +712,82 @@ test("a phone one day fast loses the photo and weigh-in on the server", () => {
   assert.deepEqual(got.weigh, [71]);
   assert.deepEqual(got.removed.sort(), ["u/fast.jpg", "u/old.jpg"]);
   assert.deepEqual(got.deletedIds.sort(), ["fast", "old"]);
+});
+
+test("a repeat delete from a fast clock removes logs made since the earlier delete", () => {
+  const rangeUrl = new URL("../supabase/functions/_shared/range.ts", import.meta.url).href;
+  const script = `
+    import { deleteRange } from ${JSON.stringify(rangeUrl)};
+    const now = Date.parse("2026-10-04T16:00:00Z");
+    const stored = now - 7 * 86_400_000;
+    const logged = now - 2 * 86_400_000;
+    const fast = now + 86_400_000;
+    const from = "2026-09-01";
+    const to = "2026-10-05";
+    const blob = {
+      sessions: [],
+      profile: {
+        weighIns: [
+          { date: "2026-10-02", kg: 70, at: logged },
+          { date: "2026-10-04", kg: 71, at: now },
+        ],
+        wDel: [],
+        wDelAt: {},
+      },
+      purges: [{ from, to, at: stored, deletedAt: stored, synced: true }],
+    };
+    const photos = [
+      { id: "two", path: "u/two.jpg", taken_at: new Date(logged).toISOString() },
+      { id: "now", path: "u/now.jpg", taken_at: new Date(now).toISOString() },
+    ];
+    let saved = null;
+    let removed = null;
+    let deletedIds = null;
+    const admin = {
+      from(table) {
+        const api = {
+          op: "select",
+          select() { api.op = "select"; return api; },
+          delete() { api.op = "delete"; return api; },
+          eq() { return api; },
+          gte() { return api; },
+          lte() { return api; },
+          in(key, ids) { api.ids = ids; return api; },
+          upsert(row) { saved = row; return Promise.resolve({ error: null }); },
+          maybeSingle() { return Promise.resolve({ data: { data: structuredClone(blob) }, error: null }); },
+          then(resolve, reject) {
+            if (table === "progress_photos" && api.op === "delete") deletedIds = api.ids;
+            const payload = table === "progress_photos" && api.op === "select" ? { data: photos, error: null } : { error: null };
+            return Promise.resolve(payload).then(resolve, reject);
+          },
+        };
+        return api;
+      },
+      storage: { from() { return { remove(paths) { removed = paths; return Promise.resolve({ error: null }); } }; } },
+      rpc() { return Promise.resolve({ error: null }); },
+    };
+    const res = await deleteRange(admin, "user-1", { from, to, deletedAt: fast }, now);
+    console.log(JSON.stringify({
+      status: res.status,
+      deletedAt: saved.data.purges[0].deletedAt,
+      weigh: (saved.data.profile.weighIns || []).map((w) => w.kg),
+      removed,
+      deletedIds,
+    }));
+  `;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    env: { ...process.env, TZ: "UTC" },
+  });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const got = JSON.parse(r.stdout.trim().split("\n").pop());
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  assert.equal(got.status, 200);
+  assert.equal(got.deletedAt, now - 1);
+  assert.deepEqual(got.weigh, [71]);
+  assert.deepEqual(got.removed, ["u/two.jpg"]);
+  assert.deepEqual(got.deletedIds, ["two"]);
 });
 
 test("csv escapes quotes and the zip round-trips", async () => {

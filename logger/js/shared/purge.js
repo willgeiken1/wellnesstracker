@@ -90,12 +90,13 @@ export function purgeCutoff(p, now = Date.now()) {
   return neutralCutoff(p, now);
 }
 
-function copyWDelAt(src) {
+function copyWDelAt(src, now = Date.now()) {
   const out = {};
   if (!src || typeof src !== "object" || Array.isArray(src)) return out;
   for (const [d, v] of Object.entries(src)) {
     const t = timeMs(v);
-    if (t != null) out[d] = t;
+    if (t == null) continue;
+    out[d] = t > now + CLOCK_SKEW_MS ? now - 1 : t;
   }
   return out;
 }
@@ -136,8 +137,8 @@ export function mergeWeighIns(localProfile, remoteProfile, purges, now = Date.no
   const lp = localProfile && typeof localProfile === "object" ? localProfile : {};
   const rp = remoteProfile && typeof remoteProfile === "object" ? remoteProfile : {};
   const wDel = new Set([...(lp.wDel || []), ...(rp.wDel || [])]);
-  const wDelAt = copyWDelAt(lp.wDelAt);
-  for (const [d, t] of Object.entries(copyWDelAt(rp.wDelAt))) {
+  const wDelAt = copyWDelAt(lp.wDelAt, now);
+  for (const [d, t] of Object.entries(copyWDelAt(rp.wDelAt, now))) {
     if (wDelAt[d] == null || t > wDelAt[d]) wDelAt[d] = t;
   }
   const byDate = new Map();
@@ -272,7 +273,7 @@ export function stripRange(data, from, to, opts = {}) {
 
   if (data.profile && typeof data.profile === "object") {
     const wDel = new Set(data.profile.wDel || []);
-    const wDelAt = copyWDelAt(data.profile.wDelAt);
+    const wDelAt = copyWDelAt(data.profile.wDelAt, now);
     const kept = [];
     let profileChanged = false;
     const beat = before == null ? [] : [{ from, to, deletedAt: before }];
