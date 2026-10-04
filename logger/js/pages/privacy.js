@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { applyPurges, buildExportFiles, coveredBy, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
+import { applyPurges, buildExportFiles, coveredBy, localStamp, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
 
 /* Privacy center: export, date-range delete, account delete, and app lock. */
 
@@ -10,6 +10,7 @@ app.mergeCheckins = mergeCheckins;
 app.datePurged = (day) => coveredBy(app.state && app.state.purges, day);
 app.weighAfterPurge = weighAfterPurge;
 app.mergeWeighIns = mergeWeighIns;
+app.localStamp = localStamp;
 
 function needsLock() {
   const L = app.state && app.state.appLock;

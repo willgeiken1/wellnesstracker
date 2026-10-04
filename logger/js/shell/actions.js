@@ -699,10 +699,15 @@ document.addEventListener("click", async (ev) => {
     case "weigh-del": {
       const d = b.dataset.date;
       if (!(await app.ask({ title: "Delete this weigh-in?", body: app.fmtDate(d), ok: "Delete", danger: true }))) break;
+      const deletedAt = app.localStamp(app.state.profile, Date.now());
       app.state.profile.weighIns = app.state.profile.weighIns.filter((x) => x.date !== d);
       app.state.profile.wDel = [...(app.state.profile.wDel || []), d];
-      app.state.profile.wDelAt = { ...(app.state.profile.wDelAt || {}), [d]: Date.now() };
-      app.state.profile.updatedAt = Date.now();
+      app.state.profile.wDelAt = { ...(app.state.profile.wDelAt || {}), [d]: deletedAt };
+      if (app.state.profile.wDelAtRaw && app.state.profile.wDelAtRaw[d] != null) {
+        app.state.profile.wDelAtRaw = { ...app.state.profile.wDelAtRaw };
+        delete app.state.profile.wDelAtRaw[d];
+      }
+      app.state.profile.updatedAt = deletedAt;
       app.save(); app.render(); app.renderSheet(); break;
     }
     case "auth-open": app.ui.sheet = "auth"; app.ui.sd = { mode: "signin", email: "" }; app.renderSheet(); break;

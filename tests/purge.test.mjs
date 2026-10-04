@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { applyPurges, buildExportFiles, mergeWeighIns, notePurge, stripRange, toCsv, unionPurges, zipStore } from "../logger/js/shared/purge.js";
+import { applyPurges, buildExportFiles, localStamp, mergeWeighIns, notePurge, stripRange, toCsv, unionPurges, zipStore } from "../logger/js/shared/purge.js";
 
 function sample() {
   return {
@@ -292,10 +292,43 @@ test("a fast-clock weigh-in delete does not block re-logging", () => {
   for (const merged of [mergeWeighIns(relogged, deleted, [], now), mergeWeighIns(deleted, relogged, [], now)]) {
     assert.equal(merged.weighIns.find((w) => w.date === date).kg, 68);
     assert.equal(merged.wDel.includes(date), false);
-    assert.equal(merged.wDelAt[date], undefined);
+    assert.equal(merged.wDelAt[date], now - 1);
+    assert.equal(merged.wDelAtRaw[date], fast);
   }
   const tomb = mergeWeighIns({ weighIns: [], wDel: [], updatedAt: now }, deleted, [], now);
   assert.equal(tomb.wDelAt[date], now - 1);
+  assert.equal(tomb.wDelAtRaw[date], fast);
+});
+
+test("a fast weigh-in delete stays neutralised across later merges", () => {
+  const t0 = Date.parse("2026-10-04T16:00:00Z");
+  const fastStamp = t0 + 86_400_000;
+  const date = "2026-10-04";
+  const fast = { weighIns: [], wDel: [date], wDelAt: { [date]: fastStamp }, updatedAt: fastStamp };
+  let phone = { weighIns: [], wDel: [], wDelAt: {}, updatedAt: t0 };
+  let now = t0;
+  phone = mergeWeighIns(phone, fast, [], now);
+  assert.equal(phone.wDelAt[date], now - 1);
+  assert.equal(phone.wDelAtRaw[date], fastStamp);
+  for (let round = 0; round < 2; round++) {
+    const relogAt = now + 5_000;
+    const relog = {
+      weighIns: [{ date, kg: 68 + round, at: relogAt }],
+      wDel: [],
+      wDelAt: { [date]: relogAt - 1 },
+      updatedAt: fastStamp + round + 1,
+    };
+    phone = mergeWeighIns(phone, relog, [], now);
+    assert.equal(phone.weighIns.find((w) => w.date === date).kg, 68 + round);
+    now += 3_600_000;
+    phone = mergeWeighIns(phone, fast, [], now);
+    assert.equal(phone.weighIns.find((w) => w.date === date).kg, 68 + round);
+    assert.equal(phone.wDelAt[date], t0 - 1);
+    assert.equal(phone.wDelAtRaw[date], fastStamp);
+    phone = mergeWeighIns(fast, phone, [], now);
+    assert.equal(phone.weighIns.find((w) => w.date === date).kg, 68 + round);
+    assert.equal(phone.wDelAt[date], t0 - 1);
+  }
 });
 
 test("a deletedAt a year ahead does not erase a weigh-in logged now", () => {
@@ -806,4 +839,132 @@ test("csv escapes quotes and the zip round-trips", async () => {
   execFileSync("unzip", ["-o", zipPath, "-d", dir]);
   assert.match(readFileSync(join(dir, "food.csv"), "utf8"), /Oats/);
   assert.match(readFileSync(join(dir, "about.txt"), "utf8"), /Anthropic|estimate/i);
+});
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function profileSig(p) {
+  const weigh = [...(p.weighIns || [])]
+    .map((w) => [w.date, w.kg, w.at])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const wDel = [...(p.wDel || [])].sort();
+  const wDelAt = {};
+  const wDelAtRaw = {};
+  for (const k of Object.keys(p.wDelAt || {}).sort()) wDelAt[k] = p.wDelAt[k];
+  for (const k of Object.keys(p.wDelAtRaw || {}).sort()) wDelAtRaw[k] = p.wDelAtRaw[k];
+  return JSON.stringify({ weigh, wDel, wDelAt, wDelAtRaw });
+}
+
+const SKEW_SEEDS = [1, 7, 42, 99, 20261004, 8675309, 123456, 31337];
+const SKEW_ROUNDS = 40;
+
+test("three skewed clocks keep deletes, keep later logs, and agree", () => {
+  const DAY = 86_400_000;
+  for (const seed of SKEW_SEEDS) {
+    const rnd = mulberry32(seed);
+    const start = Date.parse("2026-06-15T12:00:00Z");
+    let real = start;
+    const dates = [0, 1, 2, 3].map((i) => new Date(start + i * DAY).toISOString().slice(0, 10));
+    const phones = [-DAY, 0, DAY].map((skew) => ({
+      skew,
+      profile: { weighIns: [], wDel: [], wDelAt: {}, wDelAtRaw: {}, updatedAt: start, clockHint: start + skew },
+    }));
+    const events = [];
+    const log = (phone, date) => {
+      const at = localStamp(phone.profile, real + phone.skew);
+      const kg = Math.round((70 + rnd() * 20) * 10) / 10;
+      const p = phone.profile;
+      const frozen = p.wDelAtRaw && typeof p.wDelAtRaw[date] === "number"
+        && typeof (p.wDelAt && p.wDelAt[date]) === "number" && p.wDelAt[date] < at;
+      p.weighIns = [...(p.weighIns || []).filter((w) => w.date !== date), { date, kg, at }];
+      p.wDel = (p.wDel || []).filter((d) => d !== date);
+      if (!frozen) p.wDelAt = { ...(p.wDelAt || {}), [date]: at - 1 };
+      p.updatedAt = Math.max(p.updatedAt || 0, at);
+      events.push({ type: "log", date, real, at, kg });
+    };
+    const del = (phone, date) => {
+      const at = localStamp(phone.profile, real + phone.skew);
+      const p = phone.profile;
+      p.weighIns = (p.weighIns || []).filter((w) => w.date !== date);
+      if (!(p.wDel || []).includes(date)) p.wDel = [...(p.wDel || []), date];
+      p.wDelAt = { ...(p.wDelAt || {}), [date]: at };
+      if (p.wDelAtRaw && p.wDelAtRaw[date] != null) {
+        const next = { ...p.wDelAtRaw };
+        delete next[date];
+        p.wDelAtRaw = next;
+      }
+      p.updatedAt = Math.max(p.updatedAt || 0, at);
+      events.push({ type: "delete", date, real, at });
+    };
+    const pull = (dst, src) => {
+      dst.profile = mergeWeighIns(dst.profile, src.profile, [], real + dst.skew);
+    };
+    const fullSync = () => {
+      for (let pass = 0; pass < 6; pass++) {
+        for (const dst of phones) {
+          for (const src of phones) if (dst !== src) pull(dst, src);
+        }
+      }
+    };
+    fullSync();
+    for (let round = 0; round < SKEW_ROUNDS; round++) {
+      real += 60_000 + Math.floor(rnd() * 4 * 3600_000);
+      for (const phone of phones) phone.profile.clockHint = real + phone.skew;
+      const phone = phones[Math.floor(rnd() * phones.length)];
+      const date = dates[Math.floor(rnd() * dates.length)];
+      const roll = rnd();
+      if (roll < 0.4) log(phone, date);
+      else if (roll < 0.75) del(phone, date);
+      else {
+        const other = phones[Math.floor(rnd() * phones.length)];
+        if (other !== phone) {
+          pull(phone, other);
+          pull(other, phone);
+        }
+      }
+      if (rnd() < 0.35) fullSync();
+    }
+    fullSync();
+    const agreed = profileSig(phones[0].profile);
+    for (const phone of phones) assert.equal(profileSig(phone.profile), agreed, `seed ${seed} phones diverge`);
+    const profile = phones[0].profile;
+    for (const date of dates) {
+      const ev = events.filter((e) => e.date === date);
+      const lastDelIdx = ev.findLastIndex((e) => e.type === "delete");
+      const after = lastDelIdx < 0 ? ev : ev.slice(lastDelIdx + 1);
+      const logs = after.filter((e) => e.type === "log");
+      const have = (profile.weighIns || []).find((w) => w.date === date);
+      if (!logs.length) {
+        assert.equal(have, undefined, `seed ${seed} ${date} deleted weigh-in returned`);
+        continue;
+      }
+      const tomb = profile.wDelAt ? profile.wDelAt[date] : null;
+      const raw = profile.wDelAtRaw ? profile.wDelAtRaw[date] : null;
+      const survivor = logs.find((entry) => {
+        const ahead = entry.at > real + 60_000 && !(raw && entry.at > raw);
+        return !ahead && (tomb == null || entry.at > tomb);
+      });
+      if (survivor) assert.ok(have, `seed ${seed} ${date} log after delete was lost`);
+      else assert.equal(have, undefined, `seed ${seed} ${date} deleted weigh-in returned`);
+    }
+    const frozen = profileSig(phones[0].profile);
+    real += 5 * DAY;
+    fullSync();
+    for (const phone of phones) assert.equal(profileSig(phone.profile), frozen, `seed ${seed} drifted after a later sync`);
+    for (const date of dates) {
+      const raw = profile.wDelAtRaw && profile.wDelAtRaw[date];
+      if (raw == null) continue;
+      const fast = { weighIns: [], wDel: [date], wDelAt: { [date]: raw }, updatedAt: raw };
+      const again = mergeWeighIns(mergeWeighIns(profile, fast, [], real), fast, [], real + DAY);
+      assert.equal(profileSig(again), profileSig(profile), `seed ${seed} ${date} neutralised again`);
+    }
+  }
 });
