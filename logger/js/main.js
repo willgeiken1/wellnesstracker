@@ -1,4 +1,5 @@
 import { app } from "./runtime.js";
+import "./sentry.js";
 import "./data/body.js";
 import "./data/state.js";
 import "./shared/icons.js";
