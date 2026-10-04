@@ -78,6 +78,13 @@ async function main() {
     return { text: app.machineNote("Pec Fly Machine"), shape: v && typeof v === "object" && !Array.isArray(v) ? v : null };
   });
   check("legacy string migrates to a note record", migrated.text === "Seat 4" && migrated.shape && migrated.shape.text === "Seat 4" && typeof migrated.shape.at === "number", JSON.stringify(migrated));
+  const rpcGate = await page.evaluate(() => ({
+    missing: app.mergeRpcMissing({ code: "PGRST202", message: "Could not find the function public.merge_user_data(p_data) in the schema cache" }),
+    undefinedFn: app.mergeRpcMissing({ code: "42883", message: "function public.merge_user_data(jsonb) does not exist" }),
+    other: app.mergeRpcMissing({ code: "42501", message: "permission denied for function merge_user_data" }),
+    none: app.mergeRpcMissing(null),
+  }));
+  check("undeployed merge function is the fallback case", rpcGate.missing === true && rpcGate.undefinedFn === true && rpcGate.other === false && rpcGate.none === false, JSON.stringify(rpcGate));
 
   await page.locator('.tab[data-tab="workouts"]').click();
   await page.waitForTimeout(200);
