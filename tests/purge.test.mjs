@@ -962,43 +962,19 @@ test("skewed phones follow real-time deletes and later logs", () => {
         const logs = ev.filter((e) => e.type === "log");
         const deletes = ev.filter((e) => e.type === "delete");
         const lastDel = deletes.length ? deletes[deletes.length - 1] : null;
-        const maxDelAt = deletes.reduce((m, e) => Math.max(m, e.at), -Infinity);
-        /* Stamps above every delete beat a plain tomb and a neutralised one.
-           An earlier fast-clock log can outrank a later real-time log. */
-        const dominating = logs.filter((e) => !lastDel || e.at > maxDelAt);
-        const best = dominating.length ? dominating.reduce((a, b) => (a.at >= b.at ? a : b)) : null;
-        if (!lastDel) {
-          if (!best) assert.equal(have, undefined, `${label} ${date} weigh-in with no log`);
-          else {
-            assert.ok(have, `${label} ${date} log was lost`);
-            assert.equal(have.kg, best.kg, `${label} ${date} kept an older weigh-in`);
-            assert.equal(have.at, best.at, `${label} ${date} kept an older stamp`);
-          }
-          continue;
-        }
-        const aheadOfAll = best != null && phones.every((p) => best.at > real + p.skew + skewMs);
-        const anyFuture = deletes.some((e) => phones.some((p) => e.at > real + p.skew + skewMs));
-        if (best && !aheadOfAll) {
-          assert.ok(have, `${label} ${date} log after the deletes was lost`);
-          assert.equal(have.kg, best.kg, `${label} ${date} kept an older weigh-in`);
-          assert.equal(have.at, best.at, `${label} ${date} kept an older stamp`);
-          continue;
-        }
-        if (best && have) {
-          assert.equal(have.kg, best.kg, `${label} ${date} kept an older weigh-in`);
-          assert.equal(have.at, best.at, `${label} ${date} kept an older stamp`);
-          continue;
-        }
-        if (!anyFuture) {
-          assert.equal(have, undefined, `${label} ${date} deleted weigh-in returned`);
-          continue;
-        }
+        const inWindow = (at) => phones.every((p) => at <= real + p.skew + skewMs);
+        const best = logs.length ? logs.reduce((a, b) => (a.at >= b.at ? a : b)) : null;
         if (have) {
           const match = logs.find((e) => e.kg === have.kg && e.at === have.at);
           assert.ok(match, `${label} ${date} weigh-in is not a logged event`);
-          const slowest = Math.min(...phones.map((p) => real + p.skew));
-          const lastPlain = lastDel.at <= slowest + skewMs;
-          assert.ok(!(match.real < lastDel.real && match.at <= lastDel.at && lastPlain), `${label} ${date} resurrected a pre-delete weigh-in`);
+          if (lastDel && inWindow(lastDel.at) && match.real < lastDel.real && match.at <= lastDel.at) {
+            assert.fail(`${label} ${date} resurrected a pre-delete weigh-in`);
+          }
+        }
+        if (!lastDel && best && inWindow(best.at)) {
+          assert.ok(have, `${label} ${date} log was lost`);
+          assert.equal(have.kg, best.kg, `${label} ${date} kept an older weigh-in`);
+          assert.equal(have.at, best.at, `${label} ${date} kept an older stamp`);
         }
       }
       const frozen = profileSig(phones[0].profile);

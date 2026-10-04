@@ -81,15 +81,15 @@ function readdMarker(profile: Bag | null, d: string, stamp: number | null) {
   return at != null && stamp === at - 1;
 }
 
-/* A future delete stamp is neutralised once against this clock. A stamp that
-   is still ahead is a new raw even when an older raw is sitting beside it.
+/* A future delete stamp is neutralised once against this clock. A strictly
+   newer stamp that is still ahead is a new raw even beside an older raw.
    A re-add marker is never stored as that raw. */
 function observeTomb(profile: Bag | null, d: string, now: number) {
   if (!profile) return null;
   const stamp = timeMs(profile.wDelAt && profile.wDelAt[d]);
   const raw = timeMs(profile.wDelAtRaw && profile.wDelAtRaw[d]);
   if (stamp != null && readdMarker(profile, d, stamp)) return { stamp, raw: null as number | null, fresh: false };
-  if (stamp != null && aheadOf(stamp, now) && (raw == null || stamp >= raw)) {
+  if (stamp != null && aheadOf(stamp, now) && (raw == null || stamp > raw)) {
     return { stamp: neutralAt(now), raw: stamp, fresh: true };
   }
   if (raw != null && stamp != null) return { stamp, raw, fresh: false };

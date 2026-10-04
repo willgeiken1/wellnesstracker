@@ -124,10 +124,10 @@ function observeTomb(profile, d, now) {
   const stamp = timeMs(profile.wDelAt && profile.wDelAt[d]);
   const raw = timeMs(profile.wDelAtRaw && profile.wDelAtRaw[d]);
   if (stamp != null && readdMarker(profile, d, stamp)) return { stamp, raw: null, fresh: false };
-  /* A cutoff already neutralised is stamp < raw. A stamp still ahead of this
-     clock, including one left beside an older raw by a previous app version,
-     is a new delete and is neutralised once. */
-  if (stamp != null && aheadOf(stamp, now) && (raw == null || stamp >= raw)) {
+  /* A cutoff already settled is stamp <= raw. A strictly newer stamp still
+     ahead of this clock, including one an older app left beside a raw, is a
+     new delete and is neutralised once. */
+  if (stamp != null && aheadOf(stamp, now) && (raw == null || stamp > raw)) {
     return { stamp: neutralAt(now), raw: stamp, fresh: true };
   }
   if (raw != null && stamp != null) return { stamp, raw, fresh: false };
@@ -266,6 +266,43 @@ export function mergeWeighIns(localProfile, remoteProfile, purges, now = Date.no
     if (!wins(x)) continue;
     wDel.delete(x.date);
     if (wDelAtRaw[x.date] == null) delete wDelAt[x.date];
+  }
+  /* A profile that already deleted this date, and does not hold the weigh-in,
+     covers a higher stamp that is still ahead of this clock. The cutoff is
+     pinned at that stamp so a faster phone cannot show it again. */
+  const latestOn = (profile, date) => {
+    let best = null;
+    for (const w of (profile && profile.weighIns) || []) {
+      if (!w || w.date !== date) continue;
+      const t = timeMs(w.at);
+      if (t != null && (best == null || t >= best.at)) best = w;
+    }
+    return best;
+  };
+  const coverDates = new Set([
+    ...((lp.weighIns || []).map((w) => w && w.date).filter(Boolean)),
+    ...((rp.weighIns || []).map((w) => w && w.date).filter(Boolean)),
+    ...Object.keys(lp.wDelAt || {}),
+    ...Object.keys(rp.wDelAt || {}),
+  ]);
+  for (const date of coverDates) {
+    const lw = latestOn(lp, date);
+    const rw = latestOn(rp, date);
+    const held = lw && rw ? ((timeMs(lw.at) || 0) >= (timeMs(rw.at) || 0) ? lw : rw) : (lw || rw);
+    const t = timeMs(held && held.at);
+    if (t == null || !aheadOf(t, now)) continue;
+    let cover = null;
+    for (const [side, has] of [[lp, lw], [rp, rw]]) {
+      if (has) continue;
+      const stamp = timeMs(side.wDelAt && side.wDelAt[date]);
+      if (stamp == null || stamp === t - 1 || readdMarker(side, date, stamp)) continue;
+      if (cover == null || stamp > cover) cover = stamp;
+    }
+    if (cover == null || t <= cover) continue;
+    wDelAt[date] = t;
+    if ((timeMs(wDelAtRaw[date]) || 0) < t) wDelAtRaw[date] = t;
+    byDate.delete(date);
+    wDel.add(date);
   }
   const merged = {
     ...(newerLocal ? lp : rp),
