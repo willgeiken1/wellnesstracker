@@ -235,7 +235,9 @@ test("the offline shell caches the gate and the widget stub", () => {
 test("ouraRefresh seeds on connect and the return copy no longer says Recovery", () => {
   const cloud = readFileSync(new URL("../logger/js/shared/cloud.js", import.meta.url), "utf8");
   const gate = readFileSync(new URL("../logger/js/shared/oura-gate.js", import.meta.url), "utf8");
-  assert.match(cloud, /noteOuraConnected\(app\.state, !!c, \{ seed: !!app\.cloudPullOk \}\)/);
+  assert.match(cloud, /const linked = status === "connected" \|\| status === "membership_inactive"/);
+  assert.match(cloud, /noteOuraConnected\(app\.state, linked, \{ seed: !!app\.cloudPullOk && linked \}\)/);
+  assert.match(cloud, /noteOuraConnected\(app\.state, still, \{ seed: !!app\.cloudPullOk && still \}\)/);
   assert.match(cloud, /async function cloudPull\(\) \{\n  app\.cloudPullOk = false;/);
   assert.match(cloud, /cloudPullOk = true/);
   assert.match(cloud, /pendingOuraConnect/);
