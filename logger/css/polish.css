@@ -3,7 +3,8 @@
 
 :root {
   --tabbar-h: 64px;
-  --tabbar-inset: 10px;
+  /* Room between the pill and the home-indicator safe area. */
+  --tabbar-inset: 16px;
   --tabs-h: calc(var(--tabbar-h) + var(--tabbar-inset));
   --r-sm: 14px;
   --r-md: 20px;
@@ -16,7 +17,8 @@
   --sheen: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 42%);
   --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .4 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --pad-x: max(16px, calc((100% - 640px) / 2));
-  --pad-top: calc(14px + var(--safe-top));
+  /* Safe area sits outside the scrollport, so this padding does not scroll away. */
+  --pad-top: 14px;
   --pad-bot: calc(var(--tabs-h) + 110px + var(--safe-bottom));
 }
 
@@ -42,36 +44,69 @@ html, body {
   background: var(--bg);
 }
 
+/* The swipe transform lives on the slot, not the scroller. iOS paints a
+   transformed overflow layer through the status bar and leaves stale text
+   there (week numbers, "Delete account", insight sentences). */
+.pane-slot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+  transform: translate3d(100%, 0, 0);
+}
+.pane-slot[data-slot="home"] { transform: translate3d(0, 0, 0); }
+
 .pane {
   position: absolute;
-  top: 0;
+  top: var(--safe-top);
+  right: 0;
+  bottom: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
   overflow-x: hidden;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   background: var(--bg);
   max-width: none;
   margin: 0;
   padding: var(--pad-top) var(--pad-x) var(--pad-bot);
-  transform: translate3d(100%, 0, 0);
+  transform: none;
 }
-
-.pane[data-pane="home"] { transform: translate3d(0, 0, 0); }
 
 #view {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: var(--safe-top);
+  bottom: 0;
   z-index: 4;
   overflow-x: hidden;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   background: var(--bg);
   max-width: none;
   margin: 0;
   padding: var(--pad-top) var(--pad-x) var(--pad-bot);
+}
+
+/* Covers the status-bar band so a rubber-band or a composited layer cannot
+   show page text over the clock or Dynamic Island.
+   The band stays #0F0F11 in every theme. black-translucent always draws
+   white icons, and an installed app often keeps that style from install
+   time, so a light band would hide the clock. Dark mode matches --bg, so
+   there is no seam. data-bar still picks the status-bar meta and
+   theme-color at launch; iOS reads those only when the app opens. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-top);
+  background: #0F0F11;
+  z-index: 6;
+  pointer-events: none;
 }
 
 body.timer-on:not(.in-workout) .pane,
@@ -92,7 +127,7 @@ body.timer-on:not(.in-workout) #view {
   align-items: stretch;
   justify-content: stretch;
   gap: 0;
-  padding: 0;
+  padding: 5px 2px;
   border-radius: 22px;
   background-color: var(--nav-bg);
   background-image: var(--sheen), var(--noise);
@@ -122,8 +157,9 @@ body.timer-on:not(.in-workout) #view {
 #tab-bubble {
   position: absolute;
   left: 0;
-  top: 5px;
-  height: calc(100% - 10px);
+  top: 6px;
+  bottom: 6px;
+  height: auto;
   width: calc(20% - 8px);
   border-radius: 17px;
   background: var(--lav);
@@ -259,7 +295,7 @@ body.timer-on:not(.in-workout) #view {
 
 @media (prefers-reduced-motion: reduce) {
   #tab-bubble { transition: none !important; }
-  .pane { transition: none !important; }
+  .pane, .pane-slot { transition: none !important; }
 }
 
 /* insight widgets */
