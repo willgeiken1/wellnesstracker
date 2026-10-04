@@ -226,8 +226,10 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v29/);
-  assert.match(sentry, /insight-shell-v29/);
+  assert.match(sw, /importScripts\("\.\/js\/version\.js"\)/);
+  assert.match(sw, /globalThis\.INSIGHT_SHELL_CACHE/);
+  assert.match(sentry, /import "\.\/version\.js"/);
+  assert.match(sentry, /globalThis\.INSIGHT_APP_VERSION/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });

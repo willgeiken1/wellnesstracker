@@ -140,7 +140,7 @@ test("epley and RPE averages ignore warm-ups", () => {
   assert.ok(rows.highAvg > 100 && rows.lowAvg < 100);
 });
 
-test("the workout shell saves RPE, offers a normal plan, and bumps the cache", () => {
+test("the workout shell saves RPE, offers a normal plan, and uses the shared shell cache", () => {
   const session = readFileSync(new URL("../logger/js/pages/session.js", import.meta.url), "utf8");
   const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
   const workout = readFileSync(new URL("../logger/js/shell/workout.js", import.meta.url), "utf8");
@@ -151,6 +151,7 @@ test("the workout shell saves RPE, offers a normal plan, and bumps the cache", (
   assert.match(actions, /sugg-plain/);
   assert.match(workout, /rpeChipsHTML/);
   assert.match(workout, /badge rpe/);
-  assert.match(sw, /insight-shell-v29/);
+  assert.match(sw, /importScripts\("\.\/js\/version\.js"\)/);
+  assert.match(sw, /globalThis\.INSIGHT_SHELL_CACHE/);
   assert.match(purge, /"rpe"/);
 });
