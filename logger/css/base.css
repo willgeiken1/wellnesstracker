@@ -29,16 +29,17 @@ html[data-mode="dark"] { color-scheme: dark; }
 html[data-mode="light"] { color-scheme: light; }
 body { min-height: 100vh; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
-textarea, select {
+/* :where() keeps this at zero specificity so .add-row input can stay on --raised
+   and the date rule below can turn native appearance back on.
+   -webkit-text-fill-color is what iOS uses for textarea glyphs; color alone stays black. */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select) {
   font: inherit;
   color: var(--text);
-  /* iOS paints textarea glyphs from -webkit-text-fill-color and can ignore color. */
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
   background-color: var(--bg);
 }
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) { -webkit-appearance: none; appearance: none; }
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])) { -webkit-appearance: none; appearance: none; }
 textarea { -webkit-appearance: none; appearance: none; }
 /* Native appearance keeps the calendar glyph in the active color-scheme.
    WebKit otherwise centers the value and ignores the field height. */
@@ -215,7 +216,8 @@ body.timer-on:not(.in-workout) #view { padding-bottom: calc(var(--tabs-h) + 190p
 .hint { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 10px 4px 0; }
 
 /* ---------- Active workout ---------- */
-#workout { position: fixed; inset: 0; z-index: 12; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(120px + var(--safe-bottom)); }
+#workout { position: fixed; top: var(--safe-top); right: 0; bottom: 0; left: 0; z-index: 12; background: var(--bg); overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: calc(120px + var(--safe-bottom)); }
+#workout .wo-top { padding-top: 8px; }
 .wo-top { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; padding: calc(8px + var(--safe-top)) 12px 10px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .wo-title { min-width: 0; }
 .wo-title h2 { font-family: var(--display); font-weight: 700; font-size: 28px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

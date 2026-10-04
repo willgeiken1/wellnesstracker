@@ -116,9 +116,11 @@ function applyTheme() {
   const root = document.documentElement;
   root.dataset.mode = t.mode === "light" ? "light" : "dark";
   root.dataset.accent = app.ACCENTS.some((a) => a.id === t.accent) ? t.accent : "citrus";
+  if (!root.dataset.bar) root.dataset.bar = root.dataset.mode;
   const meta = document.querySelector('meta[name="theme-color"]');
-  /* Status glyphs stay white under black-translucent, so the bar color stays dark in light mode too. */
-  if (meta) meta.setAttribute("content", root.dataset.mode === "light" ? "#141414" : "#0F0F11");
+  /* theme-color stays on the launch choice. iOS will not restyle the status bar until the app is opened again. */
+  const bar = root.dataset.bar === "light" ? "light" : "dark";
+  if (meta) meta.setAttribute("content", bar === "light" ? "#F3F4F1" : "#0F0F11");
 }
 app.applyTheme = applyTheme;
 
@@ -126,11 +128,15 @@ app.applyTheme();
 
 function appearanceHTML() {
   const t = app.state.theme || {};
+  const launched = document.documentElement.dataset.bar === "light" ? "light" : "dark";
+  const mode = t.mode === "light" ? "light" : "dark";
+  const barNote = mode === launched ? "" : `<p class="hint bar-note">Status bar updates after reopening the app.</p>`;
   return `<div class="group-label">Appearance</div>
     <div class="group">
       <div class="mode-row"><div class="seg2" role="radiogroup" aria-label="Mode">
         <button data-action="theme-mode" data-m="dark" aria-pressed="${t.mode !== "light"}">Dark</button>
         <button data-action="theme-mode" data-m="light" aria-pressed="${t.mode === "light"}">Light</button></div></div>
+      ${barNote}
       <div class="swatches" role="radiogroup" aria-label="Accent colors">${app.ACCENTS.map((a) =>
         `<button class="sw" data-action="theme-accent" data-a="${a.id}" aria-pressed="${(t.accent || "citrus") === a.id}">
           <span class="sw-dots">${a.c.map((c) => `<i style="background:${c}"></i>`).join("")}</span><span>${a.name}</span></button>`).join("")}</div>
