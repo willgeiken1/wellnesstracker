@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import "../shared/home-widgets.js";
+import { HOME_REGISTRY_PAINT } from "../shared/home-widgets.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -91,34 +91,9 @@ function homeWeekHTML() {
 }
 app.homeWeekHTML = homeWeekHTML;
 
-/* The weigh-in nudge used to live inside the brief widget. It sits after that
-   card now, and still shows when the brief itself is hidden. */
-function placeWeighNudge(html, nudge) {
-  if (!nudge) return html;
-  const open = `<div class="wdg" data-w="brief">`;
-  const start = html.indexOf(open);
-  if (start < 0) return html.replace(`<div class="wdgs`, `${nudge}<div class="wdgs`);
-  let depth = 0;
-  let i = start;
-  while (i < html.length) {
-    const nextOpen = html.indexOf("<div", i);
-    const nextClose = html.indexOf("</div>", i);
-    if (nextClose < 0) return html;
-    if (nextOpen !== -1 && nextOpen < nextClose) {
-      depth += 1;
-      i = nextOpen + 4;
-    } else {
-      depth -= 1;
-      i = nextClose + 6;
-      if (depth === 0) return html.slice(0, i) + nudge + html.slice(i);
-    }
-  }
-  return html;
-}
-
 function homeHTML() {
   const t = app.today();
-  const saved = app.state.layout && app.state.layout.homeV2 && app.state.layout.homeV2.v === 2 && Array.isArray(app.state.layout.homeV2.items);
+  const saved = HOME_REGISTRY_PAINT && app.state.layout && app.state.layout.homeV2 && app.state.layout.homeV2.v === 2 && Array.isArray(app.state.layout.homeV2.items);
   const head = `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
@@ -130,6 +105,7 @@ function homeHTML() {
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>
     <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`);
-  return head + placeWeighNudge(stack, nudge);
+  /* Outside .wdgs. A child with no data-w is saved as a blank id in the order. */
+  return head + nudge + stack;
 }
 app.homeHTML = homeHTML;

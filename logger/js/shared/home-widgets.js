@@ -2,14 +2,20 @@ import { app } from "../runtime.js";
 import { correlate, pickForToday, todayLine } from "./correlate.js";
 
 /* Home widget registry.
-   Paint for people who do not yet have layout.homeV2 still goes through the
-   legacy Home stack, so the page does not change. getHomeLayout() only
-   describes the v2 stand-in. Step 2 persists a migration; this file does not.
+   HOME_REGISTRY_PAINT stays false until the Home editor ships. Home keeps the
+   legacy Morning Brief stack for every user, including a saved homeV2.
+   getHomeLayout() only describes the v2 stand-in. Step 2 persists a migration;
+   this file does not.
 
    homeV2 lives on layout so it rides along in user_data, but cloud merge
    keeps it off the wholesale layout replace and picks a winner by updatedAt.
    A missing homeV2 is only an in-memory stand-in (updatedAt 0). setHomeLayout
-   is a user edit: it keeps unknown fields, clears migrated, and stamps now. */
+   is a user edit: it keeps unknown fields, clears migrated, migratedAt, and
+   migratedFrom, and stamps now. */
+
+/* Off until the editor can save a v2 arrangement. Home must not paint from
+   the registry before that, or a migrated homeV2 drops the Morning Brief. */
+export const HOME_REGISTRY_PAINT = false;
 
 const BRIEF_METRICS = ["pattern", "oura", "train", "food", "week", "weight"];
 const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
@@ -335,7 +341,7 @@ function asData(input) {
   if (input && input.kind === "snapshot") return input;
   if (input && input.live) return input;
   if (isDemoBundle(input)) return snapshotFromDemo(input);
-  if (!input) return snapshotFromDemo(typeof app.makeDemo === "function" ? safeDemo() : null);
+  if (!input) return snapshotFromApp();
   return input;
 }
 
@@ -525,7 +531,10 @@ function widget(spec) {
     size: spec.size,
     needsOura: spec.needsOura,
     render(data) { return spec.render(asData(data)); },
-    preview(sample) { return this.render(sample); },
+    preview(sample) {
+      if (sample == null) return spec.render(snapshotFromDemo(typeof app.makeDemo === "function" ? safeDemo() : null));
+      return spec.render(asData(sample));
+    },
   };
 }
 
@@ -634,12 +643,19 @@ export function setHomeLayout(state, layout) {
     updatedAt: Date.now(),
   };
   delete next.migrated;
+  delete next.migratedAt;
+  delete next.migratedFrom;
   state.layout = state.layout && typeof state.layout === "object" && !Array.isArray(state.layout) ? state.layout : {};
   state.layout.homeV2 = next;
   return next;
 }
 
-export function mergeHomeV2(local, remote) {
+function plainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/* Newer updatedAt wins. A tie keeps the local copy. */
+function keptHomeV2(local, remote) {
   const a = isHomeV2(local) ? local : null;
   const b = isHomeV2(remote) ? remote : null;
   if (!a && !b) return null;
@@ -648,23 +664,25 @@ export function mergeHomeV2(local, remote) {
   return (b.updatedAt || 0) > (a.updatedAt || 0) ? cloneHomeV2(b) : cloneHomeV2(a);
 }
 
-/* Wholesale layout replace must not carry homeV2. The winner is chosen here. */
+/* Wholesale layout replace must not carry homeV2. The winner is chosen here.
+   A string or array layout must not be spread: that becomes a character map. */
 export function mergeRemoteLayout(state, remote) {
   if (!state) return;
   const localV2 = state.layout && state.layout.homeV2;
   const remoteLayout = remote && remote.layout;
-  const remoteV2 = remoteLayout && remoteLayout.homeV2;
+  const layoutObject = plainObject(remoteLayout) ? remoteLayout : null;
+  const remoteV2 = layoutObject && layoutObject.homeV2;
   if ((remote && remote.settingsAt || 0) > ((state && state.settingsAt) || 0)) {
     if (remote.muscleMode) state.muscleMode = remote.muscleMode;
-    if (remoteLayout) {
-      const rest = { ...remoteLayout };
+    if (layoutObject) {
+      const rest = { ...layoutObject };
       delete rest.homeV2;
       state.layout = rest;
     }
     if (remote.uniEx) state.uniEx = remote.uniEx;
     state.settingsAt = remote.settingsAt;
   }
-  const winner = mergeHomeV2(localV2, remoteV2);
+  const winner = keptHomeV2(localV2, remoteV2);
   if (winner) {
     state.layout = state.layout || {};
     state.layout.homeV2 = winner;
@@ -688,10 +706,27 @@ export function renderHomeWidgets(layout, data) {
   return `<div class="home-v2">${body}</div>`;
 }
 
+/* True when the ring is connected and no Oura day has arrived yet. */
+function latestStoredDay() {
+  if (typeof app.src !== "function") return null;
+  try {
+    const days = app.src().oura;
+    if (!days || typeof days !== "object") return null;
+    const keys = Object.keys(days).filter((k) => days[k] && typeof days[k] === "object").sort();
+    return keys.length ? days[keys[keys.length - 1]] : null;
+  } catch (e) { return null; }
+}
+
+export function homeAwaitingSync() {
+  if (latestStoredDay()) return false;
+  return !!(app.state && app.state.oura && app.state.oura.connected);
+}
+
 app.HOME_WIDGETS = HOME_WIDGETS;
+app.HOME_REGISTRY_PAINT = HOME_REGISTRY_PAINT;
 app.getHomeLayout = getHomeLayout;
 app.setHomeLayout = setHomeLayout;
-app.mergeHomeV2 = mergeHomeV2;
 app.mergeRemoteLayout = mergeRemoteLayout;
 app.renderHomeWidgets = renderHomeWidgets;
 app.snapshotFromApp = snapshotFromApp;
+app.homeAwaitingSync = homeAwaitingSync;

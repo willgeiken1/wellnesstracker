@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { app } from "../logger/js/runtime.js";
-import { HOME_WIDGETS, getHomeLayout, mergeHomeV2, mergeRemoteLayout, renderHomeWidgets, setHomeLayout } from "../logger/js/shared/home-widgets.js";
+import { HOME_REGISTRY_PAINT, HOME_WIDGETS, getHomeLayout, homeAwaitingSync, mergeRemoteLayout, renderHomeWidgets, setHomeLayout } from "../logger/js/shared/home-widgets.js";
+import "../logger/js/pages/home.js";
 
 const IDS = [
   "readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps",
@@ -155,7 +156,7 @@ test("saved homeV2 is returned as a copy, and setHomeLayout leaves the old keys 
   assert.deepEqual(getHomeLayout(state).items, ["muscles", "today"]);
 });
 
-test("an edit clears migrated, stamps now, and keeps unknown homeV2 fields", () => {
+test("an edit clears migrated, migratedAt, and migratedFrom, then stamps now", () => {
   const state = {
     layout: {
       homeV2: {
@@ -165,6 +166,7 @@ test("an edit clears migrated, stamps now, and keeps unknown homeV2 fields", () 
         updatedAt: 0,
         migrated: true,
         migratedAt: 12,
+        migratedFrom: "{\"order\":[\"brief\"]}",
         ouraSeeded: true,
       },
     },
@@ -173,7 +175,10 @@ test("an edit clears migrated, stamps now, and keeps unknown homeV2 fields", () 
   const written = setHomeLayout(state, { items: ["cardio", "today"], hidden: ["steps"] });
   assert.equal(written.migrated, undefined);
   assert.equal(state.layout.homeV2.migrated, undefined);
-  assert.equal(written.migratedAt, 12);
+  assert.equal(written.migratedAt, undefined);
+  assert.equal(written.migratedFrom, undefined);
+  assert.equal(state.layout.homeV2.migratedAt, undefined);
+  assert.equal(state.layout.homeV2.migratedFrom, undefined);
   assert.equal(written.ouraSeeded, true);
   assert.ok(written.updatedAt >= before);
   assert.notEqual(written.updatedAt, 0);
@@ -206,13 +211,6 @@ test("hiding the brief or a brief tile changes the stand-in, not stored state", 
 });
 
 test("homeV2 merges on its own updatedAt and survives a wholesale layout replace", () => {
-  const older = { v: 2, items: ["today"], hidden: [], updatedAt: 10 };
-  const newer = { v: 2, items: ["cardio"], hidden: ["steps"], updatedAt: 25 };
-  assert.deepEqual(mergeHomeV2(newer, older).items, ["cardio"]);
-  assert.deepEqual(mergeHomeV2(older, newer).items, ["cardio"]);
-  assert.deepEqual(mergeHomeV2(older, null).items, ["today"]);
-  assert.equal(mergeHomeV2(null, { v: 1, items: [] }), null);
-
   const state = {
     settingsAt: 5,
     muscleMode: "basic",
@@ -275,4 +273,228 @@ test("the shell cache names the registry", () => {
   assert.match(sentry, /insight-shell-v20/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
   assert.match(sw, /css\/home-widgets\.css/);
+});
+
+test("render with no data uses the live snapshot, and preview keeps demo numbers", () => {
+  const prevDemo = app.makeDemo;
+  const prevSrc = app.src;
+  const prevState = app.state;
+  app.makeDemo = () => ({
+    today: "2026-10-04",
+    sessions: [],
+    foodDays: {},
+    oura: { "2026-10-04": { date: "2026-10-04", readiness: 88 } },
+  });
+  app.src = () => ({ oura: {}, sessions: [] });
+  app.state = { demo: false };
+  const live = HOME_WIDGETS.readiness.render();
+  assert.match(live, /No Oura yet/);
+  assert.doesNotMatch(live, /88/);
+  assert.match(HOME_WIDGETS.readiness.render(undefined), /No Oura yet/);
+  assert.match(HOME_WIDGETS.readiness.preview(), /88/);
+  assert.match(HOME_WIDGETS.readiness.preview(app.makeDemo()), /88/);
+  app.makeDemo = prevDemo;
+  app.src = prevSrc;
+  app.state = prevState;
+});
+
+function wdgsBlock(html) {
+  const marker = '<div class="wdgs';
+  const start = html.indexOf(marker);
+  if (start < 0) return "";
+  let depth = 0;
+  let i = start;
+  while (i < html.length) {
+    const nextOpen = html.indexOf("<div", i);
+    const nextClose = html.indexOf("</div>", i);
+    if (nextClose < 0) return html.slice(start);
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      i = nextOpen + 4;
+    } else {
+      depth -= 1;
+      i = nextClose + 6;
+      if (depth === 0) return html.slice(start, i);
+    }
+  }
+  return html.slice(start);
+}
+
+let widgetLoad = null;
+function loadWidgets() {
+  if (!widgetLoad) {
+    const listeners = [];
+    globalThis.document = {
+      addEventListener(type, fn) { listeners.push({ type, fn }); },
+      querySelectorAll() { return []; },
+    };
+    widgetLoad = import("../logger/js/shared/widgets.js").then(() => listeners);
+  }
+  return widgetLoad;
+}
+
+test("a saved homeV2 still paints the legacy stack, and the weigh-in nudge stays outside it", async () => {
+  assert.equal(HOME_REGISTRY_PAINT, false);
+  await loadWidgets();
+  const prev = {
+    state: app.state,
+    ui: app.ui,
+    today: app.today,
+    pageHead: app.pageHead,
+    firstName: app.firstName,
+    esc: app.esc,
+    greeting: app.greeting,
+    fmtDate: app.fmtDate,
+    addButtonHTML: app.addButtonHTML,
+    weekCardHTML: app.weekCardHTML,
+    weighReminderHTML: app.weighReminderHTML,
+    briefHTML: app.briefHTML,
+    readinessCardHTML: app.readinessCardHTML,
+    muscleMapHTML: app.muscleMapHTML,
+    muscleMode: app.muscleMode,
+    todayRender: app.HOME_WIDGETS.today.render,
+    weekRender: app.HOME_WIDGETS["this-week"].render,
+    cardioRender: app.HOME_WIDGETS.cardio.render,
+  };
+  app.today = () => "2026-10-04";
+  app.ui = { edit: null };
+  app.muscleMode = () => "basic";
+  app.state = {
+    layout: {
+      home: { order: ["brief", "today"], hidden: ["map-adv"] },
+      homeV2: { v: 2, items: ["steps"], hidden: [], updatedAt: 9, migratedAt: 4 },
+    },
+    plan: {},
+    workouts: [],
+  };
+  app.pageHead = () => "<header>Home</header>";
+  app.firstName = () => "";
+  app.esc = (s) => String(s ?? "");
+  app.greeting = () => "";
+  app.fmtDate = () => "Sunday";
+  app.addButtonHTML = () => "";
+  app.weekCardHTML = () => "";
+  app.weighReminderHTML = () => `<button class="nudge" data-action="weigh-open"><b>Time for a weigh-in</b></button>`;
+  app.briefHTML = () => `<section class="brief">Morning brief</section>`;
+  app.readinessCardHTML = () => `<div class="card">Readiness</div>`;
+  app.muscleMapHTML = () => `<div class="map"></div>`;
+  app.HOME_WIDGETS.today.render = () => `<div class="hero">Today</div>`;
+  app.HOME_WIDGETS["this-week"].render = () => `<section class="sec">Week</section>`;
+  app.HOME_WIDGETS.cardio.render = () => `<section class="sec">Cardio</section>`;
+  try {
+    const html = app.homeHTML();
+    assert.match(html, /Morning brief/);
+    assert.doesNotMatch(html, /class="home-v2"/);
+    assert.match(html, /class="nudge"/);
+    const stack = wdgsBlock(html);
+    assert.match(stack, /data-w="brief"/);
+    assert.doesNotMatch(stack, /class="nudge"/);
+    assert.ok(html.indexOf('class="nudge"') < html.indexOf('class="wdgs"'));
+    app.state.layout.home.hidden = ["brief", "map-adv"];
+    const hiddenBrief = app.homeHTML();
+    assert.doesNotMatch(wdgsBlock(hiddenBrief), /class="nudge"|data-w="brief"/);
+    assert.match(hiddenBrief, /class="nudge"/);
+  } finally {
+    app.state = prev.state;
+    app.ui = prev.ui;
+    app.today = prev.today;
+    app.pageHead = prev.pageHead;
+    app.firstName = prev.firstName;
+    app.esc = prev.esc;
+    app.greeting = prev.greeting;
+    app.fmtDate = prev.fmtDate;
+    app.addButtonHTML = prev.addButtonHTML;
+    app.weekCardHTML = prev.weekCardHTML;
+    app.weighReminderHTML = prev.weighReminderHTML;
+    app.briefHTML = prev.briefHTML;
+    app.readinessCardHTML = prev.readinessCardHTML;
+    app.muscleMapHTML = prev.muscleMapHTML;
+    app.muscleMode = prev.muscleMode;
+    app.HOME_WIDGETS.today.render = prev.todayRender;
+    app.HOME_WIDGETS["this-week"].render = prev.weekRender;
+    app.HOME_WIDGETS.cardio.render = prev.cardioRender;
+  }
+});
+
+test("a drag drops blank widget ids before saving the home order", async () => {
+  const listeners = await loadWidgets();
+  const pointerup = listeners.filter((entry) => entry.type === "pointerup").pop().fn;
+  const prev = { state: app.state, ui: app.ui, render: app.render, save: app.save, wdrag: app.wdrag };
+  app.state = { layout: { home: { order: ["week", "brief", "today"], hidden: [] } }, workouts: [] };
+  app.ui = { ...(app.ui || {}), edit: "home" };
+  app.save = () => {};
+  app.render = () => {};
+  app.wdrag = {
+    box: {
+      dataset: { page: "home" },
+      children: [
+        { dataset: { w: "today" } },
+        { dataset: {} },
+        { dataset: { w: "brief" } },
+      ],
+    },
+    el: { classList: { remove() {} }, style: {} },
+  };
+  try {
+    pointerup({});
+    assert.deepEqual(app.state.layout.home.order, ["today", "brief", "week"]);
+    assert.equal(app.state.layout.home.order.every(Boolean), true);
+  } finally {
+    app.state = prev.state;
+    app.ui = prev.ui;
+    app.render = prev.render;
+    app.save = prev.save;
+    app.wdrag = prev.wdrag;
+  }
+});
+
+test("mergeRemoteLayout ignores a remote layout that is not a plain object", () => {
+  const state = {
+    settingsAt: 1,
+    muscleMode: "basic",
+    layout: {
+      home: { order: ["today"], hidden: ["brief"] },
+      extra: 1,
+      homeV2: { v: 2, items: ["today"], hidden: ["steps"], updatedAt: 20, ouraSeeded: true },
+    },
+  };
+  mergeRemoteLayout(state, { settingsAt: 90, muscleMode: "advanced", layout: "{\"home\":true}" });
+  assert.equal(state.settingsAt, 90);
+  assert.equal(state.muscleMode, "advanced");
+  assert.equal(state.layout[0], undefined);
+  assert.equal(state.layout.extra, 1);
+  assert.deepEqual(state.layout.home, { order: ["today"], hidden: ["brief"] });
+  assert.deepEqual(state.layout.homeV2.items, ["today"]);
+  assert.deepEqual(state.layout.homeV2.hidden, ["steps"]);
+  assert.equal(state.layout.homeV2.ouraSeeded, true);
+
+  const listed = {
+    settingsAt: 1,
+    layout: { home: { order: ["week"], hidden: [] }, homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 3 } },
+  };
+  mergeRemoteLayout(listed, { settingsAt: 10, layout: ["today", "week"] });
+  assert.deepEqual(listed.layout.home.order, ["week"]);
+  assert.equal(listed.layout[0], undefined);
+  assert.deepEqual(listed.layout.homeV2.items, ["cardio"]);
+});
+
+test("homeAwaitingSync is true only for a connected ring with no day yet", () => {
+  const prevState = app.state;
+  const prevSrc = app.src;
+  try {
+    app.state = { oura: { connected: true } };
+    app.src = () => ({ oura: {} });
+    assert.equal(homeAwaitingSync(), true);
+    app.src = () => ({ oura: { "2026-10-03": { steps: 100 } } });
+    assert.equal(homeAwaitingSync(), false);
+    app.state = { oura: { connected: false } };
+    app.src = () => ({ oura: {} });
+    assert.equal(homeAwaitingSync(), false);
+    app.src = () => { throw new Error("offline"); };
+    app.state = { oura: { connected: true } };
+    assert.equal(homeAwaitingSync(), true);
+  } finally {
+    app.state = prevState;
+    app.src = prevSrc;
+  }
 });
