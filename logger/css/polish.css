@@ -273,3 +273,100 @@ body.timer-on:not(.in-workout) #view {
 .ins-routine { margin-top: 14px; }
 .ins-routine b { display: block; margin-bottom: 8px; }
 .ins-card .btn { margin-top: 14px; }
+
+/* What affects you. Same card depth as the rest of Insights, with a quiet good / bad mark. */
+.aff-h { margin-top: 2px; }
+.aff-note { margin: -4px 0 12px; }
+.aff-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 16px 14px 18px;
+}
+.aff-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.aff-card.good::before { background: var(--accent-line); }
+.aff-card.bad::before { background: var(--red); }
+.aff-k {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+.aff-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+}
+.aff-mark::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.aff-card.good .aff-mark {
+  background: var(--green-soft);
+  color: var(--accent-text);
+}
+.aff-card.bad .aff-mark {
+  background: rgba(255, 90, 78, .14);
+  color: var(--red);
+}
+.aff-out {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.aff-s {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: -.015em;
+  color: var(--text);
+}
+.aff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.aff-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.aff-chip.hi {
+  background: var(--green-soft);
+  color: var(--accent-text);
+}
+.aff-empty h4 { margin-bottom: 6px; }
+.aff-more { margin: 2px 0 16px; }

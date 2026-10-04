@@ -208,7 +208,11 @@ function correlationSource() {
 app.correlationSource = correlationSource;
 
 function correlations(options) {
-  return runCorrelations(correlationSource(), options);
+  const opts = { ...(options || {}) };
+  if (opts.weightDir == null && typeof app.goals === "function") {
+    try { opts.weightDir = app.goals().weightDir || null; } catch (e) { opts.weightDir = null; }
+  }
+  return runCorrelations(correlationSource(), opts);
 }
 app.correlations = correlations;
 

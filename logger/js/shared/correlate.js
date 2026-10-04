@@ -13,31 +13,40 @@ const CONFIDENCE_WEIGHT = { low: 1, medium: 2, high: 3 };
    up too. plural tunes "is" / "are" in the sentence. absolute means the
    sentence quotes the raw difference, because a percent of a near-zero
    baseline (temperature deviation, lift % vs recent) is misleading. */
+/* better: "higher" means a rise is good, "lower" means a drop is good,
+   "goal" follows the weight goal, anything else stays neutral. */
 const METRICS = {
-  readiness: { label: "readiness" },
-  sleepScore: { label: "sleep score" },
-  sleepHours: { label: "sleep" },
-  deepHours: { label: "deep sleep" },
-  remHours: { label: "REM sleep" },
+  readiness: { label: "readiness", better: "higher" },
+  sleepScore: { label: "sleep score", better: "higher" },
+  sleepHours: { label: "sleep", better: "higher" },
+  deepHours: { label: "deep sleep", better: "higher" },
+  remHours: { label: "REM sleep", better: "higher" },
   lightHours: { label: "light sleep" },
-  awakeMin: { label: "time awake" },
+  awakeMin: { label: "time awake", better: "lower" },
   steps: { label: "steps", plural: true },
-  hrv: { label: "HRV" },
-  rhr: { label: "resting heart rate" },
+  hrv: { label: "HRV", better: "higher" },
+  rhr: { label: "resting heart rate", better: "lower" },
   temp: { label: "temperature deviation", absolute: true },
   workoutVolume: { label: "workout volume" },
-  liftPerf: { label: "strength", absolute: true },
+  liftPerf: { label: "strength", absolute: true, better: "higher" },
   calories: { label: "calories", plural: true },
   protein: { label: "protein" },
   carbs: { label: "carbs", plural: true },
   fat: { label: "fat" },
-  weight: { label: "weight" },
+  weight: { label: "weight", better: "goal" },
   cardioMin: { label: "cardio" },
   cardioKcal: { label: "cardio calories", plural: true },
   waist: { label: "waist" },
   arms: { label: "arms", plural: true },
   chest: { label: "chest" },
 };
+
+/* Oura fields from one night or day. Two of these on the same date are the
+   same story told twice (sleep score versus hours, HRV versus readiness). */
+const OURA_IDS = new Set(["readiness", "sleepScore", "sleepHours", "deepHours", "remHours", "lightHours", "awakeMin", "steps", "hrv", "rhr", "temp"]);
+
+export const DISPLAY_LIMIT = 8;
+export const DAYS_FOR_A_PATTERN = MIN_PER_GROUP * 2;
 
 const BOOLEAN_PHRASE = {
   workedOut: "you work out",
@@ -225,6 +234,40 @@ function locked(factorId, source, outcome) {
   return false;
 }
 
+function isOura(id, extra) {
+  if (!id) return false;
+  if (OURA_IDS.has(id)) return true;
+  return !!(extra && extra.has(id));
+}
+
+/* Same-night Oura pairs, and a workout type against that same session's
+   volume or strength. Next-day pairs stay, because those are different days. */
+export function suppressedStory(factor, outcome, lag, ouraExtra) {
+  if (lag === 0 && isOura(factor.source || factor.id, ouraExtra) && isOura(outcome, ouraExtra)) return true;
+  if (lag === 0 && String(factor.id).indexOf("workout:") === 0 && (outcome === "workoutVolume" || outcome === "liftPerf")) return true;
+  return false;
+}
+
+function preferredDirection(outcome, weightDir) {
+  const better = metricMeta(outcome).better || "neutral";
+  if (better === "goal") {
+    if (weightDir === "gain") return "higher";
+    if (weightDir === "lose") return "lower";
+    return "neutral";
+  }
+  return better;
+}
+
+export function valenceOf(outcome, diff, percent, weightDir) {
+  const direction = preferredDirection(outcome, weightDir);
+  if (direction !== "higher" && direction !== "lower") return "neutral";
+  const moved = percent != null ? percent : diff;
+  if (moved == null || Math.abs(moved) < 0.5) return "neutral";
+  const up = moved > 0;
+  if (direction === "higher") return up ? "good" : "bad";
+  return up ? "bad" : "good";
+}
+
 function dayBucket(days, date) {
   if (!days[date]) days[date] = {};
   return days[date];
@@ -323,6 +366,7 @@ export function extractDays(data) {
   const src = data || {};
   const days = {};
   const phrases = {};
+  const ouraKeys = new Set();
   const active = [];
 
   const oura = ouraMap(src.oura);
@@ -331,18 +375,21 @@ export function extractDays(data) {
     if (!day || typeof day !== "object") return;
     active.push(date);
     const bucket = dayBucket(days, date);
-    OURA_NAMED.forEach((k) => putNum(bucket, k, day[k]));
+    OURA_NAMED.forEach((k) => { if (finite(day[k]) != null) { putNum(bucket, k, day[k]); ouraKeys.add(k); } });
     Object.keys(OURA_STAGES).forEach((k) => {
       const n = finite(day[k]);
       if (n == null) return;
       bucket[OURA_STAGES[k]] = n / 3600;
+      ouraKeys.add(OURA_STAGES[k]);
     });
     const awake = finite(day.awake);
-    if (awake != null) bucket.awakeMin = awake / 60;
+    if (awake != null) { bucket.awakeMin = awake / 60; ouraKeys.add("awakeMin"); }
     Object.keys(day).forEach((k) => {
       if (k === "date" || k === "awake" || OURA_STAGES[k] || OURA_NAMED.indexOf(k) !== -1) return;
       if (days[date][k] != null) return;
+      if (finite(day[k]) == null) return;
       putNum(bucket, k, day[k]);
+      ouraKeys.add(k);
     });
   });
 
@@ -467,7 +514,7 @@ export function extractDays(data) {
     phrases[id] = "you do a " + name + " workout";
   });
 
-  return { days, phrases };
+  return { days, phrases, ouraKeys };
 }
 
 function quantile(sorted, p) {
@@ -616,12 +663,10 @@ function formatPercent(p) {
 
 function formatAbs(v) {
   const a = Math.abs(v);
-  if (a >= 9.95) {
-    const t = Math.round(a * 10) / 10;
-    return Math.abs(t - Math.round(t)) < 1e-9 ? String(Math.round(t)) : t.toFixed(1);
-  }
-  const t = Math.round(a * 100) / 100;
-  return String(t);
+  const places = a >= 1 ? 10 : 100;
+  const t = Math.round(a * places) / places;
+  if (Math.abs(t - Math.round(t)) < 1e-9) return String(Math.round(t));
+  return places === 10 ? t.toFixed(1) : String(t);
 }
 
 export function sentenceFor(result) {
@@ -631,20 +676,27 @@ export function sentenceFor(result) {
   let change;
   if (useAbs) {
     const shown = formatAbs(result.diff);
-    change = shown === "0" ? "about the same" : shown + (result.diff > 0 ? " higher" : " lower");
+    const unit = result.outcome === "liftPerf" && shown !== "0" ? " points" : "";
+    change = shown === "0" ? "about the same" : shown + unit + (result.diff > 0 ? " higher" : " lower");
   } else {
     const shown = formatPercent(result.percent);
     change = shown === "0" ? "about the same" : shown + "% " + (result.percent > 0 ? "higher" : "lower");
   }
   const when = result.lag > 0 ? "On days after " : "On days ";
   const tail = result.kind === "tertile" && change !== "about the same" ? " than on days in the bottom third" : "";
+  const meaning = result.valence === "good" ? ", which is a good sign" : result.valence === "bad" ? ", which is working against you" : "";
   const n = result.nWith;
-  return when + result.phrase + ", your " + meta.label + " " + verb + " " + change + tail + " (" + result.confidence + " confidence, " + n + " days).";
+  const body = when + result.phrase + ", your " + meta.label + " " + verb + " " + change + tail + meaning;
+  return {
+    lead: body + ".",
+    sentence: body + " (" + result.confidence + " confidence, " + n + " days).",
+  };
 }
 
-function evaluate(days, phrases, options) {
+function evaluate(days, phrases, options, ouraExtra) {
   const minN = options.minPerGroup == null ? MIN_PER_GROUP : options.minPerGroup;
   const lags = options.lags || [0, 1];
+  const weightDir = options.weightDir || null;
   const factors = buildFactors(days, phrases || {});
   const outcomes = numericSeries(days).filter((id) => !options.outcomes || options.outcomes.indexOf(id) !== -1);
   const results = [];
@@ -654,6 +706,7 @@ function evaluate(days, phrases, options) {
     factors.forEach((factor) => {
       if (locked(factor.id, factor.source, outcome)) return;
       lags.forEach((lag) => {
+        if (suppressedStory(factor, outcome, lag, ouraExtra)) return;
         const groups = align(factor.values, ys, lag);
         if (groups.withVals.length < minN || groups.withoutVals.length < minN) return;
         const stats = welch(groups.withVals, groups.withoutVals);
@@ -668,6 +721,7 @@ function evaluate(days, phrases, options) {
           phrase: factor.phrase,
           outcome,
           outcomeLabel: metricMeta(outcome).label,
+          direction: preferredDirection(outcome, weightDir),
           lag,
           meanWith: stats.meanWith,
           meanWithout: stats.meanWithout,
@@ -680,8 +734,11 @@ function evaluate(days, phrases, options) {
           effect: stats.d,
           confidence,
           strength,
+          valence: valenceOf(outcome, stats.diff, percent, weightDir),
         };
-        row.sentence = sentenceFor(row);
+        const said = sentenceFor(row);
+        row.lead = said.lead;
+        row.sentence = said.sentence;
         results.push(row);
       });
     });
@@ -713,13 +770,25 @@ function isPrebuilt(input) {
   return true;
 }
 
+/* The Insights list hides low confidence. The engine still returns those rows
+   so a caller can see what was too weak to show. */
+export function findingsForView(rows) {
+  return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
+}
+
+export function loggedDays(input) {
+  const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
+  return Object.keys(days || {}).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).length;
+}
+
 /* input is either { days, phrases } or a user_data-shaped blob.
-   options.lags defaults to same day and next day. options.minPerGroup defaults to 7. */
+   options.lags defaults to same day and next day. options.minPerGroup defaults to 7.
+   options.weightDir is "gain", "lose", or empty, and only affects weight. */
 export function correlate(input, options) {
   const opts = options || {};
-  if (isPrebuilt(input)) return rank(evaluate(input.days, input.phrases || {}, opts));
+  if (isPrebuilt(input)) return rank(evaluate(input.days, input.phrases || {}, opts, null));
   const extracted = extractDays(input || {});
-  return rank(evaluate(extracted.days, extracted.phrases, opts));
+  return rank(evaluate(extracted.days, extracted.phrases, opts, extracted.ouraKeys));
 }
 
 export const TRACKED_METRICS = Object.keys(METRICS);
