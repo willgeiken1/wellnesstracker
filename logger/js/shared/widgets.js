@@ -68,6 +68,21 @@ app.addButtonHTML = addButtonHTML;
 function doneButtonHTML() { return app.ui.edit ? `<button class="done-pill" data-action="w-done">Done</button>` : ""; }
 app.doneButtonHTML = doneButtonHTML;
 
+/* Mounted on body. A pane's translate3d would make position:fixed scroll with the page. */
+function mountDonePill() {
+  const hide = !app.ui.edit || (app.needsLock && app.needsLock());
+  document.body.classList.toggle("editing", !hide);
+  let slot = document.getElementById("done-slot");
+  if (hide) { if (slot) slot.remove(); return; }
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.id = "done-slot";
+    document.body.appendChild(slot);
+  }
+  slot.innerHTML = doneButtonHTML();
+}
+app.mountDonePill = mountDonePill;
+
 function addSheetHTML() {
   const page = app.ui.edit, L = app.layoutOf(page), names = app.WIDGETS[page];
   const hidden = (L.hidden || []).filter((id) => names[id]);

@@ -788,12 +788,13 @@ document.addEventListener("click", async (ev) => {
     case "w-add-one": app.showWidget(app.ui.edit, b.dataset.w); app.ui.sheet = null; app.render(); app.toast(`${app.WIDGETS[app.ui.edit][b.dataset.w]} added.`); break;
     case "ms-list": app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; app.renderSheet(); break;
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }
-    case "ms-save": case "ms-clear": {
-      const txt = a === "ms-clear" ? "" : ((app.$("#ms-text") || {}).value || "").trim();
+    case "ms-save": {
+      const txt = ((app.$("#ms-text") || {}).value || "").trim();
+      if (!txt) { app.toast("Type the machine settings to save."); break; }
       app.state.machineNotes = app.state.machineNotes || {};
-      if (txt) app.state.machineNotes[app.ui.sd.name] = txt; else delete app.state.machineNotes[app.ui.sd.name];
-      app.state.settingsAt = Date.now(); app.save();
-      app.toast(txt ? `Saved settings for ${app.ui.sd.name}.` : "Settings cleared.");
+      app.state.machineNotes[app.ui.sd.name] = { text: txt, at: Date.now() };
+      app.save();
+      app.toast(`Saved settings for ${app.ui.sd.name}.`);
       if (app.ui.sd.back) { app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; } else app.ui.sheet = null;
       app.renderSheet(); app.renderWorkout(); app.tick(); break;
     }
@@ -846,7 +847,13 @@ document.addEventListener("click", async (ev) => {
       if (app.ui.sd.idx >= 0) {
         const old = w.exercises[app.ui.sd.idx];
         if (old.name !== name) {
-          if (app.state.machineNotes && app.state.machineNotes[old.name] != null) { app.state.machineNotes[name] = app.state.machineNotes[old.name]; delete app.state.machineNotes[old.name]; }
+          if (app.state.machineNotes && app.state.machineNotes[old.name] != null) {
+            const prev = app.state.machineNotes[old.name];
+            const text = typeof prev === "string" ? prev.trim() : (prev && !prev.gone && prev.text ? String(prev.text).trim() : "");
+            const now = Date.now();
+            if (text) app.state.machineNotes[name] = { text, at: now };
+            app.state.machineNotes[old.name] = { text: "", at: now, gone: true };
+          }
           if (app.goals().lifts[old.name]) { app.goals().lifts[name] = app.goals().lifts[old.name]; delete app.goals().lifts[old.name]; app.goals().updatedAt = Date.now(); }
           // keep history linked to the renamed exercise
           app.state.sessions.forEach((s) => s.entries.forEach((e) => { if (e.exercise === old.name) e.exercise = name; }));
