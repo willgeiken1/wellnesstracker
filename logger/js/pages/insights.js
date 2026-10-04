@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, findingsForView, loggedDays } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays } from "../shared/correlate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -97,7 +97,7 @@ function affectsHTML() {
   try {
     const src = app.correlationSource();
     days = loggedDays(src);
-    rows = findingsForView(app.correlations());
+    rows = listFindings(app.correlations());
   } catch (e) { rows = []; }
   const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
   const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;

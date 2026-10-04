@@ -254,12 +254,40 @@ function isTrainingOutcome(outcome) {
   return outcome === "workoutVolume" || outcome === "liftPerf" || String(outcome || "").indexOf("workout:") === 0;
 }
 
+/* Oura stores a night on the wake-up date. Sleep, HRV, resting heart rate,
+   readiness, and the rest of that night are already known on the morning of
+   that date, before the day's training and meals. Tonight's sleep is the
+   next date. */
+const MORNING_IDS = new Set(["readiness", "sleepScore", "sleepHours", "deepHours", "remHours", "lightHours", "awakeMin", "hrv", "rhr", "temp"]);
+const LATER_IDS = new Set([
+  "workedOut", "workoutVolume", "liftPerf", "steps",
+  "calories", "protein", "carbs", "fat", "lateEating",
+  "caloriesOverTarget", "proteinOverTarget", "carbsOverTarget", "fatOverTarget",
+  "didCardio", "cardioMin", "cardioKcal",
+]);
+
+function factorMetric(factor) {
+  const id = String(factor && factor.id || "");
+  if (id.indexOf("workout:") === 0) return id;
+  if (factor && factor.source) return factor.source;
+  return id.replace(/:(median|tertile)$/, "");
+}
+
+function isLaterFactor(factor) {
+  const id = String(factor && factor.id || "");
+  if (id.indexOf("workout:") === 0) return true;
+  const metric = factorMetric(factor);
+  return LATER_IDS.has(metric) || LATER_IDS.has(id);
+}
+
 /* Same-night Oura pairs tell one story twice. A workout type or "worked out"
-   against volume, strength, or another workout type is just the training
-   split, same day or next day. Recovery outcomes stay. */
+   against volume, strength, or another workout type is the training split.
+   A factor that happens later in the day cannot explain that morning's
+   sleep, readiness, HRV, or resting heart rate. The next-day lag can. */
 export function suppressedStory(factor, outcome, lag, ouraExtra) {
   if (lag === 0 && isOura(factor.source || factor.id, ouraExtra) && isOura(outcome, ouraExtra)) return true;
   if (isTrainingFactor(factor) && isTrainingOutcome(outcome)) return true;
+  if (lag === 0 && isLaterFactor(factor) && MORNING_IDS.has(outcome)) return true;
   return false;
 }
 
@@ -730,9 +758,8 @@ export function sentenceFor(result) {
   const change = changeWords(result);
   const when = result.lag > 0 ? "On days after " : "On days ";
   const tail = result.kind === "tertile" && change !== "about the same" ? tertileTail(result.source) : "";
-  const meaning = result.valence === "good" ? ", which is a good sign" : result.valence === "bad" ? ", which is working against you" : "";
   const n = result.nWith;
-  const body = when + result.phrase + ", your " + meta.label + " " + verb + " " + change + tail + meaning;
+  const body = when + result.phrase + ", your " + meta.label + " " + verb + " " + change + tail;
   return {
     lead: body + ".",
     sentence: body + " (" + result.confidence + " confidence, " + n + " days).",
@@ -847,8 +874,42 @@ function dedupe(results) {
   return out;
 }
 
+function mirrorMetric(row) {
+  const id = String(row.factor || "");
+  if (id.indexOf("workout:") === 0) return id;
+  if (row.source) return row.source;
+  return id.replace(/:(median|tertile)$/, "");
+}
+
+/* A to B and B to A are one relationship. Keep the stronger row. */
+function mergeMirrors(rows) {
+  const groups = new Map();
+  rows.forEach((r) => {
+    const a = mirrorMetric(r);
+    const b = r.outcome;
+    const key = a < b ? a + "\0" + b : b + "\0" + a;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  });
+  const out = [];
+  groups.forEach((list) => {
+    const dirs = new Set(list.map((r) => mirrorMetric(r) + ">" + r.outcome));
+    if (dirs.size < 2) {
+      list.forEach((r) => out.push(r));
+      return;
+    }
+    list.sort((a, b) => b.strength - a.strength || Math.abs(b.percent || 0) - Math.abs(a.percent || 0) || (b.nWith + b.nWithout) - (a.nWith + a.nWithout));
+    out.push(list[0]);
+  });
+  return out;
+}
+
+function byStrength(a, b) {
+  return b.strength - a.strength || Math.abs(b.percent || 0) - Math.abs(a.percent || 0) || (b.nWith + b.nWithout) - (a.nWith + a.nWithout);
+}
+
 function rank(results) {
-  return dedupe(results).sort((a, b) => b.strength - a.strength || Math.abs(b.percent || 0) - Math.abs(a.percent || 0) || (b.nWith + b.nWithout) - (a.nWith + a.nWithout));
+  return mergeMirrors(dedupe(results)).sort(byStrength);
 }
 
 function isPrebuilt(input) {
@@ -861,10 +922,47 @@ function viewGroup(row) {
   return row && (row.valence === "good" || row.valence === "bad") ? 0 : 1;
 }
 
+const SLEEP_FAMILY = new Set(["sleepHours", "sleepScore", "deepHours", "remHours", "lightHours", "awakeMin"]);
+const TRAINING_FAMILY = new Set(["workedOut", "workoutVolume", "liftPerf", "didCardio", "cardioMin", "cardioKcal"]);
+const FOOD_FAMILY = new Set(["calories", "protein", "carbs", "fat", "lateEating", "caloriesOverTarget", "proteinOverTarget", "carbsOverTarget", "fatOverTarget"]);
+
+export const OUTCOME_CAP = 2;
+export const FAMILY_CAP = 3;
+
+export function factorFamily(row) {
+  const id = String(row && row.factor || "");
+  if (id.indexOf("workout:") === 0) return "training";
+  const metric = (row && row.source) || id.replace(/:(median|tertile)$/, "");
+  if (SLEEP_FAMILY.has(metric)) return "sleep";
+  if (metric.indexOf("workout:") === 0 || TRAINING_FAMILY.has(metric)) return "training";
+  if (FOOD_FAMILY.has(metric)) return "food";
+  return metric || "other";
+}
+
 /* The Insights list hides low confidence, then puts a good or bad pattern
    ahead of a neutral one. Strength still orders each group. */
 export function findingsForView(rows) {
-  return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).slice().sort((a, b) => viewGroup(a) - viewGroup(b) || b.strength - a.strength || Math.abs(b.percent || 0) - Math.abs(a.percent || 0) || (b.nWith + b.nWithout) - (a.nWith + a.nWithout));
+  return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).slice().sort((a, b) => viewGroup(a) - viewGroup(b) || byStrength(a, b));
+}
+
+/* The first screen keeps the ranked order, but will not stack one outcome
+   or one kind of factor. Everything else stays available for See all. */
+export function listFindings(rows) {
+  const ranked = findingsForView(rows);
+  const picked = [];
+  const rest = [];
+  const outcomes = {};
+  const families = {};
+  ranked.forEach((r) => {
+    const outcome = r.outcome;
+    const family = factorFamily(r);
+    if (picked.length < DISPLAY_LIMIT && (outcomes[outcome] || 0) < OUTCOME_CAP && (families[family] || 0) < FAMILY_CAP) {
+      picked.push(r);
+      outcomes[outcome] = (outcomes[outcome] || 0) + 1;
+      families[family] = (families[family] || 0) + 1;
+    } else rest.push(r);
+  });
+  return picked.concat(rest);
 }
 
 function samplesOf(days, id) {
