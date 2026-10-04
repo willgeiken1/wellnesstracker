@@ -102,7 +102,7 @@ function scrubProperties(props) {
 /* Local development must never reach the production project. */
 export function isDevHost(hostname) {
   if (typeof hostname !== "string") return true;
-  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "").split("%")[0];
   if (!host) return true;
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
   if (host === "::1" || host === "0.0.0.0" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
@@ -113,7 +113,14 @@ export function isDevHost(hostname) {
       if (o[0] === 10) return true;
       if (o[0] === 192 && o[1] === 168) return true;
       if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true;
+      if (o[0] === 169 && o[1] === 254) return true;
+      if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return true;
     }
+  }
+  if (host.includes(":")) {
+    const first = host.split(":").find((part) => part.length > 0) || "";
+    if (/^fe[89ab]/.test(first)) return true;
+    if (/^f[cd]/.test(first)) return true;
   }
   return false;
 }

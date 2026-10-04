@@ -436,4 +436,8 @@ body.timer-on:not(.in-workout) #view {
 .oura-nudge { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; }
 .oura-nudge h4 { margin: 0 0 2px; color: var(--text); }
 .oura-nudge .sub { margin: 0; color: var(--sub); }
-.oura-nudge .btn { flex: none; }
+.oura-nudge .btn { flex: none; height: 44px; min-height: 44px; }
+:root[data-mode="dark"] .oura-nudge .btn {
+  background: var(--green-soft);
+  color: var(--accent-text);
+}

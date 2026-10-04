@@ -1,6 +1,6 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
-import { needsSleepRecovery, sleepRecoveryLabel } from "../shared/oura-gate.js";
+import { needsSleepRecovery, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -107,8 +107,8 @@ function affectsHTML() {
     const src = app.correlationSource();
     days = loggedDays(src);
     const rows = app.correlations();
-    ({ top, more } = splitFindings(rows));
     picked = pickForToday(rows, src, app.today());
+    ({ top, more } = splitFindings(rows, src, app.today()));
   } catch (e) { top = []; more = []; }
   const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
   const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;
@@ -178,12 +178,10 @@ function insightsHTML(embedded) {
     ${app.effectCard("Sleep the night before", sl, app.compareSentence(sl, "after 7.5+ hours of sleep", "after less than 6.5"), need)}
     ${app.effectCard("Work the day before", wk, wkSentence, need)}`;
   } else if (needsSleepRecovery(app.state, nights)) {
-    const reconnect = !!(app.state.oura && app.state.oura.connected);
     const label = sleepRecoveryLabel(app.state, !!app.session);
-    const sub = reconnect
-      ? "Reconnect Oura to bring sleep and readiness back. This stays empty when the membership has lapsed."
-      : "Connect an Oura Ring to see how sleep and readiness affect your lifts.";
-    const action = app.session ? 'data-action="oura-connect"' : 'data-action="iseg" data-s="recovery"';
+    const sub = sleepRecoveryCopy(app.state);
+    const action = !app.session ? 'data-action="iseg" data-s="recovery"'
+      : label === "Sync now" ? 'data-action="oura-sync"' : 'data-action="oura-connect"';
     effectsHTML = `<div class="card oura-nudge"><div><h4>Add sleep and recovery</h4>
       <p class="sub">${sub}</p></div>
       <button class="btn small" ${action}>${label}</button></div>`;

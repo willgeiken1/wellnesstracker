@@ -177,10 +177,10 @@ test("every event that passes disables GeoIP and drops IP and GeoIP properties",
 });
 
 test("isDevHost spots local development hosts", () => {
-  for (const host of ["localhost", "LOCALHOST", "app.localhost", "127.0.0.1", "127.1.2.3", "::1", "[::1]", "0.0.0.0", "my-mac.local", "my-mac.local.", "", null, undefined, "10.0.0.5", "10.1.2.3", "192.168.0.1", "192.168.1.20", "172.16.0.1", "172.31.255.255"]) {
+  for (const host of ["localhost", "LOCALHOST", "app.localhost", "127.0.0.1", "127.1.2.3", "::1", "[::1]", "0.0.0.0", "my-mac.local", "my-mac.local.", "", null, undefined, "10.0.0.5", "10.1.2.3", "192.168.0.1", "192.168.1.20", "172.16.0.1", "172.31.255.255", "169.254.1.1", "169.254.0.0", "100.64.0.1", "100.127.255.255", "fe80::1", "[fe80::1]", "fe80::1%eth0", "fd00::1", "fc00::"]) {
     assert.equal(isDevHost(host), true, String(host));
   }
-  for (const host of ["insight.example.com", "localhost.example.com", "local", "127.0.0.1.nip.io.example", "11.0.0.5", "192.169.0.1", "172.15.0.1", "172.32.0.1", "example.locals"]) {
+  for (const host of ["insight.example.com", "localhost.example.com", "local", "127.0.0.1.nip.io.example", "11.0.0.5", "192.169.0.1", "172.15.0.1", "172.32.0.1", "example.locals", "169.253.1.1", "100.63.0.1", "100.128.0.1", "2001:db8::1", "fec0::1"]) {
     assert.equal(isDevHost(host), false, host);
   }
   assert.equal(onDevHost({ protocol: "file:", hostname: "" }), true);

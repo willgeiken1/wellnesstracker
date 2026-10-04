@@ -10,6 +10,7 @@ import {
   needsSleepRecovery,
   noteOuraConnected,
   ouraReturnDialog,
+  sleepRecoveryCopy,
   sleepRecoveryLabel,
   ouraWidgetShowing,
   seedOuraWidgets,
@@ -427,9 +428,14 @@ test("lapsed Oura needs the sleep card, and a reconnect label, while demo stays 
   assert.equal(needsSleepRecovery(never, 0), true);
   assert.equal(needsSleepRecovery(withNights, 1), false);
   assert.equal(needsSleepRecovery(demo, 0), false);
+  const fresh = state({ oura: { connected: true, lastSync: null, days: {}, lastError: null } });
   assert.equal(sleepRecoveryLabel(lapsed, true), "Reconnect");
+  assert.equal(sleepRecoveryLabel(fresh, true), "Sync now");
   assert.equal(sleepRecoveryLabel(never, true), "Connect Oura");
   assert.equal(sleepRecoveryLabel(never, false), "Learn more");
+  assert.match(sleepRecoveryCopy(fresh), /first sync/);
+  assert.doesNotMatch(sleepRecoveryCopy(fresh), /lapsed|Reconnect/);
+  assert.match(sleepRecoveryCopy(lapsed), /lapsed/);
 });
 
 test("the OAuth dialog sends people to Settings", () => {

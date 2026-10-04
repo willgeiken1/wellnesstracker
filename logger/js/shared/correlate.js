@@ -1394,8 +1394,9 @@ function byStoryMember(a, b) {
    story, and is never padded with rows that break those caps. The next
    STORY_CAP rows of a story stay in See all. Anything past that cap is kept
    at the end of See all instead of being dropped, so a high finding and the
-   brief's pick cannot disappear. */
-export function splitFindings(rows) {
+   brief's pick cannot disappear. pickForToday (high confidence, q <= 0.001,
+   good or bad) is pinned into the first screen. */
+export function splitFindings(rows, input, today) {
   const eligible = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
   const grouped = new Map();
   eligible.forEach((r) => {
@@ -1438,11 +1439,47 @@ export function splitFindings(rows) {
     } else more.push(r);
   });
   more.push(...overflow);
-  return { top, more };
+  if (arguments.length < 2) return { top, more };
+  return placePick(top, more, pickForToday(rows, input, today));
 }
 
-export function listFindings(rows) {
-  const { top, more } = splitFindings(rows);
+function rowKey(r) {
+  return String(r && r.outcome) + "\0" + String(r && r.factor) + "\0" + (Number(r && r.lag) || 0);
+}
+
+function roomFor(kept, r) {
+  if (kept.length >= DISPLAY_LIMIT) return false;
+  const story = storyKey(r);
+  const family = factorFamily(r);
+  let sameStory = false;
+  let outcomes = 0;
+  let families = 0;
+  for (let i = 0; i < kept.length; i++) {
+    const k = kept[i];
+    if (storyKey(k) === story) sameStory = true;
+    if (k.outcome === r.outcome) outcomes++;
+    if (factorFamily(k) === family) families++;
+  }
+  return !sameStory && outcomes < OUTCOME_CAP && families < FAMILY_CAP;
+}
+
+/* The brief's pick leads the first screen. Other rows keep their order and
+   still obey the caps; nothing is dropped from the full list. */
+function placePick(top, more, picked) {
+  if (!picked) return { top, more };
+  const key = rowKey(picked);
+  const rest = top.concat(more).filter((r) => rowKey(r) !== key);
+  const kept = [picked];
+  const overflow = [];
+  rest.forEach((r) => {
+    if (roomFor(kept, r)) kept.push(r);
+    else overflow.push(r);
+  });
+  return { top: kept, more: overflow };
+}
+
+export function listFindings(rows, input, today) {
+  const { top, more } = arguments.length < 2 ? splitFindings(rows) : splitFindings(rows, input, today);
   return top.concat(more);
 }
 

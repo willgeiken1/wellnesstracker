@@ -205,6 +205,10 @@ test("equal-timestamp ties converge between client and SQL", () => {
   assert.deepEqual(stored.Row, { text: "Pad A", at: 50 });
   assert.deepEqual(app.mergeMachineNotes({ Row: { text: "Pad B", at: 50 } }, stored), stored);
   assert.deepEqual(
+    app.mergeMachineNotes({ Row: "Seat 4" }, { Row: "Seat 1" }).Row,
+    { text: "Seat 4", at: 0 }
+  );
+  assert.deepEqual(
     app.mergeMachineNotes({ Squat: { text: "", at: 10, gone: true } }, sqlMerge({ Squat: { text: "Rack", at: 10 } }, { Squat: { text: "", at: 10, gone: true } })).Squat,
     { text: "Rack", at: 10 }
   );
