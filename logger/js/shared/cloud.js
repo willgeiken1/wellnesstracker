@@ -179,21 +179,47 @@ async function cloudPull() {
 }
 app.cloudPull = cloudPull;
 
+function applyOuraConnection(row) {
+  const prev = app.state.oura || { days: {} };
+  if (!row) {
+    app.state.oura = { connected: false, status: null, lastSync: prev.lastSync || null, lastError: null, days: prev.days || {} };
+    return null;
+  }
+  const status = row.status || "connected";
+  app.state.oura.status = status;
+  app.state.oura.lastError = row.last_error || null;
+  app.state.oura.connected = status === "connected" || status === "membership_inactive";
+  if (status === "disconnected") {
+    app.state.oura.connected = false;
+    app.state.oura.days = {};
+    app.state.oura.lastSync = null;
+  }
+  return status;
+}
+
 async function ouraRefresh(force) {
   if (!app.sb || !app.session || app.ouraBusy) return;
   app.ouraBusy = true;
   try {
     const { data: c } = await app.sb.from("oura_connections").select("*").eq("user_id", app.session.user.id).maybeSingle();
-    noteOuraConnected(app.state, !!c, { seed: !!app.cloudPullOk });
-    app.state.oura.lastError = c ? c.last_error : null;
-    if (c) {
+    let status = applyOuraConnection(c);
+    const linked = status === "connected" || status === "membership_inactive";
+    noteOuraConnected(app.state, linked, { seed: !!app.cloudPullOk && linked });
+    const maySync = c && (status === "connected" || (force && status === "membership_inactive"));
+    if (maySync) {
       const stale = !c.last_sync || Date.now() - new Date(c.last_sync).getTime() > 3 * 3600_000;
-      if (force || stale) {
+      if (force || (status === "connected" && stale)) {
         app.ui.ouraSyncing = true; app.render();
         const { error } = await app.sb.functions.invoke("oura-sync", { body: { days: c.last_sync ? 14 : 120 } });
         app.ui.ouraSyncing = false;
         if (error) app.toast("Couldn't sync Oura right now. Try Sync now in Settings.");
+        const again = await app.sb.from("oura_connections").select("*").eq("user_id", app.session.user.id).maybeSingle();
+        status = applyOuraConnection(again.data);
+        const still = status === "connected" || status === "membership_inactive";
+        noteOuraConnected(app.state, still, { seed: !!app.cloudPullOk && still });
       }
+    }
+    if (status === "connected" || status === "membership_inactive") {
       const { data: rows } = await app.sb.from("oura_days").select("day, data").eq("user_id", app.session.user.id).gte("day", app.addDays(app.today(), -150));
       if (rows) {
         const days = {};
@@ -291,7 +317,7 @@ async function signOut(opts) {
   if (app.syncSentryUser) app.syncSentryUser(null);
   if (app.syncUsageUser) app.syncUsageUser(null);
   app.ui.onboard = false; app.renderOnboard();
-  app.state.oura = { connected: false, lastSync: null, days: {} };
+  app.state.oura = { connected: false, status: null, lastSync: null, days: {} };
   app.save(); app.render();
   if (!(opts && opts.quiet)) app.toast("Signed out. Your workouts are still saved on this phone.");
 }
@@ -311,7 +337,7 @@ async function disconnectOura() {
   if (!(await app.ask({ title: "Disconnect Oura?", body: "Your Oura data will be removed from Insight. You can reconnect any time.", ok: "Disconnect", danger: true }))) return;
   const { error } = await app.sb.functions.invoke("oura-connect", { body: { action: "disconnect" } });
   if (error) { app.toast("Couldn't disconnect right now."); return; }
-  app.state.oura = { connected: false, lastSync: null, days: {} };
+  app.state.oura = { connected: false, status: null, lastSync: null, days: {} };
   // Leave homeV2 items and hidden alone. Oura widgets hide while the ring is off.
   app.save(); app.render(); app.toast("Oura disconnected.");
 }

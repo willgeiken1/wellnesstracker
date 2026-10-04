@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
     }
     counted = true;
 
+    // Oura data is never sent to Claude. This body is only the meal photo and an optional note. §4(d)
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },

@@ -1,12 +1,14 @@
 # Insight Terms of Service
 
+DRAFT LEGAL COPY: for Will's review
+
 _Last updated: October 4, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. By creating an account or using Insight, you agree to these terms.
 
 ## What Insight is
 
-Insight helps you log workouts, food, cardio, weigh-ins, and progress photos, and shows trends based on that information and, if you connect it, your Oura Ring data. It is provided free of charge, as is, and without warranties of any kind. It may change, have bugs, or stop working at any time.
+Insight helps you log workouts, food, cardio, weigh-ins, and progress photos, and shows trends based on that information and, if you connect it, your Oura Ring data. It is provided as is, and without warranties of any kind. It may change, have bugs, or stop working at any time.
 
 ## Not medical advice
 
@@ -27,6 +29,8 @@ Don't try to break Insight, access other people's data, or overload it. Food pho
 ## Third-party services
 
 Insight relies on other services, including Supabase, Anthropic, Open Food Facts, Oura, Sentry, and PostHog. Your use of them through Insight is also subject to their own terms. If you connect Oura, you can disconnect at any time.
+
+Third-party service providers, including Oura, make no warranties of merchantability, fitness for a particular purpose, or non-infringement. They are not liable for consequential damages arising from their services.
 
 ## Limit of liability
 

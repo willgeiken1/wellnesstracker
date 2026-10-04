@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { showOuraOnHome } from "./oura-ui.js";
 import { pickForToday, todayLine } from "./correlate.js";
 import { hasOura, ouraWidgetShowing } from "./oura-gate.js";
 
@@ -108,9 +109,11 @@ function proteinLowDays() {
 }
 
 export function ouraMetric() {
+  const status = app.state.oura && app.state.oura.status;
+  if (status === "disconnected") return null;
   if (!hasOura(app.state) || ouraWidgetShowing(app.state, "readiness")) return null;
   const o = app.latestOura(app.src().oura);
-  if (!o || o.readiness == null) return null;
+  if (!showOuraOnHome(status, !!(o && o.readiness != null))) return null;
   const lv = app.readinessLevel(o.readiness);
   const when = o.date === app.today() ? "Today" : o.date === app.addDays(app.today(), -1) ? "Yesterday" : app.fmtDate(o.date, { month: "short", day: "numeric" });
   const sleepOnTile = ouraWidgetShowing(app.state, "sleep-score");

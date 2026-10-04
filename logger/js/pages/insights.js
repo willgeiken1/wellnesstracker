@@ -5,6 +5,7 @@ import "./insight-widgets.js";
 /* Insights and Recovery markup. */
 /* ---------- Screens ---------- */
 function readinessCardHTML() {
+  if (app.state.oura && app.state.oura.status === "disconnected") return "";
   const o = app.latestOura(app.src().oura);
   if (!o) return "";
   const lv = app.readinessLevel(o.readiness);
@@ -16,12 +17,22 @@ app.readinessCardHTML = readinessCardHTML;
 
 function recoveryHTML(embedded) {
   const S = app.src(), o = S.oura, keys = Object.keys(o).sort();
-  const status = !app.state.demo && app.state.oura.connected
+  const link = !app.state.demo && app.state.oura && app.state.oura.status;
+  if (!app.state.demo && link === "disconnected") {
+    return `<div class="card connect"><h4>Reconnect Oura</h4>
+      <p class="sub">Oura access was revoked, so the ring data stored in Insight was removed.</p>
+      <button class="btn primary block" data-action="oura-connect">${app.session ? "Reconnect Oura" : "Sign in to reconnect Oura"}</button></div>`;
+  }
+  const status = !app.state.demo && app.state.oura.connected && link !== "membership_inactive"
     ? `<div class="page-sub">${app.ui.ouraSyncing ? "Syncing…" : app.syncedAgo() || "From your Oura Ring"} · <button class="link-inline" data-action="oura-sync">Sync now</button></div>`
     : `<div class="page-sub">From your Oura Ring</div>`;
   const head = `<div style="margin:-4px 0 14px">${status}</div>${app.demoBanner()}`;
+  const inactive = !app.state.demo && link === "membership_inactive" ? `<div class="card" data-oura-status="membership_inactive"><h4>Oura membership inactive</h4>
+      <p class="sub">Scores already saved in Insight stay here. Syncing is paused, and nothing was deleted. It starts again when the Oura membership is active.</p>
+      <button class="btn block" data-action="oura-sync">Check again</button></div>` : "";
   const t = app.latestOura(o);
-  if (!t && !app.state.demo && app.state.oura.connected) return head + `<div class="card"><h4>${app.ui.ouraSyncing ? "Pulling your Oura data…" : "No Oura data yet"}</h4>
+  if (!t && inactive) return head + inactive;
+  if (!t && !app.state.demo && app.state.oura.connected && link !== "membership_inactive") return head + `<div class="card"><h4>${app.ui.ouraSyncing ? "Pulling your Oura data…" : "No Oura data yet"}</h4>
       <p class="sub">${app.ui.ouraSyncing ? "The first sync brings in about four months of history and can take a moment." : app.state.oura.lastError ? "Last sync problem: " + app.esc(app.state.oura.lastError) : "Make sure your ring has synced with the Oura app, then tap Sync now."}</p>
       <button class="btn primary block" data-action="oura-sync">Sync now</button></div>`;
   if (!t) return head + `<div class="card connect"><h4>Connect your Oura Ring</h4>
@@ -34,7 +45,7 @@ function recoveryHTML(embedded) {
   const range = keys.slice(-(app.ui.range || 14));
   const stage = (k, c) => `<i class="${c}" style="width:${((t[k] || 0) / ((t.total || 1) + (t.awake || 0)) * 100).toFixed(1)}%"></i>`;
   const prevDay = o[app.addDays(t.date, -1)];
-  return head + app.widgetize("recovery", `
+  return head + inactive + app.widgetize("recovery", `
     <!--w:ready--><div class="card ready">${app.ringSVG(t.readiness, lv.cls)}
       <div><h4>Readiness · ${lv.word}</h4><p class="sub">${lv.tip}</p>
       <p class="sub small">${t.date === app.today() ? "Today" : app.fmtDate(t.date)}</p></div></div>
