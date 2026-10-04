@@ -317,6 +317,7 @@ document.addEventListener("click", async (ev) => {
       const fromI = app.TAB_ORDER.indexOf(app.ui.tab), toI = app.TAB_ORDER.indexOf(to);
       if (to === "settings" && app.ui.tab !== "settings") app.ui.prevTab = app.ui.tab;
       app.ui.edit = null;
+      app.ui.briefEdit = false;
       app.ui.tab = to;
       if (same && to === "insights") app.ui.iseg = "trends";
       if (same && to === "food") app.ui.foodDay = null;
@@ -760,6 +761,14 @@ document.addEventListener("click", async (ev) => {
       break;
     }
     case "w-done": app.ui.edit = null; app.render(); break;
+    case "brief-edit": app.ui.briefEdit = true; app.ui.edit = null; app.render(); break;
+    case "brief-done": app.ui.briefEdit = false; app.render(); break;
+    case "brief-size": { const p = app.briefPrefs(); app.saveBrief({ ...p, size: p.size === "expanded" ? "compact" : "expanded" }); app.render(); break; }
+    case "brief-toggle": {
+      const p = app.briefPrefs(), hidden = new Set(p.hidden);
+      if (hidden.has(b.dataset.id)) hidden.delete(b.dataset.id); else hidden.add(b.dataset.id);
+      app.saveBrief({ ...p, hidden: [...hidden] }); app.render(); break;
+    }
     case "w-remove": app.hideWidget(app.ui.edit, b.dataset.w); break;
     case "r-remove": app.deleteRoutine(b.dataset.w); break;
     case "w-add": app.ui.sheet = "w-add"; app.ui.sd = {}; app.renderSheet(); break;

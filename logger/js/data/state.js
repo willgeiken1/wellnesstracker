@@ -169,6 +169,7 @@ function migrate(d) {
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },
     muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: d.machineNotes || {}, measurements: d.measurements || {},
     cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 },
+    brief: d.brief && typeof d.brief === "object" && !Array.isArray(d.brief) ? d.brief : null,
     appLock: d.appLock && typeof d.appLock === "object" ? d.appLock : { enabled: false, updatedAt: 0 },
     purges: Array.isArray(d.purges) ? d.purges : [],
     checkins: d.checkins || null,

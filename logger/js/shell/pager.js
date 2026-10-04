@@ -175,10 +175,10 @@ function horizontallyScrollable(node) {
 }
 
 function swipeAllowed(target, touches) {
-  if (!app.TAB_ORDER.includes(app.ui.tab) || app.ui.edit || app.ui.sheet || app.ui.workoutOpen || app.ui.cardioOpen || app.ui.detail) return false;
+  if (!app.TAB_ORDER.includes(app.ui.tab) || app.ui.edit || app.ui.briefEdit || app.ui.sheet || app.ui.workoutOpen || app.ui.cardioOpen || app.ui.detail) return false;
   if (touches != null && touches !== 1) return false;
   if (!target || !target.closest) return false;
-  if (target.closest("input, textarea, select, .wdg-grip, .timeline, .switch, #tabs, .handle, .day-nav, .bc-cam, #sheet, #dialog, #onboard, #workout, #cardio-live")) return false;
+  if (target.closest("input, textarea, select, .wdg-grip, .brief-grip, .timeline, .switch, #tabs, .handle, .day-nav, .bc-cam, #sheet, #dialog, #onboard, #workout, #cardio-live")) return false;
   if (horizontallyScrollable(target)) return false;
   if (!target.closest("#stage")) return false;
   return true;

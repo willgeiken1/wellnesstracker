@@ -17,6 +17,7 @@ import "./shared/widgets.js";
 import "./pages/workouts.js";
 import "./pages/privacy.js";
 import "./pages/settings.js";
+import "./shared/brief.js";
 import "./pages/home.js";
 import "./shell/workout.js";
 import "./shell/timer.js";
