@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       updated_at: now,
     });
     // last_sync stays empty so the app runs a full first sync the next time it opens.
-    await admin.from("oura_connections").upsert({ user_id: st.user_id, connected_at: now, last_sync: null, last_error: null });
+    await admin.from("oura_connections").upsert({ user_id: st.user_id, connected_at: now, last_sync: null, last_error: null, status: "connected" });
     return back("connected");
   } catch (e) {
     console.error(e);

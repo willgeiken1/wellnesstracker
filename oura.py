@@ -21,7 +21,7 @@ CLIENT_ID = os.environ["OURA_CLIENT_ID"]
 CLIENT_SECRET = os.environ["OURA_CLIENT_SECRET"]
 
 REDIRECT_URI = "http://localhost:8080/callback"  # must match your Oura app exactly
-SCOPES = "daily personal heartrate workout"
+SCOPES = "daily heartrate workout"
 TOKEN_FILE = "tokens.json"
 AUTH_URL = "https://cloud.ouraring.com/oauth/authorize"
 TOKEN_URL = "https://api.ouraring.com/oauth/token"
@@ -85,6 +85,31 @@ def login():
     return save_tokens(resp.json())
 
 
+def drop_saved_login():
+    if os.path.exists(TOKEN_FILE):
+        os.remove(TOKEN_FILE)
+
+
+def refresh_or_login(tokens):
+    """One refresh. invalid_grant deletes the saved login. A 403 is not a revoke."""
+    resp = requests.post(TOKEN_URL, data={
+        "grant_type": "refresh_token",
+        "refresh_token": tokens["refresh_token"],
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+    })
+    if "invalid_grant" in resp.text:
+        drop_saved_login()
+        print("Oura access was revoked. Saved login removed.")
+        return login()["access_token"]
+    if resp.status_code != 200:
+        print("Saved login no longer valid, logging in again...")
+        return login()["access_token"]
+    new_tokens = resp.json()
+    new_tokens.setdefault("refresh_token", tokens["refresh_token"])
+    return save_tokens(new_tokens)["access_token"]
+
+
 def get_access_token():
     """Use the saved token, refresh it if expired, or log in if there's none."""
     if not os.path.exists(TOKEN_FILE):
@@ -94,21 +119,7 @@ def get_access_token():
         tokens = json.load(f)
     if time.time() < tokens["expires_at"]:
         return tokens["access_token"]
-
-    resp = requests.post(TOKEN_URL, data={
-        "grant_type": "refresh_token",
-        "refresh_token": tokens["refresh_token"],
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-    })
-    if resp.status_code != 200:
-        print("Saved login no longer valid, logging in again...")
-        return login()["access_token"]
-
-    # Oura refresh tokens are single-use, so the new one must be saved every time
-    new_tokens = resp.json()
-    new_tokens.setdefault("refresh_token", tokens["refresh_token"])
-    return save_tokens(new_tokens)["access_token"]
+    return refresh_or_login(tokens)
 
 
 def fetch(endpoint, token, days=30):
@@ -121,6 +132,22 @@ def fetch(endpoint, token, days=30):
         headers={"Authorization": f"Bearer {token}"},
         params=params,
     )
+    if resp.status_code == 403:
+        raise SystemExit("Oura membership inactive. Saved login was kept.")
+    if resp.status_code == 401 and os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE) as f:
+            tokens = json.load(f)
+        token = refresh_or_login(tokens)
+        resp = requests.get(
+            f"{API_BASE}/{endpoint}",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+        )
+        if resp.status_code == 401:
+            drop_saved_login()
+            raise SystemExit("Oura access was revoked. Saved login removed.")
+        if resp.status_code == 403:
+            raise SystemExit("Oura membership inactive. Saved login was kept.")
     resp.raise_for_status()
     return resp.json()["data"]
 

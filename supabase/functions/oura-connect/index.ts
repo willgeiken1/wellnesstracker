@@ -1,6 +1,7 @@
 // oura-connect: starts the Oura login for the signed-in user, or disconnects Oura.
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { deleteOuraData } from "../_shared/oura-data.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -31,9 +32,9 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     if (body.action === "disconnect") {
-      await admin.from("oura_tokens").delete().eq("user_id", user.id);
-      await admin.from("oura_days").delete().eq("user_id", user.id);
+      await deleteOuraData(user.id);
       await admin.from("oura_connections").delete().eq("user_id", user.id);
+      await admin.from("oura_oauth_states").delete().eq("user_id", user.id);
       return json({ ok: true });
     }
 
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
       response_type: "code",
       client_id: clientId,
       redirect_uri: `${SUPABASE_URL}/functions/v1/oura-callback`,
-      scope: "daily personal heartrate workout",
+      scope: "daily heartrate workout",
       state,
     });
     return json({ url: `https://cloud.ouraring.com/oauth/authorize?${params}` });

@@ -137,6 +137,25 @@ function appearanceHTML() {
 }
 app.appearanceHTML = appearanceHTML;
 
+function ouraSettingsRowsHTML() {
+  const o = app.state.oura || {};
+  if (o.status === "membership_inactive") {
+    return `<div class="set-row" data-oura-status="membership_inactive"><span>Oura membership inactive</span><span class="sub">Data kept</span></div>
+      <button class="set-row" data-action="oura-sync"><span>Check again</span><span class="sub">${app.ui.ouraSyncing ? "Checking…" : "Sync stays off"}</span></button>
+      <button class="set-row" data-action="oura-disconnect"><span style="color:var(--red)">Disconnect Oura</span></button>`;
+  }
+  if (o.status === "disconnected") {
+    return `<button class="set-row" data-action="oura-connect"><span>Reconnect Oura</span>${app.I.chevR}</button>`;
+  }
+  if (o.connected) {
+    return `<div class="set-row"><span>Connection</span><span class="sub">Connected</span></div>
+      <button class="set-row" data-action="oura-sync"><span>Sync now</span><span class="sub">${app.ui.ouraSyncing ? "Syncing…" : app.syncedAgo()}</span></button>
+      <button class="set-row" data-action="oura-disconnect"><span style="color:var(--red)">Disconnect Oura</span></button>`;
+  }
+  return `<button class="set-row" data-action="oura-connect"><span>${app.session ? "Connect Oura" : "Sign in to connect Oura"}</span>${app.I.chevR}</button>`;
+}
+app.ouraSettingsRowsHTML = ouraSettingsRowsHTML;
+
 function settingsHTML() {
   const days = app.state.lastExport ? Math.floor((Date.now() - app.state.lastExport) / 86400000) : null;
   const lastExp = days == null ? "Never" : days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`;
@@ -178,11 +197,7 @@ function settingsHTML() {
     ${app.privacySectionHTML()}
     <div class="group-label">Oura Ring</div>
     <div class="group">
-      ${app.state.oura.connected
-        ? `<div class="set-row"><span>Connection</span><span class="sub">Connected</span></div>
-           <button class="set-row" data-action="oura-sync"><span>Sync now</span><span class="sub">${app.ui.ouraSyncing ? "Syncing…" : app.syncedAgo()}</span></button>
-           <button class="set-row" data-action="oura-disconnect"><span style="color:var(--red)">Disconnect Oura</span></button>`
-        : `<button class="set-row" data-action="oura-connect"><span>${app.session ? "Connect Oura" : "Sign in to connect Oura"}</span>${app.I.chevR}</button>`}
+      ${app.ouraSettingsRowsHTML()}
       <button class="set-row" data-action="${app.state.demo ? "demo-off" : "demo-on"}"><span>Preview with sample data</span><span class="sub">${app.state.demo ? "On" : "Off"}</span></button>
     </div>
     <p class="hint">Sample data fills Recovery and Insights for exploring. It never mixes with your real workouts or Oura data.</p>

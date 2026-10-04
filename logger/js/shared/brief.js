@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { showOuraOnHome } from "./oura-ui.js";
 import { pickForToday, todayLine } from "./correlate.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
@@ -108,10 +109,8 @@ function proteinLowDays() {
 
 function ouraMetric() {
   const o = app.latestOura(app.src().oura);
-  if (!o || o.readiness == null) {
-    const connected = app.state.oura && app.state.oura.connected;
-    return { id: "oura", label: "Readiness", value: "No Oura yet", meta: connected ? "Waiting for a sync" : "Connect a ring to see scores", sub: "Readiness and sleep show up here after a sync.", empty: true };
-  }
+  const status = app.state.oura && app.state.oura.status;
+  if (!showOuraOnHome(status, !!(o && o.readiness != null))) return null;
   const lv = app.readinessLevel(o.readiness);
   const when = o.date === app.today() ? "Today" : o.date === app.addDays(app.today(), -1) ? "Yesterday" : app.fmtDate(o.date, { month: "short", day: "numeric" });
   return {

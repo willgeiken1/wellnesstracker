@@ -1,5 +1,7 @@
 # Insight Privacy Policy
 
+DRAFT LEGAL COPY: for Will's review
+
 _Last updated: October 4, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. This page explains, in plain language, what information Insight handles, where it goes, and the choices you have.
@@ -16,7 +18,7 @@ Insight is a personal fitness app built and run by an individual developer as a 
 
 **Progress photos.** Only if you add them. They are saved on your device and, when you are signed in, in a private storage area tied to your account.
 
-**Oura Ring data.** Only if you connect your ring. Insight reads your sleep, readiness, heart rate variability, resting heart rate, body temperature, and step data. The login tokens that let Insight fetch this are kept in a private table that the app itself cannot read; only Insight's server functions can use them.
+**Oura Ring data.** Only if you connect your ring. Insight fetches daily readiness (score and temperature deviation), daily sleep score, the main sleep period (total, deep, REM, light, and awake time, average heart rate variability, and lowest resting heart rate), and daily steps. It does not fetch your Oura profile, email, or personal details. Those days are stored in a private `oura_days` table in Supabase, one row per day, and a copy is kept in the browser so Home and Insights work offline. The login tokens that let Insight fetch this are kept in a private table that the app itself cannot read; only Insight's server functions can use them. Oura data is never sent to Anthropic, Claude, or any other AI or machine-learning model. Food photo and meal-description estimates contain only what you submit for that meal.
 
 **Usage counts.** How many food photos (10 a day) and written meal descriptions (20 a day) you send for an estimate. Each count resets at midnight in your time zone.
 
@@ -38,6 +40,7 @@ Sentry and PostHog run only while **Share anonymous usage data** is on. That swi
 - It does not show ads.
 - It does not use advertising trackers. Crash reports and the anonymous feature-usage notes above are sent only while Share anonymous usage data is on.
 - It does not currently share your data with other Insight users. Other users cannot see your workouts, food, photos, or health data.
+- It does not send Oura ring data to an AI or machine-learning model.
 
 ## Where your data lives
 
@@ -50,13 +53,13 @@ A copy of your data is kept in your browser on your device so Insight works offl
 - **Delete a date range** in Settings → Privacy. This removes workouts, food logs, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and stored Oura days between the two dates you pick. Your account, routines, and saved meals stay. Oura's own copy of your ring data is not deleted. A later sync will not bring those days back into Insight.
 - **Export your data** in Settings → Privacy. Insight downloads a zip of CSV files (workouts, sets, food, measurements, weigh-ins, cardio, Oura days, goals, and a list of progress photos). The photo image files are not in the zip.
 - **App lock** in Settings → Privacy. Optional. When it is on, this phone asks for Face ID, Touch ID, or the device passcode before showing Insight. If the device can't do that, Insight asks for a 6-digit code instead. Insight never receives your face, fingerprint, or device passcode. If that unlock isn't available, sign in again with your email and password to open the app. That does not delete anything.
-- **Disconnect Oura** in Settings. This removes the Oura login tokens and the Oura data Insight stored. You can also remove Insight's access from your Oura account.
+- **Disconnect Oura** in Settings. This removes the Oura login tokens and the Oura days Insight stored, right away. If Oura revokes Insight's access, those same tokens and days are deleted then, and in every case within 72 hours. You can also remove Insight's access from your Oura account. A lapsed Oura membership pauses syncing and keeps the days already stored until you disconnect.
 - **Delete your account** in Settings → Privacy. You confirm by typing DELETE. This permanently removes your sign-in and everything stored with the account, including workouts, food, cardio, measurements, Oura data, and photos, and it erases the copy on that phone. You can also email the address below.
 - **Sign out** at any time in Settings. Signing out does not erase the copy kept in your browser; clear your browser's site data, or use Erase this phone in Privacy when you are signed out, to remove it.
 
 ## How long data is kept
 
-Until you delete it, delete the date range it falls in, or delete your account.
+Until you delete it, delete the date range it falls in, or delete your account. Oura days follow that same rule by default: retention is unlimited unless a shorter window is configured on the server. When a window is set, days older than it are removed by a cleanup job. Disconnecting Oura, or Oura revoking access, deletes the stored Oura days and login tokens within 72 hours (Insight does this immediately).
 
 ## Children
 
