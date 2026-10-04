@@ -566,6 +566,15 @@ function isHomeV2(raw) {
   return !!(raw && raw.v === 2 && Array.isArray(raw.items));
 }
 
+/* Known catalog ids, first occurrence only. Null, blanks, duplicates, and unknown ids drop out. */
+function widgetIds(list) {
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach((id) => {
+    if (typeof id === "string" && HOME_WIDGETS[id] && !out.includes(id)) out.push(id);
+  });
+  return out;
+}
+
 function cloneHomeV2(raw) {
   return {
     ...raw,
@@ -626,7 +635,12 @@ function equivalentLayout(state) {
 
 export function getHomeLayout(state) {
   const saved = state && state.layout && state.layout.homeV2;
-  if (isHomeV2(saved)) return cloneHomeV2(saved);
+  if (isHomeV2(saved)) {
+    const copy = cloneHomeV2(saved);
+    copy.items = widgetIds(copy.items);
+    copy.hidden = widgetIds(copy.hidden);
+    return copy;
+  }
   return equivalentLayout(state || {});
 }
 
@@ -638,13 +652,14 @@ export function setHomeLayout(state, layout) {
   const next = {
     ...prev,
     v: 2,
-    items: Array.isArray(layout && layout.items) ? layout.items.slice() : [],
-    hidden: Array.isArray(layout && layout.hidden) ? layout.hidden.slice() : [],
+    items: widgetIds(layout && layout.items),
+    hidden: widgetIds(layout && layout.hidden),
     updatedAt: Date.now(),
   };
   delete next.migrated;
   delete next.migratedAt;
   delete next.migratedFrom;
+  if (layout && layout.ouraSeeded === true) next.ouraSeeded = true;
   state.layout = state.layout && typeof state.layout === "object" && !Array.isArray(state.layout) ? state.layout : {};
   state.layout.homeV2 = next;
   return next;

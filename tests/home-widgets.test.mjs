@@ -190,6 +190,32 @@ test("an edit clears migrated, migratedAt, and migratedFrom, then stamps now", (
   assert.equal(again.ouraSeeded, true);
 });
 
+test("setHomeLayout keeps ouraSeeded when the edit passes it in", () => {
+  const state = { layout: { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1 } } };
+  const written = setHomeLayout(state, { items: ["today", "readiness"], hidden: [], ouraSeeded: true });
+  assert.equal(written.ouraSeeded, true);
+  assert.equal(state.layout.homeV2.ouraSeeded, true);
+  assert.equal(getHomeLayout(state).ouraSeeded, true);
+  const left = setHomeLayout(state, { items: ["today"], hidden: ["readiness"] });
+  assert.equal(left.ouraSeeded, true);
+});
+
+test("setHomeLayout and getHomeLayout keep each known id once", () => {
+  const state = { layout: {} };
+  const written = setHomeLayout(state, {
+    items: ["today", null, "", "today", "nope", "cardio", "cardio"],
+    hidden: ["steps", "steps", "missing", "", null, "today"],
+  });
+  assert.deepEqual(written.items, ["today", "cardio"]);
+  assert.deepEqual(written.hidden, ["steps", "today"]);
+  state.layout.homeV2.items = ["hrv", "hrv", "ghost", null, ""];
+  state.layout.homeV2.hidden = ["muscles", "nope", "muscles"];
+  const got = getHomeLayout(state);
+  assert.deepEqual(got.items, ["hrv"]);
+  assert.deepEqual(got.hidden, ["muscles"]);
+  assert.deepEqual(state.layout.homeV2.items, ["hrv", "hrv", "ghost", null, ""]);
+});
+
 test("hiding the brief or a brief tile changes the stand-in, not stored state", () => {
   const hiddenBrief = getHomeLayout({
     muscleMode: "basic",
