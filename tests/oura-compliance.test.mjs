@@ -110,8 +110,8 @@ test("local Postgres drops only oura_days older than a configured window", () =>
   const uid = "22222222-2222-2222-2222-222222222222";
   q(`delete from public.oura_days where user_id = '${uid}'`);
   q(`insert into public.oura_days (user_id, day, data) values
-    ('${uid}', current_date - 10, '{"date":"recent"}'),
-    ('${uid}', current_date - 40, '{"date":"old"}')
+    ('${uid}', (now() at time zone 'utc')::date - 10, '{"date":"recent"}'),
+    ('${uid}', (now() at time zone 'utc')::date - 40, '{"date":"old"}')
     on conflict (user_id, day) do update set data = excluded.data`);
   q(`update public.app_settings set value = 'null'::jsonb where key = 'oura_days_retention_days'`);
   assert.equal(q(`select public.purge_oura_days_retention()`), "0");
@@ -119,7 +119,7 @@ test("local Postgres drops only oura_days older than a configured window", () =>
   q(`update public.app_settings set value = '30'::jsonb where key = 'oura_days_retention_days'`);
   assert.equal(q(`select public.purge_oura_days_retention()`), "1");
   assert.equal(q(`select count(*) from public.oura_days where user_id = '${uid}'`), "1");
-  assert.equal(q(`select day::text from public.oura_days where user_id = '${uid}'`), q(`select (current_date - 10)::text`));
+  assert.equal(q(`select day::text from public.oura_days where user_id = '${uid}'`), q(`select ((now() at time zone 'utc')::date - 10)::text`));
   q(`update public.app_settings set value = 'null'::jsonb where key = 'oura_days_retention_days'`);
   q(`delete from public.oura_days where user_id = '${uid}'`);
 });

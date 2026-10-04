@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { classifyCollection, classifyRefresh, planSync } from "../supabase/functions/_shared/oura-policy.js";
 
@@ -152,6 +153,20 @@ function psql(database, args, input) {
   });
 }
 
+function psqlResult(database, args, input) {
+  const res = spawnSync("sudo", ["-u", "postgres", "psql", "-d", database, "-v", "ON_ERROR_STOP=1", ...args], {
+    encoding: "utf8",
+    input,
+  });
+  return res;
+}
+
+/* N keeps N UTC calendar dates. Exactly N days ago is deleted. Below 1 and above 36500 delete nothing. */
+function retentionDeletes(kind, n, offset) {
+  if (kind !== "pos" || !(n >= 1) || n > 36500) return false;
+  return offset >= Math.floor(n);
+}
+
 test("purge_oura_days_retention deletes only rows older than a positive window", () => {
   const rng = mulberry32(RETENTION_SEED);
   const db = "oura_property";
@@ -186,7 +201,7 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
   const present = psql(db, ["-t", "-A", "-c", "select string_agg(name, ',' order by name) from pg_timezone_names where name in ('UTC','Pacific/Kiritimati','Pacific/Pago_Pago','America/New_York','Asia/Kathmandu')"]).trim();
   for (const zone of ZONES) assert.ok(present.split(",").includes(zone), `missing time zone ${zone}`);
 
-  const kinds = ["null", "zero", "neg", "pos"];
+  const kinds = ["null", "zero", "neg", "frac", "huge", "pos"];
   for (let i = 0; i < RETENTION_ITERATIONS; i++) {
     const zone = ZONES[i % ZONES.length];
     const kind = kinds[i % kinds.length];
@@ -199,17 +214,20 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
       const tenths = Math.floor(rng() * 10);
       valueSql = `to_jsonb(-(${whole}::numeric + ${tenths}::numeric / 10))`;
       n = -(whole + tenths / 10);
+    } else if (kind === "frac") {
+      const tenths = 1 + Math.floor(rng() * 9);
+      valueSql = `to_jsonb(${tenths}::numeric / 10)`;
+      n = tenths / 10;
+    } else if (kind === "huge") {
+      const extra = 1 + Math.floor(rng() * 100000);
+      n = 36500 + extra / 10;
+      valueSql = `to_jsonb(36500::numeric + ${extra}::numeric / 10)`;
     } else if (kind === "pos") {
-      const whole = Math.floor(rng() * 90);
+      const whole = 1 + Math.floor(rng() * 120);
       const tenths = rng() < 0.5 ? 0 : 1 + Math.floor(rng() * 9);
       cutoff = whole;
       n = whole + tenths / 10;
       valueSql = tenths === 0 ? `to_jsonb(${whole}::int)` : `to_jsonb(${whole}::numeric + ${tenths}::numeric / 10)`;
-      if (n <= 0) {
-        cutoff = 1;
-        n = 1;
-        valueSql = "to_jsonb(1::int)";
-      }
     }
 
     const offsets = new Map();
@@ -218,6 +236,8 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
       add(user, 0);
       add(user, -1);
       add(user, 1);
+      add(user, 90);
+      add(user, 89);
       if (cutoff != null) {
         add(user, cutoff);
         add(user, cutoff + 1);
@@ -225,7 +245,7 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
       }
       for (let k = 0; k < 6; k++) add(user, Math.floor(rng() * 400) - 5);
     }
-    const values = [...offsets.values()].map((row) => `('${row.user}', current_date - ${row.offset}, '{"row":${row.offset}}')`).join(",\n");
+    const values = [...offsets.values()].map((row) => `('${row.user}', (now() at time zone 'utc')::date - ${row.offset}, '{"row":${row.offset}}')`).join(",\n");
     const where = `seed ${SEED} retentionSeed ${RETENTION_SEED} iter ${i} zone ${zone} kind ${kind} n ${n} cutoff ${cutoff}`;
     const sql = `
       begin;
@@ -246,7 +266,7 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
       insert into public.oura_days (user_id, day, data) values ${values};
       update public.app_settings set value = ${valueSql} where key = 'oura_days_retention_days';
       select 'REMOVED|' || public.purge_oura_days_retention()::text;
-      select 'LEFT|' || coalesce(string_agg(user_id::text || '|' || (current_date - day)::text, ',' order by user_id::text, day), '')
+      select 'LEFT|' || coalesce(string_agg(user_id::text || '|' || ((now() at time zone 'utc')::date - day)::text, ',' order by user_id::text, day), '')
         from public.oura_days
         where user_id in ('${USER_A}', '${USER_B}');
       select 'SENTINEL|' || note from public.retention_sentinel where id = 1;
@@ -255,7 +275,7 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
         from public.oura_connections where user_id in ('${USER_A}', '${USER_B}');
       select 'TOKEN|' || coalesce(string_agg(user_id::text || ':' || access_token, ',' order by user_id::text), '')
         from public.oura_tokens where user_id in ('${USER_A}', '${USER_B}');
-      select 'UTC|' || (timezone('UTC', now()))::date::text;
+      select 'UTC|' || (now() at time zone 'utc')::date::text;
       select 'LOCAL|' || current_date::text;
       rollback;
     `;
@@ -265,10 +285,9 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
       return [line.slice(0, idx), line.slice(idx + 1)];
     }));
     const kept = new Set(lines.LEFT ? lines.LEFT.split(",").filter(Boolean) : []);
-    const deletes = kind === "pos";
     let expectRemoved = 0;
     for (const row of offsets.values()) {
-      const drop = deletes && row.offset > cutoff;
+      const drop = retentionDeletes(kind, n, row.offset);
       if (drop) expectRemoved += 1;
       assert.equal(kept.has(`${row.user}|${row.offset}`), !drop, `${where} utc ${lines.UTC} local ${lines.LOCAL}`);
     }
@@ -279,10 +298,96 @@ test("purge_oura_days_retention deletes only rows older than a positive window",
     assert.equal(lines.CONN, `${USER_A}:connected,${USER_B}:membership_inactive`, where);
     assert.equal(lines.TOKEN, `${USER_A}:token-a,${USER_B}:token-b`, where);
 
-    if (deletes && lines.UTC !== lines.LOCAL) {
-      const delta = lines.UTC > lines.LOCAL ? 1 : -1;
-      const diverged = [...offsets.values()].some((row) => (row.offset > cutoff) !== (row.offset + delta > cutoff));
-      assert.equal(diverged, true, `${where} utc ${lines.UTC} local ${lines.LOCAL} followed the same cutoff`);
+    if (kind === "pos" && lines.UTC !== lines.LOCAL) {
+      const utcAhead = lines.UTC > lines.LOCAL ? 1 : -1;
+      const diverged = [...offsets.values()].some((row) => retentionDeletes(kind, n, row.offset) !== retentionDeletes(kind, n, row.offset - utcAhead));
+      assert.equal(diverged, true, `${where} utc ${lines.UTC} local ${lines.LOCAL} followed the session date`);
     }
   }
+
+  const q = (sql) => psql(db, ["-t", "-A", "-c", sql]).trim();
+  const src = readFileSync(file, "utf8");
+  assert.match(src, /n_days < 1 or n_days > 36500/);
+  assert.match(src, /\(now\(\) at time zone 'utc'\)::date/);
+  assert.match(src, /set search_path = ''/);
+  assert.match(src, /raise warning 'oura_days_retention_days must be JSON null or a number/);
+  assert.match(src, /create index if not exists oura_days_day_idx/);
+  assert.doesNotMatch(src, /drop constraint if exists oura_connections_status_check/);
+  assert.doesNotMatch(src, /cron\.unschedule/);
+  assert.match(src, /perform cron\.schedule\(\s*'oura-days-retention'/);
+  assert.equal(q("select data_type from information_schema.columns where table_schema = 'public' and table_name = 'oura_days' and column_name = 'day'"), "date");
+  assert.match(q("select proconfig::text from pg_catalog.pg_proc where proname = 'purge_oura_days_retention'"), /search_path=/);
+
+  const statusOid = q("select oid::text from pg_catalog.pg_constraint where conname = 'oura_connections_status_check'");
+  const retentionOid = q("select oid::text from pg_catalog.pg_constraint where conname = 'app_settings_oura_days_retention_check'");
+  psql(db, ["-f", file]);
+  assert.equal(q("select oid::text from pg_catalog.pg_constraint where conname = 'oura_connections_status_check'"), statusOid);
+  assert.equal(q("select oid::text from pg_catalog.pg_constraint where conname = 'app_settings_oura_days_retention_check'"), retentionOid);
+
+  const leading = () => q(`
+    select count(*) from pg_catalog.pg_index i
+    join pg_catalog.pg_class t on t.oid = i.indrelid
+    join pg_catalog.pg_namespace n on n.oid = t.relnamespace
+    join pg_catalog.pg_attribute a on a.attrelid = t.oid and a.attnum = i.indkey[0]
+    where n.nspname = 'public' and t.relname = 'oura_days' and a.attname = 'day' and i.indisvalid and i.indkey[0] <> 0
+  `);
+  assert.equal(leading(), "1");
+  q("drop index if exists public.oura_days_day_idx");
+  q("create index oura_days_day_alt on public.oura_days (day, user_id)");
+  psql(db, ["-f", file]);
+  assert.equal(q("select to_regclass('public.oura_days_day_idx') is null"), "t");
+  assert.equal(leading(), "1");
+  q("drop index public.oura_days_day_alt");
+  psql(db, ["-f", file]);
+  assert.equal(q("select to_regclass('public.oura_days_day_idx') is not null"), "t");
+
+  const bad = pick(rng, ["'\"forever\"'::jsonb", "'true'::jsonb", "'[90]'::jsonb", "'{\"days\":90}'::jsonb"]);
+  const rejected = psqlResult(db, ["-t", "-A", "-f", "-"], `
+    begin;
+    update public.app_settings set value = ${bad} where key = 'oura_days_retention_days';
+    rollback;
+  `);
+  assert.notEqual(rejected.status, 0, `seed ${SEED} accepted retention value ${bad}`);
+  assert.match(`${rejected.stderr}`, /app_settings_oura_days_retention_check/);
+
+  const warned = psqlResult(db, ["-t", "-A", "-f", "-"], `
+    begin;
+    alter table public.app_settings drop constraint app_settings_oura_days_retention_check;
+    update public.app_settings set value = '"forever"'::jsonb where key = 'oura_days_retention_days';
+    delete from public.oura_days;
+    insert into public.oura_days (user_id, day, data) values
+      ('${USER_A}', (now() at time zone 'utc')::date - 90, '{"row":90}'),
+      ('${USER_B}', (now() at time zone 'utc')::date, '{"row":0}');
+    select 'REMOVED|' || public.purge_oura_days_retention()::text;
+    select 'LEFT|' || count(*)::text from public.oura_days;
+    rollback;
+  `);
+  assert.equal(warned.status, 0, warned.stderr);
+  assert.match(warned.stderr, /WARNING:.*oura_days_retention_days must be JSON null or a number \(found string\)/);
+  const warnedLines = Object.fromEntries(warned.stdout.split("\n").filter((line) => line.includes("|")).map((line) => {
+    const idx = line.indexOf("|");
+    return [line.slice(0, idx), line.slice(idx + 1)];
+  }));
+  assert.equal(warnedLines.REMOVED, "0");
+  assert.equal(warnedLines.LEFT, "2");
+
+  const window90 = psql(db, ["-t", "-A", "-f", "-"], `
+    begin;
+    delete from public.oura_days;
+    insert into public.oura_days (user_id, day, data)
+    select '${USER_A}', (now() at time zone 'utc')::date - g, '{"row":true}'
+    from generate_series(0, 90) g;
+    update public.app_settings set value = '90'::jsonb where key = 'oura_days_retention_days';
+    select 'REMOVED|' || public.purge_oura_days_retention()::text;
+    select 'OLDEST|' || ((now() at time zone 'utc')::date - min(day))::text from public.oura_days;
+    select 'COUNT|' || count(*)::text from public.oura_days;
+    rollback;
+  `);
+  const windowLines = Object.fromEntries(window90.split("\n").filter((line) => line.includes("|")).map((line) => {
+    const idx = line.indexOf("|");
+    return [line.slice(0, idx), line.slice(idx + 1)];
+  }));
+  assert.equal(windowLines.REMOVED, "1");
+  assert.equal(windowLines.OLDEST, "89");
+  assert.equal(windowLines.COUNT, "90");
 });
