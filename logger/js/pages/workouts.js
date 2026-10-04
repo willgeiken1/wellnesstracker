@@ -37,10 +37,25 @@ function detailHTML() {
         </button>
         <span class="handle" aria-label="Drag to reorder ${app.esc(e.name)}">${app.I.grip}</span>
       </li>`).join("")}</ul>
-    <button class="add-row-btn" data-action="open-picker">Add exercises</button>
-    <div class="start-bar"><button class="btn primary block" data-action="start" data-id="${app.esc(w.id)}">Start ${app.esc(w.name)}</button></div>`;
+    <button class="add-row-btn" data-action="open-picker">Add exercises</button>`;
 }
 app.detailHTML = detailHTML;
+
+/* The routine list lives in a transformed pane, which would make a fixed bar scroll away. */
+function mountStartBar() {
+  const w = app.ui.tab === "workouts" && app.ui.detail && app.workoutById(app.ui.detail);
+  const show = w && !(app.needsLock && app.needsLock());
+  let slot = document.getElementById("start-slot");
+  if (!show) { if (slot) slot.remove(); return; }
+  const html = `<div class="start-bar"><button class="btn primary block" data-action="start" data-id="${app.esc(w.id)}">Start ${app.esc(w.name)}</button></div>`;
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.id = "start-slot";
+    document.body.appendChild(slot);
+  }
+  if (slot.innerHTML !== html) slot.innerHTML = html;
+}
+app.mountStartBar = mountStartBar;
 
 function historyHTML(embedded) {
   const list = app.finished().filter((s) => app.setCount(s) > 0);

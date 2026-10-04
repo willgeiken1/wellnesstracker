@@ -36,7 +36,14 @@ async function boot(browser, state) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(err.message));
   page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
-  if (state) await page.addInitScript((s) => localStorage.setItem("liftlog-v1", JSON.stringify(s)), state);
+  if (state) await page.addInitScript((s) => {
+    // Reload must keep what the page saved. Seeding on every navigation wiped the open workout.
+    try {
+      if (sessionStorage.getItem("insight-notes-seeded") === "1") return;
+      sessionStorage.setItem("insight-notes-seeded", "1");
+    } catch (e) {}
+    localStorage.setItem("liftlog-v1", JSON.stringify(s));
+  }, state);
   else await page.addInitScript(() => localStorage.removeItem("liftlog-v1"));
   await page.goto(BASE + "/index.html", { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.app && window.app.mergeRemote);
@@ -206,6 +213,18 @@ async function main() {
   });
   await page.waitForTimeout(200);
   await page.locator("[data-action='open-w'][data-id='push']").click();
+  await page.waitForSelector("#start-slot .start-bar");
+  const startAtRest = await page.locator("#start-slot .start-bar").boundingBox();
+  await page.evaluate(() => {
+    const pane = document.querySelector(".pane.active");
+    pane.scrollTop = pane.scrollHeight;
+  });
+  await page.waitForTimeout(80);
+  const startScrolled = await page.locator("#start-slot .start-bar").boundingBox();
+  check("start button stays pinned while the routine scrolls",
+    startAtRest && startScrolled && Math.abs(startAtRest.y - startScrolled.y) < 1 && startAtRest.x >= -1 && startAtRest.x + startAtRest.width <= 391,
+    JSON.stringify({ startAtRest, startScrolled }));
+  await page.evaluate(() => { document.querySelector(".pane.active").scrollTop = 0; });
   await page.locator("[data-action='edit-ex']").first().click();
   await page.locator("#exName").fill("Pec Fly");
   await page.locator("[data-action='ex-save']").click();
@@ -277,7 +296,8 @@ async function main() {
     const bar = document.createElement("div");
     bar.className = "start-bar";
     bar.innerHTML = "<button class='btn primary block'>Start</button>";
-    document.querySelector(".pane.active").appendChild(bar);
+    // A bar inside the transformed pane is not viewport-fixed, so it cannot stand in for the pinned Start button.
+    document.body.appendChild(bar);
   });
   await p.waitForTimeout(50);
   const aboveStart = await pillBox(p);

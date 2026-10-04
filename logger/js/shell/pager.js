@@ -150,6 +150,7 @@ app.render = function () {
   if (app.needsLock && app.needsLock()) {
     document.body.classList.add("locked");
     if (app.mountDonePill) app.mountDonePill();
+    if (app.mountStartBar) app.mountStartBar();
     if (app.renderLock) app.renderLock(false);
     return;
   }
@@ -174,6 +175,7 @@ app.render = function () {
     host.scrollTop = top;
   }
   if (app.mountDonePill) app.mountDonePill();
+  if (app.mountStartBar) app.mountStartBar();
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.dataset.pane === tab));
 
   const to = app.TAB_ORDER.indexOf(tab);
