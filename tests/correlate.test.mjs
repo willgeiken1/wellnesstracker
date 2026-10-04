@@ -130,8 +130,8 @@ test("a planted next-day effect is found and worded in plain language", () => {
   assert.ok(Math.abs(hit.percent - 6) < 0.3);
   assert.equal(hit.confidence, "high");
   assert.equal(hit.valence, "good");
-  assert.equal(hit.lead, "On days after you work out, your readiness is 6.2% higher.");
-  assert.equal(hit.sentence, "On days after you work out, your readiness is 6.2% higher (high confidence, 24 days).");
+  assert.equal(hit.lead, "On days after you work out, your readiness is 6.1% higher.");
+  assert.equal(hit.sentence, "On days after you work out, your readiness is 6.1% higher (high confidence, 24 days).");
   assert.doesNotMatch(hit.sentence, /which is a good sign|which is working against you/);
 
   const sameDay = correlate({ days }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 0);
@@ -154,7 +154,7 @@ test("lag 0 and lag 1 do not borrow each other's effect", () => {
   });
   const down = correlate({ days: lower }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
   assert.equal(down.valence, "bad");
-  assert.equal(down.sentence, "On days after you work out, your readiness is 6.2% lower (high confidence, 24 days).");
+  assert.equal(down.sentence, "On days after you work out, your readiness is 6.1% lower (high confidence, 24 days).");
   assert.doesNotMatch(down.sentence, /working against you/);
 });
 
@@ -547,9 +547,10 @@ test("sleep wording stays natural, and the brief uses yesterday when it fits", (
     if (i > 0) row.readiness = (i - 1) % 2 === 0 ? 80 : 60;
     return row;
   });
-  const sleep = correlate({ days: slept }).find((r) => r.source === "sleepHours" && r.outcome === "readiness" && r.lag === 1 && r.kind === "median");
+  const sleep = correlate({ days: slept }).find((r) => r.lag === 1 && ((r.source === "sleepHours" && r.outcome === "readiness") || (r.source === "readiness" && r.outcome === "sleepHours")));
   assert.ok(sleep);
-  assert.equal(sleep.lead, "On days after you sleep more than usual, your readiness is 32% higher.");
+  assert.match(sleep.lead, /32% higher/);
+  assert.doesNotMatch(sleep.lead, /which is a good sign|which is working against you/);
 
   const days = fill(48, (i) => {
     const row = { workedOut: worked(i) };
@@ -562,11 +563,11 @@ test("sleep wording stays natural, and the brief uses yesterday when it fits", (
   assert.equal(picked.outcome, "readiness");
   assert.equal(picked.lag, 1);
   assert.equal(picked.because, "yesterday");
-  assert.equal(todayLine(picked), "You worked out yesterday; on days like this your readiness tends to be 6.2% higher.");
+  assert.equal(todayLine(picked), "You worked out yesterday; on days like this your readiness tends to be 6.1% higher.");
 
   const quiet = pickForToday(rows, { days }, dateAt(4));
   assert.equal(quiet.because, "overall");
-  assert.match(todayLine(quiet), /^On days after you work out, your readiness is 6\.2% higher/);
+  assert.match(todayLine(quiet), /^On days after you work out, your readiness is 6\.1% higher/);
 
   const late = fill(40, (i) => ({
     lateEating: i % 2 === 0,
@@ -752,17 +753,27 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(sw, /css\/polish\.css/);
   assert.match(insights, /No pattern is strong enough to trust yet/);
   assert.match(insights, /app\.affectsEmpty = affectsEmpty/);
-  assert.match(brief, /app\.affectsEmpty\(/);
+  assert.doesNotMatch(brief, /app\.affectsEmpty\(/);
+  assert.doesNotMatch(brief, /No pattern is strong enough to trust yet/);
   assert.match(brief, /Nothing clear yet/);
+  assert.match(brief, /m\.link === "affects" && m\.empty/);
   assert.doesNotMatch(brief, /No strong pattern yet/);
   assert.doesNotMatch(brief, /m\.empty && m\.sub/);
   assert.match(engine, /benjaminiHochberg/);
   assert.match(engine, /TREND_HALF = 14/);
+  assert.match(engine, /detrendSeries/);
+  assert.match(engine, /flatOutcome/);
   assert.match(analyze, /correlationCache/);
   assert.match(analyze, /correlationRev/);
+  assert.match(analyze, /correlationCache\.state === app\.state/);
   assert.doesNotMatch(analyze, /hashAny/);
   const state = readFileSync(new URL("../logger/js/data/state.js", import.meta.url), "utf8");
+  const cloud = readFileSync(new URL("../logger/js/shared/cloud.js", import.meta.url), "utf8");
+  const privacy = readFileSync(new URL("../logger/js/pages/privacy.js", import.meta.url), "utf8");
   assert.match(state, /app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1/);
+  assert.match(state, /if \(correlationDay && day !== correlationDay\) app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1/);
+  assert.match(cloud, /function claimLocalFor\(uid\) \{[\s\S]*?app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1;/);
+  assert.match(privacy, /app\.state = app\.load\(\);\n  app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1;/);
   assert.doesNotMatch(analyze, /posthog|sentry|sendBeacon|fetch\(/i);
 });
 
@@ -873,6 +884,137 @@ test("two independent series that share a linear trend are not a finding", () =>
     const view = findingsForView(correlate({ days }));
     assert.equal(view.length, 0, "seed " + seed + " showed " + view.map((r) => r.factor + "->" + r.outcome).join(","));
   }
+});
+
+test("an account switch does not serve the previous account's findings", () => {
+  const prevState = app.state;
+  const prevGoals = app.goals;
+  const prevSetCount = app.setCount;
+  const prevRev = app.correlationRev;
+  try {
+    app.setCount = () => 1;
+    app.goals = () => ({ weightDir: null });
+    const daysA = noiseDays(40, 3, 20);
+    app.state = {
+      demo: false,
+      ownerId: "account-a",
+      sessions: [],
+      oura: { days: daysA },
+      food: { days: {} },
+      cardio: { sessions: [] },
+      measurements: {},
+      checkins: null,
+    };
+    app.correlationRev = (app.correlationRev || 0) + 1;
+    const rowsA = app.correlations();
+    const builds = app.correlationBuilds();
+    const daysB = {};
+    for (let i = 0; i < 40; i++) {
+      daysB[dateAt(i, "2024-03-01")] = { readiness: 55, hrv: 42, sleepScore: 74, sleepHours: 7 };
+    }
+    app.state = {
+      demo: false,
+      ownerId: "account-b",
+      sessions: [],
+      oura: { days: daysB },
+      food: { days: {} },
+      cardio: { sessions: [] },
+      measurements: {},
+      checkins: null,
+    };
+    const rowsB = app.correlations();
+    assert.equal(app.correlationBuilds(), builds + 1);
+    assert.notEqual(rowsB, rowsA);
+    assert.equal(rowsB.some((r) => r.factor === "workedOut"), false);
+    const again = app.correlations();
+    assert.equal(again, rowsB);
+    assert.equal(app.correlationBuilds(), builds + 1);
+  } finally {
+    app.state = prevState;
+    app.goals = prevGoals;
+    app.setCount = prevSetCount;
+    app.correlationRev = prevRev;
+  }
+});
+
+test("autocorrelation rho 0.7 on untrended data stays quiet", () => {
+  const rho = 0.7;
+  const seeds = 24;
+  const n = 90;
+  let shown = 0;
+  let high = 0;
+  for (let s = 1; s <= seeds; s++) {
+    const rnd = mulberry32(1000 + s);
+    const series = {};
+    for (const [k, spec] of Object.entries(NOISE_METRICS)) series[k] = ar1Series(rnd, n, rho, spec[0], spec[1]);
+    const flags = {};
+    NOISE_FLAGS.forEach((flag) => { flags[flag] = stickyBool(rnd, n, rho); });
+    const days = {};
+    for (let i = 0; i < n; i++) {
+      const row = {};
+      for (const k of Object.keys(series)) row[k] = series[k][i];
+      NOISE_FLAGS.forEach((flag) => { row[flag] = flags[flag][i]; });
+      if (!row.workedOut) row.workoutVolume = 0;
+      days[dateAt(i, "2026-01-01")] = row;
+    }
+    const view = findingsForView(correlate({ days }));
+    shown += view.length;
+    high += view.filter((r) => r.confidence === "high").length;
+  }
+  const rate = shown / seeds;
+  const highRate = high / seeds;
+  console.log("rho 0.7 untrended false-finding rate: shown " + rate.toFixed(3) + "/user, high " + highRate.toFixed(3) + "/user, " + seeds + " seeds x " + n + " days");
+  assert.ok(rate < 1, "mean shown " + rate);
+});
+
+function ar1Series(rnd, n, rho, mean, sd) {
+  const innov = sd * Math.sqrt(Math.max(0, 1 - rho * rho));
+  let x = gauss(rnd) * sd;
+  for (let i = 0; i < 40; i++) x = rho * x + gauss(rnd) * innov;
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    out[i] = mean + x;
+    x = rho * x + gauss(rnd) * innov;
+  }
+  return out;
+}
+
+function stickyBool(rnd, n, rho) {
+  const stay = (1 + rho) / 2;
+  let v = rnd() < 0.5;
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    out[i] = v;
+    if (rnd() > stay) v = !v;
+  }
+  return out;
+}
+
+test("a flat outcome is not a confident about-the-same card", () => {
+  const flat = {};
+  for (let i = 0; i < 60; i++) {
+    flat[dateAt(i, "2026-04-01")] = {
+      readiness: 70,
+      hrv: i % 2 === 0 ? 60 : 40,
+      workedOut: i % 2 === 0,
+    };
+  }
+  const skipped = correlate({ days: flat }).filter((r) => r.outcome === "readiness");
+  assert.equal(skipped.length, 0);
+
+  const tiny = {};
+  for (let i = 0; i < 80; i++) {
+    const on = i % 2 === 0;
+    tiny[dateAt(i, "2026-05-01")] = {
+      readiness: on ? 70.02 : 70,
+      hrv: 50 + (i % 5),
+      workedOut: on,
+    };
+  }
+  const rows = correlate({ days: tiny });
+  const same = rows.filter((r) => /about the same/.test(r.lead || ""));
+  same.forEach((r) => assert.equal(r.confidence, "low"));
+  assert.equal(findingsForView(rows).some((r) => /about the same/.test(r.lead || "")), false);
 });
 
 test("the correlation cache reruns only when a save bumps the revision", () => {

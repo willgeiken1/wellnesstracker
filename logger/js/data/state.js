@@ -59,7 +59,13 @@ app.esc = esc;
 const iso = (d) => d.toLocaleDateString("en-CA");
 app.iso = iso;
 
-const today = () => app.iso(new Date());
+let correlationDay = "";
+const today = () => {
+  const day = app.iso(new Date());
+  if (correlationDay && day !== correlationDay) app.correlationRev = (app.correlationRev || 0) + 1;
+  correlationDay = day;
+  return day;
+};
 app.today = today;
 
 const parseDay = (s) => new Date(s + "T12:00:00");

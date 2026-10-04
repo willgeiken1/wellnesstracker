@@ -270,6 +270,7 @@ async function eraseThisPhone() {
   try { localStorage.removeItem(app.KEY); } catch (e) {}
   try { sessionStorage.removeItem("insight-unlocked"); } catch (e) {}
   app.state = app.load();
+  app.correlationRev = (app.correlationRev || 0) + 1;
   app.applyTheme();
   app.ui.sheet = null;
   app.ui.drafts = {};

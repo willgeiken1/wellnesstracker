@@ -6,11 +6,13 @@
 
    A day of logs is not an independent coin flip, and one user is compared on
    well over a hundred factor, outcome, and lag pairs. A centred 29-day mean
-   is removed from each numeric series before any cut, so a shared drift is
-   not read as a split of early days against late days. Each comparison then
-   uses Welch's t with an effective sample size from the outcome's
-   autocorrelation, then Benjamini-Hochberg q-values across that whole family.
-   Confidence also requires a minimum effect size, so noise does not get a card. */
+   is removed from each numeric series before any cut. The first and last 14
+   days are filled by mirroring, so those windows stay centred instead of
+   one-sided. A shared drift is then not read as a split of early days against
+   late days. Each comparison uses Welch's t with an effective sample size
+   from the outcome's autocorrelation, then Benjamini-Hochberg q-values across
+   that whole family. Confidence also requires a minimum effect size, so noise
+   does not get a card. */
 
 export const MIN_PER_GROUP = 7;
 export const LATE_HOUR = 21;
@@ -776,25 +778,89 @@ function factorPhrase(id, label, verb) {
   };
 }
 
-/* Centred 29-day window: 14 days on each side of the day itself. */
+/* Centred 29-day window: 14 days on each side of the day itself.
+   Days before the first sample and after the last are filled by mirroring
+   the series across those endpoints, so the edge windows stay centred. */
 const TREND_HALF = 14;
 
 /* Subtract each numeric series' centred rolling mean, then add the series
    mean back. Cuts and outcomes both use this copy, so a slow drift is not a
    high-versus-low split, and a percent still refers to the usual level.
    Booleans are copied through unchanged. */
-let trendT = new Int32Array(256);
+let trendT = new Float64Array(256);
 let trendY = new Float64Array(256);
 let trendAt = new Int32Array(256);
 let trendOrder = [];
+let extT = new Float64Array(320);
+let extY = new Float64Array(320);
 
 function detrendGrow(n) {
   if (trendT.length >= n) return;
   let cap = trendT.length;
   while (cap < n) cap *= 2;
-  trendT = new Int32Array(cap);
+  trendT = new Float64Array(cap);
   trendY = new Float64Array(cap);
   trendAt = new Int32Array(cap);
+}
+
+function extGrow(n) {
+  if (extT.length >= n) return;
+  let cap = extT.length;
+  while (cap < n) cap *= 2;
+  extT = new Float64Array(cap);
+  extY = new Float64Array(cap);
+}
+
+/* `times` and `values` are sorted by time. Mirrored copies pad both ends by
+   up to TREND_HALF days. `apply` is called with the original index and the
+   detrended value. Interior days use only real neighbours. */
+function detrendSeries(times, values, at, n, apply) {
+  if (n < 2) return;
+  let overall = 0;
+  for (let i = 0; i < n; i++) overall += values[i];
+  overall /= n;
+  const t0 = times[0];
+  const tN = times[n - 1];
+  let nLeft = 0;
+  for (let i = 1; i < n; i++) {
+    if (2 * t0 - times[i] < t0 - TREND_HALF) break;
+    nLeft++;
+  }
+  let nRight = 0;
+  for (let i = n - 2; i >= 0; i--) {
+    if (2 * tN - times[i] > tN + TREND_HALF) break;
+    nRight++;
+  }
+  const m = nLeft + n + nRight;
+  extGrow(m);
+  let p = 0;
+  for (let k = nLeft; k >= 1; k--) {
+    extT[p] = 2 * t0 - times[k];
+    extY[p] = values[k];
+    p++;
+  }
+  const base = p;
+  for (let i = 0; i < n; i++) {
+    extT[p] = times[i];
+    extY[p] = values[i];
+    p++;
+  }
+  for (let k = 0; k < nRight; k++) {
+    const i = n - 2 - k;
+    extT[p] = 2 * tN - times[i];
+    extY[p] = values[i];
+    p++;
+  }
+  let lo = 0;
+  let hi = 0;
+  let sum = 0;
+  let cnt = 0;
+  for (let i = 0; i < m; i++) {
+    const t = extT[i];
+    while (hi < m && extT[hi] <= t + TREND_HALF) { sum += extY[hi]; cnt++; hi++; }
+    while (extT[lo] < t - TREND_HALF) { sum -= extY[lo]; cnt--; lo++; }
+    if (i >= base && i < base + n) apply(at[i - base], values[i - base] - sum / cnt + overall);
+  }
 }
 
 function detrendDays(days) {
@@ -832,20 +898,16 @@ function detrendDays(days) {
     trendOrder.length = n;
     for (let i = 0; i < n; i++) trendOrder[i] = i;
     trendOrder.sort((a, b) => trendT[a] - trendT[b]);
-    let overall = 0;
-    for (let i = 0; i < n; i++) overall += trendY[i];
-    overall /= n;
-    let lo = 0;
-    let hi = 0;
-    let sum = 0;
-    let cnt = 0;
+    const sortedT = new Float64Array(n);
+    const sortedY = new Float64Array(n);
+    const sortedAt = new Int32Array(n);
     for (let i = 0; i < n; i++) {
       const oi = trendOrder[i];
-      const t = trendT[oi];
-      while (hi < n && trendT[trendOrder[hi]] <= t + TREND_HALF) { sum += trendY[trendOrder[hi]]; cnt++; hi++; }
-      while (trendT[trendOrder[lo]] < t - TREND_HALF) { sum -= trendY[trendOrder[lo]]; cnt--; lo++; }
-      out[dates[trendAt[oi]]][id] = trendY[oi] - sum / cnt + overall;
+      sortedT[i] = trendT[oi];
+      sortedY[i] = trendY[oi];
+      sortedAt[i] = trendAt[oi];
     }
+    detrendSeries(sortedT, sortedY, sortedAt, n, (idx, y) => { out[dates[idx]][id] = y; });
   }
   return out;
 }
@@ -1090,6 +1152,25 @@ export function todayLine(result) {
   return result.lead || result.sentence || "";
 }
 
+/* A series that does not move (sd under a billionth of its level) makes a
+   tiny leftover difference look certain. Skip it. A difference that still
+   rounds to "about the same" is kept, but only at low confidence. */
+function flatOutcome(map) {
+  let n = 0;
+  let sum = 0;
+  let sum2 = 0;
+  for (const date in map) {
+    const y = map[date];
+    n++;
+    sum += y;
+    sum2 += y * y;
+  }
+  if (n < 2) return true;
+  const mean = sum / n;
+  const sd = Math.sqrt(Math.max(0, (sum2 - (sum * sum) / n) / (n - 1)));
+  return !(sd > 1e-9 * Math.abs(mean));
+}
+
 function evaluate(days, phrases, options, ouraExtra) {
   const minN = options.minPerGroup == null ? MIN_PER_GROUP : options.minPerGroup;
   const lags = options.lags || [0, 1];
@@ -1102,6 +1183,7 @@ function evaluate(days, phrases, options, ouraExtra) {
 
   outcomes.forEach((outcome) => {
     const ys = outcomeMap(adjusted, outcome);
+    if (flatOutcome(ys)) return;
     const rho = seriesRho(ys, idx);
     factors.forEach((factor) => {
       if (locked(factor.id, factor.source, outcome)) return;
@@ -1155,10 +1237,11 @@ function evaluate(days, phrases, options, ouraExtra) {
     /* Effective days can fall under 7 when the series barely moves from one
        day to the next. That is not enough to be confident, but it is still a
        computed comparison, so it stays low instead of disappearing. */
-    const confidence = row.nEff >= MIN_PER_GROUP
+    let confidence = row.nEff >= MIN_PER_GROUP
       ? confidenceOf(row.q, row.n1eff, row.n2eff, row.effect)
       : "low";
     if (!confidence) return;
+    if (confidence !== "low" && changeWords(row) === "about the same") confidence = "low";
     row.confidence = confidence;
     row.strength = Math.abs(row.effect) * CONFIDENCE_WEIGHT[confidence];
     const said = sentenceFor(row);
@@ -1276,7 +1359,7 @@ export function listFindings(rows) {
   return picked.concat(rest);
 }
 
-/* One numeric series, same centred 29-day adjustment evaluate() uses for cuts.
+/* One numeric series, same mirrored-edge adjustment evaluate() uses for cuts.
    Cached on the extracted day object so a week check does not repeat it. */
 function adjustedSeries(days, id) {
   if (!days.__trend) Object.defineProperty(days, "__trend", { value: Object.create(null) });
@@ -1296,19 +1379,15 @@ function adjustedSeries(days, id) {
     return map;
   }
   pts.sort((a, b) => a.t - b.t);
-  let overall = 0;
-  for (let i = 0; i < n; i++) overall += pts[i].y;
-  overall /= n;
-  let lo = 0;
-  let hi = 0;
-  let sum = 0;
-  let cnt = 0;
+  const times = new Float64Array(n);
+  const values = new Float64Array(n);
+  const at = new Int32Array(n);
   for (let i = 0; i < n; i++) {
-    const t = pts[i].t;
-    while (hi < n && pts[hi].t <= t + TREND_HALF) { sum += pts[hi].y; cnt++; hi++; }
-    while (pts[lo].t < t - TREND_HALF) { sum -= pts[lo].y; cnt--; lo++; }
-    map[pts[i].d] = pts[i].y - sum / cnt + overall;
+    times[i] = pts[i].t;
+    values[i] = pts[i].y;
+    at[i] = i;
   }
+  detrendSeries(times, values, at, n, (idx, y) => { map[pts[idx].d] = y; });
   box[id] = map;
   return map;
 }

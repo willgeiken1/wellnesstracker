@@ -181,12 +181,10 @@ function weightMetric() {
 
 function patternEmpty(days) {
   const n = days || 0;
-  const line = typeof app.affectsEmpty === "function" ? app.affectsEmpty(n) : "";
   return {
     id: "pattern",
     label: "What affects you",
     value: n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet",
-    meta: line,
     empty: true,
     link: "affects",
   };
@@ -240,8 +238,12 @@ function briefTodayHeadline() {
 app.briefTodayHeadline = briefTodayHeadline;
 
 function metricHTML(m) {
+  if (m.link === "affects" && m.empty) {
+    return `<li class="brief-metric span empty" data-metric="${m.id}">
+      <button class="brief-hit" data-action="open-affects"><span class="brief-line">${app.esc(m.value)}</span></button></li>`;
+  }
   if (m.link === "affects") {
-    return `<li class="brief-metric span${m.empty ? " empty" : ""}${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
+    return `<li class="brief-metric span${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
       <button class="brief-hit" data-action="open-affects">
         <span class="brief-l">${app.esc(m.label)}</span>
         <span class="brief-line">${app.esc(m.value)}</span>

@@ -182,8 +182,10 @@ function effect(perfs, valueOf, buckets) {
 app.effect = effect;
 
 /* Daily correlations for later screens. Nothing here is rendered, and nothing is sent off the device.
-   The result is cached in memory until app.save() bumps app.correlationRev. Health values
-   are not hashed and are not uploaded. */
+   The result is cached in memory until the revision changes, the options change, or app.state
+   is a different object. An account switch replaces state without save(), so the object check
+   is what stops the previous account's rows from being served. Health values are not hashed
+   and are not uploaded. */
 function correlationSource() {
   const S = app.src();
   const demo = !!(app.state && app.state.demo);
@@ -209,7 +211,7 @@ function correlationSource() {
 }
 app.correlationSource = correlationSource;
 
-let correlationCache = { rev: -1, opt: "", rows: null, builds: 0 };
+let correlationCache = { rev: -1, opt: "", state: null, rows: null, builds: 0 };
 
 function optionKey(opts) {
   const lags = opts.lags ? opts.lags.join(",") : "";
@@ -225,8 +227,8 @@ function correlations(options) {
   }
   const rev = app.correlationRev || 0;
   const opt = optionKey(opts);
-  if (correlationCache.rows && correlationCache.rev === rev && correlationCache.opt === opt) return correlationCache.rows;
-  correlationCache = { rev, opt, rows: runCorrelations(correlationSource(), opts), builds: correlationCache.builds + 1 };
+  if (correlationCache.rows && correlationCache.rev === rev && correlationCache.opt === opt && correlationCache.state === app.state) return correlationCache.rows;
+  correlationCache = { rev, opt, state: app.state, rows: runCorrelations(correlationSource(), opts), builds: correlationCache.builds + 1 };
   return correlationCache.rows;
 }
 app.correlations = correlations;

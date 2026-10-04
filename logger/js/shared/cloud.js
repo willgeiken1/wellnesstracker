@@ -182,6 +182,7 @@ function claimLocalFor(uid) {
     app.ui.drafts = {}; app.ui.open = null; app.ui.detail = null; app.ui.workoutOpen = false;
   }
   app.state.ownerId = uid;
+  app.correlationRev = (app.correlationRev || 0) + 1;
 }
 app.claimLocalFor = claimLocalFor;
 
