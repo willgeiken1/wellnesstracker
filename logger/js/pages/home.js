@@ -99,8 +99,9 @@ function homeEditBlocked() {
 
 function homeEditButton() {
   const blocked = homeEditBlocked();
-  const off = blocked ? ` disabled aria-disabled="true"` : "";
-  return `<button type="button" class="home-edit" data-action="home-edit"${off}>Edit</button>`;
+  if (!blocked) return `<button type="button" class="home-edit" data-action="home-edit">Edit</button>`;
+  const why = "Offline. Edit unlocks after the first sync finishes.";
+  return `<span class="home-edit-lock"><button type="button" class="home-edit" data-action="home-edit" disabled aria-disabled="true" title="${why}" aria-describedby="home-edit-wait">Edit</button><p class="sub home-edit-wait" id="home-edit-wait">${why}</p></span>`;
 }
 app.homeEditBlocked = homeEditBlocked;
 
@@ -176,11 +177,10 @@ function homeGalleryHTML() {
 }
 app.homeGalleryHTML = homeGalleryHTML;
 
+/* The brief card stays whenever the layout shows it. briefHTML drops only the
+   metrics that are already painted as their own tiles. */
 function paintedHomeItems(state) {
-  const visible = visibleHomeIds(state);
-  const dup = new Set(app.BRIEF_TILE_IDS || []);
-  const brief = visible.includes("brief") && !visible.some((id) => dup.has(id));
-  return brief ? visible : visible.filter((id) => id !== "brief");
+  return visibleHomeIds(state);
 }
 
 function homeHTML() {

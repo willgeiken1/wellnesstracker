@@ -686,27 +686,40 @@ function storedHomeV2(state) {
   return !!(saved && saved.v === 2 && Array.isArray(saved.items));
 }
 
+function concealEmpty(items, hidden, id) {
+  if (!items.includes(id)) return { items, hidden };
+  return { items: items.filter((x) => x !== id), hidden: hidden.includes(id) ? hidden : hidden.concat(id) };
+}
+
 /* The editor's starting arrangement. Unknown ids stay on the stored copy.
    A home that has never been saved starts from the trimmed stand-in: the brief
    stays one card, its metric tiles stay out, and Oura ids stay out with no ring.
-   A stored layout, including a migration, is edited as stored. */
+   A real edit is opened as stored. A migration drops Oura ids when there is no
+   ring, and hides an empty weekly goal or an empty weigh-in tile. */
 export function homeEditorDraft(state) {
   const stored = storedHomeV2(state);
   const layout = stored ? getHomeLayout(state) : equivalentLayout(state);
   const hiddenSet = new Set(layout.hidden);
   let items = layout.items.filter((id) => !hiddenSet.has(id));
   let hidden = layout.hidden.filter((id) => HOME_WIDGETS[id]);
+  const stripOura = () => {
+    const oura = (id) => !!(HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura);
+    items = items.filter((id) => !oura(id));
+    hidden = hidden.filter((id) => !oura(id));
+  };
   if (!stored) {
     if (items.includes("brief")) {
       const dup = new Set(BRIEF_TILE_IDS);
       items = items.filter((id) => !dup.has(id));
       hidden = hidden.filter((id) => !dup.has(id));
     }
-    if (!ringOrDemo(state)) {
-      const oura = (id) => !!(HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura);
-      items = items.filter((id) => !oura(id));
-      hidden = hidden.filter((id) => !oura(id));
-    }
+    if (!ringOrDemo(state)) stripOura();
+  } else if (!homeRegistryActive(state)) {
+    if (!ringOrDemo(state)) stripOura();
+    const goal = state && state.goals && state.goals.sessionsPerWeek;
+    if (!goal) ({ items, hidden } = concealEmpty(items, hidden, "weekly-goal"));
+    const weighs = state && state.profile && Array.isArray(state.profile.weighIns) ? state.profile.weighIns : [];
+    if (!weighs.length && !(state && state.demo)) ({ items, hidden } = concealEmpty(items, hidden, "weight-trend"));
   }
   const raw = state && state.layout && state.layout.homeV2;
   const sizes = raw && raw.sizes && typeof raw.sizes === "object" && !Array.isArray(raw.sizes) ? { ...raw.sizes } : {};

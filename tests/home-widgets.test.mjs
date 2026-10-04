@@ -4,6 +4,7 @@ import test from "node:test";
 import { app } from "../logger/js/runtime.js";
 import { BRIEF_TILE_IDS, HOME_REGISTRY_PAINT, HOME_WIDGETS, commitHomeEditor, getHomeLayout, homeAwaitingSync, homeDraftUnchanged, homeEditorDraft, homeRegistryActive, renderHomeWidgets, setHomeLayout, widgetSize } from "../logger/js/shared/home-widgets.js";
 import "../logger/js/pages/home.js";
+import "../logger/js/shared/brief.js";
 
 const IDS = [
   "readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps",
@@ -253,7 +254,7 @@ test("the editor save clears a migration and writes the chosen cards", () => {
   const before = Date.now();
   const draft = homeEditorDraft(state);
   assert.deepEqual(draft.items, ["today"]);
-  assert.ok(draft.hidden.includes("steps"));
+  assert.equal(draft.hidden.includes("steps"), false);
   assert.equal(draft.sizes["future-widget"], "small");
   draft.items = ["cardio", "headline"];
   draft.hidden = ["today", "steps"];
@@ -391,8 +392,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v29/);
-  assert.match(sentry, /insight-shell-v29/);
+  assert.match(sw, /insight-shell-v30/);
+  assert.match(sentry, /insight-shell-v30/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
@@ -762,7 +763,7 @@ function mulberry32(seed) {
   };
 }
 
-test("a random draft save does not repeat an id or its text in the brief and the tiles", () => {
+test("any layout containing brief paints one brief card", () => {
   const rnd = mulberry32(0x5fe1744);
   const ids = Object.keys(HOME_WIDGETS);
   const phrase = (id) => `Only on the ${id} card zz`;
@@ -770,7 +771,7 @@ test("a random draft save does not repeat an id or its text in the brief and the
   ids.forEach((id) => {
     prevRender[id] = HOME_WIDGETS[id].render;
     HOME_WIDGETS[id].render = () => (id === "brief"
-      ? `<section class="brief">${BRIEF_TILE_IDS.map((tile) => `<span data-metric="${tile}">${phrase(tile)}</span>`).join("")}</section>`
+      ? `<section class="brief">Morning brief card</section>`
       : `<article>${phrase(id)}</article>`);
   });
   const prev = {
@@ -819,23 +820,11 @@ test("a random draft save does not repeat an id or its text in the brief and the
     return app.homeHTML();
   }
 
-  function assertSplit(html, label) {
-    const briefs = html.match(/<section class="brief"[\s\S]*?<\/section>/g) || [];
-    assert.ok(briefs.length <= 1, label);
-    const brief = briefs[0] || "";
-    const tiles = [...html.matchAll(/<div class="hw-slot[^"]*" data-hw="([^"]+)">([\s\S]*?)<\/div>/g)];
-    const tileIds = tiles.map((match) => match[1]).filter((id) => id !== "brief");
-    const tileText = tiles.filter((match) => match[1] !== "brief").map((match) => match[2]).join("\n");
-    if (brief) {
-      const repeated = tileIds.filter((id) => BRIEF_TILE_IDS.includes(id));
-      assert.deepEqual(repeated, [], `${label} ids ${repeated.join(",")}`);
-      BRIEF_TILE_IDS.forEach((id) => {
-        assert.equal(brief.includes(phrase(id)) && tileText.includes(phrase(id)), false, `${label} text ${id}`);
-      });
-    }
-    tileIds.forEach((id) => {
-      assert.equal(brief.includes(phrase(id)), false, `${label} tile text ${id}`);
-    });
+  function assertBriefCard(html, items, hidden, label) {
+    const on = items.includes("brief") && !(hidden || []).includes("brief");
+    const briefs = html.match(/<section class="brief"/g) || [];
+    assert.equal(briefs.length, on ? 1 : 0, label);
+    if (on) assert.match(html, /data-hw="brief"/, label);
   }
 
   try {
@@ -845,13 +834,14 @@ test("a random draft save does not repeat an id or its text in the brief and the
       ["brief", "this-week", "cardio", "muscles"],
       ["headline", "pattern", "today", "food-yesterday", "weekly-goal", "weight-trend"],
       ["brief", "headline", "readiness"],
+      ["brief", "headline", "pattern", "today", "food-yesterday", "weekly-goal", "weight-trend"],
     ];
-    forced.forEach((items, index) => assertSplit(paint(items, []), `forced ${index}`));
-    for (let trial = 0; trial < 24; trial++) {
+    forced.forEach((items, index) => assertBriefCard(paint(items, []), items, [], `forced ${index}`));
+    for (let trial = 0; trial < 40; trial++) {
       const items = ids.filter(() => rnd() < 0.45);
-      if (!items.length) items.push(rnd() < 0.5 ? "brief" : "today");
-      const hidden = ids.filter((id) => !items.includes(id) && rnd() < 0.35);
-      assertSplit(paint(items, hidden), `trial ${trial}`);
+      if (!items.includes("brief")) items.push("brief");
+      const hidden = ids.filter((id) => !items.includes(id) && rnd() < 0.2);
+      assertBriefCard(paint(items, hidden), items, hidden, `trial ${trial}`);
     }
     const hidden = paint(["this-week"], ["brief"]);
     assert.doesNotMatch(hidden, /class="brief"/);
@@ -863,6 +853,8 @@ test("a random draft save does not repeat an id or its text in the brief and the
     app.state = { layout: {}, oura: { connected: false } };
     const blocked = app.homeHTML();
     assert.match(blocked, /data-action="home-edit"[^>]*disabled/);
+    assert.match(blocked, /id="home-edit-wait"/);
+    assert.match(blocked, /first sync finishes/);
     app.cloudPullOk = true;
     const open = app.homeHTML();
     assert.doesNotMatch(open, /data-action="home-edit"[^>]*disabled/);
@@ -889,5 +881,143 @@ test("a random draft save does not repeat an id or its text in the brief and the
     app.readinessCardHTML = prev.readinessCardHTML;
     app.muscleMapHTML = prev.muscleMapHTML;
     app.widgetize = prev.widgetize;
+  }
+});
+
+test("a migrated editor hides a missing ring and empty goal and weigh-in tiles", () => {
+  const migrated = {
+    oura: { connected: false },
+    goals: { sessionsPerWeek: null },
+    profile: { weighIns: [] },
+    layout: {
+      homeV2: {
+        v: 2,
+        items: ["readiness", "weekly-goal", "weight-trend", "brief", "this-week"],
+        hidden: ["steps", "sleep-score"],
+        updatedAt: 4,
+        migrated: true,
+        migratedAt: 4,
+      },
+    },
+  };
+  const draft = homeEditorDraft(migrated);
+  assert.deepEqual(draft.items, ["brief", "this-week"]);
+  assert.ok(draft.hidden.includes("weekly-goal"));
+  assert.ok(draft.hidden.includes("weight-trend"));
+  assert.equal(draft.items.concat(draft.hidden).some((id) => HOME_WIDGETS[id].needsOura), false);
+  assert.equal(homeDraftUnchanged(draft, homeEditorDraft(migrated)), true);
+
+  const filled = homeEditorDraft({
+    ...migrated,
+    oura: { connected: true },
+    goals: { sessionsPerWeek: 3 },
+    profile: { weighIns: [{ date: "2026-10-01", kg: 80 }] },
+  });
+  assert.ok(filled.items.includes("readiness"));
+  assert.ok(filled.items.includes("weekly-goal"));
+  assert.ok(filled.items.includes("weight-trend"));
+  assert.ok(filled.hidden.includes("sleep-score"));
+
+  const demo = homeEditorDraft({ ...migrated, demo: true });
+  assert.ok(demo.items.includes("readiness"));
+  assert.ok(demo.items.includes("weight-trend"));
+  assert.ok(demo.hidden.includes("weekly-goal"));
+});
+
+test("the registry brief drops repeated metrics and keeps a start action", () => {
+  const prev = {
+    state: app.state,
+    ui: app.ui,
+    today: app.today,
+    esc: app.esc,
+    briefPrefs: app.briefPrefs,
+    briefTodayHeadline: app.briefTodayHeadline,
+    briefMetrics: app.briefMetrics,
+    activeSession: app.activeSession,
+    sessionsOn: app.sessionsOn,
+    workoutById: app.workoutById,
+    addDays: app.addDays,
+    dayEntries: app.dayEntries,
+    sessionsInWeek: app.sessionsInWeek,
+    mondayOf: app.mondayOf,
+    weekGoalStatus: app.weekGoalStatus,
+    pl: app.pl,
+    weighIns: app.weighIns,
+    plan: app.state && app.state.plan,
+  };
+  app.today = () => "2026-10-04";
+  app.esc = (s) => String(s ?? "");
+  app.ui = {};
+  app.pl = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  app.activeSession = () => null;
+  app.sessionsOn = () => [];
+  app.workoutById = (id) => (id === "push" ? { id, name: "Push", exercises: [{}, {}] } : null);
+  app.addDays = (day, n) => `${day}:${n}`;
+  app.dayEntries = () => [];
+  app.sessionsInWeek = () => 0;
+  app.mondayOf = () => "2026-09-28";
+  app.weekGoalStatus = () => null;
+  app.weighIns = () => [];
+  app.briefPrefs = () => ({ order: ["pattern", "train", "food", "week", "weight"], hidden: [], size: "compact" });
+  app.briefTodayHeadline = () => "Headline phrase zz";
+  const base = {
+    demo: false,
+    oura: { connected: false },
+    plan: { "2026-10-04": "push" },
+    workouts: [],
+    sessions: [],
+    profile: { weighIns: [] },
+    goals: {},
+  };
+  try {
+    app.state = {
+      ...base,
+      layout: { homeV2: { v: 2, items: ["brief", "headline", "pattern", "today", "food-yesterday"], hidden: [], updatedAt: 5 } },
+    };
+    const covered = app.briefHTML();
+    assert.match(covered, /class="card brief"/);
+    assert.doesNotMatch(covered, /brief-h|data-metric="pattern"|data-metric="train"|data-metric="food"|data-action="brief-edit"|Headline phrase zz/);
+    assert.match(covered, /data-metric="week"/);
+    assert.match(covered, /data-metric="weight"/);
+    assert.match(covered, /data-action="brief-size"/);
+    assert.doesNotMatch(covered, /data-action="start"/);
+    const heroSrc = readFileSync(new URL("../logger/js/pages/home.js", import.meta.url), "utf8");
+    assert.match(heroSrc, /data-action="start" data-id="\$\{app\.esc\(w\.id\)\}"/);
+
+    app.state = {
+      ...base,
+      layout: { homeV2: { v: 2, items: ["brief"], hidden: [], updatedAt: 5 } },
+    };
+    const alone = app.briefHTML();
+    assert.match(alone, /class="brief-h"/);
+    assert.match(alone, /Headline phrase zz/);
+    assert.match(alone, /data-metric="train"/);
+    assert.match(alone, /data-action="start" data-id="push"/);
+    assert.match(alone, /data-metric="food"/);
+    assert.doesNotMatch(alone, /data-action="brief-edit"/);
+
+    app.state = { ...base, layout: { home: { order: ["brief"], hidden: [] } } };
+    const legacy = app.briefHTML();
+    assert.match(legacy, /data-action="brief-edit"/);
+    assert.match(legacy, /data-action="start" data-id="push"/);
+    assert.match(legacy, /class="brief-h"/);
+  } finally {
+    app.state = prev.state;
+    app.ui = prev.ui;
+    app.today = prev.today;
+    app.esc = prev.esc;
+    app.briefPrefs = prev.briefPrefs;
+    app.briefTodayHeadline = prev.briefTodayHeadline;
+    app.briefMetrics = prev.briefMetrics;
+    app.activeSession = prev.activeSession;
+    app.sessionsOn = prev.sessionsOn;
+    app.workoutById = prev.workoutById;
+    app.addDays = prev.addDays;
+    app.dayEntries = prev.dayEntries;
+    app.sessionsInWeek = prev.sessionsInWeek;
+    app.mondayOf = prev.mondayOf;
+    app.weekGoalStatus = prev.weekGoalStatus;
+    app.pl = prev.pl;
+    app.weighIns = prev.weighIns;
   }
 });

@@ -45,6 +45,17 @@
   font-size: 15px;
 }
 .home-edit:disabled { opacity: 0.45; }
+.home-edit-lock { display: grid; justify-items: end; gap: 2px; }
+.home-edit-wait {
+  margin: 0;
+  max-width: 11rem;
+  color: #C9C9CF;
+  font-size: 13px;
+  font-style: normal;
+  line-height: 1.35;
+  text-align: right;
+}
+:root[data-mode="light"] .home-edit-wait { color: #5A5C60; }
 .home-editor { display: grid; gap: 12px; }
 .home-editor-top {
   position: sticky;

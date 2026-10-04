@@ -14,8 +14,11 @@
    updatedAt is compared only between copies of the same kind.
 
    pickHomeV2 caps a timestamp at about one day past now so a skewed clock
-   cannot win forever. Equal timestamps break by the JSON of items+hidden,
-   so two phones converge. ouraSeeded sticks to whichever copy is kept.
+   cannot win forever. Equal timestamps prefer the copy with more distinct
+   ids (items union hidden), then the JSON of items, hidden, and sizes, so
+   two phones converge and an older client that drops an unknown id cannot
+   erase it by rewriting the same updatedAt. ouraSeeded sticks to whichever
+   copy is kept.
    A copy must have a numeric v of exactly 2 (the string "2" is rejected) and
    an items array; hidden, when present, must be an array. Ids are strings.
    Unknown strings stay in items and hidden so a newer client's cards are not
@@ -181,8 +184,16 @@ function canonicalSizes(home) {
   return out;
 }
 
+/* Second tie-break, used only when both copies have the same distinct-id count. */
 function contentKey(home) {
   return JSON.stringify({ items: home.items || [], hidden: home.hidden || [], sizes: canonicalSizes(home) });
+}
+
+function distinctIdCount(home) {
+  const ids = new Set();
+  (home && home.items || []).forEach((id) => { if (typeof id === "string" && id) ids.add(id); });
+  (home && home.hidden || []).forEach((id) => { if (typeof id === "string" && id) ids.add(id); });
+  return ids.size;
 }
 
 function withSticky(winner, other) {
@@ -269,7 +280,7 @@ export function applyHomeMigration(state, now = Date.now(), opts) {
   return state;
 }
 
-/* Same kind: newer updatedAt, then items, hidden, and sizes.
+/* Same kind: newer updatedAt, then more distinct ids, then items, hidden, and sizes.
    An edit beats a migration. ouraSeeded sticks. */
 export function pickHomeV2(localLayout, remoteLayout, now = Date.now()) {
   const local = asV2(localLayout && localLayout.homeV2, now);
@@ -291,10 +302,16 @@ export function pickHomeV2(localLayout, remoteLayout, now = Date.now()) {
     if (rt > lt) { winner = remote; other = local; }
     else if (lt > rt) { winner = local; other = remote; }
     else {
-      const lk = contentKey(local);
-      const rk = contentKey(remote);
-      if (rk > lk) { winner = remote; other = local; }
-      else { winner = local; other = remote; }
+      const ln = distinctIdCount(local);
+      const rn = distinctIdCount(remote);
+      if (rn > ln) { winner = remote; other = local; }
+      else if (ln > rn) { winner = local; other = remote; }
+      else {
+        const lk = contentKey(local);
+        const rk = contentKey(remote);
+        if (rk > lk) { winner = remote; other = local; }
+        else { winner = local; other = remote; }
+      }
     }
   }
   return withSticky(winner, other);

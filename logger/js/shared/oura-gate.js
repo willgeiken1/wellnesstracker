@@ -91,6 +91,8 @@ export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
 export function homeOuraWaiting(state) {
   if (!state || state.demo || ouraReady(state)) return false;
   if (!state.oura || !state.oura.connected) return false;
+  const err = state.oura.lastError;
+  if (typeof err === "string" && err.toLowerCase().includes("membership_inactive")) return false;
   const layout = getHomeLayout(state);
   const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
   const items = Array.isArray(layout.items) ? layout.items : [];

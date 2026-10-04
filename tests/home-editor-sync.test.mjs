@@ -174,3 +174,69 @@ function getPaintIds(home) {
   const hidden = new Set(home.hidden || []);
   return (home.items || []).filter((id) => HOME_WIDGETS[id] && !hidden.has(id));
 }
+
+function mulberry(seed) {
+  let rng = seed >>> 0;
+  return () => {
+    rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0;
+    return rng / 4294967296;
+  };
+}
+
+function distinctCount(home) {
+  const ids = new Set();
+  [...(home.items || []), ...(home.hidden || [])].forEach((id) => {
+    if (typeof id === "string" && id) ids.add(id);
+  });
+  return ids.size;
+}
+
+/* An old build's allowlist has no brief and drops unknown ids. */
+function oldClientCopy(home) {
+  const keep = (id) => HOME_WIDGETS[id] && id !== "brief";
+  const items = (home.items || []).filter(keep);
+  const hidden = (home.hidden || []).filter((id) => keep(id) && !items.includes(id));
+  return { v: 2, items, hidden, updatedAt: home.updatedAt, sizes: home.sizes };
+}
+
+test("an old client that strips an id at the same updatedAt does not erase it", () => {
+  const now = 2000;
+  const rich = { v: 2, items: ["brief", "this-week", "cardio"], hidden: [], updatedAt: 1000 };
+  const poor = { v: 2, items: ["this-week", "cardio"], hidden: [], updatedAt: 1000 };
+  assert.deepEqual(pickHomeV2({ homeV2: rich }, { homeV2: poor }, now).items, ["brief", "this-week", "cardio"]);
+  assert.deepEqual(pickHomeV2({ homeV2: poor }, { homeV2: rich }, now).items, ["brief", "this-week", "cardio"]);
+  const hiddenRich = { v: 2, items: ["this-week"], hidden: ["brief"], updatedAt: 1000 };
+  const hiddenPoor = { v: 2, items: ["this-week"], hidden: [], updatedAt: 1000 };
+  assert.ok(pickHomeV2({ homeV2: hiddenRich }, { homeV2: hiddenPoor }, now).hidden.includes("brief"));
+  assert.ok(pickHomeV2({ homeV2: hiddenPoor }, { homeV2: hiddenRich }, now).hidden.includes("brief"));
+
+  const rnd = mulberry(0x4c9e055);
+  const pool = [...IDS, "future-widget", "next-card"];
+  for (let trial = 0; trial < 80; trial++) {
+    const chosen = pool.filter(() => rnd() < 0.45);
+    if (!chosen.includes("brief")) chosen.push("brief");
+    if (!chosen.some((id) => HOME_WIDGETS[id])) chosen.push("today");
+    const items = [];
+    const hidden = [];
+    chosen.forEach((id) => (rnd() < 0.72 ? items : hidden).push(id));
+    if (!items.some((id) => HOME_WIDGETS[id])) items.unshift("brief");
+    const at = 1000 + trial;
+    const full = { v: 2, items, hidden, updatedAt: at };
+    const stripped = oldClientCopy(full);
+    const forward = pickHomeV2({ homeV2: full }, { homeV2: stripped }, at + 5000);
+    const backward = pickHomeV2({ homeV2: stripped }, { homeV2: full }, at + 5000);
+    assert.equal(sig(forward), sig(backward), `trial ${trial} diverged`);
+    assert.ok(hasId(forward, "brief"), `trial ${trial} dropped brief`);
+    assert.ok(distinctCount(forward) >= distinctCount(stripped), `trial ${trial} kept the shorter copy`);
+    const merged = pickHomeV2({ homeV2: stripped }, { homeV2: forward }, at + 5000);
+    assert.equal(sig(merged), sig(forward), `trial ${trial} merge erased ids`);
+    unknowns(full).forEach((id) => assert.ok(hasId(forward, id), `trial ${trial} dropped ${id}`));
+  }
+
+  const sizedA = { v: 2, items: ["today", "brief"], hidden: ["steps"], updatedAt: 50, sizes: { z: "s", aa: "m" } };
+  const sizedB = { v: 2, items: ["today", "brief"], hidden: ["steps"], updatedAt: 50, sizes: { z: "m", aa: "s" } };
+  const sizeWinner = pickHomeV2({ homeV2: sizedA }, { homeV2: sizedB }, 80);
+  assert.equal(sizeWinner.sizes.z, "s");
+  assert.equal(pickHomeV2({ homeV2: sizedB }, { homeV2: sizedA }, 80).sizes.z, "s");
+  assert.ok(hasId(sizeWinner, "brief"));
+});

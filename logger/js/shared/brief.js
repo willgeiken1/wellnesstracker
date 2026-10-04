@@ -130,7 +130,10 @@ function trainMetric() {
   if (planned && planned !== "rest") {
     const w = app.workoutById(planned);
     if (w && !doneToday.some((s) => s.workoutId === planned)) {
-      return { id: "train", label: "Training", value: w.name, meta: app.pl(w.exercises.length, "exercise"), sub: "On today's plan." };
+      return {
+        id: "train", label: "Training", value: w.name, meta: app.pl(w.exercises.length, "exercise"), sub: "On today's plan.",
+        link: "start", workoutId: w.id,
+      };
     }
   }
   if (doneToday.length) return { id: "train", label: "Training", value: doneToday.map((s) => s.name).join(" + "), meta: "Done today", sub: "Logged for today." };
@@ -240,7 +243,30 @@ function briefTodayHeadline() {
 }
 app.briefTodayHeadline = briefTodayHeadline;
 
+const TILE_COVERS_METRIC = {
+  pattern: "pattern",
+  today: "train",
+  "food-yesterday": "food",
+  "weekly-goal": "week",
+  "weight-trend": "weight",
+};
+
+function registryTiles() {
+  if (typeof app.homeRegistryActive !== "function" || !app.homeRegistryActive(app.state)) return null;
+  if (typeof app.visibleHomeIds !== "function") return null;
+  return new Set(app.visibleHomeIds(app.state));
+}
+
 function metricHTML(m) {
+  if (m.link === "start" && m.workoutId) {
+    return `<li class="brief-metric" data-metric="${m.id}">
+      <button class="brief-hit" data-action="start" data-id="${app.esc(m.workoutId)}">
+        <span class="brief-l">${app.esc(m.label)}</span>
+        <b>${app.esc(m.value)}</b>
+        ${m.meta ? `<span class="brief-m">${app.esc(m.meta)}</span>` : ""}
+        ${m.sub ? `<span class="brief-s">${app.esc(m.sub)}</span>` : ""}
+      </button></li>`;
+  }
   if (m.link === "affects" && m.empty) {
     return `<li class="brief-metric span empty" data-metric="${m.id}">
       <button class="brief-hit" data-action="open-affects"><span class="brief-l">Patterns</span><span class="brief-line">${app.esc(m.value)}</span></button></li>`;
@@ -279,14 +305,25 @@ function briefHTML() {
       <ul class="brief-edit">${rows}</ul></section>`;
   }
   const expanded = prefs.size === "expanded";
-  const items = app.briefMetrics();
+  const tiles = registryTiles();
+  let items = app.briefMetrics();
+  let showHeadline = true;
+  if (tiles) {
+    const drop = new Set();
+    Object.entries(TILE_COVERS_METRIC).forEach(([tile, metric]) => { if (tiles.has(tile)) drop.add(metric); });
+    items = items.filter((m) => m && !drop.has(m.id));
+    showHeadline = !tiles.has("headline");
+  }
   const visible = prefs.order.filter((id) => !prefs.hidden.includes(id));
   const body = items.length ? `<ul class="brief-metrics">${items.map(metricHTML).join("")}</ul>` : (visible.length ? "" : `<p class="brief-note">All metrics are off. Edit the brief to turn one on.</p>`);
+  const registry = !!tiles;
+  const edit = registry ? "" : `<button data-action="brief-edit">Edit</button>`;
+  const headline = showHeadline ? `<h2 class="brief-h">${app.esc(app.briefTodayHeadline())}</h2>` : "";
   return `<section class="card brief${expanded ? " expanded" : ""}" data-brief-size="${prefs.size}" aria-label="Morning brief">
     <div class="brief-top"><p class="brief-k">Morning brief</p><div class="brief-tools">
       <button data-action="brief-size" aria-pressed="${expanded}">${expanded ? "Compact" : "Expand"}</button>
-      <button data-action="brief-edit">Edit</button></div></div>
-    <h2 class="brief-h">${app.esc(app.briefTodayHeadline())}</h2>
+      ${edit}</div></div>
+    ${headline}
     ${body}
   </section>`;
 }

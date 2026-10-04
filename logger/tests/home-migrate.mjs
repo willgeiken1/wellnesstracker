@@ -276,6 +276,17 @@ function regressions() {
   const capped = pickHomeV2(year, twoDays, now);
   const cappedBack = pickHomeV2(twoDays, year, now);
   check("clocks past the cap tie-break instead of the further one winning", eq(capped.items, cappedBack.items) && capped.updatedAt === now + 864e5, capped);
+
+  const withBrief = { homeV2: { v: 2, items: ["brief", "this-week", "cardio"], hidden: [], updatedAt: 1000 } };
+  const stripped = { homeV2: { v: 2, items: ["this-week", "cardio"], hidden: [], updatedAt: 1000 } };
+  const keptBrief = pickHomeV2(withBrief, stripped, 2000);
+  const keptBriefBack = pickHomeV2(stripped, withBrief, 2000);
+  check("old client stripping brief loses the tie", keptBrief.items.includes("brief") && eq(keptBrief.items, keptBriefBack.items), keptBrief.items);
+  const hiddenBrief = { homeV2: { v: 2, items: ["this-week"], hidden: ["brief"], updatedAt: 1000 } };
+  const noHidden = { homeV2: { v: 2, items: ["this-week"], hidden: [], updatedAt: 1000 } };
+  const keptHidden = pickHomeV2(hiddenBrief, noHidden, 2000);
+  const keptHiddenBack = pickHomeV2(noHidden, hiddenBrief, 2000);
+  check("old client stripping a hidden brief loses the tie", keptHidden.hidden.includes("brief") && eq(keptHidden.hidden, keptHiddenBack.hidden), keptHidden);
 }
 
 const PG_USER = process.env.PG_USER || "postgres";
@@ -390,6 +401,17 @@ function rpcCases() {
     1000
   );
   check("sql sizes tie-break matches the client", rankedHome.sizes.z === "s" && clientRank.sizes.z === rankedHome.sizes.z, rankedHome.sizes);
+  const sqlBrief = (stored, incoming) => JSON.parse(pgSql(`select public.home_v2_pick('${JSON.stringify(stored)}'::jsonb, '${JSON.stringify(incoming)}'::jsonb, 2000)::text`).trim());
+  const richBrief = { v: 2, items: ["brief", "this-week", "cardio"], hidden: [], updatedAt: 1000 };
+  const poorBrief = { v: 2, items: ["this-week", "cardio"], hidden: [], updatedAt: 1000 };
+  const sqlKept = sqlBrief(richBrief, poorBrief);
+  const sqlKeptBack = sqlBrief(poorBrief, richBrief);
+  check("sql old client stripping brief keeps the richer copy", sqlKept.items.includes("brief") && eq(sqlKept.items, sqlKeptBack.items), sqlKept.items);
+  const richHidden = { v: 2, items: ["this-week"], hidden: ["brief"], updatedAt: 1000 };
+  const poorHidden = { v: 2, items: ["this-week"], hidden: [], updatedAt: 1000 };
+  const sqlHidden = sqlBrief(richHidden, poorHidden);
+  const sqlHiddenBack = sqlBrief(poorHidden, richHidden);
+  check("sql old client stripping a hidden brief keeps it", sqlHidden.hidden.includes("brief") && eq(sqlHidden.hidden, sqlHiddenBack.hidden), sqlHidden);
 
   let unauth = "";
   try {

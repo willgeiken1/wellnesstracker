@@ -237,8 +237,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v29/);
-  assert.match(sentry, /insight-shell-v29/);
+  assert.match(sw, /insight-shell-v30/);
+  assert.match(sentry, /insight-shell-v30/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });
@@ -398,8 +398,8 @@ test("oura personas on the registry home hide empty tiles", () => {
     assert.equal(app.state.oura.lastError, persona.lastError, persona.name);
     assert.match(html, /data-hw="cardio"/, persona.name);
     assert.doesNotMatch(html, /data-hw="readiness"|data-hw="sleep-score"|data-hw="hrv"|data-hw="steps"|No Oura yet|hw-v">–/, persona.name);
-    if (persona.name === "none") assert.doesNotMatch(html, /Waiting for first sync/, persona.name);
-    else assert.equal((html.match(/Waiting for first sync/g) || []).length, 1, persona.name);
+    if (persona.name === "lapsed") assert.equal((html.match(/Waiting for first sync/g) || []).length, 1, persona.name);
+    else assert.doesNotMatch(html, /Waiting for first sync/, persona.name);
   }
   card.oura = { date: "2026-10-04", readiness: 86, sleepScore: 81 };
   app.state = state({
