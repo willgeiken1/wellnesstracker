@@ -65,15 +65,34 @@ function neutralAt(now: number) {
   return now > 0 ? now - 1 : now;
 }
 
-/* A future delete stamp is neutralised once. wDelAtRaw[d] is that raw value,
-   so the same stamp arriving again keeps the stored wDelAt[d]. A different,
-   newer raw value is a second delete and is neutralised again. */
+function latestWeighAt(profile: Bag | null, d: string): number | null {
+  let best: number | null = null;
+  for (const w of (profile && profile.weighIns) || []) {
+    const t = w && w.date === d ? timeMs(w.at) : null;
+    if (t != null && (best == null || t > best)) best = t;
+  }
+  return best;
+}
+
+/* entryAt - 1 sits beside a new weigh-in. It is not a delete. */
+function readdMarker(profile: Bag | null, d: string, stamp: number | null) {
+  if (stamp == null) return false;
+  const at = latestWeighAt(profile, d);
+  return at != null && stamp === at - 1;
+}
+
+/* A future delete stamp is neutralised once against this clock. A stamp that
+   is still ahead is a new raw even when an older raw is sitting beside it.
+   A re-add marker is never stored as that raw. */
 function observeTomb(profile: Bag | null, d: string, now: number) {
   if (!profile) return null;
   const stamp = timeMs(profile.wDelAt && profile.wDelAt[d]);
   const raw = timeMs(profile.wDelAtRaw && profile.wDelAtRaw[d]);
+  if (stamp != null && readdMarker(profile, d, stamp)) return { stamp, raw: null as number | null, fresh: false };
+  if (stamp != null && aheadOf(stamp, now) && (raw == null || stamp >= raw)) {
+    return { stamp: neutralAt(now), raw: stamp, fresh: true };
+  }
   if (raw != null && stamp != null) return { stamp, raw, fresh: false };
-  if (stamp != null && aheadOf(stamp, now)) return { stamp: neutralAt(now), raw: stamp, fresh: true };
   if (stamp != null) return { stamp, raw: null as number | null, fresh: false };
   if (raw != null && aheadOf(raw, now)) return { stamp: neutralAt(now), raw, fresh: true };
   return null;
@@ -93,7 +112,7 @@ function pickTomb(a: { stamp: number; raw: number | null; fresh: boolean } | nul
   const rawSide = a.raw != null ? a : b;
   const plain = rawSide === a ? b : a;
   if (plain.stamp === rawSide.raw) return rawSide;
-  if (plain.stamp > rawSide.stamp) return { stamp: plain.stamp, raw: null as number | null, fresh: false };
+  if (plain.stamp > rawSide.stamp) return { stamp: plain.stamp, raw: rawSide.raw, fresh: false };
   return rawSide;
 }
 
@@ -106,8 +125,12 @@ function mergeTombs(local: Bag | null, remote: Bag | null, now: number) {
   ]);
   const wDelAt: Record<string, number> = {};
   const wDelAtRaw: Record<string, number> = {};
-  for (const d of dates) {
-    const picked = pickTomb(observeTomb(local, d, now), observeTomb(remote, d, now));
+  for (const d of [...dates].sort()) {
+    let a = observeTomb(local, d, now);
+    let b = observeTomb(remote, d, now);
+    if (a && readdMarker(local, d, a.stamp) && b && b.raw != null) a = null;
+    if (b && readdMarker(remote, d, b.stamp) && a && a.raw != null) b = null;
+    const picked = pickTomb(a, b);
     if (!picked) continue;
     wDelAt[d] = picked.stamp;
     if (picked.raw != null) wDelAtRaw[d] = picked.raw;
@@ -134,7 +157,7 @@ function weighBeats(x: Bag, before: number, wDelAt: Record<string, number>, now 
   if (t == null || !x || !x.date) return false;
   const tomb = timeMs(wDelAt[x.date]) || 0;
   const raw = timeMs(wDelAtRaw && wDelAtRaw[x.date]) || 0;
-  if (aheadOf(t, now) && !(raw && t > raw)) return false;
+  if (aheadOf(t, now) && (before || !(raw && t > raw))) return false;
   return t > Math.max(tomb, before);
 }
 
@@ -146,6 +169,26 @@ export function photoDue(takenAt: unknown, cutoff: number, now = Date.now()): bo
 }
 
 const CLOCK_SKEW_MS = 60_000;
+const SKEW_FIELDS = ["clocks", "clockHint", "skewApplied", "skewKnown"];
+
+function stripSkewFields(profile: Bag | null) {
+  if (!profile || typeof profile !== "object") return false;
+  let dropped = false;
+  for (const k of SKEW_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(profile, k)) {
+      delete profile[k];
+      dropped = true;
+    }
+  }
+  return dropped;
+}
+
+function profileBag(data: Bag | null): Bag | null {
+  if (!data || typeof data !== "object") return null;
+  if (data.profile && typeof data.profile === "object") return data.profile;
+  if (Array.isArray(data.weighIns) || data.wDelAt || data.wDel) return data;
+  return null;
+}
 
 export function stripRange(data: Bag, from: string, to: string, before?: number | null, now = Date.now()): Bag {
   if (!data || typeof data !== "object") data = {};
@@ -207,14 +250,16 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
     }
   }
 
-  if (data.profile && typeof data.profile === "object") {
-    const wDel = new Set<string>(data.profile.wDel || []);
-    const tombs = mergeTombs(data.profile, null, now);
+  const profile = profileBag(data);
+  if (profile) {
+    const skewDropped = stripSkewFields(profile);
+    const wDel = new Set<string>(profile.wDel || []);
+    const tombs = mergeTombs(profile, null, now);
     const wDelAt = tombs.wDelAt;
     const wDelAtRaw = tombs.wDelAtRaw;
     const kept: Bag[] = [];
-    let profileChanged = false;
-    for (const x of data.profile.weighIns || []) {
+    let profileChanged = skewDropped;
+    for (const x of profile.weighIns || []) {
       if (x && inRange(x.date, from, to)) {
         const wins = before != null && weighBeats(x, before, wDelAt, now, wDelAtRaw);
         if (!wins) {
@@ -227,14 +272,14 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
       }
       kept.push(x);
     }
-    const tombsChanged = JSON.stringify(data.profile.wDelAt || {}) !== JSON.stringify(wDelAt)
-      || JSON.stringify(data.profile.wDelAtRaw || {}) !== JSON.stringify(wDelAtRaw);
-    if (profileChanged || tombsChanged || kept.length !== (data.profile.weighIns || []).length) {
-      data.profile.weighIns = kept;
-      data.profile.wDel = [...wDel];
-      data.profile.wDelAt = wDelAt;
-      data.profile.wDelAtRaw = wDelAtRaw;
-      data.profile.updatedAt = Date.now();
+    const tombsChanged = JSON.stringify(profile.wDelAt || {}) !== JSON.stringify(wDelAt)
+      || JSON.stringify(profile.wDelAtRaw || {}) !== JSON.stringify(wDelAtRaw);
+    if (profileChanged || tombsChanged || kept.length !== (profile.weighIns || []).length) {
+      profile.weighIns = kept;
+      profile.wDel = [...wDel];
+      profile.wDelAt = wDelAt;
+      profile.wDelAtRaw = wDelAtRaw;
+      profile.updatedAt = Date.now();
     }
   }
 
