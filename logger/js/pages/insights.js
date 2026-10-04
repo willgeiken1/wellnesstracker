@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
 /* ---------- Screens ---------- */
@@ -149,6 +150,7 @@ function insightsHTML(embedded) {
     <!--w:balance--><div class="card"><h4>Push / pull balance</h4><p class="sub">${ppMsg}</p>
       <div class="pp"><div class="pp-bar"><i style="width:${push + pull ? push / (push + pull) * 100 : 50}%"></i></div>
       <div class="pp-l"><span>Push ${push.toFixed(0)} sets/wk</span><span>Pull ${pull.toFixed(0)} sets/wk</span></div></div></div>
+    ${app.trendWidgetsHTML()}
     <!--w:end--><p class="hint">These patterns show what tends to go together in your data, not proof of what causes what. They get more reliable the more you log.</p>`);
 }
 app.insightsHTML = insightsHTML;

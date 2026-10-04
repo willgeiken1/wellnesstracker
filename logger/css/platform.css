@@ -104,7 +104,7 @@ div.wcard { display: flex; justify-content: space-between; align-items: center; 
 
 /* tab bubble */
 #tab-bubble { position: absolute; left: 0; top: 7px; height: 48px; border-radius: 24px; background: var(--lav); z-index: 0; pointer-events: none;
-  transition: transform .42s cubic-bezier(.34,1.32,.5,1), width .42s cubic-bezier(.34,1.32,.5,1), opacity .2s; will-change: transform, width; }
+  transition: none; will-change: transform, width; }
 #tabs .tab { position: relative; z-index: 1; }
 #tabs .tab[aria-current="page"] { background: transparent; }
 @media (prefers-reduced-motion: reduce) { #tab-bubble { transition: none; } }

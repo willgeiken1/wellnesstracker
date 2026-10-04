@@ -68,14 +68,30 @@ function makeDemo() {
     const prevSteps = (days[app.addDays(d, -1)] || {}).steps || 9000;
     const form = 1 + 0.0035 * (days[d].readiness - 78) - (prevSteps > 15000 ? 0.025 : 0) + (rnd() - 0.5) * 0.02;
     const weeks = (N - 1 - i) / 7;
+    let minute = 2;
+    const stamp = () => {
+      const h = 17 + Math.floor(minute / 60), m = minute % 60;
+      minute += 3;
+      return `${d}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+    };
     const entries = w.exercises.filter((e) => base[e.name]).map((e) => {
       const W = Math.round(base[e.name] * (1 + (rate[e.name] ?? 0.008) * weeks) / 5) * 5;
-      const sets = [0, 1, 2].map((j) => ({ w: W, r: app.clamp(Math.round(8 + (form - 1) * 35 - j * 0.7 + (rnd() - 0.5)), 4, 15) }));
+      const sets = [0, 1, 2].map((j) => ({ w: W, r: app.clamp(Math.round(8 + (form - 1) * 35 - j * 0.7 + (rnd() - 0.5)), 4, 15), at: stamp() }));
       return { exercise: e.name, muscles: [...e.muscles], sets };
     });
     sessions.push({ id: "demo" + i, date: d, workoutId: w.id, name: w.name, startedAt: d + "T17:00:00", finishedAt: d + "T18:10:00", entries });
   }
-  return { sessions, oura: days };
+  const weighIns = [];
+  for (let i = 56; i >= 0; i -= 7) weighIns.push({ date: app.addDays(end, -i), kg: Math.round((82 + (56 - i) / 7 * 0.2) * 10) / 10 });
+  const foodDays = {};
+  for (let i = 0; i <= 28; i++) {
+    const d = app.addDays(end, -i);
+    foodDays[d] = [{ id: "df" + i, meal: "lunch", name: "Sample meals", base: { kcal: 3000, p: 170, c: 330, f: 80 }, servings: 1, at: d + "T12:00:00" }];
+  }
+  const measurements = {};
+  measurements[app.addDays(end, -49)] = { vals: { waist: 84, arms: 35, chest: 100 }, at: 1 };
+  measurements[app.addDays(end, -5)] = { vals: { waist: 84.3, arms: 36.2, chest: 101.4 }, at: 2 };
+  return { sessions, oura: days, weighIns, foodDays, measurements };
 }
 app.makeDemo = makeDemo;
 

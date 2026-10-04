@@ -21,5 +21,3 @@
 .ph-list { display: grid; gap: 12px; }
 .ph-fig { margin: 0; } .ph-fig img { width: 100%; border-radius: 18px; max-height: 60vh; object-fit: contain; background: var(--bg); }
 .ph-fig figcaption { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; }
-.tab { min-width: 44px; padding: 0 10px; }
-@media (max-width: 380px) { .tab[aria-current="page"] span { display: none; } .tab[aria-current="page"] { padding: 0 12px; } }

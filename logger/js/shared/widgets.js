@@ -6,7 +6,8 @@ const WIDGETS = {
   home: { readiness: "Readiness", today: "Today", week: "This week", cardio: "Cardio", "map-adv": "Muscle map (detailed)", "map-basic": "Muscle map (basic)" },
   food: { summary: "Daily summary", log: "Log buttons", "m-breakfast": "Breakfast", "m-lunch": "Lunch", "m-dinner": "Dinner", "m-snacks": "Snacks", history: "Last 14 days" },
   trends: { goals: "Goals", lifts: "Lift progress", prs: "Personal records", effects: "What affects your lifts", load: "Training load vs recovery",
-            volume: "Weekly sets per muscle", balance: "Push / pull balance" },
+            volume: "Weekly sets per muscle", balance: "Push / pull balance", stall: "Stall detective", maintenance: "Real maintenance calories",
+            bulk: "Bulk quality", efficiency: "Workout efficiency" },
   recovery: { ready: "Readiness", stats: "Today's numbers", hrvage: "HRV for your age", night: "Last night", charts: "Trends" },
 };
 app.WIDGETS = WIDGETS;
