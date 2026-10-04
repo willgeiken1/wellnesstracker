@@ -47,11 +47,12 @@ function sessionTime(s) {
   return best;
 }
 
-/* A purge with no cutoff still clears the whole range. Otherwise drop only
-   logs with no timestamp or a timestamp at or before the delete. */
-function dropBefore(stamp, before) {
+/* A purge with no cutoff still clears the whole range. Otherwise drop a log
+   with no timestamp, a timestamp more than a minute ahead, or a timestamp at
+   or before the delete. A fast clock's stamp counts as before the cutoff. */
+function dropBefore(stamp, before, now = Date.now()) {
   if (before == null) return true;
-  return stamp == null || stamp <= before;
+  return stamp == null || stamp > now + CLOCK_SKEW_MS || stamp <= before;
 }
 
 const CLOCK_SKEW_MS = 60_000;
@@ -64,9 +65,11 @@ function clampStamp(t, now) {
   return t;
 }
 
-/* The cutoff to store and apply. An impossible future is pulled back to just
-   before now, so a weigh-in logged at this moment stays and older logs in the
-   range are still removed. A real earlier stamp beats that future. */
+/* The cutoff to store and apply. The server uses this same instant: a stamp
+   more than a minute ahead becomes just before now, never now plus a minute.
+   Neutralising an unknown future delete time removes range logs made before a
+   device first sees the purge, and keeps logs made after. Removing those
+   earlier logs is the privacy-safe direction. A real earlier stamp still wins. */
 function neutralCutoff(p, now) {
   if (!p) return null;
   const deleted = timeMs(p.deletedAt);
@@ -98,10 +101,10 @@ function copyWDelAt(src) {
 }
 
 /* Latest purge cutoff that covers this date, or 0 when none does. */
-function coveringCutoff(purges, date) {
+function coveringCutoff(purges, date, now) {
   let cut = 0;
   for (const p of purges || []) {
-    const c = purgeCutoff(p);
+    const c = purgeCutoff(p, now);
     if (c != null && inRange(date, p.from, p.to) && c > cut) cut = c;
   }
   return cut;
@@ -112,11 +115,12 @@ function coveringCutoff(purges, date) {
    A missing wDelAt does not raise the bar. A missing at never wins.
    Dates that are only in wDel, with no timestamp, still hide the weigh-in
    unless this returns true. */
-export function weighBeatsTombstone(purges, x, wDelAt) {
+export function weighBeatsTombstone(purges, x, wDelAt, now = Date.now()) {
   const t = timeMs(x && x.at);
   if (t == null || !x || !x.date) return false;
+  if (t > now + CLOCK_SKEW_MS) return false;
   const tomb = timeMs(wDelAt && wDelAt[x.date]) || 0;
-  const cut = coveringCutoff(purges, x.date);
+  const cut = coveringCutoff(purges, x.date, now);
   if (!tomb && !cut) return false;
   return t > Math.max(tomb, cut);
 }
@@ -128,7 +132,7 @@ export function weighAfterPurge(purges, x) {
 
 /* Union of two profiles' weigh-ins. A manual delete is wDel plus wDelAt[date].
    The weigh-in wins only when x.at is later than both that stamp and the purge. */
-export function mergeWeighIns(localProfile, remoteProfile, purges) {
+export function mergeWeighIns(localProfile, remoteProfile, purges, now = Date.now()) {
   const lp = localProfile && typeof localProfile === "object" ? localProfile : {};
   const rp = remoteProfile && typeof remoteProfile === "object" ? remoteProfile : {};
   const wDel = new Set([...(lp.wDel || []), ...(rp.wDel || [])]);
@@ -139,7 +143,7 @@ export function mergeWeighIns(localProfile, remoteProfile, purges) {
   const byDate = new Map();
   const newerLocal = (lp.updatedAt || 0) >= (rp.updatedAt || 0);
   const order = newerLocal ? [rp.weighIns || [], lp.weighIns || []] : [lp.weighIns || [], rp.weighIns || []];
-  const wins = (x) => weighBeatsTombstone(purges, x, wDelAt);
+  const wins = (x) => weighBeatsTombstone(purges, x, wDelAt, now);
   order.forEach((list) => list.forEach((x) => {
     if (!x || !x.date) return;
     const blocked = wDel.has(x.date) || wDelAt[x.date] != null;
@@ -167,14 +171,14 @@ function cardioTime(s) {
   return latestTime(s, keys);
 }
 
-function stripCheckins(data, from, to, before) {
+function stripCheckins(data, from, to, before, now) {
   let changed = false;
   if (Array.isArray(data.checkins)) {
     const ids = new Set(data.checkinDeleted || []);
     const next = [];
     for (const x of data.checkins) {
       const d = x && (x.date || x.day);
-      if (inRange(d, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before)) {
+      if (inRange(d, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before, now)) {
         changed = true;
         if (x.id) ids.add(x.id);
       } else next.push(x);
@@ -183,7 +187,7 @@ function stripCheckins(data, from, to, before) {
     data.checkinDeleted = [...ids];
   } else if (data.checkins && typeof data.checkins === "object") {
     for (const d of Object.keys(data.checkins)) {
-      if (inRange(d, from, to) && dropBefore(latestTime(data.checkins[d], ITEM_KEYS), before)) {
+      if (inRange(d, from, to) && dropBefore(latestTime(data.checkins[d], ITEM_KEYS), before, now)) {
         delete data.checkins[d];
         changed = true;
       }
@@ -199,9 +203,10 @@ export function stripRange(data, from, to, opts = {}) {
   let changed = false;
 
   const before = opts.before;
+  const now = opts.now ?? Date.now();
   const deleted = new Set(data.deleted || []);
   data.sessions = (data.sessions || []).filter((s) => {
-    if (s && inRange(s.date, from, to) && dropBefore(sessionTime(s), before)) {
+    if (s && inRange(s.date, from, to) && dropBefore(sessionTime(s), before, now)) {
       changed = true;
       if (s.id) deleted.add(s.id);
       return false;
@@ -219,7 +224,7 @@ export function stripRange(data, from, to, opts = {}) {
       const keep = [];
       let dayChanged = false;
       for (const e of days[d] || []) {
-        if (dropBefore(latestTime(e, ITEM_KEYS), before)) {
+        if (dropBefore(latestTime(e, ITEM_KEYS), before, now)) {
           dayChanged = true;
           if (e && e.id) fd.add(e.id);
         } else keep.push(e);
@@ -242,7 +247,7 @@ export function stripRange(data, from, to, opts = {}) {
     const cd = new Set(data.cardio.deleted || []);
     let cardioChanged = false;
     data.cardio.sessions = (data.cardio.sessions || []).filter((s) => {
-      if (s && inRange(s.date, from, to) && dropBefore(cardioTime(s), before)) {
+      if (s && inRange(s.date, from, to) && dropBefore(cardioTime(s), before, now)) {
         cardioChanged = true;
         if (s.id) cd.add(s.id);
         return false;
@@ -258,7 +263,7 @@ export function stripRange(data, from, to, opts = {}) {
 
   if (data.measurements && typeof data.measurements === "object") {
     for (const d of Object.keys(data.measurements)) {
-      if (inRange(d, from, to) && dropBefore(latestTime(data.measurements[d], ITEM_KEYS), before)) {
+      if (inRange(d, from, to) && dropBefore(latestTime(data.measurements[d], ITEM_KEYS), before, now)) {
         delete data.measurements[d];
         changed = true;
       }
@@ -273,7 +278,7 @@ export function stripRange(data, from, to, opts = {}) {
     const beat = before == null ? [] : [{ from, to, deletedAt: before }];
     for (const x of data.profile.weighIns || []) {
       if (x && inRange(x.date, from, to)) {
-        const wins = before != null && weighBeatsTombstone(beat, x, wDelAt);
+        const wins = before != null && weighBeatsTombstone(beat, x, wDelAt, now);
         if (!wins) {
           if (!wDel.has(x.date)) profileChanged = true;
           wDel.add(x.date);
@@ -297,7 +302,7 @@ export function stripRange(data, from, to, opts = {}) {
     const at = data.planAt && typeof data.planAt === "object" ? data.planAt : null;
     for (const d of Object.keys(data.plan)) {
       if (!inRange(d, from, to)) continue;
-      if (at && !dropBefore(timeMs(at[d]), before)) continue;
+      if (at && !dropBefore(timeMs(at[d]), before, now)) continue;
       delete data.plan[d];
       if (at) delete at[d];
       changed = true;
@@ -310,7 +315,7 @@ export function stripRange(data, from, to, opts = {}) {
     }
   }
 
-  if (stripCheckins(data, from, to, before)) changed = true;
+  if (stripCheckins(data, from, to, before, now)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
 }
@@ -365,7 +370,7 @@ export function applyPurges(data, now = Date.now()) {
     if (!p) continue;
     const before = neutralCutoff(p, now);
     if (before != null) { p.at = before; p.deletedAt = before; }
-    stripRange(data, p.from, p.to, before == null ? { quiet: true } : { quiet: true, before });
+    stripRange(data, p.from, p.to, { quiet: true, before, now });
   }
   data.purges = purges;
   return data;

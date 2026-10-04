@@ -6,19 +6,19 @@ import { addPurge, photoDue, resolveCutoff, stripRange } from "./strip.ts";
 
 type Bag = Record<string, any>;
 
-export async function deleteRange(admin: Bag, userId: string, body: Bag): Promise<{ status: number; body: Bag }> {
+export async function deleteRange(admin: Bag, userId: string, body: Bag, now = Date.now()): Promise<{ status: number; body: Bag }> {
   const from = body.from;
   const to = body.to;
 
   const { data: row, error: readErr } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
   if (readErr) return { status: 500, body: { error: "Couldn't update the account copy. Try again." } };
   const raw = (row && row.data) || {};
-  const cutoff = resolveCutoff(raw, from, to, body.deletedAt ?? body.at);
+  const cutoff = resolveCutoff(raw, from, to, body.deletedAt ?? body.at, now);
 
   const { data: photos, error: photoErr } = await admin.from("progress_photos").select("id, path, taken_at").eq("user_id", userId).gte("day", from).lte("day", to);
   if (photoErr) return { status: 500, body: { error: "Couldn't delete that range from the account. Try again." } };
 
-  const due = (photos || []).filter((p: Bag) => p && photoDue(p.taken_at, cutoff));
+  const due = (photos || []).filter((p: Bag) => p && photoDue(p.taken_at, cutoff, now));
   const paths = due.map((p: Bag) => p.path).filter((p: string) => !!p);
   if (paths.length) {
     const bucket = admin.storage.from("progress");
@@ -52,7 +52,7 @@ export async function deleteRange(admin: Bag, userId: string, body: Bag): Promis
   const { data: again, error: againErr } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
   if (againErr) return { status: 500, body: { error: "Couldn't update the account copy. Try again." } };
   const latest = (again && again.data) || {};
-  const data = addPurge(stripRange(latest, from, to, cutoff), from, to, cutoff);
+  const data = addPurge(stripRange(latest, from, to, cutoff, now), from, to, cutoff, now);
   const { error: writeErr } = await admin.from("user_data").upsert({
     user_id: userId,
     data,

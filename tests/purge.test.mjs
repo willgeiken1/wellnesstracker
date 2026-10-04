@@ -162,6 +162,7 @@ test("the edge strip keeps logs after deletedAt and does not move it on retry", 
   const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
   const script = `
     import { addPurge, resolveCutoff, stripRange } from ${JSON.stringify(stripUrl)};
+    const now = Date.parse("2026-10-04T18:00:00Z");
     const deletedAt = Date.parse("2026-10-04T12:00:00Z");
     const loggedAt = deletedAt + 60_000;
     const blob = {
@@ -176,16 +177,16 @@ test("the edge strip keeps logs after deletedAt and does not move it on retry", 
       ] }, deleted: [] },
       purges: [{ from: "2026-10-01", to: "2026-10-04", at: deletedAt, deletedAt, synced: false }],
     };
-    const cutoff = resolveCutoff(blob, "2026-10-01", "2026-10-04", deletedAt);
-    let out = addPurge(stripRange(blob, "2026-10-01", "2026-10-04", cutoff), "2026-10-01", "2026-10-04", cutoff);
-    out = addPurge(stripRange(out, "2026-10-01", "2026-10-04", resolveCutoff(out, "2026-10-01", "2026-10-04", deletedAt)), "2026-10-01", "2026-10-04", deletedAt);
+    const cutoff = resolveCutoff(blob, "2026-10-01", "2026-10-04", deletedAt, now);
+    let out = addPurge(stripRange(blob, "2026-10-01", "2026-10-04", cutoff, now), "2026-10-01", "2026-10-04", cutoff, now);
+    out = addPurge(stripRange(out, "2026-10-01", "2026-10-04", resolveCutoff(out, "2026-10-01", "2026-10-04", deletedAt, now), now), "2026-10-01", "2026-10-04", deletedAt, now);
     const backfillAt = Date.parse("2026-10-04T15:00:00Z");
     const oldRange = {
       sessions: [{ id: "back-wo", date: "2026-09-15", startedAt: "2026-09-15T17:00:00", mod: backfillAt }],
       food: { days: { "2026-09-15": [{ id: "back-meal", at: "2026-09-15T08:00:00.000Z", updatedAt: new Date(backfillAt).toISOString() }] }, deleted: [] },
       purges: [{ from: "2026-09-01", to: "2026-09-30", at: Date.parse("2026-10-01T00:00:00Z"), deletedAt: Date.parse("2026-10-01T00:00:00Z") }],
     };
-    const back = stripRange(oldRange, "2026-09-01", "2026-09-30", resolveCutoff(oldRange, "2026-09-01", "2026-09-30", null));
+    const back = stripRange(oldRange, "2026-09-01", "2026-09-30", resolveCutoff(oldRange, "2026-09-01", "2026-09-30", null, now), now);
     console.log(JSON.stringify({
       cutoff,
       sessions: out.sessions.map((s) => s.id),
@@ -302,6 +303,68 @@ test("a deletedAt a year ahead does not erase a weigh-in logged now", () => {
   assert.equal(data.purges[0].deletedAt, now - 1);
 });
 
+test("a phone one day fast loses the weigh-in it logged and then deleted", () => {
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  const fast = now + 86_400_000;
+  const from = "2026-10-01";
+  const to = "2026-10-05";
+  const data = {
+    sessions: [
+      { id: "fast-wo", date: "2026-10-05", mod: fast },
+      { id: "seen-later", date: "2026-10-04", mod: now },
+      { id: "already-there", date: "2026-10-03", mod: now - 86_400_000 },
+    ],
+    deleted: [],
+    profile: {
+      weighIns: [
+        { date: "2026-10-05", kg: 70, at: fast },
+        { date: "2026-10-04", kg: 71, at: now },
+        { date: "2026-10-03", kg: 68, at: now - 86_400_000 },
+      ],
+      wDel: [],
+      wDelAt: {},
+    },
+    purges: [{ from, to, at: fast, deletedAt: fast, synced: true }],
+  };
+  applyPurges(data, now);
+  assert.equal(data.sessions.some((s) => s.id === "fast-wo"), false);
+  assert.equal(data.sessions.some((s) => s.id === "seen-later"), true);
+  assert.equal(data.sessions.some((s) => s.id === "already-there"), false);
+  assert.equal(data.profile.weighIns.some((w) => w.kg === 70), false);
+  assert.equal(data.profile.weighIns.find((w) => w.kg === 71).at, now);
+  assert.equal(data.profile.weighIns.some((w) => w.kg === 68), false);
+  assert.equal(data.purges[0].deletedAt, now - 1);
+
+  const other = {
+    sessions: [{ id: "fast-wo", date: "2026-10-05", mod: fast }],
+    deleted: [],
+    profile: { weighIns: [{ date: "2026-10-05", kg: 70, at: fast }], wDel: [], wDelAt: {} },
+    purges: unionPurges([], [{ from, to, at: fast, deletedAt: fast }], now),
+  };
+  const merged = mergeWeighIns(
+    other.profile,
+    { weighIns: [], wDel: data.profile.wDel, wDelAt: data.profile.wDelAt, updatedAt: now },
+    other.purges,
+    now,
+  );
+  assert.equal(merged.weighIns.some((w) => w.kg === 70), false);
+  applyPurges(other, now);
+  assert.equal(other.sessions.some((s) => s.id === "fast-wo"), false);
+
+  const skew = {
+    sessions: [{ id: "within-minute", date: "2026-10-04", mod: now + 30_000 }],
+    deleted: [],
+    purges: unionPurges(
+      [{ from, to, at: now - 1, deletedAt: now - 1, synced: true }],
+      [{ from, to, at: fast, deletedAt: fast }],
+      now,
+    ),
+  };
+  applyPurges(skew, now);
+  assert.equal(skew.purges[0].deletedAt, now - 1);
+  assert.equal(skew.sessions[0].id, "within-minute");
+});
+
 test("same-day manual cardio logged before the delete is removed", () => {
   const noon = Date.parse("2026-10-04T12:00:00");
   const deletedAt = noon - 60_000;
@@ -346,12 +409,12 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
       },
       purges: [{ from: "2026-10-01", to: "2026-10-04", at: deletedAt, deletedAt }],
     };
-    const stripped = stripRange(structuredClone(blob), "2026-10-01", "2026-10-04", resolveCutoff(blob, "2026-10-01", "2026-10-04", deletedAt));
+    const now = Date.parse("2026-10-04T15:00:00Z");
+    const stripped = stripRange(structuredClone(blob), "2026-10-01", "2026-10-04", resolveCutoff(blob, "2026-10-01", "2026-10-04", deletedAt, now), now);
     const kept = stripRange(structuredClone({
       profile: { weighIns: [{ date: "2026-10-04", kg: 68, at: loggedAt }], wDel: ["2026-10-04"], wDelAt: {} },
       purges: blob.purges,
-    }), "2026-10-01", "2026-10-04", deletedAt);
-    const now = Date.parse("2026-10-04T15:00:00Z");
+    }), "2026-10-01", "2026-10-04", deletedAt, now);
     const clamped = resolveCutoff({ purges: [] }, "2026-10-01", "2026-10-04", Date.parse("2030-01-01T00:00:00Z"), now);
     const cutoff = deletedAt;
     const photos = [
@@ -386,7 +449,7 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
       storage: { from() { return { remove(paths) { removed = paths; return Promise.resolve({ error: null }); } }; } },
       rpc(name, args) { rpc = { name, args }; return Promise.resolve({ error: null }); },
     };
-    const good = await deleteRange(okAdmin, "user-1", { from: "2026-10-01", to: "2026-10-04", deletedAt: cutoff });
+    const good = await deleteRange(okAdmin, "user-1", { from: "2026-10-01", to: "2026-10-04", deletedAt: cutoff }, now);
     const goodRemoved = removed;
     const goodIds = deletedIds;
     const goodRpc = rpc && rpc.name;
@@ -416,7 +479,7 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
       storage: { from() { return { remove() { return Promise.resolve({ error: { message: "storage down" } }); } }; } },
       rpc() { rpc = true; return Promise.resolve({ error: null }); },
     };
-    const failed = await deleteRange(failAdmin, "user-1", { from: "2026-10-01", to: "2026-10-04", deletedAt: cutoff });
+    const failed = await deleteRange(failAdmin, "user-1", { from: "2026-10-01", to: "2026-10-04", deletedAt: cutoff }, now);
     console.log(JSON.stringify({
       cardio: stripped.cardio.sessions.map((s) => s.id),
       weigh: stripped.profile.weighIns.map((w) => w.date),
@@ -425,9 +488,9 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
       keptWeigh: kept.profile.weighIns.map((w) => w.date),
       keptTomb: kept.profile.wDel.includes("2026-10-04"),
       clamped,
-      cap: now + 60_000,
-      dueOld: photoDue(photos[0].taken_at, cutoff),
-      dueNew: photoDue(photos[2].taken_at, cutoff),
+      neutral: now - 1,
+      dueOld: photoDue(photos[0].taken_at, cutoff, now),
+      dueNew: photoDue(photos[2].taken_at, cutoff, now),
       status: good.status,
       removed: goodRemoved,
       deletedIds: goodIds,
@@ -449,7 +512,7 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
   assert.equal(got.tomb, got.manualDel);
   assert.deepEqual(got.keptWeigh, ["2026-10-04"]);
   assert.equal(got.keptTomb, false);
-  assert.equal(got.clamped, got.cap);
+  assert.equal(got.clamped, got.neutral);
   assert.equal(got.dueOld, true);
   assert.equal(got.dueNew, false);
   assert.equal(got.status, 200);
@@ -540,6 +603,95 @@ test("the server clamp ignores a year-ahead purge and the save reads the blob ag
   assert.equal(got.reads, 2);
   assert.deepEqual(got.sessions, ["during"]);
   assert.deepEqual(got.removed, ["u/old.jpg"]);
+});
+
+test("a phone one day fast loses the photo and weigh-in on the server", () => {
+  const rangeUrl = new URL("../supabase/functions/_shared/range.ts", import.meta.url).href;
+  const script = `
+    import { deleteRange } from ${JSON.stringify(rangeUrl)};
+    const now = Date.parse("2026-10-04T16:00:00Z");
+    const fast = now + 86_400_000;
+    const from = "2026-10-01";
+    const to = "2026-10-05";
+    const blob = {
+      sessions: [
+        { id: "fast-wo", date: "2026-10-05", mod: fast },
+        { id: "seen-later", date: "2026-10-04", mod: now },
+        { id: "already-there", date: "2026-10-03", mod: now - 86_400_000 },
+      ],
+      profile: {
+        weighIns: [
+          { date: "2026-10-05", kg: 70, at: fast },
+          { date: "2026-10-04", kg: 71, at: now },
+          { date: "2026-10-03", kg: 68, at: now - 86_400_000 },
+        ],
+        wDel: [],
+        wDelAt: {},
+      },
+      purges: [],
+    };
+    const photos = [
+      { id: "fast", path: "u/fast.jpg", taken_at: new Date(fast).toISOString() },
+      { id: "now", path: "u/now.jpg", taken_at: new Date(now).toISOString() },
+      { id: "old", path: "u/old.jpg", taken_at: new Date(now - 86_400_000).toISOString() },
+    ];
+    let reads = 0;
+    let saved = null;
+    let removed = null;
+    let deletedIds = null;
+    const admin = {
+      from(table) {
+        const api = {
+          op: "select",
+          select() { api.op = "select"; return api; },
+          delete() { api.op = "delete"; return api; },
+          eq() { return api; },
+          gte() { return api; },
+          lte() { return api; },
+          in(key, ids) { api.ids = ids; return api; },
+          upsert(row) { saved = row; return Promise.resolve({ error: null }); },
+          maybeSingle() {
+            reads += 1;
+            return Promise.resolve({ data: { data: structuredClone(blob) }, error: null });
+          },
+          then(resolve, reject) {
+            if (table === "progress_photos" && api.op === "delete") deletedIds = api.ids;
+            const payload = table === "progress_photos" && api.op === "select" ? { data: photos, error: null } : { error: null };
+            return Promise.resolve(payload).then(resolve, reject);
+          },
+        };
+        return api;
+      },
+      storage: { from() { return { remove(paths) { removed = paths; return Promise.resolve({ error: null }); } }; } },
+      rpc() { return Promise.resolve({ error: null }); },
+    };
+    const res = await deleteRange(admin, "user-1", { from, to, deletedAt: fast }, now);
+    const weigh = (saved.data.profile.weighIns || []).map((w) => w.kg);
+    console.log(JSON.stringify({
+      status: res.status,
+      reads,
+      deletedAt: saved.data.purges[0].deletedAt,
+      sessions: (saved.data.sessions || []).map((s) => s.id),
+      weigh,
+      removed,
+      deletedIds,
+    }));
+  `;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    env: { ...process.env, TZ: "UTC" },
+  });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const got = JSON.parse(r.stdout.trim().split("\n").pop());
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  assert.equal(got.status, 200);
+  assert.equal(got.reads, 2);
+  assert.equal(got.deletedAt, now - 1);
+  assert.deepEqual(got.sessions, ["seen-later"]);
+  assert.deepEqual(got.weigh, [71]);
+  assert.deepEqual(got.removed.sort(), ["u/fast.jpg", "u/old.jpg"]);
+  assert.deepEqual(got.deletedIds.sort(), ["fast", "old"]);
 });
 
 test("csv escapes quotes and the zip round-trips", async () => {
