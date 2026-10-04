@@ -385,8 +385,11 @@ async function enableAppLock() {
       app.toast("App lock is on. Next time you open Insight it will ask for Face ID or your device passcode.");
       return;
     } catch (e) {
+      const name = e && e.name;
+      // A dismissed prompt stays a dismiss. A domain that cannot use WebAuthn (an IP address, for example) falls through to the passcode.
+      if (name === "AbortError" || name === "NotAllowedError") { app.toast("App lock wasn't turned on."); return; }
       const avail = await app.platformAvailable();
-      if (avail || (e && e.name === "AbortError")) { app.toast("App lock wasn't turned on."); return; }
+      if (avail && name !== "SecurityError" && name !== "NotSupportedError") { app.toast("App lock wasn't turned on."); return; }
     }
   }
   app.ui.sheet = "priv-passcode";
