@@ -168,15 +168,11 @@ async function cloudPull() {
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
     if (error) return;
-<<<<<<< HEAD
     if (data && data.data) {
       app.mergeRemote(data.data);
       applyHomeMigration(app.state, Date.now(), { afterMerge: true });
     }
-=======
-    if (data && data.data) app.mergeRemote(data.data);
     app.cloudPullOk = true;
->>>>>>> 7fa1496b26d9e497f066fa5fae80cb26f2ea1f61
     app.save();
     app.render();
   } catch (e) { /* offline */ }
