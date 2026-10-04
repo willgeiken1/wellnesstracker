@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import "../shared/home-widgets.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -28,31 +29,36 @@ function startChips(label) {
 }
 app.startChips = startChips;
 
-function homeHTML() {
+function homeHeroHTML() {
   const t = app.today();
   const active = app.activeSession();
   const planned = app.state.plan[t];
   const doneToday = app.sessionsOn(t).filter((s) => s.finishedAt);
-  let hero;
   if (active) {
-    hero = `<div class="hero"><p class="hero-k">In progress</p><h2 class="hero-t">${app.esc(active.name)}</h2>
+    return `<div class="hero"><p class="hero-k">In progress</p><h2 class="hero-t">${app.esc(active.name)}</h2>
       <p class="hero-s">${app.pl(app.setCount(active), "set")} logged · started ${new Date(active.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
       <button class="btn primary block" data-action="resume">Resume workout</button></div>`;
-  } else if (planned && planned !== "rest" && app.workoutById(planned) && !doneToday.some((s) => s.workoutId === planned)) {
+  }
+  if (planned && planned !== "rest" && app.workoutById(planned) && !doneToday.some((s) => s.workoutId === planned)) {
     const w = app.workoutById(planned);
-    hero = `<div class="hero"><p class="hero-k">Planned for today</p><h2 class="hero-t">${app.esc(w.name)}</h2>
+    return `<div class="hero"><p class="hero-k">Planned for today</p><h2 class="hero-t">${app.esc(w.name)}</h2>
       <p class="hero-s">${app.pl(w.exercises.length, "exercise")}</p>
       <button class="btn primary block" data-action="start" data-id="${app.esc(w.id)}">Start ${app.esc(w.name)}</button></div>`;
-  } else if (doneToday.length) {
-    const sets = doneToday.reduce((n, s) => n + app.setCount(s), 0);
-    hero = `<div class="hero"><p class="hero-k">Done today</p><h2 class="hero-t">${doneToday.map((s) => app.esc(s.name)).join(" + ")}</h2>
-      ${app.startChips(`${app.pl(sets, "set")} logged. Train again?`)}</div>`;
-  } else if (planned === "rest") {
-    hero = `<div class="hero quiet"><p class="hero-k">Today</p><h2 class="hero-t">Rest day</h2>${app.startChips("Planned off. Changed your mind?")}</div>`;
-  } else {
-    hero = `<div class="hero quiet"><p class="hero-k">Today</p><h2 class="hero-t">Nothing planned</h2>${app.startChips("Start a workout now, or plan one below.")}</div>`;
   }
+  if (doneToday.length) {
+    const sets = doneToday.reduce((n, s) => n + app.setCount(s), 0);
+    return `<div class="hero"><p class="hero-k">Done today</p><h2 class="hero-t">${doneToday.map((s) => app.esc(s.name)).join(" + ")}</h2>
+      ${app.startChips(`${app.pl(sets, "set")} logged. Train again?`)}</div>`;
+  }
+  if (planned === "rest") {
+    return `<div class="hero quiet"><p class="hero-k">Today</p><h2 class="hero-t">Rest day</h2>${app.startChips("Planned off. Changed your mind?")}</div>`;
+  }
+  return `<div class="hero quiet"><p class="hero-k">Today</p><h2 class="hero-t">Nothing planned</h2>${app.startChips("Start a workout now, or plan one below.")}</div>`;
+}
+app.homeHeroHTML = homeHeroHTML;
 
+function homeWeekHTML() {
+  const t = app.today();
   const mon = app.addDays(app.mondayOf(t), app.ui.weekOffset * 7);
   const days = [...Array(7)].map((_, i) => app.addDays(mon, i));
   const weekLabel = app.ui.weekOffset === 0 ? "This week" : app.ui.weekOffset === 1 ? "Next week" : app.ui.weekOffset === -1 ? "Last week"
@@ -74,26 +80,56 @@ function homeHTML() {
       <span class="wk-n">${app.parseDay(d).getDate()}</span>
       <span class="wk-w">${app.esc(label)}</span></button>`;
   }).join("");
-
-  const thisMon = app.mondayOf(t);
-  const hit = app.musclesBetween(thisMon, app.addDays(thisMon, 6));
-  const hitSet = new Set(hit.keys());
-  const keys = Object.keys(app.MUSCLES).sort((a, b) => (hit.get(b) || 0) - (hit.get(a) || 0));
-
-  return `
-    ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
-    ${app.weekCardHTML ? app.weekCardHTML() : ""}
-    ${app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${hero}
-    <!--w:week--><section class="sec">
+  return `<section class="sec">
       <div class="sec-h"><h3>${weekLabel}</h3>
         <div class="week-nav">${app.ui.weekOffset === 0 ? app.weekGoalHeadHTML() : ""}
           <button class="icon-btn" data-action="week" data-d="-1" aria-label="Previous week">${app.I.chevL}</button>
           <button class="icon-btn" data-action="week" data-d="1" aria-label="Next week"><span style="transform:scaleX(-1);display:grid">${app.I.chevL}</span></button>
         </div></div>
       <div class="week">${week}</div>${app.ui.weekOffset === 0 ? app.weekGoalLineHTML() : ""}
-    </section>
-    <!--w:cardio-->${app.cardioWidgetHTML()}
+    </section>`;
+}
+app.homeWeekHTML = homeWeekHTML;
+
+/* The weigh-in nudge used to live inside the brief widget. It sits after that
+   card now, and still shows when the brief itself is hidden. */
+function placeWeighNudge(html, nudge) {
+  if (!nudge) return html;
+  const open = `<div class="wdg" data-w="brief">`;
+  const start = html.indexOf(open);
+  if (start < 0) return html.replace(`<div class="wdgs`, `${nudge}<div class="wdgs`);
+  let depth = 0;
+  let i = start;
+  while (i < html.length) {
+    const nextOpen = html.indexOf("<div", i);
+    const nextClose = html.indexOf("</div>", i);
+    if (nextClose < 0) return html;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      i = nextOpen + 4;
+    } else {
+      depth -= 1;
+      i = nextClose + 6;
+      if (depth === 0) return html.slice(0, i) + nudge + html.slice(i);
+    }
+  }
+  return html;
+}
+
+function homeHTML() {
+  const t = app.today();
+  const saved = app.state.layout && app.state.layout.homeV2 && app.state.layout.homeV2.v === 2 && Array.isArray(app.state.layout.homeV2.items);
+  const head = `
+    ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
+    ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
+  const nudge = app.weighReminderHTML();
+  if (saved) return head + nudge + app.renderHomeWidgets(app.getHomeLayout(app.state), app.snapshotFromApp());
+  const live = { live: true };
+  const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
+    <!--w:week-->${app.HOME_WIDGETS["this-week"].render(live)}
+    <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>
-    <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`)}`;
+    <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`);
+  return head + placeWeighNudge(stack, nudge);
 }
 app.homeHTML = homeHTML;

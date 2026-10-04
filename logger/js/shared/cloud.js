@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { mergeRemoteLayout } from "./home-widgets.js";
 
 /* Supabase account, backup, and Oura sync. */
 /* ================= Cloud: account, backup, Oura ================= */
@@ -106,7 +107,7 @@ function mergeRemote(r) {
   if (r.cardio) app.mergeCardio(r.cardio);
   if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = app.meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) app.meas()[d] = m; });
   app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, r.machineNotes);
-  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) { if (r.muscleMode) app.state.muscleMode = r.muscleMode; if (r.layout) app.state.layout = r.layout; if (r.uniEx) app.state.uniEx = r.uniEx; app.state.settingsAt = r.settingsAt; }
+  mergeRemoteLayout(app.state, r);
   if (r.profile) {
     const lp = app.state.profile;
     const wDel = new Set([...((lp && lp.wDel) || []), ...(r.profile.wDel || [])]);
