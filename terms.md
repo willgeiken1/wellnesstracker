@@ -22,7 +22,7 @@ You keep ownership of what you put into Insight. You allow it to store and proce
 
 ## Using it fairly
 
-Don't try to break Insight, access other people's data, or overload it. Food photo analysis has a daily limit per person to keep the app running for everyone. The developer may limit or remove access if the app is being misused.
+Don't try to break Insight, access other people's data, or overload it. Food photos are limited to 10 a day and written meal descriptions to 20 a day. Both reset at midnight in your time zone. The developer may limit or remove access if the app is being misused.
 
 ## Third-party services
 

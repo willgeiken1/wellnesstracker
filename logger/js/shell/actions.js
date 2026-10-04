@@ -65,6 +65,7 @@ function finishSession(s, quiet) {
     app.state.deleted = [...(app.state.deleted || []), s.id];
     if (!quiet) app.toast("Workout discarded. No sets were logged.");
   } else {
+    if (s.plain) delete s.plain;
     s.finishedAt = new Date().toISOString(); s.mod = Date.now();
     if (!quiet) { app.ui.sheet = "summary"; app.ui.sd = { id: s.id }; }
   }
@@ -107,6 +108,7 @@ function logSet(i) {
   entry.muscles = [...e.muscles];
   const set = { w, r, ...(base.uni ? { uni: base.uni } : {}), note: d.note.trim() || undefined, at: new Date().toISOString() };
   if (d.tag) set.tag = d.tag;
+  if (Number.isInteger(d.rpe) && d.rpe >= 6 && d.rpe <= 10) set.rpe = d.rpe;
   entry.sets.push(set);
   s.mod = Date.now();
   const prs = app.prsFor(e.name, set, s.date);
@@ -281,6 +283,7 @@ document.addEventListener("input", (ev) => {
   if (el.id === "pick-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#pick-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
+  if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
   if (el.dataset.cf && app.ui.sheet === "cardio-log") { app.updateLogTotals(); return; }
   if (el.id === "food-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#food-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "bc-amt") { app.ui.sd.amt = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#bc-amt"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
@@ -305,6 +308,7 @@ document.addEventListener("click", async (ev) => {
   if (!b) return;
   const a = b.dataset.action;
   const i = b.dataset.i != null ? +b.dataset.i : null;
+  if (app.needsLock && app.needsLock() && a.indexOf("lock-") !== 0) { ev.preventDefault(); return; }
 
   switch (a) {
     case "tab": {
@@ -315,6 +319,7 @@ document.addEventListener("click", async (ev) => {
       const fromI = app.TAB_ORDER.indexOf(app.ui.tab), toI = app.TAB_ORDER.indexOf(to);
       if (to === "settings" && app.ui.tab !== "settings") app.ui.prevTab = app.ui.tab;
       app.ui.edit = null;
+      app.ui.briefEdit = false;
       app.ui.tab = to;
       if (same && to === "insights") app.ui.iseg = "trends";
       if (same && to === "food") app.ui.foodDay = null;
@@ -447,6 +452,20 @@ document.addEventListener("click", async (ev) => {
     case "food-day": { const d = app.addDays(app.ui.foodDay || app.today(), +b.dataset.d); app.ui.foodDay = d > app.today() ? app.today() : d; app.render(); break; }
     case "food-add": app.ui.sheet = "food-add"; app.ui.sd = { meal: b.dataset.meal }; app.renderSheet(); break;
     case "food-photo": { app.ui.sd = { meal: app.ui.sd.meal || app.autoMeal(), hint: "" }; app.ui.sheet = null; app.renderSheet(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
+    case "food-describe": {
+      const meal = (app.ui.sd && app.ui.sd.meal) || app.autoMeal();
+      const text = (app.ui.sd && app.ui.sd.text) || "";
+      app.ui.sheet = "food-describe";
+      app.ui.sd = { meal, text, source: "describe" };
+      app.renderSheet();
+      setTimeout(() => { const f = app.$("#food-describe"); if (f) f.focus(); }, 60);
+      break;
+    }
+    case "food-describe-go": {
+      app.ui.sd.text = ((app.$("#food-describe") || {}).value || "").trim();
+      await app.analyzeFoodText();
+      break;
+    }
     case "food-photo-go": { app.ui.sd.hint = ((app.$("#food-hint") || {}).value || "").trim(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
     case "food-manual": app.ui.sheet = "food-manual"; app.ui.sd = { meal: app.ui.sd.meal || "snacks" }; app.renderSheet(); break;
     case "food-edit": app.ui.sheet = "food-manual"; app.ui.sd = { edit: b.dataset.id }; app.renderSheet(); break;
@@ -463,7 +482,7 @@ document.addEventListener("click", async (ev) => {
       const t = app.reviewTotals(), name = items.map((it) => it.name).join(", ").slice(0, 80);
       const keep = items.map((it) => ({ name: it.name, portion: it.portion, kcal: app.r0(it.base.kcal * (it.mult || 1)), p: app.r0(it.base.p * (it.mult || 1)), c: app.r0(it.base.c * (it.mult || 1)), f: app.r0(it.base.f * (it.mult || 1)) }));
       const base = { kcal: app.r0(t.kcal), p: app.r0(t.p), c: app.r0(t.c), f: app.r0(t.f) };
-      app.addEntry(app.ui.sd.meal, name, base, 1, "photo", keep);
+      app.addEntry(app.ui.sd.meal, name, base, 1, app.ui.sd.source === "describe" ? "describe" : "photo", keep);
       if ((app.$("#food-fav") || {}).checked) app.favFrom(name, base, keep);
       app.ui.sheet = null; app.render(); app.toast(`Added ${app.r0(t.kcal)} cal.`); break;
     }
@@ -543,11 +562,11 @@ document.addEventListener("click", async (ev) => {
     case "set-edit": {
       const s = app.activeSession(); if (!s) break;
       const e = app.liveExercises(s)[i], x = app.setsFor(s, e.name)[+b.dataset.s]; if (!x) break;
-      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.name, j: +b.dataset.s, tag: x.tag || null }; app.renderSheet(); break;
+      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.name, j: +b.dataset.s, tag: x.tag || null, rpe: x.rpe || null }; app.renderSheet(); break;
     }
     case "hist-set": {
       const s = app.state.sessions.find((x) => x.id === b.dataset.id), e = s && s.entries.find((x) => x.exercise === b.dataset.ex), x = e && e.sets[+b.dataset.s]; if (!x) break;
-      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.exercise, j: +b.dataset.s, tag: x.tag || null }; app.renderSheet(); break;
+      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.exercise, j: +b.dataset.s, tag: x.tag || null, rpe: x.rpe || null }; app.renderSheet(); break;
     }
     case "se-step": {
       const inp = document.getElementById(b.dataset.f); if (!inp) break;
@@ -573,6 +592,7 @@ document.addEventListener("click", async (ev) => {
       t.x.w = w; t.x.r = r;
       if (note) t.x.note = note; else delete t.x.note;
       if (app.ui.sd.tag) t.x.tag = app.ui.sd.tag; else delete t.x.tag;
+      if (Number.isInteger(app.ui.sd.rpe) && app.ui.sd.rpe >= 6 && app.ui.sd.rpe <= 10) t.x.rpe = app.ui.sd.rpe; else delete t.x.rpe;
       app.recomputePRs(t.e.exercise);
       t.s.mod = Date.now(); delete app.ui.drafts[t.e.exercise];
       app.save(); app.ui.sheet = null; app.render(); app.toast("Set updated."); break;
@@ -594,6 +614,31 @@ document.addEventListener("click", async (ev) => {
       const d = app.draftFor(s, e.name);
       d.w = sg.w != null ? app.fmtNum(sg.w) : ""; d.r = String(sg.r);
       app.renderWorkout(); app.tick(); break;
+    }
+    case "sugg-plain":
+    case "sugg-ready": {
+      const s = app.activeSession(); if (!s) break;
+      const e = app.liveExercises(s)[i]; if (!e) break;
+      const list = (Array.isArray(s.plain) ? s.plain : []).filter((n) => n !== e.name);
+      if (a === "sugg-plain") list.push(e.name);
+      if (list.length) s.plain = list; else delete s.plain;
+      s.mod = Date.now();
+      delete app.ui.drafts[e.name];
+      app.save(); app.renderWorkout(); app.tick(); break;
+    }
+    case "rpe": {
+      const s = app.activeSession(); if (!s) break;
+      const e = app.liveExercises(s)[i]; if (!e) break;
+      const d = app.draftFor(s, e.name), n = +b.dataset.n;
+      d.rpe = d.rpe === n ? null : n;
+      app.renderWorkout(); app.tick(); break;
+    }
+    case "se-rpe": {
+      if (!app.ui.sd) break;
+      const n = +b.dataset.n;
+      app.ui.sd.rpe = app.ui.sd.rpe === n ? null : n;
+      document.querySelectorAll('[data-action="se-rpe"]').forEach((el) => el.setAttribute("aria-pressed", String(+el.dataset.n === app.ui.sd.rpe)));
+      break;
     }
     case "tag": {
       const s = app.activeSession(); if (!s) break;
@@ -744,6 +789,14 @@ document.addEventListener("click", async (ev) => {
       break;
     }
     case "w-done": app.ui.edit = null; app.render(); break;
+    case "brief-edit": app.ui.briefEdit = true; app.ui.edit = null; app.render(); break;
+    case "brief-done": app.ui.briefEdit = false; app.render(); break;
+    case "brief-size": { const p = app.briefPrefs(); app.saveBrief({ ...p, size: p.size === "expanded" ? "compact" : "expanded" }); app.render(); break; }
+    case "brief-toggle": {
+      const p = app.briefPrefs(), hidden = new Set(p.hidden);
+      if (hidden.has(b.dataset.id)) hidden.delete(b.dataset.id); else hidden.add(b.dataset.id);
+      app.saveBrief({ ...p, hidden: [...hidden] }); app.render(); break;
+    }
     case "w-remove": app.hideWidget(app.ui.edit, b.dataset.w); break;
     case "r-remove": app.deleteRoutine(b.dataset.w); break;
     case "w-add": app.ui.sheet = "w-add"; app.ui.sd = {}; app.renderSheet(); break;
@@ -833,6 +886,25 @@ document.addEventListener("click", async (ev) => {
       app.save(); app.render(); break;
     }
     case "rest": app.state.restSeconds = +b.dataset.s; app.save(); app.render(); break;
+    case "priv-summary": app.ui.sheet = "priv-summary"; app.ui.sd = {}; app.renderSheet(); break;
+    case "priv-export": await app.exportAllData(); break;
+    case "priv-range": app.ui.sheet = "priv-range"; app.ui.sd = { from: "", to: "" }; app.renderSheet(); break;
+    case "priv-range-go": {
+      const from = (app.ui.sd && app.ui.sd.from) || ((app.$("#purge-from") || {}).value || "");
+      const to = (app.ui.sd && app.ui.sd.to) || ((app.$("#purge-to") || {}).value || "");
+      await app.purgeRange(from, to);
+      break;
+    }
+    case "priv-lock": if (app.lockState().enabled) await app.disableAppLock(); else await app.enableAppLock(); break;
+    case "priv-pass-save": await app.savePasscodeLock(); break;
+    case "priv-delete": app.ui.sheet = "priv-delete"; app.ui.sd = {}; app.renderSheet(); setTimeout(() => { const f = app.$("#del-confirm"); if (f) f.focus(); }, 60); break;
+    case "priv-delete-go": await app.deleteAccount(); break;
+    case "lock-bio": await app.unlockWithBiometric(); break;
+    case "lock-relogin": app.ui.lockMode = "relogin"; app.ui.lockMsg = ""; app.renderLock(true); break;
+    case "lock-back": app.ui.lockMode = app.lockState().method === "passcode" ? "passcode" : "main"; app.ui.lockMsg = ""; app.renderLock(true); break;
+    case "lock-show-pass": app.ui.lockMode = "passcode"; app.ui.lockMsg = ""; app.renderLock(true); break;
+    case "lock-code-go": await app.unlockWithPasscode(); break;
+    case "lock-signin": await app.unlockWithPassword(); break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
   }

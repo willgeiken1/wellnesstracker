@@ -32,8 +32,9 @@ app.schedulePush = schedulePush;
 
 async function cloudPush() {
   if (!app.sb || !app.session) return;
-  const blob = { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
-                 deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now() };
+  const blob = { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
+                 deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(),
+                 appLock: app.state.appLock || { enabled: false, updatedAt: 0 }, purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
   try {
     const { error } = await app.sb.from("user_data").upsert({ user_id: app.session.user.id, data: blob, updated_at: new Date().toISOString() });
     if (!error) { app.state.lastCloud = Date.now(); localStorage.setItem(app.KEY, JSON.stringify(app.state)); }
@@ -43,6 +44,14 @@ app.cloudPush = cloudPush;
 
 /* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
 function mergeRemote(r) {
+  r = r || {};
+  if (app.unionPurges) app.state.purges = app.unionPurges(app.state.purges, r.purges);
+  if (app.mergeCheckins) {
+    const c = app.mergeCheckins(app.state, r);
+    app.state.checkins = c.checkins;
+    app.state.checkinDeleted = c.checkinDeleted;
+  }
+  if (r.appLock && (r.appLock.updatedAt || 0) > ((app.state.appLock && app.state.appLock.updatedAt) || 0)) app.state.appLock = r.appLock;
   const deleted = new Set([...(app.state.deleted || []), ...(r.deleted || [])]);
   const byId = new Map();
   // This phone's copy goes first so it wins ties (e.g. right after converting units).
@@ -55,6 +64,7 @@ function mergeRemote(r) {
   });
   app.state.sessions = [...byId.values()];
   if (r.goals && (!app.state.goals || (r.goals.updatedAt || 0) > (app.state.goals.updatedAt || 0))) app.state.goals = r.goals;
+  if (r.brief && (r.brief.updatedAt || 0) > ((app.state.brief && app.state.brief.updatedAt) || 0)) app.state.brief = r.brief;
   if (r.food) app.mergeFood(r.food);
   if (r.cardio) app.mergeCardio(r.cardio);
   if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = app.meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) app.meas()[d] = m; });
@@ -75,6 +85,10 @@ function mergeRemote(r) {
     if (r.theme) { app.state.theme = r.theme; app.applyTheme(); }
   }
   app.state.deleted = [...deleted];
+  if (app.applyPurges) app.applyPurges(app.state);
+  if (app.state.oura && app.state.oura.days && app.datePurged) {
+    Object.keys(app.state.oura.days).forEach((d) => { if (app.datePurged(d)) delete app.state.oura.days[d]; });
+  }
 }
 app.mergeRemote = mergeRemote;
 
@@ -108,7 +122,7 @@ async function ouraRefresh(force) {
       const { data: rows } = await app.sb.from("oura_days").select("day, data").eq("user_id", app.session.user.id).gte("day", app.addDays(app.today(), -150));
       if (rows) {
         const days = {};
-        rows.forEach((r) => { days[r.day] = r.data; });
+        rows.forEach((r) => { if (!(app.datePurged && app.datePurged(r.day))) days[r.day] = r.data; });
         app.state.oura.days = days;
         app.state.oura.lastSync = Date.now();
       }
@@ -139,7 +153,7 @@ async function initCloud() {
     const { data } = await app.sb.auth.getSession();
     app.session = data.session;
     app.sb.auth.onAuthStateChange((_event, s) => { app.session = s; });
-    if (app.session) { app.claimLocalFor(app.session.user.id); await app.cloudPull(); app.checkProfileGate(); await app.loadPhotos(); app.syncPhotos(); await app.ouraRefresh(false); }
+    if (app.session) { app.claimLocalFor(app.session.user.id); await app.cloudPull(); app.checkProfileGate(); await app.loadPhotos(); await app.syncPhotos(); if (app.dropPurgedPhotos) await app.dropPurgedPhotos(); await app.ouraRefresh(false); if (app.flushPurges) await app.flushPurges(); }
     else { await app.loadPhotos(); app.render(); }
   } catch (e) { /* offline */ }
 }
@@ -166,20 +180,23 @@ async function signIn(mode) {
   app.toast(mode === "signup" ? "Account created. Your workouts are backing up." : "Signed in.");
   await app.cloudPull();
   app.checkProfileGate();
-  await app.loadPhotos(); app.syncPhotos();
+  await app.loadPhotos(); await app.syncPhotos();
+  if (app.dropPurgedPhotos) await app.dropPurgedPhotos();
   await app.ouraRefresh(false);
+  if (app.flushPurges) await app.flushPurges();
 }
 app.signIn = signIn;
 
-async function signOut() {
+async function signOut(opts) {
+  const skipPush = opts && opts.skipPush;
   clearTimeout(app.pushTimer);
-  try { await app.cloudPush(); } catch (e) {}          // make sure the latest is backed up first
+  if (!skipPush) { try { await app.cloudPush(); } catch (e) {} }   // make sure the latest is backed up first
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
   app.ui.onboard = false; app.renderOnboard();
   app.state.oura = { connected: false, lastSync: null, days: {} };
   app.save(); app.render();
-  app.toast("Signed out. Your workouts are still saved on this phone.");
+  if (!(opts && opts.quiet)) app.toast("Signed out. Your workouts are still saved on this phone.");
 }
 app.signOut = signOut;
 

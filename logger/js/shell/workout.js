@@ -32,13 +32,16 @@ function exerciseHTML(s, e, i) {
   if (open) {
     const d = app.draftFor(s, e.name);
     const worked = done.filter(app.isWork).length;
+    const sg = worked ? null : app.suggestion(e.name, s.id);
     let wi = 0;
     html += `<div class="panel"><div class="panel-top">${app.machineNote(e.name) ? `<button class="ms-chip" data-action="ms-edit" data-name="${app.esc(e.name)}" aria-label="Machine settings: ${app.esc(app.machineNote(e.name))}">${app.GEAR_SVG}<span>${app.esc(app.machineNote(e.name))}</span></button>` : `<button class="ms-add" data-action="ms-edit" data-name="${app.esc(e.name)}">${app.GEAR_SVG}<span>Machine settings</span></button>`}<button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
-      ${worked ? "" : app.suggestionHTML(app.suggestion(e.name, s.id), i)}
-      ${done.length ? `<ol class="sets">${done.map((x, j) => `
-      <li><span class="set-n${x.tag === "warmup" ? " wu" : ""}">${x.tag === "warmup" ? "W" : ++wi}</span><button class="set-v set-edit" data-action="set-edit" data-i="${i}" data-s="${j}" aria-label="Edit set ${j + 1}">${app.fmtSet(x)}${x.tag === "failure" || (x.pr && x.pr.length) ? `<span class="set-badges">${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}</span>` : ""}</button>
+      ${sg ? app.suggestionHTML(sg, i) : (worked ? "" : app.readinessQuietHTML())}
+      ${done.length ? `<ol class="sets">${done.map((x, j) => {
+        const badges = `${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}${x.rpe ? `<span class="badge rpe">RPE ${x.rpe}</span>` : ""}`;
+        return `<li><span class="set-n${x.tag === "warmup" ? " wu" : ""}">${x.tag === "warmup" ? "W" : ++wi}</span><button class="set-v set-edit" data-action="set-edit" data-i="${i}" data-s="${j}" aria-label="Edit set ${j + 1}">${app.fmtSet(x)}${badges ? `<span class="set-badges">${badges}</span>` : ""}</button>
       <button class="set-x" data-action="delset" data-i="${i}" data-s="${j}" aria-label="Remove set ${j + 1}">×</button>
-      ${x.note ? `<span class="set-note">${app.esc(x.note)}</span>` : ""}</li>`).join("")}</ol>` : ""}
+      ${x.note ? `<span class="set-note">${app.esc(x.note)}</span>` : ""}</li>`;
+      }).join("")}</ol>` : ""}
       <div class="uni-row"><span id="uni-l-${i}">Unilateral</span>
         <button class="switch" role="switch" aria-checked="${app.isUni(e.name)}" aria-labelledby="uni-l-${i}" data-action="uni" data-i="${i}"><i></i></button></div>
       ${app.isUni(e.name) ? `<div class="side-l">Left</div>${app.stepPair(i, d, "w", "r", app.canBW(e.name))}<div class="side-l">Right</div>${app.stepPair(i, d, "wR", "rR", app.canBW(e.name))}` : app.stepPair(i, d, "w", "r", app.canBW(e.name))}
@@ -46,6 +49,7 @@ function exerciseHTML(s, e, i) {
       <div class="tags" role="group" aria-label="Set type">
         <button data-action="tag" data-t="warmup" data-i="${i}" aria-pressed="${d.tag === "warmup"}">Warm-up</button>
         <button data-action="tag" data-t="failure" data-i="${i}" aria-pressed="${d.tag === "failure"}">To failure</button></div>
+      ${app.rpeChipsHTML("rpe", d.rpe || null, i)}
       <button class="log" data-action="log" data-i="${i}">${d.tag === "warmup" ? "Log warm-up" : `Log set ${worked + 1}`}</button></div>`;
   }
   return html + "</li>";
@@ -66,6 +70,7 @@ function renderSheet() {
       ${cur ? `<button class="opt clear" data-action="set-plan" data-id="">Clear plan</button>` : ""}`;
   } else if (app.ui.sheet === "food-add") { inner = app.foodAddSheetHTML();
   } else if (app.ui.sheet === "food-photo") { inner = app.foodPhotoSheetHTML();
+  } else if (app.ui.sheet === "food-describe") { inner = app.foodDescribeSheetHTML();
   } else if (app.ui.sheet === "food-review") { inner = app.foodReviewSheetHTML();
   } else if (app.ui.sheet === "food-manual") { inner = app.foodManualSheetHTML();
   } else if (app.ui.sheet === "food-saved") { inner = app.foodSavedSheetHTML();
@@ -112,6 +117,10 @@ function renderSheet() {
   } else if (app.ui.sheet === "ms-edit") { inner = app.machineEditSheetHTML();
   } else if (app.ui.sheet === "meas-log") { inner = app.measLogSheetHTML();
   } else if (app.ui.sheet === "meas-detail") { inner = app.measDetailSheetHTML();
+  } else if (app.ui.sheet === "priv-summary") { inner = app.summarySheetHTML();
+  } else if (app.ui.sheet === "priv-range") { inner = app.rangeSheetHTML();
+  } else if (app.ui.sheet === "priv-delete") { inner = app.deleteSheetHTML();
+  } else if (app.ui.sheet === "priv-passcode") { inner = app.passcodeSheetHTML();
   } else if (app.ui.sheet === "live-add") {
     inner = app.liveAddSheetHTML();
   } else if (app.ui.sheet === "picker") {

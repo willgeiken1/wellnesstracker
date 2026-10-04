@@ -170,6 +170,7 @@ function settingsHTML() {
          <button class="set-row" data-action="sign-out"><span>Sign out</span></button>`
       : `<button class="set-row" data-action="auth-open"><span>Sign in or create an account</span>${app.I.chevR}</button>`}</div>
     ${app.session ? "" : `<p class="hint">An account backs up your workouts to the cloud and lets you connect Oura.</p>`}
+    ${app.privacySectionHTML()}
     <div class="group-label">Oura Ring</div>
     <div class="group">
       ${app.state.oura.connected

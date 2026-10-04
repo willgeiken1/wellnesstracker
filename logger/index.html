@@ -25,6 +25,16 @@
 <link rel="stylesheet" href="css/cardio.css">
 <link rel="stylesheet" href="css/platform.css">
 <link rel="stylesheet" href="css/polish.css">
+<link rel="stylesheet" href="css/privacy.css">
+<link rel="stylesheet" href="css/brief.css">
+<script>
+try {
+  var raw = localStorage.getItem("liftlog-v1");
+  var saved = raw ? JSON.parse(raw) : null;
+  if (saved && saved.appLock && saved.appLock.enabled && sessionStorage.getItem("insight-unlocked") !== "1")
+    document.documentElement.classList.add("lock-first");
+} catch (e) {}
+</script>
 </head>
 <body>
 <div id="stage">
@@ -62,6 +72,7 @@
 <div id="sheet" hidden></div>
 <div id="toast" hidden role="status"></div>
 <div id="onboard" hidden></div>
+<div id="lock" hidden></div>
 <div id="dialog" hidden></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 

@@ -1,29 +1,13 @@
 // food-photo: estimates foods + macros from a meal photo using Claude.
-// Body: { image: <base64 JPEG, no data: prefix>, hint?: string }
-// Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-sonnet-5-5), FOOD_DAILY_LIMIT (optional, default 15)
+// Body: { image: <base64 JPEG, no data: prefix>, hint?: string, localDate: "YYYY-MM-DD", timeZone: "America/Chicago" }
+// The daily cap is 10 photos, counted on the phone's local date. The limit is enforced
+// atomically by consume_ai_quota (describe, at 20, uses the same function).
+// Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-sonnet-5-5)
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { cors, json, requireUser } from "../_shared/http.ts";
+import { consumeQuota, PHOTO_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-
-function serverKey(): string {
-  try {
-    const keys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
-    if (keys.default) return keys.default;
-    const first = Object.values(keys)[0];
-    if (typeof first === "string") return first;
-  } catch { /* fall back to the legacy key */ }
-  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-}
-const admin = createClient(Deno.env.get("SUPABASE_URL")!, serverKey(), { auth: { persistSession: false } });
 const MODEL = Deno.env.get("FOOD_MODEL") ?? "claude-sonnet-5-5";
-const DAILY_LIMIT = Number(Deno.env.get("FOOD_DAILY_LIMIT") ?? 15);
 
 const PROMPT = `You estimate nutrition from meal photos for a fitness app.
 Identify each distinct food or drink you can see and estimate its portion and nutrition.
@@ -38,8 +22,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   let userId: string | null = null, counted = false, day = "";
   try {
-    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-    const { data: { user } } = await admin.auth.getUser(token);
+    const user = await requireUser(req);
     if (!user) return json({ error: "Sign in to analyze food photos." }, 401);
     userId = user.id;
 
@@ -51,12 +34,20 @@ Deno.serve(async (req) => {
     const key = Deno.env.get("ANTHROPIC_API_KEY");
     if (!key) return json({ error: "Food photos aren't set up yet (missing API key)." }, 500);
 
-    // Server-side daily limit, so a bug or a busy day can never run up a surprise bill.
-    day = new Date().toISOString().slice(0, 10);
-    const { data: u } = await admin.from("ai_usage").select("count").eq("user_id", userId).eq("day", day).maybeSingle();
-    const used = u?.count ?? 0;
-    if (used >= DAILY_LIMIT) return json({ error: `You've used all ${DAILY_LIMIT} food photos for today. Add the rest by barcode or manually.`, code: "limit" }, 429);
-    await admin.from("ai_usage").upsert({ user_id: userId, day, count: used + 1 });
+    const when = resolveQuotaDay(body.localDate, body.timeZone);
+    if ("error" in when) return json({ error: when.error }, 400);
+    day = when.day;
+
+    // One atomic increment. A failed estimate is given back below.
+    const quota = await consumeQuota(userId, day, PHOTO_KIND);
+    if (!quota.allowed) {
+      return json({
+        error: `You've used all ${quota.limit} food photos for today. Add the rest by barcode or manually.`,
+        code: "limit",
+        remaining: 0,
+        limit: quota.limit,
+      }, 429);
+    }
     counted = true;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -89,13 +80,19 @@ Deno.serve(async (req) => {
       grams: num(it.grams),
       calories: num(it.calories), protein: num(it.protein), carbs: num(it.carbs), fat: num(it.fat),
     }));
-    return json({ items, notes: String(parsed.notes ?? "").slice(0, 300) });
+    return json({
+      items,
+      notes: String(parsed.notes ?? "").slice(0, 300),
+      remaining: quota.remaining,
+      limit: quota.limit,
+    });
   } catch (e) {
     // Failed analyses don't count against the daily limit.
-    if (counted && userId) {
-      const { data: u } = await admin.from("ai_usage").select("count").eq("user_id", userId).eq("day", day).maybeSingle();
-      if (u?.count) await admin.from("ai_usage").update({ count: u.count - 1 }).eq("user_id", userId).eq("day", day);
+    if (counted && userId && day) await releaseQuota(userId, day, PHOTO_KIND);
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/consume_ai_quota|could not find the function/i.test(msg)) {
+      return json({ error: "Food photo limits aren't set up yet." }, 500);
     }
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return json({ error: msg }, 500);
   }
 });

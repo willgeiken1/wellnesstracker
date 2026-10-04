@@ -80,6 +80,9 @@ div.wcard { display: flex; justify-content: space-between; align-items: center; 
 #workout .panel-top { margin: -2px 0 4px; }
 #workout .sugg { padding: 9px 12px; margin-bottom: 8px; border-radius: 14px; }
 #workout .sugg b { font-size: 14px; } #workout .sugg > span { font-size: 12.5px; margin-top: 2px; }
+#workout .sugg > .sugg-ready { font-size: 13px; margin-top: 6px; color: var(--text); font-weight: 600; }
+#workout .rpe { margin-top: 8px; }
+#workout .rpe button { height: 36px; }
 #workout .sets { margin: 0 0 8px; }
 #workout .sets li { min-height: 38px; }
 #workout .set-v { font-size: 16px; }

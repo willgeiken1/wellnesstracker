@@ -208,7 +208,8 @@ function foodAddSheetHTML() {
   const label = app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1];
   const opt = (a, icon, t, s) => `<button class="fopt" data-action="${a}"><span class="fopt-i">${icon}</span><span><b>${t}</b><span>${s}</span></span>${app.I.chevR}</button>`;
   return `<h3>Add to ${label}</h3>
-    ${opt("food-photo", "📷", "Snap your plate", "AI estimates each food and its macros")}
+    ${opt("food-photo", "📷", "Snap your plate", "AI estimates each food. 10 photos a day")}
+    ${opt("food-describe", "💬", "Describe it", "Type or dictate a meal. 20 a day")}
     ${opt("food-barcode", "▥", "Scan a barcode", "Packaged foods, from Open Food Facts")}
     ${opt("food-saved", "★", "Saved and recent", "Re-log your usual meals in one tap")}
     ${opt("food-manual", "✎", "Enter manually", "Type the calories and macros")}`;
@@ -221,9 +222,31 @@ function foodPhotoSheetHTML() {
     <label class="field-label" for="food-hint">Anything the camera can't see? (optional)</label>
     <input class="text-in" id="food-hint" autocomplete="off" placeholder="Cooked in butter, 2 scoops of rice" value="${app.esc(app.ui.sd.hint || "")}">
     <button class="btn primary block" data-action="food-photo-go">Take or choose a photo</button>
-    <p class="sub small">Uses about a penny of AI credit per photo. The photo isn't kept.</p>`;
+    <p class="sub small">10 food photos a day. The count resets at midnight on this phone. The photo isn't kept.</p>`;
 }
 app.foodPhotoSheetHTML = foodPhotoSheetHTML;
+
+function foodDescribeSheetHTML() {
+  return `<h3>Describe it</h3>
+    <p class="sub" style="margin:-6px 0 14px">Type the meal, or dictate it with the microphone on your keyboard. You'll review the estimate before it's saved.</p>
+    <label class="field-label" for="food-describe">What did you eat?</label>
+    <textarea class="text-in desc-in" id="food-describe" maxlength="800" rows="4" placeholder="Two eggs, toast with butter, black coffee" aria-label="Meal description">${app.esc(app.ui.sd.text || "")}</textarea>
+    <button class="btn primary block" data-action="food-describe-go">Estimate this meal</button>
+    <p class="sub small">20 descriptions a day. The count resets at midnight on this phone. The description isn't kept.</p>`;
+}
+app.foodDescribeSheetHTML = foodDescribeSheetHTML;
+
+function quotaLeftLine() {
+  if (typeof app.ui.sd.describesLeft === "number") {
+    const n = app.ui.sd.describesLeft;
+    return `<p class="sub small">${n === 0 ? "No descriptions left today." : `${app.pl(n, "description")} left today.`}</p>`;
+  }
+  if (typeof app.ui.sd.photosLeft === "number") {
+    const n = app.ui.sd.photosLeft;
+    return `<p class="sub small">${n === 0 ? "No food photos left today." : `${app.pl(n, "food photo")} left today.`}</p>`;
+  }
+  return "";
+}
 
 function itemRow(it, i) {
   const m = it.mult || 1, v = (k) => app.r0(it.base[k] * m);
@@ -244,18 +267,23 @@ app.reviewTotals = reviewTotals;
 
 function foodReviewSheetHTML() {
   const label = app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1];
-  if (app.ui.sd.loading) return `<h3>Reading your plate…</h3><div class="spin" aria-hidden="true"></div><p class="sub" style="text-align:center">This usually takes a few seconds.</p>`;
+  const described = app.ui.sd.source === "describe";
+  if (app.ui.sd.loading) return `<h3>${described ? "Reading your description…" : "Reading your plate…"}</h3><div class="spin" aria-hidden="true"></div><p class="sub" style="text-align:center">This usually takes a few seconds.</p>`;
   if (app.ui.sd.error) return `<h3>Couldn't analyze that</h3><p class="sub">${app.esc(app.ui.sd.error)}</p>
-    <button class="btn primary block" data-action="food-photo">Try another photo</button><button class="btn block" data-action="food-manual" style="margin-top:8px">Enter manually</button>`;
+    <button class="btn primary block" data-action="${described ? "food-describe" : "food-photo"}">${described ? "Edit the description" : "Try another photo"}</button><button class="btn block" data-action="food-manual" style="margin-top:8px">Enter manually</button>`;
   const t = app.reviewTotals(), items = app.ui.sd.items || [];
   return `<h3>Review your meal</h3>
     <div class="seg2 meal-seg">${app.MEALS.map(([k, l]) => `<button data-action="review-meal" data-m="${k}" aria-pressed="${app.ui.sd.meal === k}">${l}</button>`).join("")}</div>
     ${app.ui.sd.notes ? `<p class="sub" style="margin:-6px 0 12px">${app.esc(app.ui.sd.notes)}</p>` : ""}
-    ${items.length ? items.map(app.itemRow).join("") : `<p class="sub">No foods found. Add one below or try another photo.</p>`}
+    ${quotaLeftLine()}
+    ${items.length ? items.map(app.itemRow).join("") : `<p class="sub">No foods found. Add one below or ${described ? "describe it again" : "try another photo"}.</p>`}
     <button class="link-btn" data-action="fi-add">Add a food</button>
     ${app.ui.sd.image ? `<details class="reanalyze"${app.ui.sd.hint ? " open" : ""}><summary>Something off? Add a note and re-analyze</summary>
       <input class="text-in" id="food-hint" autocomplete="off" placeholder="Cooked in butter, 2 scoops of rice" value="${app.esc(app.ui.sd.hint || "")}">
       <button class="btn block" data-action="food-reanalyze">Re-analyze (uses 1 photo)</button></details>` : ""}
+    ${described ? `<details class="reanalyze"><summary>Change the description</summary>
+      <textarea class="text-in desc-in" id="food-describe" maxlength="800" rows="3" aria-label="Meal description">${app.esc(app.ui.sd.text || "")}</textarea>
+      <button class="btn block" data-action="food-describe-go">Estimate again (uses 1 description)</button></details>` : ""}
     <div class="fr-total"><b>${app.r0(t.kcal)} cal</b><span>P ${app.r0(t.p)} · C ${app.r0(t.c)} · F ${app.r0(t.f)}</span></div>
     <label class="swap-keep"><input type="checkbox" id="food-fav" ${app.ui.sd.fav ? "checked" : ""}> Save as a favorite meal</label>
     <button class="btn primary block" data-action="food-review-save" ${items.length ? "" : "disabled"}>Save to ${app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1]}</button>`;
@@ -356,13 +384,23 @@ function compressForAI(file) {
 }
 app.compressForAI = compressForAI;
 
+function aiClock() {
+  let timeZone = "UTC";
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone) timeZone = zone;
+  } catch (e) { /* UTC is only a fallback; the server still checks the date */ }
+  return { localDate: app.today(), timeZone };
+}
+app.aiClock = aiClock;
+
 async function analyzeFoodPhoto(file, reuse) {
   app.ui.sheet = "food-review"; app.ui.sd = { meal: app.autoMeal(), ...app.ui.sd, loading: true, error: null, items: [] }; app.renderSheet();
   try {
     if (!app.sb || !app.session) throw new Error("Sign in (Settings → Account) to use food photos.");
     const image = reuse || await app.compressForAI(file);
     app.ui.sd.image = image;
-    const { data, error } = await app.sb.functions.invoke("food-photo", { body: { image, hint: app.ui.sd.hint || "" } });
+    const { data, error } = await app.sb.functions.invoke("food-photo", { body: { image, hint: app.ui.sd.hint || "", ...app.aiClock() } });
     if (error) {
       let msg = "Couldn't reach the food analysis service. Check your connection and try again.";
       try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
@@ -370,11 +408,43 @@ async function analyzeFoodPhoto(file, reuse) {
     }
     app.ui.sd.items = (data.items || []).map((it) => ({ name: it.name, portion: it.portion, mult: 1, base: { kcal: it.calories, p: it.protein, c: it.carbs, f: it.fat } }));
     app.ui.sd.notes = data.notes || "";
+    app.ui.sd.source = "photo";
+    app.ui.sd.photosLeft = typeof data.remaining === "number" ? data.remaining : null;
+    app.ui.sd.describesLeft = null;
     app.ui.sd.loading = false;
   } catch (e) { app.ui.sd.loading = false; app.ui.sd.error = e.message || String(e); }
   if (app.ui.sheet === "food-review") app.renderSheet();
 }
 app.analyzeFoodPhoto = analyzeFoodPhoto;
+
+async function analyzeFoodText() {
+  if (app.describeBusy) return;
+  const text = ((app.ui.sd && app.ui.sd.text) || "").trim();
+  app.ui.sd.text = text;
+  if (text.length < 2) { app.toast("Describe what you ate."); return; }
+  const meal = app.ui.sd.meal || app.autoMeal();
+  app.describeBusy = true;
+  app.ui.sheet = "food-review";
+  app.ui.sd = { meal, text, source: "describe", loading: true, error: null, items: [], image: null };
+  app.renderSheet();
+  try {
+    if (!app.sb || !app.session) throw new Error("Sign in (Settings → Account) to describe a meal.");
+    const { data, error } = await app.sb.functions.invoke("food-describe", { body: { text, ...app.aiClock() } });
+    if (error) {
+      let msg = "Couldn't reach the food analysis service. Check your connection and try again.";
+      try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    app.ui.sd.items = (data.items || []).map((it) => ({ name: it.name, portion: it.portion, mult: 1, base: { kcal: it.calories, p: it.protein, c: it.carbs, f: it.fat } }));
+    app.ui.sd.notes = data.notes || "";
+    app.ui.sd.describesLeft = typeof data.remaining === "number" ? data.remaining : null;
+    app.ui.sd.photosLeft = null;
+    app.ui.sd.loading = false;
+  } catch (e) { app.ui.sd.loading = false; app.ui.sd.error = e.message || String(e); }
+  finally { app.describeBusy = false; }
+  if (app.ui.sheet === "food-review") app.renderSheet();
+}
+app.analyzeFoodText = analyzeFoodText;
 
 /* Barcode scanner: the app opens the rear camera itself (so the live view always shows),
    then reads frames with the browser's built-in detector if it has one, or ZXing loaded on demand. */
