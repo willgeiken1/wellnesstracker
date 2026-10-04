@@ -126,9 +126,10 @@ function deleteRoutine(id) {
   if (app.state.workouts.length <= 1) { app.toast("Keep at least one routine."); return; }
   const [w] = app.state.workouts.splice(idx, 1);
   const days = Object.keys(app.state.plan).filter((d) => app.state.plan[d] === id);
-  days.forEach((d) => delete app.state.plan[d]);
+  const stamped = {};
+  days.forEach((d) => { if (app.state.planAt && app.state.planAt[d]) stamped[d] = app.state.planAt[d]; delete app.state.plan[d]; if (app.state.planAt) delete app.state.planAt[d]; });
   app.save(); app.render();
-  app.toast(`${w.name} deleted.`, () => { app.state.workouts.splice(idx, 0, w); days.forEach((d) => { app.state.plan[d] = id; }); app.save(); app.render(); });
+  app.toast(`${w.name} deleted.`, () => { app.state.workouts.splice(idx, 0, w); app.state.planAt = app.state.planAt || {}; days.forEach((d) => { app.state.plan[d] = id; if (stamped[d]) app.state.planAt[d] = stamped[d]; }); app.save(); app.render(); });
 }
 app.deleteRoutine = deleteRoutine;
 

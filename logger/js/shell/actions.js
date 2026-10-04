@@ -317,7 +317,9 @@ document.addEventListener("click", async (ev) => {
     case "week": app.ui.weekOffset += +b.dataset.d; app.render(); break;
     case "plan": app.ui.sheet = "plan"; app.ui.sd = { date: b.dataset.date }; app.renderSheet(); break;
     case "set-plan":
-      if (b.dataset.id) app.state.plan[app.ui.sd.date] = b.dataset.id; else delete app.state.plan[app.ui.sd.date];
+      app.state.planAt = app.state.planAt || {};
+      if (b.dataset.id) { app.state.plan[app.ui.sd.date] = b.dataset.id; app.state.planAt[app.ui.sd.date] = Date.now(); }
+      else { delete app.state.plan[app.ui.sd.date]; delete app.state.planAt[app.ui.sd.date]; }
       app.save(); app.ui.sheet = null; app.render(); break;
     case "sheet-close": app.ui.sheet = null; app.renderSheet(); break;
     case "start": app.startWorkout(b.dataset.id); break;
@@ -409,7 +411,7 @@ document.addEventListener("click", async (ev) => {
       if (!segs.length) { app.toast("Enter how many minutes you did."); break; }
       const date = (app.$("#cl-date") || {}).value || app.today();
       if (date > app.today()) { app.toast("That date is in the future."); break; }
-      const sNew = { id: app.cid(), date, machine: app.ui.sd.machine || "treadmill", segments: segs, src: "manual", finishedAt: date + "T12:00:00" };
+      const sNew = { id: app.cid(), date, machine: app.ui.sd.machine || "treadmill", segments: segs, src: "manual", finishedAt: date + "T12:00:00", loggedAt: Date.now() };
       sNew.kcal = Math.round(app.sessionKcal(sNew, app.bodyKg()));
       app.cardio().sessions.push(sNew); app.cardioTouch();
       app.ui.sheet = "cardio-sum"; app.ui.sd = { id: sNew.id, fresh: true }; app.render(); break;
@@ -495,7 +497,7 @@ document.addEventListener("click", async (ev) => {
       if (!base.kcal && !base.p && !base.c && !base.f) { app.toast("Enter at least the calories."); break; }
       if (app.ui.sd.edit) {
         const d = app.ui.foodDay || app.today(), e = app.dayEntries(d).find((x) => x.id === app.ui.sd.edit);
-        if (e) { e.name = name; e.base = base; e.servings = sv; const m = (app.$("#fm-meal") || {}).value; if (m) e.meal = m; }
+        if (e) { e.name = name; e.base = base; e.servings = sv; const m = (app.$("#fm-meal") || {}).value; if (m) e.meal = m; e.updatedAt = new Date().toISOString(); }
         app.foodTouch();
       } else app.addEntry(app.ui.sd.meal, name, base, sv, "manual");
       if ((app.$("#food-fav") || {}).checked) app.favFrom(name, base);
@@ -697,9 +699,15 @@ document.addEventListener("click", async (ev) => {
     case "weigh-del": {
       const d = b.dataset.date;
       if (!(await app.ask({ title: "Delete this weigh-in?", body: app.fmtDate(d), ok: "Delete", danger: true }))) break;
+      const deletedAt = app.localStamp(app.state.profile, Date.now());
       app.state.profile.weighIns = app.state.profile.weighIns.filter((x) => x.date !== d);
       app.state.profile.wDel = [...(app.state.profile.wDel || []), d];
-      app.state.profile.updatedAt = Date.now();
+      app.state.profile.wDelAt = { ...(app.state.profile.wDelAt || {}), [d]: deletedAt };
+      if (app.state.profile.wDelAtRaw && app.state.profile.wDelAtRaw[d] != null) {
+        app.state.profile.wDelAtRaw = { ...app.state.profile.wDelAtRaw };
+        delete app.state.profile.wDelAtRaw[d];
+      }
+      app.state.profile.updatedAt = deletedAt;
       app.save(); app.render(); app.renderSheet(); break;
     }
     case "auth-open": app.ui.sheet = "auth"; app.ui.sd = { mode: "signin", email: "" }; app.renderSheet(); break;
@@ -773,7 +781,7 @@ document.addEventListener("click", async (ev) => {
       const w = app.workoutById(app.ui.detail);
       if (!(await app.ask({ title: `Delete ${w.name}?`, body: "Past workouts stay in your history. Any days planned with it will be cleared.", ok: "Delete", danger: true }))) break;
       app.state.workouts = app.state.workouts.filter((x) => x !== w);
-      Object.keys(app.state.plan).forEach((d) => { if (app.state.plan[d] === w.id) delete app.state.plan[d]; });
+      Object.keys(app.state.plan).forEach((d) => { if (app.state.plan[d] === w.id) { delete app.state.plan[d]; if (app.state.planAt) delete app.state.planAt[d]; } });
       app.ui.detail = null; app.save(); app.render(); break;
     }
     case "edit-ex": {
