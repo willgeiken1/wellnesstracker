@@ -56,7 +56,7 @@ const METRICS = {
    same story told twice (sleep score versus hours, HRV versus readiness). */
 const OURA_IDS = new Set(["readiness", "sleepScore", "sleepHours", "deepHours", "remHours", "lightHours", "awakeMin", "steps", "hrv", "rhr", "temp"]);
 
-export const DISPLAY_LIMIT = 8;
+export const DISPLAY_LIMIT = 5;
 export const SEE_ALL_LIMIT = 25;
 export const DAYS_FOR_A_PATTERN = MIN_PER_GROUP * 2;
 
@@ -1358,24 +1358,59 @@ export function findingsForView(rows) {
   return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).slice().sort((a, b) => viewGroup(a) - viewGroup(b) || byStrength(a, b));
 }
 
-/* The first screen keeps the ranked order, but will not stack one outcome
-   or one kind of factor. Everything else stays available for See all. */
-export function listFindings(rows) {
-  const ranked = findingsForView(rows);
-  const picked = [];
-  const rest = [];
+export const STORY_CAP = 2;
+
+/* One outcome, one kind of factor, one direction. Late eating, fat and carbs
+   all pulling HRV down are the same story. */
+export function storyKey(row) {
+  const v = row && row.valence;
+  const p = Number(row && row.percent) || 0;
+  const dir = v === "good" || v === "bad" || v === "neutral" ? v : p > 0 ? "up" : p < 0 ? "down" : "flat";
+  return row.outcome + "|" + factorFamily(row) + "|" + dir;
+}
+
+function textOrder(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/* Same as the view order, then by name so ties never depend on input order. */
+function byViewStable(a, b) {
+  return viewGroup(a) - viewGroup(b) || byStrength(a, b)
+    || textOrder(String(a.outcome), String(b.outcome))
+    || textOrder(String(a.factor), String(b.factor))
+    || (Number(a.lag) || 0) - (Number(b.lag) || 0);
+}
+
+/* The first screen will not stack one outcome, one kind of factor, or one
+   story, and is never padded with rows that break those caps. See all gets
+   the rest, but no story more than STORY_CAP times overall. */
+export function splitFindings(rows) {
+  const ranked = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).sort(byViewStable);
+  const top = [];
+  const more = [];
   const outcomes = {};
   const families = {};
+  const stories = {};
+  const shown = {};
   ranked.forEach((r) => {
+    const story = storyKey(r);
+    if ((stories[story] || 0) >= STORY_CAP) return;
+    stories[story] = (stories[story] || 0) + 1;
     const outcome = r.outcome;
     const family = factorFamily(r);
-    if (picked.length < DISPLAY_LIMIT && (outcomes[outcome] || 0) < OUTCOME_CAP && (families[family] || 0) < FAMILY_CAP) {
-      picked.push(r);
+    if (top.length < DISPLAY_LIMIT && !shown[story] && (outcomes[outcome] || 0) < OUTCOME_CAP && (families[family] || 0) < FAMILY_CAP) {
+      top.push(r);
+      shown[story] = true;
       outcomes[outcome] = (outcomes[outcome] || 0) + 1;
       families[family] = (families[family] || 0) + 1;
-    } else rest.push(r);
+    } else more.push(r);
   });
-  return picked.concat(rest);
+  return { top, more };
+}
+
+export function listFindings(rows) {
+  const { top, more } = splitFindings(rows);
+  return top.concat(more);
 }
 
 /* One numeric series, same line-reflected adjustment evaluate() uses for cuts.

@@ -23,6 +23,9 @@ import {
   OUTCOME_CAP,
   pickForToday,
   SEE_ALL_LIMIT,
+  splitFindings,
+  STORY_CAP,
+  storyKey,
   studentP,
   suppressedStory,
   todayLine,
@@ -386,7 +389,7 @@ test("a full month of series stays on the device and finishes quickly", () => {
 test("same-night Oura pairs and same-day workout types are filtered out", () => {
   assert.equal(LATE_HOUR, 21);
   assert.equal(DAYS_FOR_A_PATTERN, 14);
-  assert.equal(DISPLAY_LIMIT, 8);
+  assert.equal(DISPLAY_LIMIT, 5);
   assert.equal(SEE_ALL_LIMIT, 25);
 
   assert.equal(suppressedStory({ id: "sleepHours", source: "sleepHours" }, "sleepScore", 0, null), true);
@@ -654,7 +657,7 @@ test("mirror pairs collapse to the stronger temporally valid direction", () => {
   assert.equal(rows.filter((r) => (r.source === "sleepHours" && r.outcome === "liftPerf") || (r.source === "liftPerf" && r.outcome === "sleepHours")).length, 1);
 });
 
-test("the top 8 allow at most 2 cards per outcome and 3 per factor family", () => {
+test("the first screen allows 2 cards per outcome, 3 per family, 1 per story", () => {
   assert.equal(OUTCOME_CAP, 2);
   assert.equal(FAMILY_CAP, 3);
   const outcomes = ["liftPerf", "readiness", "sleepScore", "hrv", "rhr"];
@@ -695,24 +698,93 @@ test("the top 8 allow at most 2 cards per outcome and 3 per factor family", () =
     });
   });
   const listed = listFindings(rows);
-  const top = listed.slice(0, DISPLAY_LIMIT);
+  const { top, more } = splitFindings(rows);
   const byOutcome = {};
   const byFamily = {};
+  const byStory = {};
   top.forEach((r) => {
     byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1;
     const family = factorFamily(r);
     byFamily[family] = (byFamily[family] || 0) + 1;
+    byStory[storyKey(r)] = (byStory[storyKey(r)] || 0) + 1;
     assert.ok(family === "sleep" || family === "training" || family === "food" || family === "hrv" || family === "rhr" || family === "readiness" || family === "steps");
   });
   assert.equal(top.length, DISPLAY_LIMIT);
   Object.values(byOutcome).forEach((n) => assert.ok(n <= OUTCOME_CAP));
   Object.values(byFamily).forEach((n) => assert.ok(n <= FAMILY_CAP));
-  const seen = top.map((r) => r.outcome);
-  assert.ok(new Set(seen).size >= 4);
-  const all = listed.slice(0, SEE_ALL_LIMIT);
-  assert.equal(all.length, SEE_ALL_LIMIT);
-  assert.ok(all.filter((r) => r.outcome === "liftPerf").length > OUTCOME_CAP);
-  assert.deepEqual(all.slice(0, DISPLAY_LIMIT), top);
+  Object.values(byStory).forEach((n) => assert.equal(n, 1));
+  assert.ok(new Set(top.map((r) => r.outcome)).size >= 3);
+  assert.deepEqual(listed, top.concat(more));
+  const all = {};
+  listed.forEach((r) => { all[storyKey(r)] = (all[storyKey(r)] || 0) + 1; });
+  Object.values(all).forEach((n) => assert.ok(n <= STORY_CAP));
+  // liftPerf spans several families, so See all still has more than
+  // OUTCOME_CAP liftPerf rows, but only STORY_CAP of the sleep story.
+  assert.ok(listed.filter((r) => r.outcome === "liftPerf").length > OUTCOME_CAP);
+  assert.equal(listed.filter((r) => r.outcome === "liftPerf" && factorFamily(r) === "sleep").length, STORY_CAP);
+  assert.ok(listed.length < rows.length);
+});
+
+function hrvRow(factor, source, strength, extra) {
+  return { confidence: "high", valence: "bad", strength, percent: -8, nWith: 20, nWithout: 20, outcome: "hrv", factor, source, lag: 1, ...extra };
+}
+
+test("late eating, fat and carbs pulling HRV down are one story", () => {
+  const rows = [
+    hrvRow("fat:median", "fat", 50),
+    hrvRow("lateEating", undefined, 80),
+    hrvRow("carbs:median", "carbs", 65),
+  ];
+  assert.equal(new Set(rows.map(storyKey)).size, 1);
+  const { top, more } = splitFindings(rows);
+  const listed = listFindings(rows);
+  assert.equal(listed.length, STORY_CAP);
+  assert.deepEqual(listed.map((r) => r.factor), ["lateEating", "carbs:median"]);
+  assert.equal(top.length, 1);
+  assert.equal(top[0].factor, "lateEating");
+  assert.deepEqual(more.map((r) => r.factor), ["carbs:median"]);
+  assert.deepEqual(listed, top.concat(more));
+});
+
+test("a different direction or family is a different story", () => {
+  const rows = [
+    hrvRow("lateEating", undefined, 80),
+    hrvRow("protein:median", "protein", 70, { valence: "good", percent: 6 }),
+    hrvRow("sleepHours:median", "sleepHours", 60),
+    hrvRow("steps:median", "steps", 55, { valence: undefined, percent: 4 }),
+    hrvRow("calories:median", "calories", 50, { valence: undefined, percent: -4 }),
+  ];
+  assert.equal(new Set(rows.map(storyKey)).size, rows.length);
+});
+
+test("splitFindings never pads the first screen with cap-breaking rows", () => {
+  const rows = [
+    hrvRow("lateEating", undefined, 90),
+    hrvRow("fat:median", "fat", 80),
+    hrvRow("sleepHours:median", "sleepHours", 70),
+    hrvRow("deepHours:median", "deepHours", 60),
+    hrvRow("steps:median", "steps", 50),
+    hrvRow("workedOut", "workoutVolume", 40, { confidence: "low" }),
+  ];
+  const { top, more } = splitFindings(rows);
+  assert.ok(top.length < DISPLAY_LIMIT);
+  assert.deepEqual(top.map((r) => r.factor), ["lateEating", "sleepHours:median"]);
+  assert.deepEqual(more.map((r) => r.factor), ["fat:median", "deepHours:median", "steps:median"]);
+  assert.deepEqual(listFindings(rows), top.concat(more));
+  assert.deepEqual(splitFindings([]), { top: [], more: [] });
+});
+
+test("ties are broken by name, so input order does not matter", () => {
+  const a = hrvRow("lateEating", undefined, 50, { outcome: "rhr" });
+  const b = hrvRow("sleepHours:median", "sleepHours", 50);
+  const c = hrvRow("steps:median", "steps", 50, { lag: 0 });
+  const d = hrvRow("steps:median", "steps", 50);
+  const order = (rows) => listFindings(rows).map((r) => r.outcome + "|" + r.factor + "|" + r.lag);
+  const want = ["hrv|sleepHours:median|1", "hrv|steps:median|0", "rhr|lateEating|1", "hrv|steps:median|1"];
+  assert.deepEqual(order([a, b, c, d]), want);
+  assert.deepEqual(order([d, c, b, a]), want);
+  const strong = hrvRow("deepHours:median", "deepHours", 51, { outcome: "rhr", factor: "zzz" });
+  assert.equal(listFindings([a, strong])[0], strong);
 });
 
 test("the Insights screen still calls effect(), and the engine does not phone home", () => {
