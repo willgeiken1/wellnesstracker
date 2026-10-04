@@ -107,7 +107,7 @@ function proteinLowDays() {
   return n;
 }
 
-function ouraMetric() {
+export function ouraMetric() {
   if (!hasOura(app.state) || ouraWidgetShowing(app.state, "readiness")) return null;
   const o = app.latestOura(app.src().oura);
   if (!o || o.readiness == null) return null;

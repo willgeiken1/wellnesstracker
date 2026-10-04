@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
-import { gatedOuraStripHTML, ouraWidgetShowing } from "../shared/oura-gate.js";
+import { getHomeLayout } from "../shared/home-widgets.js";
+import { gatedOuraStripHTML } from "../shared/oura-gate.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -81,7 +82,7 @@ function homeHTML() {
   const hitSet = new Set(hit.keys());
   const keys = Object.keys(app.MUSCLES).sort((a, b) => (hit.get(b) || 0) - (hit.get(a) || 0));
 
-  const readiness = ouraWidgetShowing(app.state, "readiness") ? "" : app.readinessCardHTML();
+  const readiness = getHomeLayout(app.state) ? "" : app.readinessCardHTML();
   return `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}

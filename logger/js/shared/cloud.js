@@ -205,7 +205,6 @@ async function initCloud() {
       await app.loadPhotos();
       await app.syncPhotos();
       if (app.dropPurgedPhotos) await app.dropPurgedPhotos();
-      if (app.pendingOuraConnect) app.ui.tab = "home";
       await app.ouraRefresh(!!app.pendingOuraConnect);
       app.pendingOuraConnect = false;
       if (app.flushPurges) await app.flushPurges();

@@ -43,15 +43,41 @@ function shown(v, fmt) {
   return fmt ? fmt(v) : String(v);
 }
 
-function tile(id, label, value) {
-  return `<div class="stat" data-oura-widget="${id}"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+function latestDay() {
+  if (typeof app.src !== "function") return null;
+  try {
+    const days = app.src().oura;
+    if (!days || typeof days !== "object") return null;
+    const keys = Object.keys(days).filter((k) => days[k] && typeof days[k] === "object").sort();
+    return keys.length ? days[keys[keys.length - 1]] : null;
+  } catch (e) { return null; }
+}
+
+function awaitingFirstSync() {
+  if (latestDay()) return false;
+  return !!(app.state && app.state.oura && app.state.oura.connected);
+}
+
+const WAITING = "Waiting for first sync";
+
+function tile(id, label, value, opt = {}) {
+  const cls = ["stat", opt.level ? `lvl-${opt.level}` : "", opt.wait ? "wait" : ""].filter(Boolean).join(" ");
+  const inner = `<b>${esc(value)}</b><span>${esc(label)}</span>`;
+  if (id === "readiness") {
+    return `<button type="button" class="${cls}" data-oura-widget="${id}" data-action="tab" data-tab="recovery" aria-label="${esc(label)}">${inner}</button>`;
+  }
+  return `<div class="${cls}" data-oura-widget="${id}">${inner}</div>`;
 }
 
 function renderOura(id) {
+  if (awaitingFirstSync()) return id === "last-night"
+    ? `<div class="card" data-oura-widget="last-night"><h4>Last night</h4><p class="sub">${esc(WAITING)}</p></div>`
+    : tile(id, id === "sleep-score" ? "Sleep score" : id === "sleep-duration" ? "Sleep" : id === "hrv" ? "HRV" : id === "resting-hr" ? "Resting HR" : id === "steps" ? "Steps" : "Readiness", WAITING, { wait: true });
   const o = reading() || {};
   const hm = (sec) => (typeof app.fmtHM === "function" ? app.fmtHM(sec) : shown(sec));
+  const lv = o.readiness != null && typeof app.readinessLevel === "function" ? app.readinessLevel(o.readiness) : null;
   switch (id) {
-    case "readiness": return tile(id, "Readiness", shown(o.readiness));
+    case "readiness": return tile(id, "Readiness", shown(o.readiness), { level: lv && lv.cls });
     case "sleep-score": return tile(id, "Sleep score", shown(o.sleepScore));
     case "sleep-duration": return tile(id, "Sleep", shown(o.total, hm));
     case "hrv": return tile(id, "HRV", shown(o.hrv, (v) => `${v} ms`));
@@ -77,7 +103,7 @@ export const HOME_WIDGETS = Object.fromEntries(SPECS.map((row) => {
 
 export function getHomeLayout(state) {
   const layout = state && state.layout && state.layout.homeV2;
-  if (!layout || layout.v !== 2 || !Array.isArray(layout.items)) return null;
+  if (!layout || layout.v !== 2) return null;
   return layout;
 }
 

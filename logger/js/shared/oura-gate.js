@@ -14,29 +14,40 @@ export function hasOura(state) {
   return !!(state.demo || (state.oura && state.oura.connected));
 }
 
-/* Pure. A seeded layout is returned unchanged, even if a seeded widget was removed. */
+/* Pure. A seeded layout is returned unchanged, even if a seeded widget was removed.
+   Ids already in items or hidden stay where the person put them. Only a missing id is prepended. */
 export function seedOuraWidgets(layout) {
   if (layout && layout.ouraSeeded) return layout;
-  const items = layout && Array.isArray(layout.items) ? layout.items.filter((id) => typeof id === "string") : [];
+  const rawItems = layout && Array.isArray(layout.items) ? layout.items : [];
   const hidden = layout && Array.isArray(layout.hidden) ? layout.hidden.filter((id) => typeof id === "string") : [];
-  const rest = items.filter((id) => !SEEDED_OURA_IDS.includes(id));
+  const hiddenSet = new Set(hidden);
+  const items = [];
+  const seen = new Set();
+  for (const id of rawItems) {
+    if (typeof id !== "string" || seen.has(id)) continue;
+    seen.add(id);
+    items.push(id);
+  }
+  const missing = SEEDED_OURA_IDS.filter((id) => !seen.has(id) && !hiddenSet.has(id));
   return {
     ...(layout && typeof layout === "object" ? layout : {}),
     v: 2,
-    items: [...SEEDED_OURA_IDS, ...rest],
+    items: [...missing, ...items],
     hidden: hidden.slice(),
     ouraSeeded: true,
     updatedAt: Date.now(),
   };
 }
 
-/* Ids Home should paint. hidden is the person's list. needsOura drops out with no ring and no demo. */
+/* Ids Home should paint. hidden is the person's list. needsOura drops out with no ring and no demo.
+   items and hidden are guarded because a v2 layout can omit them. */
 export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
   const layout = getHomeLayout(state);
   if (!layout) return [];
+  const items = Array.isArray(layout.items) ? layout.items : [];
   const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
   const oura = hasOura(state);
-  return layout.items.filter((id) => {
+  return items.filter((id) => {
     if (typeof id !== "string" || hidden.has(id)) return false;
     const widget = widgets && widgets[id];
     if (widget && widget.needsOura && !oura) return false;
@@ -76,7 +87,11 @@ export function noteOuraConnected(state, connected) {
   if (!now) return false;
   const current = getHomeLayout(state);
   if (!current || current.ouraSeeded) return false;
-  setHomeLayout(state, seedOuraWidgets(current));
+  const next = seedOuraWidgets(current);
+  setHomeLayout(state, next);
+  /* settingsAt is what this branch's cloud merge uses for the whole layout.
+     homeV2.updatedAt is what the other merge will use. Same instant, so the flag travels with the items. */
+  state.settingsAt = Math.max(state.settingsAt || 0, next.updatedAt);
   return true;
 }
 
