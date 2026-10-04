@@ -15,7 +15,22 @@ function renderWorkout() {
       <button class="btn small primary" data-action="finish">Finish</button></div></div>
     <ul class="list" id="wo-list">${list.length ? list.map((e, i) => app.exerciseHTML(s, e, i)).join("")
       : `<li class="empty">No exercises yet. Add one below.</li>`}</ul>
-    <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>`;
+    <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>
+    ${skippedFoot(s)}`;
+}
+
+const MORE_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>`;
+
+function skippedFoot(s) {
+  const list = Array.isArray(s.skipped) ? s.skipped : [];
+  if (!list.length) return "";
+  const open = !!app.ui.skippedOpen;
+  const rows = open ? `<ul class="skipped-list">${list.map((x, k) => {
+    const n = x.entry && x.entry.sets ? x.entry.sets.filter((z) => z && z.tag !== "warmup").length : 0;
+    return `<li><span>${app.esc(x.name)}${n ? `<small>${app.pl(n, "set")} logged</small>` : ""}</span>
+      <button data-action="restore-skip" data-k="${k}">Restore</button></li>`;
+  }).join("")}</ul>` : "";
+  return `<div class="skipped-foot"><button class="skipped-sum" data-action="skipped-toggle" aria-expanded="${open}">${list.length} skipped</button>${rows}</div>`;
 }
 app.renderWorkout = renderWorkout;
 
@@ -30,12 +45,20 @@ function exerciseHTML(s, e, i) {
   const done = app.setsFor(s, e.name);
   const prev = app.lastSets(e.name, s.id);
   const open = app.ui.open === i;
-  let html = `<li class="ex${open ? " open" : ""}">
+  const menu = app.ui.exMenu === i;
+  let html = `<li class="ex${open ? " open" : ""}" data-i="${i}">
+    <div class="ex-swipe">
+      <div class="ex-skip-bg" aria-hidden="true">Skip</div>
+      <div class="ex-face">
+    <div class="ex-top">
     <button class="ex-head" data-action="toggle" data-i="${i}" aria-expanded="${open}">
       <span class="ex-name">${app.esc(e.name)}</span>
       <span class="ex-count${done.length ? " has" : ""}">${done.filter(app.isWork).length || (done.length ? "W" : "")}</span>
       <span class="ex-last">${e.original ? `Swapped in for ${app.esc(e.original)} · ` : ""}${app.esc(prev ? "Last: " + prev.filter((x) => x.tag !== "warmup").map(app.fmtSet).join(", ") : "No previous sets")}</span>
     </button>
+    <button class="ex-more" data-action="ex-menu" data-i="${i}" aria-label="Options for ${app.esc(e.name)}" aria-haspopup="menu" aria-expanded="${menu}">${MORE_SVG}</button>
+    </div>
+    ${menu ? `<div class="ex-menu" role="menu"><button role="menuitem" data-action="skip-today" data-i="${i}">Skip for today</button></div>` : ""}
     <div class="ex-ms">${machineChipHTML(e.name)}</div>`;
   if (open) {
     const d = app.draftFor(s, e.name);
@@ -60,7 +83,7 @@ function exerciseHTML(s, e, i) {
       ${app.rpeChipsHTML("rpe", d.rpe || null, i)}
       <button class="log" data-action="log" data-i="${i}">${d.tag === "warmup" ? "Log warm-up" : `Log set ${worked + 1}`}</button></div>`;
   }
-  return html + "</li>";
+  return html + "</div></div></li>";
 }
 app.exerciseHTML = exerciseHTML;
 
@@ -151,3 +174,54 @@ function renderSheet() {
     <button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>${inner}</div>`;
 }
 app.renderSheet = renderSheet;
+
+/* Swipe an exercise left to skip it for today. Vertical movement keeps scrolling. */
+function bindSkipSwipe() {
+  const root = document.getElementById("workout");
+  if (!root || root.dataset.skipBound) return;
+  root.dataset.skipBound = "1";
+  let g = null;
+  const ignore = "input, textarea, select, .ex-more, .ex-menu, .step-row, .log, .set-x, .set-edit, .switch, .ms-chip, .ms-add, .link-inline, .tags, .rpe, .sugg, .note, .skipped-foot";
+  root.addEventListener("pointerdown", (ev) => {
+    if (!app.ui.workoutOpen || (ev.button != null && ev.button !== 0)) return;
+    const face = ev.target.closest && ev.target.closest(".ex-face");
+    if (!face || (ev.target.closest && ev.target.closest(ignore))) return;
+    const li = face.closest(".ex");
+    if (!li || li.dataset.i == null) return;
+    g = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, face, i: +li.dataset.i, dx: 0, lock: null };
+  });
+  root.addEventListener("pointermove", (ev) => {
+    if (!g || ev.pointerId !== g.id) return;
+    const dx = ev.clientX - g.x, dy = ev.clientY - g.y;
+    if (!g.lock) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dy) > Math.abs(dx)) { g = null; return; }
+      g.lock = "h";
+      g.face.parentElement.classList.add("dragging");
+      try { g.face.setPointerCapture(ev.pointerId); } catch (e) { /* already gone */ }
+    }
+    if (g.lock !== "h") return;
+    ev.preventDefault();
+    const pull = Math.max(-120, Math.min(0, dx));
+    g.dx = pull;
+    g.face.style.transform = `translate3d(${pull}px,0,0)`;
+    g.face.parentElement.classList.toggle("armed", pull <= -72);
+  }, { passive: false });
+  const end = (ev) => {
+    if (!g || ev.pointerId !== g.id) return;
+    const commit = g.lock === "h" && g.dx <= -72;
+    const face = g.face, i = g.i, horizontal = g.lock === "h";
+    face.style.transform = "";
+    const swipe = face.parentElement;
+    if (swipe) { swipe.classList.remove("dragging", "armed"); }
+    g = null;
+    if (horizontal) {
+      app.suppressToggle = true;
+      setTimeout(() => { app.suppressToggle = false; }, 400);
+    }
+    if (commit) app.skipExerciseAt(i);
+  };
+  root.addEventListener("pointerup", end);
+  root.addEventListener("pointercancel", end);
+}
+bindSkipSwipe();

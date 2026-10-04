@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { historyEntries } from "../shared/skip.js";
 
 /* Workouts list, routine detail, and history. */
 /* ================= Tab motion: bubble + slide + swipe ================= */
@@ -67,7 +68,7 @@ function historyHTML(embedded) {
     return `<li><details><summary>
         <div><div class="hist-t">${app.esc(s.name)}</div><div class="hist-d">${app.fmtDate(s.date)}${dur ? " · " + dur : ""}</div></div>
         <div class="hist-n">${app.setCount(s)}<span>sets</span></div></summary>
-      <div class="hist-body">${s.entries.filter((e) => e.sets.length).map((e) =>
+      <div class="hist-body">${historyEntries(s).map((e) =>
         `<div class="hist-ex"><b>${app.esc(e.exercise)}</b><span class="hs-row">${e.sets.map((x, j) => `<button class="hs${x.tag === "warmup" ? " wu" : ""}" data-action="hist-set" data-id="${app.esc(s.id)}" data-ex="${app.esc(e.exercise)}" data-s="${j}" aria-label="Edit set ${j + 1} of ${app.esc(e.exercise)}">${x.tag === "warmup" ? "W " : ""}${app.fmtSet(x)}</button>`).join("")}</span></div>`).join("")}
         <div class="hist-actions"><button class="link-btn" data-action="summary" data-id="${app.esc(s.id)}">View summary</button>
         <button class="link-btn danger" data-action="delete-s" data-id="${app.esc(s.id)}">Delete this workout</button></div></div>

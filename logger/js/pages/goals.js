@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { countedEntries } from "../shared/skip.js";
 
 /* Weekly goals, lift goals, and the PR board. */
 /* ================= Goals, PRs, bodyweight rate ================= */
@@ -116,7 +117,7 @@ app.weekGoalSheetHTML = weekGoalSheetHTML;
 /* ---------- PR board ---------- */
 function prBoard(sessions) {
   const m = {};
-  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => s.entries.forEach((e) => e.sets.filter(app.countsForStats).forEach((x) => {
+  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => countedEntries(s).forEach((e) => e.sets.filter(app.countsForStats).forEach((x) => {
     const p = (m[e.exercise] = m[e.exercise] || { heavy: null, e1: null, reps: {}, bw: null });
     const v = app.estOn(x, s.date);
     if (x.w) {

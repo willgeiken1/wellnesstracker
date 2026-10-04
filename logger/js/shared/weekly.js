@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { addDays, findingsForWeek } from "./correlate.js";
+import { countedEntries } from "./skip.js";
 
 /* In-app weekly report. Numbers stay on the device. Dismiss state is a list of
    week-start dates in the existing user blob, not a new table. */
@@ -110,7 +111,7 @@ function sessionsIn(sessions, start, end) {
 function dayVolume(sessions, date) {
   let n = 0;
   sessionsIn(sessions, date, date).forEach((s) => {
-    (s.entries || []).forEach((e) => {
+    countedEntries(s).forEach((e) => {
       (e.sets || []).forEach((set) => { if (setWork(set)) n += set.w * set.r; });
     });
   });
@@ -122,7 +123,7 @@ function liftStandout(sessions, start, end) {
   const during = [];
   (sessions || []).forEach((s) => {
     if (!s || !s.finishedAt || !s.date) return;
-    (s.entries || []).forEach((e) => {
+    countedEntries(s).forEach((e) => {
       (e.sets || []).forEach((set) => {
         if (!setWork(set)) return;
         const e1 = setE1(set);

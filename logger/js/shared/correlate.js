@@ -1,3 +1,5 @@
+import { countedEntries } from "./skip.js";
+
 /* Correlation engine for daily wellness series.
 
    Pure functions: no network, no DOM, and no analytics. Health values stay in
@@ -533,7 +535,7 @@ function setVolume(set) {
 
 function workSets(session) {
   const out = [];
-  const entries = session && session.entries || [];
+  const entries = countedEntries(session);
   for (let i = 0; i < entries.length; i++) {
     const sets = entries[i].sets || [];
     for (let j = 0; j < sets.length; j++) if (sets[j] && sets[j].tag !== "warmup") out.push(sets[j]);

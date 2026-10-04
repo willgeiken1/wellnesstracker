@@ -23,6 +23,51 @@
 .rpe-hint { color: var(--muted); font-size: 12px; line-height: 1.35; margin: 4px 0 0; }
 .set-n.wu { color: var(--lav); font-weight: 700; }
 .panel-top { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+
+/* Skip an exercise for this session only. */
+.ex-swipe { position: relative; overflow: hidden; }
+.ex.open .ex-swipe { border-radius: 24px; }
+.ex-skip-bg {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 120px;
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 22px;
+  background: var(--red); color: var(--ink); font-weight: 700; font-size: 14px; letter-spacing: -.01em;
+}
+.ex-face { position: relative; z-index: 1; background: var(--bg); touch-action: pan-y; transition: transform .18s ease; }
+.ex.open .ex-face { background: var(--surface); }
+.ex-swipe.dragging .ex-face { transition: none; }
+.ex-top { display: flex; align-items: stretch; }
+.ex-top .ex-head { flex: 1; min-width: 0; }
+.ex-more {
+  width: 44px; height: 44px; margin: 6px 6px 0 0; flex: 0 0 44px; align-self: flex-start;
+  border-radius: 22px; color: var(--muted); display: grid; place-items: center;
+}
+.ex-more:active, .ex-more[aria-expanded="true"] { background: var(--raised); color: var(--text); }
+.ex-menu { display: flex; justify-content: flex-end; padding: 0 12px 8px; }
+.ex-menu button {
+  min-height: 44px; padding: 0 16px; border-radius: 14px; background: var(--raised);
+  color: var(--text); font-weight: 700; font-size: 15px;
+}
+.ex-menu button:active { background: var(--line); }
+.skipped-foot { max-width: 640px; margin: 2px auto 12px; padding: 0 16px; }
+.skipped-sum {
+  display: flex; align-items: center; width: 100%; min-height: 44px;
+  color: var(--muted); font-size: 14px; font-weight: 600; text-align: left;
+}
+.skipped-sum[aria-expanded="true"] { color: var(--text); }
+.skipped-list { list-style: none; margin: 0; padding: 0 0 4px; }
+.skipped-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 48px; border-top: 1px solid var(--line); color: var(--text); font-size: 15px; font-weight: 600;
+}
+.skipped-list small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+.skipped-list button {
+  min-height: 36px; padding: 0 14px; border-radius: 18px; background: var(--raised);
+  color: var(--accent-text); font-weight: 700; font-size: 14px; flex: 0 0 auto;
+}
+.ex-more:focus-visible, .skipped-sum:focus-visible, .ex-menu button:focus-visible, .skipped-list button:focus-visible {
+  outline: 2px solid var(--accent-line); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) { .ex-face { transition: none; } }
 .swap-keep { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: -4px 0 14px; }
 .swap-keep input { width: 20px; height: 20px; accent-color: var(--accent-text); }
 #toast.pr { background: var(--green); color: var(--ink); font-weight: 700; }

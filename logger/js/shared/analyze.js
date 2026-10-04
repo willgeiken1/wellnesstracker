@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { correlate as runCorrelations, effect as bucketEffect } from "./correlate.js";
+import { countedEntries } from "./skip.js";
 
 /* Charts and the numbers behind Insights. */
 /* ================= Oura + insights ================= */
@@ -121,7 +122,7 @@ app.readinessLevel = readinessLevel;
 /* ---------- Analysis ---------- */
 function liftSeries(sessions) {
   const m = {};
-  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => s.entries.forEach((e) => {
+  [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => countedEntries(s).forEach((e) => {
     const est = (x) => app.estOn(x, s.date);
     const sets = e.sets.filter((x) => x.tag !== "warmup");
     const vals = sets.map(est).filter((v) => v != null);
@@ -162,7 +163,7 @@ function sessionPerf(sessions) {
   const hist = {}, out = [];
   [...sessions].sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => {
     const ratios = [];
-    s.entries.forEach((e) => {
+    countedEntries(s).forEach((e) => {
       const vals = e.sets.filter((x) => x.tag !== "warmup").map((x) => app.estOn(x, s.date)).filter((v) => v != null);
       if (!vals.length) return;
       const v = Math.max(...vals), prev = (hist[e.exercise] || []).slice(-3);

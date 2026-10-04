@@ -56,7 +56,7 @@ async function startWorkout(id) {
 }
 app.startWorkout = startWorkout;
 
-function openWorkout() { app.ui.workoutOpen = true; app.ui.sheet = null; app.render(); app.$("#workout").scrollTop = 0; }
+function openWorkout() { app.ui.workoutOpen = true; app.ui.sheet = null; app.ui.exMenu = null; app.render(); app.$("#workout").scrollTop = 0; }
 app.openWorkout = openWorkout;
 
 function finishSession(s, quiet) {
@@ -70,7 +70,7 @@ function finishSession(s, quiet) {
     if (app.capture) app.capture("workout_logged");
     if (!quiet) { app.ui.sheet = "summary"; app.ui.sd = { id: s.id }; }
   }
-  app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.drafts = {};
+  app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.exMenu = null; app.ui.drafts = {};
   app.save();
 }
 app.finishSession = finishSession;
@@ -309,6 +309,12 @@ document.addEventListener("click", async (ev) => {
   if (!b) return;
   const a = b.dataset.action;
   const i = b.dataset.i != null ? +b.dataset.i : null;
+  if (a === "toggle" && app.suppressToggle) { app.suppressToggle = false; return; }
+  if (a !== "ex-menu" && app.ui.exMenu != null) {
+    app.ui.exMenu = null;
+    document.querySelectorAll("#workout .ex-menu").forEach((el) => el.remove());
+    document.querySelectorAll("#workout .ex-more[aria-expanded='true']").forEach((el) => el.setAttribute("aria-expanded", "false"));
+  }
   if (app.needsLock && app.needsLock() && a.indexOf("lock-") !== 0) { ev.preventDefault(); return; }
 
   switch (a) {
@@ -340,7 +346,7 @@ document.addEventListener("click", async (ev) => {
       if (!ok) break;
       app.state.sessions = app.state.sessions.filter((x) => x !== s);
       app.state.deleted = [...(app.state.deleted || []), s.id];
-      app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.drafts = {};
+      app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.exMenu = null; app.ui.drafts = {};
       app.save(); app.render(); app.toast("Workout cancelled. Nothing was saved."); break;
     }
     case "dlg-ok": app.closeDialog(true); break;
@@ -721,6 +727,20 @@ document.addEventListener("click", async (ev) => {
     case "demo-off": app.state.demo = false; app.save(); app.render(); app.toast("Sample data off."); break;
     case "dlg-cancel": app.closeDialog(false); break;
     case "toast-undo": { const f = app.toastUndo; app.toastUndo = null; app.$("#toast").hidden = true; if (f) f(); break; }
+    case "ex-menu": {
+      const s = app.activeSession(); if (!s) break;
+      app.ui.exMenu = app.ui.exMenu === i ? null : i;
+      app.renderWorkout();
+      break;
+    }
+    case "skip-today": app.skipExerciseAt(i); break;
+    case "skipped-toggle": app.ui.skippedOpen = !app.ui.skippedOpen; app.renderWorkout(); break;
+    case "restore-skip": {
+      const s = app.activeSession(); if (!s || !Array.isArray(s.skipped)) break;
+      const rec = s.skipped[+b.dataset.k]; if (!rec) break;
+      app.restoreSkippedName(rec.name);
+      break;
+    }
     case "toggle": {
       const wo = app.$("#workout"), before = app.$("#wo-list").children[i] ? app.$("#wo-list").children[i].getBoundingClientRect().top : null;
       app.ui.open = app.ui.open === i ? null : i; app.renderWorkout(); app.tick();

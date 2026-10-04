@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { countedEntries } from "./skip.js";
 
 /* Muscle maps, exercise bank, and page headers. */
 /* ================= Muscles: basic + advanced, diagrams, exercise bank ================= */
@@ -45,7 +46,7 @@ app.musclesLabel = musclesLabel;
 
 function advMusclesBetween(from, to) {
   const m = new Map();
-  app.state.sessions.filter((s) => s.date >= from && s.date <= to).forEach((s) => s.entries.forEach((e) => {
+  app.state.sessions.filter((s) => s.date >= from && s.date <= to).forEach((s) => countedEntries(s).forEach((e) => {
     const n = e.sets.filter((x) => x.tag !== "warmup").length;
     if (n) app.advOf(e).forEach((k) => m.set(k, (m.get(k) || 0) + n));
   }));
@@ -223,6 +224,8 @@ app.liveAddSheetHTML = liveAddSheetHTML;
 
 function liveAdd(name) {
   const s = app.activeSession(); if (!s || !name) return;
+  const skippedHit = (s.skipped || []).find((x) => x.name.toLowerCase() === String(name).toLowerCase());
+  if (skippedHit && app.restoreSkippedName) { app.restoreSkippedName(skippedHit.name); return; }
   const w = app.workoutById(s.workoutId), list = app.liveExercises(s);
   const hit = list.find((e) => e.name.toLowerCase() === name.toLowerCase());
   if (hit) {
