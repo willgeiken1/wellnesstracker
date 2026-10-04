@@ -7,8 +7,10 @@ import { ouraMetric } from "../logger/js/shared/brief.js";
 import {
   gatedOuraStripHTML,
   hasOura,
+  needsSleepRecovery,
   noteOuraConnected,
   ouraReturnDialog,
+  sleepRecoveryLabel,
   ouraWidgetShowing,
   seedOuraWidgets,
   visibleHomeIds,
@@ -414,6 +416,20 @@ test("oura personas on the registry home hide empty tiles", () => {
   assert.match(ready, /data-hw="readiness"/);
   assert.match(ready, /86/);
   assert.doesNotMatch(ready, /Waiting for first sync|No Oura yet|hw-v">–/);
+});
+
+test("lapsed Oura needs the sleep card, and a reconnect label, while demo stays hidden", () => {
+  const lapsed = state({ oura: { connected: true, lastSync: null, days: {}, lastError: "Oura daily_sleep request failed (403)" } });
+  const never = state({ oura: { connected: false, lastSync: null, days: {} } });
+  const withNights = state({ oura: { connected: true, days: { "2026-06-01": { readiness: 80 } } } });
+  const demo = state({ demo: true, oura: { connected: false, days: {} } });
+  assert.equal(needsSleepRecovery(lapsed, 0), true);
+  assert.equal(needsSleepRecovery(never, 0), true);
+  assert.equal(needsSleepRecovery(withNights, 1), false);
+  assert.equal(needsSleepRecovery(demo, 0), false);
+  assert.equal(sleepRecoveryLabel(lapsed, true), "Reconnect");
+  assert.equal(sleepRecoveryLabel(never, true), "Connect Oura");
+  assert.equal(sleepRecoveryLabel(never, false), "Learn more");
 });
 
 test("the OAuth dialog sends people to Settings", () => {

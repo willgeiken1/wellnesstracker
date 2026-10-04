@@ -91,6 +91,32 @@ test("the local credential is stored per account", () => {
   assert.equal(app.localLockCred("owner-1"), "C1");
 });
 
+test("the Face ID key stays put when local, ownerId, and the session id trade places", () => {
+  globalThis.localStorage = memoryStorage();
+  app.state.ownerId = null;
+  app.session = null;
+  app.setLocalLockCred("CRED-LOCAL");
+  assert.equal(globalThis.localStorage.getItem("insight-lock-cred:local"), "CRED-LOCAL");
+
+  app.session = { user: { id: OWNER } };
+  assert.equal(app.localLockCred(), "CRED-LOCAL");
+  assert.equal(globalThis.localStorage.getItem("insight-lock-cred:" + OWNER), "CRED-LOCAL");
+  assert.equal(globalThis.localStorage.getItem("insight-lock-cred:local"), null);
+
+  app.state.ownerId = OWNER;
+  app.session = null;
+  assert.equal(app.localLockCred(), "CRED-LOCAL");
+
+  app.session = { user: { id: OWNER } };
+  assert.equal(app.localLockCred(), "CRED-LOCAL");
+
+  const other = "22222222-2222-4222-8222-222222222222";
+  app.state.ownerId = other;
+  app.session = { user: { id: other } };
+  assert.equal(app.localLockCred(), null);
+  assert.equal(app.localLockCred(OWNER), "CRED-LOCAL");
+});
+
 test("an older build's credentialId moves out of app state and never overwrites a local one", () => {
   globalThis.localStorage = memoryStorage();
   app.state.ownerId = OWNER;

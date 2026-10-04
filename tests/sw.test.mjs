@@ -18,7 +18,7 @@ class FakeRequest {
   }
 }
 
-function load({ fetchImpl, cached = {}, home = null }) {
+function load({ fetchImpl, cached = {}, home = null, cacheMap = null }) {
   const handlers = {};
   const puts = [];
   const added = [];
@@ -38,6 +38,11 @@ function load({ fetchImpl, cached = {}, home = null }) {
     keys: async () => [],
     delete: async () => true,
     match: async (req) => {
+      if (cacheMap) {
+        if (typeof req === "string") return cacheMap[req] || (req === "./index.html" ? home : null) || null;
+        const path = new URL(req.url).pathname;
+        return cacheMap[req.url] || cacheMap[path] || null;
+      }
       if (typeof req === "string") return req === "./index.html" ? home : null;
       return cached.value || null;
     },
@@ -49,11 +54,13 @@ function load({ fetchImpl, cached = {}, home = null }) {
   return { handlers, puts, added };
 }
 
-function dispatch(handlers, req) {
+function dispatch(handlers, req, ids = {}) {
   let responded;
   const waits = [];
   handlers.fetch({
     request: req,
+    clientId: ids.clientId || "",
+    resultingClientId: ids.resultingClientId || "",
     respondWith: (p) => { responded = p; },
     waitUntil: (p) => { waits.push(p); },
   });
@@ -189,5 +196,42 @@ test("randomized: response is always the cached copy or the network per the rule
     else if (c.delay < timeout) assert.equal(out.res, net, `case ${i}`);
     else if (c.delay > timeout) assert.equal(out.res, cachedRes, `case ${i}`);
     else assert.ok(out.res === net || out.res === cachedRes, `case ${i} (tie)`);
+  }
+});
+
+test("a deploy during a slow network never mixes old and new files within one page load", async () => {
+  const files = ["/js/usage.js", "/js/usage-pref.js", "/css/theme.css"];
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const cases = [{ navSlow: false, slowFile: "/js/usage-pref.js" }, { navSlow: true, slowFile: "/js/usage.js" }];
+  for (let i = 0; i < 20; i++) cases.push({ navSlow: rnd() < 0.5, slowFile: files[Math.floor(rnd() * files.length)] });
+  const body = (tag) => ({ tag, ok: true, type: "basic", clone() { return { tag: tag + "-clone" }; } });
+
+  for (let n = 0; n < cases.length; n++) {
+    const c = cases[n];
+    const cacheMap = { "./index.html": body("old-html") };
+    files.forEach((f) => { cacheMap[f] = body("old" + f); });
+    const { handlers } = load({
+      cacheMap,
+      home: cacheMap["./index.html"],
+      fetchImpl: async (req) => {
+        const path = new URL(req.url).pathname;
+        const file = path === "/" ? "/index.html" : path;
+        const slow = c.navSlow ? file === "/index.html" : file === c.slowFile;
+        if (slow) await sleep(c.navSlow ? 180 : 220);
+        return body("new" + file);
+      },
+    });
+    const page = "page-" + n;
+    const nav = dispatch(handlers, new FakeRequest({ url: "https://app.test/", mode: "navigate" }), { resultingClientId: page });
+    const html = await nav.responded;
+    const assets = await Promise.all(files.map(async (f) => {
+      const d = dispatch(handlers, new FakeRequest("https://app.test" + f), { clientId: page });
+      return d.responded;
+    }));
+    const tags = [html.tag].concat(assets.map((res) => res.tag));
+    const gens = new Set(tags.map((t) => (t.startsWith("old") ? "old" : "new")));
+    assert.equal(gens.size, 1, `case ${n} mixed ${tags.join(",")}`);
+    assert.equal([...gens][0], c.navSlow ? "old" : "new", `case ${n} navSlow=${c.navSlow}`);
   }
 });

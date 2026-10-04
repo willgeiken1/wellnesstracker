@@ -106,6 +106,15 @@ export function isDevHost(hostname) {
   if (!host) return true;
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
   if (host === "::1" || host === "0.0.0.0" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (ip) {
+    const o = [ip[1], ip[2], ip[3], ip[4]].map(Number);
+    if (o.every((n) => n <= 255)) {
+      if (o[0] === 10) return true;
+      if (o[0] === 192 && o[1] === 168) return true;
+      if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true;
+    }
+  }
   return false;
 }
 

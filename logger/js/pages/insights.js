@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, splitFindings } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
+import { needsSleepRecovery, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -92,15 +93,22 @@ function affectsEmpty(days) {
 }
 app.affectsEmpty = affectsEmpty;
 
+function findingKey(r) {
+  return r ? String(r.outcome) + "\0" + String(r.factor) + "\0" + (Number(r.lag) || 0) : "";
+}
+
 /* What affects you. Correlations only, and no health values leave the phone. */
 function affectsHTML() {
   let top = [];
   let more = [];
   let days = 0;
+  let picked = null;
   try {
     const src = app.correlationSource();
     days = loggedDays(src);
-    ({ top, more } = splitFindings(app.correlations()));
+    const rows = app.correlations();
+    ({ top, more } = splitFindings(rows));
+    picked = pickForToday(rows, src, app.today());
   } catch (e) { top = []; more = []; }
   const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
   const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;
@@ -109,10 +117,17 @@ function affectsHTML() {
     return head + `<div class="card aff-empty"><h4>${title}</h4><p class="sub">${affectsEmpty(days)}</p></div>`;
   }
   const open = !!app.ui.affectsAll;
-  // listFindings(rows) is top.concat(more); splitFindings keeps the first screen to exactly `top`.
-  const all = top.concat(more).slice(0, SEE_ALL_LIMIT);
-  const shown = open ? all : top;
-  const toggle = more.length ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + top.length : "See all " + all.length}</button>` : "";
+  // listFindings(rows) is top.concat(more). The brief's pick stays in See all even past the cap.
+  let all = top.concat(more);
+  const want = findingKey(picked);
+  if (want && !all.some((r) => findingKey(r) === want)) all = all.concat(picked);
+  let visible = all.slice(0, SEE_ALL_LIMIT);
+  if (want && !visible.some((r) => findingKey(r) === want)) {
+    const hit = all.find((r) => findingKey(r) === want);
+    if (hit) visible = visible.slice(0, Math.max(0, SEE_ALL_LIMIT - 1)).concat(hit);
+  }
+  const shown = open ? visible : top;
+  const toggle = more.length ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + top.length : "See all " + visible.length}</button>` : "";
   return head + shown.map(affectsCard).join("") + toggle;
 }
 app.affectsHTML = affectsHTML;
@@ -162,10 +177,16 @@ function insightsHTML(embedded) {
     ${app.effectCard("Readiness", rd, app.compareSentence(rd, "on 85+ readiness days", "on days under 70"), need)}
     ${app.effectCard("Sleep the night before", sl, app.compareSentence(sl, "after 7.5+ hours of sleep", "after less than 6.5"), need)}
     ${app.effectCard("Work the day before", wk, wkSentence, need)}`;
-  } else if (!app.state.oura.connected && !app.state.demo) {
+  } else if (needsSleepRecovery(app.state, nights)) {
+    const reconnect = !!(app.state.oura && app.state.oura.connected);
+    const label = sleepRecoveryLabel(app.state, !!app.session);
+    const sub = reconnect
+      ? "Reconnect Oura to bring sleep and readiness back. This stays empty when the membership has lapsed."
+      : "Connect an Oura Ring to see how sleep and readiness affect your lifts.";
+    const action = app.session ? 'data-action="oura-connect"' : 'data-action="iseg" data-s="recovery"';
     effectsHTML = `<div class="card oura-nudge"><div><h4>Add sleep and recovery</h4>
-      <p class="sub">Connect an Oura Ring to see how sleep and readiness affect your lifts.</p></div>
-      <button class="btn small" ${app.session ? 'data-action="oura-connect"' : 'data-action="iseg" data-s="recovery"'}>${app.session ? "Connect Oura" : "Learn more"}</button></div>`;
+      <p class="sub">${sub}</p></div>
+      <button class="btn small" ${action}>${label}</button></div>`;
   }
 
   // 3. Training load vs HRV (last 8 weeks)

@@ -177,10 +177,10 @@ test("every event that passes disables GeoIP and drops IP and GeoIP properties",
 });
 
 test("isDevHost spots local development hosts", () => {
-  for (const host of ["localhost", "LOCALHOST", "app.localhost", "127.0.0.1", "127.1.2.3", "::1", "[::1]", "0.0.0.0", "my-mac.local", "my-mac.local.", "", null, undefined]) {
+  for (const host of ["localhost", "LOCALHOST", "app.localhost", "127.0.0.1", "127.1.2.3", "::1", "[::1]", "0.0.0.0", "my-mac.local", "my-mac.local.", "", null, undefined, "10.0.0.5", "10.1.2.3", "192.168.0.1", "192.168.1.20", "172.16.0.1", "172.31.255.255"]) {
     assert.equal(isDevHost(host), true, String(host));
   }
-  for (const host of ["insight.example.com", "localhost.example.com", "local", "127.0.0.1.nip.io.example", "10.0.0.5", "example.locals"]) {
+  for (const host of ["insight.example.com", "localhost.example.com", "local", "127.0.0.1.nip.io.example", "11.0.0.5", "192.169.0.1", "172.15.0.1", "172.32.0.1", "example.locals"]) {
     assert.equal(isDevHost(host), false, host);
   }
   assert.equal(onDevHost({ protocol: "file:", hostname: "" }), true);
@@ -188,6 +188,52 @@ test("isDevHost spots local development hosts", () => {
   assert.equal(onDevHost({ protocol: "https:", hostname: "insight.example.com" }), false);
   assert.equal(onDevHost({ protocol: "http:", hostname: "localhost" }), true);
   assert.equal(onDevHost(undefined), false);
+});
+
+test("a two-phone upgrade from the old synced key, with old and new builds mixed", () => {
+  const rnd = rng(0x0A11);
+  const pick = (list) => list[Math.floor(rnd() * list.length)];
+  const oldValues = [undefined, "0", "1", "yes"];
+  // The old build had one local key, insight-share-usage, for both switches.
+  const oldOn = (store) => {
+    try { return store.getItem(USAGE_SHARE_KEY) !== "0"; } catch (e) { return true; }
+  };
+  for (let i = 0; i < 200; i++) {
+    const oldChoice = pick(oldValues);
+    const hasApp = rnd() < 0.5;
+    const phoneA = {};
+    const phoneB = {};
+    if (oldChoice !== undefined) {
+      phoneA[USAGE_SHARE_KEY] = oldChoice;
+      phoneB[USAGE_SHARE_KEY] = oldChoice;
+    }
+    if (hasApp) {
+      phoneA[APP_DATA_KEY] = "{\"version\":2}";
+      phoneB[APP_DATA_KEY] = "{\"version\":2}";
+    }
+    const a = memoryStorage(phoneA);
+    const b = memoryStorage(phoneB);
+    const label = JSON.stringify({ i, oldChoice, hasApp });
+    // Phone A is still the old build. Phone B has upgraded.
+    const aOld = oldOn(a);
+    const bNew = resolveAnalyticsPref(b);
+    assert.equal(oldOn(a), aOld, label);
+    if (oldChoice === undefined) assert.equal(bNew, hasApp, label);
+    else assert.equal(bNew, oldChoice !== "0", label);
+    // The old phone later writes its key again. That must not move the upgraded phone.
+    a.setItem(USAGE_SHARE_KEY, a.getItem(USAGE_SHARE_KEY) === "0" ? "1" : "0");
+    assert.equal(resolveAnalyticsPref(b), bNew, label);
+    assert.equal(b.getItem(ANALYTICS_SHARE_KEY), bNew ? "1" : "0", label);
+    // Phone A upgrades on its own copy of the key, after the extra write.
+    const aUp = resolveAnalyticsPref(a);
+    assert.equal(aUp, a.getItem(USAGE_SHARE_KEY) !== "0", label);
+    assert.notEqual(a.data, b.data, label);
+    // A cloud pull of app data onto a phone that already resolved cannot flip it.
+    if (!hasApp) {
+      b.setItem(APP_DATA_KEY, "{\"version\":2,\"sessions\":[]}");
+      assert.equal(resolveAnalyticsPref(b), bNew, label);
+    }
+  }
 });
 
 test("before_send drops events on a dev host", () => {

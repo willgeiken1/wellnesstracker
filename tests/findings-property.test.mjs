@@ -7,6 +7,7 @@ import {
   STORY_CAP,
   factorFamily,
   listFindings,
+  pickForToday,
   splitFindings,
   storyKey,
 } from "../logger/js/shared/correlate.js";
@@ -100,10 +101,38 @@ test("listFindings and splitFindings hold their caps over 500 random row sets", 
     counts(top, (r) => r.outcome).forEach((n) => assert.ok(n <= OUTCOME_CAP, msg("OUTCOME_CAP broken in top")));
     counts(top, factorFamily).forEach((n) => assert.ok(n <= FAMILY_CAP, msg("FAMILY_CAP broken in top")));
     counts(top, storyKey).forEach((n) => assert.equal(n, 1, msg("story repeated in top")));
-    counts(listed, storyKey).forEach((n) => assert.ok(n <= STORY_CAP, msg("STORY_CAP broken in list")));
+    const storySeen = {};
+    let overflowAt = listed.length;
+    listed.forEach((r, index) => {
+      const story = storyKey(r);
+      storySeen[story] = (storySeen[story] || 0) + 1;
+      if (storySeen[story] > STORY_CAP && overflowAt === listed.length) overflowAt = index;
+    });
+    const capped = {};
+    listed.slice(0, overflowAt).forEach((r) => {
+      const story = storyKey(r);
+      capped[story] = (capped[story] || 0) + 1;
+      assert.ok(capped[story] <= STORY_CAP, msg("STORY_CAP broken before the overflow tail"));
+    });
     assert.equal(new Set(listed).size, listed.length, msg("row appears twice"));
     assert.equal(new Set(listed.map(keyOf)).size, listed.length, msg("key appears twice"));
     listed.forEach((r) => assert.ok(r.confidence === "high" || r.confidence === "medium", msg("low confidence row returned")));
+    const eligible = rows.filter((r) => r.confidence === "high" || r.confidence === "medium");
+    assert.equal(listed.length, eligible.length, msg("a high or medium finding was dropped"));
+    rows.filter((r) => r.confidence === "high").forEach((r) => {
+      assert.ok(listed.some((x) => keyOf(x) === keyOf(r)), msg("high finding missing from listFindings"));
+    });
+    const today = "2026-06-15";
+    const days = {};
+    eligible.forEach((r, n) => {
+      if (rand() > 0.7) return;
+      const day = n % 2 === 0 ? today : "2026-06-14";
+      days[day] = days[day] || {};
+      if (r.source) days[day][r.source] = 100 + n;
+      if (r.factor && r.factor.indexOf(":") < 0) days[day][r.factor] = true;
+    });
+    const picked = pickForToday(rows, { days }, today) || pickForToday(rows, { days: {} }, null);
+    if (picked) assert.ok(listed.some((r) => keyOf(r) === keyOf(picked)), msg("brief pick missing from listFindings"));
     assert.deepEqual(listed, top.concat(more), msg("listFindings is not top.concat(more)"));
     assert.deepEqual(listed.slice(0, top.length), top, msg("top is not a prefix of listFindings"));
 

@@ -151,6 +151,20 @@ export function noteOuraConnected(state, connected, opt) {
   return true;
 }
 
+/* Insights with no nights. Never-connected and lapsed (connected, but the ring
+   returned nothing — a 403 or an expired membership) both need the card.
+   Demo hides it; sample nights are a separate path. */
+export function needsSleepRecovery(state, nights) {
+  if (!state || state.demo) return false;
+  return !nights;
+}
+
+export function sleepRecoveryLabel(state, signedIn) {
+  if (!signedIn) return "Learn more";
+  if (state && state.oura && state.oura.connected) return "Reconnect";
+  return "Connect Oura";
+}
+
 export function ouraReturnDialog(code) {
   if (code === "connected") {
     return {

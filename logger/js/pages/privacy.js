@@ -46,23 +46,87 @@ function lockCredKey(ownerId) {
 }
 app.lockCredKey = lockCredKey;
 
+/* Which account id the credential was stored under. The lookup keeps using it
+   when ownerId and the session id trade places, so Face ID is not set up again. */
+const LOCK_BOUND_KEY = "insight-lock-cred-id";
+
+function accountIds() {
+  const ids = [];
+  const add = (id) => {
+    if (typeof id === "string" && id && ids.indexOf(id) < 0) ids.push(id);
+  };
+  add(app.state && app.state.ownerId);
+  add(app.session && app.session.user && app.session.user.id);
+  return ids;
+}
+
+function readCred(id) {
+  try {
+    const v = localStorage.getItem(lockCredKey(id || "local"));
+    return typeof v === "string" && v ? v : null;
+  } catch (e) { return null; }
+}
+
+function boundId() {
+  try {
+    const v = localStorage.getItem(LOCK_BOUND_KEY);
+    return typeof v === "string" && v ? v : "";
+  } catch (e) { return ""; }
+}
+
+function writeBound(id) {
+  try { if (id) localStorage.setItem(LOCK_BOUND_KEY, id); } catch (e) {}
+}
+
+/* Prefer the key that already holds this phone's credential. A credential saved
+   before sign-in (the "local" key) moves onto the account once, and is not
+   handed to a different account. */
+function lockStorageId() {
+  const accounts = accountIds();
+  const bound = boundId();
+  if (bound && bound !== "local" && accounts.indexOf(bound) >= 0 && readCred(bound)) return bound;
+  for (let i = 0; i < accounts.length; i++) {
+    if (readCred(accounts[i])) {
+      writeBound(accounts[i]);
+      return accounts[i];
+    }
+  }
+  if (readCred("local")) {
+    if (!accounts.length) return "local";
+    const dest = accounts[0];
+    if (!readCred(dest)) {
+      try {
+        localStorage.setItem(lockCredKey(dest), readCred("local"));
+        localStorage.removeItem(lockCredKey("local"));
+      } catch (e) {}
+    }
+    writeBound(dest);
+    return dest;
+  }
+  return accounts[0] || "local";
+}
+
 function lockOwner() {
-  return (app.state && app.state.ownerId) || (app.session && app.session.user && app.session.user.id) || "local";
+  return lockStorageId();
 }
 
 function localLockCred(ownerId) {
-  try {
-    const v = localStorage.getItem(lockCredKey(ownerId || lockOwner()));
-    return typeof v === "string" && v ? v : null;
-  } catch (e) { return null; }
+  if (arguments.length) return readCred(ownerId || "local");
+  return readCred(lockStorageId());
 }
 app.localLockCred = localLockCred;
 
 function setLocalLockCred(credentialId, ownerId) {
-  const key = lockCredKey(ownerId || lockOwner());
+  const id = arguments.length > 1 ? (ownerId || "local") : lockStorageId();
+  const key = lockCredKey(id);
   try {
-    if (credentialId) localStorage.setItem(key, String(credentialId));
-    else localStorage.removeItem(key);
+    if (credentialId) {
+      localStorage.setItem(key, String(credentialId));
+      writeBound(id);
+    } else {
+      localStorage.removeItem(key);
+      if (boundId() === id) localStorage.removeItem(LOCK_BOUND_KEY);
+    }
   } catch (e) {}
 }
 app.setLocalLockCred = setLocalLockCred;

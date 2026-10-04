@@ -1382,21 +1382,52 @@ function byViewStable(a, b) {
     || (Number(a.lag) || 0) - (Number(b.lag) || 0);
 }
 
+/* Inside one story a high-confidence finding outranks a stronger medium one.
+   Strength still orders two findings with the same confidence. */
+function byStoryMember(a, b) {
+  const ca = a && a.confidence === "high" ? 0 : 1;
+  const cb = b && b.confidence === "high" ? 0 : 1;
+  return ca - cb || byViewStable(a, b);
+}
+
 /* The first screen will not stack one outcome, one kind of factor, or one
-   story, and is never padded with rows that break those caps. See all gets
-   the rest, but no story more than STORY_CAP times overall. */
+   story, and is never padded with rows that break those caps. The next
+   STORY_CAP rows of a story stay in See all. Anything past that cap is kept
+   at the end of See all instead of being dropped, so a high finding and the
+   brief's pick cannot disappear. */
 export function splitFindings(rows) {
-  const ranked = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).sort(byViewStable);
+  const eligible = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
+  const grouped = new Map();
+  eligible.forEach((r) => {
+    const story = storyKey(r);
+    if (!grouped.has(story)) grouped.set(story, []);
+    grouped.get(story).push(r);
+  });
+  const slots = [];
+  const overflow = [];
+  grouped.forEach((members) => {
+    members.sort(byStoryMember);
+    members.forEach((r, i) => {
+      if (i < STORY_CAP) {
+        if (!slots[i]) slots[i] = [];
+        slots[i].push(r);
+      } else overflow.push(r);
+    });
+  });
+  const kept = [];
+  slots.forEach((slot) => {
+    slot.sort(byViewStable);
+    kept.push(...slot);
+  });
+  overflow.sort(byViewStable);
+
   const top = [];
   const more = [];
   const outcomes = {};
   const families = {};
-  const stories = {};
   const shown = {};
-  ranked.forEach((r) => {
+  kept.forEach((r) => {
     const story = storyKey(r);
-    if ((stories[story] || 0) >= STORY_CAP) return;
-    stories[story] = (stories[story] || 0) + 1;
     const outcome = r.outcome;
     const family = factorFamily(r);
     if (top.length < DISPLAY_LIMIT && !shown[story] && (outcomes[outcome] || 0) < OUTCOME_CAP && (families[family] || 0) < FAMILY_CAP) {
@@ -1406,6 +1437,7 @@ export function splitFindings(rows) {
       families[family] = (families[family] || 0) + 1;
     } else more.push(r);
   });
+  more.push(...overflow);
   return { top, more };
 }
 

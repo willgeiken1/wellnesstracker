@@ -717,14 +717,23 @@ test("the first screen allows 2 cards per outcome, 3 per family, 1 per story", (
   Object.values(byStory).forEach((n) => assert.equal(n, 1));
   assert.ok(new Set(top.map((r) => r.outcome)).size >= 3);
   assert.deepEqual(listed, top.concat(more));
-  const all = {};
-  listed.forEach((r) => { all[storyKey(r)] = (all[storyKey(r)] || 0) + 1; });
-  Object.values(all).forEach((n) => assert.ok(n <= STORY_CAP));
-  // liftPerf spans several families, so See all still has more than
-  // OUTCOME_CAP liftPerf rows, but only STORY_CAP of the sleep story.
+  const seen = {};
+  let overflowAt = listed.length;
+  listed.forEach((r, i) => {
+    const story = storyKey(r);
+    seen[story] = (seen[story] || 0) + 1;
+    if (seen[story] > STORY_CAP && overflowAt === listed.length) overflowAt = i;
+  });
+  listed.slice(0, overflowAt).forEach((r) => {
+    const n = listed.slice(0, overflowAt).filter((x) => storyKey(x) === storyKey(r)).length;
+    assert.ok(n <= STORY_CAP);
+  });
+  // Nothing is dropped. liftPerf spans several families, and the sleep story
+  // keeps every high row, with the extras after the cap.
   assert.ok(listed.filter((r) => r.outcome === "liftPerf").length > OUTCOME_CAP);
-  assert.equal(listed.filter((r) => r.outcome === "liftPerf" && factorFamily(r) === "sleep").length, STORY_CAP);
-  assert.ok(listed.length < rows.length);
+  const sleep = listed.filter((r) => r.outcome === "liftPerf" && factorFamily(r) === "sleep");
+  assert.ok(sleep.length > STORY_CAP);
+  assert.equal(listed.length, rows.length);
 });
 
 function hrvRow(factor, source, strength, extra) {
@@ -740,12 +749,28 @@ test("late eating, fat and carbs pulling HRV down are one story", () => {
   assert.equal(new Set(rows.map(storyKey)).size, 1);
   const { top, more } = splitFindings(rows);
   const listed = listFindings(rows);
-  assert.equal(listed.length, STORY_CAP);
-  assert.deepEqual(listed.map((r) => r.factor), ["lateEating", "carbs:median"]);
+  assert.equal(listed.length, rows.length);
+  assert.deepEqual(listed.map((r) => r.factor), ["lateEating", "carbs:median", "fat:median"]);
   assert.equal(top.length, 1);
   assert.equal(top[0].factor, "lateEating");
-  assert.deepEqual(more.map((r) => r.factor), ["carbs:median"]);
+  assert.deepEqual(more.map((r) => r.factor), ["carbs:median", "fat:median"]);
   assert.deepEqual(listed, top.concat(more));
+});
+
+test("a weaker high finding is kept ahead of stronger mediums in the same story", () => {
+  const rows = [
+    hrvRow("lateEating", undefined, 90, { confidence: "medium" }),
+    hrvRow("fat:median", "fat", 80, { confidence: "medium" }),
+    hrvRow("carbs:median", "carbs", 10, { confidence: "high" }),
+  ];
+  const { top, more } = splitFindings(rows);
+  const listed = listFindings(rows);
+  assert.equal(top[0].factor, "carbs:median");
+  assert.equal(top[0].confidence, "high");
+  assert.ok(listed.some((r) => r.factor === "carbs:median"));
+  assert.ok(more.some((r) => r.factor === "lateEating" || r.factor === "fat:median"));
+  assert.equal(listed.length, 3);
+  assert.deepEqual(listFindings(rows.slice().reverse()).map((r) => r.factor), listed.map((r) => r.factor));
 });
 
 test("a different direction or family is a different story", () => {
@@ -771,7 +796,7 @@ test("splitFindings never pads the first screen with cap-breaking rows", () => {
   const { top, more } = splitFindings(rows);
   assert.ok(top.length < DISPLAY_LIMIT);
   assert.deepEqual(top.map((r) => r.factor), ["lateEating", "sleepHours:median"]);
-  assert.deepEqual(more.map((r) => r.factor), ["fat:median", "deepHours:median", "steps:median"]);
+  assert.deepEqual(more.map((r) => r.factor), ["steps:median", "fat:median", "deepHours:median"]);
   assert.deepEqual(listFindings(rows), top.concat(more));
   assert.deepEqual(splitFindings([]), { top: [], more: [] });
 });

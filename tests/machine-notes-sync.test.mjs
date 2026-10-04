@@ -19,9 +19,19 @@ app.esc = (s) => String(s);
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
-/* What merge_user_data does on the server: per key, the newer `at` wins. */
+/* merge_user_data: the higher `at` wins, and an equal `at` keeps the note already stored.
+   The client adopts that stored note, so the two sides meet. */
+function sqlMerge(stored, incoming) {
+  const out = app.normalizeMachineNotes(stored);
+  Object.entries(app.normalizeMachineNotes(incoming)).forEach(([k, b]) => {
+    const a = out[k];
+    if (!a || (b.at || 0) > (a.at || 0)) out[k] = b;
+  });
+  return out;
+}
+
 function serverMerge(server, incoming) {
-  return app.mergeMachineNotes(server, incoming);
+  return sqlMerge(server, incoming);
 }
 
 /* rpc stub: merges on call, answers whenever the test releases the reply. */
@@ -183,5 +193,51 @@ test("300 seeded interleavings of edits, clears, other phones, and late replies:
       assert.deepEqual(srv.notes[k], newest[k], `${label} server ${k}`);
     });
     assert.deepEqual(Object.keys(app.state.machineNotes).sort(), Object.keys(newest).sort(), label);
+  }
+});
+
+test("equal-timestamp ties converge between client and SQL", () => {
+  const KEYS = ["Leg press", "Row", "Curl", "Chest fly"];
+  const stored = sqlMerge(
+    { Row: { text: "Pad A", at: 50 } },
+    { Row: { text: "Pad B", at: 50 } }
+  );
+  assert.deepEqual(stored.Row, { text: "Pad A", at: 50 });
+  assert.deepEqual(app.mergeMachineNotes({ Row: { text: "Pad B", at: 50 } }, stored), stored);
+  assert.deepEqual(
+    app.mergeMachineNotes({ Squat: { text: "", at: 10, gone: true } }, sqlMerge({ Squat: { text: "Rack", at: 10 } }, { Squat: { text: "", at: 10, gone: true } })).Squat,
+    { text: "Rack", at: 10 }
+  );
+
+  for (const seed of [7, 99]) {
+    const rnd = rng(seed);
+    const pick = (list) => list[Math.floor(rnd() * list.length)];
+    for (let run = 0; run < 40; run++) {
+      let server = {};
+      const phones = [{ notes: {} }, { notes: {} }];
+      let clock = 1000;
+      const steps = 12 + Math.floor(rnd() * 20);
+      for (let s = 0; s < steps; s++) {
+        const phone = phones[Math.floor(rnd() * phones.length)];
+        const op = rnd();
+        if (op < 0.5) {
+          const k = pick(KEYS);
+          if (rnd() < 0.55) clock += 1;
+          const at = clock;
+          const next = rnd() < 0.25 ? { text: "", at, gone: true } : { text: "t" + seed + "-" + run + "-" + s, at };
+          phone.notes = { ...phone.notes, [k]: next };
+        } else if (op < 0.85) {
+          server = sqlMerge(server, phone.notes);
+          phone.notes = app.mergeMachineNotes(phone.notes, server);
+        } else {
+          phone.notes = app.mergeMachineNotes(phone.notes, server);
+        }
+      }
+      phones.forEach((phone) => { server = sqlMerge(server, phone.notes); });
+      phones.forEach((phone) => { phone.notes = app.mergeMachineNotes(phone.notes, server); });
+      phones.forEach((phone, i) => {
+        assert.deepEqual(phone.notes, server, `seed ${seed} run ${run} phone ${i}`);
+      });
+    }
   }
 });
