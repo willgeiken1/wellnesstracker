@@ -414,5 +414,22 @@ body.timer-on:not(.in-workout) #view {
   background: var(--green-soft);
   color: var(--accent-text);
 }
-.aff-empty h4 { margin-bottom: 6px; }
+.aff-empty {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 18px 20px;
+}
+.aff-empty::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 3px;
+  border-radius: 3px;
+  /* --line on the dark card is about 1.2:1. --muted clears 3:1 in dark and light. */
+  background: var(--muted);
+}
+.aff-empty h4 { margin: 0 0 6px; }
+.aff-empty .sub { margin: 0; max-width: 40em; line-height: 1.45; }
 .aff-more { margin: 2px 0 16px; }

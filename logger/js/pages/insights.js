@@ -88,8 +88,9 @@ function affectsEmpty(days) {
     const more = DAYS_FOR_A_PATTERN - days;
     return `You have ${app.pl(days, "day")} logged. About ${app.pl(more, "more day")} of sleep, workouts, or meals and the first patterns can show up.`;
   }
-  return "Nothing stands out strongly yet. Keep logging. A pattern needs at least 7 days on each side, and a gap big enough to trust.";
+  return "No pattern is strong enough to trust yet. Keep logging sleep, workouts, and meals. When the same thing lines up on enough days, it will show up here.";
 }
+app.affectsEmpty = affectsEmpty;
 
 /* What affects you. Correlations only, and no health values leave the phone. */
 function affectsHTML() {

@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { pickForToday, todayLine } from "./correlate.js";
+import { DAYS_FOR_A_PATTERN, findingsForView, loggedDays, pickForToday, todayLine } from "./correlate.js";
 import { hasOura, ouraWidgetShowing } from "./oura-gate.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
@@ -179,16 +179,32 @@ function weightMetric() {
   return { id: "weight", label: "Weight", value: `${app.signed(r.perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
 }
 
+function patternEmpty(days, rows) {
+  const n = days || 0;
+  const seeInsights = findingsForView(rows || []).length > 0;
+  return {
+    id: "pattern",
+    label: "What affects you",
+    value: seeInsights ? "See Insights" : (n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet"),
+    empty: true,
+    link: "affects",
+  };
+}
+
 function patternMetric() {
-  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return null;
+  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return patternEmpty(0);
   let row = null;
+  let days = 0;
+  let rows = [];
   try {
     const src = app.correlationSource();
-    row = pickForToday(app.correlations(), src, app.today());
+    days = loggedDays(src);
+    rows = app.correlations();
+    row = pickForToday(rows, src, app.today());
   } catch (e) { row = null; }
-  if (!row) return null;
+  if (!row) return patternEmpty(days, rows);
   const line = todayLine(row);
-  if (!line) return null;
+  if (!line) return patternEmpty(days, rows);
   const good = row.valence === "good";
   return {
     id: "pattern",
@@ -225,6 +241,10 @@ function briefTodayHeadline() {
 app.briefTodayHeadline = briefTodayHeadline;
 
 function metricHTML(m) {
+  if (m.link === "affects" && m.empty) {
+    return `<li class="brief-metric span empty" data-metric="${m.id}">
+      <button class="brief-hit" data-action="open-affects"><span class="brief-l">Patterns</span><span class="brief-line">${app.esc(m.value)}</span></button></li>`;
+  }
   if (m.link === "affects") {
     return `<li class="brief-metric span${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
       <button class="brief-hit" data-action="open-affects">

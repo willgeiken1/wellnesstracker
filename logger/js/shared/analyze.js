@@ -181,7 +181,14 @@ function effect(perfs, valueOf, buckets) {
 }
 app.effect = effect;
 
-/* Daily correlations for later screens. Nothing here is rendered, and nothing is sent off the device. */
+/* Daily correlations for later screens. Nothing here is rendered, and nothing is sent off the device.
+   The result is cached in memory until the revision changes, the options change, or app.state
+   is a different object. An account switch replaces state without save(), so the object check
+   is what stops the previous account's rows from being served.
+   Any path that replaces app.state, or wipes the logs that object holds, must also bump
+   app.correlationRev. save() does that. A wipe that mutates the same object is invisible
+   to the object check, so the revision is what drops the old rows. Health values are not
+   hashed and are not uploaded. */
 function correlationSource() {
   const S = app.src();
   const demo = !!(app.state && app.state.demo);
@@ -207,14 +214,28 @@ function correlationSource() {
 }
 app.correlationSource = correlationSource;
 
+let correlationCache = { rev: -1, opt: "", state: null, rows: null, builds: 0 };
+
+function optionKey(opts) {
+  const lags = opts.lags ? opts.lags.join(",") : "";
+  const outcomes = opts.outcomes ? opts.outcomes.join(",") : "";
+  const minPerGroup = opts.minPerGroup == null ? "" : String(opts.minPerGroup);
+  return (opts.weightDir || "") + "\0" + minPerGroup + "\0" + lags + "\0" + outcomes;
+}
+
 function correlations(options) {
   const opts = { ...(options || {}) };
   if (opts.weightDir == null && typeof app.goals === "function") {
     try { opts.weightDir = app.goals().weightDir || null; } catch (e) { opts.weightDir = null; }
   }
-  return runCorrelations(correlationSource(), opts);
+  const rev = app.correlationRev || 0;
+  const opt = optionKey(opts);
+  if (correlationCache.rows && correlationCache.rev === rev && correlationCache.opt === opt && correlationCache.state === app.state) return correlationCache.rows;
+  correlationCache = { rev, opt, state: app.state, rows: runCorrelations(correlationSource(), opts), builds: correlationCache.builds + 1 };
+  return correlationCache.rows;
 }
 app.correlations = correlations;
+app.correlationBuilds = () => correlationCache.builds;
 
 function effectCard(title, rows, sentence, need) {
   const max = Math.max(4, ...rows.filter((r) => r.n >= 3).map((r) => Math.abs(r.avg)));

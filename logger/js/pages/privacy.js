@@ -235,7 +235,7 @@ async function purgeRange(from, to) {
   if (app.purgeBusy) return;
   app.purgeBusy = true;
   try {
-    stripRange(app.state, from, to);
+    app.wipeLogs((data) => stripRange(data, from, to));
     rememberPurge(from, to, false);
     app.ui.workoutOpen = false;
     app.ui.sheet = null;
@@ -278,7 +278,7 @@ async function eraseThisPhone() {
   await app.clearPhotoStore();
   try { localStorage.removeItem(app.KEY); } catch (e) {}
   try { sessionStorage.removeItem("insight-unlocked"); } catch (e) {}
-  app.state = app.load();
+  app.replaceState(app.load());
   app.applyTheme();
   app.ui.sheet = null;
   app.ui.drafts = {};

@@ -61,7 +61,13 @@ app.esc = esc;
 const iso = (d) => d.toLocaleDateString("en-CA");
 app.iso = iso;
 
-const today = () => app.iso(new Date());
+let correlationDay = "";
+const today = () => {
+  const day = app.iso(new Date());
+  if (correlationDay && day !== correlationDay) app.correlationRev = (app.correlationRev || 0) + 1;
+  correlationDay = day;
+  return day;
+};
 app.today = today;
 
 const parseDay = (s) => new Date(s + "T12:00:00");
@@ -225,8 +231,31 @@ app.migrateHomeLayout = migrateHomeLayout;
 app.applyHomeMigration = applyHomeMigration;
 app.pickHomeV2 = pickHomeV2;
 
+function bumpCorrelationRev() {
+  app.correlationRev = (app.correlationRev || 0) + 1;
+}
+
+/* The only assignment of app.state. A new object is invisible to the cache's
+   identity check until the revision moves. */
+function replaceState(next) {
+  app.state = next;
+  bumpCorrelationRev();
+}
+app.replaceState = replaceState;
+
+/* In-place wipes keep the same object, so the identity check would serve the
+   old rows. apply mutates app.state. Callers that delete logs go through here. */
+function wipeLogs(apply) {
+  if (typeof apply === "function") apply(app.state);
+  bumpCorrelationRev();
+}
+app.wipeLogs = wipeLogs;
+
+/* Bumps correlationRev before writing. Replacing app.state or wiping logs without
+   replaceState or wipeLogs serves the previous rows. */
 function save() {
   app.state.updatedAt = Date.now();
+  bumpCorrelationRev();
   try { app.schedulePush(); } catch (e) { /* cloud not ready yet */ }
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); }
   catch (e) { app.toast("Couldn't save on this phone. Export a backup from Settings now."); }
@@ -234,7 +263,7 @@ function save() {
 app.save = save;
 
 let state = app.load();
-app.state = state;
+app.replaceState(state);
 
 // A workout left open from a previous day gets closed automatically
 app.state.sessions.forEach((s) => { if (!s.finishedAt && s.date < app.today()) s.finishedAt = s.date + "T23:59:00"; });

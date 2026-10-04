@@ -172,7 +172,7 @@ app.$("#importFile").addEventListener("change", async (ev) => {
     if (!m) throw new Error("bad file");
     if (!(await app.ask({ title: "Restore this backup?", body: `Everything on this phone will be replaced with the backup's ${app.pl(m.sessions.length, "workout")}.`, ok: "Restore", danger: true }))) return;
     m.lastExport = app.state.lastExport;
-    app.state = m; app.ui.drafts = {}; app.ui.open = null; app.ui.detail = null; app.ui.workoutOpen = false; app.applyTheme();
+    app.replaceState(m); app.ui.drafts = {}; app.ui.open = null; app.ui.detail = null; app.ui.workoutOpen = false; app.applyTheme();
     app.save(); app.render(); app.toast("Backup restored.");
   } catch (e) { app.toast("That file isn't a Insight backup. Choose a workouts-….json file."); }
 });
