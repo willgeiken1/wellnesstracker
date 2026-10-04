@@ -316,18 +316,42 @@ function briefHTML() {
   }
   const visible = prefs.order.filter((id) => !prefs.hidden.includes(id));
   const body = items.length ? `<ul class="brief-metrics">${items.map(metricHTML).join("")}</ul>` : (visible.length ? "" : `<p class="brief-note">All metrics are off. Edit the brief to turn one on.</p>`);
-  const registry = !!tiles;
-  const edit = registry ? "" : `<button data-action="brief-edit">Edit</button>`;
   const headline = showHeadline ? `<h2 class="brief-h">${app.esc(app.briefTodayHeadline())}</h2>` : "";
   return `<section class="card brief${expanded ? " expanded" : ""}" data-brief-size="${prefs.size}" aria-label="Morning brief">
     <div class="brief-top"><p class="brief-k">Morning brief</p><div class="brief-tools">
       <button data-action="brief-size" aria-pressed="${expanded}">${expanded ? "Compact" : "Expand"}</button>
-      ${edit}</div></div>
+      </div></div>
     ${headline}
     ${body}
   </section>`;
 }
 app.briefHTML = briefHTML;
+
+/* True when the registry brief would be only the label and Expand. */
+function briefPaintEmpty(state) {
+  if (typeof app.homeRegistryActive !== "function" || !app.homeRegistryActive(state)) return false;
+  if (typeof app.visibleHomeIds !== "function") return false;
+  const tiles = new Set(app.visibleHomeIds(state));
+  if (!tiles.has("brief") || !tiles.has("headline")) return false;
+  const prev = app.state;
+  if (state && state !== prev) app.state = state;
+  let enabled = [];
+  try {
+    const prefs = app.briefPrefs();
+    enabled = prefs.order.filter((id) => !prefs.hidden.includes(id));
+  } finally { if (state && state !== prev) app.state = prev; }
+  if (!enabled.length) return false;
+  const covered = {
+    pattern: tiles.has("pattern"),
+    oura: tiles.has("readiness") || !hasOura(state),
+    train: tiles.has("today"),
+    food: tiles.has("food-yesterday"),
+    week: tiles.has("weekly-goal"),
+    weight: tiles.has("weight-trend"),
+  };
+  return enabled.every((id) => covered[id]);
+}
+app.briefPaintEmpty = briefPaintEmpty;
 
 if (typeof document !== "undefined") {
   document.addEventListener("pointerdown", (ev) => {

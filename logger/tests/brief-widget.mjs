@@ -51,7 +51,8 @@ async function main() {
   check("brief is the first widget", (await widgetOrder(page))[0] === "brief", (await widgetOrder(page)).join(">"));
   const label = await page.locator(".brief-k").innerText();
   check("brief label", /morning brief/i.test(label), label);
-  check("expand and edit controls", await page.locator("[data-action='brief-size']").count() === 1 && await page.locator("[data-action='brief-edit']").count() === 1);
+  check("one Edit on legacy home", await page.locator("[data-action='home-edit']").count() === 1 && await page.locator("[data-action='brief-edit']").count() === 0);
+  check("expand stays on the brief", await page.locator("[data-action='brief-size']").count() === 1);
 
   await page.locator("[data-action='brief-size']").click();
   await page.waitForTimeout(150);
@@ -105,7 +106,7 @@ async function main() {
   const demoText = await page.locator(".wdg[data-w='brief']").innerText();
   check("demo brief has tiles", /Readiness|Training|This week/.test(demoText), demoText.slice(0, 240));
 
-  await page.locator("[data-action='brief-edit']").click();
+  await page.evaluate(() => { app.ui.briefEdit = true; app.render(); });
   await page.waitForTimeout(150);
   const switches = page.locator(".brief-edit .switch");
   const n = await switches.count();

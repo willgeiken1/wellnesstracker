@@ -100,7 +100,9 @@ function homeEditBlocked() {
 function homeEditButton() {
   const blocked = homeEditBlocked();
   if (!blocked) return `<button type="button" class="home-edit" data-action="home-edit">Edit</button>`;
-  const why = "Offline. Edit unlocks after the first sync finishes.";
+  const sync = "Edit unlocks after the first sync finishes.";
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  const why = offline ? `Offline. ${sync}` : sync;
   return `<span class="home-edit-lock"><button type="button" class="home-edit" data-action="home-edit" disabled aria-disabled="true" title="${why}" aria-describedby="home-edit-wait">Edit</button><p class="sub home-edit-wait" id="home-edit-wait">${why}</p></span>`;
 }
 app.homeEditBlocked = homeEditBlocked;
@@ -177,10 +179,15 @@ function homeGalleryHTML() {
 }
 app.homeGalleryHTML = homeGalleryHTML;
 
-/* The brief card stays whenever the layout shows it. briefHTML drops only the
-   metrics that are already painted as their own tiles. */
+/* The brief card stays when it still has a line to show. When every enabled
+   metric is already a tile, and the headline tile is up, the shell is omitted. */
 function paintedHomeItems(state) {
-  return visibleHomeIds(state);
+  const visible = visibleHomeIds(state);
+  if (!visible.includes("brief")) return visible;
+  if (typeof app.briefPaintEmpty === "function" && app.briefPaintEmpty(state)) {
+    return visible.filter((id) => id !== "brief");
+  }
+  return visible;
 }
 
 function homeHTML() {

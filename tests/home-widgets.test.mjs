@@ -790,6 +790,7 @@ test("any layout containing brief paints one brief card", () => {
     sb: app.sb,
     cloudPullOk: app.cloudPullOk,
     briefHTML: app.briefHTML,
+    briefPaintEmpty: app.briefPaintEmpty,
     weighReminderHTML: app.weighReminderHTML,
     readinessCardHTML: app.readinessCardHTML,
     muscleMapHTML: app.muscleMapHTML,
@@ -799,6 +800,7 @@ test("any layout containing brief paints one brief card", () => {
   app.ui = { edit: null };
   app.pageHead = (_title, _sub, opts) => `<header>Home</header>${opts && opts.left ? opts.left : ""}`;
   app.briefHTML = () => `<section class="brief">Morning brief</section>`;
+  app.briefPaintEmpty = () => false;
   app.weighReminderHTML = () => "";
   app.readinessCardHTML = () => "";
   app.muscleMapHTML = () => "";
@@ -877,6 +879,7 @@ test("any layout containing brief paints one brief card", () => {
     app.sb = prev.sb;
     app.cloudPullOk = prev.cloudPullOk;
     app.briefHTML = prev.briefHTML;
+    app.briefPaintEmpty = prev.briefPaintEmpty;
     app.weighReminderHTML = prev.weighReminderHTML;
     app.readinessCardHTML = prev.readinessCardHTML;
     app.muscleMapHTML = prev.muscleMapHTML;
@@ -998,7 +1001,8 @@ test("the registry brief drops repeated metrics and keeps a start action", () =>
 
     app.state = { ...base, layout: { home: { order: ["brief"], hidden: [] } } };
     const legacy = app.briefHTML();
-    assert.match(legacy, /data-action="brief-edit"/);
+    assert.doesNotMatch(legacy, /data-action="brief-edit"/);
+    assert.match(legacy, /data-action="brief-size"/);
     assert.match(legacy, /data-action="start" data-id="push"/);
     assert.match(legacy, /class="brief-h"/);
   } finally {
@@ -1019,5 +1023,130 @@ test("the registry brief drops repeated metrics and keeps a start action", () =>
     app.weekGoalStatus = prev.weekGoalStatus;
     app.pl = prev.pl;
     app.weighIns = prev.weighIns;
+  }
+});
+
+test("an empty brief shell stays off Home, and legacy Home has one Edit", () => {
+  const covered = ["headline", "pattern", "today", "food-yesterday", "weekly-goal", "weight-trend"];
+  const prevRender = {};
+  covered.forEach((id) => {
+    prevRender[id] = HOME_WIDGETS[id].render;
+    HOME_WIDGETS[id].render = () => `<article data-tile="${id}"></article>`;
+  });
+  const prev = {
+    state: app.state, ui: app.ui, today: app.today, esc: app.esc, pageHead: app.pageHead,
+    firstName: app.firstName, greeting: app.greeting, fmtDate: app.fmtDate, weekCardHTML: app.weekCardHTML,
+    snapshotFromApp: app.snapshotFromApp, weighReminderHTML: app.weighReminderHTML, widgetize: app.widgetize,
+    readinessCardHTML: app.readinessCardHTML, muscleMapHTML: app.muscleMapHTML, briefPrefs: app.briefPrefs,
+    briefTodayHeadline: app.briefTodayHeadline, activeSession: app.activeSession, sessionsOn: app.sessionsOn,
+    workoutById: app.workoutById, addDays: app.addDays, dayEntries: app.dayEntries, sessionsInWeek: app.sessionsInWeek,
+    mondayOf: app.mondayOf, weekGoalStatus: app.weekGoalStatus, pl: app.pl, weighIns: app.weighIns,
+    session: app.session, sb: app.sb, cloudPullOk: app.cloudPullOk, src: app.src, latestOura: app.latestOura,
+  };
+  app.today = () => "2026-10-04";
+  app.ui = {};
+  app.esc = (s) => String(s ?? "");
+  app.pageHead = (_title, _sub, opts) => `${opts && opts.left ? opts.left : ""}`;
+  app.firstName = () => "";
+  app.greeting = () => "";
+  app.fmtDate = () => "Sunday";
+  app.weekCardHTML = () => "";
+  app.snapshotFromApp = () => ({ live: true });
+  app.weighReminderHTML = () => "";
+  app.widgetize = (_page, html) => html;
+  app.readinessCardHTML = () => "";
+  app.muscleMapHTML = () => "";
+  app.pl = (n, word) => `${n} ${word}`;
+  app.activeSession = () => null;
+  app.sessionsOn = () => [];
+  app.workoutById = () => null;
+  app.addDays = (day) => day;
+  app.dayEntries = () => [];
+  app.sessionsInWeek = () => 0;
+  app.mondayOf = () => "2026-09-28";
+  app.weekGoalStatus = () => null;
+  app.weighIns = () => [];
+  app.briefTodayHeadline = () => "Headline phrase zz";
+  app.src = () => ({ oura: {}, sessions: [] });
+  app.latestOura = () => null;
+  app.session = null;
+  app.sb = null;
+  const shell = () => ({
+    demo: false,
+    oura: { connected: false },
+    plan: {},
+    workouts: [],
+    sessions: [],
+    profile: { weighIns: [] },
+    goals: {},
+  });
+  try {
+    app.state = {
+      ...shell(),
+      layout: { homeV2: { v: 2, items: ["brief", ...covered], hidden: [], updatedAt: 5 } },
+    };
+    const empty = app.homeHTML();
+    assert.equal(app.briefPaintEmpty(app.state), true);
+    assert.doesNotMatch(empty, /data-hw="brief"|class="card brief"|Morning brief/);
+    assert.match(empty, /data-hw="headline"/);
+    assert.match(empty, /data-tile="weight-trend"/);
+
+    app.state.layout.homeV2 = { v: 2, items: ["brief", ...covered.filter((id) => id !== "weight-trend")], hidden: [], updatedAt: 5 };
+    const kept = app.homeHTML();
+    assert.equal(app.briefPaintEmpty(app.state), false);
+    assert.match(kept, /class="card brief"/);
+    assert.match(kept, /data-metric="weight"/);
+    assert.doesNotMatch(kept, /data-metric="train"|class="brief-h"/);
+
+    app.state = { ...shell(), layout: { home: { order: ["brief"], hidden: [] } } };
+    const legacy = app.homeHTML();
+    assert.equal((legacy.match(/data-action="home-edit"/g) || []).length, 1);
+    assert.doesNotMatch(legacy, /data-action="brief-edit"/);
+    assert.match(legacy, /data-action="brief-size"/);
+  } finally {
+    covered.forEach((id) => { HOME_WIDGETS[id].render = prevRender[id]; });
+    Object.assign(app, prev);
+  }
+});
+
+test("a blocked Edit says Offline only when the device is offline", () => {
+  const prev = {
+    state: app.state, ui: app.ui, today: app.today, esc: app.esc, pageHead: app.pageHead,
+    firstName: app.firstName, greeting: app.greeting, fmtDate: app.fmtDate, weekCardHTML: app.weekCardHTML,
+    widgetize: app.widgetize, briefHTML: app.briefHTML, weighReminderHTML: app.weighReminderHTML,
+    readinessCardHTML: app.readinessCardHTML, muscleMapHTML: app.muscleMapHTML,
+    session: app.session, sb: app.sb, cloudPullOk: app.cloudPullOk,
+  };
+  app.today = () => "2026-10-04";
+  app.ui = {};
+  app.esc = (s) => String(s ?? "");
+  app.pageHead = (_title, _sub, opts) => `${opts && opts.left ? opts.left : ""}`;
+  app.firstName = () => "";
+  app.greeting = () => "";
+  app.fmtDate = () => "Sunday";
+  app.weekCardHTML = () => "";
+  app.widgetize = (_page, html) => html;
+  app.briefHTML = () => "";
+  app.weighReminderHTML = () => "";
+  app.readinessCardHTML = () => "";
+  app.muscleMapHTML = () => "";
+  app.session = { user: { id: "u" } };
+  app.sb = {};
+  app.cloudPullOk = false;
+  app.state = { layout: {}, oura: { connected: false } };
+  const prior = globalThis.navigator;
+  function paint(onLine) {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { onLine } });
+    return app.homeHTML();
+  }
+  try {
+    const online = paint(true);
+    assert.match(online, /Edit unlocks after the first sync finishes/);
+    assert.doesNotMatch(online, /Offline/);
+    const offline = paint(false);
+    assert.match(offline, /Offline\. Edit unlocks after the first sync finishes/);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: prior });
+    Object.assign(app, prev);
   }
 });
