@@ -1,82 +1,137 @@
-/* STUB — replaced by step 1 (the Home widget registry).
-   The id list and getHomeLayout / setHomeLayout match the locked interface.
-   render / preview only draw a labeled tile so a migrated layout can be previewed.
-   Rebase this file away when step 1 lands. */
+import { app } from "../runtime.js";
 
-const OURA = new Set(["readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps", "last-night"]);
+/* Stub registry. Step 1 replaces this file.
+   Ids, sizes, and needsOura match the locked Home widget interface.
+   render and preview take no arguments. Non-Oura renders stay empty so the
+   current Home page keeps drawing those sections until the real registry lands.
+   Oura tiles are drawn here so Home can show and hide them. */
 
 const SPECS = [
-  ["readiness", "Readiness", "recovery", "small"],
-  ["sleep-score", "Sleep score", "recovery", "small"],
-  ["sleep-duration", "Sleep", "recovery", "small"],
-  ["hrv", "HRV", "recovery", "small"],
-  ["resting-hr", "Resting HR", "recovery", "small"],
-  ["steps", "Steps", "recovery", "small"],
-  ["weekly-goal", "Weekly goal", "training", "small"],
-  ["food-today", "Food today", "food", "small"],
-  ["food-yesterday", "Food yesterday", "food", "small"],
-  ["weight-trend", "Weight", "body", "small"],
-  ["cardio-minutes", "Cardio minutes", "training", "small"],
-  ["today", "Today", "training", "medium"],
-  ["this-week", "This week", "training", "medium"],
-  ["pattern", "Pattern", "insights", "medium"],
-  ["headline", "Headline", "insights", "medium"],
-  ["muscles", "Muscles", "training", "medium"],
-  ["cardio", "Cardio", "training", "medium"],
-  ["last-night", "Last night", "recovery", "medium"],
+  ["readiness", "Readiness", "recovery", "small", true],
+  ["sleep-score", "Sleep score", "recovery", "small", true],
+  ["sleep-duration", "Sleep duration", "recovery", "small", true],
+  ["hrv", "HRV", "recovery", "small", true],
+  ["resting-hr", "Resting HR", "recovery", "small", true],
+  ["steps", "Steps", "recovery", "small", true],
+  ["weekly-goal", "Weekly goal", "training", "small", false],
+  ["food-today", "Food today", "nutrition", "small", false],
+  ["food-yesterday", "Yesterday's food", "nutrition", "small", false],
+  ["weight-trend", "Weight trend", "body", "small", false],
+  ["cardio-minutes", "Cardio minutes", "training", "small", false],
+  ["today", "Today", "training", "medium", false],
+  ["this-week", "This week", "training", "medium", false],
+  ["pattern", "Today's pattern", "insight", "medium", false],
+  ["headline", "Headline", "insight", "medium", false],
+  ["muscles", "Muscles this week", "training", "medium", false],
+  ["cardio", "Cardio", "training", "medium", false],
+  ["last-night", "Last night", "recovery", "medium", true],
 ];
 
-function tile(entry) {
-  return `<span class="hv2-k">${entry.category}</span><span class="hv2-name">${entry.name}</span>`;
+function esc(s) {
+  if (typeof app.esc === "function") return app.esc(s);
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-export const HOME_WIDGETS = Object.fromEntries(SPECS.map(([id, name, category, size]) => {
-  const entry = { id, name, category, size, needsOura: OURA.has(id), render: null, preview: null };
-  entry.render = () => tile(entry);
-  entry.preview = () => tile(entry);
-  return [id, entry];
+function reading() {
+  if (typeof app.latestOura !== "function" || typeof app.src !== "function") return null;
+  try { return app.latestOura(app.src().oura); }
+  catch (e) { return null; }
+}
+
+function shown(v, fmt) {
+  if (v == null || Number.isNaN(v)) return "–";
+  return fmt ? fmt(v) : String(v);
+}
+
+function latestDay() {
+  if (typeof app.src !== "function") return null;
+  try {
+    const days = app.src().oura;
+    if (!days || typeof days !== "object") return null;
+    const keys = Object.keys(days).filter((k) => days[k] && typeof days[k] === "object").sort();
+    return keys.length ? days[keys[keys.length - 1]] : null;
+  } catch (e) { return null; }
+}
+
+function awaitingFirstSync() {
+  if (latestDay()) return false;
+  return !!(app.state && app.state.oura && app.state.oura.connected);
+}
+
+function labelFor(id) {
+  if (id === "sleep-score") return "Sleep score";
+  if (id === "sleep-duration") return "Sleep";
+  if (id === "hrv") return "HRV";
+  if (id === "resting-hr") return "Resting HR";
+  if (id === "steps") return "Steps";
+  return "Readiness";
+}
+
+function tile(id, label, value, opt = {}) {
+  const cls = ["stat", opt.level ? `lvl-${opt.level}` : ""].filter(Boolean).join(" ");
+  const caption = opt.word ? `${label} · ${opt.word}` : label;
+  const inner = `<b>${esc(value)}</b><span>${esc(caption)}</span>`;
+  if (id === "readiness") {
+    const named = value != null && value !== "–" ? `${label} ${value}` : label;
+    const aria = opt.word ? `${named}, ${opt.word}, open Recovery` : `${named}, open Recovery`;
+    return `<button type="button" class="${cls}" data-oura-widget="${id}" data-action="tab" data-tab="recovery" aria-label="${esc(aria)}">${inner}</button>`;
+  }
+  return `<div class="${cls}" data-oura-widget="${id}">${inner}</div>`;
+}
+
+export function homeAwaitingSync() {
+  return awaitingFirstSync();
+}
+
+function renderOura(id) {
+  const label = labelFor(id);
+  if (awaitingFirstSync()) return id === "last-night"
+    ? `<div class="card" data-oura-widget="last-night"><h4>Last night</h4><p class="sub">–</p></div>`
+    : tile(id, label, "–");
+  const o = reading() || {};
+  const hm = (sec) => (typeof app.fmtHM === "function" ? app.fmtHM(sec) : shown(sec));
+  const lv = o.readiness != null && typeof app.readinessLevel === "function" ? app.readinessLevel(o.readiness) : null;
+  switch (id) {
+    case "readiness": return tile(id, "Readiness", shown(o.readiness), { level: lv && lv.cls, word: lv && lv.word });
+    case "sleep-score": return tile(id, "Sleep score", shown(o.sleepScore));
+    case "sleep-duration": return tile(id, "Sleep", shown(o.total, hm));
+    case "hrv": return tile(id, "HRV", shown(o.hrv, (v) => `${v} ms`));
+    case "resting-hr": return tile(id, "Resting HR", shown(o.rhr, (v) => `${v} bpm`));
+    case "steps": return tile(id, "Steps", shown(o.steps, (v) => Number(v).toLocaleString()));
+    case "last-night": return `<div class="card" data-oura-widget="last-night"><h4>Last night</h4><p class="sub">${esc(o.total != null ? `Slept ${hm(o.total)}` : "–")}</p></div>`;
+    default: return "";
+  }
+}
+
+function widget(id, name, category, size, needsOura) {
+  return {
+    id, name, category, size, needsOura,
+    render() { return needsOura ? renderOura(id) : ""; },
+    preview() { return name; },
+  };
+}
+
+export const HOME_WIDGETS = Object.fromEntries(SPECS.map((row) => {
+  const w = widget(row[0], row[1], row[2], row[3], row[4]);
+  return [w.id, w];
 }));
 
 export function getHomeLayout(state) {
-  const home = state && state.layout && state.layout.homeV2;
-  if (!home || home.v !== 2) return null;
-  return home;
+  const layout = state && state.layout && state.layout.homeV2;
+  if (!layout || layout.v !== 2) return null;
+  return layout;
 }
 
 export function setHomeLayout(state, layout) {
-  if (!state || typeof state !== "object") return;
   if (!state.layout || typeof state.layout !== "object" || Array.isArray(state.layout)) state.layout = {};
-  if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
-    state.layout.homeV2 = layout;
-    return;
-  }
-  const next = { ...layout };
-  delete next.migrated;
-  delete next.migratedAt;
-  state.layout.homeV2 = next;
-}
-
-/* Preview only. Production Home still renders the v1 widgets. */
-export function renderHomeV2(layout) {
-  const items = layout && Array.isArray(layout.items) ? layout.items : [];
-  const hidden = layout && Array.isArray(layout.hidden) ? layout.hidden : [];
-  const card = (id) => {
-    const entry = HOME_WIDGETS[id];
-    if (!entry) return "";
-    return `<article class="hv2-card hv2-${entry.size}" data-hv2="${entry.id}">${entry.render()}</article>`;
+  const next = {
+    ...(layout && typeof layout === "object" ? layout : {}),
+    v: 2,
+    items: layout && Array.isArray(layout.items) ? layout.items : [],
+    hidden: layout && Array.isArray(layout.hidden) ? layout.hidden : [],
+    updatedAt: layout && typeof layout.updatedAt === "number" ? layout.updatedAt : Date.now(),
   };
-  const hiddenRow = hidden.filter((id) => HOME_WIDGETS[id]).map((id) => HOME_WIDGETS[id].name).join(", ");
-  return `<section class="hv2" aria-label="Home layout">
-    <style>
-      .hv2 { margin: 0 0 16px; }
-      .hv2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-      .hv2-card { background: var(--surface); color: var(--text); border-radius: 20px; padding: 14px 14px 16px; min-height: 84px; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; }
-      .hv2-medium { grid-column: 1 / -1; min-height: 112px; }
-      .hv2-k { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
-      .hv2-name { font-family: var(--display); font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
-      .hv2-hidden { margin: 10px 2px 0; color: var(--muted); font-size: 13px; }
-    </style>
-    <div class="hv2-grid">${items.map(card).join("")}</div>
-    ${hiddenRow ? `<p class="hv2-hidden">Hidden: ${hiddenRow}</p>` : ""}
-  </section>`;
+  if (!(layout && layout.ouraSeeded)) delete next.ouraSeeded;
+  state.layout.homeV2 = next;
+  return next;
 }

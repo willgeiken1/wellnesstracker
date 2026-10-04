@@ -1,4 +1,6 @@
 import { app } from "../runtime.js";
+import { getHomeLayout } from "../shared/home-widgets.js";
+import { gatedOuraStripHTML } from "../shared/oura-gate.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -80,10 +82,11 @@ function homeHTML() {
   const hitSet = new Set(hit.keys());
   const keys = Object.keys(app.MUSCLES).sort((a, b) => (hit.get(b) || 0) - (hit.get(a) || 0));
 
+  const readiness = getHomeLayout(app.state) ? "" : app.readinessCardHTML();
   return `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}
-    ${app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${hero}
+    ${app.widgetize("home", `${gatedOuraStripHTML(app.state)}<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${readiness}<!--w:today-->${hero}
     <!--w:week--><section class="sec">
       <div class="sec-h"><h3>${weekLabel}</h3>
         <div class="week-nav">${app.ui.weekOffset === 0 ? app.weekGoalHeadHTML() : ""}

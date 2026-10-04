@@ -20,6 +20,12 @@
   --pad-bot: calc(var(--tabs-h) + 110px + var(--safe-bottom));
 }
 
+button.stat { width: 100%; text-align: left; }
+.stat.lvl-up b { color: #6CA020; }
+.stat.lvl-ok b { color: #7C6AE0; }
+.stat.lvl-down b { color: #E2534F; }
+.oura-wait { margin: 0 0 8px; }
+
 :root[data-mode="light"] {
   --elev-1: 0 1px 2px rgba(20, 20, 20, .05);
   --elev-2: 0 12px 28px rgba(20, 20, 20, .07);
@@ -27,6 +33,10 @@
   --inset-lo: inset 0 -1px 0 rgba(20, 20, 20, .05);
   --sheen: linear-gradient(180deg, rgba(255, 255, 255, .65), rgba(255, 255, 255, 0) 46%);
 }
+
+:root[data-mode="light"] .stat.lvl-up b { color: #547D19; }
+:root[data-mode="light"] .stat.lvl-ok b { color: #7262CE; }
+:root[data-mode="light"] .stat.lvl-down b { color: #C24744; }
 
 html, body {
   height: 100%;
