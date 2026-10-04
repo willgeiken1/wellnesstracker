@@ -24,5 +24,6 @@ import "./shell/timer.js";
 import "./shell/actions.js";
 import "./shell/pager.js";
 
+window.app = app;
 app.render();
 app.initCloud();
