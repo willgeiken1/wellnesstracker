@@ -65,6 +65,10 @@ test("feature events keep only the allowlisted property", () => {
   });
   assert.deepEqual(sanitizeCapture("privacy_export"), { event: "privacy_export", properties: {} });
   assert.deepEqual(sanitizeCapture("insights_opened"), { event: "insights_opened", properties: {} });
+  assert.deepEqual(sanitizeCapture("weekly_report_opened", { readiness: 80, week: "2026-09-21" }), {
+    event: "weekly_report_opened",
+    properties: {},
+  });
   assert.equal(sanitizeCapture("$pageview", {}), null);
   assert.equal(sanitizeCapture("$exception", { message: "note: chicken" }), null);
 });
@@ -119,12 +123,12 @@ test("before_send drops autocapture and strips identity traits and query strings
   assert.equal(JSON.stringify(identify).includes("ada@example.com"), false);
 });
 
-test("the shell caches the usage modules with the v17 release", () => {
+test("the shell caches the usage modules with the v18 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v17/);
+  assert.match(sw, /insight-shell-v18/);
   assert.match(sw, /\.\/js\/usage\.js/);
   assert.match(sw, /\.\/js\/usage-events\.js/);
   assert.match(sw, /\.\/js\/usage-pref\.js/);
-  assert.match(sentry, /insight-shell-v17/);
+  assert.match(sentry, /insight-shell-v18/);
 });

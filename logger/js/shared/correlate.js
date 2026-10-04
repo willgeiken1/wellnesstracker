@@ -1004,6 +1004,29 @@ export function pickForToday(rows, input, today) {
   return { ...ranked[0], because: "overall" };
 }
 
+/* Good or bad findings whose factor actually happened between start and end.
+   Same ranking, labels, and temporal rules as the Insights list. */
+export function findingsForWeek(rows, input, start, end, limit) {
+  const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
+  const cap = limit == null ? 3 : limit;
+  const ranked = findingsForView(rows).filter((r) => r.valence === "good" || r.valence === "bad");
+  const hit = [];
+  const outcomes = {};
+  if (!start || !end) return hit;
+  ranked.forEach((r) => {
+    if (hit.length >= cap) return;
+    if ((outcomes[r.outcome] || 0) >= OUTCOME_CAP) return;
+    for (let d = start; d <= end; d = addDays(d, 1)) {
+      if (factorActive(days, r, d)) {
+        hit.push(r);
+        outcomes[r.outcome] = (outcomes[r.outcome] || 0) + 1;
+        break;
+      }
+    }
+  });
+  return hit;
+}
+
 export function loggedDays(input) {
   const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
   return Object.keys(days || {}).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).length;

@@ -1,0 +1,106 @@
+/* Your week. Same card depth, type, and radius as the rest of the app. */
+.week-card {
+  border-radius: var(--r-xl);
+  padding: 16px 16px 14px;
+  margin: 0 0 16px;
+}
+.week-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.week-k {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.week-x {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+.week-go {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.week-h {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -.03em;
+  line-height: 1.2;
+  margin: 8px 0 4px;
+}
+.week-range { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.week-stats { display: grid; gap: 8px; }
+.week-stats.n1 { grid-template-columns: 1fr; }
+.week-stats.n2 { grid-template-columns: 1fr 1fr; }
+.week-stats.n3 { grid-template-columns: 1fr 1fr 1fr; }
+.week-stat {
+  background: var(--raised);
+  border-radius: 14px;
+  padding: 8px 10px 9px;
+  min-width: 0;
+}
+.week-stat span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.week-stat b {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.wk-h { margin-top: 2px; }
+.wk-list { padding: 4px 0; }
+.wk-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  border-top: 1px solid var(--line);
+}
+.wk-list .wk-link:first-child { border-top: 0; }
+.wk-link b { display: block; font-size: 15px; font-weight: 700; }
+.wk-link .sub { display: block; margin: 2px 0 0; }
+.wk-chev { color: var(--muted); font-size: 22px; line-height: 1; }
+.wk-block { display: grid; gap: 14px; }
+.wk-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; }
+.wk-row + .wk-row { padding-top: 12px; border-top: 1px solid var(--line); }
+.wk-row-t span { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
+.wk-row-t b { display: block; margin-top: 2px; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.wk-row-t b small { font-size: 13px; font-weight: 600; color: var(--muted); }
+.wk-row-t em { display: block; margin-top: 2px; font-style: normal; font-size: 13px; color: var(--muted); }
+.wk-row-t em.tone-up { color: var(--accent-text); }
+.wk-row-t em.tone-down { color: var(--red); }
+.wk-spark { width: 64px; height: 26px; }
+.wk-bar { fill: var(--accent-line, var(--green)); }
+.wk-gap { fill: var(--line); }
+.wk-track { grid-column: 1 / -1; height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.wk-track i { display: block; height: 100%; border-radius: 99px; background: var(--green); }
+.wk-stand p { margin: 0; font-size: 15px; line-height: 1.4; }
+.wk-stand p + p { margin-top: 10px; }
+.wk-stand b { display: block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.wk-note { margin: 8px 0 0; }
+.wk-empty h4 { margin-bottom: 6px; }
+.wk-empty .sub { margin: 0; }
+.week-report .aff-card { margin-top: 10px; }

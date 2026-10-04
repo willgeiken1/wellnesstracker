@@ -62,6 +62,7 @@ function recoveryHTML(embedded) {
 app.recoveryHTML = recoveryHTML;
 
 function insightsWrapHTML() {
+  if (app.ui.weekOpen && app.ui.iseg !== "recovery" && app.weekReportHTML) return app.weekReportHTML(app.ui.weekOpen);
   const seg = `<div class="seg2" role="tablist" style="margin-bottom:16px">
     <button data-action="iseg" data-s="trends" aria-pressed="${app.ui.iseg !== "recovery"}">Trends</button>
     <button data-action="iseg" data-s="recovery" aria-pressed="${app.ui.iseg === "recovery"}">Recovery</button></div>`;
@@ -118,8 +119,9 @@ function insightsHTML(embedded) {
   const S = app.src(), sessions = S.sessions, o = S.oura;
   const nights = Object.keys(o).length;
   const head = `<p class="sub" style="margin:-4px 0 14px">From ${app.pl(sessions.length, "workout")}${nights ? ` and ${app.pl(nights, "night")} of Oura data` : ""}</p>${app.demoBanner()}`;
+  const reports = app.weeklyListHTML ? app.weeklyListHTML() : "";
   const affects = app.affectsHTML();
-  if (sessions.length < 3) return head + affects + (app.state.demo ? "" : app.goalsSectionHTML(app.liftSeries(sessions))) + `<div class="card"><h4>Keep logging</h4>
+  if (sessions.length < 3) return head + reports + affects + (app.state.demo ? "" : app.goalsSectionHTML(app.liftSeries(sessions))) + `<div class="card"><h4>Keep logging</h4>
     <p class="sub">Insights start appearing after a few workouts and get more reliable every week. Lift trends need 4 sessions of a lift; sleep and readiness comparisons need Oura connected.</p>
     ${app.state.demo ? "" : `<button class="btn primary block" data-action="demo-on" style="margin-top:12px">Preview with sample data</button>`}</div>`;
 
@@ -179,7 +181,7 @@ function insightsHTML(embedded) {
   const ppMsg = ratio == null ? "Log some pull work to compare." : ratio > 1.25 ? `You're doing ${ratio.toFixed(1)}× more pushing than pulling. Many lifters aim for roughly even to protect the shoulders.`
     : ratio < 0.8 ? "You're doing noticeably more pulling than pushing." : "Pushing and pulling are well balanced.";
 
-  return head + affects + app.widgetize("trends", `<!--w:goals-->${app.state.demo ? "" : app.goalsSectionHTML(series)}
+  return head + reports + affects + app.widgetize("trends", `<!--w:goals-->${app.state.demo ? "" : app.goalsSectionHTML(series)}
     <!--w:lifts--><div class="sec-h"><h3>Lift progress</h3><span class="sec-sub">${counts.up} up · ${counts.flat} flat · ${counts.down} down</span></div>
     <div class="card lifts">${liftsHTML || `<p class="sub">Log weighted sets to see trends.</p>`}</div>
     <!--w:prs-->${app.prBoardHTML(sessions)}
