@@ -8,9 +8,11 @@ import {
   DISPLAY_LIMIT,
   LATE_HOUR,
   addDays,
+  benjaminiHochberg,
   confidenceOf,
   correlate,
   effect,
+  effectiveN,
   extractDays,
   findingsForView,
   loggedDays,
@@ -172,12 +174,19 @@ test("groups smaller than 7 days are dropped", () => {
   const thin = fill(26, (i) => ({ workedOut: i < 6, readiness: i < 6 ? 90 : 60 }));
   assert.equal(correlate({ days: thin }).some((r) => r.factor === "workedOut"), false);
 
-  const enough = fill(14, (i) => ({ workedOut: i < 7, weight: i < 7 ? 82 : 80 }));
+  const enough = fill(14, (i) => ({ workedOut: i % 2 === 0, weight: i % 2 === 0 ? 82 : 80 }));
   const hit = correlate({ days: enough }, { weightDir: "gain" }).find((r) => r.factor === "workedOut" && r.outcome === "weight" && r.lag === 0);
   assert.ok(hit);
   assert.equal(hit.nWith, 7);
   assert.equal(hit.nWithout, 7);
   assert.equal(hit.confidence, "medium");
+
+  const block = fill(14, (i) => ({ workedOut: i < 7, weight: i < 7 ? 82 : 80 }));
+  const blocked = correlate({ days: block }, { weightDir: "gain" }).find((r) => r.factor === "workedOut" && r.outcome === "weight" && r.lag === 0);
+  assert.ok(blocked);
+  assert.ok(blocked.nEff < 7);
+  assert.equal(blocked.confidence, "low");
+  assert.equal(findingsForView([blocked]).length, 0);
 });
 
 test("missing outcomes and missing factors are skipped, not treated as zero", () => {
@@ -335,12 +344,14 @@ test("user data becomes daily factors, including late meals and targets", () => 
   assert.equal(noClock.days["2026-05-01"].proteinOverTarget, undefined);
 });
 
-test("confidence rises only when the sample and the test both support it", () => {
-  assert.equal(confidenceOf(0.01, 20, 18), "high");
-  assert.equal(confidenceOf(0.01, 8, 12), "medium");
-  assert.equal(confidenceOf(0.08, 12, 12), "medium");
-  assert.equal(confidenceOf(0.2, 30, 30), "low");
-  assert.equal(confidenceOf(0.01, 6, 40), null);
+test("confidence rises only when the adjusted test, the effective sample, and the effect all support it", () => {
+  assert.equal(confidenceOf(0.01, 20, 18, 0.8), "high");
+  assert.equal(confidenceOf(0.01, 8, 12, 0.8), "medium");
+  assert.equal(confidenceOf(0.04, 30, 30, 0.8), "medium");
+  assert.equal(confidenceOf(0.08, 30, 30, 1.2), "low");
+  assert.equal(confidenceOf(0.2, 30, 30, 1), "low");
+  assert.equal(confidenceOf(0.005, 40, 40, 0.2), "low");
+  assert.equal(confidenceOf(0.01, 6, 40, 2), null);
 });
 
 test("a full month of series stays on the device and finishes quickly", () => {
@@ -725,8 +736,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v19/);
-  assert.match(sentry, /insight-shell-v19/);
+  assert.match(sw, /insight-shell-v23/);
+  assert.match(sentry, /insight-shell-v23/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /SEE_ALL_LIMIT/);
   assert.match(engine, /mergeMirrors/);
@@ -740,4 +751,148 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.doesNotMatch(brief, /capture\([^)]*(readiness|sleep|hrv|sentence|lead)/);
   assert.match(sw, /js\/shared\/correlate\.js/);
   assert.match(sw, /css\/polish\.css/);
+  assert.match(insights, /No pattern is strong enough to trust yet/);
+  assert.match(brief, /Nothing clear yet/);
+  assert.match(engine, /benjaminiHochberg/);
+  assert.match(analyze, /correlationCache/);
+  assert.doesNotMatch(analyze, /posthog|sentry|sendBeacon|fetch\(/i);
+});
+
+test("false-discovery q-values and the autocorrelation adjustment match the formulas", () => {
+  const q = benjaminiHochberg([0.001, 0.04, 0.03, 0.5]);
+  assert.ok(Math.abs(q[0] - 0.004) < 1e-12);
+  assert.ok(Math.abs(q[2] - (0.04 * 4) / 3) < 1e-12);
+  assert.ok(q[1] <= q[2]);
+  assert.equal(q[3], 0.5);
+  assert.deepEqual(benjaminiHochberg([]), []);
+
+  const plain = effectiveN([0, 1, 2, 3, 4, 5, 6, 7], [10, 11, 12, 13, 14, 15, 16, 17], 0);
+  assert.equal(plain.inflation, 1);
+  assert.equal(plain.n1, 8);
+  assert.equal(plain.n2, 8);
+
+  const withDays = [0, 1, 2, 3, 8, 9, 10, 11];
+  const withoutDays = [4, 5, 6, 7, 12, 13, 14, 15];
+  const rho = 0.6;
+  const adjusted = effectiveN(withDays, withoutDays, rho);
+  const pts = withDays.map((t) => ({ t, w: 1 / withDays.length })).concat(withoutDays.map((t) => ({ t, w: -1 / withoutDays.length })));
+  let S = 0;
+  pts.forEach((a) => pts.forEach((b) => {
+    const dt = Math.abs(a.t - b.t);
+    S += a.w * b.w * (dt ? rho ** dt : 1);
+  }));
+  const indep = 1 / withDays.length + 1 / withoutDays.length;
+  const inflation = Math.max(1, S / indep);
+  assert.ok(Math.abs(adjusted.inflation - inflation) < 1e-9);
+  assert.ok(adjusted.n1 < withDays.length);
+  assert.ok(adjusted.n1 > 1);
+});
+
+const NOISE_METRICS = {
+  readiness: [78, 8], sleepScore: [80, 8], sleepHours: [7.2, 0.8], deepHours: [1.4, 0.35],
+  remHours: [1.6, 0.4], lightHours: [4, 0.6], awakeMin: [40, 15], steps: [8000, 2500],
+  hrv: [55, 12], rhr: [58, 4], temp: [0, 0.2], workoutVolume: [8000, 2500],
+  liftPerf: [0, 4], calories: [2400, 400], protein: [150, 30], carbs: [250, 50],
+  fat: [70, 15], cardioMin: [20, 15], weight: [80, 0.4],
+};
+const NOISE_FLAGS = ["workedOut", "didCardio", "lateEating", "proteinOverTarget", "caloriesOverTarget", "carbsOverTarget", "fatOverTarget"];
+
+function noiseDays(n, seed, effect) {
+  const rnd = mulberry32(seed);
+  const days = {};
+  for (let i = 0; i < n; i++) {
+    const row = {};
+    for (const [k, spec] of Object.entries(NOISE_METRICS)) row[k] = spec[0] + gauss(rnd) * spec[1];
+    NOISE_FLAGS.forEach((flag) => { row[flag] = rnd() < 0.45; });
+    if (!row.workedOut) row.workoutVolume = 0;
+    days[dateAt(i, "2026-01-01")] = row;
+  }
+  if (effect) {
+    for (let i = 1; i < n; i++) {
+      const prev = days[dateAt(i - 1, "2026-01-01")];
+      if (prev && prev.workedOut) days[dateAt(i, "2026-01-01")].readiness += effect;
+    }
+  }
+  return days;
+}
+
+test("random days produce almost no findings, and an injected effect is still found", () => {
+  const seeds = 24;
+  let shown = 0;
+  let high = 0;
+  for (let s = 1; s <= seeds; s++) {
+    const days = noiseDays(90, s, 0);
+    const rows = correlate({ days });
+    const view = findingsForView(rows);
+    shown += view.length;
+    high += view.filter((r) => r.confidence === "high").length;
+    const brief = pickForToday(rows, { days }, dateAt(80, "2026-01-01"));
+    if (!view.length) assert.equal(brief, null);
+  }
+  assert.ok(shown / seeds < 0.25, "mean shown " + (shown / seeds));
+  assert.ok(high / seeds < 0.15, "mean high " + (high / seeds));
+
+  let found = 0;
+  for (let s = 1; s <= 12; s++) {
+    const days = noiseDays(90, s, 12);
+    const rows = correlate({ days });
+    const hit = findingsForView(rows).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
+    if (!hit) continue;
+    found++;
+    assert.equal(hit.valence, "good");
+    assert.ok(hit.confidence === "high" || hit.confidence === "medium");
+    assert.ok(hit.q <= 0.05);
+    assert.ok(Math.abs(hit.effect) >= 0.35);
+    const brief = pickForToday(rows, { days }, dateAt(2, "2026-01-01"));
+    assert.ok(brief);
+    assert.ok(brief.confidence === "high" || brief.confidence === "medium");
+    assert.ok(brief.valence === "good" || brief.valence === "bad");
+  }
+  assert.equal(found, 12);
+});
+
+test("the correlation cache reruns only when the underlying data changes", () => {
+  const prevState = app.state;
+  const prevGoals = app.goals;
+  const prevSetCount = app.setCount;
+  try {
+    app.setCount = () => 1;
+    let dir = null;
+    app.goals = () => ({ weightDir: dir });
+    const days = {};
+    for (let i = 0; i < 21; i++) {
+      days[dateAt(i, "2026-02-01")] = { readiness: 70 + (i % 5), sleepScore: 78, hrv: 48, total: 7 * 3600, steps: 6000 };
+    }
+    app.state = {
+      demo: false,
+      sessions: [],
+      oura: { days },
+      food: { days: {} },
+      cardio: { sessions: [] },
+      measurements: {},
+      checkins: null,
+    };
+    const before = app.correlationBuilds();
+    const first = app.correlations();
+    assert.equal(app.correlationBuilds(), before + 1);
+    const second = app.correlations();
+    assert.equal(app.correlationBuilds(), before + 1);
+    assert.equal(second, first);
+    days[dateAt(21, "2026-02-01")] = { readiness: 90, sleepScore: 88, hrv: 60, total: 8 * 3600, steps: 9000 };
+    const third = app.correlations();
+    assert.equal(app.correlationBuilds(), before + 2);
+    assert.notEqual(third, first);
+    days[dateAt(0, "2026-02-01")].readiness = 40;
+    app.correlations();
+    assert.equal(app.correlationBuilds(), before + 3);
+    dir = "gain";
+    app.correlations();
+    assert.equal(app.correlationBuilds(), before + 4);
+    app.correlations();
+    assert.equal(app.correlationBuilds(), before + 4);
+  } finally {
+    app.state = prevState;
+    app.goals = prevGoals;
+    app.setCount = prevSetCount;
+  }
 });

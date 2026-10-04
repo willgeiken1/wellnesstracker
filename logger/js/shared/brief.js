@@ -179,16 +179,28 @@ function weightMetric() {
   return { id: "weight", label: "Weight", value: `${app.signed(r.perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
 }
 
+function patternEmpty() {
+  return {
+    id: "pattern",
+    label: "What affects you",
+    value: "Nothing clear yet",
+    meta: "No strong pattern yet",
+    sub: "When the same thing lines up often enough to trust, it will show up here.",
+    empty: true,
+    link: "affects",
+  };
+}
+
 function patternMetric() {
-  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return null;
+  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return patternEmpty();
   let row = null;
   try {
     const src = app.correlationSource();
     row = pickForToday(app.correlations(), src, app.today());
   } catch (e) { row = null; }
-  if (!row) return null;
+  if (!row) return patternEmpty();
   const line = todayLine(row);
-  if (!line) return null;
+  if (!line) return patternEmpty();
   const good = row.valence === "good";
   return {
     id: "pattern",
@@ -226,11 +238,12 @@ app.briefTodayHeadline = briefTodayHeadline;
 
 function metricHTML(m) {
   if (m.link === "affects") {
-    return `<li class="brief-metric span${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
+    return `<li class="brief-metric span${m.empty ? " empty" : ""}${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">
       <button class="brief-hit" data-action="open-affects">
         <span class="brief-l">${app.esc(m.label)}</span>
         <span class="brief-line">${app.esc(m.value)}</span>
         <span class="brief-m">${app.esc(m.meta || "What affects you")}</span>
+        ${m.empty && m.sub ? `<span class="brief-s">${app.esc(m.sub)}</span>` : ""}
       </button></li>`;
   }
   const bar = m.bar != null ? `<span class="brief-bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, m.bar)).toFixed(1)}%"></i></span>` : "";

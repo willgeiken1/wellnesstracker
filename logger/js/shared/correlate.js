@@ -2,7 +2,13 @@
 
    Pure functions: no network, no DOM, and no analytics. Health values stay in
    memory on the device. Insights still calls effect() for its fixed buckets;
-   that helper now lives here next to the general engine. */
+   that helper now lives here next to the general engine.
+
+   A day of logs is not an independent coin flip, and one user is compared on
+   well over a hundred factor, outcome, and lag pairs. Each comparison uses
+   Welch's t with an effective sample size from the outcome's autocorrelation,
+   then Benjamini-Hochberg q-values across that whole family. Confidence also
+   requires a minimum effect size, so noise does not get a card. */
 
 export const MIN_PER_GROUP = 7;
 export const LATE_HOUR = 21;
@@ -196,6 +202,144 @@ export function welch(a, b) {
   const sp = n1 + n2 > 2 ? Math.sqrt(((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2)) : 0;
   const d = sp === 0 ? (diff === 0 ? 0 : Math.sign(diff) * 5) : diff / sp;
   return { meanWith: m1, meanWithout: m2, diff, t, df, p, d, v1, v2 };
+}
+
+function dayNumber(iso) {
+  return Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000);
+}
+
+/* Lag-1 correlation of consecutive calendar days. The sample coefficient is
+   biased toward -1/n under white noise, so that amount is added back and the
+   result is shrunk toward 0. Only positive dependence is kept: negative
+   dependence would make the test more willing to call a fluke real. */
+function lag1Rho(dated) {
+  let n = 0;
+  let sx = 0;
+  let sy = 0;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (let i = 1; i < dated.length; i++) {
+    if (dated[i].t - dated[i - 1].t !== 1) continue;
+    const x = dated[i - 1].y;
+    const y = dated[i].y;
+    n++;
+    sx += x;
+    sy += y;
+    sxx += x * x;
+    syy += y * y;
+    sxy += x * y;
+  }
+  if (n < 8) return 0;
+  const vx = sxx - (sx * sx) / n;
+  const vy = syy - (sy * sy) / n;
+  if (vx <= 1e-12 || vy <= 1e-12) return 0;
+  const r = (sxy - (sx * sy) / n) / Math.sqrt(vx * vy);
+  if (!Number.isFinite(r)) return 0;
+  const shrunk = (r + 1 / n) * (n / (n + 12));
+  if (!(shrunk > 0)) return 0;
+  return shrunk > 0.8 ? 0.8 : shrunk;
+}
+
+function seriesRho(map) {
+  const dated = [];
+  Object.keys(map).forEach((date) => dated.push({ t: dayNumber(date), y: map[date] }));
+  dated.sort((a, b) => a.t - b.t);
+  return lag1Rho(dated);
+}
+
+/* Variance of the with-minus-without contrast if the outcome is AR(1) with
+   correlation rho^|days apart|. Divided by the independent-days variance, so
+   1 means the usual Welch standard error is already honest. Clamped to at
+   least 1 so dependence never counts as extra evidence. */
+function contrastInflation(withDays, withoutDays, rho) {
+  if (!(rho > 0)) return 1;
+  const n1 = withDays.length;
+  const n2 = withoutDays.length;
+  if (n1 < 2 || n2 < 2) return 1;
+  const pts = new Array(n1 + n2);
+  for (let i = 0; i < n1; i++) pts[i] = { t: withDays[i], w: 1 / n1 };
+  for (let i = 0; i < n2; i++) pts[n1 + i] = { t: withoutDays[i], w: -1 / n2 };
+  pts.sort((a, b) => a.t - b.t || a.w - b.w);
+  let acc = 0;
+  let quad = 0;
+  let ww = 0;
+  let prev = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const dt = i === 0 ? 0 : pts[i].t - prev;
+    const decay = dt > 0 ? rho ** dt : 1;
+    acc = pts[i].w + (i === 0 ? 0 : decay * acc);
+    quad += pts[i].w * acc;
+    ww += pts[i].w * pts[i].w;
+    prev = pts[i].t;
+  }
+  const S = 2 * quad - ww;
+  const indep = 1 / n1 + 1 / n2;
+  if (!(S > 0) || !Number.isFinite(S)) return 1;
+  const inflation = S / indep;
+  if (!Number.isFinite(inflation) || inflation < 1) return 1;
+  return inflation > 40 ? 40 : inflation;
+}
+
+/* Effective days in each arm after the contrast inflation above. */
+export function effectiveN(withDays, withoutDays, rho) {
+  const n1 = withDays.length;
+  const n2 = withoutDays.length;
+  const inflation = contrastInflation(withDays, withoutDays, rho);
+  return {
+    inflation,
+    n1: n1 / inflation,
+    n2: n2 / inflation,
+  };
+}
+
+/* Welch's test with the effective sample size in the standard error and the
+   degrees of freedom. Means, variances, and Cohen's d stay on the raw days:
+   dependence widens the uncertainty, it does not change the gap. */
+export function welchEffective(a, b, n1eff, n2eff) {
+  const base = welch(a, b);
+  if (!(n1eff >= 2) || !(n2eff >= 2)) {
+    return { ...base, t: 0, df: 1, p: 1, n1eff, n2eff };
+  }
+  const v1 = base.v1;
+  const v2 = base.v2;
+  const diff = base.diff;
+  const se2 = v1 / n1eff + v2 / n2eff;
+  let t = 0;
+  let df = n1eff + n2eff - 2;
+  let p = 1;
+  if (se2 === 0) {
+    t = diff === 0 ? 0 : Infinity;
+    p = diff === 0 ? 1 : 0;
+  } else {
+    t = diff / Math.sqrt(se2);
+    const left = (v1 / n1eff) ** 2 / Math.max(n1eff - 1, 1e-9);
+    const right = (v2 / n2eff) ** 2 / Math.max(n2eff - 1, 1e-9);
+    const den = left + right;
+    df = den === 0 ? n1eff + n2eff - 2 : (se2 * se2) / den;
+    p = studentP(t, df);
+  }
+  return { ...base, t, df, p, n1eff, n2eff };
+}
+
+/* Benjamini-Hochberg q-values. q(i) is the smallest FDR at which test i is
+   still rejected, so a later screen can threshold them without a second pass. */
+export function benjaminiHochberg(ps) {
+  const m = ps.length;
+  const q = new Array(m);
+  if (!m) return q;
+  const order = ps.map((p, i) => ({
+    p: Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 1,
+    i,
+  }));
+  order.sort((a, b) => a.p - b.p || a.i - b.i);
+  let running = 1;
+  for (let k = m - 1; k >= 0; k--) {
+    const val = Math.min(1, (order[k].p * m) / (k + 1));
+    if (val < running) running = val;
+    q[order[k].i] = running;
+  }
+  return q;
 }
 
 /* Same bucket averages the Insights screen already shows. */
@@ -704,22 +848,37 @@ function outcomeMap(days, id) {
 function align(values, outcomes, lag) {
   const withVals = [];
   const withoutVals = [];
+  const withDays = [];
+  const withoutDays = [];
   Object.keys(values).forEach((date) => {
     const flag = values[date];
     if (flag !== true && flag !== false) return;
     const when = lag ? addDays(date, lag) : date;
     const y = outcomes[when];
     if (y == null) return;
-    (flag ? withVals : withoutVals).push(y);
+    if (flag) { withVals.push(y); withDays.push(dayNumber(when)); }
+    else { withoutVals.push(y); withoutDays.push(dayNumber(when)); }
   });
-  return { withVals, withoutVals };
+  return { withVals, withoutVals, withDays, withoutDays };
 }
 
-export function confidenceOf(p, n1, n2) {
+/* q is the Benjamini-Hochberg q-value, n1 and n2 are effective days, and d is
+   Cohen's d. High means the finding would survive a 1% false-discovery rate,
+   with at least two weeks of effective days and a medium-or-larger gap.
+   Medium is the 5% rate with a gap that is still large enough to matter.
+   A raw p under 0.05 on its own is not enough. */
+const HIGH_Q = 0.01;
+const MEDIUM_Q = 0.05;
+const HIGH_EFFECT = 0.5;
+const MEDIUM_EFFECT = 0.35;
+const HIGH_N_EFF = 14;
+
+export function confidenceOf(q, n1, n2, d) {
   const n = Math.min(n1, n2);
-  if (n < MIN_PER_GROUP) return null;
-  if (p < 0.05 && n >= 14) return "high";
-  if (p < 0.05 || (p < 0.1 && n >= 10)) return "medium";
+  if (!(n >= MIN_PER_GROUP) || !Number.isFinite(q)) return null;
+  const ad = Number.isFinite(d) ? Math.abs(d) : 0;
+  if (q <= HIGH_Q && n >= HIGH_N_EFF && ad >= HIGH_EFFECT) return "high";
+  if (q <= MEDIUM_Q && ad >= MEDIUM_EFFECT) return "medium";
   return "low";
 }
 
@@ -813,22 +972,21 @@ function evaluate(days, phrases, options, ouraExtra) {
   const weightDir = options.weightDir || null;
   const factors = buildFactors(days, phrases || {});
   const outcomes = numericSeries(days).filter((id) => outcomeAllowed(id, weightDir) && (!options.outcomes || options.outcomes.indexOf(id) !== -1));
-  const results = [];
+  const pending = [];
 
   outcomes.forEach((outcome) => {
     const ys = outcomeMap(days, outcome);
+    const rho = seriesRho(ys);
     factors.forEach((factor) => {
       if (locked(factor.id, factor.source, outcome)) return;
       lags.forEach((lag) => {
         if (suppressedStory(factor, outcome, lag, ouraExtra)) return;
         const groups = align(factor.values, ys, lag);
         if (groups.withVals.length < minN || groups.withoutVals.length < minN) return;
-        const stats = welch(groups.withVals, groups.withoutVals);
-        const confidence = confidenceOf(stats.p, groups.withVals.length, groups.withoutVals.length);
-        if (!confidence) return;
+        const eff = effectiveN(groups.withDays, groups.withoutDays, rho);
+        const stats = welchEffective(groups.withVals, groups.withoutVals, eff.n1, eff.n2);
         const percent = Math.abs(stats.meanWithout) < 1e-9 ? null : (stats.diff / Math.abs(stats.meanWithout)) * 100;
-        const strength = Math.abs(stats.d) * CONFIDENCE_WEIGHT[confidence];
-        const row = {
+        pending.push({
           factor: factor.id,
           source: factor.source,
           kind: factor.kind,
@@ -844,18 +1002,36 @@ function evaluate(days, phrases, options, ouraExtra) {
           nWith: groups.withVals.length,
           nWithout: groups.withoutVals.length,
           n: groups.withVals.length,
+          nEff: Math.min(eff.n1, eff.n2),
+          n1eff: eff.n1,
+          n2eff: eff.n2,
           p: stats.p,
           effect: stats.d,
-          confidence,
-          strength,
           valence: valenceOf(outcome, stats.diff, percent, weightDir),
-        };
-        const said = sentenceFor(row);
-        row.lead = said.lead;
-        row.sentence = said.sentence;
-        results.push(row);
+        });
       });
     });
+  });
+
+  const qs = benjaminiHochberg(pending.map((row) => row.p));
+  const results = [];
+  pending.forEach((row, i) => {
+    row.q = qs[i];
+    /* Effective days can fall under 7 when the series barely moves from one
+       day to the next. That is not enough to be confident, but it is still a
+       computed comparison, so it stays low instead of disappearing. */
+    const confidence = row.nEff >= MIN_PER_GROUP
+      ? confidenceOf(row.q, row.n1eff, row.n2eff, row.effect)
+      : "low";
+    if (!confidence) return;
+    row.confidence = confidence;
+    row.strength = Math.abs(row.effect) * CONFIDENCE_WEIGHT[confidence];
+    const said = sentenceFor(row);
+    row.lead = said.lead;
+    row.sentence = said.sentence;
+    delete row.n1eff;
+    delete row.n2eff;
+    results.push(row);
   });
   return results;
 }
