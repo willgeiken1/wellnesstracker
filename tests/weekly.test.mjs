@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { addDays, correlate, findingsForWeek } from "../logger/js/shared/correlate.js";
+import { app } from "../logger/js/runtime.js";
 import {
   WEEK_HISTORY,
   buildWeek,
+  formatChange,
+  formatValue,
   mergeWeeklyReports,
   mondayOf,
   previousWeek,
@@ -167,6 +170,33 @@ test("findings that applied during the week keep the engine labels, and other we
   assert.equal(mixed[2].outcome, "readiness");
 });
 
+test("sleep, weight, and the other deltas use one rounding style", () => {
+  assert.equal(formatChange(-12 / 60, "hours"), "−12m");
+  assert.equal(formatChange(-1.5, "hours"), "−1h 30m");
+  assert.equal(formatChange(-(65 / 60), "hours"), "−1h 05m");
+  assert.equal(formatChange(-0.1, "hours"), "about the same");
+  assert.equal(formatChange(8, "score"), "+8");
+  assert.equal(formatChange(-3, "score"), "−3");
+  assert.equal(formatChange(0.4, "score"), "about the same");
+  assert.equal(formatChange(-6.4, "hrv"), "−6 ms");
+  assert.equal(formatChange(0.4, "rhr"), "about the same");
+  assert.equal(formatChange(-5, "rhr"), "−5 bpm");
+  assert.equal(formatValue(7 + 13 / 60, "hours"), "7h 13m");
+  assert.equal(formatValue(58, "hrv"), "58<small> ms</small>");
+  assert.equal(formatValue(52, "rhr"), "52<small> bpm</small>");
+  app.wUnit = () => "lb";
+  app.kgToDisp = (kg) => kg * 2.20462;
+  assert.equal(formatChange(1, "weight"), "+2.2 lb");
+  assert.equal(formatChange(0.02, "weight"), "about the same");
+  assert.equal(formatValue(81, "weight"), "178.6<small> lb</small>");
+  assert.equal(formatChange(-22200, "volume"), "−22.2k lb");
+  assert.equal(formatValue(68200, "volume"), "68.2k<small> lb</small>");
+  app.wUnit = () => "kg";
+  app.kgToDisp = (kg) => kg;
+  assert.equal(formatChange(1, "weight"), "+1.0 kg");
+  assert.equal(formatValue(81, "weight"), "81.0<small> kg</small>");
+});
+
 test("dismissed weeks merge without keeping health values", () => {
   const merged = mergeWeeklyReports(
     { dismissed: ["2026-09-14", "nope"], updatedAt: 10 },
@@ -187,8 +217,10 @@ test("the weekly report stays on the device and opens with an empty analytics ev
   const html = readFileSync(new URL("../logger/index.html", import.meta.url), "utf8");
   assert.match(events, /weekly_report_opened:\s*\(\)\s*=>\s*\(\{\}\)/);
   assert.match(actions, /capture\("weekly_report_opened"\)/);
-  assert.match(sw, /insight-shell-v18/);
-  assert.match(sentry, /insight-shell-v18/);
+  assert.match(sw, /insight-shell-v19/);
+  assert.match(sentry, /insight-shell-v19/);
+  assert.match(weekly, /kgToDisp/);
+  assert.match(weekly, /week-lead/);
   assert.match(sw, /js\/shared\/weekly\.js/);
   assert.match(sw, /css\/weekly\.css/);
   assert.match(html, /css\/weekly\.css/);

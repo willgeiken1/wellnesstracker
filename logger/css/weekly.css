@@ -40,6 +40,8 @@
   line-height: 1.2;
   margin: 8px 0 4px;
 }
+.week-h.week-lead { margin: 2px 0 22px; }
+.week-report > .card + .sec-h { margin-top: 10px; }
 .week-range { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
 .week-stats { display: grid; gap: 8px; }
 .week-stats.n1 { grid-template-columns: 1fr; }

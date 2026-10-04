@@ -331,6 +331,8 @@ function rangeLabel(start, end) {
   return `${a} – ${b}`;
 }
 
+const SAME = "about the same";
+
 function fmtHours(h) {
   if (h == null) return "–";
   let hr = Math.floor(h);
@@ -339,28 +341,65 @@ function fmtHours(h) {
   return `${hr}h ${String(m).padStart(2, "0")}m`;
 }
 
-function fmtMean(metric, kind) {
-  if (!metric || metric.mean == null) return "–";
-  if (kind === "hours") return fmtHours(metric.mean);
-  if (kind === "hrv") return `${Math.round(metric.mean)} ms`;
-  if (kind === "weight") return metric.mean.toFixed(1);
-  if (kind === "rhr") return `${Math.round(metric.mean)}`;
-  return String(Math.round(metric.mean));
+function weightUnit() {
+  return typeof app.wUnit === "function" ? app.wUnit() : "kg";
 }
 
-function fmtDelta(delta, kind) {
-  if (delta == null) return "";
-  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+function toWeightDisp(kg) {
+  if (kg == null) return null;
+  return typeof app.kgToDisp === "function" ? app.kgToDisp(kg) : kg;
+}
+
+function changeLimit(kind) {
+  if (kind === "hours") return 0.15;
+  if (kind === "weight") return 0.05;
+  if (kind === "volume") return 1;
+  return 0.5;
+}
+
+function paintChange(delta, kind, unit) {
+  const sign = delta > 0 ? "+" : "−";
   const a = Math.abs(delta);
-  if (kind === "hours") return a < 0.15 ? "about the same" : `${sign}${a.toFixed(1)}h`;
-  if (kind === "weight") return a < 0.05 ? "about the same" : `${sign}${a.toFixed(1)}`;
-  if (kind === "volume") {
-    if (a < 1) return "about the same";
-    if (a >= 10000) return `${sign}${(a / 1000).toFixed(1)}k`;
-    return `${sign}${Math.round(a).toLocaleString("en-US")}`;
+  if (kind === "hours") {
+    const total = Math.round(a * 60);
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    if (!h) return `${sign}${m}m`;
+    if (!m) return `${sign}${h}h`;
+    return `${sign}${h}h ${String(m).padStart(2, "0")}m`;
   }
-  if (a < 0.5) return "about the same";
+  if (kind === "weight") return `${sign}${a.toFixed(1)}${unit ? ` ${unit}` : ""}`;
+  if (kind === "volume") {
+    const n = a >= 10000 ? `${(a / 1000).toFixed(1)}k` : Math.round(a).toLocaleString("en-US");
+    return `${sign}${n}${unit ? ` ${unit}` : ""}`;
+  }
+  if (kind === "hrv") return `${sign}${Math.round(a)} ms`;
+  if (kind === "rhr") return `${sign}${Math.round(a)} bpm`;
   return `${sign}${Math.round(a)}`;
+}
+
+/* Stored units stay in the week model. Weight is kilograms until it is shown. */
+export function formatChange(delta, kind) {
+  if (delta == null || !Number.isFinite(delta)) return "";
+  if (Math.abs(delta) < changeLimit(kind)) return SAME;
+  if (kind === "weight") return paintChange(toWeightDisp(delta), kind, weightUnit());
+  if (kind === "volume") return paintChange(delta, kind, weightUnit());
+  return paintChange(delta, kind);
+}
+
+export function formatValue(mean, kind) {
+  if (mean == null || !Number.isFinite(mean)) return "–";
+  if (kind === "hours") return fmtHours(mean);
+  if (kind === "hrv") return `${Math.round(mean)}<small> ms</small>`;
+  if (kind === "rhr") return `${Math.round(mean)}<small> bpm</small>`;
+  if (kind === "weight") return `${toWeightDisp(mean).toFixed(1)}<small> ${weightUnit()}</small>`;
+  if (kind === "volume") return `${volumeText(mean)}<small> ${weightUnit()}</small>`;
+  return String(Math.round(mean));
+}
+
+function fmtMean(metric, kind) {
+  if (!metric) return "–";
+  return formatValue(metric.mean, kind);
 }
 
 export function trendTone(delta, better, kind) {
@@ -378,13 +417,19 @@ function tone(metric, kind) {
   return trendTone(metric.delta, metric.better, kind);
 }
 
+function vsWeek(delta, kind) {
+  const shown = formatChange(delta, kind);
+  if (!shown || shown === SAME) return "About the same as last week";
+  return `${shown} vs last week`;
+}
+
 function deltaLine(metric, kind) {
   if (!metric || metric.n === 0) return "Not logged";
   const cover = metric.of && metric.n < metric.of ? `${metric.n} of ${metric.of} days` : "";
   if (metric.delta == null) return cover || "Logged";
-  const shown = fmtDelta(metric.delta, kind);
   const tail = cover ? " · " + cover : "";
-  if (shown === "about the same") return `About the same as last week${tail}`;
+  const shown = formatChange(metric.delta, kind);
+  if (!shown || shown === SAME) return `About the same as last week${tail}`;
   return `${shown} vs last week${tail}`;
 }
 
@@ -482,18 +527,19 @@ function weekReportHTML(start) {
   const head = app.pageHead("Your week", rangeLabel(report.start, report.end), { left: back });
   if (report.empty) return head + (app.demoBanner ? app.demoBanner() : "") + emptyCopy();
   const weight = report.weight ? metricRow("Weight", report.weight, "weight") : "";
-  const trainDelta = report.workouts.prior ? `${fmtDelta(report.workouts.n - report.workouts.prior, "score")} vs last week` : (report.workouts.n ? "First week with a workout" : "No workouts");
-  const volChange = fmtDelta(report.workouts.volume - report.workouts.priorVolume, "volume");
-  const volDelta = report.workouts.priorVolume
-    ? (volChange === "about the same" ? "About the same as last week" : `${volChange} vs last week`)
-    : "";
+  const trainDelta = report.workouts.prior ? vsWeek(report.workouts.n - report.workouts.prior, "score") : (report.workouts.n ? "First week with a workout" : "No workouts");
+  const volDelta = report.workouts.priorVolume ? vsWeek(report.workouts.volume - report.workouts.priorVolume, "volume") : "Working sets";
+  const kcalText = report.food.kcal == null ? "" : Math.round(report.food.kcal).toLocaleString("en-US");
+  const kcalLine = report.food.targetKcal
+    ? `Avg ${kcalText} cal · target ${Math.round(report.food.targetKcal).toLocaleString("en-US")}`
+    : `Avg ${kcalText} cal · no target saved`;
   const food = report.food.days ? `<div class="wk-row">
       <div class="wk-row-t"><span>Food logged</span><b>${report.food.days} of 7 days</b>
-        <em class="tone-flat">${report.food.targetKcal ? `Avg ${Math.round(report.food.kcal).toLocaleString("en-US")} cal` : `Avg ${Math.round(report.food.kcal).toLocaleString("en-US")} cal · no target saved`}</em></div>
+        <em class="tone-flat">${kcalLine}</em></div>
       ${report.food.targetKcal ? `<div class="wk-track"><i style="width:${Math.min(100, report.food.kcal / report.food.targetKcal * 100)}%"></i></div>` : ""}
     </div>
     <div class="wk-row">
-      <div class="wk-row-t"><span>Protein</span><b>${Math.round(report.food.protein)} g</b>
+      <div class="wk-row-t"><span>Protein</span><b>${Math.round(report.food.protein)}<small> g</small></b>
         <em class="tone-flat">${report.food.targetProtein ? `Target ${Math.round(report.food.targetProtein)} g` : "Daily average"}</em></div>
       ${report.food.targetProtein ? `<div class="wk-track"><i style="width:${Math.min(100, report.food.protein / report.food.targetProtein * 100)}%"></i></div>` : ""}
     </div>` : `<div class="wk-row missing"><div class="wk-row-t"><span>Food</span><b>–</b><em class="tone-flat">No meals logged</em></div></div>`;
@@ -501,24 +547,26 @@ function weekReportHTML(start) {
   const lift = report.standout.pr;
   const stand = ready || lift ? `<div class="sec-h"><h3>Standout days</h3></div><div class="card wk-stand">
       ${ready ? `<p><b>Best readiness</b> ${Math.round(ready.value)} on ${app.fmtDate(ready.date, { weekday: "long" })}</p>` : ""}
-      ${lift ? `<p><b>${lift.kind === "pr" ? "Personal record" : "Best lift"}</b> ${app.esc(lift.name)}, ${app.fmtNum(lift.w)} × ${lift.r} on ${app.fmtDate(lift.date, { weekday: "long" })}</p>` : ""}
+      ${lift ? `<p><b>${lift.kind === "pr" ? "Personal record" : "Best lift"}</b> ${app.esc(lift.name)}, ${app.fmtNum(lift.w)} ${weightUnit()} × ${lift.r} on ${app.fmtDate(lift.date, { weekday: "long" })}</p>` : ""}
     </div>` : "";
   const patterns = report.findings && report.findings.length
     ? `<div class="sec-h"><h3>What showed up</h3></div>${report.findings.map(findingCard).join("")}<p class="sub wk-note">These line up what tended to happen that week. They are correlations, not causes.</p>`
     : `<div class="sec-h"><h3>What showed up</h3></div><div class="card wk-empty"><p class="sub">No strong pattern lined up with the days in this week.</p></div>`;
   return `${head}${app.demoBanner ? app.demoBanner() : ""}
-    <h2 class="week-h">${app.esc(report.headline)}</h2>
+    <div class="week-report">
+    <h2 class="week-h week-lead">${app.esc(report.headline)}</h2>
     <div class="sec-h"><h3>Recovery</h3></div>
     <div class="card wk-block">${ROWS.map(([key, label, kind]) => metricRow(label, report.metrics[key], kind)).join("")}${weight}</div>
     <div class="sec-h"><h3>Training</h3></div>
     <div class="card wk-block">
       <div class="wk-row"><div class="wk-row-t"><span>Workouts</span><b>${report.workouts.n}</b><em class="tone-flat">${trainDelta}</em></div>${weekBars(report.workouts.series)}</div>
-      <div class="wk-row"><div class="wk-row-t"><span>Volume</span><b>${volumeText(report.workouts.volume)}${app.wUnit ? ` <small>${app.wUnit()}</small>` : ""}</b><em class="tone-flat">${volDelta || "Working sets"}</em></div></div>
+      <div class="wk-row"><div class="wk-row-t"><span>Volume</span><b>${formatValue(report.workouts.volume, "volume")}</b><em class="tone-flat">${volDelta}</em></div></div>
     </div>
     <div class="sec-h"><h3>Food</h3></div>
     <div class="card wk-block">${food}</div>
     ${stand}
-    ${patterns}`;
+    ${patterns}
+    </div>`;
 }
 app.weekReportHTML = weekReportHTML;
 
