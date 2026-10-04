@@ -19,6 +19,13 @@ function renderWorkout() {
 }
 app.renderWorkout = renderWorkout;
 
+function machineChipHTML(name) {
+  const note = app.machineNote(name);
+  const safe = app.esc(name);
+  if (note) return `<button class="ms-chip" data-action="ms-edit" data-name="${safe}" aria-label="Machine settings: ${app.esc(note)}">${app.GEAR_SVG}<span>${app.esc(note)}</span></button>`;
+  return `<button class="ms-add" data-action="ms-edit" data-name="${safe}">${app.GEAR_SVG}<span>Machine settings</span></button>`;
+}
+
 function exerciseHTML(s, e, i) {
   const done = app.setsFor(s, e.name);
   const prev = app.lastSets(e.name, s.id);
@@ -28,13 +35,14 @@ function exerciseHTML(s, e, i) {
       <span class="ex-name">${app.esc(e.name)}</span>
       <span class="ex-count${done.length ? " has" : ""}">${done.filter(app.isWork).length || (done.length ? "W" : "")}</span>
       <span class="ex-last">${e.original ? `Swapped in for ${app.esc(e.original)} · ` : ""}${app.esc(prev ? "Last: " + prev.filter((x) => x.tag !== "warmup").map(app.fmtSet).join(", ") : "No previous sets")}</span>
-    </button>`;
+    </button>
+    <div class="ex-ms">${machineChipHTML(e.name)}</div>`;
   if (open) {
     const d = app.draftFor(s, e.name);
     const worked = done.filter(app.isWork).length;
     const sg = worked ? null : app.suggestion(e.name, s.id);
     let wi = 0;
-    html += `<div class="panel"><div class="panel-top">${app.machineNote(e.name) ? `<button class="ms-chip" data-action="ms-edit" data-name="${app.esc(e.name)}" aria-label="Machine settings: ${app.esc(app.machineNote(e.name))}">${app.GEAR_SVG}<span>${app.esc(app.machineNote(e.name))}</span></button>` : `<button class="ms-add" data-action="ms-edit" data-name="${app.esc(e.name)}">${app.GEAR_SVG}<span>Machine settings</span></button>`}<button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
+    html += `<div class="panel"><div class="panel-top"><button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
       ${sg ? app.suggestionHTML(sg, i) : (worked ? "" : app.readinessQuietHTML())}
       ${done.length ? `<ol class="sets">${done.map((x, j) => {
         const badges = `${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}${x.rpe ? `<span class="badge rpe">RPE ${x.rpe}</span>` : ""}`;

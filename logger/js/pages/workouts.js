@@ -7,7 +7,7 @@ app.GEAR_SVG = GEAR_SVG;
 
 function workoutsHTML() {
   const seg = `<div class="seg2" role="tablist"><button data-action="wseg" data-seg="routines" aria-pressed="${app.ui.wseg === "routines"}">Routines</button>
-    <button data-action="wseg" data-seg="history" aria-pressed="${app.ui.wseg === "history"}">History</button><button class="icon-btn gear-btn" data-action="ms-list" aria-label="Machine settings">${app.GEAR_SVG}</button></div>`;
+    <button data-action="wseg" data-seg="history" aria-pressed="${app.ui.wseg === "history"}">History</button></div>`;
   const plus = `<button class="plus-btn" data-action="new-workout" aria-label="New workout">${app.PLUS_SVG}</button>`;
   if (app.ui.wseg === "history") return app.pageHead("Workouts", "", { below: plus }) + seg + app.historyHTML(true);
   if (app.ui.edit === "routines") return `${app.pageHead("Workouts", "Drag to reorder · × to delete", { below: plus })}${seg}${app.routinesEditHTML()}`;

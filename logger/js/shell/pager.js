@@ -149,6 +149,7 @@ window.scrollBy = function (x, y) {
 app.render = function () {
   if (app.needsLock && app.needsLock()) {
     document.body.classList.add("locked");
+    if (app.mountDonePill) app.mountDonePill();
     if (app.renderLock) app.renderLock(false);
     return;
   }
@@ -170,9 +171,9 @@ app.render = function () {
     const top = host.scrollTop;
     host.innerHTML = htmlFor(tab);
     if (app.ui.edit && app.ui.edit !== app.editPage()) app.ui.edit = null;
-    if (app.ui.edit) host.insertAdjacentHTML("beforeend", app.doneButtonHTML());
     host.scrollTop = top;
   }
+  if (app.mountDonePill) app.mountDonePill();
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.dataset.pane === tab));
 
   const to = app.TAB_ORDER.indexOf(tab);

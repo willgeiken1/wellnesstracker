@@ -13,7 +13,7 @@ function render() {
   else if (app.ui.tab === "progress") v.innerHTML = app.PH.ready ? app.photosHTML() : `<div class="page-head"><div><h1 class="page-title">Progress</h1><div class="page-sub">Loading…</div></div></div>`;
   else v.innerHTML = app.settingsHTML();
   if (app.ui.edit && app.ui.edit !== app.editPage()) app.ui.edit = null;
-  if (app.ui.edit) v.insertAdjacentHTML("beforeend", app.doneButtonHTML());
+  if (app.mountDonePill) app.mountDonePill();
   app.syncBubble(true);
   app.renderWorkout();
   app.renderCardioLive();
