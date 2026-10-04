@@ -208,7 +208,7 @@ function foodAddSheetHTML() {
   const label = app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1];
   const opt = (a, icon, t, s) => `<button class="fopt" data-action="${a}"><span class="fopt-i">${icon}</span><span><b>${t}</b><span>${s}</span></span>${app.I.chevR}</button>`;
   return `<h3>Add to ${label}</h3>
-    ${opt("food-photo", "📷", "Snap your plate", "AI estimates each food and its macros")}
+    ${opt("food-photo", "📷", "Snap your plate", "AI estimates each food. 10 photos a day")}
     ${opt("food-barcode", "▥", "Scan a barcode", "Packaged foods, from Open Food Facts")}
     ${opt("food-saved", "★", "Saved and recent", "Re-log your usual meals in one tap")}
     ${opt("food-manual", "✎", "Enter manually", "Type the calories and macros")}`;
@@ -221,7 +221,7 @@ function foodPhotoSheetHTML() {
     <label class="field-label" for="food-hint">Anything the camera can't see? (optional)</label>
     <input class="text-in" id="food-hint" autocomplete="off" placeholder="Cooked in butter, 2 scoops of rice" value="${app.esc(app.ui.sd.hint || "")}">
     <button class="btn primary block" data-action="food-photo-go">Take or choose a photo</button>
-    <p class="sub small">Uses about a penny of AI credit per photo. The photo isn't kept.</p>`;
+    <p class="sub small">10 food photos a day. The count resets at midnight on this phone. The photo isn't kept.</p>`;
 }
 app.foodPhotoSheetHTML = foodPhotoSheetHTML;
 
@@ -251,6 +251,7 @@ function foodReviewSheetHTML() {
   return `<h3>Review your meal</h3>
     <div class="seg2 meal-seg">${app.MEALS.map(([k, l]) => `<button data-action="review-meal" data-m="${k}" aria-pressed="${app.ui.sd.meal === k}">${l}</button>`).join("")}</div>
     ${app.ui.sd.notes ? `<p class="sub" style="margin:-6px 0 12px">${app.esc(app.ui.sd.notes)}</p>` : ""}
+    ${typeof app.ui.sd.photosLeft === "number" ? `<p class="sub small">${app.ui.sd.photosLeft === 0 ? "No food photos left today." : `${app.pl(app.ui.sd.photosLeft, "food photo")} left today.`}</p>` : ""}
     ${items.length ? items.map(app.itemRow).join("") : `<p class="sub">No foods found. Add one below or try another photo.</p>`}
     <button class="link-btn" data-action="fi-add">Add a food</button>
     ${app.ui.sd.image ? `<details class="reanalyze"${app.ui.sd.hint ? " open" : ""}><summary>Something off? Add a note and re-analyze</summary>
@@ -356,13 +357,23 @@ function compressForAI(file) {
 }
 app.compressForAI = compressForAI;
 
+function aiClock() {
+  let timeZone = "UTC";
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone) timeZone = zone;
+  } catch (e) { /* UTC is only a fallback; the server still checks the date */ }
+  return { localDate: app.today(), timeZone };
+}
+app.aiClock = aiClock;
+
 async function analyzeFoodPhoto(file, reuse) {
   app.ui.sheet = "food-review"; app.ui.sd = { meal: app.autoMeal(), ...app.ui.sd, loading: true, error: null, items: [] }; app.renderSheet();
   try {
     if (!app.sb || !app.session) throw new Error("Sign in (Settings → Account) to use food photos.");
     const image = reuse || await app.compressForAI(file);
     app.ui.sd.image = image;
-    const { data, error } = await app.sb.functions.invoke("food-photo", { body: { image, hint: app.ui.sd.hint || "" } });
+    const { data, error } = await app.sb.functions.invoke("food-photo", { body: { image, hint: app.ui.sd.hint || "", ...app.aiClock() } });
     if (error) {
       let msg = "Couldn't reach the food analysis service. Check your connection and try again.";
       try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
@@ -370,6 +381,7 @@ async function analyzeFoodPhoto(file, reuse) {
     }
     app.ui.sd.items = (data.items || []).map((it) => ({ name: it.name, portion: it.portion, mult: 1, base: { kcal: it.calories, p: it.protein, c: it.carbs, f: it.fat } }));
     app.ui.sd.notes = data.notes || "";
+    app.ui.sd.photosLeft = typeof data.remaining === "number" ? data.remaining : null;
     app.ui.sd.loading = false;
   } catch (e) { app.ui.sd.loading = false; app.ui.sd.error = e.message || String(e); }
   if (app.ui.sheet === "food-review") app.renderSheet();

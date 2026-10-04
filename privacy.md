@@ -18,7 +18,7 @@ Insight is a personal fitness app built and run by an individual developer as a 
 
 **Oura Ring data.** Only if you connect your ring. Insight reads your sleep, readiness, heart rate variability, resting heart rate, body temperature, and step data. The login tokens that let Insight fetch this are kept in a private table that the app itself cannot read; only Insight's server functions can use them.
 
-**Usage counts.** A count of how many AI food estimates you request per day, used to enforce a daily limit.
+**Usage counts.** How many food photos (10 a day) and written meal descriptions (20 a day) you send for an estimate. Each count resets at midnight in your time zone.
 
 ## Who else handles your information
 
