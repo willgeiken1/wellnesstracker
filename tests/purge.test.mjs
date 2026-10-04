@@ -1024,7 +1024,37 @@ test("an older future delete does not raise a cutoff that already has a newer ra
   assert.equal(merged.weighIns.find((w) => w.date === date).kg, 71);
 });
 
-test("a vouched future weigh-in does not skip a purge cutoff", () => {
+test("a stored cutoff that matches a re-add marker keeps its raw", () => {
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  const date = "2026-10-04";
+  const at = now - 5_000;
+  const raw = now + 86_400_000;
+  const stored = {
+    weighIns: [{ date, kg: 80, at }],
+    wDel: [date],
+    wDelAt: { [date]: at - 1 },
+    wDelAtRaw: { [date]: raw },
+    updatedAt: now,
+  };
+  const plainFuture = {
+    weighIns: [],
+    wDel: [date],
+    wDelAt: { [date]: raw },
+    updatedAt: raw,
+  };
+  const merged = mergeWeighIns(stored, plainFuture, [], now);
+  assert.equal(merged.wDelAt[date], at - 1);
+  assert.equal(merged.wDelAtRaw[date], raw);
+  assert.equal(merged.weighIns.find((w) => w.date === date).kg, 80);
+
+  const data = { profile: structuredClone(stored) };
+  stripRange(data, "2026-10-01", "2026-10-06", { before: at - 2, now, quiet: true });
+  assert.equal(data.profile.wDelAt[date], at - 1);
+  assert.equal(data.profile.wDelAtRaw[date], raw);
+  assert.equal(data.profile.weighIns.find((w) => w.date === date).kg, 80);
+});
+
+test("a weigh-in ahead of this clock does not skip a purge cutoff", () => {
   const now = Date.parse("2026-10-04T16:00:00Z");
   const F = now + 86_400_000;
   const date = "2026-10-05";
@@ -1118,6 +1148,14 @@ test("client and server strip the same weigh-in tombs", () => {
         wDelAt: { "2026-10-05": F - 1 },
       },
     },
+    markerShapedRaw: {
+      profile: {
+        weighIns: [{ date: "2026-10-04", kg: 80, at: now }],
+        wDel: ["2026-10-04"],
+        wDelAt: { "2026-10-04": now - 1 },
+        wDelAtRaw: { "2026-10-04": F },
+      },
+    },
     oldRowNoRaw: {
       profile: {
         weighIns: [{ date: "2026-10-03", kg: 60, at: now - 86_400_000 }],
@@ -1171,6 +1209,9 @@ test("client and server strip the same weigh-in tombs", () => {
   assert.equal(client.rawStored.wDelAtRaw["2026-10-04"], F);
   assert.equal(client.readdMarkerFuture.weigh.length, 0);
   assert.equal(client.readdMarkerFuture.wDelAtRaw["2026-10-05"], undefined);
+  assert.equal(client.markerShapedRaw.weigh.length, 1);
+  assert.equal(client.markerShapedRaw.wDelAt["2026-10-04"], now - 1);
+  assert.equal(client.markerShapedRaw.wDelAtRaw["2026-10-04"], F);
   assert.equal(client.oldRowNoRaw.weigh.length, 0);
   assert.equal(client.oldRowNoRaw.wDelAtRaw["2026-10-03"], undefined);
   assert.equal(client.oldRowNoRaw.wDelAt["2026-10-03"], now - 1000);

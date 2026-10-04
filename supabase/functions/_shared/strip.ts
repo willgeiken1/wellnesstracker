@@ -88,6 +88,9 @@ function observeTomb(profile: Bag | null, d: string, now: number) {
   if (!profile) return null;
   const stamp = timeMs(profile.wDelAt && profile.wDelAt[d]);
   const raw = timeMs(profile.wDelAtRaw && profile.wDelAtRaw[d]);
+  /* A stored cutoff below its raw can equal the weigh-in's at - 1. That is
+     also the re-add marker shape. Keep the raw. */
+  if (stamp != null && raw != null && stamp < raw && !aheadOf(stamp, now)) return { stamp, raw, fresh: false };
   if (stamp != null && readdMarkerStamp(profile, d, stamp)) {
     if (aheadOf(stamp, now)) return null;
     return { stamp, raw: null as number | null, fresh: false };
