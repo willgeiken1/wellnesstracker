@@ -68,11 +68,11 @@
 .m-breakfast { background: var(--pink); } .m-lunch { background: var(--green); } .m-dinner { background: var(--lav); } .m-snacks { background: var(--c4); }
 .meal-card .meal-h { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-bottom: 4px; }
 .meal-card h4 { font-family: var(--display); font-weight: 600; font-size: 19px; margin: 0; color: var(--ink); }
-.mc-kcal { font-size: 13px; font-weight: 700; color: rgba(20,20,20,.6); }
+.mc-kcal { font-size: 13px; font-weight: 700; color: var(--on-pastel); }
 .mc-add { width: 38px; height: 38px; border-radius: 19px; background: rgba(255,255,255,.6); color: var(--ink); font-size: 24px; font-weight: 500; line-height: 1; }
 .meal-card .fe { border-top: 1px solid rgba(20,20,20,.12); color: var(--ink); }
-.meal-card .fe-m, .meal-card .fe-n em { color: rgba(20,20,20,.6); }
-.mc-empty { margin: 4px 0 8px; font-size: 14px; color: rgba(20,20,20,.5); }
+.meal-card .fe-m, .meal-card .fe-n em { color: var(--on-pastel); }
+.mc-empty { margin: 4px 0 8px; font-size: 14px; color: var(--on-pastel); }
 #food-swipe.slide-l { animation: slideL .22s ease-out; } #food-swipe.slide-r { animation: slideR .22s ease-out; }
 @keyframes slideL { from { transform: translateX(40px); opacity: .3; } to { transform: none; opacity: 1; } }
 @keyframes slideR { from { transform: translateX(-40px); opacity: .3; } to { transform: none; opacity: 1; } }

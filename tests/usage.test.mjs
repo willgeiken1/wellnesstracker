@@ -123,7 +123,7 @@ test("before_send drops autocapture and strips identity traits and query strings
   assert.equal(JSON.stringify(identify).includes("ada@example.com"), false);
 });
 
-test("the shell caches the usage modules with the v20 release", () => {
+test("the shell caches the usage modules with the v24 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
   assert.match(sw, /insight-shell-v24/);

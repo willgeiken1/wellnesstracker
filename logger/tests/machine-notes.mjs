@@ -52,10 +52,19 @@ async function boot(browser, state) {
 
 async function hold(page, selector) {
   const el = page.locator(selector).first();
-  const box = await el.boundingBox();
+  await el.waitFor({ state: "visible" });
+  let box = await el.boundingBox();
+  for (let i = 0; i < 10; i++) {
+    await page.waitForTimeout(50);
+    const next = await el.boundingBox();
+    const settled = next && box && Math.abs(next.x - box.x) < 0.5 && Math.abs(next.y - box.y) < 0.5;
+    box = next;
+    if (settled) break;
+  }
   await page.mouse.move(box.x + Math.min(24, box.width / 2), box.y + Math.min(30, box.height / 2));
+  await page.waitForTimeout(40);
   await page.mouse.down();
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(800);
   await page.mouse.up();
   await page.waitForTimeout(250);
 }
@@ -327,8 +336,18 @@ async function main() {
 
   const resting = await pillBox(p);
   await p.evaluate(() => {
-    document.body.classList.add("timer-on");
-    document.getElementById("timer").hidden = false;
+    const w = app.state.workouts[0];
+    app.state.sessions.push({
+      id: "rest-test",
+      date: app.today(),
+      workoutId: w.id,
+      name: w.name,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      entries: [],
+    });
+    app.startTimer();
+    app.tick();
   });
   const lifted = await pillBox(p);
   const timer = await p.locator("#timer").boundingBox();
@@ -348,8 +367,9 @@ async function main() {
   const start = await p.locator(".start-bar").boundingBox();
   check("pill stays above the start bar", aboveStart && start && aboveStart.y + aboveStart.height <= start.y + 1, JSON.stringify({ aboveStart, start }));
   await p.evaluate(() => {
-    document.body.classList.remove("timer-on");
-    document.getElementById("timer").hidden = true;
+    app.stopTimer();
+    app.state.sessions = app.state.sessions.filter((s) => s.id !== "rest-test");
+    app.tick();
     document.querySelector(".start-bar").remove();
   });
 
@@ -377,7 +397,7 @@ async function main() {
   await assertPinned("recovery");
 
   await p.evaluate(() => { app.ui.edit = null; app.ui.tab = "workouts"; app.ui.detail = null; app.ui.wseg = "routines"; app.render(); });
-  await p.waitForTimeout(200);
+  await p.waitForFunction(() => !app.motion.animating && !app.motion.dragging);
   await hold(p, "#pane-workouts .wcard");
   check("routines edit mode", await p.evaluate(() => app.ui.edit) === "routines");
   await assertPinned("routines");
