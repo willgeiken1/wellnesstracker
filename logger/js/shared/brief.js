@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, loggedDays, pickForToday, todayLine } from "./correlate.js";
+import { DAYS_FOR_A_PATTERN, findingsForView, loggedDays, pickForToday, todayLine } from "./correlate.js";
 import { hasOura, ouraWidgetShowing } from "./oura-gate.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
@@ -179,12 +179,13 @@ function weightMetric() {
   return { id: "weight", label: "Weight", value: `${app.signed(r.perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
 }
 
-function patternEmpty(days) {
+function patternEmpty(days, rows) {
   const n = days || 0;
+  const seeInsights = findingsForView(rows || []).length > 0;
   return {
     id: "pattern",
     label: "What affects you",
-    value: n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet",
+    value: seeInsights ? "See Insights" : (n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet"),
     empty: true,
     link: "affects",
   };
@@ -194,14 +195,16 @@ function patternMetric() {
   if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return patternEmpty(0);
   let row = null;
   let days = 0;
+  let rows = [];
   try {
     const src = app.correlationSource();
     days = loggedDays(src);
-    row = pickForToday(app.correlations(), src, app.today());
+    rows = app.correlations();
+    row = pickForToday(rows, src, app.today());
   } catch (e) { row = null; }
-  if (!row) return patternEmpty(days);
+  if (!row) return patternEmpty(days, rows);
   const line = todayLine(row);
-  if (!line) return patternEmpty(days);
+  if (!line) return patternEmpty(days, rows);
   const good = row.valence === "good";
   return {
     id: "pattern",

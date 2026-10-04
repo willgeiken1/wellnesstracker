@@ -131,8 +131,8 @@ test("a planted next-day effect is found and worded in plain language", () => {
   assert.ok(Math.abs(hit.percent - 6) < 0.3);
   assert.equal(hit.confidence, "high");
   assert.equal(hit.valence, "good");
-  assert.equal(hit.lead, "On days after you work out, your readiness is 6% higher.");
-  assert.equal(hit.sentence, "On days after you work out, your readiness is 6% higher (high confidence, 24 days).");
+  assert.equal(hit.lead, "On days after you work out, your readiness is 6.1% higher.");
+  assert.equal(hit.sentence, "On days after you work out, your readiness is 6.1% higher (high confidence, 24 days).");
   assert.doesNotMatch(hit.sentence, /which is a good sign|which is working against you/);
 
   const sameDay = correlate({ days }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 0);
@@ -155,7 +155,7 @@ test("lag 0 and lag 1 do not borrow each other's effect", () => {
   });
   const down = correlate({ days: lower }).find((r) => r.factor === "workedOut" && r.outcome === "readiness" && r.lag === 1);
   assert.equal(down.valence, "bad");
-  assert.equal(down.sentence, "On days after you work out, your readiness is 6% lower (high confidence, 24 days).");
+  assert.equal(down.sentence, "On days after you work out, your readiness is 6.1% lower (high confidence, 24 days).");
   assert.doesNotMatch(down.sentence, /working against you/);
 });
 
@@ -212,7 +212,9 @@ test("missing outcomes and missing factors are skipped, not treated as zero", ()
   assert.ok(kept);
   assert.ok(kept.nWith <= 10);
   assert.ok(kept.nWithout <= 10);
-  assert.ok(kept.meanWith > kept.meanWithout + 4);
+  assert.ok(kept.nWith + kept.nWithout <= 20);
+  // The raw step is 8 versus 2. A 29-day window on 30 days removes most of that level change.
+  assert.ok(kept.meanWith > kept.meanWithout);
 
   const blank = fill(20, () => ({ workedOut: true }));
   assert.equal(correlate({ days: blank }).length, 0);
@@ -498,7 +500,7 @@ test("a finding is marked good, bad, or neutral from the outcome", () => {
 
   const strong = fill(20, (i) => ({ sleptWell: i % 2 === 0, liftPerf: i % 2 === 0 ? 4.82 : 0 }));
   const lift = correlate({ days: strong, phrases: { sleptWell: "you sleep well" } }).find((r) => r.factor === "sleptWell" && r.outcome === "liftPerf" && r.lag === 0);
-  assert.equal(lift.lead, "On days you sleep well, your strength is 4.7 points higher.");
+  assert.equal(lift.lead, "On days you sleep well, your strength is 4.9 points higher.");
   assert.equal(correlate({ days: strong, phrases: { sleptWell: "you sleep well" } }).some((r) => r.factor === "workedOut"), false);
 });
 
@@ -564,11 +566,11 @@ test("sleep wording stays natural, and the brief uses yesterday when it fits", (
   assert.equal(picked.outcome, "readiness");
   assert.equal(picked.lag, 1);
   assert.equal(picked.because, "yesterday");
-  assert.equal(todayLine(picked), "You worked out yesterday; on days like this your readiness tends to be 6% higher.");
+  assert.equal(todayLine(picked), "You worked out yesterday; on days like this your readiness tends to be 6.1% higher.");
 
   const quiet = pickForToday(rows, { days }, dateAt(4));
   assert.equal(quiet.because, "overall");
-  assert.match(todayLine(quiet), /^On days after you work out, your readiness is 6% higher/);
+  assert.match(todayLine(quiet), /^On days after you work out, your readiness is 6\.1% higher/);
 
   const late = fill(40, (i) => ({
     lateEating: i % 2 === 0,
@@ -757,9 +759,18 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.doesNotMatch(brief, /app\.affectsEmpty\(/);
   assert.doesNotMatch(brief, /No pattern is strong enough to trust yet/);
   assert.match(brief, /Nothing clear yet/);
+  assert.match(brief, /See Insights/);
   assert.match(brief, /brief-l">Patterns</);
-  assert.match(brief, /DAYS_FOR_A_PATTERN, loggedDays, pickForToday, todayLine/);
-  assert.match(brief, /hasOura, ouraWidgetShowing/);
+  const correlateImport = brief.match(/import\s*\{([^}]+)\}\s*from\s*"\.\/correlate\.js"/);
+  assert.ok(correlateImport, "brief imports from correlate.js");
+  for (const name of ["DAYS_FOR_A_PATTERN", "loggedDays", "pickForToday", "todayLine", "findingsForView"]) {
+    assert.match(correlateImport[1], new RegExp("\\b" + name + "\\b"));
+  }
+  const gateImport = brief.match(/import\s*\{([^}]+)\}\s*from\s*"\.\/oura-gate\.js"/);
+  assert.ok(gateImport, "brief imports from oura-gate.js");
+  for (const name of ["hasOura", "ouraWidgetShowing"]) {
+    assert.match(gateImport[1], new RegExp("\\b" + name + "\\b"));
+  }
   assert.match(brief, /m\.link === "affects" && m\.empty/);
   assert.doesNotMatch(brief, /No strong pattern yet/);
   assert.doesNotMatch(brief, /m\.empty && m\.sub/);
@@ -771,7 +782,7 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /correlationRev/);
   assert.match(analyze, /correlationCache\.state === app\.state/);
   assert.match(analyze, /must also bump/);
-  assert.match(engine, /r\.confidence === "high"/);
+  assert.match(engine, /r\.confidence === "high" && r\.q <= 0\.001/);
   assert.doesNotMatch(analyze, /hashAny/);
   const state = readFileSync(new URL("../logger/js/data/state.js", import.meta.url), "utf8");
   const cloud = readFileSync(new URL("../logger/js/shared/cloud.js", import.meta.url), "utf8");
@@ -779,7 +790,10 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(state, /app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1/);
   assert.match(state, /if \(correlationDay && day !== correlationDay\) app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1/);
   assert.match(cloud, /function claimLocalFor\(uid\) \{[\s\S]*?app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1;/);
-  assert.match(privacy, /app\.state = app\.load\(\);\n  app\.correlationRev = \(app\.correlationRev \|\| 0\) \+ 1;/);
+  assert.match(privacy, /app\.replaceState\(app\.load\(\)\)/);
+  assert.match(privacy, /app\.wipeLogs\(/);
+  assert.match(cloud, /app\.replaceState\(/);
+  assert.match(actions, /app\.replaceState\(/);
   assert.doesNotMatch(analyze, /posthog|sentry|sendBeacon|fetch\(/i);
 });
 
@@ -842,7 +856,7 @@ function noiseDays(n, seed, effect) {
 }
 
 test("random days produce almost no findings, and an injected effect is still found", () => {
-  const seeds = 24;
+  const seeds = 120;
   let shown = 0;
   let high = 0;
   for (let s = 1; s <= seeds; s++) {
@@ -852,11 +866,15 @@ test("random days produce almost no findings, and an injected effect is still fo
     shown += view.length;
     high += view.filter((r) => r.confidence === "high").length;
     const brief = pickForToday(rows, { days }, dateAt(80, "2026-01-01"));
+    if (brief) {
+      assert.equal(brief.confidence, "high");
+      assert.ok(brief.q <= 0.001);
+    }
     if (!view.length) assert.equal(brief, null);
   }
   console.log("iid false-finding rate: shown " + (shown / seeds) + "/user, high " + (high / seeds) + "/user");
-  assert.ok(shown / seeds < 1, "mean shown " + (shown / seeds));
-  assert.ok(high / seeds < 0.4, "mean high " + (high / seeds));
+  assert.ok(shown / seeds < 0.25, "mean shown " + (shown / seeds));
+  assert.ok(high / seeds < 0.15, "mean high " + (high / seeds));
 
   let found = 0;
   for (let s = 1; s <= 12; s++) {
@@ -959,78 +977,106 @@ test("the brief shows only a high-confidence finding", () => {
     nWith: 10,
     nWithout: 10,
   };
-  const high = { ...medium, confidence: "high", strength: 4, lead: "On days after you work out, your readiness is 12% higher." };
+  const high = { ...medium, confidence: "high", q: 0.001, strength: 4, lead: "On days after you work out, your readiness is 12% higher." };
+  const loose = { ...high, q: 0.01 };
   assert.equal(pickForToday([medium], { days }, dateAt(2)), null);
+  assert.equal(pickForToday([loose], { days }, dateAt(2)), null);
   assert.equal(findingsForView([medium]).length, 1);
   const picked = pickForToday([medium, high], { days }, dateAt(2));
   assert.equal(picked.confidence, "high");
+  assert.ok(picked.q <= 0.001);
   assert.equal(listFindings([medium, high]).some((r) => r.confidence === "medium"), true);
 });
 
-test("point reflection keeps a flat 120-day series at 59.5 on both ends", () => {
-  const days = {};
-  for (let i = 0; i < 120; i++) days[dateAt(i, "2026-01-01")] = { readiness: 59.5 };
-  const out = detrendDays(days);
-  const dates = Object.keys(out).sort();
-  assert.equal(dates.length, 120);
-  assert.equal(out[dates[0]].readiness, 59.5);
-  assert.equal(out[dates[119]].readiness, 59.5);
-  assert.equal(out[dates[60]].readiness, 59.5);
+test("line reflection keeps a flat series flat, removes a slope, and leaves noisy ends unamplified", () => {
+  const flat = {};
+  for (let i = 0; i < 120; i++) flat[dateAt(i, "2026-01-01")] = { readiness: 59.5 };
+  const flatOut = detrendDays(flat);
+  const flatDates = Object.keys(flatOut).sort();
+  assert.equal(flatOut[flatDates[0]].readiness, 59.5);
+  assert.equal(flatOut[flatDates[119]].readiness, 59.5);
+  assert.equal(flatOut[flatDates[60]].readiness, 59.5);
+
+  const slope = {};
+  for (let i = 0; i < 120; i++) slope[dateAt(i, "2026-01-01")] = { readiness: i };
+  const slopeOut = detrendDays(slope);
+  const slopeDates = Object.keys(slopeOut).sort();
+  for (const d of [slopeDates[0], slopeDates[60], slopeDates[119]]) {
+    assert.ok(Math.abs(slopeOut[d].readiness - 59.5) < 1e-6, d + " " + slopeOut[d].readiness);
+  }
+
+  const flatRnd = mulberry32(7);
+  const flatNoise = {};
+  const flatRaw = [];
+  for (let i = 0; i < 120; i++) {
+    const y = 50 + gauss(flatRnd) * 3;
+    flatRaw.push(y);
+    flatNoise[dateAt(i, "2026-03-01")] = { readiness: y };
+  }
+  const flatNoiseOut = detrendDays(flatNoise);
+  const flatNoiseDates = Object.keys(flatNoiseOut).sort();
+  [0, 119].forEach((i) => {
+    const y = flatNoiseOut[flatNoiseDates[i]].readiness;
+    assert.ok(Math.abs(y - flatRaw[i]) < 2, "flat end " + y);
+  });
+
+  const slopeRnd = mulberry32(7);
+  const slopeNoise = {};
+  const slopeRaw = [];
+  let slopeSum = 0;
+  for (let i = 0; i < 120; i++) {
+    const y = 50 + (i / 119) * 20 + gauss(slopeRnd) * 3;
+    slopeSum += y;
+    slopeRaw.push(y);
+    slopeNoise[dateAt(i, "2026-04-01")] = { readiness: y };
+  }
+  const slopeMean = slopeSum / 120;
+  const slopeNoiseOut = detrendDays(slopeNoise);
+  const slopeNoiseDates = Object.keys(slopeNoiseOut).sort();
+  const first = slopeNoiseOut[slopeNoiseDates[0]].readiness;
+  const last = slopeNoiseOut[slopeNoiseDates[119]].readiness;
+  assert.ok(first > slopeRaw[0]);
+  assert.ok(last < slopeRaw[119]);
+  assert.ok(Math.abs(first - slopeMean) < 12);
+  assert.ok(Math.abs(last - slopeMean) < 12);
 });
 
-function enclosingFunction(src, index) {
-  let from = index;
-  while (from >= 0) {
-    let depth = 0;
-    let opener = -1;
-    for (let i = from; i >= 0; i--) {
-      const c = src[i];
-      if (c === "}") depth++;
-      else if (c === "{") {
-        if (depth === 0) { opener = i; break; }
-        depth--;
-      }
-    }
-    if (opener < 0) return null;
-    let d = 0;
-    let end = src.length - 1;
-    for (let j = opener; j < src.length; j++) {
-      if (src[j] === "{") d++;
-      else if (src[j] === "}") {
-        d--;
-        if (d === 0) { end = j; break; }
-      }
-    }
-    const lineStart = src.lastIndexOf("\n", opener - 1) + 1;
-    const head = src.slice(lineStart, opener);
-    if (/function\b/.test(head) || /=>\s*$/.test(head)) return src.slice(opener, end + 1);
-    from = opener - 1;
-  }
-  return null;
-}
-
-function bumpsCorrelationRev(chunk) {
-  return /app\.correlationRev\s*=/.test(chunk) || /app\.save\(/.test(chunk);
-}
-
-test("any path that replaces app.state or wipes logs bumps correlationRev", () => {
+test("replaceState and wipeLogs bump correlationRev", () => {
   const root = new URL("../logger/js/", import.meta.url);
   const files = readdirSync(root, { recursive: true }).filter((name) => String(name).endsWith(".js"));
-  const missed = [];
+  const raw = [];
   for (const name of files) {
     const src = readFileSync(new URL(name, root), "utf8");
-    const marks = [/app\.state\s*=(?!=)/g, /stripRange\(\s*app\.state/g, /localStorage\.removeItem\(\s*app\.KEY\s*\)/g];
-    for (const re of marks) {
-      let hit;
-      while ((hit = re.exec(src))) {
-        const block = enclosingFunction(src, hit.index);
-        const nearby = src.slice(hit.index, hit.index + 500);
-        if (bumpsCorrelationRev(block || nearby)) continue;
-        missed.push(String(name) + ":" + src.slice(0, hit.index).split("\n").length);
-      }
+    const rel = String(name);
+    if (rel === "data/state.js") {
+      const outside = src.replace(/function replaceState\(next\) \{[\s\S]*?\n\}/, "");
+      if (/app\.state\s*=(?!=)/.test(outside)) raw.push(rel);
+      assert.match(src, /function replaceState\(next\)/);
+      assert.match(src, /function wipeLogs\(apply\)/);
+      continue;
     }
+    if (/app\.state\s*=(?!=)/.test(src)) raw.push(rel);
+    if (/stripRange\(\s*app\.state/.test(src)) raw.push(rel + " stripRange");
   }
-  assert.deepEqual(missed, []);
+  assert.deepEqual(raw, []);
+
+  const privacy = readFileSync(new URL("../logger/js/pages/privacy.js", import.meta.url), "utf8");
+  assert.match(privacy, /removeItem\(app\.KEY\)[\s\S]{0,240}replaceState\(/);
+  assert.match(privacy, /wipeLogs\(\(data\) => stripRange\(data/);
+
+  const stateSrc = readFileSync(new URL("../logger/js/data/state.js", import.meta.url), "utf8");
+  const start = stateSrc.indexOf("function bumpCorrelationRev");
+  const end = stateSrc.indexOf("function save()");
+  const host = { correlationRev: 0, state: { sessions: ["keep"] } };
+  const api = new Function("app", stateSrc.slice(start, end) + "\nreturn { replaceState, wipeLogs };")(host);
+  api.replaceState({ demo: true, sessions: [] });
+  assert.equal(host.state.demo, true);
+  assert.equal(host.correlationRev, 1);
+  let seen = null;
+  api.wipeLogs((data) => { seen = data; data.sessions = ["wiped"]; });
+  assert.equal(seen, host.state);
+  assert.deepEqual(host.state.sessions, ["wiped"]);
+  assert.equal(host.correlationRev, 2);
 });
 
 test("autocorrelation rho 0.7 on untrended data stays quiet", () => {
@@ -1058,7 +1104,12 @@ test("autocorrelation rho 0.7 on untrended data stays quiet", () => {
     const view = findingsForView(rows);
     shown += view.length;
     high += view.filter((r) => r.confidence === "high").length;
-    if (pickForToday(rows, { days }, dateAt(n - 1, "2026-01-01"))) briefUsers++;
+    const brief = pickForToday(rows, { days }, dateAt(n - 1, "2026-01-01"));
+    if (brief) {
+      briefUsers++;
+      assert.equal(brief.confidence, "high");
+      assert.ok(brief.q <= 0.001);
+    }
   }
   const rate = shown / seeds;
   const highRate = high / seeds;
