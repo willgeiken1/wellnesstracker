@@ -133,6 +133,7 @@ function mergeRemote(r) {
 app.mergeRemote = mergeRemote;
 
 async function cloudPull() {
+  app.cloudPullOk = false;
   if (!app.sb || !app.session) return;
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
