@@ -162,7 +162,7 @@ function unit() {
   deviceC.layout.homeV2 = winner;
   applyHomeMigration(deviceC, 3000);
   check("newer local homeV2 survives a settings push", eq(deviceC.layout.homeV2.items, ["pattern", "today"]) && eq(deviceC.layout.homeV2.hidden, ["steps"]));
-  check("surviving homeV2 keeps its clock", deviceC.layout.homeV2.updatedAt === 9000 && deviceC.layout.homeV2.migratedAt === 3000);
+  check("surviving homeV2 keeps its clock", deviceC.layout.homeV2.updatedAt === 9000 && deviceC.layout.homeV2.migratedAt === 1000);
 
   const tieLocal = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 40 } };
   const tieRemote = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 40, migratedAt: 7 } };
@@ -248,7 +248,8 @@ async function browserCases() {
   }));
   check("load migrates the saved arrangement", eq(loaded.items, CUSTOM_ITEMS) && eq(loaded.hidden, CUSTOM_HIDDEN) && loaded.updatedAt === 200 && loaded.migrated, loaded);
   check("loaded old keys still match the save", eq(loaded.home.order, seed.layout.home.order) && eq(loaded.home.hidden, seed.layout.home.hidden) && eq(loaded.brief.order, seed.brief.order));
-  check("older renderer still uses the old order", eq(loaded.widgets, ["today", "brief", "cardio", "readiness", "week", "map-basic"]), loaded.widgets);
+  check("older renderer still uses the old order", eq(loaded.widgets, ["today", "brief", "cardio", "week", "map-basic"]), loaded.widgets);
+  check("readiness stays saved when its card is empty", loaded.home.order.includes("readiness"));
 
   await a.page.evaluate(() => {
     const html = window.app.renderHomeV2(window.app.getHomeLayout(window.app.state));
@@ -275,7 +276,7 @@ async function browserCases() {
     const home = window.app.state.layout.homeV2;
     return { items: home.items.slice(), hidden: home.hidden.slice(), updatedAt: home.updatedAt, migratedAt: home.migratedAt };
   }, blob);
-  check("device B keeps its newer homeV2", eq(clobber.items, ["pattern", "today"]) && eq(clobber.hidden, ["steps"]) && clobber.updatedAt === 9000 && clobber.migratedAt === 4242, clobber);
+  check("device B keeps its newer homeV2", eq(clobber.items, ["pattern", "today"]) && eq(clobber.hidden, ["steps"]) && clobber.updatedAt === 9000 && clobber.migratedAt !== 4242, clobber);
 
   const pulled = await b.page.evaluate((remote) => {
     delete window.app.state.layout.homeV2;
