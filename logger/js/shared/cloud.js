@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { noteOuraConnected, ouraReturnDialog } from "./oura-gate.js";
 
 /* Supabase account, backup, and Oura sync. */
 /* ================= Cloud: account, backup, Oura ================= */
@@ -147,7 +148,7 @@ async function ouraRefresh(force) {
   app.ouraBusy = true;
   try {
     const { data: c } = await app.sb.from("oura_connections").select("*").eq("user_id", app.session.user.id).maybeSingle();
-    app.state.oura.connected = !!c;
+    noteOuraConnected(app.state, !!c);
     app.state.oura.lastError = c ? c.last_error : null;
     if (c) {
       const stale = !c.last_sync || Date.now() - new Date(c.last_sync).getTime() > 3 * 3600_000;
@@ -197,7 +198,18 @@ async function initCloud() {
       if (app.syncSentryUser) app.syncSentryUser(s);
       if (app.syncUsageUser) app.syncUsageUser(s);
     });
-    if (app.session) { app.claimLocalFor(app.session.user.id); await app.cloudPull(); app.checkProfileGate(); await app.loadPhotos(); await app.syncPhotos(); if (app.dropPurgedPhotos) await app.dropPurgedPhotos(); await app.ouraRefresh(false); if (app.flushPurges) await app.flushPurges(); }
+    if (app.session) {
+      app.claimLocalFor(app.session.user.id);
+      await app.cloudPull();
+      app.checkProfileGate();
+      await app.loadPhotos();
+      await app.syncPhotos();
+      if (app.dropPurgedPhotos) await app.dropPurgedPhotos();
+      if (app.pendingOuraConnect) app.ui.tab = "home";
+      await app.ouraRefresh(!!app.pendingOuraConnect);
+      app.pendingOuraConnect = false;
+      if (app.flushPurges) await app.flushPurges();
+    }
     else { await app.loadPhotos(); app.render(); }
   } catch (e) { /* offline */ }
 }
@@ -263,6 +275,7 @@ async function disconnectOura() {
   const { error } = await app.sb.functions.invoke("oura-connect", { body: { action: "disconnect" } });
   if (error) { app.toast("Couldn't disconnect right now."); return; }
   app.state.oura = { connected: false, lastSync: null, days: {} };
+  // Leave homeV2 items and hidden alone. Oura widgets hide while the ring is off.
   app.save(); app.render(); app.toast("Oura disconnected.");
 }
 app.disconnectOura = disconnectOura;
@@ -272,14 +285,9 @@ app.disconnectOura = disconnectOura;
   const p = new URLSearchParams(location.search).get("oura");
   if (!p) return;
   history.replaceState(null, "", location.pathname);
-  const ok = p === "connected";
-  setTimeout(() => app.ask({
-    title: ok ? "Oura connected" : "Oura wasn't connected",
-    body: ok ? "If there's a Done button in the corner, tap it to go back to Insight. Your Oura data loads there automatically."
-             : p === "expired" ? "That login took too long. Open Recovery and tap Connect Oura again."
-             : "The connection was cancelled or didn't finish. Open Recovery and tap Connect Oura to try again.",
-    ok: "OK", cancel: "Close"
-  }), 300);
+  const dialog = ouraReturnDialog(p);
+  if (p === "connected") app.pendingOuraConnect = true;
+  setTimeout(() => app.ask({ title: dialog.title, body: dialog.body, ok: "OK", cancel: "Close" }), 300);
 })();
 
 function syncedAgo() {
