@@ -1,4 +1,6 @@
 import { app } from "../runtime.js";
+import { HOME_WIDGETS, getHomeLayout, setHomeLayout, renderHomeV2 } from "../shared/home-widgets.js";
+import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../shared/home-migrate.js";
 
 /* Storage, exercise catalog, and shared session helpers. */
 /* ================= Data ================= */
@@ -210,12 +212,19 @@ app.migrate = migrate;
 function load() {
   try {
     const raw = localStorage.getItem(app.KEY);
-    if (raw) { const m = app.migrate(JSON.parse(raw)); if (m) return m; }
+    if (raw) { const m = app.migrate(JSON.parse(raw)); if (m) return applyHomeMigration(m); }
   } catch (e) { /* start fresh */ }
-  return { version: 2, workouts: app.copy(app.DEFAULT_WORKOUTS), sessions: [], plan: {}, restSeconds: 120, lastExport: null,
-    oura: { connected: false, lastSync: null, days: {} }, demo: false, appLock: { enabled: false, updatedAt: 0 }, purges: [], checkins: null, checkinDeleted: [] };
+  return applyHomeMigration({ version: 2, workouts: app.copy(app.DEFAULT_WORKOUTS), sessions: [], plan: {}, restSeconds: 120, lastExport: null,
+    oura: { connected: false, lastSync: null, days: {} }, demo: false, appLock: { enabled: false, updatedAt: 0 }, purges: [], checkins: null, checkinDeleted: [] });
 }
 app.load = load;
+app.HOME_WIDGETS = HOME_WIDGETS;
+app.getHomeLayout = getHomeLayout;
+app.setHomeLayout = setHomeLayout;
+app.renderHomeV2 = renderHomeV2;
+app.migrateHomeLayout = migrateHomeLayout;
+app.applyHomeMigration = applyHomeMigration;
+app.pickHomeV2 = pickHomeV2;
 
 function save() {
   app.state.updatedAt = Date.now();
