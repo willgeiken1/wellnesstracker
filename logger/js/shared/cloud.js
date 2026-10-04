@@ -319,6 +319,7 @@ app.disconnectOura = disconnectOura;
 
 /* After Oura's login page sends you back here */
 (function handleOuraReturn() {
+  if (typeof location === "undefined" || !location.search) return;
   const p = new URLSearchParams(location.search).get("oura");
   if (!p) return;
   history.replaceState(null, "", location.pathname);

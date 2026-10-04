@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { HOME_WIDGETS, getHomeLayout, setHomeLayout, renderHomeV2 } from "../shared/home-widgets.js";
+import { HOME_WIDGETS, getHomeLayout, setHomeLayout } from "../shared/home-widgets.js";
 import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../shared/home-migrate.js";
 
 /* Storage, exercise catalog, and shared session helpers. */
@@ -221,7 +221,6 @@ app.load = load;
 app.HOME_WIDGETS = HOME_WIDGETS;
 app.getHomeLayout = getHomeLayout;
 app.setHomeLayout = setHomeLayout;
-app.renderHomeV2 = renderHomeV2;
 app.migrateHomeLayout = migrateHomeLayout;
 app.applyHomeMigration = applyHomeMigration;
 app.pickHomeV2 = pickHomeV2;

@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { HOME_WIDGETS, getHomeLayout, homeAwaitingSync, setHomeLayout } from "./home-widgets.js";
+import { HOME_WIDGETS, getHomeLayout, homeAwaitingSync } from "./home-widgets.js";
 
 /* Home Oura gating.
    hasOura is the ring or sample data.
@@ -89,10 +89,12 @@ export function noteOuraConnected(state, connected, opt) {
   const now = !!connected;
   state.oura.connected = now;
   if (!now || (opt && opt.seed === false)) return false;
-  const current = getHomeLayout(state);
+  const raw = state.layout && state.layout.homeV2;
+  const current = raw && raw.v === 2 && Array.isArray(raw.items) ? raw : null;
   if (!current || current.ouraSeeded) return false;
   const next = seedOuraWidgets(current);
-  setHomeLayout(state, next);
+  if (!state.layout || typeof state.layout !== "object" || Array.isArray(state.layout)) state.layout = {};
+  state.layout.homeV2 = next;
   return true;
 }
 

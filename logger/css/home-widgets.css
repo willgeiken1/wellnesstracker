@@ -1,0 +1,34 @@
+/* Registry cards. Legacy Home does not use these classes, so today's page stays put. */
+.home-v2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
+.home-v2 > .span-m { grid-column: 1 / -1; }
+.hw {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 12px 14px 13px;
+  min-width: 0;
+  text-align: left;
+  color: var(--text);
+}
+.hw-size-s { display: grid; align-content: start; gap: 2px; }
+.hw-k { margin: 0; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .01em; }
+.hw-v { margin: 4px 0 0; font-family: var(--display); font-weight: 600; font-size: 26px; letter-spacing: -.03em; line-height: 1.05; }
+.hw-sub { margin: 3px 0 0; color: #C9C9CF; font-size: 13px; line-height: 1.4; }
+:root[data-mode="light"] .hw-sub { color: #5A5C60; }
+.hw-line { margin: 3px 0 0; color: var(--text); font-weight: 600; font-size: 15px; line-height: 1.4; letter-spacing: -.015em; }
+.hw-h { margin: 6px 0 0; font-family: var(--display); font-weight: 600; font-size: 22px; letter-spacing: -.03em; line-height: 1.15; }
+.hw-hit {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: visible;
+  padding-bottom: 3px;
+}
+.hw.tone-up .hw-v, .hw.tone-up .hw-k { color: var(--accent-text); }
+.hw.tone-down .hw-v, .hw.tone-down .hw-k { color: var(--red); }
+:root[data-mode="light"] .hw.tone-down .hw-v,
+:root[data-mode="light"] .hw.tone-down .hw-k { color: #8E3D5C; }
+.home-v2 .card { margin-bottom: 0; }
+.home-v2 .sec { margin-top: 0; }
+.home-v2 .hero { margin: 0; }

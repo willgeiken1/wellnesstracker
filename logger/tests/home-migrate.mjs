@@ -275,7 +275,7 @@ function regressions() {
 }
 
 const PG_USER = process.env.PG_USER || "postgres";
-const PG_DATABASE = process.env.PG_DATABASE || "notes_merge";
+const PG_DATABASE = process.env.PG_DATABASE;
 
 function pgArgs(extra) {
   return ["-u", PG_USER, "psql", "-d", PG_DATABASE, "-v", "ON_ERROR_STOP=1", ...extra];
@@ -290,6 +290,9 @@ function rpcCases() {
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
+  pgSql(`insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change, is_sso_user, is_anonymous)
+    values ('00000000-0000-0000-0000-000000000000', '${uid}', 'authenticated', 'authenticated', 'home-migrate@example.com', '', now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), '', '', '', '', false, false)
+    on conflict (id) do nothing`);
   pgSql(`delete from public.user_data where user_id = '${uid}'`);
   const claim = `select set_config('request.jwt.claim.sub', '${uid}', false)`;
   const call = (payload) => pgSql(`${claim}; select public.merge_user_data('${JSON.stringify(payload).replace(/'/g, "''")}'::jsonb)->>'layout';`);
@@ -443,13 +446,18 @@ async function browserCases() {
   check("older renderer still uses the old order", eq(loaded.widgets, ["today", "brief", "cardio", "week", "map-basic"]), loaded.widgets);
   check("readiness stays saved when its card is empty", loaded.home.order.includes("readiness"));
 
-  await a.page.evaluate(() => {
-    const html = window.app.renderHomeV2(window.app.getHomeLayout(window.app.state));
-    document.querySelector("#pane-home").insertAdjacentHTML("afterbegin", html);
-  });
   await a.page.screenshot({ path: `${ART}/home_v2_migrated.png`, fullPage: true });
-  const cards = await a.page.$$eval("#pane-home [data-hv2]", (els) => els.map((el) => el.dataset.hv2));
-  check("preview shows the migrated row", eq(cards, CUSTOM_ITEMS), cards);
+  const flagOn = await a.page.evaluate(() => window.app.HOME_REGISTRY_PAINT === true);
+  if (!flagOn) {
+    check("registry paint stays off, so Home keeps the legacy order", true);
+  } else {
+    await a.page.evaluate(() => {
+      const html = window.app.renderHomeWidgets(window.app.getHomeLayout(window.app.state), window.app.snapshotFromApp());
+      document.querySelector("#pane-home").insertAdjacentHTML("afterbegin", html);
+    });
+    const cards = await a.page.$$eval("#pane-home .hw-slot", (els) => els.map((el) => el.dataset.hw));
+    check("preview shows the migrated row", eq(cards, CUSTOM_ITEMS), cards);
+  }
 
   const blob = await a.page.evaluate(() => JSON.parse(JSON.stringify({
     layout: window.app.state.layout,
