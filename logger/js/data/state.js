@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { HOME_WIDGETS, getHomeLayout, setHomeLayout } from "../shared/home-widgets.js";
 import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../shared/home-migrate.js";
+import { stripProfileClockFields } from "../shared/purge.js";
 
 /* Storage, exercise catalog, and shared session helpers. */
 /* ================= Data ================= */
@@ -197,10 +198,12 @@ function migrate(d) {
       entries
     };
   });
+  const profile = d.profile && typeof d.profile === "object" ? d.profile : null;
+  if (profile) stripProfileClockFields(profile);
   return { version: 2, workouts, sessions, plan: d.plan || {}, planAt: d.planAt && typeof d.planAt === "object" && !Array.isArray(d.planAt) ? d.planAt : {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
     oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo,
     deleted: d.deleted || [], updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
-    profile: d.profile || null, ownerId: d.ownerId || null,
+    profile, ownerId: d.ownerId || null,
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },

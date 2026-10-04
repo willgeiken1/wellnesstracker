@@ -65,15 +65,41 @@ function neutralAt(now: number) {
   return now > 0 ? now - 1 : now;
 }
 
-/* A future delete stamp is neutralised once. wDelAtRaw[d] is that raw value,
-   so the same stamp arriving again keeps the stored wDelAt[d]. A different,
-   newer raw value is a second delete and is neutralised again. */
+function latestWeighAt(profile: Bag | null, d: string): number | null {
+  let best: number | null = null;
+  for (const w of (profile && profile.weighIns) || []) {
+    const t = w && w.date === d ? timeMs(w.at) : null;
+    if (t != null && (best == null || t > best)) best = t;
+  }
+  return best;
+}
+
+/* entryAt - 1 sits beside a new weigh-in. It is not a delete and is never stored as a raw. */
+function readdMarkerStamp(profile: Bag | null, d: string, stamp: number | null) {
+  if (stamp == null) return false;
+  const at = latestWeighAt(profile, d);
+  return at != null && stamp === at - 1;
+}
+
+/* Same rule as logger/js/shared/purge.js observeTomb. Future deletes are
+   neutralised once against this clock. A re-add marker is not a raw. A stamp
+   still ahead of local now is a new raw even beside an older raw. */
 function observeTomb(profile: Bag | null, d: string, now: number) {
   if (!profile) return null;
   const stamp = timeMs(profile.wDelAt && profile.wDelAt[d]);
   const raw = timeMs(profile.wDelAtRaw && profile.wDelAtRaw[d]);
+  /* A stored cutoff below its raw can equal the weigh-in's at - 1. That is
+     also the re-add marker shape. Keep the raw. */
+  if (stamp != null && raw != null && stamp < raw && !aheadOf(stamp, now)) return { stamp, raw, fresh: false };
+  if (stamp != null && readdMarkerStamp(profile, d, stamp)) {
+    if (aheadOf(stamp, now)) return null;
+    return { stamp, raw: null as number | null, fresh: false };
+  }
+  if (stamp != null && aheadOf(stamp, now)) {
+    if (raw != null && stamp < raw) return { stamp, raw, fresh: false };
+    return { stamp: neutralAt(now), raw: stamp, fresh: true };
+  }
   if (raw != null && stamp != null) return { stamp, raw, fresh: false };
-  if (stamp != null && aheadOf(stamp, now)) return { stamp: neutralAt(now), raw: stamp, fresh: true };
   if (stamp != null) return { stamp, raw: null as number | null, fresh: false };
   if (raw != null && aheadOf(raw, now)) return { stamp: neutralAt(now), raw, fresh: true };
   return null;
@@ -90,10 +116,12 @@ function pickTomb(a: { stamp: number; raw: number | null; fresh: boolean } | nul
     return a.stamp >= b.stamp ? a : b;
   }
   if (a.raw != null && b.raw != null) return a.raw > b.raw ? a : b;
+  if (a.raw == null && b.raw == null) return a.stamp >= b.stamp ? a : b;
   const rawSide = a.raw != null ? a : b;
   const plain = rawSide === a ? b : a;
   if (plain.stamp === rawSide.raw) return rawSide;
-  if (plain.stamp > rawSide.stamp) return { stamp: plain.stamp, raw: null as number | null, fresh: false };
+  /* A plain stamp between the frozen cutoff and the raw is an older future value. */
+  if (rawSide.raw != null && plain.stamp > rawSide.raw) return { stamp: plain.stamp, raw: rawSide.raw, fresh: false };
   return rawSide;
 }
 
@@ -106,8 +134,14 @@ function mergeTombs(local: Bag | null, remote: Bag | null, now: number) {
   ]);
   const wDelAt: Record<string, number> = {};
   const wDelAtRaw: Record<string, number> = {};
-  for (const d of dates) {
-    const picked = pickTomb(observeTomb(local, d, now), observeTomb(remote, d, now));
+  for (const d of [...dates].sort()) {
+    let a = observeTomb(local, d, now);
+    let b = observeTomb(remote, d, now);
+    const marker = (profile: Bag | null, obs: { stamp: number; raw: number | null } | null) =>
+      !!obs && obs.raw == null && readdMarkerStamp(profile, d, obs.stamp);
+    if (marker(local, a) && b && b.raw != null) a = null;
+    if (marker(remote, b) && a && a.raw != null) b = null;
+    const picked = pickTomb(a, b);
     if (!picked) continue;
     wDelAt[d] = picked.stamp;
     if (picked.raw != null) wDelAtRaw[d] = picked.raw;
@@ -134,8 +168,9 @@ function weighBeats(x: Bag, before: number, wDelAt: Record<string, number>, now 
   if (t == null || !x || !x.date) return false;
   const tomb = timeMs(wDelAt[x.date]) || 0;
   const raw = timeMs(wDelAtRaw && wDelAtRaw[x.date]) || 0;
-  if (aheadOf(t, now) && !(raw && t > raw)) return false;
-  return t > Math.max(tomb, before);
+  const cut = before > 0 ? before : 0;
+  if (aheadOf(t, now) && (cut || !(raw && t > raw))) return false;
+  return t > Math.max(tomb, cut);
 }
 
 /* No taken_at, or a taken_at more than a minute ahead, counts as before the delete. */
@@ -208,6 +243,9 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
   }
 
   if (data.profile && typeof data.profile === "object") {
+    for (const k of ["clocks", "clockHint", "skewApplied", "skewKnown"]) {
+      if (Object.prototype.hasOwnProperty.call(data.profile, k)) delete data.profile[k];
+    }
     const wDel = new Set<string>(data.profile.wDel || []);
     const tombs = mergeTombs(data.profile, null, now);
     const wDelAt = tombs.wDelAt;
