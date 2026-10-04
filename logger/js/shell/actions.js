@@ -67,6 +67,7 @@ function finishSession(s, quiet) {
   } else {
     if (s.plain) delete s.plain;
     s.finishedAt = new Date().toISOString(); s.mod = Date.now();
+    if (app.capture) app.capture("workout_logged");
     if (!quiet) { app.ui.sheet = "summary"; app.ui.sd = { id: s.id }; }
   }
   app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.drafts = {};
@@ -346,7 +347,12 @@ document.addEventListener("click", async (ev) => {
     case "lift": app.ui.sheet = "lift"; app.ui.sd = { name: b.dataset.name }; app.renderSheet(); break;
     case "iseg": app.ui.iseg = b.dataset.s; app.render(); break;
     case "install-app": { if (!app.installPrompt) break; const p = app.installPrompt; app.installPrompt = null; try { await p.prompt(); } catch (e) {} app.render(); break; }
-    case "cardio-open": app.ui.tab = "cardio"; app.ui.sheet = null; app.render(); window.scrollTo(0, 0); break;
+    case "cardio-open": {
+      const changed = app.ui.tab !== "cardio";
+      app.ui.tab = "cardio"; app.ui.sheet = null; app.render(); window.scrollTo(0, 0);
+      if (changed && app.noteTab) app.noteTab("cardio");
+      break;
+    }
     case "cardio-new": app.ui.sheet = "cardio-new"; app.ui.sd = { machine: (app.recentCardio()[0] || {}).machine || "treadmill" }; app.renderSheet(); break;
     case "ma-pick": if (app.ui.sheet === "cardio-log") { app.ui.sd.segs = app.readLogSegs(); app.ui.sd.date = (app.$("#cl-date") || {}).value; } app.ui.sd.machine = b.dataset.m; app.renderSheet(); break;
     case "cf-step": {
@@ -609,6 +615,7 @@ document.addEventListener("click", async (ev) => {
       if (list.length) s.plain = list; else delete s.plain;
       s.mod = Date.now();
       delete app.ui.drafts[e.name];
+      if (app.capture) app.capture("readiness_plan_toggled", { mode: a === "sugg-plain" ? "normal" : "readiness" });
       app.save(); app.renderWorkout(); app.tick(); break;
     }
     case "rpe": {
@@ -776,11 +783,16 @@ document.addEventListener("click", async (ev) => {
     case "w-done": app.ui.edit = null; app.render(); break;
     case "brief-edit": app.ui.briefEdit = true; app.ui.edit = null; app.render(); break;
     case "brief-done": app.ui.briefEdit = false; app.render(); break;
-    case "brief-size": { const p = app.briefPrefs(); app.saveBrief({ ...p, size: p.size === "expanded" ? "compact" : "expanded" }); app.render(); break; }
+    case "brief-size": { const p = app.briefPrefs(); app.saveBrief({ ...p, size: p.size === "expanded" ? "compact" : "expanded" }); if (app.capture) app.capture("morning_brief_customized"); app.render(); break; }
     case "brief-toggle": {
       const p = app.briefPrefs(), hidden = new Set(p.hidden);
       if (hidden.has(b.dataset.id)) hidden.delete(b.dataset.id); else hidden.add(b.dataset.id);
-      app.saveBrief({ ...p, hidden: [...hidden] }); app.render(); break;
+      app.saveBrief({ ...p, hidden: [...hidden] }); if (app.capture) app.capture("morning_brief_customized"); app.render(); break;
+    }
+    case "usage-share": {
+      const next = !(app.usageSharingOn && app.usageSharingOn());
+      if (app.applyUsageSharing) app.applyUsageSharing(next);
+      break;
     }
     case "w-remove": app.hideWidget(app.ui.edit, b.dataset.w); break;
     case "r-remove": app.deleteRoutine(b.dataset.w); break;

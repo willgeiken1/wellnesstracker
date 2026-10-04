@@ -38,6 +38,7 @@ async function boot(browser, state) {
   page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
   if (state) {
     await page.addInitScript((s) => {
+      // Reload must keep what the page saved. Seeding on every navigation wiped the open workout.
       if (sessionStorage.getItem("notes-booted")) return;
       localStorage.setItem("liftlog-v1", JSON.stringify(s));
       sessionStorage.setItem("notes-booted", "1");
@@ -85,6 +86,42 @@ async function main() {
     none: app.mergeRpcMissing(null),
   }));
   check("undeployed merge function is the fallback case", rpcGate.missing === true && rpcGate.undefinedFn === true && rpcGate.other === false && rpcGate.none === false, JSON.stringify(rpcGate));
+
+  const pushed = await page.evaluate(async () => {
+    const calls = [];
+    const prevSb = app.sb;
+    const prevSession = app.session;
+    const prevNotes = JSON.parse(JSON.stringify(app.state.machineNotes));
+    app.session = { user: { id: "11111111-1111-4111-8111-111111111111" } };
+    app.state.machineNotes = { "Pec Fly Machine": { text: "Seat 4", at: 10 } };
+    app.sb = {
+      rpc: async (name, args) => {
+        calls.push({ rpc: name, sent: args.p_data.machineNotes["Pec Fly Machine"].text });
+        return { data: { machineNotes: { "Pec Fly Machine": { text: "Seat 4", at: 10 }, Dips: { text: "Wide", at: 8 } } }, error: null };
+      },
+      from() { throw new Error("fallback should not run when merge_user_data succeeds"); },
+    };
+    await app.cloudPush();
+    const keptRemote = app.machineNote("Dips");
+    app.state.machineNotes = { "Pec Fly Machine": { text: "Seat 9", at: 20 } };
+    app.sb = {
+      rpc: async () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function public.merge_user_data" } }),
+      from() {
+        return {
+          select() { return { eq: () => ({ maybeSingle: async () => ({ data: { data: { machineNotes: { "Cable Row": { text: "Pin 3", at: 3 } } } }, error: null }) }) }; },
+          upsert: async (row) => { calls.push({ upsert: row.data.machineNotes["Pec Fly Machine"].text, cable: row.data.machineNotes["Cable Row"].text }); return { error: null }; },
+        };
+      },
+    };
+    await app.cloudPush();
+    const mergedFallback = app.machineNote("Cable Row");
+    app.state.machineNotes = prevNotes;
+    app.sb = prevSb;
+    app.session = prevSession;
+    return { calls, keptRemote, mergedFallback };
+  });
+  check("save syncs through merge_user_data and keeps the other phone's note", pushed.calls[0] && pushed.calls[0].rpc === "merge_user_data" && pushed.calls[0].sent === "Seat 4" && pushed.keptRemote === "Wide", JSON.stringify(pushed));
+  check("missing merge function falls back without dropping either note", pushed.calls[1] && pushed.calls[1].upsert === "Seat 9" && pushed.calls[1].cable === "Pin 3" && pushed.mergedFallback === "Pin 3", JSON.stringify(pushed));
 
   await page.locator('.tab[data-tab="workouts"]').click();
   await page.waitForTimeout(200);
@@ -218,6 +255,18 @@ async function main() {
   });
   await page.waitForTimeout(200);
   await page.locator("[data-action='open-w'][data-id='push']").click();
+  await page.waitForSelector("#start-slot .start-bar");
+  const startAtRest = await page.locator("#start-slot .start-bar").boundingBox();
+  await page.evaluate(() => {
+    const pane = document.querySelector(".pane.active");
+    pane.scrollTop = pane.scrollHeight;
+  });
+  await page.waitForTimeout(80);
+  const startScrolled = await page.locator("#start-slot .start-bar").boundingBox();
+  check("start button stays pinned while the routine scrolls",
+    startAtRest && startScrolled && Math.abs(startAtRest.y - startScrolled.y) < 1 && startAtRest.x >= -1 && startAtRest.x + startAtRest.width <= 391,
+    JSON.stringify({ startAtRest, startScrolled }));
+  await page.evaluate(() => { document.querySelector(".pane.active").scrollTop = 0; });
   await page.locator("[data-action='edit-ex']").first().click();
   await page.locator("#exName").fill("Pec Fly");
   await page.locator("[data-action='ex-save']").click();
@@ -291,7 +340,8 @@ async function main() {
     const bar = document.createElement("div");
     bar.className = "start-bar";
     bar.innerHTML = "<button class='btn primary block'>Start</button>";
-    pane.appendChild(bar);
+    // A bar inside the transformed pane is not viewport-fixed, so it cannot stand in for the pinned Start button.
+    document.body.appendChild(bar);
   });
   await p.waitForTimeout(50);
   const aboveStart = await pillBox(p);

@@ -34,6 +34,14 @@ function lockState() {
 }
 app.lockState = lockState;
 
+function usageRow() {
+  const on = app.usageSharingOn ? app.usageSharingOn() : true;
+  return `<div class="set-row usage-row">
+      <span class="usage-copy"><b>Share anonymous usage data</b><span class="sub">Crash reports and which features get used. No workouts, food, notes, photos, or email.</span></span>
+      <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" data-action="usage-share" aria-label="Share anonymous usage data"><i></i></button>
+    </div>`;
+}
+
 function privacySectionHTML() {
   const L = app.lockState();
   const how = !L.enabled ? "Off" : L.method === "passcode" ? "On · passcode" : "On · Face ID or device passcode";
@@ -44,6 +52,7 @@ function privacySectionHTML() {
       <button class="link-inline" data-action="priv-summary">What we store and who sees it</button>
     </div>
     <div class="group">
+      ${usageRow()}
       <button class="set-row" data-action="priv-export"><span>Export my data</span><span class="sub">CSV zip</span></button>
       <button class="set-row" data-action="priv-range"><span>Delete a date range</span>${app.I.chevR}</button>
       <button class="set-row" data-action="priv-lock"><span>App lock</span><span class="sub">${how}</span></button>
@@ -58,8 +67,8 @@ function summarySheetHTML() {
     <p class="sub">Plain version. The full policy is <a href="../privacy.md" target="_blank" rel="noopener">privacy.md</a>.</p>
     <div class="priv-block"><b>On this phone and in your account</b><p class="sub">Your email and password (the password isn't stored in a readable form). Profile, weigh-ins, workouts, sets, routines, food logs, cardio, measurements, goals, settings, and progress photos you choose to add.</p></div>
     <div class="priv-block"><b>Oura, if you connect it</b><p class="sub">Sleep, readiness, HRV, resting heart rate, temperature, and steps. The login that fetches this sits in a private table the app itself can't read.</p></div>
-    <div class="priv-block"><b>Who else sees it</b><p class="sub">Supabase holds the account, backup, and photos. Anthropic receives a meal photo and any note you type with it, and a written meal description if you submit one for an estimate. Insight doesn't keep that photo. Open Food Facts receives a barcode number when you look one up. Oura sends ring data only after you connect. Nobody else using Insight can open your logs. We don't sell data or show ads.</p></div>
-    <div class="priv-block"><b>Your choices</b><p class="sub">Export a zip of CSV files, delete the logs between two dates, or delete the whole account. App lock stays on this device. We never receive your face, fingerprint, or device passcode.</p></div>`;
+    <div class="priv-block"><b>Who else sees it</b><p class="sub">Supabase holds the account, backup, and photos. Anthropic receives a meal photo and any note you type with it, and a written meal description if you submit one for an estimate. Insight doesn't keep that photo. Open Food Facts receives a barcode number when you look one up. Oura sends ring data only after you connect. Sentry, hosted in the US, gets a crash report: what broke, the device and browser, and your anonymous account id if you're signed in. No health data, and IP addresses aren't stored. PostHog, hosted in the US, gets anonymous notes about which features get used, from a short fixed list, with no health values. It discards IP data and doesn't record the screen. Both follow Share anonymous usage data. That switch is on unless you turn it off, and the choice stays on this phone. Nobody else using Insight can open your logs. We don't sell data or show ads.</p></div>
+    <div class="priv-block"><b>Your choices</b><p class="sub">Turn off Share anonymous usage data to stop crash reports and those feature notes. Export a zip of CSV files, delete the logs between two dates, or delete the whole account. App lock stays on this device. We never receive your face, fingerprint, or device passcode.</p></div>`;
 }
 app.summarySheetHTML = summarySheetHTML;
 
@@ -166,6 +175,7 @@ async function exportAllData() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
+  if (app.capture) app.capture("privacy_export");
   app.toast("Data export downloaded.");
 }
 app.exportAllData = exportAllData;

@@ -283,6 +283,7 @@ if (typeof document !== "undefined") {
     const order = [...d.box.querySelectorAll(".brief-row")].map((el) => el.dataset.id);
     const prefs = app.briefPrefs();
     app.saveBrief({ ...prefs, order });
+    if (app.capture) app.capture("morning_brief_customized");
     app.render();
   };
   document.addEventListener("pointerup", endBriefDrag);

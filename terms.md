@@ -1,6 +1,6 @@
 # Insight Terms of Service
 
-_Last updated: October 2, 2026_
+_Last updated: October 4, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. By creating an account or using Insight, you agree to these terms.
 
@@ -26,7 +26,7 @@ Don't try to break Insight, access other people's data, or overload it. Food pho
 
 ## Third-party services
 
-Insight relies on other services, including Supabase, Anthropic, Open Food Facts, and Oura. Your use of them through Insight is also subject to their own terms. If you connect Oura, you can disconnect at any time.
+Insight relies on other services, including Supabase, Anthropic, Open Food Facts, Oura, Sentry, and PostHog. Your use of them through Insight is also subject to their own terms. If you connect Oura, you can disconnect at any time.
 
 ## Limit of liability
 

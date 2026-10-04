@@ -367,6 +367,7 @@ function addEntry(meal, name, base, servings, src, items) {
   if (items && items.length) e.items = items;
   (f.days[d] = f.days[d] || []).push(e);
   app.foodTouch();
+  if (app.capture) app.capture("food_logged", { method: src });
   return e;
 }
 app.addEntry = addEntry;
