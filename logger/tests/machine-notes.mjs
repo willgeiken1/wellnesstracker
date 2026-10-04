@@ -36,8 +36,13 @@ async function boot(browser, state) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(err.message));
   page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
-  if (state) await page.addInitScript((s) => localStorage.setItem("liftlog-v1", JSON.stringify(s)), state);
-  else await page.addInitScript(() => localStorage.removeItem("liftlog-v1"));
+  if (state) {
+    await page.addInitScript((s) => {
+      if (sessionStorage.getItem("notes-booted")) return;
+      localStorage.setItem("liftlog-v1", JSON.stringify(s));
+      sessionStorage.setItem("notes-booted", "1");
+    }, state);
+  } else await page.addInitScript(() => localStorage.removeItem("liftlog-v1"));
   await page.goto(BASE + "/index.html", { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.app && window.app.mergeRemote);
   await page.waitForTimeout(200);
@@ -274,10 +279,12 @@ async function main() {
   check("pill stays above the rest timer", lifted && timer && lifted.y + lifted.height <= timer.y + 1, JSON.stringify({ lifted, timer }));
   check("timer lifts the pill off the tab bar", lifted && resting && lifted.y < resting.y - 20, JSON.stringify({ lifted, resting }));
   await p.evaluate(() => {
+    const pane = document.querySelector(".pane.active");
+    pane.scrollTop = 0;
     const bar = document.createElement("div");
     bar.className = "start-bar";
     bar.innerHTML = "<button class='btn primary block'>Start</button>";
-    document.querySelector(".pane.active").appendChild(bar);
+    pane.appendChild(bar);
   });
   await p.waitForTimeout(50);
   const aboveStart = await pillBox(p);
