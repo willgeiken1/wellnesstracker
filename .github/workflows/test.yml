@@ -1,0 +1,31 @@
+name: Tests
+
+# --experimental-strip-types, used by tests/purge.test.mjs, needs Node 22.6+.
+on:
+  pull_request:
+  push:
+
+jobs:
+  test:
+    name: Node tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+
+      - name: Require Node 22.6 or newer
+        run: node -e "const [M,m]=process.versions.node.split('.').map(Number); if(M<22||(M===22&&m<6)){console.error(process.version); process.exit(1)}"
+
+      - name: Install PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          export PG_BIN="$(echo /usr/lib/postgresql/*/bin)"
+          node --test tests/brief.test.mjs tests/correlate.test.mjs tests/describe.test.mjs tests/privacy-delete-sql.test.mjs tests/purge.test.mjs tests/readiness.test.mjs tests/sentry-scrub.test.mjs tests/usage.test.mjs tests/weekly.test.mjs

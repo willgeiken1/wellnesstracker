@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { applyPurges, buildExportFiles, coveredBy, mergeCheckins, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
+import { applyPurges, buildExportFiles, coveredBy, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
 
 /* Privacy center: export, date-range delete, account delete, and app lock. */
 
@@ -9,6 +9,7 @@ app.unionPurges = unionPurges;
 app.mergeCheckins = mergeCheckins;
 app.datePurged = (day) => coveredBy(app.state && app.state.purges, day);
 app.weighAfterPurge = weighAfterPurge;
+app.mergeWeighIns = mergeWeighIns;
 
 function needsLock() {
   const L = app.state && app.state.appLock;
@@ -114,7 +115,7 @@ function rangeSheetHTML() {
   const from = (app.ui.sd && app.ui.sd.from) || "";
   const to = (app.ui.sd && app.ui.sd.to) || "";
   return `<h3>Delete a date range</h3>
-    <p class="sub" style="margin:-6px 0 14px">Erases logs between these dates and keeps your account. Workouts, food, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and Oura days stored in Insight. Routines and favorites stay. A later Oura sync won't bring those days back. Oura's own copy is not deleted.</p>
+    <p class="sub" style="margin:-6px 0 14px">Erases logs between these dates and keeps your account. Workouts, food, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and Oura days stored in Insight. Logs added to those dates later are kept. Routines and favorites stay. A later Oura sync won't bring those days back. Oura's own copy is not deleted.</p>
     <label class="field-label" for="purge-from">From</label>
     <input class="text-in" id="purge-from" type="date" max="${app.today()}" value="${app.esc(from)}">
     <label class="field-label" for="purge-to">To</label>

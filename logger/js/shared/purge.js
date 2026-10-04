@@ -59,14 +59,84 @@ export function purgeCutoff(p) {
   return timeMs(p.deletedAt != null ? p.deletedAt : p.at);
 }
 
+function copyWDelAt(src) {
+  const out = {};
+  if (!src || typeof src !== "object" || Array.isArray(src)) return out;
+  for (const [d, v] of Object.entries(src)) {
+    const t = timeMs(v);
+    if (t != null) out[d] = t;
+  }
+  return out;
+}
+
+/* Latest purge cutoff that covers this date, or 0 when none does. */
+function coveringCutoff(purges, date) {
+  let cut = 0;
+  for (const p of purges || []) {
+    const c = purgeCutoff(p);
+    if (c != null && inRange(date, p.from, p.to) && c > cut) cut = c;
+  }
+  return cut;
+}
+
+/* A weigh-in outlives a tombstone only when its own log time is after both
+   the manual delete (wDelAt) and any purge covering that date.
+   A missing wDelAt does not raise the bar. A missing at never wins.
+   Dates that are only in wDel, with no timestamp, still hide the weigh-in
+   unless this returns true. */
+export function weighBeatsTombstone(purges, x, wDelAt) {
+  const t = timeMs(x && x.at);
+  if (t == null || !x || !x.date) return false;
+  const tomb = timeMs(wDelAt && wDelAt[x.date]) || 0;
+  const cut = coveringCutoff(purges, x.date);
+  if (!tomb && !cut) return false;
+  return t > Math.max(tomb, cut);
+}
+
 /* True when this weigh-in was logged after a purge that covers its date. */
 export function weighAfterPurge(purges, x) {
-  const t = latestTime(x, ITEM_KEYS);
-  if (t == null || !x) return false;
-  return (purges || []).some((p) => {
-    const cut = purgeCutoff(p);
-    return cut != null && inRange(x.date, p.from, p.to) && t > cut;
-  });
+  return weighBeatsTombstone(purges, x, null);
+}
+
+/* Union of two profiles' weigh-ins. A manual delete is wDel plus wDelAt[date].
+   The weigh-in wins only when x.at is later than both that stamp and the purge. */
+export function mergeWeighIns(localProfile, remoteProfile, purges) {
+  const lp = localProfile && typeof localProfile === "object" ? localProfile : {};
+  const rp = remoteProfile && typeof remoteProfile === "object" ? remoteProfile : {};
+  const wDel = new Set([...(lp.wDel || []), ...(rp.wDel || [])]);
+  const wDelAt = copyWDelAt(lp.wDelAt);
+  for (const [d, t] of Object.entries(copyWDelAt(rp.wDelAt))) {
+    if (wDelAt[d] == null || t > wDelAt[d]) wDelAt[d] = t;
+  }
+  const byDate = new Map();
+  const newerLocal = (lp.updatedAt || 0) >= (rp.updatedAt || 0);
+  const order = newerLocal ? [rp.weighIns || [], lp.weighIns || []] : [lp.weighIns || [], rp.weighIns || []];
+  const wins = (x) => weighBeatsTombstone(purges, x, wDelAt);
+  order.forEach((list) => list.forEach((x) => {
+    if (!x || !x.date) return;
+    const blocked = wDel.has(x.date) || wDelAt[x.date] != null;
+    if (!blocked || wins(x)) byDate.set(x.date, x);
+  }));
+  for (const x of byDate.values()) {
+    if (!wins(x)) continue;
+    wDel.delete(x.date);
+    delete wDelAt[x.date];
+  }
+  return { ...(newerLocal ? lp : rp), weighIns: [...byDate.values()], wDel: [...wDel], wDelAt };
+}
+
+/* loggedAt is when the session was written. Manual cardio also stores
+   finishedAt as that calendar day at noon, which is not the log time.
+   The edge runtime reads that noon as UTC, so it can land after a delete
+   that already happened. When loggedAt is present it is the only clock. */
+function cardioTime(s) {
+  if (!s || typeof s !== "object") return null;
+  const logged = timeMs(s.loggedAt);
+  if (logged != null) return logged;
+  const keys = s.src === "manual"
+    ? ["mod", "updatedAt", "createdAt", "at", "startedAt"]
+    : ["mod", "updatedAt", "createdAt", "at", "startedAt", "finishedAt"];
+  return latestTime(s, keys);
 }
 
 function stripCheckins(data, from, to, before) {
@@ -144,7 +214,7 @@ export function stripRange(data, from, to, opts = {}) {
     const cd = new Set(data.cardio.deleted || []);
     let cardioChanged = false;
     data.cardio.sessions = (data.cardio.sessions || []).filter((s) => {
-      if (s && inRange(s.date, from, to) && dropBefore(latestTime(s, ["loggedAt", "mod", "updatedAt", "createdAt", "at", "startedAt", "finishedAt"]), before)) {
+      if (s && inRange(s.date, from, to) && dropBefore(cardioTime(s), before)) {
         cardioChanged = true;
         if (s.id) cd.add(s.id);
         return false;
@@ -169,21 +239,28 @@ export function stripRange(data, from, to, opts = {}) {
 
   if (data.profile && typeof data.profile === "object") {
     const wDel = new Set(data.profile.wDel || []);
+    const wDelAt = copyWDelAt(data.profile.wDelAt);
     const kept = [];
     let profileChanged = false;
+    const beat = before == null ? [] : [{ from, to, deletedAt: before }];
     for (const x of data.profile.weighIns || []) {
-      if (x && inRange(x.date, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before)) {
-        wDel.add(x.date);
-        profileChanged = true;
-        continue;
+      if (x && inRange(x.date, from, to)) {
+        const wins = before != null && weighBeatsTombstone(beat, x, wDelAt);
+        if (!wins) {
+          if (!wDel.has(x.date)) profileChanged = true;
+          wDel.add(x.date);
+          continue;
+        }
+        if (wDel.delete(x.date)) profileChanged = true;
+        if (wDelAt[x.date] != null) { delete wDelAt[x.date]; profileChanged = true; }
       }
-      if (x && inRange(x.date, from, to) && wDel.delete(x.date)) profileChanged = true;
       kept.push(x);
     }
     if (profileChanged || kept.length !== (data.profile.weighIns || []).length) {
       changed = true;
       data.profile.weighIns = kept;
       data.profile.wDel = [...wDel];
+      data.profile.wDelAt = wDelAt;
       if (!opts.quiet) data.profile.updatedAt = Date.now();
     }
   }

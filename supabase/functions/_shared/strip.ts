@@ -56,6 +56,52 @@ function dropBefore(stamp: number | null, before: number | null | undefined) {
   return stamp == null || stamp <= before;
 }
 
+function copyWDelAt(src: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!src || typeof src !== "object" || Array.isArray(src)) return out;
+  for (const [d, v] of Object.entries(src as Bag)) {
+    const t = timeMs(v);
+    if (t != null) out[d] = t;
+  }
+  return out;
+}
+
+/* loggedAt is when the session was written. Manual cardio also stores
+   finishedAt as that calendar day at noon, which is not the log time.
+   This runtime is UTC, so that noon can fall after a delete that already
+   happened. When loggedAt is present it is the only clock. */
+function cardioTime(s: Bag): number | null {
+  if (!s || typeof s !== "object") return null;
+  const logged = timeMs(s.loggedAt);
+  if (logged != null) return logged;
+  const keys = s.src === "manual"
+    ? ["mod", "updatedAt", "createdAt", "at", "startedAt"]
+    : ["mod", "updatedAt", "createdAt", "at", "startedAt", "finishedAt"];
+  return latestTime(s, keys);
+}
+
+function weighBeats(x: Bag, before: number, wDelAt: Record<string, number>): boolean {
+  const t = timeMs(x && x.at);
+  if (t == null || !x || !x.date) return false;
+  const tomb = timeMs(wDelAt[x.date]) || 0;
+  return t > Math.max(tomb, before);
+}
+
+/* A photo with no taken_at counts as older than the delete. */
+export function photoDue(takenAt: unknown, cutoff: number): boolean {
+  const t = timeMs(takenAt);
+  if (t == null) return true;
+  return t <= cutoff;
+}
+
+const CLOCK_SKEW_MS = 60_000;
+
+function clampCutoff(t: number | null, now: number): number | null {
+  if (t == null) return null;
+  const cap = now + CLOCK_SKEW_MS;
+  return t > cap ? cap : t;
+}
+
 export function stripRange(data: Bag, from: string, to: string, before?: number | null): Bag {
   if (!data || typeof data !== "object") data = {};
   if (!validDay(from) || !validDay(to) || from > to) return data;
@@ -99,7 +145,7 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
     const cd = new Set<string>(data.cardio.deleted || []);
     let cardioChanged = false;
     data.cardio.sessions = (data.cardio.sessions || []).filter((s: Bag) => {
-      if (s && inRange(s.date, from, to) && dropBefore(latestTime(s, ["loggedAt", "mod", "updatedAt", "createdAt", "at", "startedAt", "finishedAt"]), before)) {
+      if (s && inRange(s.date, from, to) && dropBefore(cardioTime(s), before)) {
         cardioChanged = true;
         if (s.id) cd.add(s.id);
         return false;
@@ -118,20 +164,26 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
 
   if (data.profile && typeof data.profile === "object") {
     const wDel = new Set<string>(data.profile.wDel || []);
+    const wDelAt = copyWDelAt(data.profile.wDelAt);
     const kept: Bag[] = [];
     let profileChanged = false;
     for (const x of data.profile.weighIns || []) {
-      if (x && inRange(x.date, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before)) {
-        wDel.add(x.date);
-        profileChanged = true;
-        continue;
+      if (x && inRange(x.date, from, to)) {
+        const wins = before != null && weighBeats(x, before, wDelAt);
+        if (!wins) {
+          if (!wDel.has(x.date)) profileChanged = true;
+          wDel.add(x.date);
+          continue;
+        }
+        if (wDel.delete(x.date)) profileChanged = true;
+        if (wDelAt[x.date] != null) { delete wDelAt[x.date]; profileChanged = true; }
       }
-      if (x && inRange(x.date, from, to) && wDel.delete(x.date)) profileChanged = true;
       kept.push(x);
     }
     if (profileChanged || kept.length !== (data.profile.weighIns || []).length) {
       data.profile.weighIns = kept;
       data.profile.wDel = [...wDel];
+      data.profile.wDelAt = wDelAt;
       data.profile.updatedAt = Date.now();
     }
   }
@@ -171,12 +223,12 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
   return data;
 }
 
-export function resolveCutoff(data: Bag, from: string, to: string, requested: unknown): number {
+export function resolveCutoff(data: Bag, from: string, to: string, requested: unknown, now = Date.now()): number {
   const hit = (Array.isArray(data?.purges) ? data.purges : []).find((p: Bag) => p && p.from === from && p.to === to);
-  const stored = timeMs(hit && (hit.deletedAt ?? hit.at));
-  const req = timeMs(requested);
+  const stored = clampCutoff(timeMs(hit && (hit.deletedAt ?? hit.at)), now);
+  const req = clampCutoff(timeMs(requested), now);
   if (req && stored) return Math.max(req, stored);
-  return req || stored || Date.now();
+  return req || stored || now;
 }
 
 export function addPurge(data: Bag, from: string, to: string, deletedAt?: number) {

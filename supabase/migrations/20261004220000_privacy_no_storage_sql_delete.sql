@@ -9,6 +9,10 @@
 --
 -- delete-account and purge-range already remove files through the Storage API
 -- before they call these functions. The functions only delete public rows.
+--
+-- progress_photos is left to purge-range. That function compares taken_at to
+-- the delete time and removes those rows by id. Deleting here by day would
+-- also remove a photo taken inside the range after the delete.
 
 create or replace function public.delete_user_rows(p_user uuid)
 returns void
@@ -62,7 +66,7 @@ begin
     where c.table_schema = 'public'
       and c.column_name = 'user_id'
       and t.table_type = 'BASE TABLE'
-      and c.table_name not in ('user_data', 'ai_usage', 'oura_tokens', 'oura_connections', 'oura_oauth_states')
+      and c.table_name not in ('user_data', 'ai_usage', 'oura_tokens', 'oura_connections', 'oura_oauth_states', 'progress_photos')
   loop
     select c.column_name into col
     from information_schema.columns c

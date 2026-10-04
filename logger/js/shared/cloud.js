@@ -107,16 +107,8 @@ function mergeRemote(r) {
   if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = app.meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) app.meas()[d] = m; });
   app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, r.machineNotes);
   if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) { if (r.muscleMode) app.state.muscleMode = r.muscleMode; if (r.layout) app.state.layout = r.layout; if (r.uniEx) app.state.uniEx = r.uniEx; app.state.settingsAt = r.settingsAt; }
-  if (r.profile) {
-    const lp = app.state.profile;
-    const wDel = new Set([...((lp && lp.wDel) || []), ...(r.profile.wDel || [])]);
-    const byDate = new Map();
-    const newerLocal = lp && (lp.updatedAt || 0) >= (r.profile.updatedAt || 0);
-    const order = newerLocal ? [r.profile.weighIns || [], lp.weighIns || []] : [(lp && lp.weighIns) || [], r.profile.weighIns || []];
-    const afterPurge = (x) => app.weighAfterPurge && app.weighAfterPurge(app.state.purges, x);
-    order.forEach((list) => list.forEach((x) => { if (!wDel.has(x.date) || afterPurge(x)) byDate.set(x.date, x); }));
-    for (const x of byDate.values()) if (afterPurge(x)) wDel.delete(x.date);
-    app.state.profile = { ...(newerLocal ? lp : r.profile), weighIns: [...byDate.values()], wDel: [...wDel] };
+  if (r.profile && app.mergeWeighIns) {
+    app.state.profile = app.mergeWeighIns(app.state.profile, r.profile, app.state.purges);
   }
   if ((r.updatedAt || 0) > (app.state.updatedAt || 0)) {
     if (Array.isArray(r.workouts) && r.workouts.length) app.state.workouts = r.workouts;

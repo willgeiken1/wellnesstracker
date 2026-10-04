@@ -46,6 +46,7 @@ test("delete and range SQL functions run with the storage delete trigger", { tim
   assert.doesNotMatch(migration, /delete\s+from\s+storage\.objects/i);
   assert.match(migration, /create or replace function public\.delete_user_rows/i);
   assert.match(migration, /create or replace function public\.purge_user_range_rows/i);
+  assert.match(migration, /'progress_photos'/);
 
   const dir = mkdtempSync(join(tmpdir(), "insight-pg-"));
   const port = await freePort();
@@ -182,7 +183,7 @@ test("delete and range SQL functions run with the storage delete trigger", { tim
     assert.equal(purged.status, 0, purged.stderr);
     assert.equal(scalar(sql, "select count(*) from public.oura_days where user_id = '" + userB + "' and day = '2026-09-01'"), "0");
     assert.equal(scalar(sql, "select count(*) from public.oura_days where user_id = '" + userB + "' and day = '2026-10-04'"), "1");
-    assert.equal(scalar(sql, "select count(*) from public.progress_photos where id = 'in'"), "0");
+    assert.equal(scalar(sql, "select count(*) from public.progress_photos where id = 'in'"), "1");
     assert.equal(scalar(sql, "select count(*) from public.progress_photos where id = 'out'"), "1");
     assert.equal(scalar(sql, "select count(*) from public.ai_usage where user_id = '" + userB + "'"), "1");
     assert.equal(scalar(sql, "select count(*) from public.user_data where user_id = '" + userB + "'"), "1");

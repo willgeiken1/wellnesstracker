@@ -701,6 +701,7 @@ document.addEventListener("click", async (ev) => {
       if (!(await app.ask({ title: "Delete this weigh-in?", body: app.fmtDate(d), ok: "Delete", danger: true }))) break;
       app.state.profile.weighIns = app.state.profile.weighIns.filter((x) => x.date !== d);
       app.state.profile.wDel = [...(app.state.profile.wDel || []), d];
+      app.state.profile.wDelAt = { ...(app.state.profile.wDelAt || {}), [d]: Date.now() };
       app.state.profile.updatedAt = Date.now();
       app.save(); app.render(); app.renderSheet(); break;
     }
