@@ -189,7 +189,7 @@ function migrate(d) {
       entries
     };
   });
-  return { version: 2, workouts, sessions, plan: d.plan || {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
+  return { version: 2, workouts, sessions, plan: d.plan || {}, planAt: d.planAt && typeof d.planAt === "object" && !Array.isArray(d.planAt) ? d.planAt : {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
     oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo,
     deleted: d.deleted || [], updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
     profile: d.profile || null, ownerId: d.ownerId || null,

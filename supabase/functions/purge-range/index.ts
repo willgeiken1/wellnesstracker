@@ -5,7 +5,7 @@
 // later dated table the migration knows about. Safe to retry.
 // Deploy with JWT verification OFF. No extra secrets.
 import { admin, cors, json, requireUser, validDay } from "../_shared/http.ts";
-import { addPurge, stripRange } from "../_shared/strip.ts";
+import { addPurge, resolveCutoff, stripRange } from "../_shared/strip.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -43,7 +43,9 @@ Deno.serve(async (req) => {
 
     const { data: row, error: readErr } = await admin.from("user_data").select("data").eq("user_id", user.id).maybeSingle();
     if (readErr) return json({ error: "Couldn't update the account copy. Try again." }, 500);
-    const data = addPurge(stripRange((row && row.data) || {}, from, to), from, to);
+    const raw = (row && row.data) || {};
+    const cutoff = resolveCutoff(raw, from, to, body.deletedAt ?? body.at);
+    const data = addPurge(stripRange(raw, from, to, cutoff), from, to, cutoff);
     const { error: writeErr } = await admin.from("user_data").upsert({
       user_id: user.id,
       data,

@@ -14,14 +14,69 @@ export function inRange(day, from, to) {
   return validDay(day) && validDay(from) && validDay(to) && day >= from && day <= to;
 }
 
-function stripCheckins(data, from, to) {
+function timeMs(v) {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  if (typeof v === "string" && v) {
+    const t = Date.parse(v);
+    if (Number.isFinite(t) && t > 0) return t;
+  }
+  return null;
+}
+
+const ITEM_KEYS = ["loggedAt", "updatedAt", "createdAt", "at", "mod"];
+const SESSION_KEYS = ["mod", "loggedAt", "updatedAt", "createdAt", "startedAt", "finishedAt"];
+
+function latestTime(obj, keys) {
+  if (!obj || typeof obj !== "object") return null;
+  let best = null;
+  for (const k of keys) {
+    const t = timeMs(obj[k]);
+    if (t != null && (best == null || t > best)) best = t;
+  }
+  return best;
+}
+
+function sessionTime(s) {
+  let best = latestTime(s, SESSION_KEYS);
+  for (const e of (s && s.entries) || []) {
+    for (const x of (e && e.sets) || []) {
+      const t = timeMs(x && x.at);
+      if (t != null && (best == null || t > best)) best = t;
+    }
+  }
+  return best;
+}
+
+/* A purge with no cutoff still clears the whole range. Otherwise drop only
+   logs with no timestamp or a timestamp at or before the delete. */
+function dropBefore(stamp, before) {
+  if (before == null) return true;
+  return stamp == null || stamp <= before;
+}
+
+export function purgeCutoff(p) {
+  if (!p) return null;
+  return timeMs(p.deletedAt != null ? p.deletedAt : p.at);
+}
+
+/* True when this weigh-in was logged after a purge that covers its date. */
+export function weighAfterPurge(purges, x) {
+  const t = latestTime(x, ITEM_KEYS);
+  if (t == null || !x) return false;
+  return (purges || []).some((p) => {
+    const cut = purgeCutoff(p);
+    return cut != null && inRange(x.date, p.from, p.to) && t > cut;
+  });
+}
+
+function stripCheckins(data, from, to, before) {
   let changed = false;
   if (Array.isArray(data.checkins)) {
     const ids = new Set(data.checkinDeleted || []);
     const next = [];
     for (const x of data.checkins) {
       const d = x && (x.date || x.day);
-      if (inRange(d, from, to)) {
+      if (inRange(d, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before)) {
         changed = true;
         if (x.id) ids.add(x.id);
       } else next.push(x);
@@ -30,7 +85,10 @@ function stripCheckins(data, from, to) {
     data.checkinDeleted = [...ids];
   } else if (data.checkins && typeof data.checkins === "object") {
     for (const d of Object.keys(data.checkins)) {
-      if (inRange(d, from, to)) { delete data.checkins[d]; changed = true; }
+      if (inRange(d, from, to) && dropBefore(latestTime(data.checkins[d], ITEM_KEYS), before)) {
+        delete data.checkins[d];
+        changed = true;
+      }
     }
   }
   return changed;
@@ -42,9 +100,10 @@ export function stripRange(data, from, to, opts = {}) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   let changed = false;
 
+  const before = opts.before;
   const deleted = new Set(data.deleted || []);
   data.sessions = (data.sessions || []).filter((s) => {
-    if (s && inRange(s.date, from, to)) {
+    if (s && inRange(s.date, from, to) && dropBefore(sessionTime(s), before)) {
       changed = true;
       if (s.id) deleted.add(s.id);
       return false;
@@ -59,9 +118,19 @@ export function stripRange(data, from, to, opts = {}) {
     let foodChanged = false;
     for (const d of Object.keys(days)) {
       if (!inRange(d, from, to)) continue;
-      foodChanged = true;
-      for (const e of days[d] || []) if (e && e.id) fd.add(e.id);
-      delete days[d];
+      const keep = [];
+      let dayChanged = false;
+      for (const e of days[d] || []) {
+        if (dropBefore(latestTime(e, ITEM_KEYS), before)) {
+          dayChanged = true;
+          if (e && e.id) fd.add(e.id);
+        } else keep.push(e);
+      }
+      if (dayChanged) {
+        foodChanged = true;
+        if (keep.length) days[d] = keep;
+        else delete days[d];
+      }
     }
     if (foodChanged) {
       changed = true;
@@ -75,7 +144,7 @@ export function stripRange(data, from, to, opts = {}) {
     const cd = new Set(data.cardio.deleted || []);
     let cardioChanged = false;
     data.cardio.sessions = (data.cardio.sessions || []).filter((s) => {
-      if (s && inRange(s.date, from, to)) {
+      if (s && inRange(s.date, from, to) && dropBefore(latestTime(s, ["loggedAt", "mod", "updatedAt", "createdAt", "at", "startedAt", "finishedAt"]), before)) {
         cardioChanged = true;
         if (s.id) cd.add(s.id);
         return false;
@@ -91,27 +160,42 @@ export function stripRange(data, from, to, opts = {}) {
 
   if (data.measurements && typeof data.measurements === "object") {
     for (const d of Object.keys(data.measurements)) {
-      if (inRange(d, from, to)) { delete data.measurements[d]; changed = true; }
+      if (inRange(d, from, to) && dropBefore(latestTime(data.measurements[d], ITEM_KEYS), before)) {
+        delete data.measurements[d];
+        changed = true;
+      }
     }
   }
 
   if (data.profile && typeof data.profile === "object") {
     const wDel = new Set(data.profile.wDel || []);
-    const before = (data.profile.weighIns || []).length;
-    data.profile.weighIns = (data.profile.weighIns || []).filter((x) => {
-      if (x && inRange(x.date, from, to)) { wDel.add(x.date); return false; }
-      return true;
-    });
-    if (data.profile.weighIns.length !== before || wDel.size !== (data.profile.wDel || []).length) {
+    const kept = [];
+    let profileChanged = false;
+    for (const x of data.profile.weighIns || []) {
+      if (x && inRange(x.date, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before)) {
+        wDel.add(x.date);
+        profileChanged = true;
+        continue;
+      }
+      if (x && inRange(x.date, from, to) && wDel.delete(x.date)) profileChanged = true;
+      kept.push(x);
+    }
+    if (profileChanged || kept.length !== (data.profile.weighIns || []).length) {
       changed = true;
+      data.profile.weighIns = kept;
       data.profile.wDel = [...wDel];
       if (!opts.quiet) data.profile.updatedAt = Date.now();
     }
   }
 
   if (data.plan && typeof data.plan === "object") {
+    const at = data.planAt && typeof data.planAt === "object" ? data.planAt : null;
     for (const d of Object.keys(data.plan)) {
-      if (inRange(d, from, to)) { delete data.plan[d]; changed = true; }
+      if (!inRange(d, from, to)) continue;
+      if (at && !dropBefore(timeMs(at[d]), before)) continue;
+      delete data.plan[d];
+      if (at) delete at[d];
+      changed = true;
     }
   }
 
@@ -121,9 +205,13 @@ export function stripRange(data, from, to, opts = {}) {
     }
   }
 
-  if (stripCheckins(data, from, to)) changed = true;
+  if (stripCheckins(data, from, to, before)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
+}
+
+function purgeStamp(p) {
+  return Math.max(timeMs(p.deletedAt) || 0, timeMs(p.at) || 0);
 }
 
 export function unionPurges(a, b) {
@@ -132,20 +220,41 @@ export function unionPurges(a, b) {
     if (!p || !validDay(p.from) || !validDay(p.to) || p.from > p.to) continue;
     const k = p.from + "\0" + p.to;
     const cur = map.get(k);
-    if (!cur) map.set(k, { from: p.from, to: p.to, at: p.at || 0, synced: !!p.synced });
-    else map.set(k, { from: p.from, to: p.to, at: Math.max(cur.at || 0, p.at || 0), synced: !!(cur.synced || p.synced) });
+    const stamp = Math.max(purgeStamp(p), cur ? purgeStamp(cur) : 0);
+    map.set(k, { from: p.from, to: p.to, at: stamp, deletedAt: stamp, synced: !!((cur && cur.synced) || p.synced) });
   }
   return [...map.values()];
+}
+
+/* Record a range delete. A repeat delete moves deletedAt. Marking the same
+   delete synced does not, or logs made in between would be wiped on the next sync. */
+export function notePurge(list, from, to, synced, now = Date.now()) {
+  const purges = Array.isArray(list) ? list : [];
+  if (!validDay(from) || !validDay(to) || from > to) return purges;
+  const hit = purges.find((p) => p && p.from === from && p.to === to);
+  if (hit) {
+    if (!synced) { hit.at = now; hit.deletedAt = now; }
+    else if (purgeCutoff(hit) == null) { hit.at = now; hit.deletedAt = now; }
+    hit.synced = !!synced;
+    return purges;
+  }
+  purges.push({ from, to, at: now, deletedAt: now, synced: !!synced });
+  return purges;
 }
 
 export function coveredBy(purges, day) {
   return (purges || []).some((p) => p && inRange(day, p.from, p.to));
 }
 
-/* Re-apply every stored purge. Quiet, so opening the app does not reshuffle sync timestamps. */
+/* Re-apply every stored purge. Quiet, so opening the app does not reshuffle sync timestamps.
+   Only logs created or updated at or before deletedAt (or at, on older records) are removed. */
 export function applyPurges(data) {
   const purges = data.purges || [];
-  for (const p of purges) stripRange(data, p.from, p.to, { quiet: true });
+  for (const p of purges) {
+    if (!p) continue;
+    const before = purgeCutoff(p);
+    stripRange(data, p.from, p.to, before == null ? { quiet: true } : { quiet: true, before });
+  }
   data.purges = purges;
   return data;
 }

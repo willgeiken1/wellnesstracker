@@ -32,7 +32,7 @@ app.schedulePush = schedulePush;
 
 function userDataBlob() {
   return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
-           deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(),
+           deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(), planAt: app.state.planAt || {},
            appLock: app.state.appLock || { enabled: false, updatedAt: 0 }, purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
 }
 
@@ -113,12 +113,15 @@ function mergeRemote(r) {
     const byDate = new Map();
     const newerLocal = lp && (lp.updatedAt || 0) >= (r.profile.updatedAt || 0);
     const order = newerLocal ? [r.profile.weighIns || [], lp.weighIns || []] : [(lp && lp.weighIns) || [], r.profile.weighIns || []];
-    order.forEach((list) => list.forEach((x) => { if (!wDel.has(x.date)) byDate.set(x.date, x); }));
+    const afterPurge = (x) => app.weighAfterPurge && app.weighAfterPurge(app.state.purges, x);
+    order.forEach((list) => list.forEach((x) => { if (!wDel.has(x.date) || afterPurge(x)) byDate.set(x.date, x); }));
+    for (const x of byDate.values()) if (afterPurge(x)) wDel.delete(x.date);
     app.state.profile = { ...(newerLocal ? lp : r.profile), weighIns: [...byDate.values()], wDel: [...wDel] };
   }
   if ((r.updatedAt || 0) > (app.state.updatedAt || 0)) {
     if (Array.isArray(r.workouts) && r.workouts.length) app.state.workouts = r.workouts;
     if (r.plan) app.state.plan = r.plan;
+    if (r.planAt && typeof r.planAt === "object") app.state.planAt = r.planAt;
     if (r.restSeconds) app.state.restSeconds = r.restSeconds;
     if (r.theme) { app.state.theme = r.theme; app.applyTheme(); }
   }

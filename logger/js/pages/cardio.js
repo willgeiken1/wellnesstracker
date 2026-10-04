@@ -115,7 +115,7 @@ function finishLive() {
   const segs = app.liveSegments(L).filter((g) => g.min > 0.05).map(({ at, ...g }) => ({ ...g, min: Math.round(g.min * 10) / 10 }));
   c.live = null;
   if (!segs.length) { app.cardioTouch(); return null; }
-  const s = { id: L.id, date: app.today(), machine: L.machine, segments: segs, startedAt: new Date(L.startedAt).toISOString(), finishedAt: new Date().toISOString(), src: "live" };
+  const s = { id: L.id, date: app.today(), machine: L.machine, segments: segs, startedAt: new Date(L.startedAt).toISOString(), finishedAt: new Date().toISOString(), loggedAt: Date.now(), src: "live" };
   s.kcal = Math.round(app.sessionKcal(s, app.bodyKg()));
   c.sessions.push(s); app.cardioTouch();
   return s;
