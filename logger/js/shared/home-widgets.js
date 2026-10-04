@@ -45,8 +45,15 @@ export function getHomeLayout(state) {
 
 export function setHomeLayout(state, layout) {
   if (!state || typeof state !== "object") return;
-  if (!state.layout || typeof state.layout !== "object") state.layout = {};
-  state.layout.homeV2 = layout;
+  if (!state.layout || typeof state.layout !== "object" || Array.isArray(state.layout)) state.layout = {};
+  if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
+    state.layout.homeV2 = layout;
+    return;
+  }
+  const next = { ...layout };
+  delete next.migrated;
+  delete next.migratedAt;
+  state.layout.homeV2 = next;
 }
 
 /* Preview only. Production Home still renders the v1 widgets. */

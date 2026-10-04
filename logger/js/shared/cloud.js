@@ -50,21 +50,18 @@ function rememberCloudPush() {
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
 }
 
+function layoutObject(layout) {
+  return layout && typeof layout === "object" && !Array.isArray(layout) ? layout : null;
+}
+
 function keepHomeV2(remoteLayout) {
-  const picked = pickHomeV2(app.state.layout, remoteLayout);
+  const picked = pickHomeV2(app.state.layout, layoutObject(remoteLayout));
   if (!picked) return;
-  app.state.layout = app.state.layout || {};
+  if (!layoutObject(app.state.layout)) app.state.layout = {};
   app.state.layout.homeV2 = picked;
 }
 
-/* The notes RPC last-write-wins layout. Fold a newer homeV2 in first so this push cannot erase another phone's arrangement. */
-async function adoptRemoteHomeV2() {
-  try {
-    const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
-    if (!error && data && data.data) keepHomeV2(data.data.layout);
-  } catch (e) { /* offline: send this phone's copy; the next pull merges */ }
-}
-
+/* Used only when merge_user_data is not deployed yet. The function itself merges homeV2. */
 async function cloudPushFallback(blob) {
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
@@ -83,12 +80,12 @@ async function cloudPushFallback(blob) {
 
 async function cloudPush() {
   if (!app.sb || !app.session) return;
-  await adoptRemoteHomeV2();
   const blob = userDataBlob();
   try {
     const { data, error } = await app.sb.rpc("merge_user_data", { p_data: blob });
     if (!error && data && typeof data === "object") {
       if (data.machineNotes && typeof data.machineNotes === "object") app.state.machineNotes = data.machineNotes;
+      if (data.layout) keepHomeV2(data.layout);
       rememberCloudPush();
       return;
     }
@@ -128,10 +125,18 @@ function mergeRemote(r) {
   if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = app.meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) app.meas()[d] = m; });
   app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, r.machineNotes);
   const layoutBefore = app.state.layout;
-  const remoteLayout = r.layout;
-  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) { if (r.muscleMode) app.state.muscleMode = r.muscleMode; if (r.layout) app.state.layout = r.layout; if (r.uniEx) app.state.uniEx = r.uniEx; app.state.settingsAt = r.settingsAt; }
+  const remoteLayout = layoutObject(r.layout);
+  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) {
+    if (r.muscleMode) app.state.muscleMode = r.muscleMode;
+    if (remoteLayout) app.state.layout = remoteLayout;
+    if (r.uniEx) app.state.uniEx = r.uniEx;
+    app.state.settingsAt = r.settingsAt;
+  }
   const pickedHome = pickHomeV2(layoutBefore, remoteLayout);
-  if (pickedHome) { app.state.layout = app.state.layout || {}; app.state.layout.homeV2 = pickedHome; }
+  if (pickedHome) {
+    if (!layoutObject(app.state.layout)) app.state.layout = {};
+    app.state.layout.homeV2 = pickedHome;
+  }
   if (r.profile) {
     const lp = app.state.profile;
     const wDel = new Set([...((lp && lp.wDel) || []), ...(r.profile.wDel || [])]);
@@ -160,8 +165,10 @@ async function cloudPull() {
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
     if (error) return;
-    if (data && data.data) app.mergeRemote(data.data);
-    applyHomeMigration(app.state);
+    if (data && data.data) {
+      app.mergeRemote(data.data);
+      applyHomeMigration(app.state, Date.now(), { afterMerge: true });
+    }
     app.save();
     app.render();
   } catch (e) { /* offline */ }

@@ -2,6 +2,7 @@
 //   PLAYWRIGHT_PATH=... node logger/tests/home-migrate.mjs
 
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../js/shared/home-migrate.js";
 import { getHomeLayout, setHomeLayout, HOME_WIDGETS } from "../js/shared/home-widgets.js";
@@ -11,7 +12,8 @@ const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const { chromium } = pw;
 
 const BASE = process.env.BASE || "http://127.0.0.1:8765";
-const ART = "/opt/cursor/artifacts";
+const ART = process.env.ARTIFACTS_DIR || "/opt/cursor/artifacts";
+const CHROME = process.env.CHROME_PATH || "/usr/local/bin/google-chrome";
 mkdirSync(ART, { recursive: true });
 const fails = [];
 
@@ -132,14 +134,14 @@ function unit() {
   const newer = customState();
   newer.layout.homeV2 = { v: 2, items: ["pattern", "today"], hidden: ["steps"], updatedAt: 9000 };
   applyHomeMigration(newer, 50);
-  check("newer homeV2 is kept", eq(newer.layout.homeV2.items, ["pattern", "today"]) && newer.layout.homeV2.updatedAt === 9000 && newer.layout.homeV2.migratedAt === 50);
+  check("newer homeV2 is kept", eq(newer.layout.homeV2.items, ["pattern", "today"]) && newer.layout.homeV2.updatedAt === 9000 && !newer.layout.homeV2.migratedAt);
   applyHomeMigration(newer, 80);
-  check("stamp is not rewritten", newer.layout.homeV2.migratedAt === 50);
+  check("stamp is not rewritten", !newer.layout.homeV2.migratedAt && newer.layout.homeV2.updatedAt === 9000);
 
   const older = customState();
   older.layout.homeV2 = { v: 2, items: ["steps"], hidden: [], updatedAt: 10 };
   applyHomeMigration(older, 60);
-  check("older homeV2 is replaced by the saved arrangement", eq(older.layout.homeV2.items, CUSTOM_ITEMS) && older.layout.homeV2.updatedAt === 200);
+  check("unflagged homeV2 survives a newer settingsAt", eq(older.layout.homeV2.items, ["steps"]) && older.layout.homeV2.updatedAt === 10 && !older.layout.homeV2.migrated);
 
   const deviceA = customState();
   applyHomeMigration(deviceA, 1000);
@@ -162,17 +164,20 @@ function unit() {
   deviceC.layout.homeV2 = winner;
   applyHomeMigration(deviceC, 3000);
   check("newer local homeV2 survives a settings push", eq(deviceC.layout.homeV2.items, ["pattern", "today"]) && eq(deviceC.layout.homeV2.hidden, ["steps"]));
-  check("surviving homeV2 keeps its clock", deviceC.layout.homeV2.updatedAt === 9000 && deviceC.layout.homeV2.migratedAt === 1000);
+  check("surviving homeV2 keeps its clock", deviceC.layout.homeV2.updatedAt === 9000 && !deviceC.layout.homeV2.migratedAt);
 
   const tieLocal = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 40 } };
   const tieRemote = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 40, migratedAt: 7 } };
   const tied = pickHomeV2(tieLocal, tieRemote);
-  check("tie keeps this phone and borrows the stamp", eq(tied.items, ["today"]) && tied.migratedAt === 7);
+  check("an edit beats a migrated copy with the same clock", eq(tied.items, ["today"]) && !tied.migratedAt);
   check("invalid homeV2 is ignored", pickHomeV2({ homeV2: { v: 1, items: ["today"] } }, { homeV2: { items: ["cardio"] } }) === null);
 
   const holder = { layout: {} };
-  setHomeLayout(holder, { v: 2, items: ["today"], hidden: [], updatedAt: 3 });
+  setHomeLayout(holder, { v: 2, items: ["today"], hidden: [], updatedAt: 3, migrated: true, migratedAt: 9 });
   check("registry round trip", getHomeLayout(holder).items[0] === "today" && HOME_WIDGETS.today.size === "medium");
+  check("setHomeLayout clears the migration flag", !holder.layout.homeV2.migrated && holder.layout.homeV2.migratedAt == null);
+
+  regressions();
 
   const oldClient = (state) => ({
     order: state.layout.home.order.slice(),
@@ -184,6 +189,151 @@ function unit() {
   const seenByOld = oldClient(aged);
   applyHomeMigration(aged, 9);
   check("older client still reads the same keys", eq(oldClient(aged), seenByOld));
+}
+
+function regressions() {
+  const stale = {
+    settingsAt: 100,
+    layout: { home: { order: ["today", "cardio"], hidden: ["map-adv"] } },
+  };
+  applyHomeMigration(stale, 1);
+  const locked = stale.layout.homeV2.items.slice();
+  stale.settingsAt = 500;
+  stale.layout.home = { order: ["cardio", "week", "today"], hidden: ["map-adv", "readiness"] };
+  applyHomeMigration(stale, 2);
+  check("1 stale migration stays until a merge", eq(stale.layout.homeV2.items, locked) && stale.layout.homeV2.migrated === true);
+  applyHomeMigration(stale, 3, { afterMerge: true });
+  const rebuilt = migrateHomeLayout(stale);
+  check("1 merge of newer old keys rebuilds an untouched migration", eq(stale.layout.homeV2.items, rebuilt.items) && stale.layout.homeV2.updatedAt === 500 && stale.layout.homeV2.migrated === true, stale.layout.homeV2.items);
+  check("1 old keys stay in place through the rebuild", eq(stale.layout.home.order, ["cardio", "week", "today"]));
+  const sameKeys = { settingsAt: 100, layout: { home: { order: ["today", "cardio"], hidden: ["map-adv"] } } };
+  applyHomeMigration(sameKeys, 1);
+  const kept = sameKeys.layout.homeV2.items.slice();
+  sameKeys.layout.homeV2 = { ...sameKeys.layout.homeV2, items: ["steps", "today"], updatedAt: Date.now() - 60000 };
+  sameKeys.settingsAt = Date.now();
+  applyHomeMigration(sameKeys, 2, { afterMerge: true });
+  check("1 a settings bump does not rebuild when the saved order is unchanged", eq(sameKeys.layout.homeV2.items, ["steps", "today"]) && !eq(kept, ["steps", "today"]));
+
+  const edited = customState();
+  applyHomeMigration(edited, 4);
+  setHomeLayout(edited, { ...edited.layout.homeV2, items: ["steps", "today"], hidden: [], updatedAt: 40 });
+  edited.settingsAt = Date.now();
+  applyHomeMigration(edited, 5, { afterMerge: true });
+  check("2 an edit is not rebuilt after a settings bump", eq(edited.layout.homeV2.items, ["steps", "today"]) && !edited.layout.homeV2.migrated && edited.layout.homeV2.migratedAt == null);
+
+  const migratedHigh = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 99999, migrated: true, migratedAt: 1 } };
+  const realEdit = { homeV2: { v: 2, items: ["steps"], hidden: ["hrv"], updatedAt: 10 } };
+  check("2 edit beats a migrated copy with a later stamp", pickHomeV2(migratedHigh, realEdit).items[0] === "steps" && pickHomeV2(realEdit, migratedHigh).items[0] === "steps");
+
+  const seeded = { homeV2: { v: 2, items: ["today"], hidden: ["readiness"], updatedAt: 100, migratedAt: 1, ouraSeeded: true } };
+  const elsewhere = { homeV2: { v: 2, items: ["cardio", "today"], hidden: ["readiness", "sleep-score"], updatedAt: 200, migratedAt: 2 } };
+  const sticky = pickHomeV2(seeded, elsewhere);
+  check("3 ouraSeeded survives a newer copy", sticky.ouraSeeded === true && sticky.items[0] === "cardio", sticky);
+
+  const spread = {
+    settingsAt: 100,
+    layout: {
+      home: { order: ["today"], hidden: ["map-adv"] },
+      homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 20, migrated: true, migratedAt: 8, ouraSeeded: true, extra: "step1field", migratedFrom: "{\"order\":[\"cardio\"],\"hidden\":[],\"briefOrder\":[],\"briefHidden\":[]}" },
+    },
+  };
+  spread.settingsAt = 400;
+  applyHomeMigration(spread, 9, { afterMerge: true });
+  check("3 rebuild keeps ouraSeeded and future fields", spread.layout.homeV2.ouraSeeded === true && spread.layout.homeV2.extra === "step1field" && spread.layout.homeV2.items.includes("today"), spread.layout.homeV2);
+
+  const local = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5 } };
+  const bad = [null, "x", [], { homeV2: null }, { homeV2: "x" }, { homeV2: { v: 1, items: [] } }, { homeV2: { v: 2 } }, { homeV2: { v: 2, items: "x" } }, { homeV2: { v: 2, hidden: ["today"], updatedAt: 99 } }];
+  check("5 malformed remotes never replace a good local", bad.every((r) => pickHomeV2(local, r) === local.homeV2));
+  const junk = pickHomeV2(local, { homeV2: { v: 2, items: [1, null, "nope", "today", "today"], hidden: ["nope", "hrv"], updatedAt: 50 } });
+  check("5 junk ids are filtered", eq(junk.items, ["today"]) && eq(junk.hidden, ["hrv"]), junk);
+
+  const left = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1, migratedAt: 5 } };
+  const right = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 1, migratedAt: 6 } };
+  check("tie on updatedAt converges", eq(pickHomeV2(left, right).items, pickHomeV2(right, left).items));
+
+  const now = 1_700_000_000_000;
+  const skewed = pickHomeV2(
+    { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: now } },
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: now + 365 * 864e5 } },
+    now
+  );
+  check("a far-future stamp is capped at one day", skewed.items[0] === "today" && skewed.updatedAt === now + 864e5, skewed);
+  const year = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: now + 365 * 864e5 } };
+  const twoDays = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: now + 2 * 864e5 } };
+  const capped = pickHomeV2(year, twoDays, now);
+  const cappedBack = pickHomeV2(twoDays, year, now);
+  check("clocks past the cap tie-break instead of the further one winning", eq(capped.items, cappedBack.items) && capped.updatedAt === now + 864e5, capped);
+}
+
+function pgSql(sql) {
+  return execFileSync("sudo", ["-u", "postgres", "psql", "-d", "notes_merge", "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", sql], { encoding: "utf8" });
+}
+
+function rpcCases() {
+  const dir = new URL("../..", import.meta.url);
+  execFileSync("sudo", ["-u", "postgres", "psql", "-d", "notes_merge", "-v", "ON_ERROR_STOP=1", "-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname], { encoding: "utf8" });
+  execFileSync("sudo", ["-u", "postgres", "psql", "-d", "notes_merge", "-v", "ON_ERROR_STOP=1", "-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname], { encoding: "utf8" });
+  const uid = "11111111-1111-1111-1111-111111111111";
+  pgSql(`delete from public.user_data where user_id = '${uid}'`);
+  const claim = `select set_config('request.jwt.claim.sub', '${uid}', false)`;
+  const call = (payload) => pgSql(`${claim}; select public.merge_user_data('${JSON.stringify(payload).replace(/'/g, "''")}'::jsonb)->>'layout';`);
+  const homeOf = (raw) => {
+    const lines = raw.trim().split("\n").filter(Boolean);
+    const layout = JSON.parse(lines[lines.length - 1]);
+    return layout && layout.homeV2;
+  };
+
+  call({
+    settingsAt: 10,
+    machineNotes: { Bench: { text: "Seat 4", at: 20 } },
+    layout: { home: { order: ["today"], hidden: ["map-adv"] }, homeV2: { v: 2, items: ["today", "cardio"], hidden: [], updatedAt: 10, migrated: true, migratedAt: 10, ouraSeeded: true } },
+  });
+  const oldClient = homeOf(call({
+    settingsAt: 999999,
+    machineNotes: { Bench: { text: "Old", at: 5 }, Squat: { text: "New", at: 30 } },
+    layout: { home: { order: ["cardio"], hidden: ["map-adv"] } },
+  }));
+  check("4 old client with a newer settingsAt keeps homeV2", eq(oldClient.items, ["today", "cardio"]) && oldClient.ouraSeeded === true, oldClient);
+  const notes = JSON.parse(pgSql(`${claim}; select data->'machineNotes' from public.user_data where user_id = '${uid}'`).trim().split("\n").filter(Boolean).pop());
+  check("4 machine notes still merge", notes.Bench.text === "Seat 4" && notes.Squat.text === "New", notes);
+
+  const edited = homeOf(call({
+    settingsAt: 11,
+    layout: { home: { order: ["today"], hidden: ["map-adv"] }, homeV2: { v: 2, items: ["steps"], hidden: [], updatedAt: 15 } },
+  }));
+  check("4 an edit beats a stored migration", eq(edited.items, ["steps"]) && edited.ouraSeeded === true, edited);
+  const migratedLater = homeOf(call({
+    settingsAt: 12,
+    layout: { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 99999, migrated: true, migratedAt: 1 } },
+  }));
+  check("4 a later migration does not replace the edit", eq(migratedLater.items, ["steps"]) && migratedLater.ouraSeeded === true, migratedLater);
+
+  const seededEdit = homeOf(call({
+    settingsAt: 13,
+    layout: { homeV2: { v: 2, items: ["muscles"], hidden: [], updatedAt: 90 } },
+  }));
+  check("4 ouraSeeded sticks onto a newer edit", seededEdit.ouraSeeded === true && seededEdit.items[0] === "muscles", seededEdit);
+
+  const partial = homeOf(call({
+    settingsAt: 14,
+    layout: { homeV2: { v: 2, hidden: [], updatedAt: 999999999 } },
+  }));
+  check("4 a partial homeV2 does not blank the stored one", eq(partial.items, ["muscles"]) && partial.ouraSeeded === true, partial);
+
+  const future = Date.now() + 10 * 864e5;
+  const capped = homeOf(call({
+    settingsAt: 15,
+    layout: { homeV2: { v: 2, items: ["hrv"], hidden: [], updatedAt: future } },
+  }));
+  check("4 a future stamp is capped at about one day", capped.items[0] === "hrv" && capped.updatedAt <= Date.now() + 864e5 + 5000 && capped.updatedAt > Date.now(), capped);
+
+  let unauth = "";
+  try {
+    pgSql(`select set_config('request.jwt.claim.sub', '', false); select public.merge_user_data('{}'::jsonb);`);
+  } catch (err) {
+    unauth = String(err.stderr || err.message || err);
+  }
+  check("4 merge_user_data still requires auth.uid()", /not authenticated/i.test(unauth), unauth.slice(0, 180));
 }
 
 function savedBlob() {
@@ -232,7 +382,7 @@ async function boot(browser, state) {
 
 async function browserCases() {
   const browser = await chromium.launch({
-    executablePath: "/usr/local/bin/google-chrome",
+    executablePath: CHROME,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const seed = savedBlob();
@@ -296,11 +446,23 @@ async function browserCases() {
   check("device B adopts A's push", eq(pulled.items, CUSTOM_ITEMS) && eq(pulled.hidden, CUSTOM_HIDDEN), pulled);
   check("device B does not re-migrate its own brief", pulled.migratedAt !== 7777 && pulled.items[0] === "today" && eq(pulled.briefOrder, ["food", "weight"]), pulled);
 
+  const corrupt = await a.page.evaluate(() => {
+    const before = window.app.state.layout.homeV2.items.slice();
+    try {
+      window.app.mergeRemote({ settingsAt: (window.app.state.settingsAt || 0) + 1000, layout: "corrupt", sessions: [] });
+      return { ok: true, items: window.app.state.layout.homeV2.items.slice(), same: JSON.stringify(before) === JSON.stringify(window.app.state.layout.homeV2.items) };
+    } catch (err) {
+      return { ok: false, message: err.message };
+    }
+  });
+  check("corrupt remote layout does not throw", corrupt.ok === true && corrupt.same === true, corrupt);
+
   check("no console errors", a.errors.length === 0 && b.errors.length === 0, [...a.errors, ...b.errors]);
   await browser.close();
 }
 
 unit();
+rpcCases();
 await browserCases();
 if (fails.length) {
   console.log("FAILED", fails.join(", "));
