@@ -82,8 +82,7 @@ function homeHTML() {
 
   return `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
-    ${app.briefHTML()}
-    ${app.weighReminderHTML()}${app.widgetize("home", `<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${hero}
+    ${app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${hero}
     <!--w:week--><section class="sec">
       <div class="sec-h"><h3>${weekLabel}</h3>
         <div class="week-nav">${app.ui.weekOffset === 0 ? app.weekGoalHeadHTML() : ""}

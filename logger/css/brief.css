@@ -59,6 +59,7 @@
 .brief-metric.tone-up b { color: var(--accent-text); }
 .brief-metric.empty b { color: var(--muted); font-weight: 600; }
 .brief.editing { outline: 1.5px dashed var(--pill-border); outline-offset: 4px; }
+.wdgs.editing .brief-top { padding-left: 22px; padding-right: 22px; }
 .brief-edit { display: grid; gap: 8px; margin-top: 12px; }
 .brief-row {
   display: grid;
