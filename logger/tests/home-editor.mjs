@@ -113,7 +113,8 @@ async function editorContrast(page, mode) {
   assertReadable(mode + " save", await fieldStyle(page, ".home-editor-save"));
   assertReadable(mode + " card name", await fieldStyle(page, ".hw-row-name"));
   assertReadable(mode + " remove", await fieldStyle(page, ".hw-remove"));
-  assertReadable(mode + " size", await fieldStyle(page, ".hw-size button"));
+  assertReadable(mode + " move", await fieldStyle(page, ".hw-move:not(:disabled)"));
+  if (await page.locator(".hw-size button").count()) assertReadable(mode + " size", await fieldStyle(page, ".hw-size button"));
   assertReadable(mode + " note", await fieldStyle(page, ".home-editor-note"));
   const grip = await page.locator(".hw-grip").first().evaluate((el) => ({
     h: el.getBoundingClientRect().height,
@@ -193,6 +194,7 @@ async function main() {
   await page.locator("[data-action='home-size'][data-id='food-today'][data-size='medium']").click();
   await page.waitForTimeout(100);
   check("size stays in the draft", await page.evaluate(() => app.ui.homeDraft.sizes["food-today"] === "medium"));
+  assertReadable("dark size", await fieldStyle(page, ".hw-size button"));
 
   await page.locator("[data-action='home-save']").click();
   await page.waitForTimeout(250);

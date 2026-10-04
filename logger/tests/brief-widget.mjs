@@ -80,8 +80,8 @@ async function main() {
   await page.locator("[data-action='home-add'][data-id='brief']").click();
   await page.waitForTimeout(250);
   check("brief re-added", await page.evaluate(() => app.ui.homeDraft.items.includes("brief")));
-  await page.locator(".sheet-back").click();
-  await page.waitForTimeout(100);
+  await page.evaluate(() => document.querySelector(".sheet-back").click());
+  await page.waitForTimeout(150);
   await page.locator("[data-action='home-cancel']").click();
   await page.waitForTimeout(200);
   check("cancel keeps the legacy brief", await page.locator("#pane-home .wdg[data-w='brief'] .brief").count() === 1);
