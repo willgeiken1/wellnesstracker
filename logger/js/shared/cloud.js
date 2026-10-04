@@ -153,9 +153,11 @@ async function initCloud() {
     const { data } = await app.sb.auth.getSession();
     app.session = data.session;
     if (app.syncSentryUser) app.syncSentryUser(app.session);
+    if (app.syncUsageUser) app.syncUsageUser(app.session);
     app.sb.auth.onAuthStateChange((_event, s) => {
       app.session = s;
       if (app.syncSentryUser) app.syncSentryUser(s);
+      if (app.syncUsageUser) app.syncUsageUser(s);
     });
     if (app.session) { app.claimLocalFor(app.session.user.id); await app.cloudPull(); app.checkProfileGate(); await app.loadPhotos(); await app.syncPhotos(); if (app.dropPurgedPhotos) await app.dropPurgedPhotos(); await app.ouraRefresh(false); if (app.flushPurges) await app.flushPurges(); }
     else { await app.loadPhotos(); app.render(); }
@@ -180,6 +182,7 @@ async function signIn(mode) {
   if (!res.data.session) { app.toast("Check your email to confirm your account, then sign in."); app.ui.sheet = null; app.render(); return; }
   app.session = res.data.session;
   if (app.syncSentryUser) app.syncSentryUser(app.session);
+  if (app.syncUsageUser) app.syncUsageUser(app.session);
   app.ui.sheet = null;
   app.claimLocalFor(app.session.user.id);
   app.toast(mode === "signup" ? "Account created. Your workouts are backing up." : "Signed in.");
@@ -199,6 +202,7 @@ async function signOut(opts) {
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
   if (app.syncSentryUser) app.syncSentryUser(null);
+  if (app.syncUsageUser) app.syncUsageUser(null);
   app.ui.onboard = false; app.renderOnboard();
   app.state.oura = { connected: false, lastSync: null, days: {} };
   app.save(); app.render();

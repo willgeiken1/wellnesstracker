@@ -1,5 +1,6 @@
 import { app } from "./runtime.js";
 import "./sentry.js";
+import "./usage.js";
 import "./data/body.js";
 import "./data/state.js";
 import "./shared/icons.js";
@@ -27,4 +28,5 @@ import "./shell/pager.js";
 
 window.app = app;
 app.render();
+if (app.noteTab) app.noteTab(app.ui.tab || "home");
 app.initCloud();

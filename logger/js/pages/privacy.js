@@ -34,6 +34,14 @@ function lockState() {
 }
 app.lockState = lockState;
 
+function usageRow() {
+  const on = app.usageSharingOn ? app.usageSharingOn() : true;
+  return `<div class="set-row usage-row">
+      <span class="usage-copy"><b>Share anonymous usage data</b><span class="sub">Crash reports and which features get used. No workouts, food, notes, photos, or email.</span></span>
+      <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" data-action="usage-share" aria-label="Share anonymous usage data"><i></i></button>
+    </div>`;
+}
+
 function privacySectionHTML() {
   const L = app.lockState();
   const how = !L.enabled ? "Off" : L.method === "passcode" ? "On · passcode" : "On · Face ID or device passcode";
@@ -44,6 +52,7 @@ function privacySectionHTML() {
       <button class="link-inline" data-action="priv-summary">What we store and who sees it</button>
     </div>
     <div class="group">
+      ${usageRow()}
       <button class="set-row" data-action="priv-export"><span>Export my data</span><span class="sub">CSV zip</span></button>
       <button class="set-row" data-action="priv-range"><span>Delete a date range</span>${app.I.chevR}</button>
       <button class="set-row" data-action="priv-lock"><span>App lock</span><span class="sub">${how}</span></button>
@@ -166,6 +175,7 @@ async function exportAllData() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
+  if (app.capture) app.capture("privacy_export");
   app.toast("Data export downloaded.");
 }
 app.exportAllData = exportAllData;

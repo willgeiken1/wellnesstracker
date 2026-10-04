@@ -283,6 +283,7 @@ app.goTab = function (to, opts = {}) {
     app.motion.index = toI;
   }
   app.render();
+  if (!same && app.noteTab) app.noteTab(to);
   window.scrollTo(0, 0);
   if (pagerMove) {
     app.motion.hold = false;

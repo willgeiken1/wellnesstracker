@@ -5,6 +5,12 @@
 .priv-intro .link-inline { display: inline-block; margin-top: 10px; font-weight: 700; }
 .priv-intro .sub { margin-top: 0; }
 
+.usage-row { align-items: flex-start; padding: 12px 0; }
+.usage-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 1px; }
+.usage-copy b { font-weight: 600; font-size: 16px; letter-spacing: -.01em; line-height: 1.25; }
+.usage-copy .sub { font-size: 13px; line-height: 1.35; }
+.usage-row .switch { margin-top: 1px; }
+
 .priv-block { margin: 14px 0; }
 .priv-block b { display: block; font-size: 15px; margin-bottom: 4px; }
 .priv-block .sub { margin: 0; }
