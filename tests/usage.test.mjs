@@ -126,9 +126,9 @@ test("before_send drops autocapture and strips identity traits and query strings
 test("the shell caches the usage modules with the current release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v23/);
+  assert.match(sw, /insight-shell-v27/);
   assert.match(sw, /\.\/js\/usage\.js/);
   assert.match(sw, /\.\/js\/usage-events\.js/);
   assert.match(sw, /\.\/js\/usage-pref\.js/);
-  assert.match(sentry, /insight-shell-v23/);
+  assert.match(sentry, /insight-shell-v27/);
 });

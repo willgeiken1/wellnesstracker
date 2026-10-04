@@ -184,8 +184,11 @@ app.effect = effect;
 /* Daily correlations for later screens. Nothing here is rendered, and nothing is sent off the device.
    The result is cached in memory until the revision changes, the options change, or app.state
    is a different object. An account switch replaces state without save(), so the object check
-   is what stops the previous account's rows from being served. Health values are not hashed
-   and are not uploaded. */
+   is what stops the previous account's rows from being served.
+   Any path that replaces app.state, or wipes the logs that object holds, must also bump
+   app.correlationRev. save() does that. A wipe that mutates the same object is invisible
+   to the object check, so the revision is what drops the old rows. Health values are not
+   hashed and are not uploaded. */
 function correlationSource() {
   const S = app.src();
   const demo = !!(app.state && app.state.demo);

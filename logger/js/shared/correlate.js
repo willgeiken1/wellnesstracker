@@ -6,13 +6,13 @@
 
    A day of logs is not an independent coin flip, and one user is compared on
    well over a hundred factor, outcome, and lag pairs. A centred 29-day mean
-   is removed from each numeric series before any cut. The first and last 14
-   days are filled by mirroring, so those windows stay centred instead of
-   one-sided. A shared drift is then not read as a split of early days against
-   late days. Each comparison uses Welch's t with an effective sample size
-   from the outcome's autocorrelation, then Benjamini-Hochberg q-values across
-   that whole family. Confidence also requires a minimum effect size, so noise
-   does not get a card. */
+   is removed from each numeric series before any cut. Days past either end
+   are filled by point reflection through the endpoint (2*y0 - y[k] at the
+   start, 2*yN - y[N-k] at the end), so the window stays centred. A shared
+   drift is then not read as a split of early days against late days. Each
+   comparison uses Welch's t with an effective sample size from the outcome's
+   autocorrelation, then Benjamini-Hochberg q-values across that whole family.
+   Confidence also requires a minimum effect size, so noise does not get a card. */
 
 export const MIN_PER_GROUP = 7;
 export const LATE_HOUR = 21;
@@ -779,8 +779,9 @@ function factorPhrase(id, label, verb) {
 }
 
 /* Centred 29-day window: 14 days on each side of the day itself.
-   Days before the first sample and after the last are filled by mirroring
-   the series across those endpoints, so the edge windows stay centred. */
+   Days before the first sample and after the last are point reflections
+   through that endpoint: 2*y0 - y[k] at the start and 2*yN - y[N-k] at the
+   end. A flat series stays flat, and a line keeps its slope. */
 const TREND_HALF = 14;
 
 /* Subtract each numeric series' centred rolling mean, then add the series
@@ -811,9 +812,9 @@ function extGrow(n) {
   extY = new Float64Array(cap);
 }
 
-/* `times` and `values` are sorted by time. Mirrored copies pad both ends by
-   up to TREND_HALF days. `apply` is called with the original index and the
-   detrended value. Interior days use only real neighbours. */
+/* `times` and `values` are sorted by time. Point-reflected copies pad both
+   ends by up to TREND_HALF days. `apply` is called with the original index
+   and the detrended value. Interior days use only real neighbours. */
 function detrendSeries(times, values, at, n, apply) {
   if (n < 2) return;
   let overall = 0;
@@ -836,7 +837,7 @@ function detrendSeries(times, values, at, n, apply) {
   let p = 0;
   for (let k = nLeft; k >= 1; k--) {
     extT[p] = 2 * t0 - times[k];
-    extY[p] = values[k];
+    extY[p] = 2 * values[0] - values[k];
     p++;
   }
   const base = p;
@@ -848,7 +849,7 @@ function detrendSeries(times, values, at, n, apply) {
   for (let k = 0; k < nRight; k++) {
     const i = n - 2 - k;
     extT[p] = 2 * tN - times[i];
-    extY[p] = values[i];
+    extY[p] = 2 * values[n - 1] - values[i];
     p++;
   }
   let lo = 0;
@@ -863,7 +864,7 @@ function detrendSeries(times, values, at, n, apply) {
   }
 }
 
-function detrendDays(days) {
+export function detrendDays(days) {
   if (!days) return {};
   const dates = Object.keys(days);
   const nDates = dates.length;
@@ -1359,7 +1360,7 @@ export function listFindings(rows) {
   return picked.concat(rest);
 }
 
-/* One numeric series, same mirrored-edge adjustment evaluate() uses for cuts.
+/* One numeric series, same point-reflected adjustment evaluate() uses for cuts.
    Cached on the extracted day object so a week check does not repeat it. */
 function adjustedSeries(days, id) {
   if (!days.__trend) Object.defineProperty(days, "__trend", { value: Object.create(null) });
@@ -1413,11 +1414,13 @@ function factorActive(days, row, date) {
   return false;
 }
 
-/* A high or medium finding that fits today. Yesterday's trigger on a next-day
-   pattern comes first. Otherwise the top good or bad finding. */
+/* The morning brief shows only a high-confidence finding. Medium stays on
+   Insights: on autocorrelated days a medium card was a false finding on Home.
+   Yesterday's trigger on a next-day pattern comes first. Otherwise the top
+   good or bad finding. */
 export function pickForToday(rows, input, today) {
   const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
-  const ranked = findingsForView(rows).filter((r) => r.valence === "good" || r.valence === "bad");
+  const ranked = findingsForView(rows).filter((r) => r.confidence === "high" && (r.valence === "good" || r.valence === "bad"));
   if (!today || !ranked.length) return ranked[0] ? { ...ranked[0], because: "overall" } : null;
   const yesterday = addDays(today, -1);
   const triggered = ranked.find((r) => r.lag === 1 && factorActive(days, r, yesterday));

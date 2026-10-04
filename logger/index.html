@@ -27,6 +27,7 @@
 <link rel="stylesheet" href="css/polish.css">
 <link rel="stylesheet" href="css/privacy.css">
 <link rel="stylesheet" href="css/brief.css">
+<link rel="stylesheet" href="css/home-widgets.css">
 <link rel="stylesheet" href="css/weekly.css">
 <script>
 try {
@@ -34,16 +35,25 @@ try {
   var saved = raw ? JSON.parse(raw) : null;
   if (saved && saved.appLock && saved.appLock.enabled && sessionStorage.getItem("insight-unlocked") !== "1")
     document.documentElement.classList.add("lock-first");
+  var light = !!(saved && saved.theme && saved.theme.mode === "light");
+  document.documentElement.dataset.mode = light ? "light" : "dark";
+  document.documentElement.dataset.bar = light ? "light" : "dark";
+  if (light) {
+    var barMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    var themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (barMeta) barMeta.setAttribute("content", "default");
+    if (themeMeta) themeMeta.setAttribute("content", "#F3F4F1");
+  }
 } catch (e) {}
 </script>
 </head>
 <body>
 <div id="stage">
-  <section class="pane active" data-pane="home" id="pane-home"></section>
-  <section class="pane" data-pane="workouts" id="pane-workouts"></section>
-  <section class="pane" data-pane="food" id="pane-food"></section>
-  <section class="pane" data-pane="progress" id="pane-progress"></section>
-  <section class="pane" data-pane="insights" id="pane-insights"></section>
+  <div class="pane-slot" data-slot="home"><section class="pane active" data-pane="home" id="pane-home"></section></div>
+  <div class="pane-slot" data-slot="workouts"><section class="pane" data-pane="workouts" id="pane-workouts"></section></div>
+  <div class="pane-slot" data-slot="food"><section class="pane" data-pane="food" id="pane-food"></section></div>
+  <div class="pane-slot" data-slot="progress"><section class="pane" data-pane="progress" id="pane-progress"></section></div>
+  <div class="pane-slot" data-slot="insights"><section class="pane" data-pane="insights" id="pane-insights"></section></div>
 </div>
 <main id="view" hidden></main>
 

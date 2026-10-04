@@ -5,6 +5,10 @@
   --text: #F4F4F1; --muted: #9B9BA1;
   --green: #D5F56B; --green-ink: #141414; --green-soft: rgba(213,245,107,.14); --green-lo: #EEF9C4;
   --lav: #C7B5FA; --pink: #F5BEDB; --ink: #141414; --red: #FF7B7B;
+  /* Secondary copy on pastel cards. .82 clears 4.5:1 on the darkest card (Sea Glass green). */
+  --on-pastel: rgba(20, 20, 20, .82);
+  /* Filled destructive buttons keep the light red and use ink, 7.3:1. White on #FF7B7B is 2.5:1. */
+  --danger-fill: #FF7B7B; --danger-on: #141414;
   --muscle: #34343A; --skin: #26262B; --base: #26262B;
   --display: "Lexend", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
   --body: "Manrope", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
@@ -47,9 +51,9 @@ body { letter-spacing: -.005em; }
 /* today card */
 .hero { background: var(--green); color: var(--ink); border-left: 0; border-radius: 28px; padding: 20px; }
 .hero.quiet { background: var(--lav); }
-.hero-k { color: rgba(20,20,20,.62); font-weight: 600; font-size: 14px; }
+.hero-k { color: var(--on-pastel); font-weight: 600; font-size: 14px; }
 .hero-t { font-weight: 600; font-size: 30px; letter-spacing: -.03em; line-height: 1.08; margin: 6px 0 8px; }
-.hero-s { color: rgba(20,20,20,.68); }
+.hero-s { color: var(--on-pastel); }
 .hero .chip { background: var(--ink); color: #fff; }
 .hero .btn.primary { background: var(--ink); color: #fff; }
 
@@ -57,7 +61,7 @@ body { letter-spacing: -.005em; }
 .rcard { background: var(--pink); color: var(--ink); border-radius: 24px; }
 .rcard-n { background: #fff; color: var(--ink); font-size: 20px; border-color: var(--ink); }
 .rcard-n.ok { border-color: #7C6AE0; } .rcard-n.down { border-color: #E2534F; } .rcard-n.up { border-color: #6CA020; }
-.rcard-t, .rcard-s { color: rgba(20,20,20,.68); } .rcard-t b { color: var(--ink); }
+.rcard-t, .rcard-s { color: var(--on-pastel); } .rcard-t b { color: var(--ink); }
 .nudge { background: var(--surface); border-radius: 20px; }
 
 /* week strip */
@@ -76,7 +80,7 @@ body { letter-spacing: -.005em; }
 .wcard.c0 { background: var(--lav); } .wcard.c1 { background: var(--green); } .wcard.c2 { background: var(--pink); }
 .wcard:active { filter: brightness(.95); }
 .wcard-t { font-weight: 600; font-size: 24px; letter-spacing: -.03em; }
-.wcard-s { color: rgba(20,20,20,.68); }
+.wcard-s { color: var(--on-pastel); }
 .wcard .chev { width: 40px; height: 40px; padding: 9px; border-radius: 20px; background: rgba(255,255,255,.6); color: var(--ink); }
 .erow { border-radius: 20px; }
 .add-row-btn { border-radius: 20px; }
@@ -114,7 +118,7 @@ body.timer-on:not(.in-workout) .start-bar { bottom: calc(var(--tabs-h) + var(--s
 .sheet-card h3 { font-weight: 600; font-size: 23px; letter-spacing: -.02em; }
 .opt { border-radius: 20px; }
 .opt[aria-pressed="true"] { background: var(--green); color: var(--ink); box-shadow: none; }
-.opt[aria-pressed="true"] .sec-sub { color: rgba(20,20,20,.6); }
+.opt[aria-pressed="true"] .sec-sub { color: var(--on-pastel); }
 .dlg { border-radius: 26px; } .dlg h3 { font-weight: 600; font-size: 21px; letter-spacing: -.02em; }
 .text-in { border-radius: 16px; }
 .group { border-radius: 22px; }

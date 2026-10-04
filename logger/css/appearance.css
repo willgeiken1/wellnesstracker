@@ -3,7 +3,7 @@
 :root {
   --accent-text: var(--green); --accent-line: var(--green);
   --nav-bg: rgba(30,30,34,.92); --nav-border: #2E2E34; --nav-icon: #C9C9CE; --pill-border: #3A3A41;
-  --panel: #F4F4F1; --panel-ink: #141414; --panel-btn: #E4E4DE; --panel-track: #E1E1DB; --ph: #5D646C;
+  --panel: #F4F4F1; --panel-ink: #141414; --panel-btn: #E4E4DE; --panel-track: #E1E1DB; --ph: #8A939C;
 }
 :root { --c4: #FFD3A8; }
 :root[data-accent="sea"]  { --c4: #CEDFCC; }
@@ -17,7 +17,9 @@
   --bg: #F3F4F1; --surface: #FFFFFF; --raised: #ECEDE9; --line: #E3E4DF; --text: #141414; --muted: #6E7073;
   --muscle: #D9DBD6; --skin: #E7E8E4; --base: #E7E8E4;
   --nav-bg: rgba(255,255,255,.95); --nav-border: #E3E4DF; --nav-icon: #55575B; --pill-border: #D3D4CF;
-  --panel: #1B1B1F; --panel-ink: #F4F4F1; --panel-btn: #2C2C31; --panel-track: #34343A; --ph: #A3A5A8;
+  --panel: #1B1B1F; --panel-ink: #F4F4F1; --panel-btn: #2C2C31; --panel-track: #34343A; --ph: #626468;
+  /* #FF7B7B on the light surfaces is about 2.2:1. This red clears 5:1 on the darkest light surface. */
+  --red: #B52E2E;
   --accent-text: #5E7A00; --accent-line: #7FA30C;
 }
 :root[data-mode="light"][data-accent="sea"]  { --accent-text: #2D6876; --accent-line: #2D6876; }
@@ -31,12 +33,14 @@
 .seg2 button[aria-pressed="true"], .range button[aria-pressed="true"] { border-color: var(--green); }
 #timer { background: var(--panel); color: var(--panel-ink); }
 #timer-track { background: var(--panel-track); }
-.timer-lbl { color: var(--panel-ink); opacity: .6; }
+.timer-lbl { color: var(--panel-ink); opacity: .85; }
 #timer-time { color: var(--panel-ink); }
 .timer-btns button { background: var(--panel-btn); color: var(--panel-ink); }
 #timer.done, #timer.done #timer-time, #timer.done .timer-btns button { color: var(--ink); }
 #toast { background: var(--text); color: var(--bg); }
-.step-row input::placeholder, .note::placeholder { color: var(--ph); }
+.step-row input::placeholder, .note::placeholder { color: var(--ph); -webkit-text-fill-color: currentColor; }
+:root[data-mode="light"] input::placeholder,
+:root[data-mode="light"] textarea::placeholder { color: #626468; }
 .link-inline { color: var(--accent-text); }
 .mgrid li.hit b { color: var(--accent-text); }
 .chip-s.up { color: var(--accent-text); }
