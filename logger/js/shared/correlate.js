@@ -1108,7 +1108,8 @@ function changeWords(result) {
   if (useAbs) {
     const shown = formatAbs(result.diff);
     if (shown === "0") return "about the same";
-    const unit = result.outcome === "liftPerf" ? " points" : "";
+    // liftPerf is a session's est. 1RM as % above the lift's recent average, so a gap is percentage points.
+    const unit = result.outcome === "liftPerf" ? " percentage points" : "";
     return shown + unit + (result.diff > 0 ? " higher" : " lower");
   }
   const shown = formatPercent(result.percent);

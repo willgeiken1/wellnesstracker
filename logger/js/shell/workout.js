@@ -19,10 +19,30 @@ function renderWorkout() {
 }
 app.renderWorkout = renderWorkout;
 
-function machineChipHTML(name) {
+const MACHINE_RE = /machine|cable|smith|plate[- ]?loaded|pulldown|pec deck|leg press|hack squat|selectorized|assisted/i;
+
+/* Settings notes only make sense for seat/pad/pin style equipment, not barbells or bodyweight. */
+export function isMachineLike(name, equipment) {
+  return MACHINE_RE.test(String(name || "")) || MACHINE_RE.test(String(equipment || ""));
+}
+
+function equipmentOf(name) {
+  const n = String(name || "").toLowerCase();
+  const lists = [(app.state && app.state.workouts) || [], app.DEFAULT_WORKOUTS || []];
+  for (const list of lists) {
+    for (const w of list) {
+      const e = (w.exercises || []).find((x) => x && x.name && x.name.toLowerCase() === n);
+      if (e && e.equipment) return e.equipment;
+    }
+  }
+  return "";
+}
+
+export function machineChipHTML(name) {
   const note = app.machineNote(name);
   const safe = app.esc(name);
   if (note) return `<button class="ms-chip" data-action="ms-edit" data-name="${safe}" aria-label="Machine settings: ${app.esc(note)}">${app.GEAR_SVG}<span>${app.esc(note)}</span></button>`;
+  if (!isMachineLike(name, equipmentOf(name))) return "";
   return `<button class="ms-add" data-action="ms-edit" data-name="${safe}">${app.GEAR_SVG}<span>Machine settings</span></button>`;
 }
 

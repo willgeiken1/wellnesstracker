@@ -11,6 +11,21 @@ app.IS_IOS = IS_IOS;
 let installPrompt = null;
 app.installPrompt = installPrompt;
 
+/* True when a service-worker reload would not lose anything the user is doing. */
+function reloadSafeNow(doc, ui, state) {
+  const el = doc && doc.activeElement;
+  if (el) {
+    const tag = String(el.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return false;
+  }
+  if (ui && ui.sheet) return false;
+  if (doc && typeof doc.querySelector === "function" && doc.querySelector(".sheet-card, dialog[open], #dialog .dlg")) return false;
+  const sessions = state && state.sessions;
+  if (Array.isArray(sessions) && sessions.some((s) => s && !s.finishedAt)) return false;
+  return true;
+}
+app.reloadSafeNow = reloadSafeNow;
+
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); app.installPrompt = e; if (app.ui.tab === "settings") app.render(); });
 
 window.addEventListener("appinstalled", () => { app.installPrompt = null; app.toast("Insight is installed. Open it from your home screen."); if (app.ui.tab === "settings") app.render(); });
@@ -20,13 +35,32 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   // home-screen install picks up a new shell instead of keeping the old page.
   try { sessionStorage.removeItem("insight-reloaded"); } catch (e) {}
   const hadWorker = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!hadWorker) return;
+  let waiting = false;
+  const reloadNow = () => {
     try {
       if (sessionStorage.getItem("insight-reloaded")) return;
       sessionStorage.setItem("insight-reloaded", "1");
     } catch (e) {}
     location.reload();
+  };
+  // Never reload under half-typed input, an open sheet or dialog, or a workout in progress.
+  // Wait for the page to be hidden, or for focus to leave and everything to close.
+  const reloadWhenSafe = () => {
+    if (app.reloadSafeNow(document, app.ui, app.state)) { reloadNow(); return; }
+    if (waiting) return;
+    waiting = true;
+    let timer = null;
+    const recheck = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (app.reloadSafeNow(document, app.ui, app.state)) reloadNow(); }, 400);
+    };
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") reloadNow(); });
+    document.addEventListener("focusout", recheck);
+    setInterval(recheck, 3000);
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadWorker) return;
+    reloadWhenSafe();
   });
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
 }

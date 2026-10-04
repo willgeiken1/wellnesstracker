@@ -20,6 +20,8 @@
 .fe b { font-family: var(--display); font-weight: 600; } .fe-m { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
 .fopt { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; background: var(--raised); border-radius: 18px; padding: 12px 14px; margin-bottom: 8px; }
 .fopt-i { width: 44px; height: 44px; border-radius: 22px; background: var(--bg); display: grid; place-items: center; font-size: 20px; }
+.fopt-i svg { width: 22px; height: 22px; }
+.burn-i { display: inline-grid; vertical-align: -3px; } .burn-i svg { width: 16px; height: 16px; }
 .fopt b { display: block; font-size: 16px; } .fopt span span { color: var(--muted); font-size: 13px; }
 .fi { background: var(--raised); border-radius: 18px; padding: 10px 12px; margin-bottom: 10px; }
 .fi-top { display: grid; grid-template-columns: 1fr 40px; gap: 6px; align-items: center; }

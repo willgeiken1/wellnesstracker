@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, splitFindings } from "../shared/correlate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -94,24 +94,25 @@ app.affectsEmpty = affectsEmpty;
 
 /* What affects you. Correlations only, and no health values leave the phone. */
 function affectsHTML() {
-  let rows = [];
+  let top = [];
+  let more = [];
   let days = 0;
   try {
     const src = app.correlationSource();
     days = loggedDays(src);
-    rows = listFindings(app.correlations());
-  } catch (e) { rows = []; }
+    ({ top, more } = splitFindings(app.correlations()));
+  } catch (e) { top = []; more = []; }
   const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
   const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;
-  if (!rows.length) {
+  if (!top.length && !more.length) {
     const title = days < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet";
     return head + `<div class="card aff-empty"><h4>${title}</h4><p class="sub">${affectsEmpty(days)}</p></div>`;
   }
   const open = !!app.ui.affectsAll;
-  const capped = rows.slice(0, SEE_ALL_LIMIT);
-  const shown = open ? capped : capped.slice(0, DISPLAY_LIMIT);
-  const more = capped.length > DISPLAY_LIMIT;
-  const toggle = more ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + DISPLAY_LIMIT : "See all " + capped.length}</button>` : "";
+  // listFindings(rows) is top.concat(more); splitFindings keeps the first screen to exactly `top`.
+  const all = top.concat(more).slice(0, SEE_ALL_LIMIT);
+  const shown = open ? all : top;
+  const toggle = more.length ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + top.length : "See all " + all.length}</button>` : "";
   return head + shown.map(affectsCard).join("") + toggle;
 }
 app.affectsHTML = affectsHTML;

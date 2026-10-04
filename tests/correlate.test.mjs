@@ -503,7 +503,9 @@ test("a finding is marked good, bad, or neutral from the outcome", () => {
 
   const strong = fill(20, (i) => ({ sleptWell: i % 2 === 0, liftPerf: i % 2 === 0 ? 4.82 : 0 }));
   const lift = correlate({ days: strong, phrases: { sleptWell: "you sleep well" } }).find((r) => r.factor === "sleptWell" && r.outcome === "liftPerf" && r.lag === 0);
-  assert.equal(lift.lead, "On days you sleep well, your strength is 4.9 points higher.");
+  assert.equal(lift.lead, "On days you sleep well, your strength is 4.9 percentage points higher.");
+  assert.match(lift.sentence, /4\.9 percentage points higher \(/);
+  assert.match(todayLine({ ...lift, because: "yesterday", phrase: "you sleep well" }), /4\.9 percentage points higher\.$|^On days you sleep well/);
   assert.equal(correlate({ days: strong, phrases: { sleptWell: "you sleep well" } }).some((r) => r.factor === "workedOut"), false);
 });
 

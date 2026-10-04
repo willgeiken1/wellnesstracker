@@ -97,6 +97,17 @@ app.ICON_CAL = ICON_CAL;
 const ICON_CAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8h3.5l1.8-3h5.4l1.8 3H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
 app.ICON_CAM = ICON_CAM;
 
+/* Add-food sheet and cardio line icons, in the same style as app.I.* */
+const foodIcon = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const FOOD_ICONS = {
+  cam: foodIcon('<path d="M4 8h3.5l1.8-3h5.4l1.8 3H20v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
+  chat: foodIcon('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
+  barcode: foodIcon('<path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>'),
+  star: foodIcon('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'),
+  edit: foodIcon('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+  flame: foodIcon('<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4 0 1.6.8 2.5 1.7 2.5C11 9.5 11 6 12 3z"/>'),
+};
+
 function foodHTML() {
   const d = app.ui.foodDay || app.today(), isToday = d === app.today();
   const seg = `<div class="seg2" role="tablist" style="margin-bottom:14px">
@@ -118,7 +129,7 @@ function foodHTML() {
   const actNudge = isToday && aT && aT.basis.steps == null && !aT.basis.activitySet && app.food().targets.auto !== false
     ? `<button class="act-nudge" data-action="pf-edit">Targets assume you're fairly active. <b>Set your activity level</b></button>` : "";
   const burned = app.cardio().sessions.filter((x) => x.date === d).reduce((n, x) => n + (x.kcal || 0), 0);
-  const burnLine = burned ? `<p class="burn">🔥 ${Math.round(burned).toLocaleString()} cal burned from cardio${isToday ? " today" : ""} <span>(not added to your target)</span></p>` : "";
+  const burnLine = burned ? `<p class="burn"><span class="burn-i">${FOOD_ICONS.flame}</span>${Math.round(burned).toLocaleString()} cal burned from cardio${isToday ? " today" : ""} <span>(not added to your target)</span></p>` : "";
   const actions = isToday ? `<div class="log-row">
       <button class="snap" data-action="food-snap">${app.ICON_CAM}<span>Snap a meal</span></button>
       <button class="mini-act" data-action="food-quick-barcode">Scan</button>
@@ -208,11 +219,11 @@ function foodAddSheetHTML() {
   const label = app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1];
   const opt = (a, icon, t, s) => `<button class="fopt" data-action="${a}"><span class="fopt-i">${icon}</span><span><b>${t}</b><span>${s}</span></span>${app.I.chevR}</button>`;
   return `<h3>Add to ${label}</h3>
-    ${opt("food-photo", "📷", "Snap your plate", "AI estimates each food. 10 photos a day")}
-    ${opt("food-describe", "💬", "Describe it", "Type or dictate a meal. 20 a day")}
-    ${opt("food-barcode", "▥", "Scan a barcode", "Packaged foods, from Open Food Facts")}
-    ${opt("food-saved", "★", "Saved and recent", "Re-log your usual meals in one tap")}
-    ${opt("food-manual", "✎", "Enter manually", "Type the calories and macros")}`;
+    ${opt("food-photo", FOOD_ICONS.cam, "Snap your plate", "AI estimates each food. 10 photos a day")}
+    ${opt("food-describe", FOOD_ICONS.chat, "Describe it", "Type or dictate a meal. 20 a day")}
+    ${opt("food-barcode", FOOD_ICONS.barcode, "Scan a barcode", "Packaged foods, from Open Food Facts")}
+    ${opt("food-saved", FOOD_ICONS.star, "Saved and recent", "Re-log your usual meals in one tap")}
+    ${opt("food-manual", FOOD_ICONS.edit, "Enter manually", "Type the calories and macros")}`;
 }
 app.foodAddSheetHTML = foodAddSheetHTML;
 

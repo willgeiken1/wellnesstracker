@@ -107,6 +107,56 @@ function lastPrDate(series) {
   return date;
 }
 
+export const STALL_MIN_WEEKS = 4;
+export const STALL_MIN_SESSIONS = 4;
+
+const dayMs = (d) => Date.parse(d + "T00:00:00Z");
+
+/* A lift only counts as stalled after 4+ weeks and 4+ sessions without beating its best. */
+export function stallWindow(series, today) {
+  if (!series || !series.length) return { ok: false, days: 0, weeks: 0, sessionsSince: 0, prDate: null };
+  const prDate = lastPrDate(series);
+  const days = Math.max(0, Math.round((dayMs(today) - dayMs(prDate)) / 86400000));
+  const sessionsSince = series.filter((p) => p.date > prDate).length;
+  return {
+    ok: days >= STALL_MIN_WEEKS * 7 && sessionsSince >= STALL_MIN_SESSIONS,
+    days, weeks: Math.max(1, Math.round(days / 7)), sessionsSince, prDate,
+  };
+}
+
+/* Advice from what is actually different about this lift:
+   ctx = { weeks, sessionsSince, repsAvg, volume: "down"|"up"|null, bwPct }.
+   One main lever plus a note on how long it has been stuck. */
+export function stallAdvice(ctx) {
+  const perWeek = ctx.sessionsSince / Math.max(1, ctx.weeks);
+  let lever;
+  if (ctx.volume === "down") lever = "Your weekly sets for this muscle fell, so bring them back to where they were before changing anything else.";
+  else if (ctx.volume === "up") lever = "Weekly sets for this muscle went up a lot, so recovery may be the limit. Trim a set or two for a couple of weeks.";
+  else if (ctx.bwPct != null && ctx.bwPct <= -1.5) lever = `Body weight is down about ${fmt1(Math.abs(ctx.bwPct))}%, which can pull strength down with it. Judge it by reps at the same weight.`;
+  else if (ctx.bwPct != null && ctx.bwPct >= 1.5) lever = `Body weight is up about ${fmt1(ctx.bwPct)}%, so the same weight is relatively lighter. Add load in the smallest jumps you have.`;
+  else if (ctx.repsAvg != null && ctx.repsAvg >= 12) lever = `Your best sets sit around ${Math.round(ctx.repsAvg)} reps. Add weight and work in the 6–10 rep range for a few weeks.`;
+  else if (ctx.repsAvg != null && ctx.repsAvg <= 3) lever = `Your best sets are ${Math.round(ctx.repsAvg)} reps or fewer. Add a back-off set of 6–8 reps to build volume under the heavy work.`;
+  else if (perWeek < 1) lever = `It showed up about ${fmt1(perWeek)} times a week since your last record. A second weekly session usually moves it more than any tweak.`;
+  else if (perWeek >= 2.5) lever = `You hit it about ${fmt1(perWeek)} times a week, which leaves little time to recover. Drop one session and make the other heavier.`;
+  else lever = "Add weight only after you hit your top rep range on every set, and add a rep each session until then.";
+  const time = ctx.weeks >= 8
+    ? `After ${ctx.weeks} weeks, change the variation or the rep range instead of repeating the same sets.`
+    : "Give it two more weeks with 5–10% less weight before you change the program.";
+  return `${lever} ${time}`;
+}
+
+/* Lifts that got identical advice share one line. */
+export function groupStallAdvice(lifts) {
+  const groups = [];
+  const byText = {};
+  lifts.forEach((l) => {
+    if (!l.advice) return;
+    if (byText[l.advice]) byText[l.advice].names.push(l.name);
+    else { byText[l.advice] = { advice: l.advice, names: [l.name] }; groups.push(byText[l.advice]); }
+  });
+  return groups;
+}
+
 function stallBounds(series) {
   const prDate = lastPrDate(series);
   const end = app.today();
@@ -147,6 +197,8 @@ function stallFactors(name, series, bounds) {
   const list = sessions();
   const oura = app.src().oura || {};
   const flags = [];
+  let volume = null;
+  let bwPct = null;
   const sleepA = avgOver(start, end, (d) => oura[d] && oura[d].total != null ? oura[d].total : null);
   const sleepB = avgOver(baseStart, baseEnd, (d) => oura[d] && oura[d].total != null ? oura[d].total : null);
   if (sleepA && sleepB && sleepA.avg <= sleepB.avg - 30 * 60) {
@@ -176,21 +228,24 @@ function stallFactors(name, series, bounds) {
     const vA = muscleSets(list, muscle, start, end);
     const vB = muscleSets(list, muscle, baseStart, baseEnd);
     const label = (app.MUSCLES[muscle] || muscle).toLowerCase();
+    if (vB > 0 && vA <= vB * 0.75) volume = "down";
+    else if (vB > 0 && vA >= vB * 1.4) volume = "up";
     if (vB > 0 && vA <= vB * 0.75) flags.push({ score: (1 - vA / vB) / 0.25, text: `Weekly ${label} sets averaged ${fmt1(vA)} vs ${fmt1(vB)} when it was climbing.` });
     else if (vB > 0 && vA >= vB * 1.4) flags.push({ score: (vA / vB - 1) / 0.4, text: `Weekly ${label} sets averaged ${fmt1(vA)} vs ${fmt1(vB)} when it was climbing.` });
   }
   const fA = series.filter((p) => p.date >= start && p.date <= end).length / weekSpan(start, end);
   const fB = series.filter((p) => p.date >= baseStart && p.date <= baseEnd).length / weekSpan(baseStart, baseEnd);
   if (fA <= fB - 0.5) flags.push({ score: (fB - fA) / 0.5, text: `${name} showed up ${fmt1(fA)} times a week vs ${fmt1(fB)} when it was climbing.` });
-  if (app.goals().weightDir === "gain") {
+  {
     const wA = weighInsIn().filter((w) => w.date >= start && w.date <= end);
     const wB = weighInsIn().filter((w) => w.date >= baseStart && w.date <= baseEnd);
     if (wA.length && wB.length) {
       const a = app.avg(wA.map((w) => w.kg)), b = app.avg(wB.map((w) => w.kg));
-      if (a < b - 0.2) flags.push({ score: 1, text: `Body weight averaged ${app.fmtW(app.kgToDisp(a))} vs ${app.fmtW(app.kgToDisp(b))} when it was climbing, while your goal is to gain.` });
+      if (b > 0) bwPct = (a - b) / b * 100;
+      if (app.goals().weightDir === "gain" && a < b - 0.2) flags.push({ score: 1, text: `Body weight averaged ${app.fmtW(app.kgToDisp(a))} vs ${app.fmtW(app.kgToDisp(b))} when it was climbing, while your goal is to gain.` });
     }
   }
-  return flags.sort((a, b) => b.score - a.score).slice(0, 3);
+  return { flags: flags.sort((a, b) => b.score - a.score).slice(0, 3), volume, bwPct };
 }
 
 function stallReport() {
@@ -204,9 +259,14 @@ function stallReport() {
     watched++;
     const st = app.liftStatus(series);
     if (st.label !== "Plateau" && st.label !== "Declining") return;
+    const win = stallWindow(series, app.today());
+    if (!win.ok) return;
     const bounds = stallBounds(series);
-    const flags = stallFactors(name, series, bounds);
-    lifts.push({ name, st, weeks: bounds.weeksSincePR, flags, rank: st.label === "Declining" ? 2 : 1 });
+    const { flags, volume, bwPct } = stallFactors(name, series, bounds);
+    const since = series.filter((p) => p.date > win.prDate && p.top && p.top.r != null);
+    const repsAvg = since.length ? app.avg(since.map((p) => p.top.r)) : null;
+    const advice = stallAdvice({ weeks: win.weeks, sessionsSince: win.sessionsSince, repsAvg, volume, bwPct });
+    lifts.push({ name, st, weeks: win.weeks, flags, advice, rank: st.label === "Declining" ? 2 : 1 });
   });
   lifts.sort((a, b) => b.rank - a.rank || b.flags.length - a.flags.length || Math.abs(b.st.pctWeek || 0) - Math.abs(a.st.pctWeek || 0));
   return { empty: watched === 0, clear: watched > 0 && lifts.length === 0, total: lifts.length, lifts: lifts.slice(0, 3) };
@@ -217,14 +277,14 @@ function stallHTML() {
   const rep = stallReport();
   const title = "Stall detective";
   if (rep.empty) return widgetShell(title, `<p class="sub">Log a lift on 6+ sessions over 6 weeks to unlock this.</p>`);
-  if (rep.clear) return widgetShell(title, `<h4 class="ins-verdict">No lifts look stalled right now.</h4><p class="ins-why">This shows up when a lift plateaus or starts slipping after at least 6 sessions over 6 weeks.</p>`);
+  if (rep.clear) return widgetShell(title, `<h4 class="ins-verdict">No lifts look stalled right now.</h4><p class="ins-why">This shows up when a lift plateaus or starts slipping after at least 4 weeks and 4 sessions without a new best.</p>`);
   const verdict = rep.total === 1
     ? `${rep.lifts[0].name} has stalled.`
     : `${rep.total} lifts have stalled or started slipping.`;
   const body = rep.lifts.map((l) => `<div class="ins-lift"><div class="ins-lift-h"><b>${app.esc(l.name)}</b><span class="chip-s ${l.st.cls}">No PR in ${l.weeks} week${l.weeks === 1 ? "" : "s"}</span></div>
-    ${l.flags.length ? `<ul class="ins-factors">${l.flags.map((f) => `<li>${app.esc(f.text)}</li>`).join("")}</ul>`
-      : `<p class="sub">Nothing else changed much during this stall. A technique or variation change, or a short deload, is a reasonable next step.</p>`}</div>`).join("");
-  return widgetShell(title, `<h4 class="ins-verdict">${app.esc(verdict)}</h4>${body}<p class="ins-why">These are patterns, not proof. The biggest gap is usually the place to start.</p>`);
+    ${l.flags.length ? `<ul class="ins-factors">${l.flags.map((f) => `<li>${app.esc(f.text)}</li>`).join("")}</ul>` : ""}</div>`).join("");
+  const advice = `<ul class="ins-factors" style="margin-top:14px">${groupStallAdvice(rep.lifts).map((g) => `<li><b>${app.esc(g.names.join(", "))}:</b> ${app.esc(g.advice)}</li>`).join("")}</ul>`;
+  return widgetShell(title, `<h4 class="ins-verdict">${app.esc(verdict)}</h4>${body}${advice}<p class="ins-why">These are patterns, not proof. The biggest gap is usually the place to start.</p>`);
 }
 
 /* ---------- Real maintenance ---------- */
