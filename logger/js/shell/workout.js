@@ -66,6 +66,7 @@ function renderSheet() {
       ${cur ? `<button class="opt clear" data-action="set-plan" data-id="">Clear plan</button>` : ""}`;
   } else if (app.ui.sheet === "food-add") { inner = app.foodAddSheetHTML();
   } else if (app.ui.sheet === "food-photo") { inner = app.foodPhotoSheetHTML();
+  } else if (app.ui.sheet === "food-describe") { inner = app.foodDescribeSheetHTML();
   } else if (app.ui.sheet === "food-review") { inner = app.foodReviewSheetHTML();
   } else if (app.ui.sheet === "food-manual") { inner = app.foodManualSheetHTML();
   } else if (app.ui.sheet === "food-saved") { inner = app.foodSavedSheetHTML();

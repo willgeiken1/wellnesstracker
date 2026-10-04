@@ -281,6 +281,7 @@ document.addEventListener("input", (ev) => {
   if (el.id === "pick-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#pick-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
+  if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
   if (el.dataset.cf && app.ui.sheet === "cardio-log") { app.updateLogTotals(); return; }
   if (el.id === "food-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#food-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "bc-amt") { app.ui.sd.amt = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#bc-amt"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
@@ -448,6 +449,20 @@ document.addEventListener("click", async (ev) => {
     case "food-day": { const d = app.addDays(app.ui.foodDay || app.today(), +b.dataset.d); app.ui.foodDay = d > app.today() ? app.today() : d; app.render(); break; }
     case "food-add": app.ui.sheet = "food-add"; app.ui.sd = { meal: b.dataset.meal }; app.renderSheet(); break;
     case "food-photo": { app.ui.sd = { meal: app.ui.sd.meal || app.autoMeal(), hint: "" }; app.ui.sheet = null; app.renderSheet(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
+    case "food-describe": {
+      const meal = (app.ui.sd && app.ui.sd.meal) || app.autoMeal();
+      const text = (app.ui.sd && app.ui.sd.text) || "";
+      app.ui.sheet = "food-describe";
+      app.ui.sd = { meal, text, source: "describe" };
+      app.renderSheet();
+      setTimeout(() => { const f = app.$("#food-describe"); if (f) f.focus(); }, 60);
+      break;
+    }
+    case "food-describe-go": {
+      app.ui.sd.text = ((app.$("#food-describe") || {}).value || "").trim();
+      await app.analyzeFoodText();
+      break;
+    }
     case "food-photo-go": { app.ui.sd.hint = ((app.$("#food-hint") || {}).value || "").trim(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
     case "food-manual": app.ui.sheet = "food-manual"; app.ui.sd = { meal: app.ui.sd.meal || "snacks" }; app.renderSheet(); break;
     case "food-edit": app.ui.sheet = "food-manual"; app.ui.sd = { edit: b.dataset.id }; app.renderSheet(); break;
@@ -464,7 +479,7 @@ document.addEventListener("click", async (ev) => {
       const t = app.reviewTotals(), name = items.map((it) => it.name).join(", ").slice(0, 80);
       const keep = items.map((it) => ({ name: it.name, portion: it.portion, kcal: app.r0(it.base.kcal * (it.mult || 1)), p: app.r0(it.base.p * (it.mult || 1)), c: app.r0(it.base.c * (it.mult || 1)), f: app.r0(it.base.f * (it.mult || 1)) }));
       const base = { kcal: app.r0(t.kcal), p: app.r0(t.p), c: app.r0(t.c), f: app.r0(t.f) };
-      app.addEntry(app.ui.sd.meal, name, base, 1, "photo", keep);
+      app.addEntry(app.ui.sd.meal, name, base, 1, app.ui.sd.source === "describe" ? "describe" : "photo", keep);
       if ((app.$("#food-fav") || {}).checked) app.favFrom(name, base, keep);
       app.ui.sheet = null; app.render(); app.toast(`Added ${app.r0(t.kcal)} cal.`); break;
     }
