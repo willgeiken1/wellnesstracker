@@ -36,15 +36,14 @@ async function boot(browser, state) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(err.message));
   page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
-  if (state) await page.addInitScript((s) => {
-    // Reload must keep what the page saved. Seeding on every navigation wiped the open workout.
-    try {
-      if (sessionStorage.getItem("insight-notes-seeded") === "1") return;
-      sessionStorage.setItem("insight-notes-seeded", "1");
-    } catch (e) {}
-    localStorage.setItem("liftlog-v1", JSON.stringify(s));
-  }, state);
-  else await page.addInitScript(() => localStorage.removeItem("liftlog-v1"));
+  if (state) {
+    await page.addInitScript((s) => {
+      // Reload must keep what the page saved. Seeding on every navigation wiped the open workout.
+      if (sessionStorage.getItem("notes-booted")) return;
+      localStorage.setItem("liftlog-v1", JSON.stringify(s));
+      sessionStorage.setItem("notes-booted", "1");
+    }, state);
+  } else await page.addInitScript(() => localStorage.removeItem("liftlog-v1"));
   await page.goto(BASE + "/index.html", { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.app && window.app.mergeRemote);
   await page.waitForTimeout(200);
@@ -80,6 +79,47 @@ async function main() {
     return { text: app.machineNote("Pec Fly Machine"), shape: v && typeof v === "object" && !Array.isArray(v) ? v : null };
   });
   check("legacy string migrates to a note record", migrated.text === "Seat 4" && migrated.shape && migrated.shape.text === "Seat 4" && typeof migrated.shape.at === "number", JSON.stringify(migrated));
+  const rpcGate = await page.evaluate(() => ({
+    missing: app.mergeRpcMissing({ code: "PGRST202", message: "Could not find the function public.merge_user_data(p_data) in the schema cache" }),
+    undefinedFn: app.mergeRpcMissing({ code: "42883", message: "function public.merge_user_data(jsonb) does not exist" }),
+    other: app.mergeRpcMissing({ code: "42501", message: "permission denied for function merge_user_data" }),
+    none: app.mergeRpcMissing(null),
+  }));
+  check("undeployed merge function is the fallback case", rpcGate.missing === true && rpcGate.undefinedFn === true && rpcGate.other === false && rpcGate.none === false, JSON.stringify(rpcGate));
+
+  const pushed = await page.evaluate(async () => {
+    const calls = [];
+    const prevSb = app.sb;
+    const prevSession = app.session;
+    app.session = { user: { id: "11111111-1111-4111-8111-111111111111" } };
+    app.state.machineNotes = { "Pec Fly Machine": { text: "Seat 4", at: 10 } };
+    app.sb = {
+      rpc: async (name, args) => {
+        calls.push({ rpc: name, sent: args.p_data.machineNotes["Pec Fly Machine"].text });
+        return { data: { machineNotes: { "Pec Fly Machine": { text: "Seat 4", at: 10 }, Dips: { text: "Wide", at: 8 } } }, error: null };
+      },
+      from() { throw new Error("fallback should not run when merge_user_data succeeds"); },
+    };
+    await app.cloudPush();
+    const keptRemote = app.machineNote("Dips");
+    app.state.machineNotes = { "Pec Fly Machine": { text: "Seat 9", at: 20 } };
+    app.sb = {
+      rpc: async () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function public.merge_user_data" } }),
+      from() {
+        return {
+          select() { return { eq: () => ({ maybeSingle: async () => ({ data: { data: { machineNotes: { "Cable Row": { text: "Pin 3", at: 3 } } } }, error: null }) }) }; },
+          upsert: async (row) => { calls.push({ upsert: row.data.machineNotes["Pec Fly Machine"].text, cable: row.data.machineNotes["Cable Row"].text }); return { error: null }; },
+        };
+      },
+    };
+    await app.cloudPush();
+    const mergedFallback = app.machineNote("Cable Row");
+    app.sb = prevSb;
+    app.session = prevSession;
+    return { calls, keptRemote, mergedFallback };
+  });
+  check("save syncs through merge_user_data and keeps the other phone's note", pushed.calls[0] && pushed.calls[0].rpc === "merge_user_data" && pushed.calls[0].sent === "Seat 4" && pushed.keptRemote === "Wide", JSON.stringify(pushed));
+  check("missing merge function falls back without dropping either note", pushed.calls[1] && pushed.calls[1].upsert === "Seat 9" && pushed.calls[1].cable === "Pin 3" && pushed.mergedFallback === "Pin 3", JSON.stringify(pushed));
 
   await page.locator('.tab[data-tab="workouts"]').click();
   await page.waitForTimeout(200);
@@ -293,6 +333,8 @@ async function main() {
   check("pill stays above the rest timer", lifted && timer && lifted.y + lifted.height <= timer.y + 1, JSON.stringify({ lifted, timer }));
   check("timer lifts the pill off the tab bar", lifted && resting && lifted.y < resting.y - 20, JSON.stringify({ lifted, resting }));
   await p.evaluate(() => {
+    const pane = document.querySelector(".pane.active");
+    pane.scrollTop = 0;
     const bar = document.createElement("div");
     bar.className = "start-bar";
     bar.innerHTML = "<button class='btn primary block'>Start</button>";

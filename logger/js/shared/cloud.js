@@ -30,21 +30,53 @@ function schedulePush() {
 }
 app.schedulePush = schedulePush;
 
-async function cloudPush() {
-  if (!app.sb || !app.session) return;
+function userDataBlob() {
+  return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
+           deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(),
+           appLock: app.state.appLock || { enabled: false, updatedAt: 0 }, purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
+}
+
+/* PostgREST says this when the migration has not been applied yet. */
+function mergeRpcMissing(error) {
+  if (!error) return false;
+  const code = String(error.code || "");
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`;
+  return code === "PGRST202" || code === "42883" || /could not find the function/i.test(msg) || /merge_user_data/i.test(msg) && /does not exist|schema cache/i.test(msg);
+}
+
+function rememberCloudPush() {
+  app.state.lastCloud = Date.now();
+  try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
+}
+
+async function cloudPushFallback(blob) {
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
     if (!error && data && data.data) app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, data.data.machineNotes);
   } catch (e) { /* offline: send this phone's copy; the next pull merges */ }
-  const blob = { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
-                 deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(),
-                 appLock: app.state.appLock || { enabled: false, updatedAt: 0 }, purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
+  blob.machineNotes = app.state.machineNotes || {};
   try {
     const { error } = await app.sb.from("user_data").upsert({ user_id: app.session.user.id, data: blob, updated_at: new Date().toISOString() });
-    if (!error) { app.state.lastCloud = Date.now(); localStorage.setItem(app.KEY, JSON.stringify(app.state)); }
+    if (!error) rememberCloudPush();
   } catch (e) { /* offline: the next save or app open retries */ }
 }
+
+async function cloudPush() {
+  if (!app.sb || !app.session) return;
+  const blob = userDataBlob();
+  try {
+    const { data, error } = await app.sb.rpc("merge_user_data", { p_data: blob });
+    if (!error && data && typeof data === "object") {
+      if (data.machineNotes && typeof data.machineNotes === "object") app.state.machineNotes = data.machineNotes;
+      rememberCloudPush();
+      return;
+    }
+    if (!(error && mergeRpcMissing(error))) return;
+  } catch (e) { /* offline: the next save or app open retries */ return; }
+  await cloudPushFallback(blob);
+}
 app.cloudPush = cloudPush;
+app.mergeRpcMissing = mergeRpcMissing;
 
 /* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
 function mergeRemote(r) {
