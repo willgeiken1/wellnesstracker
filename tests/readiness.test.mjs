@@ -151,6 +151,6 @@ test("the workout shell saves RPE, offers a normal plan, and bumps the cache", (
   assert.match(actions, /sugg-plain/);
   assert.match(workout, /rpeChipsHTML/);
   assert.match(workout, /badge rpe/);
-  assert.match(sw, /insight-shell-v27/);
+  assert.match(sw, /insight-shell-v29/);
   assert.match(purge, /"rpe"/);
 });
