@@ -1039,10 +1039,11 @@ test("a vouched future weigh-in does not skip a purge cutoff", () => {
   assert.equal(merged.weighIns.find((w) => w.date === date), undefined);
 });
 
-test("a slower phone keeps a weigh-in the writer already saved", () => {
+test("a slower phone agrees with the writer after its clock catches up", () => {
   const now = Date.parse("2026-10-04T16:00:00Z");
   const date = "2026-10-04";
   const stamp = now + 6 * 3_600_000;
+  const day = 86_400_000;
   const writer = {
     weighIns: [{ date, kg: 81.1, at: stamp }],
     wDel: [],
@@ -1052,14 +1053,21 @@ test("a slower phone keeps a weigh-in the writer already saved", () => {
   const slow = {
     weighIns: [],
     wDel: [date],
-    wDelAt: { [date]: now - 86_400_000 },
-    updatedAt: now - 86_400_000,
+    wDelAt: { [date]: now - day },
+    updatedAt: now - day,
   };
-  const onSlow = mergeWeighIns(slow, writer, [], now - 3_600_000);
-  const onWriter = mergeWeighIns(writer, slow, [], stamp);
+  let onSlow = mergeWeighIns(slow, writer, [], now - 3_600_000);
+  let onWriter = mergeWeighIns(writer, slow, [], stamp);
+  const later = now + 5 * day;
+  for (let pass = 0; pass < 4; pass++) {
+    const nextSlow = mergeWeighIns(onSlow, onWriter, [], later - 3_600_000);
+    const nextWriter = mergeWeighIns(onWriter, onSlow, [], later);
+    onSlow = nextSlow;
+    onWriter = nextWriter;
+  }
+  assert.equal(profileSig(onSlow), profileSig(onWriter));
   assert.equal(onSlow.weighIns.find((w) => w.date === date).kg, 81.1);
   assert.equal(onWriter.weighIns.find((w) => w.date === date).kg, 81.1);
-  assert.equal(onSlow.wDel.includes(date), false);
 });
 
 test("a slow clock does not move a cutoff that was already neutralised", () => {
@@ -1185,13 +1193,10 @@ function clusterSkew(rnd, n) {
   return skews;
 }
 
-/* The oracle reads the event log, not the merged tomb fields.
-   Phones must agree, clock-skew fields must be gone, and re-merging an older
-   future delete must not move a cutoff.
-   Stamp order and real time disagree when one phone's clock is ahead. A log
-   whose stamp sits between a neutralised cutoff and its raw is the same shape
-   as a re-log after a fast delete, so the oracle allows it. A correct-clock
-   log has to win only when no other log has a higher stamp. */
+/* Phones can disagree while one clock is still behind. Five days later they
+   must agree, clock-skew fields must be gone, and re-merging a stored raw must
+   not move the cutoff. The real-time resurrection oracle lives in
+   weigh-sync-sim.test.mjs. */
 function runSkewCluster(seed, skews, rounds) {
   const rnd = mulberry32(seed);
   const start = Date.parse("2026-06-15T12:00:00Z");
@@ -1258,15 +1263,25 @@ function runSkewCluster(seed, skews, rounds) {
   }
   fullSync();
   const label = `seed ${seed} skews ${skews.join(",")}`;
+  const finalReal = real;
+  /* While a phone is still behind, aheadOf can disagree. Five days later every
+     stamp from this run is in the past on every phone, and they converge. */
+  const later = real + 5 * DAY;
+  for (let pass = 0; pass < 6; pass++) {
+    for (const dst of phones) {
+      for (const src of phones) {
+        if (dst !== src) dst.profile = mergeWeighIns(dst.profile, src.profile, [], later + dst.skew);
+      }
+    }
+  }
   const agreed = profileSig(phones[0].profile);
   for (const phone of phones) {
-    assert.equal(profileSig(phone.profile), agreed, `${label} phones diverge`);
+    assert.equal(profileSig(phone.profile), agreed, `${label} phones diverge after the clock catches up`);
     for (const k of ["clocks", "clockHint", "skewApplied", "skewKnown"]) {
       assert.equal(Object.hasOwn(phone.profile, k), false, `${label} kept ${k}`);
     }
   }
   const profile = phones[0].profile;
-  const finalReal = real;
   for (const date of dates) {
     const ev = events.filter((e) => e.date === date && e.type !== "sync");
     const logs = ev.filter((e) => e.type === "log");
@@ -1305,10 +1320,9 @@ function runSkewCluster(seed, skews, rounds) {
     }
   }
   const frozen = profileSig(profile);
-  const later = real + 5 * DAY;
   for (const dst of phones) {
     for (const src of phones) {
-      if (dst !== src) dst.profile = mergeWeighIns(dst.profile, src.profile, [], later + dst.skew);
+      if (dst !== src) dst.profile = mergeWeighIns(dst.profile, src.profile, [], later + DAY + dst.skew);
     }
   }
   for (const phone of phones) assert.equal(profileSig(phone.profile), frozen, `${label} drifted after a later sync`);

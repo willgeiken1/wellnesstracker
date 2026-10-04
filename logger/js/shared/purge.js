@@ -179,7 +179,7 @@ function pickTomb(a, b) {
   /* A plain delete newer than the raw raises the cutoff. The raw stays so that
      same future stamp is not neutralised again. A plain stamp between the
      frozen cutoff and the raw is an older future value, not a new delete. */
-  if (plain.stamp > rawSide.raw) return { stamp: plain.stamp, raw: rawSide.raw, fresh: false };
+  if (rawSide.raw != null && plain.stamp > rawSide.raw) return { stamp: plain.stamp, raw: rawSide.raw, fresh: false };
   return rawSide;
 }
 
@@ -258,29 +258,9 @@ export function mergeWeighIns(localProfile, remoteProfile, purges, now = Date.no
   const byDate = new Map();
   const newerLocal = (lp.updatedAt || 0) >= (rp.updatedAt || 0);
   const lists = [rp.weighIns || [], lp.weighIns || []];
-  const profiles = [lp, rp];
-  /* A phone that saved this stamp has updatedAt at or after it, so the stamp
-     is a real log time on that phone. Both sides of the merge can see that,
-     and neither side's clock is used to raise a delete cutoff. */
-  const acceptedStamp = (x) => {
-    const t = timeMs(x && x.at);
-    if (t == null || !x || !x.date) return false;
-    return profiles.some((p) => {
-      const upd = timeMs(p && p.updatedAt) || 0;
-      if (t > upd + CLOCK_SKEW_MS) return false;
-      return (p.weighIns || []).some((w) => w && w.date === x.date && timeMs(w.at) === t);
-    });
-  };
-  const wins = (x) => {
-    const cut = coveringCutoff(purges, x && x.date, now);
-    /* A range delete still uses this phone's clock. A vouched stamp must not
-       skip that cutoff. */
-    if (cut || !acceptedStamp(x)) return weighBeatsTombstone(purges, x, wDelAt, now, wDelAtRaw);
-    const t = timeMs(x.at);
-    const tomb = timeMs(wDelAt[x.date]) || 0;
-    if (!tomb) return false;
-    return t > tomb;
-  };
+  /* Ahead-of-clock uses this phone's now only. A stamp another phone already
+     saved does not raise the cutoff or undelete a row the slow clock froze. */
+  const wins = (x) => weighBeatsTombstone(purges, x, wDelAt, now, wDelAtRaw);
   lists.forEach((list) => list.forEach((x) => {
     if (!x || !x.date) return;
     const blocked = wDel.has(x.date) || wDelAt[x.date] != null;

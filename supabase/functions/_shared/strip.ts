@@ -118,7 +118,7 @@ function pickTomb(a: { stamp: number; raw: number | null; fresh: boolean } | nul
   const plain = rawSide === a ? b : a;
   if (plain.stamp === rawSide.raw) return rawSide;
   /* A plain stamp between the frozen cutoff and the raw is an older future value. */
-  if (plain.stamp > rawSide.raw) return { stamp: plain.stamp, raw: rawSide.raw, fresh: false };
+  if (rawSide.raw != null && plain.stamp > rawSide.raw) return { stamp: plain.stamp, raw: rawSide.raw, fresh: false };
   return rawSide;
 }
 
