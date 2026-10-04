@@ -3,7 +3,7 @@ import { app } from "../runtime.js";
 /* Rearrangeable home and routine widgets. */
 /* ================= Customizable pages (widgets) ================= */
 const WIDGETS = {
-  home: { readiness: "Readiness", today: "Today", week: "This week", cardio: "Cardio", "map-adv": "Muscle map (detailed)", "map-basic": "Muscle map (basic)" },
+  home: { brief: "Morning brief", readiness: "Readiness", today: "Today", week: "This week", cardio: "Cardio", "map-adv": "Muscle map (detailed)", "map-basic": "Muscle map (basic)" },
   food: { summary: "Daily summary", log: "Log buttons", "m-breakfast": "Breakfast", "m-lunch": "Lunch", "m-dinner": "Dinner", "m-snacks": "Snacks", history: "Last 14 days" },
   trends: { goals: "Goals", lifts: "Lift progress", prs: "Personal records", effects: "What affects your lifts", load: "Training load vs recovery",
             volume: "Weekly sets per muscle", balance: "Push / pull balance", stall: "Stall detective", maintenance: "Real maintenance calories",
@@ -33,7 +33,13 @@ function widgetize(page, html, force) {
     if (parts[i] === "end") { post = parts[i + 1] || ""; continue; }
     W[parts[i]] = parts[i + 1] || ""; natural.push(parts[i]);
   }
-  const L = app.layoutOf(page), hidden = new Set(L.hidden || []);
+  const L = app.layoutOf(page);
+  // The brief used to sit above the stack. A saved order from before it was a widget
+  // should still show it there, unless the person has already hidden it.
+  if (page === "home" && natural.includes("brief") && (L.order || []).length && !(L.order || []).includes("brief") && !(L.hidden || []).includes("brief")) {
+    L.order = ["brief", ...L.order];
+  }
+  const hidden = new Set(L.hidden || []);
   const order = [...(L.order || []).filter((id) => natural.includes(id)), ...natural.filter((id) => !(L.order || []).includes(id))];
   const editing = app.ui.edit === page;
   const show = order.filter((id) => W[id] && W[id].trim() && (!hidden.has(id) || (force && force.has(id))));
@@ -126,11 +132,11 @@ app.wEatClick = wEatClick;
 app.wdrag = wdrag;
 
 document.addEventListener("pointerdown", (ev) => {
-  if (app.ui.edit || app.ui.sheet || ev.button > 0) return;
+  if (app.ui.edit || app.ui.briefEdit || app.ui.sheet || ev.button > 0) return;
   const w = ev.target.closest(".wdgs .wdg, .wcard[data-action=open-w]"); if (!w) return;
   const page = app.editPage(); if (!page) return;
   app.wlp = { x: ev.clientX, y: ev.clientY, t: setTimeout(() => {
-    app.wlp = null; app.wEatClick = true; app.ui.edit = page;
+    app.wlp = null; app.wEatClick = true; app.ui.briefEdit = false; app.ui.edit = page;
     try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
     app.render();
   }, 500) };
