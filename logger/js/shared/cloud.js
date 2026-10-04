@@ -15,6 +15,7 @@ app.sb = sb;
 app.session = session;
 app.pushTimer = pushTimer;
 app.ouraBusy = ouraBusy;
+app.cloudPullOk = false;
 
 try {
   if (window.supabase && window.supabase.createClient) {
@@ -137,6 +138,7 @@ async function cloudPull() {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
     if (error) return;
     if (data && data.data) app.mergeRemote(data.data);
+    app.cloudPullOk = true;
     app.save();
     app.render();
   } catch (e) { /* offline */ }
@@ -148,7 +150,7 @@ async function ouraRefresh(force) {
   app.ouraBusy = true;
   try {
     const { data: c } = await app.sb.from("oura_connections").select("*").eq("user_id", app.session.user.id).maybeSingle();
-    noteOuraConnected(app.state, !!c);
+    noteOuraConnected(app.state, !!c, { seed: !!app.cloudPullOk });
     app.state.oura.lastError = c ? c.last_error : null;
     if (c) {
       const stale = !c.last_sync || Date.now() - new Date(c.last_sync).getTime() > 3 * 3600_000;
@@ -234,6 +236,7 @@ async function signIn(mode) {
   if (app.syncUsageUser) app.syncUsageUser(app.session);
   app.ui.sheet = null;
   app.claimLocalFor(app.session.user.id);
+  app.cloudPullOk = false;
   app.toast(mode === "signup" ? "Account created. Your workouts are backing up." : "Signed in.");
   await app.cloudPull();
   app.checkProfileGate();
@@ -250,6 +253,7 @@ async function signOut(opts) {
   if (!skipPush) { try { await app.cloudPush(); } catch (e) {} }   // make sure the latest is backed up first
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
+  app.cloudPullOk = false;
   if (app.syncSentryUser) app.syncSentryUser(null);
   if (app.syncUsageUser) app.syncUsageUser(null);
   app.ui.onboard = false; app.renderOnboard();

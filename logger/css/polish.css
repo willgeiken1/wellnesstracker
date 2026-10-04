@@ -24,7 +24,7 @@ button.stat { width: 100%; text-align: left; }
 .stat.lvl-up b { color: #6CA020; }
 .stat.lvl-ok b { color: #7C6AE0; }
 .stat.lvl-down b { color: #E2534F; }
-.stat.wait b { font-size: 15px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; }
+.oura-wait { margin: 0 0 8px; }
 
 :root[data-mode="light"] {
   --elev-1: 0 1px 2px rgba(20, 20, 20, .05);
@@ -33,6 +33,10 @@ button.stat { width: 100%; text-align: left; }
   --inset-lo: inset 0 -1px 0 rgba(20, 20, 20, .05);
   --sheen: linear-gradient(180deg, rgba(255, 255, 255, .65), rgba(255, 255, 255, 0) 46%);
 }
+
+:root[data-mode="light"] .stat.lvl-up b { color: #547D19; }
+:root[data-mode="light"] .stat.lvl-ok b { color: #7262CE; }
+:root[data-mode="light"] .stat.lvl-down b { color: #C24744; }
 
 html, body {
   height: 100%;

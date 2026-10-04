@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { HOME_WIDGETS, getHomeLayout, setHomeLayout } from "./home-widgets.js";
+import { HOME_WIDGETS, getHomeLayout, homeAwaitingSync, setHomeLayout } from "./home-widgets.js";
 
 /* Home Oura gating.
    hasOura is the ring or sample data.
@@ -70,28 +70,29 @@ export function gatedOuraStripHTML(state) {
     if (!html) return;
     (widget.size === "small" ? small : medium).push(html);
   });
-  return (small.length ? `<div class="stats">${small.join("")}</div>` : "") + medium.join("");
+  const body = (small.length ? `<div class="stats">${small.join("")}</div>` : "") + medium.join("");
+  if (!body || !homeAwaitingSync()) return body;
+  return `<p class="sub oura-wait">Waiting for first sync</p>${body}`;
 }
 
 /* Called from ouraRefresh after the connection row is read.
    Seeds the first time a v2 layout is on the phone while the ring is connected.
    Already-connected saves still seed once, because oura.connected is persisted
-   and would not flip again. A missing layout waits. Disconnect leaves homeV2 alone. */
-export function noteOuraConnected(state, connected) {
+   and would not flip again. A missing layout waits. Disconnect leaves homeV2 alone.
+   Pass seed:false when this session has not pulled yet. settingsAt is left alone:
+   bumping it makes a stale phone win muscle mode, uniEx, and the whole layout. */
+export function noteOuraConnected(state, connected, opt) {
   if (!state || typeof state !== "object") return false;
   if (!state.oura || typeof state.oura !== "object" || Array.isArray(state.oura)) {
     state.oura = { connected: false, lastSync: null, days: {} };
   }
   const now = !!connected;
   state.oura.connected = now;
-  if (!now) return false;
+  if (!now || (opt && opt.seed === false)) return false;
   const current = getHomeLayout(state);
   if (!current || current.ouraSeeded) return false;
   const next = seedOuraWidgets(current);
   setHomeLayout(state, next);
-  /* settingsAt is what this branch's cloud merge uses for the whole layout.
-     homeV2.updatedAt is what the other merge will use. Same instant, so the flag travels with the items. */
-  state.settingsAt = Math.max(state.settingsAt || 0, next.updatedAt);
   return true;
 }
 

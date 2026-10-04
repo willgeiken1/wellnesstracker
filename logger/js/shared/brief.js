@@ -113,9 +113,10 @@ export function ouraMetric() {
   if (!o || o.readiness == null) return null;
   const lv = app.readinessLevel(o.readiness);
   const when = o.date === app.today() ? "Today" : o.date === app.addDays(app.today(), -1) ? "Yesterday" : app.fmtDate(o.date, { month: "short", day: "numeric" });
+  const sleepOnTile = ouraWidgetShowing(app.state, "sleep-score");
   return {
     id: "oura", label: "Readiness", value: String(o.readiness), tone: lv.cls, bar: o.readiness,
-    meta: o.sleepScore != null ? `Sleep ${o.sleepScore}` : "No sleep score",
+    meta: sleepOnTile ? null : (o.sleepScore != null ? `Sleep ${o.sleepScore}` : "No sleep score"),
     sub: `${lv.word} · ${when}${app.state.demo ? " · sample" : ""}`,
   };
 }

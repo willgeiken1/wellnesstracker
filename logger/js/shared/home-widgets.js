@@ -58,26 +58,41 @@ function awaitingFirstSync() {
   return !!(app.state && app.state.oura && app.state.oura.connected);
 }
 
-const WAITING = "Waiting for first sync";
+function labelFor(id) {
+  if (id === "sleep-score") return "Sleep score";
+  if (id === "sleep-duration") return "Sleep";
+  if (id === "hrv") return "HRV";
+  if (id === "resting-hr") return "Resting HR";
+  if (id === "steps") return "Steps";
+  return "Readiness";
+}
 
 function tile(id, label, value, opt = {}) {
-  const cls = ["stat", opt.level ? `lvl-${opt.level}` : "", opt.wait ? "wait" : ""].filter(Boolean).join(" ");
-  const inner = `<b>${esc(value)}</b><span>${esc(label)}</span>`;
+  const cls = ["stat", opt.level ? `lvl-${opt.level}` : ""].filter(Boolean).join(" ");
+  const caption = opt.word ? `${label} · ${opt.word}` : label;
+  const inner = `<b>${esc(value)}</b><span>${esc(caption)}</span>`;
   if (id === "readiness") {
-    return `<button type="button" class="${cls}" data-oura-widget="${id}" data-action="tab" data-tab="recovery" aria-label="${esc(label)}">${inner}</button>`;
+    const named = value != null && value !== "–" ? `${label} ${value}` : label;
+    const aria = opt.word ? `${named}, ${opt.word}, open Recovery` : `${named}, open Recovery`;
+    return `<button type="button" class="${cls}" data-oura-widget="${id}" data-action="tab" data-tab="recovery" aria-label="${esc(aria)}">${inner}</button>`;
   }
   return `<div class="${cls}" data-oura-widget="${id}">${inner}</div>`;
 }
 
+export function homeAwaitingSync() {
+  return awaitingFirstSync();
+}
+
 function renderOura(id) {
+  const label = labelFor(id);
   if (awaitingFirstSync()) return id === "last-night"
-    ? `<div class="card" data-oura-widget="last-night"><h4>Last night</h4><p class="sub">${esc(WAITING)}</p></div>`
-    : tile(id, id === "sleep-score" ? "Sleep score" : id === "sleep-duration" ? "Sleep" : id === "hrv" ? "HRV" : id === "resting-hr" ? "Resting HR" : id === "steps" ? "Steps" : "Readiness", WAITING, { wait: true });
+    ? `<div class="card" data-oura-widget="last-night"><h4>Last night</h4><p class="sub">–</p></div>`
+    : tile(id, label, "–");
   const o = reading() || {};
   const hm = (sec) => (typeof app.fmtHM === "function" ? app.fmtHM(sec) : shown(sec));
   const lv = o.readiness != null && typeof app.readinessLevel === "function" ? app.readinessLevel(o.readiness) : null;
   switch (id) {
-    case "readiness": return tile(id, "Readiness", shown(o.readiness), { level: lv && lv.cls });
+    case "readiness": return tile(id, "Readiness", shown(o.readiness), { level: lv && lv.cls, word: lv && lv.word });
     case "sleep-score": return tile(id, "Sleep score", shown(o.sleepScore));
     case "sleep-duration": return tile(id, "Sleep", shown(o.total, hm));
     case "hrv": return tile(id, "HRV", shown(o.hrv, (v) => `${v} ms`));
