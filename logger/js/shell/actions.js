@@ -65,6 +65,7 @@ function finishSession(s, quiet) {
     app.state.deleted = [...(app.state.deleted || []), s.id];
     if (!quiet) app.toast("Workout discarded. No sets were logged.");
   } else {
+    if (s.plain) delete s.plain;
     s.finishedAt = new Date().toISOString(); s.mod = Date.now();
     if (!quiet) { app.ui.sheet = "summary"; app.ui.sd = { id: s.id }; }
   }
@@ -107,6 +108,7 @@ function logSet(i) {
   entry.muscles = [...e.muscles];
   const set = { w, r, ...(base.uni ? { uni: base.uni } : {}), note: d.note.trim() || undefined, at: new Date().toISOString() };
   if (d.tag) set.tag = d.tag;
+  if (Number.isInteger(d.rpe) && d.rpe >= 6 && d.rpe <= 10) set.rpe = d.rpe;
   entry.sets.push(set);
   s.mod = Date.now();
   const prs = app.prsFor(e.name, set, s.date);
@@ -560,11 +562,11 @@ document.addEventListener("click", async (ev) => {
     case "set-edit": {
       const s = app.activeSession(); if (!s) break;
       const e = app.liveExercises(s)[i], x = app.setsFor(s, e.name)[+b.dataset.s]; if (!x) break;
-      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.name, j: +b.dataset.s, tag: x.tag || null }; app.renderSheet(); break;
+      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.name, j: +b.dataset.s, tag: x.tag || null, rpe: x.rpe || null }; app.renderSheet(); break;
     }
     case "hist-set": {
       const s = app.state.sessions.find((x) => x.id === b.dataset.id), e = s && s.entries.find((x) => x.exercise === b.dataset.ex), x = e && e.sets[+b.dataset.s]; if (!x) break;
-      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.exercise, j: +b.dataset.s, tag: x.tag || null }; app.renderSheet(); break;
+      app.ui.sheet = "set-edit"; app.ui.sd = { sid: s.id, ex: e.exercise, j: +b.dataset.s, tag: x.tag || null, rpe: x.rpe || null }; app.renderSheet(); break;
     }
     case "se-step": {
       const inp = document.getElementById(b.dataset.f); if (!inp) break;
@@ -590,6 +592,7 @@ document.addEventListener("click", async (ev) => {
       t.x.w = w; t.x.r = r;
       if (note) t.x.note = note; else delete t.x.note;
       if (app.ui.sd.tag) t.x.tag = app.ui.sd.tag; else delete t.x.tag;
+      if (Number.isInteger(app.ui.sd.rpe) && app.ui.sd.rpe >= 6 && app.ui.sd.rpe <= 10) t.x.rpe = app.ui.sd.rpe; else delete t.x.rpe;
       app.recomputePRs(t.e.exercise);
       t.s.mod = Date.now(); delete app.ui.drafts[t.e.exercise];
       app.save(); app.ui.sheet = null; app.render(); app.toast("Set updated."); break;
@@ -611,6 +614,31 @@ document.addEventListener("click", async (ev) => {
       const d = app.draftFor(s, e.name);
       d.w = sg.w != null ? app.fmtNum(sg.w) : ""; d.r = String(sg.r);
       app.renderWorkout(); app.tick(); break;
+    }
+    case "sugg-plain":
+    case "sugg-ready": {
+      const s = app.activeSession(); if (!s) break;
+      const e = app.liveExercises(s)[i]; if (!e) break;
+      const list = (Array.isArray(s.plain) ? s.plain : []).filter((n) => n !== e.name);
+      if (a === "sugg-plain") list.push(e.name);
+      if (list.length) s.plain = list; else delete s.plain;
+      s.mod = Date.now();
+      delete app.ui.drafts[e.name];
+      app.save(); app.renderWorkout(); app.tick(); break;
+    }
+    case "rpe": {
+      const s = app.activeSession(); if (!s) break;
+      const e = app.liveExercises(s)[i]; if (!e) break;
+      const d = app.draftFor(s, e.name), n = +b.dataset.n;
+      d.rpe = d.rpe === n ? null : n;
+      app.renderWorkout(); app.tick(); break;
+    }
+    case "se-rpe": {
+      if (!app.ui.sd) break;
+      const n = +b.dataset.n;
+      app.ui.sd.rpe = app.ui.sd.rpe === n ? null : n;
+      document.querySelectorAll('[data-action="se-rpe"]').forEach((el) => el.setAttribute("aria-pressed", String(+el.dataset.n === app.ui.sd.rpe)));
+      break;
     }
     case "tag": {
       const s = app.activeSession(); if (!s) break;

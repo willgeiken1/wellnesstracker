@@ -216,7 +216,7 @@ export function buildExportFiles(state, opts = {}) {
   }
   files.push({ name: "routines.csv", text: toCsv(routines) });
 
-  const sets = [["date", "workout_id", "workout", "exercise", "set_index", "weight", "reps", "tag", "note", "pr", "left_weight", "left_reps", "right_weight", "right_reps"]];
+  const sets = [["date", "workout_id", "workout", "exercise", "set_index", "weight", "reps", "tag", "note", "pr", "left_weight", "left_reps", "right_weight", "right_reps", "rpe"]];
   for (const sess of s.sessions || []) {
     for (const e of sess.entries || []) {
       (e.sets || []).forEach((x, i) => {
@@ -225,6 +225,7 @@ export function buildExportFiles(state, opts = {}) {
           num(x.w), num(x.r), x.tag || "", x.note || "", (x.pr || []).join(" "),
           x.uni ? num(x.uni.l && x.uni.l.w) : "", x.uni ? num(x.uni.l && x.uni.l.r) : "",
           x.uni ? num(x.uni.r && x.uni.r.w) : "", x.uni ? num(x.uni.r && x.uni.r.r) : "",
+          num(x.rpe),
         ]);
       });
     }

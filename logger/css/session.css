@@ -12,6 +12,15 @@
 .set-badges { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: 2px; }
 .badge { font-family: var(--body); font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 8px; background: var(--raised); color: var(--muted); }
 .badge.pr { background: var(--green); color: var(--ink); } .badge.fail { background: var(--pink); color: var(--ink); }
+.badge.rpe { background: var(--lav); color: var(--ink); }
+.sugg > .sugg-ready { color: var(--text); font-weight: 600; margin-top: 6px; }
+.sugg > .link-inline { display: inline-flex; align-items: center; min-height: 36px; margin-top: 4px; font-size: 13px; }
+.sugg-quiet { color: var(--muted); font-size: 13px; line-height: 1.4; margin: 0 0 10px; }
+.rpe { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.rpe-l { font-size: 12px; font-weight: 800; letter-spacing: .04em; color: var(--muted); margin-right: 2px; }
+.rpe button { min-width: 36px; height: 36px; padding: 0 8px; border-radius: 18px; border: 1.5px solid var(--pill-border); font-size: 14px; font-weight: 700; color: var(--text); background: transparent; }
+.rpe button[aria-pressed="true"] { background: var(--lav); border-color: var(--lav); color: var(--ink); }
+.rpe-hint { color: var(--muted); font-size: 12px; line-height: 1.35; margin: 4px 0 0; }
 .set-n.wu { color: var(--lav); font-weight: 700; }
 .panel-top { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
 .swap-keep { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: -4px 0 14px; }

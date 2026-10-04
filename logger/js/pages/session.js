@@ -23,48 +23,269 @@ function modeHigh(nums) {
 }
 app.modeHigh = modeHigh;
 
-/* "Same reps, add weight each time":
-   hit the target reps on every working set at the top weight -> add weight; missed -> repeat; missed twice running -> step back ~10%. */
-function suggestion(name, sessionId) {
-  const hist = app.finished().filter((s) => s.id !== sessionId)
-    .map((s) => s.entries.find((e) => e.exercise === name)).filter((e) => e && e.sets.some(app.isWork));
-  if (!hist.length) return null;
-  const work = (e) => e.sets.filter(app.isWork);
-  const last = work(hist[0]);
-  if (last.every((x) => x.w == null)) {
-    const best = Math.max(...last.map((x) => x.r));
-    return { w: null, r: best + 1, kind: "bw", why: `Your best set last time was ${app.pl(best, "rep")}. Go for ${best + 1}.` };
+/* Readiness and RPE sit on top of the usual progression.
+   RPE from the last session is part of the normal plan. Today's readiness is a separate, dismissible layer. */
+const roundW = (v) => Math.round(v * 100) / 100;
+const MINUS = "−";
+
+export function bestEpley(sets) {
+  let best = null;
+  for (const x of sets || []) {
+    if (!x || x.tag === "warmup" || x.w == null || !(Number(x.r) > 0)) continue;
+    const e = Number(x.w) * (1 + Number(x.r) / 30);
+    if (!Number.isFinite(e)) continue;
+    if (best == null || e > best) best = e;
   }
-  const top = (e) => { const ws = work(e).filter((x) => x.w != null); const m = Math.max(...ws.map((x) => x.w)); return { W: m, sets: ws.filter((x) => x.w === m) }; };
-  const { W, sets } = top(hist[0]);
-  const T = app.modeHigh(hist.slice(0, 3).flatMap((e) => (work(e).some((x) => x.w != null) ? top(e).sets.map((x) => x.r) : [])));
-  const inc = app.weightInc(W);
-  if (sets.every((x) => x.r >= T)) {
-    const out = { w: W + inc, r: T, kind: "up", why: `You hit ${T} reps on every set at ${app.fmtNum(W)} last time.` };
-    const o = app.state.oura && app.state.oura.days && app.state.oura.days[app.today()];
-    if (!app.state.demo && o && o.readiness != null && o.readiness < 70) out.note = `Readiness is ${o.readiness} today, so repeating ${app.fmtNum(W)} is a fine call too.`;
+  return best;
+}
+
+export function summarizeReadiness(rows) {
+  const high = [], low = [];
+  for (const row of rows || []) {
+    if (!row || row.perf == null || row.readiness == null) continue;
+    const perf = Number(row.perf), r = Number(row.readiness);
+    if (!Number.isFinite(perf) || !Number.isFinite(r)) continue;
+    if (r >= 85) high.push(perf);
+    else if (r < 70) low.push(perf);
+  }
+  const avg = (a) => (a.length ? a.reduce((s, n) => s + n, 0) / a.length : null);
+  return { highN: high.length, lowN: low.length, highAvg: avg(high), lowAvg: avg(low) };
+}
+
+export function meanRpe(sets) {
+  const rs = [];
+  for (const x of sets || []) {
+    if (!x || x.tag === "warmup") continue;
+    const n = Number(x.rpe);
+    if (Number.isInteger(n) && n >= 6 && n <= 10) rs.push(n);
+  }
+  if (!rs.length) return null;
+  return rs.reduce((a, b) => a + b, 0) / rs.length;
+}
+
+export function applyRpe(plan, avgRpe) {
+  const out = { w: plan.w, r: plan.r, kind: plan.kind };
+  if (avgRpe == null || !Number.isFinite(Number(avgRpe))) return out;
+  const avg = Number(avgRpe);
+  const bw = plan.w == null;
+  const inc = plan.inc || 0;
+  if (avg <= 6) {
+    if (bw) out.r = plan.r + 1;
+    else if (inc) out.w = roundW(plan.w + inc);
     return out;
   }
-  let misses = 0;
-  for (const e of hist) {
-    if (!work(e).some((x) => x.w != null)) break;
-    const t = top(e);
-    if (t.W !== W || t.sets.every((x) => x.r >= T)) break;
-    misses++;
+  if (avg >= 10) {
+    if (bw) out.r = Math.max(1, plan.r - 1);
+    else if (inc) out.w = Math.max(inc, roundW(plan.w - inc));
+    return out;
   }
-  if (misses >= 2) return { w: Math.max(inc, app.roundTo(W * 0.9, inc)), r: T, kind: "down", why: `${T} reps at ${app.fmtNum(W)} was missed two sessions running. A small step back lets you build up again.` };
-  return { w: W, r: T, kind: "same", why: `You didn't get ${T} reps on every set at ${app.fmtNum(W)} last time. Stay here until you do.` };
+  if (avg >= 9 && (plan.kind === "up" || plan.kind === "bw")) {
+    if (bw) out.r = Math.max(1, plan.r - 1);
+    else if (inc) out.w = Math.max(inc, roundW(plan.w - inc));
+  }
+  return out;
+}
+
+function weightPhrase(delta, unit) {
+  const n = (Math.round(Math.abs(delta) * 100) / 100).toString();
+  return delta < 0 ? `${MINUS}${n} ${unit}` : `+${n} ${unit}`;
+}
+
+/* Gentle defaults until this lift has at least three high and three low readiness days.
+   High adds one increment (never on a deload). Low drops one set when there are three or more, otherwise one increment. */
+export function readinessAdjust(base, readiness, history, unit) {
+  const same = { w: base.w, r: base.r, sets: base.sets, ready: null, adjusted: false };
+  if (readiness == null || !Number.isFinite(Number(readiness))) return same;
+  const n = Math.round(Number(readiness));
+  const bw = base.w == null;
+  const inc = base.inc || 0;
+  const hold = { ...same, ready: `Readiness ${n}, holding steady` };
+  const enough = !!(history && history.highN >= 3 && history.lowN >= 3 && history.highAvg != null && history.lowAvg != null && history.highAvg > 0);
+  const strongerHigh = enough && history.highAvg >= history.lowAvg * 1.02;
+  const weakerLow = enough && history.lowAvg <= history.highAvg * 0.95;
+  if (n >= 85) {
+    if (base.kind === "down" || (enough && !strongerHigh)) return hold;
+    if (bw) return { w: null, r: base.r + 1, sets: base.sets, ready: `Readiness ${n}, suggesting +1 rep`, adjusted: true };
+    if (!inc) return hold;
+    return { w: roundW(base.w + inc), r: base.r, sets: base.sets, ready: `Readiness ${n}, suggesting ${weightPhrase(inc, unit)}`, adjusted: true };
+  }
+  if (n >= 70) return hold;
+  if (weakerLow) {
+    if (bw) {
+      const r = Math.max(1, base.r - 1);
+      if (r === base.r) return hold;
+      return { w: null, r, sets: base.sets, ready: `Readiness ${n}, suggesting ${MINUS}1 rep`, adjusted: true };
+    }
+    if (!inc) return hold;
+    const w = Math.max(inc, roundW(base.w - inc));
+    if (Math.abs(w - base.w) < 1e-6) return hold;
+    return { w, r: base.r, sets: base.sets, ready: `Readiness ${n}, suggesting ${weightPhrase(-inc, unit)}`, adjusted: true };
+  }
+  if ((base.sets || 0) >= 3) {
+    return { w: base.w, r: base.r, sets: base.sets - 1, ready: `Readiness ${n}, dropping a set today`, adjusted: true };
+  }
+  if (bw) {
+    const r = Math.max(1, base.r - 1);
+    if (r === base.r) return hold;
+    return { w: null, r, sets: base.sets, ready: `Readiness ${n}, suggesting ${MINUS}1 rep`, adjusted: true };
+  }
+  if (!inc) return hold;
+  const w = Math.max(inc, roundW(base.w - inc));
+  if (Math.abs(w - base.w) < 1e-6) return hold;
+  return { w, r: base.r, sets: base.sets, ready: `Readiness ${n}, suggesting ${weightPhrase(-inc, unit)}`, adjusted: true };
+}
+
+export function rpeNote(avg, kind) {
+  if (avg == null || !Number.isFinite(Number(avg))) return "";
+  const n = Number(avg);
+  const shown = Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString();
+  if (n <= 6) return ` Last time felt easy (RPE ${shown}), so this adds a little more.`;
+  if (n >= 10 && kind !== "up" && kind !== "bw") return ` Last time was a max effort (RPE ${shown}), so this backs off a little.`;
+  if (n >= 9) return ` Last time was very hard (RPE ${shown}), so this holds here.`;
+  return "";
+}
+
+export function quietReadinessNote(readiness) {
+  if (readiness == null || !Number.isFinite(Number(readiness))) return "";
+  const n = Math.round(Number(readiness));
+  if (n < 70) return `Readiness ${n}. No history yet, so nothing is changed. Starting a little lighter is reasonable.`;
+  if (n >= 85) return `Readiness ${n}. No history yet, so the usual plan stands.`;
+  return "";
+}
+
+function displayKind(kind, w, lastW) {
+  if (kind === "bw" || w == null) return "bw";
+  if (lastW == null || !Number.isFinite(Number(lastW))) return kind;
+  if (w > lastW + 1e-6) return "up";
+  if (w < lastW - 1e-6) return "down";
+  return "same";
+}
+
+export function applyTrainingAdjust(plan, opts = {}) {
+  const avg = opts.avgRpe;
+  const after = applyRpe(plan, avg);
+  const changed = after.w !== plan.w || after.r !== plan.r;
+  const why = (plan.why || "") + (changed ? rpeNote(avg, plan.kind) : "");
+  const layer = readinessAdjust(
+    { w: after.w, r: after.r, kind: plan.kind, sets: plan.sets, inc: plan.inc },
+    opts.readiness, opts.history, opts.unit || "lb"
+  );
+  const picked = opts.dismissed
+    ? { w: after.w, r: after.r, sets: plan.sets, ready: null, adjusted: false }
+    : layer;
+  return {
+    w: picked.w, r: picked.r, sets: picked.sets,
+    kind: displayKind(plan.kind, picked.w, opts.lastW),
+    why, ready: picked.ready,
+    adjusted: !opts.dismissed && !!layer.adjusted,
+    plain: !!opts.dismissed,
+    canReady: !!opts.dismissed && !!layer.adjusted,
+    base: { w: after.w, r: after.r, sets: plan.sets },
+  };
+}
+
+function todayReadinessScore() {
+  if (!app.state || app.state.demo) return null;
+  const o = app.state.oura && app.state.oura.days && app.state.oura.days[app.today()];
+  if (!o || o.readiness == null || o.readiness === "") return null;
+  const n = Number(o.readiness);
+  return Number.isFinite(n) ? n : null;
+}
+
+function readinessRows(sessions, name) {
+  const days = (app.state.oura && app.state.oura.days) || {};
+  const rows = [];
+  for (const s of sessions) {
+    const e = (s.entries || []).find((x) => x.exercise === name);
+    if (!e) continue;
+    const perf = bestEpley(e.sets);
+    const day = days[s.date];
+    const readiness = day && day.readiness != null && day.readiness !== "" ? Number(day.readiness) : null;
+    if (perf == null || readiness == null || !Number.isFinite(readiness)) continue;
+    rows.push({ readiness, perf });
+  }
+  return rows;
+}
+
+/* "Same reps, add weight each time":
+   hit the target reps on every working set at the top weight -> add weight; missed -> repeat; missed twice running -> step back ~10%.
+   Then nudge from last session's RPE, then from today's readiness. */
+function suggestion(name, sessionId) {
+  const histS = app.finished().filter((s) => s.id !== sessionId);
+  const hist = histS
+    .map((s) => ({ s, e: s.entries.find((e) => e.exercise === name) }))
+    .filter((x) => x.e && x.e.sets.some(app.isWork));
+  if (!hist.length) return null;
+  const work = (e) => e.sets.filter(app.isWork);
+  const last = work(hist[0].e);
+  const cur = app.state.sessions.find((s) => s.id === sessionId);
+  const dismissed = !!(cur && Array.isArray(cur.plain) && cur.plain.includes(name));
+  const opts = {
+    avgRpe: meanRpe(last),
+    readiness: todayReadinessScore(),
+    history: summarizeReadiness(readinessRows(histS, name)),
+    unit: app.wUnit(),
+    dismissed,
+  };
+  if (last.every((x) => x.w == null)) {
+    const best = Math.max(...last.map((x) => x.r));
+    return applyTrainingAdjust({
+      w: null, r: best + 1, kind: "bw", sets: last.length, inc: 1,
+      why: `Your best set last time was ${app.pl(best, "rep")}. Go for ${best + 1}.`,
+    }, opts);
+  }
+  const top = (e) => { const ws = work(e).filter((x) => x.w != null); const m = Math.max(...ws.map((x) => x.w)); return { W: m, sets: ws.filter((x) => x.w === m) }; };
+  const { W, sets } = top(hist[0].e);
+  const T = app.modeHigh(hist.slice(0, 3).flatMap((x) => (work(x.e).some((y) => y.w != null) ? top(x.e).sets.map((y) => y.r) : [])));
+  const inc = app.weightInc(W);
+  opts.lastW = W;
+  let plan;
+  if (sets.every((x) => x.r >= T)) {
+    plan = { w: W + inc, r: T, kind: "up", sets: last.length, inc, why: `You hit ${T} reps on every set at ${app.fmtNum(W)} last time.` };
+  } else {
+    let misses = 0;
+    for (const x of hist) {
+      if (!work(x.e).some((y) => y.w != null)) break;
+      const t = top(x.e);
+      if (t.W !== W || t.sets.every((y) => y.r >= T)) break;
+      misses++;
+    }
+    if (misses >= 2) plan = { w: Math.max(inc, app.roundTo(W * 0.9, inc)), r: T, kind: "down", sets: last.length, inc, why: `${T} reps at ${app.fmtNum(W)} was missed two sessions running. A small step back lets you build up again.` };
+    else plan = { w: W, r: T, kind: "same", sets: last.length, inc, why: `You didn't get ${T} reps on every set at ${app.fmtNum(W)} last time. Stay here until you do.` };
+  }
+  return applyTrainingAdjust(plan, opts);
 }
 app.suggestion = suggestion;
 
 function suggestionHTML(sg, i) {
   if (!sg) return "";
   const label = { up: "Add weight", same: "Repeat", down: "Step back", bw: "Beat last time" }[sg.kind];
-  return `<div class="sugg ${sg.kind}"><div class="sugg-top"><b>${label}: ${sg.w != null ? app.fmtNum(sg.w) + " " + app.wUnit() : "BW"} × ${sg.r}</b>
+  const load = sg.w != null ? `${app.fmtNum(sg.w)} ${app.wUnit()}` : "BW";
+  const sets = sg.sets ? ` · ${app.pl(sg.sets, "set")}` : "";
+  const act = sg.adjusted
+    ? `<button class="link-inline" data-action="sugg-plain" data-i="${i}">Use normal plan</button>`
+    : (sg.canReady ? `<button class="link-inline" data-action="sugg-ready" data-i="${i}">Use readiness</button>` : "");
+  return `<div class="sugg ${sg.kind}"><div class="sugg-top"><b>${label}: ${load} × ${sg.r}${sets}</b>
     <button class="link-inline" data-action="sugg-use" data-i="${i}">Use</button></div>
-    <span>${sg.why}${sg.note ? " " + sg.note : ""}</span></div>`;
+    <span>${app.esc(sg.why)}</span>
+    ${sg.ready ? `<span class="sugg-ready">${app.esc(sg.ready)}</span>` : ""}
+    ${act}</div>`;
 }
 app.suggestionHTML = suggestionHTML;
+
+function readinessQuietHTML() {
+  const text = quietReadinessNote(todayReadinessScore());
+  return text ? `<p class="sugg-quiet">${app.esc(text)}</p>` : "";
+}
+app.readinessQuietHTML = readinessQuietHTML;
+
+function rpeChipsHTML(action, pressed, i) {
+  const chips = [6, 7, 8, 9, 10].map((n) =>
+    `<button data-action="${action}" data-n="${n}"${i != null ? ` data-i="${i}"` : ""} aria-pressed="${pressed === n}" aria-label="RPE ${n}">${n}</button>`).join("");
+  return `<div class="rpe" role="group" aria-label="How hard was this set"><span class="rpe-l">RPE</span>${chips}</div>
+    <p class="rpe-hint">Optional. 6 means about 4 reps left, 10 means none left.</p>`;
+}
+app.rpeChipsHTML = rpeChipsHTML;
 
 /* ---------- PRs (compared with every earlier working set of this lift) ---------- */
 function prsFor(name, set, date) {
@@ -198,6 +419,7 @@ function setEditSheetHTML() {
     <div class="tags" role="group" aria-label="Set type">
       <button data-action="se-tag" data-t="warmup" aria-pressed="${tag === "warmup"}">Warm-up</button>
       <button data-action="se-tag" data-t="failure" aria-pressed="${tag === "failure"}">To failure</button></div>
+    ${app.rpeChipsHTML("se-rpe", app.ui.sd.rpe || null)}
     <div class="sheet-actions" style="margin-top:14px"><button class="btn danger" data-action="se-del">Delete</button><button class="btn primary" data-action="se-save">Save</button></div>`;
 }
 app.setEditSheetHTML = setEditSheetHTML;
