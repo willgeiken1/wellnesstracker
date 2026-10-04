@@ -104,6 +104,23 @@ export function skipForToday(session, exercise, now = Date.now()) {
   return rec;
 }
 
+/* A routine rename has to follow the exercise into parked sets, or the skip record
+   keeps the old name and the exercise shows up again. */
+export function renameExerciseData(session, from, to) {
+  if (!session || !from || from === to) return;
+  (session.entries || []).forEach((e) => { if (e && e.exercise === from) e.exercise = to; });
+  (session.skipped || []).forEach((sk) => {
+    if (!sk) return;
+    if (sk.name === from) sk.name = to;
+    if (sk.original === from) sk.original = to;
+    if (sk.entry && sk.entry.exercise === from) sk.entry.exercise = to;
+  });
+  if (session.swaps && session.swaps[from]) {
+    session.swaps[to] = session.swaps[from];
+    delete session.swaps[from];
+  }
+}
+
 /* Put a skipped exercise back into this session, including any sets that were parked. */
 export function restoreSkipped(session, name, now = Date.now()) {
   if (!session || !name) return null;

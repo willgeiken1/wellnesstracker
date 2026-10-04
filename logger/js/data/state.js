@@ -98,7 +98,7 @@ app.LOADED_RE = LOADED_RE;
 
 // "BW" (bodyweight) only makes sense for movements you can do without a load.
 function canBW(name) {
-  if (app.state.sessions.some((s) => s.entries.some((e) => e.exercise === name && e.sets.some((x) => x.w == null)))) return true;
+  if (app.state.sessions.some((s) => countedEntries(s).some((e) => e.exercise === name && e.sets.some((x) => x.w == null)))) return true;
   return app.BW_RE.test(name) && !app.LOADED_RE.test(name);
 }
 app.canBW = canBW;
@@ -303,7 +303,7 @@ function liveExercises(s) {
   const sw = s.swaps || {};
   const list = w ? w.exercises.map((e) => sw[e.name] ? { name: sw[e.name].name, muscles: sw[e.name].muscles, adv: sw[e.name].adv, original: e.name } : { name: e.name, muscles: e.muscles, adv: e.adv }) : [];
   (s.extra || []).forEach((x) => { if (!list.some((y) => y.name === x.name)) list.push({ ...x, extra: true }); });
-  s.entries.forEach((e) => { if (!list.some((x) => x.name === e.exercise)) list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv }); });
+  (s.entries || []).forEach((e) => { if (!list.some((x) => x.name === e.exercise)) list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv }); });
   const skip = skippedNames(s);
   return skip.size ? list.filter((e) => !skip.has(e.name)) : list;
 }
@@ -315,7 +315,7 @@ app.setsFor = setsFor;
 function lastSets(name, excludeId) {
   for (const s of app.finished()) {
     if (s.id === excludeId) continue;
-    const e = s.entries.find((x) => x.exercise === name);
+    const e = countedEntries(s).find((x) => x.exercise === name);
     if (e && e.sets.length) return e.sets;
   }
   return null;

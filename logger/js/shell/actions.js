@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { renameExerciseData } from "../shared/skip.js";
 
 /* Clicks, typing, and the rest of the event wiring. */
 /* ================= Actions ================= */
@@ -907,7 +908,7 @@ document.addEventListener("click", async (ev) => {
           }
           if (app.goals().lifts[old.name]) { app.goals().lifts[name] = app.goals().lifts[old.name]; delete app.goals().lifts[old.name]; app.goals().updatedAt = Date.now(); }
           // keep history linked to the renamed exercise
-          app.state.sessions.forEach((s) => s.entries.forEach((e) => { if (e.exercise === old.name) e.exercise = name; }));
+          app.state.sessions.forEach((s) => renameExerciseData(s, old.name, name));
         }
         w.exercises[app.ui.sd.idx] = exObj;
       } else w.exercises.push(exObj);

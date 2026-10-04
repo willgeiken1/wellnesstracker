@@ -151,7 +151,13 @@ app.squarePhoto = squarePhoto;
 function customExercises() {
   const bankNames = new Set(app.ASSETS.bank.map((e) => e.n.toLowerCase())), out = new Map();
   app.state.workouts.forEach((w) => w.exercises.forEach((e) => { if (!bankNames.has(e.name.toLowerCase())) out.set(e.name, e); }));
-  app.state.sessions.forEach((s) => s.entries.forEach((e) => { if (!bankNames.has(e.exercise.toLowerCase()) && !out.has(e.exercise)) out.set(e.exercise, { name: e.exercise, muscles: e.muscles, adv: e.adv }); }));
+  app.state.sessions.forEach((s) => {
+    const parked = (s.skipped || []).map((sk) => sk && sk.entry).filter((e) => e && e.exercise);
+    [...countedEntries(s), ...parked].forEach((e) => {
+      if (bankNames.has(e.exercise.toLowerCase()) || out.has(e.exercise)) return;
+      out.set(e.exercise, { name: e.exercise, muscles: e.muscles, adv: e.adv });
+    });
+  });
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 app.customExercises = customExercises;

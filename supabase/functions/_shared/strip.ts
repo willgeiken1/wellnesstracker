@@ -41,14 +41,21 @@ function latestTime(obj: unknown, keys: string[]): number | null {
   return best;
 }
 
+function later(best: number | null, t: number | null): number | null {
+  return t != null && (best == null || t > best) ? t : best;
+}
+
+function setsTime(entries: Bag[] | undefined, best: number | null): number | null {
+  for (const e of entries || []) {
+    for (const x of (e && e.sets) || []) best = later(best, timeMs(x && x.at));
+  }
+  return best;
+}
+
 function sessionTime(s: Bag): number | null {
   let best = latestTime(s, SESSION_KEYS);
-  for (const e of (s && s.entries) || []) {
-    for (const x of (e && e.sets) || []) {
-      const t = timeMs(x && x.at);
-      if (t != null && (best == null || t > best)) best = t;
-    }
-  }
+  best = setsTime(s && s.entries, best);
+  for (const sk of (s && s.skipped) || []) best = setsTime(sk && sk.entry ? [sk.entry] : [], best);
   return best;
 }
 

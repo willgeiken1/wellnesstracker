@@ -5,11 +5,14 @@ import "../logger/js/shared/analyze.js";
 import "../logger/js/pages/session.js";
 import "../logger/js/pages/goals.js";
 import { buildWeek } from "../logger/js/shared/weekly.js";
+import { buildExportFiles, stripRange } from "../logger/js/shared/purge.js";
+import { stripRange as stripRangeServer } from "../supabase/functions/_shared/strip.ts";
 import {
   bestEffortAverage,
   historyEntries,
   muscleSetMap,
   reconcileSkipped,
+  renameExerciseData,
   restoreSkipped,
   skipForToday,
   withoutSkipped,
@@ -144,6 +147,33 @@ test("a weak skipped set does not drag the session average down", () => {
   const series = app.liftSeries([...days, skipped]);
   assert.equal(series["Cable Fly"].some((p) => p.date === "2026-09-29"), false);
   assert.equal(series["Bench Press"].some((p) => p.date === "2026-09-29"), true);
+});
+
+test("a rename follows a skipped exercise, and a parked set still counts as stored data", () => {
+  const s = session();
+  skipForToday(s, { name: "Cable Fly", muscles: ["chest"] }, 1000);
+  s.skipped[0].entry.sets[0].at = "2026-10-04T15:00:00Z";
+  s.startedAt = "2026-10-04T10:00:00Z";
+  s.finishedAt = null;
+  s.mod = Date.parse("2026-10-04T10:30:00Z");
+  renameExerciseData(s, "Cable Fly", "Cable Crossover");
+  assert.equal(s.skipped[0].name, "Cable Crossover");
+  assert.equal(s.skipped[0].entry.exercise, "Cable Crossover");
+  assert.equal(s.entries.some((e) => e.exercise === "Cable Fly" || e.exercise === "Cable Crossover"), false);
+
+  const before = Date.parse("2026-10-04T12:00:00Z");
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  const blob = { sessions: [JSON.parse(JSON.stringify(s))], deleted: [] };
+  assert.equal(stripRange(JSON.parse(JSON.stringify(blob)), "2026-10-04", "2026-10-04", { before, now, quiet: true }), false);
+  assert.equal(stripRangeServer(JSON.parse(JSON.stringify(blob)), "2026-10-04", "2026-10-04", before, now).sessions.length, 1);
+  const early = JSON.parse(JSON.stringify(blob));
+  early.sessions[0].skipped[0].entry.sets[0].at = "2026-10-04T10:15:00Z";
+  assert.equal(stripRange(early, "2026-10-04", "2026-10-04", { before, now, quiet: true }), true);
+  assert.equal(early.sessions.length, 0);
+
+  const csv = buildExportFiles({ sessions: [s] }).find((f) => f.name === "sets.csv").text;
+  assert.match(csv, /Cable Crossover/);
+  assert.equal(csv.includes("Bench Press"), true);
 });
 
 test("skipped state survives a reload of the saved session", () => {
