@@ -22,15 +22,71 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); font-size: 17px; -webkit-text-size-adjust: 100%; }
+/* The app draws both themes. light dark lets the UA follow the phone until
+   data-mode is set; the attribute then pins native controls to that theme. */
+html { color-scheme: light dark; }
+html[data-mode="dark"] { color-scheme: dark; }
+html[data-mode="light"] { color-scheme: light; }
 body { min-height: 100vh; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-input { font: inherit; color: var(--text); -webkit-appearance: none; appearance: none; }
-button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+/* :where() keeps this at zero specificity so .add-row input can stay on --raised
+   and the date rule below can turn native appearance back on.
+   -webkit-text-fill-color is what iOS uses for textarea glyphs; color alone stays black. */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select) {
+  font: inherit;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  background-color: var(--bg);
+}
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])) { -webkit-appearance: none; appearance: none; }
+textarea { -webkit-appearance: none; appearance: none; }
+/* Native appearance keeps the calendar glyph in the active color-scheme.
+   WebKit otherwise centers the value and ignores the field height. */
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"] {
+  -webkit-appearance: auto; appearance: auto;
+  text-align: left;
+  height: 50px;
+  min-height: 50px;
+  line-height: 50px;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value,
+input[type="month"]::-webkit-date-and-time-value,
+input[type="week"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.2em;
+  margin: 0;
+}
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit,
+input[type="datetime-local"]::-webkit-datetime-edit,
+input[type="month"]::-webkit-datetime-edit,
+input[type="week"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper,
+input[type="month"]::-webkit-datetime-edit-fields-wrapper,
+input[type="week"]::-webkit-datetime-edit-fields-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+  padding: 0;
+  text-align: left;
+}
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+input::placeholder, textarea::placeholder {
+  color: var(--muted);
+  -webkit-text-fill-color: currentColor;
+  opacity: 1;
+}
 [hidden] { display: none !important; }
 h1, h2, h3, h4 { margin: 0; }
 
 /* ---------- Shell ---------- */
-#view { padding: calc(14px + var(--safe-top)) 16px calc(var(--tabs-h) + 110px + var(--safe-bottom)); max-width: 640px; margin: 0 auto; }
+#view { padding: 14px 16px calc(var(--tabs-h) + 110px + var(--safe-bottom)); max-width: 640px; margin: 0 auto; }
 .page-title { font-family: var(--display); font-weight: 700; font-size: 38px; line-height: 1.05; }
 .page-sub { color: var(--muted); font-size: 15px; margin-top: 2px; }
 .page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; }
@@ -160,7 +216,8 @@ body.timer-on:not(.in-workout) #view { padding-bottom: calc(var(--tabs-h) + 190p
 .hint { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 10px 4px 0; }
 
 /* ---------- Active workout ---------- */
-#workout { position: fixed; inset: 0; z-index: 12; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(120px + var(--safe-bottom)); }
+#workout { position: fixed; top: var(--safe-top); right: 0; bottom: 0; left: 0; z-index: 12; background: var(--bg); overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: calc(120px + var(--safe-bottom)); }
+#workout .wo-top { padding-top: 8px; }
 .wo-top { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; padding: calc(8px + var(--safe-top)) 12px 10px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .wo-title { min-width: 0; }
 .wo-title h2 { font-family: var(--display); font-weight: 700; font-size: 28px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -205,7 +262,7 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .timer-btns { display: flex; gap: 6px; }
 .timer-btns button { height: 44px; min-width: 52px; padding: 0 10px; border-radius: 10px; background: var(--surface); font-weight: 600; font-size: 16px; }
 #timer.done { background: var(--green); color: var(--green-ink); }
-#timer.done .timer-lbl { color: var(--green-ink); opacity: .7; }
+#timer.done .timer-lbl { color: var(--ink); opacity: 1; }
 #timer.done #timer-track { background: transparent; }
 #timer.done .t-adj { display: none; }
 #timer.done .timer-btns button { background: rgba(0,0,0,.14); color: var(--green-ink); }
@@ -233,7 +290,7 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .dlg p { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0 0 18px; }
 .dlg .text-in { margin-bottom: 18px; }
 .dlg-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.btn.danger-fill { background: var(--red); color: #fff; }
+.btn.danger-fill { background: var(--danger-fill, #FF7B7B); color: var(--danger-on, #141414); }
 .wo-actions { display: flex; gap: 6px; }
 .btn.small.cancel { background: rgba(255, 90, 78, .15); color: var(--red); }
 #toast { display: flex; align-items: center; justify-content: center; gap: 14px; }
@@ -315,8 +372,8 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .pp { margin-top: 12px; } .pp-bar { height: 12px; border-radius: 6px; background: #7FB3F5; overflow: hidden; } .pp-bar i { display: block; height: 100%; background: var(--green); }
 .pp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 6px; }
 .warn { color: #F2C12E; }
-#onboard { position: fixed; inset: 0; z-index: 25; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.ob-wrap { max-width: 520px; margin: 0 auto; padding: calc(22px + var(--safe-top)) 20px calc(30px + var(--safe-bottom)); }
+#onboard { position: fixed; top: var(--safe-top); right: 0; bottom: 0; left: 0; z-index: 25; background: var(--bg); overflow-y: auto; overscroll-behavior-y: contain; }
+.ob-wrap { max-width: 520px; margin: 0 auto; padding: 22px 20px calc(30px + var(--safe-bottom)); }
 .pf-seg { margin-bottom: 16px; }
 .pf-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .pf-row .text-in { margin-bottom: 0; flex: 1; min-width: 0; }
