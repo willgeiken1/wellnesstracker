@@ -1,4 +1,6 @@
 import { app } from "../runtime.js";
+import { applyHomeMigration, pickHomeV2 } from "./home-migrate.js";
+import { noteOuraConnected, ouraReturnDialog } from "./oura-gate.js";
 
 /* Supabase account, backup, and Oura sync. */
 /* ================= Cloud: account, backup, Oura ================= */
@@ -14,6 +16,7 @@ app.sb = sb;
 app.session = session;
 app.pushTimer = pushTimer;
 app.ouraBusy = ouraBusy;
+app.cloudPullOk = false;
 
 try {
   if (window.supabase && window.supabase.createClient) {
@@ -49,12 +52,28 @@ function rememberCloudPush() {
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
 }
 
+function layoutObject(layout) {
+  return layout && typeof layout === "object" && !Array.isArray(layout) ? layout : null;
+}
+
+function keepHomeV2(remoteLayout) {
+  const picked = pickHomeV2(app.state.layout, layoutObject(remoteLayout));
+  if (!picked) return;
+  if (!layoutObject(app.state.layout)) app.state.layout = {};
+  app.state.layout.homeV2 = picked;
+}
+
+/* Used only when merge_user_data is not deployed yet. The function itself merges homeV2. */
 async function cloudPushFallback(blob) {
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
-    if (!error && data && data.data) app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, data.data.machineNotes);
+    if (!error && data && data.data) {
+      app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, data.data.machineNotes);
+      keepHomeV2(data.data.layout);
+    }
   } catch (e) { /* offline: send this phone's copy; the next pull merges */ }
   blob.machineNotes = app.state.machineNotes || {};
+  blob.layout = app.state.layout || {};
   try {
     const { error } = await app.sb.from("user_data").upsert({ user_id: app.session.user.id, data: blob, updated_at: new Date().toISOString() });
     if (!error) rememberCloudPush();
@@ -68,6 +87,7 @@ async function cloudPush() {
     const { data, error } = await app.sb.rpc("merge_user_data", { p_data: blob });
     if (!error && data && typeof data === "object") {
       if (data.machineNotes && typeof data.machineNotes === "object") app.state.machineNotes = data.machineNotes;
+      if (data.layout) keepHomeV2(data.layout);
       rememberCloudPush();
       return;
     }
@@ -106,7 +126,19 @@ function mergeRemote(r) {
   if (r.cardio) app.mergeCardio(r.cardio);
   if (r.measurements) Object.entries(r.measurements).forEach(([d, m]) => { const l = app.meas()[d]; if (!l || (m.at || 0) > (l.at || 0)) app.meas()[d] = m; });
   app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, r.machineNotes);
-  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) { if (r.muscleMode) app.state.muscleMode = r.muscleMode; if (r.layout) app.state.layout = r.layout; if (r.uniEx) app.state.uniEx = r.uniEx; app.state.settingsAt = r.settingsAt; }
+  const layoutBefore = app.state.layout;
+  const remoteLayout = layoutObject(r.layout);
+  if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) {
+    if (r.muscleMode) app.state.muscleMode = r.muscleMode;
+    if (remoteLayout) app.state.layout = remoteLayout;
+    if (r.uniEx) app.state.uniEx = r.uniEx;
+    app.state.settingsAt = r.settingsAt;
+  }
+  const pickedHome = pickHomeV2(layoutBefore, remoteLayout);
+  if (pickedHome) {
+    if (!layoutObject(app.state.layout)) app.state.layout = {};
+    app.state.layout.homeV2 = pickedHome;
+  }
   if (r.profile) {
     const lp = app.state.profile;
     const wDel = new Set([...((lp && lp.wDel) || []), ...(r.profile.wDel || [])]);
@@ -131,11 +163,16 @@ function mergeRemote(r) {
 app.mergeRemote = mergeRemote;
 
 async function cloudPull() {
+  app.cloudPullOk = false;
   if (!app.sb || !app.session) return;
   try {
     const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
     if (error) return;
-    if (data && data.data) app.mergeRemote(data.data);
+    if (data && data.data) {
+      app.mergeRemote(data.data);
+      applyHomeMigration(app.state, Date.now(), { afterMerge: true });
+    }
+    app.cloudPullOk = true;
     app.save();
     app.render();
   } catch (e) { /* offline */ }
@@ -166,6 +203,8 @@ async function ouraRefresh(force) {
   try {
     const { data: c } = await app.sb.from("oura_connections").select("*").eq("user_id", app.session.user.id).maybeSingle();
     let status = applyOuraConnection(c);
+    const linked = status === "connected" || status === "membership_inactive";
+    noteOuraConnected(app.state, linked, { seed: !!app.cloudPullOk && linked });
     const maySync = c && (status === "connected" || (force && status === "membership_inactive"));
     if (maySync) {
       const stale = !c.last_sync || Date.now() - new Date(c.last_sync).getTime() > 3 * 3600_000;
@@ -176,6 +215,8 @@ async function ouraRefresh(force) {
         if (error) app.toast("Couldn't sync Oura right now. Try Sync now in Settings.");
         const again = await app.sb.from("oura_connections").select("*").eq("user_id", app.session.user.id).maybeSingle();
         status = applyOuraConnection(again.data);
+        const still = status === "connected" || status === "membership_inactive";
+        noteOuraConnected(app.state, still, { seed: !!app.cloudPullOk && still });
       }
     }
     if (status === "connected" || status === "membership_inactive") {
@@ -219,7 +260,17 @@ async function initCloud() {
       if (app.syncSentryUser) app.syncSentryUser(s);
       if (app.syncUsageUser) app.syncUsageUser(s);
     });
-    if (app.session) { app.claimLocalFor(app.session.user.id); await app.cloudPull(); app.checkProfileGate(); await app.loadPhotos(); await app.syncPhotos(); if (app.dropPurgedPhotos) await app.dropPurgedPhotos(); await app.ouraRefresh(false); if (app.flushPurges) await app.flushPurges(); }
+    if (app.session) {
+      app.claimLocalFor(app.session.user.id);
+      await app.cloudPull();
+      app.checkProfileGate();
+      await app.loadPhotos();
+      await app.syncPhotos();
+      if (app.dropPurgedPhotos) await app.dropPurgedPhotos();
+      await app.ouraRefresh(!!app.pendingOuraConnect);
+      app.pendingOuraConnect = false;
+      if (app.flushPurges) await app.flushPurges();
+    }
     else { await app.loadPhotos(); app.render(); }
   } catch (e) { /* offline */ }
 }
@@ -245,6 +296,7 @@ async function signIn(mode) {
   if (app.syncUsageUser) app.syncUsageUser(app.session);
   app.ui.sheet = null;
   app.claimLocalFor(app.session.user.id);
+  app.cloudPullOk = false;
   app.toast(mode === "signup" ? "Account created. Your workouts are backing up." : "Signed in.");
   await app.cloudPull();
   app.checkProfileGate();
@@ -261,6 +313,7 @@ async function signOut(opts) {
   if (!skipPush) { try { await app.cloudPush(); } catch (e) {} }   // make sure the latest is backed up first
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
+  app.cloudPullOk = false;
   if (app.syncSentryUser) app.syncSentryUser(null);
   if (app.syncUsageUser) app.syncUsageUser(null);
   app.ui.onboard = false; app.renderOnboard();
@@ -285,23 +338,20 @@ async function disconnectOura() {
   const { error } = await app.sb.functions.invoke("oura-connect", { body: { action: "disconnect" } });
   if (error) { app.toast("Couldn't disconnect right now."); return; }
   app.state.oura = { connected: false, status: null, lastSync: null, days: {} };
+  // Leave homeV2 items and hidden alone. Oura widgets hide while the ring is off.
   app.save(); app.render(); app.toast("Oura disconnected.");
 }
 app.disconnectOura = disconnectOura;
 
 /* After Oura's login page sends you back here */
 (function handleOuraReturn() {
+  if (typeof location === "undefined" || !location.search) return;
   const p = new URLSearchParams(location.search).get("oura");
   if (!p) return;
   history.replaceState(null, "", location.pathname);
-  const ok = p === "connected";
-  setTimeout(() => app.ask({
-    title: ok ? "Oura connected" : "Oura wasn't connected",
-    body: ok ? "If there's a Done button in the corner, tap it to go back to Insight. Your Oura data loads there automatically."
-             : p === "expired" ? "That login took too long. Open Recovery and tap Connect Oura again."
-             : "The connection was cancelled or didn't finish. Open Recovery and tap Connect Oura to try again.",
-    ok: "OK", cancel: "Close"
-  }), 300);
+  const dialog = ouraReturnDialog(p);
+  if (p === "connected") app.pendingOuraConnect = true;
+  setTimeout(() => app.ask({ title: dialog.title, body: dialog.body, ok: "OK", cancel: "Close" }), 300);
 })();
 
 function syncedAgo() {

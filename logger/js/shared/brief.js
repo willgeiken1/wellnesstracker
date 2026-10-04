@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { showOuraOnHome } from "./oura-ui.js";
 import { pickForToday, todayLine } from "./correlate.js";
+import { hasOura, ouraWidgetShowing } from "./oura-gate.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
    The headline uses readiness, lift status, and effect() — no network.
@@ -107,15 +108,18 @@ function proteinLowDays() {
   return n;
 }
 
-function ouraMetric() {
-  const o = app.latestOura(app.src().oura);
+export function ouraMetric() {
   const status = app.state.oura && app.state.oura.status;
+  if (status === "disconnected") return null;
+  if (!hasOura(app.state) || ouraWidgetShowing(app.state, "readiness")) return null;
+  const o = app.latestOura(app.src().oura);
   if (!showOuraOnHome(status, !!(o && o.readiness != null))) return null;
   const lv = app.readinessLevel(o.readiness);
   const when = o.date === app.today() ? "Today" : o.date === app.addDays(app.today(), -1) ? "Yesterday" : app.fmtDate(o.date, { month: "short", day: "numeric" });
+  const sleepOnTile = ouraWidgetShowing(app.state, "sleep-score");
   return {
     id: "oura", label: "Readiness", value: String(o.readiness), tone: lv.cls, bar: o.readiness,
-    meta: o.sleepScore != null ? `Sleep ${o.sleepScore}` : "No sleep score",
+    meta: sleepOnTile ? null : (o.sleepScore != null ? `Sleep ${o.sleepScore}` : "No sleep score"),
     sub: `${lv.word} · ${when}${app.state.demo ? " · sample" : ""}`,
   };
 }

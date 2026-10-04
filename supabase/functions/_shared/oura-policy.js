@@ -37,7 +37,8 @@ export function planSync({ refresh = "skipped", api, retryRefresh = null, retryA
   if (api === "membership_inactive") return "inactive";
   if (api === "unauthorized") {
     if (retryRefresh == null) return "retry";
-    if (retryRefresh === "revoked" || retryRefresh === "refresh_failed") return "delete";
+    if (retryRefresh === "revoked") return "delete";
+    if (retryRefresh !== "ok") return "error";
     if (retryApi === "membership_inactive") return "inactive";
     if (retryApi === "unauthorized") return "delete";
     if (retryApi === "ok") return "save";

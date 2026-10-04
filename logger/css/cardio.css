@@ -12,7 +12,8 @@
 .cw-btn .chev { width: 18px; height: 18px; }
 .cw-btn.new { background: var(--lav); color: var(--ink); justify-content: center; padding: 0 16px; }
 .cw-live { font-family: var(--display); font-weight: 600; font-size: 28px; font-variant-numeric: tabular-nums; }
-#cardio-live { position: fixed; inset: 0; z-index: 13; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(40px + var(--safe-bottom)); }
+#cardio-live { position: fixed; top: var(--safe-top); right: 0; bottom: 0; left: 0; z-index: 13; background: var(--bg); overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: calc(40px + var(--safe-bottom)); }
+#cardio-live .wo-top { padding-top: 8px; }
 .cl-body { max-width: 640px; margin: 0 auto; padding: 22px 16px; }
 .cl-time { font-family: var(--display); font-weight: 600; font-size: 76px; text-align: center; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
 .cl-kcal { text-align: center; color: var(--muted); margin: 10px 0 20px; } .cl-kcal b { color: var(--text); font-size: 20px; }

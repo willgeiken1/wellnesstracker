@@ -14,7 +14,7 @@ test("invalid_grant revokes, and a 401 that survives one refresh deletes", () =>
   assert.equal(classifyCollection(401), "unauthorized");
   assert.equal(classifyCollection(403), "membership_inactive");
   assert.equal(planSync({ refresh: "revoked", api: "ok" }), "delete");
-  assert.equal(planSync({ refresh: "skipped", api: "unauthorized", retryRefresh: "refresh_failed" }), "delete");
+  assert.equal(planSync({ refresh: "skipped", api: "unauthorized", retryRefresh: "refresh_failed" }), "error");
   assert.equal(planSync({ refresh: "skipped", api: "unauthorized", retryRefresh: "revoked" }), "delete");
   assert.equal(planSync({ refresh: "ok", api: "unauthorized", retryRefresh: "ok", retryApi: "unauthorized" }), "delete");
   assert.equal(planSync({ refresh: "skipped", api: "unauthorized" }), "retry");
