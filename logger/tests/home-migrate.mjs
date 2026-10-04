@@ -246,6 +246,15 @@ function regressions() {
   check("5 malformed remotes never replace a good local", bad.every((r) => pickHomeV2(local, r) === local.homeV2));
   const junk = pickHomeV2(local, { homeV2: { v: 2, items: [1, null, "nope", "today", "today"], hidden: ["nope", "hrv"], updatedAt: 50 } });
   check("5 junk ids are filtered", eq(junk.items, ["today"]) && eq(junk.hidden, ["hrv"]), junk);
+  const stringV = { homeV2: { v: "2", items: ["steps"], hidden: [], updatedAt: 999 } };
+  check("string v is rejected", pickHomeV2(local, stringV) === local.homeV2);
+  const onlyUnknown = { homeV2: { v: 2, items: ["nope", "zzz"], hidden: [], updatedAt: 99 } };
+  check("only unknown ids are invalid", pickHomeV2(local, onlyUnknown) === local.homeV2);
+  const emptyItems = pickHomeV2(
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1 } },
+    { homeV2: { v: 2, items: [], hidden: [], updatedAt: 50 } }
+  );
+  check("an empty items array is a real layout", eq(emptyItems.items, []) && emptyItems.updatedAt === 50, emptyItems);
 
   const left = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1, migratedAt: 5 } };
   const right = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 1, migratedAt: 6 } };
@@ -265,14 +274,21 @@ function regressions() {
   check("clocks past the cap tie-break instead of the further one winning", eq(capped.items, cappedBack.items) && capped.updatedAt === now + 864e5, capped);
 }
 
+const PG_USER = process.env.PG_USER || "postgres";
+const PG_DATABASE = process.env.PG_DATABASE || "notes_merge";
+
+function pgArgs(extra) {
+  return ["-u", PG_USER, "psql", "-d", PG_DATABASE, "-v", "ON_ERROR_STOP=1", ...extra];
+}
+
 function pgSql(sql) {
-  return execFileSync("sudo", ["-u", "postgres", "psql", "-d", "notes_merge", "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", sql], { encoding: "utf8" });
+  return execFileSync("sudo", pgArgs(["-t", "-A", "-c", sql]), { encoding: "utf8" });
 }
 
 function rpcCases() {
   const dir = new URL("../..", import.meta.url);
-  execFileSync("sudo", ["-u", "postgres", "psql", "-d", "notes_merge", "-v", "ON_ERROR_STOP=1", "-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname], { encoding: "utf8" });
-  execFileSync("sudo", ["-u", "postgres", "psql", "-d", "notes_merge", "-v", "ON_ERROR_STOP=1", "-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname], { encoding: "utf8" });
+  execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
+  execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
   pgSql(`delete from public.user_data where user_id = '${uid}'`);
   const claim = `select set_config('request.jwt.claim.sub', '${uid}', false)`;
@@ -326,6 +342,32 @@ function rpcCases() {
     layout: { homeV2: { v: 2, items: ["hrv"], hidden: [], updatedAt: future } },
   }));
   check("4 a future stamp is capped at about one day", capped.items[0] === "hrv" && capped.updatedAt <= Date.now() + 864e5 + 5000 && capped.updatedAt > Date.now(), capped);
+
+  pgSql(`delete from public.user_data where user_id = '${uid}'`);
+  call({
+    settingsAt: 1,
+    layout: { homeV2: { v: 2, items: ["muscles"], hidden: [], updatedAt: 10, ouraSeeded: true } },
+  });
+  const stringV = homeOf(call({
+    settingsAt: 2,
+    layout: { homeV2: { v: "2", items: ["steps"], hidden: [], updatedAt: 999999 } },
+  }));
+  check("string v is rejected and the stored copy stays", eq(stringV.items, ["muscles"]) && stringV.ouraSeeded === true, stringV);
+  const onlyUnknown = homeOf(call({
+    settingsAt: 3,
+    layout: { homeV2: { v: 2, items: ["not-a-widget", "zzz"], hidden: [], updatedAt: 999999 } },
+  }));
+  check("only unknown ids keep the stored copy", eq(onlyUnknown.items, ["muscles"]) && onlyUnknown.ouraSeeded === true, onlyUnknown);
+  const emptyItems = homeOf(call({
+    settingsAt: 4,
+    layout: { homeV2: { v: 2, items: [], hidden: [], updatedAt: 20 } },
+  }));
+  check("an empty items array is a real layout", Array.isArray(emptyItems.items) && emptyItems.items.length === 0 && emptyItems.ouraSeeded === true, emptyItems);
+  const mixed = homeOf(call({
+    settingsAt: 5,
+    layout: { homeV2: { v: 2, items: ["nope", "today"], hidden: [], updatedAt: 30 } },
+  }));
+  check("a mix of known and unknown ids stays valid", eq(mixed.items, ["nope", "today"]) && mixed.ouraSeeded === true, mixed);
 
   let unauth = "";
   try {

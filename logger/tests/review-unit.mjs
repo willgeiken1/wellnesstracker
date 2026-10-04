@@ -68,9 +68,13 @@ ok("U2g old keys untouched by apply", (() => { const s = J(V.withBrief); const b
   console.log("  string updatedAt '9' vs 10 ->", pickHomeV2(str, num).items);
 }
 
-const bad = [null, "x", [], { homeV2: null }, { homeV2: "x" }, { homeV2: { v: 1, items: [] } }, { homeV2: { v: 2 } }, { homeV2: { v: 2, items: "x" } }];
+const bad = [null, "x", [], { homeV2: null }, { homeV2: "x" }, { homeV2: { v: 1, items: [] } }, { homeV2: { v: 2 } }, { homeV2: { v: 2, items: "x" } }, { homeV2: { v: "2", items: ["today"], updatedAt: 99 } }, { homeV2: { v: 2, items: ["nope", "zzz"], updatedAt: 99 } }];
 const local = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5 } };
 ok("U6 malformed remotes never replace a good local", bad.every((r) => pickHomeV2(local, r) === local.homeV2));
+{
+  const empty = pickHomeV2(local, { homeV2: { v: 2, items: [], hidden: [], updatedAt: 50 } });
+  ok("U6c an empty items array is a real layout", empty && empty.items.length === 0 && empty.updatedAt === 50, empty);
+}
 {
   const r = { homeV2: { v: 2, hidden: ["today"], updatedAt: 99 } }; const w = pickHomeV2(local, r);
   ok("U6b partial remote {v:2, hidden} (no items) must not win", w === local.homeV2, w);

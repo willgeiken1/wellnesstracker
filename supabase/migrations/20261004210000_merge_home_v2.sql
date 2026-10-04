@@ -5,6 +5,11 @@
 -- breaks on the JSON of items and hidden, ouraSeeded sticks, a timestamp more
 -- than a day ahead is pulled back, and a missing or malformed incoming copy
 -- keeps the one already stored. The rest of the blob stays the caller's payload.
+-- v is valid only as a JSON number equal to 2; the string "2" is rejected.
+-- items: [] is a real empty layout and can win. A non-empty items array with
+-- no id from HOME_WIDGETS is malformed, so the stored copy is kept. A mix of
+-- known and unknown ids stays stored; the client drops the unknown ones.
+-- The id list below matches logger/js/shared/home-widgets.js.
 -- Safe to run more than once.
 -- Only the signed-in user can call it, and it writes only auth.uid()'s row.
 
@@ -21,14 +26,30 @@ begin
   if p_value is null or jsonb_typeof(p_value) <> 'object' then
     return null;
   end if;
+  if jsonb_typeof(p_value->'v') is distinct from 'number' then
+    return null;
+  end if;
   begin
-    if (p_value->>'v') is null or (p_value->>'v')::numeric <> 2 then
+    if (p_value->>'v')::numeric <> 2 then
       return null;
     end if;
   exception when others then
     return null;
   end;
   if jsonb_typeof(p_value->'items') is distinct from 'array' then
+    return null;
+  end if;
+  if jsonb_array_length(p_value->'items') > 0
+     and not exists (
+       select 1
+       from jsonb_array_elements(p_value->'items') elem
+       where jsonb_typeof(elem) = 'string'
+         and elem #>> '{}' in (
+           'readiness', 'sleep-score', 'sleep-duration', 'hrv', 'resting-hr', 'steps',
+           'weekly-goal', 'food-today', 'food-yesterday', 'weight-trend', 'cardio-minutes',
+           'today', 'this-week', 'pattern', 'headline', 'muscles', 'cardio', 'last-night'
+         )
+     ) then
     return null;
   end if;
   if p_value ? 'hidden' and jsonb_typeof(p_value->'hidden') is distinct from 'array' and jsonb_typeof(p_value->'hidden') is distinct from 'null' then

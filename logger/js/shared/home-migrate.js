@@ -16,8 +16,11 @@
    pickHomeV2 caps a timestamp at about one day past now so a skewed clock
    cannot win forever. Equal timestamps break by the JSON of items+hidden,
    so two phones converge. ouraSeeded sticks to whichever copy is kept.
-   A copy must have v:2 and an items array; hidden, when present, must be an
-   array. Ids are strings that exist in HOME_WIDGETS.
+   A copy must have a numeric v of exactly 2 (the string "2" is rejected) and
+   an items array; hidden, when present, must be an array. Ids are strings
+   that exist in HOME_WIDGETS. An empty items array is a real layout that
+   shows nothing and can win. A non-empty items array that contains none of
+   those ids is malformed, and pickHomeV2 keeps the other copy.
 
    Old keys stay in place so a cached older client still has its order.
    Never-customized state returns null (missing layout, empty order, or only
@@ -140,12 +143,15 @@ function clampAt(at, now) {
   return at > cap ? cap : at;
 }
 
-/* null when the record cannot be a layout. A clean record is returned as-is. */
+/* null when the record cannot be a layout. A clean record is returned as-is.
+   items: [] is valid. A non-empty list with no HOME_WIDGETS id is not. */
 function asV2(home, now) {
-  if (!home || typeof home !== "object" || Array.isArray(home) || home.v !== 2) return null;
+  if (!home || typeof home !== "object" || Array.isArray(home)) return null;
+  if (typeof home.v !== "number" || home.v !== 2) return null;
   if (!Array.isArray(home.items)) return null;
   if ("hidden" in home && home.hidden != null && !Array.isArray(home.hidden)) return null;
   const items = knownIds(home.items);
+  if (home.items.length > 0 && items.length === 0) return null;
   const hidden = knownIds(Array.isArray(home.hidden) ? home.hidden : []).filter((id) => !items.includes(id));
   const at = clampAt(home.updatedAt, now);
   const sameItems = items.length === home.items.length && items.every((id, i) => id === home.items[i]);
