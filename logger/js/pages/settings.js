@@ -130,7 +130,10 @@ function appearanceHTML() {
   const t = app.state.theme || {};
   const launched = document.documentElement.dataset.bar === "light" ? "light" : "dark";
   const mode = t.mode === "light" ? "light" : "dark";
-  const barNote = mode === launched ? "" : `<p class="hint bar-note">Status bar updates after reopening the app.</p>`;
+  const standalone = navigator.standalone === true;
+  const barNote = standalone && mode !== launched
+    ? `<p class="hint bar-note">Status bar colors update the next time you open Insight (close it from the app switcher first).</p>`
+    : "";
   return `<div class="group-label">Appearance</div>
     <div class="group">
       <div class="mode-row"><div class="seg2" role="radiogroup" aria-label="Mode">

@@ -154,7 +154,7 @@ async function checkWorkoutBand(page, mode) {
     check("dark launch keeps black-translucent", info.style === "black-translucent", info.style);
     check("dark theme-color matches the background", info.themeColor === "#0F0F11", info.themeColor);
   } else {
-    check("light band is the light background", info.bandBg === "rgb(243, 244, 241)", info.bandBg);
+    check("light band stays dark", info.bandBg === "rgb(15, 15, 17)", info.bandBg);
     check("light launch uses status-bar style default", info.bar === "light" && info.style === "default", info.bar + " " + info.style);
     check("light theme-color is #F3F4F1", info.themeColor === "#F3F4F1", info.themeColor);
   }

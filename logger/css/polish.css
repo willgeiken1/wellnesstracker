@@ -92,10 +92,11 @@ html, body {
 
 /* Covers the status-bar band so a rubber-band or a composited layer cannot
    show page text over the clock or Dynamic Island.
-   data-bar is the theme at launch. Dark uses --bg (#0F0F11) so the band
-   meets the page with no seam. Light uses the light background, because
-   status-bar style "default" paints dark icons. A theme switch does not
-   move the band: iOS reads the status-bar meta only when the app opens. */
+   The band stays #0F0F11 in every theme. black-translucent always draws
+   white icons, and an installed app often keeps that style from install
+   time, so a light band would hide the clock. Dark mode matches --bg, so
+   there is no seam. data-bar still picks the status-bar meta and
+   theme-color at launch; iOS reads those only when the app opens. */
 body::before {
   content: "";
   position: fixed;
@@ -103,12 +104,10 @@ body::before {
   left: 0;
   right: 0;
   height: var(--safe-top);
-  background: var(--bg);
+  background: #0F0F11;
   z-index: 6;
   pointer-events: none;
 }
-html[data-bar="light"] body::before { background: #F3F4F1; }
-html[data-bar="dark"][data-mode="light"] body::before { background: #0F0F11; }
 
 body.timer-on:not(.in-workout) .pane,
 body.timer-on:not(.in-workout) #view {
