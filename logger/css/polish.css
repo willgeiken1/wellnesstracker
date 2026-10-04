@@ -381,7 +381,8 @@ body.timer-on:not(.in-workout) #view {
   bottom: 18px;
   width: 3px;
   border-radius: 3px;
-  background: var(--line);
+  /* --line on the dark card is about 1.2:1. --muted clears 3:1 in dark and light. */
+  background: var(--muted);
 }
 .aff-empty h4 { margin: 0 0 6px; }
 .aff-empty .sub { margin: 0; max-width: 40em; line-height: 1.45; }

@@ -182,8 +182,8 @@ function effect(perfs, valueOf, buckets) {
 app.effect = effect;
 
 /* Daily correlations for later screens. Nothing here is rendered, and nothing is sent off the device.
-   The result is cached in memory. The key is a hash of the inputs, not a copy anyone
-   can upload, and it is recomputed only when those inputs change. */
+   The result is cached in memory until app.save() bumps app.correlationRev. Health values
+   are not hashed and are not uploaded. */
 function correlationSource() {
   const S = app.src();
   const demo = !!(app.state && app.state.demo);
@@ -209,37 +209,13 @@ function correlationSource() {
 }
 app.correlationSource = correlationSource;
 
-let correlationCache = { key: 0, rows: null, builds: 0 };
+let correlationCache = { rev: -1, opt: "", rows: null, builds: 0 };
 
-function mixHash(h, value) {
-  const s = String(value);
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function hashAny(h, value) {
-  if (value == null) return mixHash(h, "\0");
-  const t = typeof value;
-  if (t === "number") return mixHash(h, Number.isFinite(value) ? "n" + value : "nan");
-  if (t === "string" || t === "boolean") return mixHash(h, (t === "string" ? "s" : "b") + value);
-  if (Array.isArray(value)) {
-    h = mixHash(h, "[" + value.length);
-    for (let i = 0; i < value.length; i++) h = hashAny(h, value[i]);
-    return h;
-  }
-  if (t === "object") {
-    const keys = Object.keys(value).sort();
-    h = mixHash(h, "{" + keys.length);
-    for (let i = 0; i < keys.length; i++) {
-      h = mixHash(h, keys[i]);
-      h = hashAny(h, value[keys[i]]);
-    }
-    return h;
-  }
-  return h;
+function optionKey(opts) {
+  const lags = opts.lags ? opts.lags.join(",") : "";
+  const outcomes = opts.outcomes ? opts.outcomes.join(",") : "";
+  const minPerGroup = opts.minPerGroup == null ? "" : String(opts.minPerGroup);
+  return (opts.weightDir || "") + "\0" + minPerGroup + "\0" + lags + "\0" + outcomes;
 }
 
 function correlations(options) {
@@ -247,16 +223,10 @@ function correlations(options) {
   if (opts.weightDir == null && typeof app.goals === "function") {
     try { opts.weightDir = app.goals().weightDir || null; } catch (e) { opts.weightDir = null; }
   }
-  const src = correlationSource();
-  const key = hashAny(2166136261, {
-    weightDir: opts.weightDir || "",
-    lags: opts.lags || null,
-    minPerGroup: opts.minPerGroup == null ? null : opts.minPerGroup,
-    outcomes: opts.outcomes || null,
-    src,
-  });
-  if (correlationCache.rows && correlationCache.key === key) return correlationCache.rows;
-  correlationCache = { key, rows: runCorrelations(src, opts), builds: correlationCache.builds + 1 };
+  const rev = app.correlationRev || 0;
+  const opt = optionKey(opts);
+  if (correlationCache.rows && correlationCache.rev === rev && correlationCache.opt === opt) return correlationCache.rows;
+  correlationCache = { rev, opt, rows: runCorrelations(correlationSource(), opts), builds: correlationCache.builds + 1 };
   return correlationCache.rows;
 }
 app.correlations = correlations;

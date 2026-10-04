@@ -219,6 +219,7 @@ app.load = load;
 
 function save() {
   app.state.updatedAt = Date.now();
+  app.correlationRev = (app.correlationRev || 0) + 1;
   try { app.schedulePush(); } catch (e) { /* cloud not ready yet */ }
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); }
   catch (e) { app.toast("Couldn't save on this phone. Export a backup from Settings now."); }

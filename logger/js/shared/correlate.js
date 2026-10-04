@@ -5,10 +5,12 @@
    that helper now lives here next to the general engine.
 
    A day of logs is not an independent coin flip, and one user is compared on
-   well over a hundred factor, outcome, and lag pairs. Each comparison uses
-   Welch's t with an effective sample size from the outcome's autocorrelation,
-   then Benjamini-Hochberg q-values across that whole family. Confidence also
-   requires a minimum effect size, so noise does not get a card. */
+   well over a hundred factor, outcome, and lag pairs. A centred 29-day mean
+   is removed from each numeric series before any cut, so a shared drift is
+   not read as a split of early days against late days. Each comparison then
+   uses Welch's t with an effective sample size from the outcome's
+   autocorrelation, then Benjamini-Hochberg q-values across that whole family.
+   Confidence also requires a minimum effect size, so noise does not get a card. */
 
 export const MIN_PER_GROUP = 7;
 export const LATE_HOUR = 21;
@@ -204,8 +206,13 @@ export function welch(a, b) {
   return { meanWith: m1, meanWithout: m2, diff, t, df, p, d, v1, v2 };
 }
 
+const dayCache = Object.create(null);
 function dayNumber(iso) {
-  return Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000);
+  const known = dayCache[iso];
+  if (known != null) return known;
+  const n = Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000);
+  dayCache[iso] = n;
+  return n;
 }
 
 /* Lag-1 correlation of consecutive calendar days. The sample coefficient is
@@ -241,40 +248,61 @@ function lag1Rho(dated) {
   return shrunk > 0.8 ? 0.8 : shrunk;
 }
 
-function seriesRho(map) {
+function seriesRho(map, idx) {
   const dated = [];
-  Object.keys(map).forEach((date) => dated.push({ t: dayNumber(date), y: map[date] }));
+  const dates = Object.keys(map);
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    const known = idx && idx[date];
+    dated.push({ t: known == null ? dayNumber(date) : known, y: map[date] });
+  }
   dated.sort((a, b) => a.t - b.t);
   return lag1Rho(dated);
 }
 
 /* Variance of the with-minus-without contrast if the outcome is AR(1) with
-   correlation rho^|days apart|. Divided by the independent-days variance, so
-   1 means the usual Welch standard error is already honest. Clamped to at
-   least 1 so dependence never counts as extra evidence. */
+   correlation rho^|days apart|, divided by the independent-days variance.
+   1 means the usual Welch standard error is already honest. The multiplier
+   is clamped to [1, 40]: dependence never counts as extra evidence, and a
+   very sticky series cannot shrink the sample without limit. */
+let contrastWeights = new Float64Array(512);
+
 function contrastInflation(withDays, withoutDays, rho) {
   if (!(rho > 0)) return 1;
   const n1 = withDays.length;
   const n2 = withoutDays.length;
   if (n1 < 2 || n2 < 2) return 1;
-  const pts = new Array(n1 + n2);
-  for (let i = 0; i < n1; i++) pts[i] = { t: withDays[i], w: 1 / n1 };
-  for (let i = 0; i < n2; i++) pts[n1 + i] = { t: withoutDays[i], w: -1 / n2 };
-  pts.sort((a, b) => a.t - b.t || a.w - b.w);
+  let tMin = withDays[0];
+  let tMax = tMin;
+  for (let i = 1; i < n1; i++) {
+    const t = withDays[i];
+    if (t < tMin) tMin = t;
+    else if (t > tMax) tMax = t;
+  }
+  for (let i = 0; i < n2; i++) {
+    const t = withoutDays[i];
+    if (t < tMin) tMin = t;
+    else if (t > tMax) tMax = t;
+  }
+  const span = tMax - tMin + 1;
+  if (!Number.isFinite(span) || span < 1) return 1;
+  if (contrastWeights.length < span) contrastWeights = new Float64Array(span);
+  else contrastWeights.fill(0, 0, span);
+  const w1 = 1 / n1;
+  const w2 = -1 / n2;
+  for (let i = 0; i < n1; i++) contrastWeights[withDays[i] - tMin] += w1;
+  for (let i = 0; i < n2; i++) contrastWeights[withoutDays[i] - tMin] += w2;
   let acc = 0;
   let quad = 0;
   let ww = 0;
-  let prev = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const dt = i === 0 ? 0 : pts[i].t - prev;
-    const decay = dt > 0 ? rho ** dt : 1;
-    acc = pts[i].w + (i === 0 ? 0 : decay * acc);
-    quad += pts[i].w * acc;
-    ww += pts[i].w * pts[i].w;
-    prev = pts[i].t;
+  for (let i = 0; i < span; i++) {
+    const w = contrastWeights[i];
+    acc = w + rho * acc;
+    quad += w * acc;
+    ww += w * w;
   }
   const S = 2 * quad - ww;
-  const indep = 1 / n1 + 1 / n2;
+  const indep = w1 - w2;
   if (!(S > 0) || !Number.isFinite(S)) return 1;
   const inflation = S / indep;
   if (!Number.isFinite(inflation) || inflation < 1) return 1;
@@ -295,15 +323,21 @@ export function effectiveN(withDays, withoutDays, rho) {
 
 /* Welch's test with the effective sample size in the standard error and the
    degrees of freedom. Means, variances, and Cohen's d stay on the raw days:
-   dependence widens the uncertainty, it does not change the gap. */
+   dependence widens the uncertainty, it does not change the gap. One tail
+   probability is computed, from the effective size. */
 export function welchEffective(a, b, n1eff, n2eff) {
-  const base = welch(a, b);
+  const n1 = a.length;
+  const n2 = b.length;
+  const m1 = mean(a);
+  const m2 = mean(b);
+  const v1 = variance(a, m1);
+  const v2 = variance(b, m2);
+  const diff = m1 - m2;
+  const sp = n1 + n2 > 2 ? Math.sqrt(((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2)) : 0;
+  const d = sp === 0 ? (diff === 0 ? 0 : Math.sign(diff) * 5) : diff / sp;
   if (!(n1eff >= 2) || !(n2eff >= 2)) {
-    return { ...base, t: 0, df: 1, p: 1, n1eff, n2eff };
+    return { meanWith: m1, meanWithout: m2, diff, t: 0, df: 1, p: 1, d, v1, v2, n1eff, n2eff };
   }
-  const v1 = base.v1;
-  const v2 = base.v2;
-  const diff = base.diff;
   const se2 = v1 / n1eff + v2 / n2eff;
   let t = 0;
   let df = n1eff + n2eff - 2;
@@ -319,7 +353,7 @@ export function welchEffective(a, b, n1eff, n2eff) {
     df = den === 0 ? n1eff + n2eff - 2 : (se2 * se2) / den;
     p = studentP(t, df);
   }
-  return { ...base, t, df, p, n1eff, n2eff };
+  return { meanWith: m1, meanWithout: m2, diff, t, df, p, d, v1, v2, n1eff, n2eff };
 }
 
 /* Benjamini-Hochberg q-values. q(i) is the smallest FDR at which test i is
@@ -742,6 +776,87 @@ function factorPhrase(id, label, verb) {
   };
 }
 
+/* Centred 29-day window: 14 days on each side of the day itself. */
+const TREND_HALF = 14;
+
+/* Subtract each numeric series' centred rolling mean, then add the series
+   mean back. Cuts and outcomes both use this copy, so a slow drift is not a
+   high-versus-low split, and a percent still refers to the usual level.
+   Booleans are copied through unchanged. */
+let trendT = new Int32Array(256);
+let trendY = new Float64Array(256);
+let trendAt = new Int32Array(256);
+let trendOrder = [];
+
+function detrendGrow(n) {
+  if (trendT.length >= n) return;
+  let cap = trendT.length;
+  while (cap < n) cap *= 2;
+  trendT = new Int32Array(cap);
+  trendY = new Float64Array(cap);
+  trendAt = new Int32Array(cap);
+}
+
+function detrendDays(days) {
+  if (!days) return {};
+  const dates = Object.keys(days);
+  const nDates = dates.length;
+  if (!nDates) return days;
+  const out = {};
+  const numeric = Object.create(null);
+  const times = new Int32Array(nDates);
+  for (let i = 0; i < nDates; i++) {
+    const bucket = days[dates[i]];
+    const copy = {};
+    for (const k in bucket) {
+      copy[k] = bucket[k];
+      if (finite(bucket[k]) != null) numeric[k] = 1;
+    }
+    out[dates[i]] = copy;
+    times[i] = dayNumber(dates[i]);
+  }
+  const ids = Object.keys(numeric);
+  for (let k = 0; k < ids.length; k++) {
+    const id = ids[k];
+    let n = 0;
+    for (let i = 0; i < nDates; i++) {
+      const y = finite(days[dates[i]][id]);
+      if (y == null) continue;
+      if (n >= trendT.length) detrendGrow(n + 1);
+      trendT[n] = times[i];
+      trendY[n] = y;
+      trendAt[n] = i;
+      n++;
+    }
+    if (n < 2) continue;
+    trendOrder.length = n;
+    for (let i = 0; i < n; i++) trendOrder[i] = i;
+    trendOrder.sort((a, b) => trendT[a] - trendT[b]);
+    let overall = 0;
+    for (let i = 0; i < n; i++) overall += trendY[i];
+    overall /= n;
+    let lo = 0;
+    let hi = 0;
+    let sum = 0;
+    let cnt = 0;
+    for (let i = 0; i < n; i++) {
+      const oi = trendOrder[i];
+      const t = trendT[oi];
+      while (hi < n && trendT[trendOrder[hi]] <= t + TREND_HALF) { sum += trendY[trendOrder[hi]]; cnt++; hi++; }
+      while (trendT[trendOrder[lo]] < t - TREND_HALF) { sum -= trendY[trendOrder[lo]]; cnt--; lo++; }
+      out[dates[trendAt[oi]]][id] = trendY[oi] - sum / cnt + overall;
+    }
+  }
+  return out;
+}
+
+function dayIndex(days) {
+  const idx = Object.create(null);
+  const dates = Object.keys(days);
+  for (let i = 0; i < dates.length; i++) idx[dates[i]] = dayNumber(dates[i]);
+  return idx;
+}
+
 function tertileTail(source) {
   if (source === "sleepHours") return " than on your shorter nights";
   if (source === "deepHours") return " than on nights with less deep sleep";
@@ -845,20 +960,29 @@ function outcomeMap(days, id) {
   return map;
 }
 
-function align(values, outcomes, lag) {
+function align(values, outcomes, lag, idx) {
   const withVals = [];
   const withoutVals = [];
   const withDays = [];
   const withoutDays = [];
-  Object.keys(values).forEach((date) => {
+  const dates = Object.keys(values);
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
     const flag = values[date];
-    if (flag !== true && flag !== false) return;
+    if (flag !== true && flag !== false) continue;
     const when = lag ? addDays(date, lag) : date;
     const y = outcomes[when];
-    if (y == null) return;
-    if (flag) { withVals.push(y); withDays.push(dayNumber(when)); }
-    else { withoutVals.push(y); withoutDays.push(dayNumber(when)); }
-  });
+    if (y == null) continue;
+    if (!idx) {
+      if (flag) withVals.push(y);
+      else withoutVals.push(y);
+      continue;
+    }
+    const known = idx[when];
+    const t = known == null ? dayNumber(when) : known;
+    if (flag) { withVals.push(y); withDays.push(t); }
+    else { withoutVals.push(y); withoutDays.push(t); }
+  }
   return { withVals, withoutVals, withDays, withoutDays };
 }
 
@@ -970,21 +1094,32 @@ function evaluate(days, phrases, options, ouraExtra) {
   const minN = options.minPerGroup == null ? MIN_PER_GROUP : options.minPerGroup;
   const lags = options.lags || [0, 1];
   const weightDir = options.weightDir || null;
-  const factors = buildFactors(days, phrases || {});
-  const outcomes = numericSeries(days).filter((id) => outcomeAllowed(id, weightDir) && (!options.outcomes || options.outcomes.indexOf(id) !== -1));
+  const adjusted = detrendDays(days);
+  const idx = dayIndex(adjusted);
+  const factors = buildFactors(adjusted, phrases || {});
+  const outcomes = numericSeries(adjusted).filter((id) => outcomeAllowed(id, weightDir) && (!options.outcomes || options.outcomes.indexOf(id) !== -1));
   const pending = [];
 
   outcomes.forEach((outcome) => {
-    const ys = outcomeMap(days, outcome);
-    const rho = seriesRho(ys);
+    const ys = outcomeMap(adjusted, outcome);
+    const rho = seriesRho(ys, idx);
     factors.forEach((factor) => {
       if (locked(factor.id, factor.source, outcome)) return;
       lags.forEach((lag) => {
         if (suppressedStory(factor, outcome, lag, ouraExtra)) return;
-        const groups = align(factor.values, ys, lag);
+        const groups = align(factor.values, ys, lag, rho > 0 ? idx : null);
         if (groups.withVals.length < minN || groups.withoutVals.length < minN) return;
-        const eff = effectiveN(groups.withDays, groups.withoutDays, rho);
-        const stats = welchEffective(groups.withVals, groups.withoutVals, eff.n1, eff.n2);
+        const n1 = groups.withVals.length;
+        const n2 = groups.withoutVals.length;
+        let stats;
+        let n1eff = n1;
+        let n2eff = n2;
+        if (rho > 0) {
+          const eff = effectiveN(groups.withDays, groups.withoutDays, rho);
+          n1eff = eff.n1;
+          n2eff = eff.n2;
+          stats = welchEffective(groups.withVals, groups.withoutVals, n1eff, n2eff);
+        } else stats = welch(groups.withVals, groups.withoutVals);
         const percent = Math.abs(stats.meanWithout) < 1e-9 ? null : (stats.diff / Math.abs(stats.meanWithout)) * 100;
         pending.push({
           factor: factor.id,
@@ -1001,10 +1136,10 @@ function evaluate(days, phrases, options, ouraExtra) {
           percent,
           nWith: groups.withVals.length,
           nWithout: groups.withoutVals.length,
-          n: groups.withVals.length,
-          nEff: Math.min(eff.n1, eff.n2),
-          n1eff: eff.n1,
-          n2eff: eff.n2,
+          n: n1,
+          nEff: Math.min(n1eff, n2eff),
+          n1eff,
+          n2eff,
           p: stats.p,
           effect: stats.d,
           valence: valenceOf(outcome, stats.diff, percent, weightDir),
@@ -1141,23 +1276,54 @@ export function listFindings(rows) {
   return picked.concat(rest);
 }
 
-function samplesOf(days, id) {
-  const samples = [];
-  Object.keys(days || {}).forEach((date) => {
-    const n = finite(days[date] && days[date][id]);
-    if (n != null) samples.push(n);
-  });
-  samples.sort((a, b) => a - b);
-  return samples;
+/* One numeric series, same centred 29-day adjustment evaluate() uses for cuts.
+   Cached on the extracted day object so a week check does not repeat it. */
+function adjustedSeries(days, id) {
+  if (!days.__trend) Object.defineProperty(days, "__trend", { value: Object.create(null) });
+  const box = days.__trend;
+  if (box[id]) return box[id];
+  const dates = Object.keys(days);
+  const map = Object.create(null);
+  const pts = [];
+  for (let i = 0; i < dates.length; i++) {
+    const y = finite(days[dates[i]] && days[dates[i]][id]);
+    if (y != null) pts.push({ t: dayNumber(dates[i]), y, d: dates[i] });
+  }
+  const n = pts.length;
+  if (n < 2) {
+    for (let i = 0; i < n; i++) map[pts[i].d] = pts[i].y;
+    box[id] = map;
+    return map;
+  }
+  pts.sort((a, b) => a.t - b.t);
+  let overall = 0;
+  for (let i = 0; i < n; i++) overall += pts[i].y;
+  overall /= n;
+  let lo = 0;
+  let hi = 0;
+  let sum = 0;
+  let cnt = 0;
+  for (let i = 0; i < n; i++) {
+    const t = pts[i].t;
+    while (hi < n && pts[hi].t <= t + TREND_HALF) { sum += pts[hi].y; cnt++; hi++; }
+    while (pts[lo].t < t - TREND_HALF) { sum -= pts[lo].y; cnt--; lo++; }
+    map[pts[i].d] = pts[i].y - sum / cnt + overall;
+  }
+  box[id] = map;
+  return map;
 }
 
 function factorActive(days, row, date) {
   const bucket = days[date];
   if (!bucket || !row) return false;
   if (row.kind === "boolean") return bucket[row.factor] === true;
-  const n = finite(bucket[row.source]);
+  const series = adjustedSeries(days, row.source);
+  const n = series[date];
   if (n == null) return false;
-  const sorted = samplesOf(days, row.source);
+  const sorted = [];
+  const dates = Object.keys(series);
+  for (let i = 0; i < dates.length; i++) sorted.push(series[dates[i]]);
+  sorted.sort((a, b) => a - b);
   if (sorted.length < 4 || sorted[0] === sorted[sorted.length - 1]) return false;
   if (row.kind === "median") return n > quantile(sorted, 0.5);
   if (row.kind === "tertile") {

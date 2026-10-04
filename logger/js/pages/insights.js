@@ -90,6 +90,7 @@ function affectsEmpty(days) {
   }
   return "No pattern is strong enough to trust yet. Keep logging sleep, workouts, and meals. When the same thing lines up on enough days, it will show up here.";
 }
+app.affectsEmpty = affectsEmpty;
 
 /* What affects you. Correlations only, and no health values leave the phone. */
 function affectsHTML() {

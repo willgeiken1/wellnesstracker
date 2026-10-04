@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { pickForToday, todayLine } from "./correlate.js";
+import { DAYS_FOR_A_PATTERN, loggedDays, pickForToday, todayLine } from "./correlate.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
    The headline uses readiness, lift status, and effect() — no network.
@@ -179,28 +179,31 @@ function weightMetric() {
   return { id: "weight", label: "Weight", value: `${app.signed(r.perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
 }
 
-function patternEmpty() {
+function patternEmpty(days) {
+  const n = days || 0;
+  const line = typeof app.affectsEmpty === "function" ? app.affectsEmpty(n) : "";
   return {
     id: "pattern",
     label: "What affects you",
-    value: "Nothing clear yet",
-    meta: "No strong pattern yet",
-    sub: "When the same thing lines up often enough to trust, it will show up here.",
+    value: n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet",
+    meta: line,
     empty: true,
     link: "affects",
   };
 }
 
 function patternMetric() {
-  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return patternEmpty();
+  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function") return patternEmpty(0);
   let row = null;
+  let days = 0;
   try {
     const src = app.correlationSource();
+    days = loggedDays(src);
     row = pickForToday(app.correlations(), src, app.today());
   } catch (e) { row = null; }
-  if (!row) return patternEmpty();
+  if (!row) return patternEmpty(days);
   const line = todayLine(row);
-  if (!line) return patternEmpty();
+  if (!line) return patternEmpty(days);
   const good = row.valence === "good";
   return {
     id: "pattern",
@@ -243,7 +246,6 @@ function metricHTML(m) {
         <span class="brief-l">${app.esc(m.label)}</span>
         <span class="brief-line">${app.esc(m.value)}</span>
         <span class="brief-m">${app.esc(m.meta || "What affects you")}</span>
-        ${m.empty && m.sub ? `<span class="brief-s">${app.esc(m.sub)}</span>` : ""}
       </button></li>`;
   }
   const bar = m.bar != null ? `<span class="brief-bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, m.bar)).toFixed(1)}%"></i></span>` : "";
