@@ -2,20 +2,31 @@ import { app } from "../runtime.js";
 import { correlate, pickForToday, todayLine } from "./correlate.js";
 
 /* Home widget registry.
-   HOME_REGISTRY_PAINT stays false until the Home editor ships. Home keeps the
-   legacy Morning Brief stack for every user, including a saved homeV2.
-   getHomeLayout() only describes the v2 stand-in. Step 2 persists a migration;
-   this file does not.
+   Painting is per user: homeRegistryActive is true only for a stored homeV2
+   that is a real edit (v is the number 2, items is an array, and the copy is
+   not migrated). Everyone else keeps the legacy Home. HOME_REGISTRY_PAINT
+   stays false and is not the paint switch.
 
    homeV2 lives on layout so it rides along in user_data, but cloud merge
    keeps it off the wholesale layout replace and picks a winner by updatedAt.
-   A missing homeV2 is only an in-memory stand-in (updatedAt 0). setHomeLayout
-   is a user edit: it keeps unknown fields, clears migrated, migratedAt, and
-   migratedFrom, and stamps now. */
+   A missing homeV2 is only an in-memory stand-in (updatedAt 0). getHomeLayout
+   never writes. setHomeLayout is a user edit: it spreads the previous homeV2,
+   keeps unknown string ids in items and hidden, clears migrated, migratedAt,
+   and migratedFrom, and stamps now.
 
-/* Off until the editor can save a v2 arrangement. Home must not paint from
-   the registry before that, or a migrated homeV2 drops the Morning Brief. */
+   sizes, when present, maps an id to "small" or "medium" only where that
+   differs from the registry default. Unknown id keys are kept and not rendered. */
+
+/* Not the paint switch. A migrated homeV2 must keep the legacy stack, and
+   older builds still read this flag. homeRegistryActive decides for this one. */
 export const HOME_REGISTRY_PAINT = false;
+
+/* Default size is HOME_WIDGETS[id].size. These also accept the other size. */
+const BOTH_SIZES = new Set([
+  "readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps",
+  "weekly-goal", "food-today", "food-yesterday", "weight-trend", "cardio-minutes",
+  "pattern", "headline",
+]);
 
 const BRIEF_METRICS = ["pattern", "oura", "train", "food", "week", "weight"];
 const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
@@ -525,11 +536,13 @@ function renderLastNight(data) {
 }
 
 function widget(spec) {
+  const sizes = BOTH_SIZES.has(spec.id) ? ["small", "medium"] : [spec.size];
   return {
     id: spec.id,
     name: spec.name,
     category: spec.category,
     size: spec.size,
+    sizes,
     needsOura: spec.needsOura,
     render(data) { return spec.render(asData(data)); },
     preview(sample) {
@@ -567,14 +580,114 @@ function isHomeV2(raw) {
   return !!(raw && raw.v === 2 && Array.isArray(raw.items));
 }
 
-/* Known catalog ids, first occurrence only. Null, blanks, duplicates, and unknown ids drop out.
-   TODO: setHomeLayout drops unknown ids. Revisit in the step 4 editor. */
+/* Known catalog ids, first occurrence only. Used when reading a layout to paint.
+   Unknown ids stay in the stored copy and are left out of this list. */
 function widgetIds(list) {
   const out = [];
   (Array.isArray(list) ? list : []).forEach((id) => {
     if (typeof id === "string" && HOME_WIDGETS[id] && !out.includes(id)) out.push(id);
   });
   return out;
+}
+
+/* Every non-blank string once, including ids this build does not know. */
+function stringIds(list) {
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach((id) => {
+    if (typeof id === "string" && id && !out.includes(id)) out.push(id);
+  });
+  return out;
+}
+
+/* Keep unknown ids a newer client stored when this build rewrites the list. */
+function withPreservedUnknown(prevList, nextList) {
+  const next = stringIds(nextList);
+  const prev = stringIds(prevList);
+  const have = new Set(next);
+  prev.forEach((id, index) => {
+    if (HOME_WIDGETS[id] || have.has(id)) return;
+    let at = next.length;
+    let placed = false;
+    for (let j = index - 1; j >= 0; j--) {
+      const pos = next.indexOf(prev[j]);
+      if (pos >= 0) { at = pos + 1; placed = true; break; }
+    }
+    if (!placed) {
+      for (let j = index + 1; j < prev.length; j++) {
+        const pos = next.indexOf(prev[j]);
+        if (pos >= 0) { at = pos; break; }
+      }
+    }
+    next.splice(at, 0, id);
+    have.add(id);
+  });
+  return next;
+}
+
+function sizeChoice(value) {
+  return value === "small" || value === "medium" ? value : null;
+}
+
+/* Known ids store only a non-default supported size. Unknown id keys are kept. */
+function sanitizeSizes(draftSizes, prevSizes) {
+  const out = {};
+  const prev = prevSizes && typeof prevSizes === "object" && !Array.isArray(prevSizes) ? prevSizes : {};
+  const draft = draftSizes && typeof draftSizes === "object" && !Array.isArray(draftSizes) ? draftSizes : null;
+  Object.keys(prev).forEach((id) => {
+    if (HOME_WIDGETS[id]) return;
+    const choice = sizeChoice(prev[id]);
+    if (choice) out[id] = choice;
+  });
+  const source = draft || prev;
+  Object.keys(source).forEach((id) => {
+    const choice = sizeChoice(source[id]);
+    if (!choice) return;
+    const entry = HOME_WIDGETS[id];
+    if (!entry) { out[id] = choice; return; }
+    const allowed = entry.sizes || [entry.size];
+    if (!allowed.includes(choice) || choice === entry.size) return;
+    out[id] = choice;
+  });
+  return out;
+}
+
+export function widgetSize(id, layout) {
+  const entry = HOME_WIDGETS[id];
+  if (!entry) return "medium";
+  const allowed = entry.sizes || [entry.size];
+  const choice = layout && layout.sizes && layout.sizes[id];
+  if (typeof choice === "string" && allowed.includes(choice)) return choice;
+  return entry.size;
+}
+
+/* True when this phone should paint the registry Home. A migration is not an edit. */
+export function homeRegistryActive(state) {
+  const saved = state && state.layout && state.layout.homeV2;
+  if (!isHomeV2(saved)) return false;
+  if (saved.migrated === true) return false;
+  if (typeof saved.migratedAt === "number" && saved.migratedAt > 0) return false;
+  return true;
+}
+
+/* The editor's starting arrangement. Unknown ids stay on the stored copy. */
+export function homeEditorDraft(state) {
+  const layout = getHomeLayout(state);
+  const hidden = new Set(layout.hidden);
+  const raw = state && state.layout && state.layout.homeV2;
+  const sizes = raw && raw.sizes && typeof raw.sizes === "object" && !Array.isArray(raw.sizes) ? { ...raw.sizes } : {};
+  return {
+    items: layout.items.filter((id) => !hidden.has(id)),
+    hidden: layout.hidden.filter((id) => HOME_WIDGETS[id]),
+    sizes,
+  };
+}
+
+/* Writes a real edit. Unknown ids already stored are put back by setHomeLayout. */
+export function commitHomeEditor(state, draft) {
+  if (!state || typeof state !== "object") throw new Error("commitHomeEditor needs a state object");
+  const items = stringIds(draft && draft.items).filter((id) => HOME_WIDGETS[id]);
+  const hidden = stringIds(draft && draft.hidden).filter((id) => HOME_WIDGETS[id] && !items.includes(id));
+  return setHomeLayout(state, { items, hidden, sizes: draft && draft.sizes });
 }
 
 function cloneHomeV2(raw) {
@@ -651,17 +764,20 @@ export function setHomeLayout(state, layout) {
   const prev = state.layout && state.layout.homeV2 && typeof state.layout.homeV2 === "object" && !Array.isArray(state.layout.homeV2)
     ? state.layout.homeV2
     : {};
+  const sizes = sanitizeSizes(layout && layout.sizes, prev.sizes);
   const next = {
     ...prev,
     v: 2,
-    items: widgetIds(layout && layout.items),
-    hidden: widgetIds(layout && layout.hidden),
+    items: withPreservedUnknown(prev.items, layout && layout.items),
+    hidden: withPreservedUnknown(prev.hidden, layout && layout.hidden),
     updatedAt: Date.now(),
   };
   delete next.migrated;
   delete next.migratedAt;
   delete next.migratedFrom;
   if (layout && layout.ouraSeeded === true) next.ouraSeeded = true;
+  if (Object.keys(sizes).length) next.sizes = sizes;
+  else delete next.sizes;
   state.layout = state.layout && typeof state.layout === "object" && !Array.isArray(state.layout) ? state.layout : {};
   state.layout.homeV2 = next;
   return next;
@@ -676,7 +792,7 @@ export function renderHomeWidgets(layout, data) {
     if (!entry) return "";
     const html = entry.render(data) || "";
     if (!String(html).trim()) return "";
-    const span = entry.size === "medium" ? " span-m" : "";
+    const span = widgetSize(id, layout) === "medium" ? " span-m" : "";
     return `<div class="hw-slot${span}" data-hw="${id}">${html}</div>`;
   }).join("");
   return `<div class="home-v2">${body}</div>`;
@@ -700,6 +816,10 @@ export function homeAwaitingSync() {
 
 app.HOME_WIDGETS = HOME_WIDGETS;
 app.HOME_REGISTRY_PAINT = HOME_REGISTRY_PAINT;
+app.homeRegistryActive = homeRegistryActive;
+app.widgetSize = widgetSize;
+app.homeEditorDraft = homeEditorDraft;
+app.commitHomeEditor = commitHomeEditor;
 app.getHomeLayout = getHomeLayout;
 app.setHomeLayout = setHomeLayout;
 app.renderHomeWidgets = renderHomeWidgets;

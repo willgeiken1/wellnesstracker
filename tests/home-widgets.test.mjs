@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { app } from "../logger/js/runtime.js";
-import { HOME_REGISTRY_PAINT, HOME_WIDGETS, getHomeLayout, homeAwaitingSync, renderHomeWidgets, setHomeLayout } from "../logger/js/shared/home-widgets.js";
+import { HOME_REGISTRY_PAINT, HOME_WIDGETS, commitHomeEditor, getHomeLayout, homeAwaitingSync, homeEditorDraft, homeRegistryActive, renderHomeWidgets, setHomeLayout, widgetSize } from "../logger/js/shared/home-widgets.js";
 import "../logger/js/pages/home.js";
 
 const IDS = [
@@ -206,14 +206,88 @@ test("setHomeLayout and getHomeLayout keep each known id once", () => {
     items: ["today", null, "", "today", "nope", "cardio", "cardio"],
     hidden: ["steps", "steps", "missing", "", null, "today"],
   });
-  assert.deepEqual(written.items, ["today", "cardio"]);
-  assert.deepEqual(written.hidden, ["steps", "today"]);
+  assert.deepEqual(written.items, ["today", "nope", "cardio"]);
+  assert.deepEqual(written.hidden, ["steps", "missing", "today"]);
   state.layout.homeV2.items = ["hrv", "hrv", "ghost", null, ""];
   state.layout.homeV2.hidden = ["muscles", "nope", "muscles"];
   const got = getHomeLayout(state);
   assert.deepEqual(got.items, ["hrv"]);
   assert.deepEqual(got.hidden, ["muscles"]);
   assert.deepEqual(state.layout.homeV2.items, ["hrv", "hrv", "ghost", null, ""]);
+  assert.equal(renderHomeWidgets(got, snap).includes('data-hw="ghost"'), false);
+});
+
+test("setHomeLayout keeps unknown ids already stored and does not render them", () => {
+  const state = {
+    layout: { homeV2: { v: 2, items: ["today", "future-widget", "cardio"], hidden: ["next-card"], updatedAt: 4, sizes: { "future-widget": "medium" } } },
+  };
+  const written = setHomeLayout(state, { items: ["muscles", "today"], hidden: ["hrv"] });
+  assert.deepEqual(written.items, ["muscles", "today", "future-widget"]);
+  assert.ok(written.hidden.includes("next-card"));
+  assert.ok(written.hidden.includes("hrv"));
+  assert.equal(written.sizes["future-widget"], "medium");
+  const painted = getHomeLayout(state);
+  assert.deepEqual(painted.items, ["muscles", "today"]);
+  assert.equal(painted.hidden.includes("next-card"), false);
+  assert.equal(renderHomeWidgets(state.layout.homeV2, snap).includes("future-widget"), false);
+  assert.equal(JSON.stringify(state).includes("future-widget"), true);
+});
+
+test("the editor save clears a migration and writes the chosen cards", () => {
+  const state = {
+    layout: {
+      home: { order: ["today"], hidden: [] },
+      homeV2: {
+        v: 2,
+        items: ["today", "future-widget"],
+        hidden: ["steps"],
+        updatedAt: 8,
+        migrated: true,
+        migratedAt: 3,
+        migratedFrom: "home",
+        ouraSeeded: true,
+        sizes: { "future-widget": "small", readiness: "medium" },
+      },
+    },
+  };
+  const before = Date.now();
+  const draft = homeEditorDraft(state);
+  assert.deepEqual(draft.items, ["today"]);
+  assert.ok(draft.hidden.includes("steps"));
+  assert.equal(draft.sizes["future-widget"], "small");
+  draft.items = ["cardio", "headline"];
+  draft.hidden = ["today", "steps"];
+  draft.sizes = { ...draft.sizes, headline: "small", readiness: "medium", today: "small" };
+  const written = commitHomeEditor(state, draft);
+  assert.equal(written.migrated, undefined);
+  assert.equal(written.migratedAt, undefined);
+  assert.equal(written.migratedFrom, undefined);
+  assert.equal(written.ouraSeeded, true);
+  assert.ok(written.updatedAt >= before);
+  assert.deepEqual(written.items, ["cardio", "headline", "future-widget"]);
+  assert.ok(written.hidden.includes("today"));
+  assert.ok(written.hidden.includes("steps"));
+  assert.equal(written.sizes.headline, "small");
+  assert.equal(written.sizes.readiness, "medium");
+  assert.equal(written.sizes.today, undefined);
+  assert.equal(written.sizes["future-widget"], "small");
+  assert.equal(widgetSize("headline", written), "small");
+  assert.equal(widgetSize("readiness", written), "medium");
+  assert.equal(widgetSize("today", written), "medium");
+  assert.equal(homeRegistryActive(state), true);
+  assert.equal(state.layout.home.order[0], "today");
+  const html = renderHomeWidgets(getHomeLayout(state), snap);
+  assert.match(html, /data-hw="headline"/);
+  assert.doesNotMatch(html, /span-m" data-hw="headline"/);
+  assert.match(renderHomeWidgets({ items: ["readiness"], hidden: [], sizes: { readiness: "medium" } }, snap), /span-m" data-hw="readiness"/);
+  assert.doesNotMatch(renderHomeWidgets({ items: ["readiness"], hidden: [] }, snap), /span-m/);
+  assert.equal(html.includes("future-widget"), false);
+  const again = homeEditorDraft(state);
+  again.sizes = { ...again.sizes, headline: "medium", readiness: "small" };
+  const cleared = commitHomeEditor(state, again);
+  assert.equal(cleared.sizes.headline, undefined);
+  assert.equal(cleared.sizes.readiness, undefined);
+  assert.equal(cleared.sizes["future-widget"], "small");
 });
 
 test("hiding the brief or a brief tile changes the stand-in, not stored state", () => {

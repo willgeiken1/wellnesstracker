@@ -245,7 +245,7 @@ function regressions() {
   const bad = [null, "x", [], { homeV2: null }, { homeV2: "x" }, { homeV2: { v: 1, items: [] } }, { homeV2: { v: 2 } }, { homeV2: { v: 2, items: "x" } }, { homeV2: { v: 2, hidden: ["today"], updatedAt: 99 } }];
   check("5 malformed remotes never replace a good local", bad.every((r) => pickHomeV2(local, r) === local.homeV2));
   const junk = pickHomeV2(local, { homeV2: { v: 2, items: [1, null, "nope", "today", "today"], hidden: ["nope", "hrv"], updatedAt: 50 } });
-  check("5 junk ids are filtered", eq(junk.items, ["today"]) && eq(junk.hidden, ["hrv"]), junk);
+  check("5 junk ids are filtered and unknown ids stay", eq(junk.items, ["nope", "today"]) && eq(junk.hidden, ["hrv"]), junk);
   const stringV = { homeV2: { v: "2", items: ["steps"], hidden: [], updatedAt: 999 } };
   check("string v is rejected", pickHomeV2(local, stringV) === local.homeV2);
   const onlyUnknown = { homeV2: { v: 2, items: ["nope", "zzz"], hidden: [], updatedAt: 99 } };
