@@ -217,9 +217,10 @@ async function saveProfile() {
   p.weighIns = p.weighIns || [];
   const last = app.weighIns().pop();
   if (!last || Math.abs(last.kg - kg) > 0.05) {
-    p.weighIns = p.weighIns.filter((x) => x.date !== app.today()).concat([{ date: app.today(), kg: Math.round(kg * 100) / 100, at: Date.now() }]);
+    const entryAt = Date.now();
+    p.weighIns = p.weighIns.filter((x) => x.date !== app.today()).concat([{ date: app.today(), kg: Math.round(kg * 100) / 100, at: entryAt }]);
     if (Array.isArray(p.wDel)) p.wDel = p.wDel.filter((d) => d !== app.today());
-    if (p.wDelAt && typeof p.wDelAt === "object") delete p.wDelAt[app.today()];
+    p.wDelAt = { ...(p.wDelAt || {}), [app.today()]: entryAt - 1 };
   }
   p.updatedAt = Date.now();
   app.state.profile = p;
@@ -252,9 +253,10 @@ function saveWeighIn() {
   if (!v || kg < 30 || kg > 300) return app.toast("Enter a valid weight.");
   if (d > app.today()) return app.toast("That date is in the future.");
   app.state.profile = app.state.profile || { weighIns: [] };
-  app.state.profile.weighIns = (app.state.profile.weighIns || []).filter((x) => x.date !== d).concat([{ date: d, kg: Math.round(kg * 100) / 100, at: Date.now() }]);
+  const entryAt = Date.now();
+  app.state.profile.weighIns = (app.state.profile.weighIns || []).filter((x) => x.date !== d).concat([{ date: d, kg: Math.round(kg * 100) / 100, at: entryAt }]);
   if (Array.isArray(app.state.profile.wDel)) app.state.profile.wDel = app.state.profile.wDel.filter((day) => day !== d);
-  if (app.state.profile.wDelAt && typeof app.state.profile.wDelAt === "object") delete app.state.profile.wDelAt[d];
+  app.state.profile.wDelAt = { ...(app.state.profile.wDelAt || {}), [d]: entryAt - 1 };
   app.state.profile.updatedAt = Date.now();
   app.save(); app.ui.sheet = null; app.render();
   app.toast(`Logged ${app.fmtW(v)}.`);

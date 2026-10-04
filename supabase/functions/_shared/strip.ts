@@ -231,17 +231,30 @@ export function resolveCutoff(data: Bag, from: string, to: string, requested: un
   return req || stored || now;
 }
 
-export function addPurge(data: Bag, from: string, to: string, deletedAt?: number) {
+/* A stamp past the skew window is ignored so it cannot win Math.max over a real delete time. */
+function usableStamp(t: number | null, now: number): number | null {
+  if (t == null || !(t > 0)) return null;
+  if (t > now + CLOCK_SKEW_MS) return null;
+  return t;
+}
+
+export function addPurge(data: Bag, from: string, to: string, deletedAt?: number, now = Date.now()) {
   const purges = Array.isArray(data.purges) ? data.purges : [];
   const hit = purges.find((p: Bag) => p && p.from === from && p.to === to);
-  const stamp = timeMs(deletedAt) || timeMs(hit && (hit.deletedAt ?? hit.at)) || Date.now();
+  const prevRaw = timeMs(hit && (hit.deletedAt ?? hit.at));
+  const reqRaw = timeMs(deletedAt);
+  const prev = usableStamp(prevRaw, now) || 0;
+  const req = usableStamp(reqRaw, now) || 0;
+  let next = Math.max(prev, req);
+  if (!next) {
+    const raw = Math.max(prevRaw || 0, reqRaw || 0);
+    next = raw > now + CLOCK_SKEW_MS ? (now > 0 ? now - 1 : now) : now;
+  }
   if (hit) {
-    const prev = timeMs(hit.deletedAt ?? hit.at) || 0;
-    const next = Math.max(prev, stamp);
     hit.at = next;
     hit.deletedAt = next;
     hit.synced = true;
-  } else purges.push({ from, to, at: stamp, deletedAt: stamp, synced: true });
+  } else purges.push({ from, to, at: next, deletedAt: next, synced: true });
   data.purges = purges;
   return data;
 }

@@ -54,9 +54,37 @@ function dropBefore(stamp, before) {
   return stamp == null || stamp <= before;
 }
 
-export function purgeCutoff(p) {
+const CLOCK_SKEW_MS = 60_000;
+
+/* A stamp more than a minute ahead is not a real delete time. Drop it.
+   Anything inside that window, including a clock a minute fast, is kept. */
+function clampStamp(t, now) {
+  if (!(t > 0)) return null;
+  if (t > now + CLOCK_SKEW_MS) return null;
+  return t;
+}
+
+/* The cutoff to store and apply. An impossible future is pulled back to just
+   before now, so a weigh-in logged at this moment stays and older logs in the
+   range are still removed. A real earlier stamp beats that future. */
+function neutralCutoff(p, now) {
   if (!p) return null;
-  return timeMs(p.deletedAt != null ? p.deletedAt : p.at);
+  const deleted = timeMs(p.deletedAt);
+  const at = timeMs(p.at);
+  const usable = Math.max(clampStamp(deleted, now) || 0, clampStamp(at, now) || 0);
+  if (usable) return usable;
+  const raw = Math.max(deleted || 0, at || 0);
+  if (raw > now + CLOCK_SKEW_MS) return now > 0 ? now - 1 : now;
+  return null;
+}
+
+export function purgeCutoff(p, now = Date.now()) {
+  if (!p) return null;
+  const deleted = clampStamp(timeMs(p.deletedAt), now);
+  if (p.deletedAt != null && deleted != null) return deleted;
+  const at = clampStamp(timeMs(p.at), now);
+  if (at != null) return at;
+  return neutralCutoff(p, now);
 }
 
 function copyWDelAt(src) {
@@ -287,20 +315,26 @@ export function stripRange(data, from, to, opts = {}) {
   return changed;
 }
 
-function purgeStamp(p) {
-  return Math.max(timeMs(p.deletedAt) || 0, timeMs(p.at) || 0);
+function usableCutoff(p, now) {
+  return Math.max(clampStamp(timeMs(p && p.deletedAt), now) || 0, clampStamp(timeMs(p && p.at), now) || 0);
 }
 
-export function unionPurges(a, b) {
+function rawAhead(p, now) {
+  return Math.max(timeMs(p && p.deletedAt) || 0, timeMs(p && p.at) || 0) > now + CLOCK_SKEW_MS;
+}
+
+export function unionPurges(a, b, now = Date.now()) {
   const map = new Map();
   for (const p of [...(a || []), ...(b || [])]) {
     if (!p || !validDay(p.from) || !validDay(p.to) || p.from > p.to) continue;
     const k = p.from + "\0" + p.to;
     const cur = map.get(k);
-    const stamp = Math.max(purgeStamp(p), cur ? purgeStamp(cur) : 0);
-    map.set(k, { from: p.from, to: p.to, at: stamp, deletedAt: stamp, synced: !!((cur && cur.synced) || p.synced) });
+    const usable = Math.max(usableCutoff(p, now), cur ? cur.usable : 0);
+    const ahead = rawAhead(p, now) || !!(cur && cur.ahead);
+    const stamp = usable || (ahead ? (now > 0 ? now - 1 : now) : 0);
+    map.set(k, { from: p.from, to: p.to, at: stamp, deletedAt: stamp, synced: !!((cur && cur.synced) || p.synced), usable, ahead });
   }
-  return [...map.values()];
+  return [...map.values()].map(({ usable, ahead, ...rest }) => rest);
 }
 
 /* Record a range delete. A repeat delete moves deletedAt. Marking the same
@@ -325,11 +359,12 @@ export function coveredBy(purges, day) {
 
 /* Re-apply every stored purge. Quiet, so opening the app does not reshuffle sync timestamps.
    Only logs created or updated at or before deletedAt (or at, on older records) are removed. */
-export function applyPurges(data) {
+export function applyPurges(data, now = Date.now()) {
   const purges = data.purges || [];
   for (const p of purges) {
     if (!p) continue;
-    const before = purgeCutoff(p);
+    const before = neutralCutoff(p, now);
+    if (before != null) { p.at = before; p.deletedAt = before; }
     stripRange(data, p.from, p.to, before == null ? { quiet: true } : { quiet: true, before });
   }
   data.purges = purges;

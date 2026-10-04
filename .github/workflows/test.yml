@@ -28,4 +28,5 @@ jobs:
         run: |
           set -euo pipefail
           export PG_BIN="$(echo /usr/lib/postgresql/*/bin)"
-          node --test tests/brief.test.mjs tests/correlate.test.mjs tests/describe.test.mjs tests/privacy-delete-sql.test.mjs tests/purge.test.mjs tests/readiness.test.mjs tests/sentry-scrub.test.mjs tests/usage.test.mjs tests/weekly.test.mjs
+          mapfile -t files < <(find tests -maxdepth 1 -name '*.test.mjs' ! -name 'quota.test.mjs' | sort)
+          node --test "${files[@]}"

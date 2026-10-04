@@ -259,6 +259,49 @@ test("a weigh-in deleted after the range delete does not come back", () => {
   assert.equal(kept.profile.wDel.includes("2026-10-04"), false);
 });
 
+test("re-logging a weigh-in beats a legacy wDel still on the other phone", () => {
+  const entryAt = Date.parse("2026-10-04T15:00:00Z");
+  const legacy = { weighIns: [], wDel: ["2026-10-04"], updatedAt: entryAt - 5000 };
+  const phoneA = {
+    weighIns: [{ date: "2026-10-04", kg: 68, at: entryAt }],
+    wDel: [],
+    wDelAt: { "2026-10-04": entryAt - 1 },
+    updatedAt: entryAt,
+  };
+  const phoneB = { weighIns: [], wDel: ["2026-10-04"], updatedAt: legacy.updatedAt };
+  const onB = mergeWeighIns(phoneB, phoneA, []);
+  const onA = mergeWeighIns(phoneA, phoneB, []);
+  for (const merged of [onA, onB]) {
+    assert.equal(merged.weighIns.find((w) => w.date === "2026-10-04").kg, 68);
+    assert.equal(merged.wDel.includes("2026-10-04"), false);
+  }
+});
+
+test("a deletedAt a year ahead does not erase a weigh-in logged now", () => {
+  const now = Date.parse("2026-10-04T16:00:00Z");
+  const ahead = now + 365 * 24 * 3600 * 1000;
+  const yesterday = now - 86_400_000;
+  const range = { from: "2026-10-01", to: "2026-10-04" };
+  const future = { ...range, at: ahead, deletedAt: ahead, synced: true };
+  const real = { ...range, at: yesterday, deletedAt: yesterday, synced: true };
+  const keptReal = unionPurges([future], [real], now);
+  assert.equal(keptReal.length, 1);
+  assert.equal(keptReal[0].deletedAt, yesterday);
+  const onlyFuture = unionPurges([future], [], now);
+  assert.equal(onlyFuture[0].deletedAt, now - 1);
+
+  const data = sample();
+  data.purges = [{ ...future }];
+  data.profile.weighIns = [
+    { date: "2026-10-04", kg: 70, at: now },
+    { date: "2026-10-03", kg: 80, at: now - 86_400_000 },
+  ];
+  applyPurges(data, now);
+  assert.equal(data.profile.weighIns.find((w) => w.kg === 70).at, now);
+  assert.equal(data.profile.weighIns.some((w) => w.kg === 80), false);
+  assert.equal(data.purges[0].deletedAt, now - 1);
+});
+
 test("same-day manual cardio logged before the delete is removed", () => {
   const noon = Date.parse("2026-10-04T12:00:00");
   const deletedAt = noon - 60_000;
@@ -416,6 +459,87 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
   assert.equal(got.failStatus, 500);
   assert.equal(got.failDeleted, null);
   assert.equal(got.failRpc, null);
+});
+
+test("the server clamp ignores a year-ahead purge and the save reads the blob again", () => {
+  const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+  const rangeUrl = new URL("../supabase/functions/_shared/range.ts", import.meta.url).href;
+  const script = `
+    import { addPurge } from ${JSON.stringify(stripUrl)};
+    import { deleteRange } from ${JSON.stringify(rangeUrl)};
+    const now = Date.parse("2026-10-04T16:00:00Z");
+    const ahead = now + 365 * 24 * 3600 * 1000;
+    const yesterday = now - 86_400_000;
+    const withReal = addPurge(
+      { purges: [{ from: "2026-10-01", to: "2026-10-04", at: ahead, deletedAt: ahead }] },
+      "2026-10-01", "2026-10-04", yesterday, now
+    );
+    const onlyFuture = addPurge(
+      { purges: [{ from: "2026-10-01", to: "2026-10-04", at: ahead, deletedAt: ahead }] },
+      "2026-10-01", "2026-10-04", undefined, now
+    );
+    const T = Date.parse("2026-10-01T00:00:00Z");
+    const first = { purges: [{ from: "2026-10-01", to: "2026-10-04", deletedAt: T, at: T }], sessions: [] };
+    const second = {
+      purges: [{ from: "2026-10-01", to: "2026-10-04", deletedAt: T + 120_000, at: T + 120_000 }],
+      sessions: [{ id: "during", date: "2026-10-04", mod: T + 60_000 }],
+    };
+    let reads = 0;
+    let saved = null;
+    let removed = null;
+    const photos = [
+      { id: "old", path: "u/old.jpg", taken_at: new Date(T - 1000).toISOString() },
+      { id: "new", path: "u/new.jpg", taken_at: new Date(T + 60_000).toISOString() },
+    ];
+    const admin = {
+      from(table) {
+        const api = {
+          op: "select",
+          select() { api.op = "select"; return api; },
+          delete() { api.op = "delete"; return api; },
+          eq() { return api; },
+          gte() { return api; },
+          lte() { return api; },
+          in() { return api; },
+          upsert(row) { saved = row; return Promise.resolve({ error: null }); },
+          maybeSingle() {
+            reads += 1;
+            const data = reads === 1 ? first : second;
+            return Promise.resolve({ data: { data }, error: null });
+          },
+          then(resolve, reject) {
+            const payload = table === "progress_photos" && api.op === "select" ? { data: photos, error: null } : { error: null };
+            return Promise.resolve(payload).then(resolve, reject);
+          },
+        };
+        return api;
+      },
+      storage: { from() { return { remove(paths) { removed = paths; return Promise.resolve({ error: null }); } }; } },
+      rpc() { return Promise.resolve({ error: null }); },
+    };
+    const res = await deleteRange(admin, "user-1", { from: "2026-10-01", to: "2026-10-04", deletedAt: T });
+    console.log(JSON.stringify({
+      keptReal: withReal.purges[0].deletedAt,
+      onlyFuture: onlyFuture.purges[0].deletedAt,
+      status: res.status,
+      reads,
+      sessions: (saved.data.sessions || []).map((s) => s.id),
+      removed,
+    }));
+  `;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    env: { ...process.env, TZ: "UTC" },
+  });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const got = JSON.parse(r.stdout.trim().split("\n").pop());
+  assert.equal(got.keptReal, Date.parse("2026-10-04T16:00:00Z") - 86_400_000);
+  assert.equal(got.onlyFuture, Date.parse("2026-10-04T16:00:00Z") - 1);
+  assert.equal(got.status, 200);
+  assert.equal(got.reads, 2);
+  assert.deepEqual(got.sessions, ["during"]);
+  assert.deepEqual(got.removed, ["u/old.jpg"]);
 });
 
 test("csv escapes quotes and the zip round-trips", async () => {

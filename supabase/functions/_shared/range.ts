@@ -49,7 +49,10 @@ export async function deleteRange(admin: Bag, userId: string, body: Bag): Promis
     await admin.from("oura_days").delete().eq("user_id", userId).gte("day", from).lte("day", to);
   }
 
-  const data = addPurge(stripRange(raw, from, to, cutoff), from, to, cutoff);
+  const { data: again, error: againErr } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
+  if (againErr) return { status: 500, body: { error: "Couldn't update the account copy. Try again." } };
+  const latest = (again && again.data) || {};
+  const data = addPurge(stripRange(latest, from, to, cutoff), from, to, cutoff);
   const { error: writeErr } = await admin.from("user_data").upsert({
     user_id: userId,
     data,
