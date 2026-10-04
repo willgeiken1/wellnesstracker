@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 const ROOT = new URL("..", import.meta.url);
 const OLD_SQL = new URL("../supabase/migrations/20261003120000_privacy_delete.sql", import.meta.url);
-const NEW_SQL = new URL("../supabase/migrations/20261004210000_privacy_no_storage_sql_delete.sql", import.meta.url);
+const NEW_SQL = new URL("../supabase/migrations/20261004220000_privacy_no_storage_sql_delete.sql", import.meta.url);
 
 function pgBin(name) {
   const candidates = [
