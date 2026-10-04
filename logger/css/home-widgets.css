@@ -32,3 +32,158 @@
 .home-v2 .card { margin-bottom: 0; }
 .home-v2 .sec { margin-top: 0; }
 .home-v2 .hero { margin: 0; }
+
+/* Editor and gallery. The pane already starts under the status bar. */
+.home-edit {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+}
+.home-editor { display: grid; gap: 12px; }
+.home-editor-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0 10px;
+  background: var(--bg);
+}
+.home-editor-top .page-title { flex: 1; min-width: 0; text-align: center; font-size: 22px; }
+.home-editor-cancel,
+.home-editor-save {
+  flex: 0 0 auto;
+  min-width: 72px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  font-weight: 700;
+  font-size: 16px;
+}
+.home-editor-cancel { background: var(--raised); color: var(--text); }
+.home-editor-save { background: var(--green); color: var(--ink); }
+.home-editor-note,
+.hw-gal-meta,
+.home-editor-empty {
+  margin: 0;
+  color: #C9C9CF;
+  font-size: 15px;
+  font-style: normal;
+  line-height: 1.45;
+}
+:root[data-mode="light"] .home-editor-note,
+:root[data-mode="light"] .hw-gal-meta,
+:root[data-mode="light"] .home-editor-empty { color: #5A5C60; }
+.home-editor-list { display: grid; gap: 8px; }
+.hw-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-areas: "grip name remove" "grip size size";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 8px;
+  min-height: 56px;
+  padding: 8px 10px 10px 4px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--elev-1);
+}
+.hw-row:not(:has(.hw-size)) { grid-template-areas: "grip name remove"; }
+.hw-grip {
+  grid-area: grip;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--text);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.hw-grip svg { width: 22px; height: 22px; }
+.hw-row-name {
+  grid-area: name;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.25;
+}
+.hw-size {
+  grid-area: size;
+  display: flex;
+  gap: 6px;
+}
+.hw-size button,
+.hw-remove {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+}
+.hw-size button {
+  min-width: 76px;
+  border: 1.5px solid var(--pill-border);
+}
+.hw-size button[aria-pressed="true"] {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--ink);
+}
+.hw-remove { grid-area: remove; }
+.hw-row.dragging {
+  position: relative;
+  z-index: 3;
+  background: var(--raised);
+  box-shadow: var(--elev-2);
+}
+.home-editor-add { width: 100%; min-height: 52px; }
+.sheet-card.home-gallery {
+  max-height: min(88vh, calc(100vh - var(--safe-top) - 12px));
+  max-height: min(88vh, calc(100dvh - var(--safe-top) - 12px));
+}
+.home-gallery h3,
+.home-gallery .hw-gal-row b { color: var(--text); }
+.home-gallery .field-label,
+.home-gallery .mini-l { color: #C9C9CF; }
+:root[data-mode="light"] .home-gallery .field-label,
+:root[data-mode="light"] .home-gallery .mini-l { color: #5A5C60; }
+.home-gallery .text-in {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  background: var(--bg);
+}
+.home-gallery .text-in::placeholder {
+  color: #C9C9CF;
+  -webkit-text-fill-color: #C9C9CF;
+  opacity: 1;
+}
+:root[data-mode="light"] .home-gallery .text-in::placeholder {
+  color: #5A5C60;
+  -webkit-text-fill-color: #5A5C60;
+}
+.hw-gal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 0;
+}
+.hw-gal-row span { min-width: 0; }
+.hw-gal-row b { display: block; font-size: 16px; line-height: 1.25; }
+.hw-gal-meta { display: block; margin-top: 2px; font-size: 13px; }
+.hw-gal-row .btn { flex: 0 0 auto; height: 44px; min-height: 44px; }

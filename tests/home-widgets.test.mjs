@@ -540,6 +540,85 @@ test("a saved homeV2 still paints the legacy stack, and the weigh-in nudge sits 
   }
 });
 
+test("a real home edit paints the registry and keeps the weigh-in nudge inside the brief", async () => {
+  await loadWidgets();
+  const prev = {
+    state: app.state,
+    ui: app.ui,
+    today: app.today,
+    pageHead: app.pageHead,
+    firstName: app.firstName,
+    esc: app.esc,
+    greeting: app.greeting,
+    fmtDate: app.fmtDate,
+    addButtonHTML: app.addButtonHTML,
+    weekCardHTML: app.weekCardHTML,
+    weighReminderHTML: app.weighReminderHTML,
+    briefHTML: app.briefHTML,
+    snapshotFromApp: app.snapshotFromApp,
+    todayRender: app.HOME_WIDGETS.today.render,
+    stepsRender: app.HOME_WIDGETS.steps.render,
+    headlineRender: app.HOME_WIDGETS.headline.render,
+  };
+  app.today = () => "2026-10-04";
+  app.ui = { edit: null };
+  app.state = {
+    layout: {
+      home: { order: ["brief", "today"], hidden: ["map-adv"] },
+      homeV2: { v: 2, items: ["headline", "today", "future-widget"], hidden: [], updatedAt: 9 },
+    },
+  };
+  app.pageHead = () => "<header>Home</header>";
+  app.firstName = () => "";
+  app.esc = (s) => String(s ?? "");
+  app.greeting = () => "";
+  app.fmtDate = () => "Sunday";
+  app.addButtonHTML = () => "";
+  app.weekCardHTML = () => "";
+  app.weighReminderHTML = () => `<button class="nudge" data-action="weigh-open"><b>Time for a weigh-in</b></button>`;
+  app.briefHTML = () => `<section class="brief">Morning brief</section>`;
+  app.snapshotFromApp = () => ({ live: true });
+  app.HOME_WIDGETS.today.render = () => `<div class="hero">Today</div>`;
+  app.HOME_WIDGETS.steps.render = () => `<article class="hw">Steps</article>`;
+  app.HOME_WIDGETS.headline.render = () => `<section class="hw">Headline</section>`;
+  try {
+    const html = app.homeHTML();
+    assert.match(html, /class="home-v2"/);
+    assert.match(html, /data-hw="today"/);
+    assert.match(html, /data-hw="headline"/);
+    assert.doesNotMatch(html, /future-widget|class="wdgs/);
+    const briefEnd = html.indexOf("</section>");
+    const nudgeAt = html.indexOf('class="nudge"');
+    const gridAt = html.indexOf('class="home-v2"');
+    assert.ok(nudgeAt > html.indexOf('class="brief"') && nudgeAt < briefEnd && briefEnd < gridAt);
+
+    app.ui.homeDraft = { items: ["headline", "today", "future-widget"], hidden: ["steps"], sizes: {} };
+    app.ui.homeEdit = true;
+    const editor = app.homeHTML();
+    assert.match(editor, /data-action="home-save"/);
+    assert.match(editor, /data-action="home-size" data-id="headline" data-size="small"/);
+    assert.match(editor, /data-action="home-size" data-id="headline" data-size="medium"/);
+    assert.doesNotMatch(editor, /data-action="home-size" data-id="today"|future-widget/);
+  } finally {
+    app.state = prev.state;
+    app.ui = prev.ui;
+    app.today = prev.today;
+    app.pageHead = prev.pageHead;
+    app.firstName = prev.firstName;
+    app.esc = prev.esc;
+    app.greeting = prev.greeting;
+    app.fmtDate = prev.fmtDate;
+    app.addButtonHTML = prev.addButtonHTML;
+    app.weekCardHTML = prev.weekCardHTML;
+    app.weighReminderHTML = prev.weighReminderHTML;
+    app.briefHTML = prev.briefHTML;
+    app.snapshotFromApp = prev.snapshotFromApp;
+    app.HOME_WIDGETS.today.render = prev.todayRender;
+    app.HOME_WIDGETS.steps.render = prev.stepsRender;
+    app.HOME_WIDGETS.headline.render = prev.headlineRender;
+  }
+});
+
 test("a drag drops blank widget ids before saving the home order", async () => {
   const listeners = await loadWidgets();
   const pointerup = listeners.filter((entry) => entry.type === "pointerup").pop().fn;

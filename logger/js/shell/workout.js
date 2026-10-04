@@ -121,6 +121,8 @@ function renderSheet() {
     inner = app.liftSheetHTML(app.ui.sd.name);
   } else if (app.ui.sheet === "w-add") {
     inner = app.addSheetHTML();
+  } else if (app.ui.sheet === "home-gallery") {
+    inner = app.homeGalleryHTML();
   } else if (app.ui.sheet === "ms-list") { inner = app.machineListSheetHTML();
   } else if (app.ui.sheet === "ms-edit") { inner = app.machineEditSheetHTML();
   } else if (app.ui.sheet === "meas-log") { inner = app.measLogSheetHTML();
@@ -146,8 +148,9 @@ function renderSheet() {
       <div class="sheet-actions">${editing ? `<button class="btn danger" data-action="ex-delete">Remove</button>` : ""}
         <button class="btn primary" data-action="ex-save">${editing ? "Save" : "Add exercise"}</button></div>`;
   }
+  const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : "sheet-card";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
-    <div class="sheet-card" role="dialog" aria-modal="true"><div class="grabber"></div>
+    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Add a card" : "Sheet"}"><div class="grabber"></div>
     <button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>${inner}</div>`;
 }
 app.renderSheet = renderSheet;

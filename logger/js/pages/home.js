@@ -1,6 +1,5 @@
 import { app } from "../runtime.js";
-import { HOME_REGISTRY_PAINT } from "../shared/home-widgets.js";
-import { gatedOuraStripHTML, visibleHomeIds } from "../shared/oura-gate.js";
+import { visibleHomeIds } from "../shared/oura-gate.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -92,24 +91,157 @@ function homeWeekHTML() {
 }
 app.homeWeekHTML = homeWeekHTML;
 
+const CATEGORY_LABEL = { recovery: "Recovery", training: "Training", nutrition: "Nutrition", body: "Body" };
+
+function homeEditButton() {
+  return `<button type="button" class="home-edit" data-action="home-edit">Edit</button>`;
+}
+
+function briefWithNudge() {
+  const brief = typeof app.briefHTML === "function" ? app.briefHTML() : "";
+  if (app.ui && app.ui.briefEdit) return brief;
+  const nudge = typeof app.weighReminderHTML === "function" ? app.weighReminderHTML() : "";
+  if (!nudge) return brief;
+  const close = brief.lastIndexOf("</section>");
+  if (close >= 0) return brief.slice(0, close) + nudge + brief.slice(close);
+  return `<section class="card brief" aria-label="Morning brief">${brief}${nudge}</section>`;
+}
+
+function sizeControls(id, widget, draft) {
+  const sizes = widget.sizes || [widget.size];
+  if (sizes.length < 2) return "";
+  const current = draft.sizes && draft.sizes[id] && sizes.includes(draft.sizes[id]) ? draft.sizes[id] : widget.size;
+  const buttons = sizes.map((size) => {
+    const label = size === "small" ? "Small" : "Medium";
+    const on = current === size;
+    return `<button type="button" data-action="home-size" data-id="${app.esc(id)}" data-size="${size}" aria-pressed="${on}">${label}</button>`;
+  }).join("");
+  return `<div class="hw-size" role="group" aria-label="Size for ${app.esc(widget.name)}">${buttons}</div>`;
+}
+
+function homeEditorHTML() {
+  const draft = app.ui.homeDraft || app.homeEditorDraft(app.state);
+  app.ui.homeDraft = draft;
+  const grip = app.I && app.I.grip ? app.I.grip : "";
+  const rows = (draft.items || []).map((id) => {
+    const widget = app.HOME_WIDGETS[id];
+    if (!widget) return "";
+    return `<div class="hw-row" data-id="${app.esc(id)}">
+      <button type="button" class="hw-grip" aria-label="Drag to move ${app.esc(widget.name)}">${grip}</button>
+      <span class="hw-row-name">${app.esc(widget.name)}</span>
+      ${sizeControls(id, widget, draft)}
+      <button type="button" class="hw-remove" data-action="home-remove" data-id="${app.esc(id)}" aria-label="Remove ${app.esc(widget.name)}">Remove</button>
+    </div>`;
+  }).join("");
+  return `<div class="home-editor">
+    <div class="home-editor-top">
+      <button type="button" class="home-editor-cancel" data-action="home-cancel">Cancel</button>
+      <h1 class="page-title">Edit Home</h1>
+      <button type="button" class="btn primary home-editor-save" data-action="home-save">Save</button>
+    </div>
+    <p class="home-editor-note">Drag to reorder. Remove a card, or add one from the gallery. Save keeps this arrangement with your account.</p>
+    <div class="home-editor-list" data-home-list>
+      ${rows || `<p class="home-editor-empty">No cards on Home yet. Add one from the gallery.</p>`}
+    </div>
+    <button type="button" class="btn home-editor-add" data-action="home-gallery">Add a card</button>
+  </div>`;
+}
+app.homeEditorHTML = homeEditorHTML;
+
+function homeGalleryHTML() {
+  const draft = app.ui.homeDraft || { items: [] };
+  const q = ((app.ui.sd && app.ui.sd.q) || "").trim().toLowerCase();
+  const have = new Set(draft.items || []);
+  const groups = {};
+  Object.keys(app.HOME_WIDGETS).forEach((id) => {
+    if (have.has(id)) return;
+    const widget = app.HOME_WIDGETS[id];
+    if (q && !widget.name.toLowerCase().includes(q) && !id.includes(q)) return;
+    (groups[widget.category] = groups[widget.category] || []).push(widget);
+  });
+  const body = ["recovery", "training", "nutrition", "body"].filter((key) => groups[key]).map((key) => {
+    const rows = groups[key].map((widget) => {
+      const meta = `${widget.needsOura ? "Oura · " : ""}${widget.size === "small" ? "Small card" : "Medium card"}`;
+      return `<div class="hw-gal-row"><span><b>${app.esc(widget.name)}</b><em class="hw-gal-meta">${app.esc(meta)}</em></span><button type="button" class="btn small primary" data-action="home-add" data-id="${app.esc(widget.id)}">Add</button></div>`;
+    }).join("");
+    return `<div class="mini-l">${CATEGORY_LABEL[key]}</div>${rows}`;
+  }).join("");
+  return `<h3>Add a card</h3>
+    <label class="field-label" for="home-q">Search</label>
+    <input class="text-in" id="home-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search cards" value="${app.esc((app.ui.sd && app.ui.sd.q) || "")}">
+    ${body || `<p class="sub">${q ? "No cards match that search." : "Every card is already on Home."}</p>`}`;
+}
+app.homeGalleryHTML = homeGalleryHTML;
+
 function homeHTML() {
+  if (app.ui && app.ui.homeEdit) return homeEditorHTML();
   const t = app.today();
-  const homeV2 = app.state.layout && app.state.layout.homeV2;
-  const hasV2 = !!(homeV2 && homeV2.v === 2 && Array.isArray(homeV2.items));
-  const ouraV2 = HOME_REGISTRY_PAINT && hasV2;
+  const registry = typeof app.homeRegistryActive === "function" && app.homeRegistryActive(app.state);
+  const legacyEdit = app.ui && app.ui.edit === "home";
   const head = `
-    ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: app.addButtonHTML("home") })}
+    ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: legacyEdit ? app.addButtonHTML("home") : homeEditButton() })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
-  if (ouraV2) return head + app.renderHomeWidgets(app.getHomeLayout(app.state), app.snapshotFromApp());
+  if (registry) {
+    const data = typeof app.snapshotFromApp === "function" ? app.snapshotFromApp() : { live: true };
+    return head + briefWithNudge() + app.renderHomeWidgets(app.getHomeLayout(app.state), data);
+  }
   const live = { live: true };
-  const readiness = ouraV2 ? "" : app.readinessCardHTML();
-  const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${readiness}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
+  const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
     <!--w:week-->${app.HOME_WIDGETS["this-week"].render(live)}
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>
     <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`);
-  const strip = ouraV2 ? gatedOuraStripHTML(app.state) : "";
-  return head + strip + stack;
+  return head + stack;
 }
 app.visibleHomeIds = visibleHomeIds;
 app.homeHTML = homeHTML;
+
+if (typeof document !== "undefined") {
+  document.addEventListener("pointerdown", (ev) => {
+    const grip = ev.target.closest && ev.target.closest(".hw-grip");
+    if (!grip || !app.ui || !app.ui.homeEdit) return;
+    ev.preventDefault();
+    const row = grip.closest(".hw-row");
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    app.homeDrag = { row, box: row.parentElement, grab: ev.clientY - rect.top, ty: 0, moved: false };
+    row.classList.add("dragging");
+    try { grip.setPointerCapture(ev.pointerId); } catch (e) { /* the drag still follows the pointer */ }
+  });
+
+  document.addEventListener("pointermove", (ev) => {
+    const drag = app.homeDrag;
+    if (!drag) return;
+    ev.preventDefault();
+    const y = ev.clientY;
+    const row = drag.row;
+    if (Math.abs(y - (drag.grab + row.getBoundingClientRect().top - drag.ty)) > 4) drag.moved = true;
+    const place = () => {
+      const top = row.getBoundingClientRect().top - drag.ty;
+      drag.ty = y - drag.grab - top;
+      row.style.transform = `translateY(${drag.ty}px)`;
+    };
+    place();
+    const prev = row.previousElementSibling;
+    const next = row.nextElementSibling;
+    if (prev && y < prev.getBoundingClientRect().top + prev.offsetHeight / 2) { drag.box.insertBefore(row, prev); place(); }
+    else if (next && y > next.getBoundingClientRect().top + next.offsetHeight / 2) { drag.box.insertBefore(next, row); place(); }
+    const scroller = row.closest(".pane") || document.scrollingElement;
+    if (scroller) {
+      if (y < 96) scroller.scrollTop -= 16;
+      else if (y > window.innerHeight - 150) scroller.scrollTop += 16;
+    }
+  }, { passive: false });
+
+  const endHomeDrag = () => {
+    const drag = app.homeDrag;
+    if (!drag) return;
+    app.homeDrag = null;
+    drag.row.classList.remove("dragging");
+    drag.row.style.transform = "";
+    if (!drag.moved || !app.ui || !app.ui.homeDraft) return;
+    app.ui.homeDraft.items = [...drag.box.querySelectorAll(".hw-row")].map((row) => row.dataset.id).filter(Boolean);
+  };
+  document.addEventListener("pointerup", endHomeDrag);
+  document.addEventListener("pointercancel", endHomeDrag);
+}

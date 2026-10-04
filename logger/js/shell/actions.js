@@ -281,6 +281,7 @@ document.addEventListener("input", (ev) => {
     return;
   }
   if (el.id === "ms-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#ms-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  if (el.id === "home-q" && app.ui.sheet === "home-gallery") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#home-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "pick-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#pick-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
@@ -816,6 +817,66 @@ document.addEventListener("click", async (ev) => {
     case "w-remove": app.hideWidget(app.ui.edit, b.dataset.w); break;
     case "r-remove": app.deleteRoutine(b.dataset.w); break;
     case "w-add": app.ui.sheet = "w-add"; app.ui.sd = {}; app.renderSheet(); break;
+    case "home-edit":
+      app.ui.homeEdit = true;
+      app.ui.edit = null;
+      app.ui.briefEdit = false;
+      app.ui.sheet = null;
+      app.ui.homeDraft = app.homeEditorDraft(app.state);
+      app.render();
+      break;
+    case "home-cancel":
+      app.ui.homeEdit = false;
+      app.ui.homeDraft = null;
+      app.ui.sheet = null;
+      app.render();
+      break;
+    case "home-save": {
+      if (app.ui.homeDraft) app.commitHomeEditor(app.state, app.ui.homeDraft);
+      app.ui.homeEdit = false;
+      app.ui.homeDraft = null;
+      app.ui.sheet = null;
+      app.save();
+      app.render();
+      app.toast("Home saved.");
+      break;
+    }
+    case "home-gallery":
+      app.ui.sheet = "home-gallery";
+      app.ui.sd = { q: "" };
+      app.renderSheet();
+      break;
+    case "home-add": {
+      const id = b.dataset.id;
+      const draft = app.ui.homeDraft;
+      if (!draft || !app.HOME_WIDGETS[id] || draft.items.includes(id)) break;
+      draft.items.push(id);
+      draft.hidden = (draft.hidden || []).filter((item) => item !== id);
+      app.render();
+      break;
+    }
+    case "home-remove": {
+      const id = b.dataset.id;
+      const draft = app.ui.homeDraft;
+      if (!draft) break;
+      draft.items = draft.items.filter((item) => item !== id);
+      draft.hidden = draft.hidden || [];
+      if (app.HOME_WIDGETS[id] && !draft.hidden.includes(id)) draft.hidden.push(id);
+      app.render();
+      break;
+    }
+    case "home-size": {
+      const draft = app.ui.homeDraft;
+      const id = b.dataset.id;
+      const size = b.dataset.size;
+      const widget = app.HOME_WIDGETS[id];
+      if (!draft || !widget || !(widget.sizes || []).includes(size)) break;
+      draft.sizes = draft.sizes || {};
+      if (size === widget.size) delete draft.sizes[id];
+      else draft.sizes[id] = size;
+      app.render();
+      break;
+    }
     case "w-add-one": app.showWidget(app.ui.edit, b.dataset.w); app.ui.sheet = null; app.render(); app.toast(`${app.WIDGETS[app.ui.edit][b.dataset.w]} added.`); break;
     case "ms-list": app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; app.renderSheet(); break;
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }
