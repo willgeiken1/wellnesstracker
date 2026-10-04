@@ -91,6 +91,7 @@ async function main() {
     const calls = [];
     const prevSb = app.sb;
     const prevSession = app.session;
+    const prevNotes = JSON.parse(JSON.stringify(app.state.machineNotes));
     app.session = { user: { id: "11111111-1111-4111-8111-111111111111" } };
     app.state.machineNotes = { "Pec Fly Machine": { text: "Seat 4", at: 10 } };
     app.sb = {
@@ -114,6 +115,7 @@ async function main() {
     };
     await app.cloudPush();
     const mergedFallback = app.machineNote("Cable Row");
+    app.state.machineNotes = prevNotes;
     app.sb = prevSb;
     app.session = prevSession;
     return { calls, keptRemote, mergedFallback };
