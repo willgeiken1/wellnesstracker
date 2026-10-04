@@ -7,7 +7,9 @@ import { correlate, pickForToday, todayLine } from "./correlate.js";
    describes the v2 stand-in. Step 2 persists a migration; this file does not.
 
    homeV2 lives on layout so it rides along in user_data, but cloud merge
-   keeps it off the wholesale layout replace and picks a winner by updatedAt. */
+   keeps it off the wholesale layout replace and picks a winner by updatedAt.
+   A missing homeV2 is only an in-memory stand-in (updatedAt 0). setHomeLayout
+   is a user edit: it keeps unknown fields, clears migrated, and stamps now. */
 
 const BRIEF_METRICS = ["pattern", "oura", "train", "food", "week", "weight"];
 const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
@@ -557,6 +559,7 @@ function isHomeV2(raw) {
 
 function cloneHomeV2(raw) {
   return {
+    ...raw,
     v: 2,
     items: raw.items.slice(),
     hidden: Array.isArray(raw.hidden) ? raw.hidden.slice() : [],
@@ -620,13 +623,18 @@ export function getHomeLayout(state) {
 
 export function setHomeLayout(state, layout) {
   if (!state || typeof state !== "object") throw new Error("setHomeLayout needs a state object");
+  const prev = state.layout && state.layout.homeV2 && typeof state.layout.homeV2 === "object" && !Array.isArray(state.layout.homeV2)
+    ? state.layout.homeV2
+    : {};
   const next = {
+    ...prev,
     v: 2,
     items: Array.isArray(layout && layout.items) ? layout.items.slice() : [],
     hidden: Array.isArray(layout && layout.hidden) ? layout.hidden.slice() : [],
-    updatedAt: layout && typeof layout.updatedAt === "number" ? layout.updatedAt : Date.now(),
+    updatedAt: Date.now(),
   };
-  state.layout = state.layout && typeof state.layout === "object" ? state.layout : {};
+  delete next.migrated;
+  state.layout = state.layout && typeof state.layout === "object" && !Array.isArray(state.layout) ? state.layout : {};
   state.layout.homeV2 = next;
   return next;
 }

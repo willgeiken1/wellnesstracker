@@ -146,12 +146,43 @@ test("saved homeV2 is returned as a copy, and setHomeLayout leaves the old keys 
   got.hidden.push("today");
   assert.deepEqual(state.layout.homeV2.items, ["today", "cardio"]);
   assert.deepEqual(state.layout.homeV2.hidden, ["steps"]);
+  const before = Date.now();
   const written = setHomeLayout(state, { items: ["muscles", "today"], hidden: ["hrv"], updatedAt: 70 });
   assert.equal(written.v, 2);
-  assert.equal(written.updatedAt, 70);
+  assert.ok(written.updatedAt >= before);
   assert.deepEqual(state.layout.home, { order: ["today"], hidden: ["brief"] });
   assert.equal(state.brief.updatedAt, 3);
   assert.deepEqual(getHomeLayout(state).items, ["muscles", "today"]);
+});
+
+test("an edit clears migrated, stamps now, and keeps unknown homeV2 fields", () => {
+  const state = {
+    layout: {
+      homeV2: {
+        v: 2,
+        items: ["today"],
+        hidden: [],
+        updatedAt: 0,
+        migrated: true,
+        migratedAt: 12,
+        ouraSeeded: true,
+      },
+    },
+  };
+  const before = Date.now();
+  const written = setHomeLayout(state, { items: ["cardio", "today"], hidden: ["steps"] });
+  assert.equal(written.migrated, undefined);
+  assert.equal(state.layout.homeV2.migrated, undefined);
+  assert.equal(written.migratedAt, 12);
+  assert.equal(written.ouraSeeded, true);
+  assert.ok(written.updatedAt >= before);
+  assert.notEqual(written.updatedAt, 0);
+  assert.deepEqual(written.items, ["cardio", "today"]);
+  assert.deepEqual(written.hidden, ["steps"]);
+  const again = getHomeLayout(state);
+  again.items.push("nope");
+  assert.deepEqual(state.layout.homeV2.items, ["cardio", "today"]);
+  assert.equal(again.ouraSeeded, true);
 });
 
 test("hiding the brief or a brief tile changes the stand-in, not stored state", () => {
@@ -186,7 +217,7 @@ test("homeV2 merges on its own updatedAt and survives a wholesale layout replace
     settingsAt: 5,
     muscleMode: "basic",
     uniEx: {},
-    layout: { home: { order: ["today"], hidden: [] }, homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 50 } },
+    layout: { home: { order: ["today"], hidden: [] }, homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 50, migrated: true, ouraSeeded: true } },
   };
   mergeRemoteLayout(state, {
     settingsAt: 90,
@@ -200,6 +231,8 @@ test("homeV2 merges on its own updatedAt and survives a wholesale layout replace
   assert.deepEqual(state.layout.home, { order: ["week"], hidden: ["brief"] });
   assert.deepEqual(state.layout.homeV2.items, ["today"]);
   assert.equal(state.layout.homeV2.updatedAt, 50);
+  assert.equal(state.layout.homeV2.ouraSeeded, true);
+  assert.equal(state.layout.homeV2.migrated, true);
 
   const kept = {
     settingsAt: 100,
