@@ -91,7 +91,9 @@ html, body {
 }
 
 /* Covers the status-bar band so a rubber-band or a composited layer cannot
-   show page text over the clock or Dynamic Island. */
+   show page text over the clock or Dynamic Island.
+   black-translucent draws the clock and icons white, so the band stays dark
+   in both themes (light --bg would leave them on #F3F4F1). */
 body::before {
   content: "";
   position: fixed;
@@ -99,7 +101,7 @@ body::before {
   left: 0;
   right: 0;
   height: var(--safe-top);
-  background: var(--bg);
+  background: #141414;
   z-index: 6;
   pointer-events: none;
 }
@@ -122,8 +124,7 @@ body.timer-on:not(.in-workout) #view {
   align-items: stretch;
   justify-content: stretch;
   gap: 0;
-  /* Labels sit up inside the pill; the safe area stays below the pill. */
-  padding: 6px 2px 10px;
+  padding: 5px 2px;
   border-radius: 22px;
   background-color: var(--nav-bg);
   background-image: var(--sheen), var(--noise);
@@ -154,7 +155,7 @@ body.timer-on:not(.in-workout) #view {
   position: absolute;
   left: 0;
   top: 6px;
-  bottom: 10px;
+  bottom: 6px;
   height: auto;
   width: calc(20% - 8px);
   border-radius: 17px;
@@ -177,7 +178,7 @@ body.timer-on:not(.in-workout) #view {
   min-width: 0;
   max-width: none;
   margin: 0;
-  padding: 4px 2px 2px;
+  padding: 6px 2px 5px;
   border-radius: 0;
   display: flex;
   flex-direction: column;
@@ -214,7 +215,7 @@ body.timer-on:not(.in-workout) #view {
 #tabs .tab[aria-current="page"] {
   background: transparent;
   color: var(--ink);
-  padding: 4px 2px 2px;
+  padding: 6px 2px 5px;
 }
 
 #tabs .tab[aria-current="page"] span {
@@ -225,7 +226,7 @@ body.timer-on:not(.in-workout) #view {
 @media (max-width: 380px) {
   #tabs .tab[aria-current="page"] span,
   #tabs .tab span { display: block; font-size: 10px; }
-  #tabs .tab[aria-current="page"] { padding: 4px 2px 2px; }
+  #tabs .tab[aria-current="page"] { padding: 6px 2px 5px; }
 }
 
 :root[data-mode="light"] #tabs {

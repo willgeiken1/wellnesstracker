@@ -57,10 +57,12 @@ function htmlFor(tab) {
 function paint(tab) {
   const el = document.querySelector(`.pane[data-pane="${tab}"]`);
   if (!el) return;
+  const top = el.scrollTop;
   const saved = app.ui.tab;
   app.ui.tab = tab;
   try { el.innerHTML = htmlFor(tab); }
   finally { app.ui.tab = saved; }
+  el.scrollTop = top;
 }
 
 let moveGen = 0;
@@ -324,7 +326,8 @@ app.goTab = function (to, opts = {}) {
   }
   app.render();
   if (!same && app.noteTab) app.noteTab(to);
-  window.scrollTo(0, 0);
+  /* Switching tabs keeps that tab's scroll. Tapping the tab you're already on goes to the top. */
+  if (same) window.scrollTo(0, 0);
   if (pagerMove) {
     app.motion.hold = false;
     app.pageTransition(toI, { fromIndex: fromI, ...opts });

@@ -22,15 +22,19 @@
 
 #lock {
   position: fixed;
-  inset: 0;
+  top: var(--safe-top);
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 70;
   display: grid;
   place-items: center;
-  padding: calc(28px + var(--safe-top)) 22px calc(28px + var(--safe-bottom));
+  padding: 28px 22px calc(28px + var(--safe-bottom));
   background: var(--bg);
   background-image: var(--sheen), var(--noise);
   background-blend-mode: normal, soft-light;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 #lock[hidden] { display: none !important; }
 

@@ -117,7 +117,8 @@ function applyTheme() {
   root.dataset.mode = t.mode === "light" ? "light" : "dark";
   root.dataset.accent = app.ACCENTS.some((a) => a.id === t.accent) ? t.accent : "citrus";
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", root.dataset.mode === "light" ? "#F3F4F1" : "#0F0F11");
+  /* Status glyphs stay white under black-translucent, so the bar color stays dark in light mode too. */
+  if (meta) meta.setAttribute("content", root.dataset.mode === "light" ? "#141414" : "#0F0F11");
 }
 app.applyTheme = applyTheme;
 
