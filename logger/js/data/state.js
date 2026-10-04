@@ -2,6 +2,7 @@ import { app } from "../runtime.js";
 import { HOME_WIDGETS, getHomeLayout, setHomeLayout } from "../shared/home-widgets.js";
 import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../shared/home-migrate.js";
 import { stripProfileClockFields } from "../shared/purge.js";
+import { countedEntries, muscleSetMap, reconcileSkipped, skippedNames } from "../shared/skip.js";
 
 /* Storage, exercise catalog, and shared session helpers. */
 /* ================= Data ================= */
@@ -97,7 +98,7 @@ app.LOADED_RE = LOADED_RE;
 
 // "BW" (bodyweight) only makes sense for movements you can do without a load.
 function canBW(name) {
-  if (app.state.sessions.some((s) => s.entries.some((e) => e.exercise === name && e.sets.some((x) => x.w == null)))) return true;
+  if (app.state.sessions.some((s) => countedEntries(s).some((e) => e.exercise === name && e.sets.some((x) => x.w == null)))) return true;
   return app.BW_RE.test(name) && !app.LOADED_RE.test(name);
 }
 app.canBW = canBW;
@@ -131,7 +132,7 @@ app.uid = uid;
 const pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 app.pl = pl;
 
-const setCount = (s) => s.entries.reduce((n, e) => n + e.sets.length, 0);
+const setCount = (s) => countedEntries(s).reduce((n, e) => n + e.sets.length, 0);
 app.setCount = setCount;
 
 function lookupMuscles(name, workouts) {
@@ -187,7 +188,7 @@ function migrate(d) {
   const sessions = d.sessions.map((s) => {
     const entries = (s.entries || []).map((e) => ({ exercise: e.exercise, muscles: e.muscles || app.lookupMuscles(e.exercise, workouts), sets: e.sets || [] }));
     const lastAt = entries.flatMap((e) => e.sets.map((x) => x.at)).filter(Boolean).sort().pop();
-    return {
+    const session = {
       ...(v2 ? s : {}),
       id: v2 ? s.id : app.uid() + Math.random().toString(36).slice(2, 4),
       date: s.date,
@@ -197,6 +198,8 @@ function migrate(d) {
       finishedAt: v2 ? (s.finishedAt || null) : (lastAt || s.date + "T12:00:00"),
       entries
     };
+    reconcileSkipped(session);
+    return session;
   });
   const profile = d.profile && typeof d.profile === "object" ? d.profile : null;
   if (profile) stripProfileClockFields(profile);
@@ -273,7 +276,7 @@ app.state.sessions.forEach((s) => { if (!s.finishedAt && s.date < app.today()) s
 
 app.save();
 
-const ui = { edit: null, cardioOpen: false, fseg: "day", qMeal: null, rq: "", fcMonth: null, iseg: "trends", prevTab: "home", foodDay: null, onboard: false, pf: {}, tab: "home", wseg: "routines", range: 14, detail: null, weekOffset: 0, open: null, drafts: {}, sheet: null, sd: {}, workoutOpen: false };
+const ui = { edit: null, cardioOpen: false, fseg: "day", qMeal: null, rq: "", fcMonth: null, iseg: "trends", prevTab: "home", foodDay: null, onboard: false, pf: {}, tab: "home", wseg: "routines", range: 14, detail: null, weekOffset: 0, open: null, drafts: {}, sheet: null, sd: {}, workoutOpen: false, exMenu: null, skippedOpen: false };
 app.ui = ui;
 
 const workoutById = (id) => app.state.workouts.find((w) => w.id === id);
@@ -290,12 +293,7 @@ const sessionsOn = (d) => app.state.sessions.filter((s) => s.date === d && app.s
 app.sessionsOn = sessionsOn;
 
 function musclesBetween(from, to) {
-  const m = new Map();
-  app.state.sessions.forEach((s) => {
-    if (s.date < from || s.date > to) return;
-    s.entries.forEach((e) => { const n = e.sets.filter((x) => x.tag !== "warmup").length; if (n) e.muscles.forEach((k) => m.set(k, (m.get(k) || 0) + n)); });
-  });
-  return m;
+  return muscleSetMap(app.state.sessions.filter((s) => s.date >= from && s.date <= to));
 }
 app.musclesBetween = musclesBetween;
 
@@ -305,8 +303,9 @@ function liveExercises(s) {
   const sw = s.swaps || {};
   const list = w ? w.exercises.map((e) => sw[e.name] ? { name: sw[e.name].name, muscles: sw[e.name].muscles, adv: sw[e.name].adv, original: e.name } : { name: e.name, muscles: e.muscles, adv: e.adv }) : [];
   (s.extra || []).forEach((x) => { if (!list.some((y) => y.name === x.name)) list.push({ ...x, extra: true }); });
-  s.entries.forEach((e) => { if (!list.some((x) => x.name === e.exercise)) list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv }); });
-  return list;
+  (s.entries || []).forEach((e) => { if (!list.some((x) => x.name === e.exercise)) list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv }); });
+  const skip = skippedNames(s);
+  return skip.size ? list.filter((e) => !skip.has(e.name)) : list;
 }
 app.liveExercises = liveExercises;
 
@@ -316,7 +315,7 @@ app.setsFor = setsFor;
 function lastSets(name, excludeId) {
   for (const s of app.finished()) {
     if (s.id === excludeId) continue;
-    const e = s.entries.find((x) => x.exercise === name);
+    const e = countedEntries(s).find((x) => x.exercise === name);
     if (e && e.sets.length) return e.sets;
   }
   return null;

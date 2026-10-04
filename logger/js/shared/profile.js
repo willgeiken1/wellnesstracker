@@ -180,11 +180,15 @@ function convertLoggedWeights(fromUnits, toUnits) {
   if (fromUnits === toUnits) return 0;
   const f = toUnits === "metric" ? 1 / app.LB : app.LB;
   let n = 0;
-  app.state.sessions.forEach((s) => s.entries.forEach((e) => e.sets.forEach((x) => {
-    const cv = (v) => toUnits === "metric" ? Math.round(v * f * 2) / 2 : Math.round(v * f);
-    if (x.w != null) { x.w = cv(x.w); n++; }
-    if (x.uni) [x.uni.l, x.uni.r].forEach((y) => { if (y.w != null) y.w = cv(y.w); });
-  })));
+  app.state.sessions.forEach((s) => {
+    const rows = [...(s.entries || [])];
+    (s.skipped || []).forEach((sk) => { if (sk && sk.entry) rows.push(sk.entry); });
+    rows.forEach((e) => (e.sets || []).forEach((x) => {
+      const cv = (v) => toUnits === "metric" ? Math.round(v * f * 2) / 2 : Math.round(v * f);
+      if (x.w != null) { x.w = cv(x.w); n++; }
+      if (x.uni) [x.uni.l, x.uni.r].forEach((y) => { if (y.w != null) y.w = cv(y.w); });
+    }));
+  });
   app.ui.drafts = {};
   if (n) app.state.sessions.forEach((x) => { x.mod = Date.now(); });
   return n;

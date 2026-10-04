@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { countedEntries, restoreSkipped, skipForToday, workingVolume } from "../shared/skip.js";
 
 /* Logging a workout: suggestions, PRs, swaps. */
 /* ================= At the gym: progression, PRs, summary, swap, tags ================= */
@@ -8,7 +9,7 @@ app.isWork = isWork;
 const workCount = (e) => e.sets.filter(app.isWork).length;
 app.workCount = workCount;
 
-const workSetCount = (s) => s.entries.reduce((n, e) => n + app.workCount(e), 0);
+const workSetCount = (s) => countedEntries(s).reduce((n, e) => n + app.workCount(e), 0);
 app.workSetCount = workSetCount;
 
 function weightInc(w) { return app.units() === "metric" ? (w <= 20 ? 1.25 : 2.5) : (w <= 40 ? 2.5 : 5); }
@@ -196,7 +197,7 @@ function readinessRows(sessions, name) {
   const days = (app.state.oura && app.state.oura.days) || {};
   const rows = [];
   for (const s of sessions) {
-    const e = (s.entries || []).find((x) => x.exercise === name);
+    const e = countedEntries(s).find((x) => x.exercise === name);
     if (!e) continue;
     const perf = bestEpley(e.sets);
     const day = days[s.date];
@@ -213,7 +214,7 @@ function readinessRows(sessions, name) {
 function suggestion(name, sessionId) {
   const histS = app.finished().filter((s) => s.id !== sessionId);
   const hist = histS
-    .map((s) => ({ s, e: s.entries.find((e) => e.exercise === name) }))
+    .map((s) => ({ s, e: countedEntries(s).find((e) => e.exercise === name) }))
     .filter((x) => x.e && x.e.sets.some(app.isWork));
   if (!hist.length) return null;
   const work = (e) => e.sets.filter(app.isWork);
@@ -291,7 +292,7 @@ app.rpeChipsHTML = rpeChipsHTML;
 function prsFor(name, set, date) {
   if (!app.isWork(set)) return [];
   const prior = [];
-  app.state.sessions.forEach((s) => s.entries.forEach((e) => {
+  app.state.sessions.forEach((s) => countedEntries(s).forEach((e) => {
     if (e.exercise === name) e.sets.forEach((x) => { if (x !== set && app.isWork(x)) prior.push({ x, date: s.date }); });
   }));
   if (!prior.length) return [];                       // first time doing a lift isn't a PR
@@ -314,7 +315,7 @@ app.prsFor = prsFor;
 function recomputePRs(name) {
   const sess = [...app.state.sessions].sort((a, b) => a.date.localeCompare(b.date) || String(a.startedAt).localeCompare(String(b.startedAt)));
   let any = false, maxW = null, maxBw = null, maxE = null; const repsAt = {};
-  sess.forEach((s) => s.entries.forEach((e) => {
+  sess.forEach((s) => countedEntries(s).forEach((e) => {
     if (e.exercise !== name) return;
     e.sets.forEach((x) => {
       if (!app.isWork(x)) { delete x.pr; return; }
@@ -351,7 +352,7 @@ app.celebrate = celebrate;
 
 /* ---------- Workout summary ---------- */
 function volumeOf(s) {
-  return s.entries.reduce((v, e) => v + e.sets.filter(app.isWork).reduce((a, x) => a + app.setVolume(x), 0), 0);
+  return workingVolume(s);
 }
 app.volumeOf = volumeOf;
 
@@ -360,9 +361,10 @@ function summaryHTML(id) {
   if (!s) return "";
   const prev = app.finished().find((x) => x.id !== s.id && x.workoutId === s.workoutId && x.date <= s.date && x.startedAt < s.startedAt);
   const vol = app.volumeOf(s), pv = prev ? app.volumeOf(prev) : 0;
-  const prs = s.entries.flatMap((e) => e.sets.filter((x) => x.pr && x.pr.length).map((x) => ({ name: e.exercise, x })));
-  const fail = s.entries.reduce((n, e) => n + e.sets.filter((x) => x.tag === "failure").length, 0);
-  const muscles = [...new Set(s.entries.filter((e) => app.workCount(e)).flatMap((e) => e.muscles))].map((m) => app.MUSCLES[m]).filter(Boolean);
+  const done = countedEntries(s);
+  const prs = done.flatMap((e) => e.sets.filter((x) => x.pr && x.pr.length).map((x) => ({ name: e.exercise, x })));
+  const fail = done.reduce((n, e) => n + e.sets.filter((x) => x.tag === "failure").length, 0);
+  const muscles = [...new Set(done.filter((e) => app.workCount(e)).flatMap((e) => e.muscles))].map((m) => app.MUSCLES[m]).filter(Boolean);
   const dur = s.startedAt && s.finishedAt ? app.fmtDur(new Date(s.finishedAt) - new Date(s.startedAt)) : "–";
   const fmtVol = (v) => v >= 10000 ? (v / 1000).toFixed(1) + "k" : Math.round(v).toLocaleString();
   return `<h3>${app.esc(s.name)} done${prs.length ? " 🏆" : ""}</h3>
@@ -460,3 +462,65 @@ function applySwap(newName) {
   app.toast(`Swapped to ${newName}${routine ? ` (routine updated)` : " for this workout"}.`);
 }
 app.applySwap = applySwap;
+
+function openExerciseName(s) {
+  return app.ui.open != null && app.liveExercises(s)[app.ui.open] ? app.liveExercises(s)[app.ui.open].name : null;
+}
+
+function retargetOpen(s, name) {
+  if (!name) { app.ui.open = null; return; }
+  const idx = app.liveExercises(s).findIndex((e) => e.name === name);
+  app.ui.open = idx >= 0 ? idx : null;
+}
+
+function skipExerciseAt(i) {
+  const s = app.activeSession(); if (!s) return;
+  const e = app.liveExercises(s)[i]; if (!e) return;
+  const openName = openExerciseName(s);
+  const had = !!((s.entries || []).find((x) => x.exercise === e.name && x.sets && x.sets.length));
+  skipForToday(s, e);
+  app.ui.exMenu = null;
+  delete app.ui.drafts[e.name];
+  retargetOpen(s, openName);
+  if (had) app.recomputePRs(e.name);
+  app.save();
+  app.renderWorkout();
+  if (app.tick) app.tick();
+  app.toast(`Skipped ${e.name} for today`, () => {
+    if (s.finishedAt) return;
+    const back = restoreSkipped(s, e.name);
+    if (!back) return;
+    delete app.ui.drafts[e.name];
+    retargetOpen(s, openName);
+    if (had) app.recomputePRs(e.name);
+    app.save();
+    app.renderWorkout();
+    if (app.tick) app.tick();
+  });
+}
+app.skipExerciseAt = skipExerciseAt;
+
+function restoreSkippedName(name) {
+  const s = app.activeSession(); if (!s || !name) return;
+  const openName = openExerciseName(s);
+  const rec = restoreSkipped(s, name);
+  if (!rec) return;
+  app.ui.exMenu = null;
+  delete app.ui.drafts[rec.name];
+  retargetOpen(s, openName);
+  if (rec.entry) app.recomputePRs(rec.name);
+  app.save();
+  app.renderWorkout();
+  if (app.tick) app.tick();
+  app.toast(`Restored ${rec.name}`, () => {
+    if (s.finishedAt) return;
+    skipForToday(s, rec);
+    delete app.ui.drafts[rec.name];
+    retargetOpen(s, openName);
+    if (rec.entry) app.recomputePRs(rec.name);
+    app.save();
+    app.renderWorkout();
+    if (app.tick) app.tick();
+  });
+}
+app.restoreSkippedName = restoreSkippedName;

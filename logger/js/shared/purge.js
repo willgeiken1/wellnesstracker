@@ -36,14 +36,21 @@ function latestTime(obj, keys) {
   return best;
 }
 
+function later(best, t) {
+  return t != null && (best == null || t > best) ? t : best;
+}
+
+function setsTime(entries, best) {
+  for (const e of entries || []) {
+    for (const x of (e && e.sets) || []) best = later(best, timeMs(x && x.at));
+  }
+  return best;
+}
+
 function sessionTime(s) {
   let best = latestTime(s, SESSION_KEYS);
-  for (const e of (s && s.entries) || []) {
-    for (const x of (e && e.sets) || []) {
-      const t = timeMs(x && x.at);
-      if (t != null && (best == null || t > best)) best = t;
-    }
-  }
+  best = setsTime(s && s.entries, best);
+  for (const sk of (s && s.skipped) || []) best = setsTime(sk && sk.entry ? [sk.entry] : [], best);
   return best;
 }
 
@@ -583,7 +590,9 @@ export function buildExportFiles(state, opts = {}) {
 
   const sets = [["date", "workout_id", "workout", "exercise", "set_index", "weight", "reps", "tag", "note", "pr", "left_weight", "left_reps", "right_weight", "right_reps", "rpe"]];
   for (const sess of s.sessions || []) {
-    for (const e of sess.entries || []) {
+    const logged = [...(sess.entries || [])];
+    for (const sk of sess.skipped || []) if (sk && sk.entry) logged.push(sk.entry);
+    for (const e of logged) {
       (e.sets || []).forEach((x, i) => {
         sets.push([
           sess.date, sess.workoutId || "", sess.name || "", e.exercise || "", i + 1,

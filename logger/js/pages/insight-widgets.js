@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { countedEntries } from "../shared/skip.js";
 
 /* Stall detective, real maintenance, bulk quality, and workout efficiency.
    Numbers come only from logged data. Demo mode reads the sample bundle. */
@@ -124,7 +125,7 @@ function stallBounds(series) {
 
 function mainMuscle(list, name) {
   let m = null;
-  list.forEach((s) => s.entries.forEach((e) => {
+  list.forEach((s) => countedEntries(s).forEach((e) => {
     if (e.exercise === name && e.muscles && e.muscles[0]) m = e.muscles[0];
   }));
   return m;
@@ -134,7 +135,7 @@ function muscleSets(list, muscle, start, end) {
   let n = 0;
   list.forEach((s) => {
     if (s.date < start || s.date > end) return;
-    s.entries.forEach((e) => {
+    countedEntries(s).forEach((e) => {
       if (!e.muscles || e.muscles[0] !== muscle) return;
       n += app.workCount(e);
     });
@@ -376,7 +377,7 @@ function bulkHTML() {
 /* ---------- Workout efficiency ---------- */
 function timedSets(s) {
   const out = [];
-  s.entries.forEach((e) => e.sets.forEach((set) => {
+  countedEntries(s).forEach((e) => e.sets.forEach((set) => {
     if (!app.isWork(set) || !set.at) return;
     const t = new Date(set.at).getTime();
     if (!Number.isNaN(t)) out.push({ t, exercise: e.exercise });
@@ -396,7 +397,7 @@ function restsOf(s) {
 }
 
 function hasTimestamps(s) {
-  return s.entries.some((e) => e.sets.some((set) => app.isWork(set) && set.at));
+  return countedEntries(s).some((e) => e.sets.some((set) => app.isWork(set) && set.at));
 }
 
 function efficiencyReport() {

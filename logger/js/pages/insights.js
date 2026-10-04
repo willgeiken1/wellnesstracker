@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays } from "../shared/correlate.js";
+import { countedEntries } from "../shared/skip.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -169,7 +170,7 @@ function insightsHTML(embedded) {
 
   // 4. Weekly sets per muscle (4-week average)
   const from = app.addDays(app.today(), -27), msets = {};
-  sessions.filter((s) => s.date >= from).forEach((s) => s.entries.forEach((e) => e.muscles.forEach((m, i) => msets[m] = (msets[m] || 0) + app.workCount(e) * (i === 0 ? 1 : 0.5) / 4)));
+  sessions.filter((s) => s.date >= from).forEach((s) => countedEntries(s).forEach((e) => e.muscles.forEach((m, i) => msets[m] = (msets[m] || 0) + app.workCount(e) * (i === 0 ? 1 : 0.5) / 4)));
   const mrows = Object.keys(app.MUSCLES).map((k) => ({ k, v: msets[k] || 0 })).sort((a, b) => b.v - a.v);
   const volHTML = mrows.map((r) => `<div class="vol-row"><span>${app.MUSCLES[r.k]}</span>
       <div class="vol-bar"><em></em><i class="${r.v >= 10 && r.v <= 20 ? "in" : r.v > 20 ? "over" : r.v > 0 ? "under" : ""}" style="width:${Math.min(100, r.v / 25 * 100)}%"></i></div>

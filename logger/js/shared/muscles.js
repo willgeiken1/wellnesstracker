@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { countedEntries } from "./skip.js";
 
 /* Muscle maps, exercise bank, and page headers. */
 /* ================= Muscles: basic + advanced, diagrams, exercise bank ================= */
@@ -45,7 +46,7 @@ app.musclesLabel = musclesLabel;
 
 function advMusclesBetween(from, to) {
   const m = new Map();
-  app.state.sessions.filter((s) => s.date >= from && s.date <= to).forEach((s) => s.entries.forEach((e) => {
+  app.state.sessions.filter((s) => s.date >= from && s.date <= to).forEach((s) => countedEntries(s).forEach((e) => {
     const n = e.sets.filter((x) => x.tag !== "warmup").length;
     if (n) app.advOf(e).forEach((k) => m.set(k, (m.get(k) || 0) + n));
   }));
@@ -150,7 +151,13 @@ app.squarePhoto = squarePhoto;
 function customExercises() {
   const bankNames = new Set(app.ASSETS.bank.map((e) => e.n.toLowerCase())), out = new Map();
   app.state.workouts.forEach((w) => w.exercises.forEach((e) => { if (!bankNames.has(e.name.toLowerCase())) out.set(e.name, e); }));
-  app.state.sessions.forEach((s) => s.entries.forEach((e) => { if (!bankNames.has(e.exercise.toLowerCase()) && !out.has(e.exercise)) out.set(e.exercise, { name: e.exercise, muscles: e.muscles, adv: e.adv }); }));
+  app.state.sessions.forEach((s) => {
+    const parked = (s.skipped || []).map((sk) => sk && sk.entry).filter((e) => e && e.exercise);
+    [...countedEntries(s), ...parked].forEach((e) => {
+      if (bankNames.has(e.exercise.toLowerCase()) || out.has(e.exercise)) return;
+      out.set(e.exercise, { name: e.exercise, muscles: e.muscles, adv: e.adv });
+    });
+  });
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 app.customExercises = customExercises;
@@ -223,6 +230,8 @@ app.liveAddSheetHTML = liveAddSheetHTML;
 
 function liveAdd(name) {
   const s = app.activeSession(); if (!s || !name) return;
+  const skippedHit = (s.skipped || []).find((x) => x.name.toLowerCase() === String(name).toLowerCase());
+  if (skippedHit && app.restoreSkippedName) { app.restoreSkippedName(skippedHit.name); return; }
   const w = app.workoutById(s.workoutId), list = app.liveExercises(s);
   const hit = list.find((e) => e.name.toLowerCase() === name.toLowerCase());
   if (hit) {
