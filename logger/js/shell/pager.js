@@ -11,8 +11,8 @@ function stageWidth() {
   const stage = document.getElementById("stage");
   return stage ? stage.clientWidth : window.innerWidth;
 }
-function paneEls() {
-  return [...document.querySelectorAll("#stage .pane")];
+function slotEls() {
+  return [...document.querySelectorAll("#stage .pane-slot")];
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -67,7 +67,7 @@ let moveGen = 0;
 
 function readVisualIndex() {
   const w = stageWidth();
-  const el = document.querySelector("#pane-home") || paneEls()[0];
+  const el = document.querySelector('.pane-slot[data-slot="home"]') || slotEls()[0];
   if (!el || !w) return app.motion.index;
   const tr = getComputedStyle(el).transform;
   if (!tr || tr === "none") return app.motion.index;
@@ -80,7 +80,7 @@ function readVisualIndex() {
 
 function dropAnims() {
   moveGen++;
-  paneEls().forEach((el) => {
+  slotEls().forEach((el) => {
     el.getAnimations().forEach((a) => { a.onfinish = null; a.cancel(); });
   });
   app.motion.animating = false;
@@ -88,7 +88,7 @@ function dropAnims() {
 
 function moveTo(activeIndex, duration) {
   const w = stageWidth();
-  const panes = paneEls();
+  const panes = slotEls();
   const gen = ++moveGen;
   let pending = 0;
   panes.forEach((el, i) => {
@@ -121,7 +121,7 @@ function moveTo(activeIndex, duration) {
 function dragTo(fromIndex, dx) {
   const w = stageWidth();
   dropAnims();
-  paneEls().forEach((el, i) => {
+  slotEls().forEach((el, i) => {
     el.style.transform = `translate3d(${(i - fromIndex) * w + dx}px,0,0)`;
   });
 }

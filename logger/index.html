@@ -39,11 +39,11 @@ try {
 </head>
 <body>
 <div id="stage">
-  <section class="pane active" data-pane="home" id="pane-home"></section>
-  <section class="pane" data-pane="workouts" id="pane-workouts"></section>
-  <section class="pane" data-pane="food" id="pane-food"></section>
-  <section class="pane" data-pane="progress" id="pane-progress"></section>
-  <section class="pane" data-pane="insights" id="pane-insights"></section>
+  <div class="pane-slot" data-slot="home"><section class="pane active" data-pane="home" id="pane-home"></section></div>
+  <div class="pane-slot" data-slot="workouts"><section class="pane" data-pane="workouts" id="pane-workouts"></section></div>
+  <div class="pane-slot" data-slot="food"><section class="pane" data-pane="food" id="pane-food"></section></div>
+  <div class="pane-slot" data-slot="progress"><section class="pane" data-pane="progress" id="pane-progress"></section></div>
+  <div class="pane-slot" data-slot="insights"><section class="pane" data-pane="insights" id="pane-insights"></section></div>
 </div>
 <main id="view" hidden></main>
 

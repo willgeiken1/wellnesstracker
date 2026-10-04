@@ -22,15 +22,26 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); font-size: 17px; -webkit-text-size-adjust: 100%; }
+/* The app draws both themes. light dark lets the UA follow the phone until
+   data-mode is set; the attribute then pins native controls to that theme. */
+html { color-scheme: light dark; }
+html[data-mode="dark"] { color-scheme: dark; }
+html[data-mode="light"] { color-scheme: light; }
 body { min-height: 100vh; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-input { font: inherit; color: var(--text); -webkit-appearance: none; appearance: none; }
-button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+input, textarea, select { font: inherit; color: var(--text); background-color: var(--bg); }
+input { -webkit-appearance: none; appearance: none; }
+textarea { -webkit-appearance: none; appearance: none; }
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"] {
+  -webkit-appearance: auto; appearance: auto;
+}
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 [hidden] { display: none !important; }
 h1, h2, h3, h4 { margin: 0; }
 
 /* ---------- Shell ---------- */
-#view { padding: calc(14px + var(--safe-top)) 16px calc(var(--tabs-h) + 110px + var(--safe-bottom)); max-width: 640px; margin: 0 auto; }
+#view { padding: 14px 16px calc(var(--tabs-h) + 110px + var(--safe-bottom)); max-width: 640px; margin: 0 auto; }
 .page-title { font-family: var(--display); font-weight: 700; font-size: 38px; line-height: 1.05; }
 .page-sub { color: var(--muted); font-size: 15px; margin-top: 2px; }
 .page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; }

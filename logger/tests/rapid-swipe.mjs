@@ -60,7 +60,8 @@ async function state(page) {
     const stage = document.getElementById("stage");
     const w = stage.clientWidth;
     const panes = [...document.querySelectorAll("#stage .pane")].map((el, i) => {
-      const tr = getComputedStyle(el).transform;
+      const slot = el.closest(".pane-slot") || el;
+      const tr = getComputedStyle(slot).transform;
       const m = tr && (tr.match(/matrix3d\(([^)]+)\)/) || tr.match(/matrix\(([^)]+)\)/));
       let x = null;
       if (m) {
@@ -129,7 +130,8 @@ async function main() {
     const w = stage.clientWidth;
     const visual = () => {
       const el = document.querySelector("#pane-home");
-      const tr = getComputedStyle(el).transform;
+      const slot = el.closest(".pane-slot") || el;
+      const tr = getComputedStyle(slot).transform;
       const m = tr.match(/matrix3d\(([^)]+)\)/) || tr.match(/matrix\(([^)]+)\)/);
       const p = m[1].split(",").map(Number);
       const x = p.length === 16 ? p[12] : p[4];
