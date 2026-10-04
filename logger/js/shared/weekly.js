@@ -467,7 +467,7 @@ function weekFindings(start, end) {
 
 function findingCard(r) {
   const toneName = r.valence === "good" ? "good" : "bad";
-  const mark = toneName === "good" ? "Good for you" : "Working against you";
+  const mark = toneName === "good" ? "Good for you" : "Worth watching";
   return `<article class="card aff-card ${toneName}">
     <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
     <p class="aff-s">${app.esc(r.lead || r.sentence || "")}</p>
@@ -515,10 +515,13 @@ function weeklyListHTML() {
   const reports = weekHistory(today).map((start) => buildWeek(src, start));
   const head = `<div class="sec-h wk-h"><h3>Weekly reports</h3></div>`;
   if (!reports.length || reports.every((r) => r.empty)) return head + emptyCopy();
-  const rows = reports.map((r) => `<button type="button" class="wk-link" data-action="week-open" data-week="${r.start}">
+  const row = (r) => `<button type="button" class="wk-link" data-action="week-open" data-week="${r.start}">
       <span><b>${rangeLabel(r.start, r.end)}</b><span class="sub">${app.esc(r.headline)}</span></span>
-      <span class="wk-chev" aria-hidden="true">›</span></button>`).join("");
-  return head + `<div class="card wk-list">${rows}</div>`;
+      <span class="wk-chev" aria-hidden="true">›</span></button>`;
+  const LATEST = 3;
+  const older = reports.slice(LATEST);
+  const more = older.length ? `<details class="wk-older"><summary><span class="wk-more">See all ${reports.length} weeks</span><span class="wk-less">Show fewer</span></summary>${older.map(row).join("")}</details>` : "";
+  return head + `<div class="card wk-list">${reports.slice(0, LATEST).map(row).join("")}${more}</div>`;
 }
 app.weeklyListHTML = weeklyListHTML;
 

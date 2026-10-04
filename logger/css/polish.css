@@ -433,3 +433,7 @@ body.timer-on:not(.in-workout) #view {
 .aff-empty h4 { margin: 0 0 6px; }
 .aff-empty .sub { margin: 0; max-width: 40em; line-height: 1.45; }
 .aff-more { margin: 2px 0 16px; }
+.oura-nudge { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; }
+.oura-nudge h4 { margin: 0 0 2px; color: var(--text); }
+.oura-nudge .sub { margin: 0; color: var(--sub); }
+.oura-nudge .btn { flex: none; }

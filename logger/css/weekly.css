@@ -84,6 +84,11 @@
 .wk-list .wk-link:first-child { border-top: 0; }
 .wk-link b { display: block; font-size: 15px; font-weight: 700; }
 .wk-link .sub { display: block; margin: 2px 0 0; }
+.wk-older > summary { list-style: none; cursor: pointer; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 14px; font-weight: 600; color: var(--text); }
+.wk-older > summary::-webkit-details-marker { display: none; }
+.wk-older[open] > summary { color: var(--sub); }
+.wk-less, .wk-older[open] .wk-more { display: none; }
+.wk-older[open] .wk-less { display: inline; }
 .wk-chev { color: var(--muted); font-size: 22px; line-height: 1; }
 .wk-block { display: grid; gap: 14px; }
 .wk-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; }
