@@ -259,6 +259,10 @@ function regressions() {
   const left = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1, migratedAt: 5 } };
   const right = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 1, migratedAt: 6 } };
   check("tie on updatedAt converges", eq(pickHomeV2(left, right).items, pickHomeV2(right, left).items));
+  const sizedA = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "s", aa: "m" } } };
+  const sizedB = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "m", aa: "s" } } };
+  const sizeWinner = pickHomeV2(sizedA, sizedB);
+  check("sizes break a same-millisecond tie", sizeWinner.sizes.z === "s" && pickHomeV2(sizedB, sizedA).sizes.z === "s", sizeWinner.sizes);
 
   const now = 1_700_000_000_000;
   const skewed = pickHomeV2(
@@ -289,6 +293,7 @@ function rpcCases() {
   const dir = new URL("../..", import.meta.url);
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
+  execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261005000000_home_v2_brief_rank.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
   pgSql(`insert into auth.users (id) values ('${uid}') on conflict (id) do nothing`);
   pgSql(`delete from public.user_data where user_id = '${uid}'`);
@@ -369,6 +374,22 @@ function rpcCases() {
     layout: { homeV2: { v: 2, items: ["nope", "today"], hidden: [], updatedAt: 30 } },
   }));
   check("a mix of known and unknown ids stays valid", eq(mixed.items, ["nope", "today"]) && mixed.ouraSeeded === true, mixed);
+  const briefOnly = homeOf(call({
+    settingsAt: 6,
+    layout: { homeV2: { v: 2, items: ["brief"], hidden: [], updatedAt: 40 } },
+  }));
+  check("brief is an allowlisted id", eq(briefOnly.items, ["brief"]), briefOnly);
+  const ranked = pgSql(`select public.home_v2_pick(
+    '{"v":2,"items":["today"],"hidden":[],"updatedAt":5,"sizes":{"z":"s","aa":"m"}}'::jsonb,
+    '{"v":2,"items":["today"],"hidden":[],"updatedAt":5,"sizes":{"z":"m","aa":"s"}}'::jsonb,
+    1000)::text`).trim();
+  const rankedHome = JSON.parse(ranked);
+  const clientRank = pickHomeV2(
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "s", aa: "m" } } },
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "m", aa: "s" } } },
+    1000
+  );
+  check("sql sizes tie-break matches the client", rankedHome.sizes.z === "s" && clientRank.sizes.z === rankedHome.sizes.z, rankedHome.sizes);
 
   let unauth = "";
   try {

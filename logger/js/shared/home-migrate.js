@@ -165,8 +165,24 @@ function asV2(home, now) {
   return { ...home, v: 2, items, hidden, updatedAt: at };
 }
 
+/* Postgres jsonb sorts object keys by length, then bytewise. */
+function pgKeyOrder(a, b) {
+  if (a.length !== b.length) return a.length - b.length;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function canonicalSizes(home) {
+  const raw = home && home.sizes;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  Object.keys(raw).sort(pgKeyOrder).forEach((key) => { out[key] = raw[key]; });
+  return out;
+}
+
 function contentKey(home) {
-  return JSON.stringify({ items: home.items || [], hidden: home.hidden || [] });
+  return JSON.stringify({ items: home.items || [], hidden: home.hidden || [], sizes: canonicalSizes(home) });
 }
 
 function withSticky(winner, other) {
@@ -253,7 +269,7 @@ export function applyHomeMigration(state, now = Date.now(), opts) {
   return state;
 }
 
-/* Same kind: newer updatedAt, then a deterministic items+hidden order.
+/* Same kind: newer updatedAt, then items, hidden, and sizes.
    An edit beats a migration. ouraSeeded sticks. */
 export function pickHomeV2(localLayout, remoteLayout, now = Date.now()) {
   const local = asV2(localLayout && localLayout.homeV2, now);

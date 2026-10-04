@@ -56,7 +56,7 @@ function widgetChrome(page, id, last) {
 }
 app.widgetChrome = widgetChrome;
 
-const editPage = () => app.ui.tab === "home" ? "home" : app.ui.tab === "food" && app.ui.fseg !== "recent" ? "food"
+const editPage = () => app.ui.tab === "home" ? null : app.ui.tab === "food" && app.ui.fseg !== "recent" ? "food"
   : app.ui.tab === "insights" ? (app.ui.iseg === "recovery" ? "recovery" : "trends") : app.ui.tab === "workouts" && !app.ui.detail && app.ui.wseg !== "history" ? "routines" : null;
 app.editPage = editPage;
 

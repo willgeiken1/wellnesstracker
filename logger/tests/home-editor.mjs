@@ -143,12 +143,21 @@ async function main() {
   await page.locator("[data-action='home-edit']").click();
   await page.waitForTimeout(200);
   check("editor opens", await page.locator(".home-editor").count() === 1);
+  const untouched = await page.evaluate(() => app.state.layout.homeV2 == null);
+  await page.locator("[data-action='home-save']").click();
+  await page.waitForTimeout(200);
+  check("no-change save does not write", untouched && await page.evaluate(() => app.state.layout.homeV2 == null) && await page.locator("#pane-home .home-v2").count() === 0);
+
+  await page.locator("[data-action='home-edit']").click();
+  await page.waitForTimeout(200);
   await editorContrast(page, "dark");
+  const move = await page.locator(".hw-row[data-id='brief'] .hw-move").first().evaluate((el) => el.getBoundingClientRect().height);
+  check("move buttons are 44px", move >= 44, String(move));
   await page.screenshot({ path: ART + "/home_editor_dark.png", animations: "disabled" });
 
   const before = await page.evaluate(() => app.ui.homeDraft.items.slice());
-  const grip = page.locator(".hw-row[data-id='headline'] .hw-grip");
-  const next = page.locator(".hw-row[data-id='readiness']");
+  const grip = page.locator(".hw-row[data-id='brief'] .hw-grip");
+  const next = page.locator(".hw-row[data-id='this-week']");
   const g = await grip.boundingBox();
   const n = await next.boundingBox();
   await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
@@ -157,11 +166,12 @@ async function main() {
   await page.mouse.up();
   await page.waitForTimeout(150);
   const dragged = await page.evaluate(() => app.ui.homeDraft.items.slice());
-  check("drag reorders before save", dragged.indexOf("headline") > before.indexOf("headline") && dragged[0] !== "headline", dragged.slice(0, 4).join(">"));
+  check("drag reorders before save", dragged.indexOf("brief") > before.indexOf("brief") && dragged[0] !== "brief", dragged.slice(0, 4).join(">"));
 
-  await page.locator("[data-action='home-size'][data-id='headline'][data-size='small']").click();
+  await page.locator("[data-action='home-down'][data-id='brief']").click();
   await page.waitForTimeout(100);
-  check("size stays in the draft", await page.evaluate(() => app.ui.homeDraft.sizes.headline === "small"));
+  const stepped = await page.evaluate(() => app.ui.homeDraft.items.slice());
+  check("down button moves the brief", stepped.indexOf("brief") > dragged.indexOf("brief"), stepped.join(">"));
 
   await page.locator("[data-action='home-remove'][data-id='muscles']").click();
   await page.waitForTimeout(100);
@@ -180,6 +190,9 @@ async function main() {
   check("add puts the card on the draft", await page.evaluate(() => app.ui.homeDraft.items.includes("food-today")));
   await page.locator(".sheet-back").click();
   await page.waitForTimeout(100);
+  await page.locator("[data-action='home-size'][data-id='food-today'][data-size='medium']").click();
+  await page.waitForTimeout(100);
+  check("size stays in the draft", await page.evaluate(() => app.ui.homeDraft.sizes["food-today"] === "medium"));
 
   await page.locator("[data-action='home-save']").click();
   await page.waitForTimeout(250);
@@ -194,17 +207,20 @@ async function main() {
       })(),
       last: !!document.querySelector("#pane-home [data-hw='food-today']"),
       muscles: !!document.querySelector("#pane-home [data-hw='muscles']"),
-      span: document.querySelector("#pane-home [data-hw='headline']")?.className || "",
+      span: document.querySelector("#pane-home [data-hw='food-today']")?.className || "",
+      briefs: document.querySelectorAll("#pane-home section.brief").length,
+      headline: !!document.querySelector("#pane-home [data-hw='headline']"),
       migrated: home.migrated,
       migratedAt: home.migratedAt,
-      size: home.sizes && home.sizes.headline,
-      items: home.items.includes("food-today") && !home.items.includes("muscles"),
+      size: home.sizes && home.sizes["food-today"],
+      items: home.items.includes("food-today") && home.items.includes("brief") && !home.items.includes("muscles"),
     };
   });
   check("save paints the registry", saved.registry === true, saved);
-  check("weigh-in nudge sits inside the brief", saved.nudgeInside === true, saved);
-  check("save stores a real edit", saved.migrated == null && saved.migratedAt == null && saved.size === "small" && saved.items, saved);
-  check("small headline is not a full row", !/\bspan-m\b/.test(saved.span), saved.span);
+  check("weigh-in nudge sits inside the brief", saved.nudgeInside === true && saved.briefs === 1, saved);
+  check("save does not repeat the headline tile", saved.headline === false, saved);
+  check("save stores a real edit", saved.migrated == null && saved.migratedAt == null && saved.size === "medium" && saved.items, saved);
+  check("medium food today is a full row", /\bspan-m\b/.test(saved.span), saved.span);
   check("removed card stays off the grid", saved.muscles === false);
   check("added card is on the grid", saved.last === true);
 
@@ -217,7 +233,7 @@ async function main() {
   check("reload keeps the registry", await page.locator("#pane-home .home-v2").count() === 1);
   check("reload keeps the edit", await page.evaluate(() => {
     const home = app.state.layout.homeV2;
-    return home.sizes.headline === "small" && home.items.includes("food-today") && !home.migratedAt;
+    return home.sizes["food-today"] === "medium" && home.items.includes("food-today") && home.items.includes("brief") && !home.migratedAt;
   }));
 
   await page.evaluate(() => {

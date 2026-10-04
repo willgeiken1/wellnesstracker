@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { app } from "../logger/js/runtime.js";
-import { HOME_REGISTRY_PAINT, HOME_WIDGETS, commitHomeEditor, getHomeLayout, homeAwaitingSync, homeEditorDraft, homeRegistryActive, renderHomeWidgets, setHomeLayout, widgetSize } from "../logger/js/shared/home-widgets.js";
+import { BRIEF_TILE_IDS, HOME_REGISTRY_PAINT, HOME_WIDGETS, commitHomeEditor, getHomeLayout, homeAwaitingSync, homeDraftUnchanged, homeEditorDraft, homeRegistryActive, renderHomeWidgets, setHomeLayout, widgetSize } from "../logger/js/shared/home-widgets.js";
 import "../logger/js/pages/home.js";
 
 const IDS = [
   "readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps",
   "weekly-goal", "food-today", "food-yesterday", "weight-trend", "cardio-minutes",
-  "today", "this-week", "pattern", "headline", "muscles", "cardio", "last-night",
+  "brief", "today", "this-week", "pattern", "headline", "muscles", "cardio", "last-night",
 ];
 
 const OURA = new Set(["readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps", "last-night"]);
@@ -66,6 +66,8 @@ test("the registry is exactly the agreed ids, sizes, and Oura flags", () => {
   assert.equal(HOME_WIDGETS.readiness.category, "recovery");
   assert.equal(HOME_WIDGETS["food-today"].category, "nutrition");
   assert.equal(HOME_WIDGETS["weight-trend"].category, "body");
+  assert.equal(HOME_WIDGETS.brief.category, "training");
+  assert.equal(HOME_WIDGETS.brief.name, "Morning brief");
   assert.equal(HOME_WIDGETS.today.category, "training");
   assert.equal(HOME_WIDGETS["last-night"].category, "recovery");
 });
@@ -128,11 +130,9 @@ test("a missing homeV2 is a temporary equivalent and is not written", () => {
   assert.equal(JSON.stringify(state), before);
   assert.equal(layout.v, 2);
   assert.equal(layout.updatedAt, 0);
-  assert.deepEqual(layout.items.filter((id) => !layout.hidden.includes(id)), [
-    "headline", "pattern", "readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps",
-    "food-yesterday", "weekly-goal", "weight-trend", "today", "this-week", "cardio", "muscles",
-  ]);
-  assert.deepEqual(layout.hidden, ["food-today", "cardio-minutes", "last-night"]);
+  const visible = ["brief", "readiness", "today", "this-week", "cardio", "muscles"];
+  assert.deepEqual(layout.items.filter((id) => !layout.hidden.includes(id)), visible);
+  assert.deepEqual(layout.hidden, IDS.filter((id) => !visible.includes(id)));
   layout.items.push("nope");
   assert.equal(state.layout.homeV2, undefined);
 });
@@ -290,13 +290,14 @@ test("the editor save clears a migration and writes the chosen cards", () => {
   assert.equal(cleared.sizes["future-widget"], "small");
 });
 
-test("hiding the brief or a brief tile changes the stand-in, not stored state", () => {
+test("hiding the brief carries into the stand-in and does not explode its metrics", () => {
   const hiddenBrief = getHomeLayout({
     muscleMode: "basic",
     layout: { home: { order: [], hidden: ["brief", "map-adv"] } },
   });
   const shown = hiddenBrief.items.filter((id) => !hiddenBrief.hidden.includes(id));
   assert.deepEqual(shown, ["readiness", "today", "this-week", "cardio", "muscles"]);
+  assert.ok(hiddenBrief.hidden.includes("brief"));
   assert.ok(hiddenBrief.hidden.includes("headline"));
   assert.ok(hiddenBrief.hidden.includes("food-yesterday"));
 
@@ -305,9 +306,10 @@ test("hiding the brief or a brief tile changes the stand-in, not stored state", 
     brief: { order: ["weight", "pattern", "oura", "train", "food", "week"], hidden: ["weight"], updatedAt: 1 },
   });
   const visible = noWeight.items.filter((id) => !noWeight.hidden.includes(id));
-  assert.equal(visible[0], "headline");
+  assert.equal(visible[0], "brief");
   assert.equal(visible.includes("weight-trend"), false);
-  assert.equal(visible.includes("pattern"), true);
+  assert.equal(visible.includes("pattern"), false);
+  assert.equal(visible.includes("headline"), false);
 });
 
 async function loadCloud() {
@@ -565,7 +567,7 @@ test("a real home edit paints the registry and keeps the weigh-in nudge inside t
   app.state = {
     layout: {
       home: { order: ["brief", "today"], hidden: ["map-adv"] },
-      homeV2: { v: 2, items: ["headline", "today", "future-widget"], hidden: [], updatedAt: 9 },
+      homeV2: { v: 2, items: ["brief", "this-week", "future-widget"], hidden: [], updatedAt: 9 },
     },
   };
   app.pageHead = () => "<header>Home</header>";
@@ -584,13 +586,20 @@ test("a real home edit paints the registry and keeps the weigh-in nudge inside t
   try {
     const html = app.homeHTML();
     assert.match(html, /class="home-v2"/);
-    assert.match(html, /data-hw="today"/);
-    assert.match(html, /data-hw="headline"/);
-    assert.doesNotMatch(html, /future-widget|class="wdgs/);
-    const briefEnd = html.indexOf("</section>");
-    const nudgeAt = html.indexOf('class="nudge"');
-    const gridAt = html.indexOf('class="home-v2"');
-    assert.ok(nudgeAt > html.indexOf('class="brief"') && nudgeAt < briefEnd && briefEnd < gridAt);
+    assert.match(html, /data-hw="brief"/);
+    assert.match(html, /data-hw="this-week"/);
+    assert.doesNotMatch(html, /future-widget|class="wdgs|data-hw="headline"/);
+    const slot = html.slice(html.indexOf('data-hw="brief"'));
+    const briefAt = slot.indexOf('class="brief"');
+    const nudgeAt = slot.indexOf('class="nudge"');
+    const briefEnd = slot.indexOf("</section>");
+    assert.ok(briefAt >= 0 && nudgeAt > briefAt && briefEnd > nudgeAt);
+    assert.equal((html.match(/class="brief"/g) || []).length, 1);
+
+    app.state.layout.homeV2 = { v: 2, items: ["headline", "today"], hidden: ["brief"], updatedAt: 9 };
+    const tiles = app.homeHTML();
+    assert.match(tiles, /data-hw="headline"/);
+    assert.doesNotMatch(tiles, /class="brief"|class="nudge"/);
 
     app.ui.homeDraft = { items: ["headline", "today", "future-widget"], hidden: ["steps"], sizes: {} };
     app.ui.homeEdit = true;
@@ -707,5 +716,178 @@ test("homeAwaitingSync is true only for a connected ring with no day yet", () =>
   } finally {
     app.state = prevState;
     app.src = prevSrc;
+  }
+});
+
+test("the first-save draft keeps the brief and leaves its metrics and a missing ring out", () => {
+  const plain = { muscleMode: "basic", layout: {}, oura: { connected: false } };
+  const draft = homeEditorDraft(plain);
+  assert.deepEqual(draft.items, ["brief", "this-week", "cardio", "muscles"]);
+  assert.equal(draft.items.some((id) => BRIEF_TILE_IDS.includes(id)), false);
+  assert.equal(draft.items.concat(draft.hidden).some((id) => HOME_WIDGETS[id].needsOura), false);
+  assert.equal(homeDraftUnchanged(draft, homeEditorDraft(plain)), true);
+  const moved = { ...draft, items: draft.items.slice().reverse() };
+  assert.equal(homeDraftUnchanged(moved, homeEditorDraft(plain)), false);
+
+  const hiddenBrief = homeEditorDraft({
+    muscleMode: "basic",
+    layout: { home: { order: [], hidden: ["brief"] } },
+    oura: { connected: false },
+  });
+  assert.equal(hiddenBrief.items.includes("brief"), false);
+  assert.ok(hiddenBrief.hidden.includes("brief"));
+  assert.ok(hiddenBrief.items.includes("today"));
+
+  const demo = homeEditorDraft({ demo: true, muscleMode: "basic", layout: {}, oura: { connected: false } });
+  assert.deepEqual(demo.items, ["brief", "readiness", "this-week", "cardio", "muscles"]);
+  assert.equal(demo.items.some((id) => BRIEF_TILE_IDS.includes(id)), false);
+  assert.ok(demo.hidden.includes("last-night"));
+
+  const saved = {
+    oura: { connected: false },
+    layout: { homeV2: { v: 2, items: ["readiness", "brief", "today"], hidden: ["steps"], updatedAt: 3 } },
+  };
+  const again = homeEditorDraft(saved);
+  assert.deepEqual(again.items, ["readiness", "brief", "today"]);
+  assert.ok(again.hidden.includes("steps"));
+});
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("a random draft save does not repeat an id or its text in the brief and the tiles", () => {
+  const rnd = mulberry32(0x5fe1744);
+  const ids = Object.keys(HOME_WIDGETS);
+  const phrase = (id) => `Only on the ${id} card zz`;
+  const prevRender = {};
+  ids.forEach((id) => {
+    prevRender[id] = HOME_WIDGETS[id].render;
+    HOME_WIDGETS[id].render = () => (id === "brief"
+      ? `<section class="brief">${BRIEF_TILE_IDS.map((tile) => `<span data-metric="${tile}">${phrase(tile)}</span>`).join("")}</section>`
+      : `<article>${phrase(id)}</article>`);
+  });
+  const prev = {
+    state: app.state,
+    ui: app.ui,
+    today: app.today,
+    pageHead: app.pageHead,
+    firstName: app.firstName,
+    esc: app.esc,
+    greeting: app.greeting,
+    fmtDate: app.fmtDate,
+    weekCardHTML: app.weekCardHTML,
+    snapshotFromApp: app.snapshotFromApp,
+    src: app.src,
+    session: app.session,
+    sb: app.sb,
+    cloudPullOk: app.cloudPullOk,
+    briefHTML: app.briefHTML,
+    weighReminderHTML: app.weighReminderHTML,
+    readinessCardHTML: app.readinessCardHTML,
+    muscleMapHTML: app.muscleMapHTML,
+    widgetize: app.widgetize,
+  };
+  app.today = () => "2026-10-04";
+  app.ui = { edit: null };
+  app.pageHead = (_title, _sub, opts) => `<header>Home</header>${opts && opts.left ? opts.left : ""}`;
+  app.briefHTML = () => `<section class="brief">Morning brief</section>`;
+  app.weighReminderHTML = () => "";
+  app.readinessCardHTML = () => "";
+  app.muscleMapHTML = () => "";
+  app.widgetize = (_page, html) => html;
+  app.firstName = () => "";
+  app.esc = (s) => String(s ?? "");
+  app.greeting = () => "";
+  app.fmtDate = () => "Sunday";
+  app.weekCardHTML = () => "";
+  app.snapshotFromApp = () => ({ live: true });
+  app.session = null;
+  app.sb = null;
+
+  function paint(items, hidden) {
+    const state = { demo: false, oura: { connected: false, days: {} }, layout: {}, muscleMode: "basic" };
+    commitHomeEditor(state, { items, hidden, sizes: {} });
+    app.state = state;
+    app.src = () => ({ oura: {} });
+    return app.homeHTML();
+  }
+
+  function assertSplit(html, label) {
+    const briefs = html.match(/<section class="brief"[\s\S]*?<\/section>/g) || [];
+    assert.ok(briefs.length <= 1, label);
+    const brief = briefs[0] || "";
+    const tiles = [...html.matchAll(/<div class="hw-slot[^"]*" data-hw="([^"]+)">([\s\S]*?)<\/div>/g)];
+    const tileIds = tiles.map((match) => match[1]).filter((id) => id !== "brief");
+    const tileText = tiles.filter((match) => match[1] !== "brief").map((match) => match[2]).join("\n");
+    if (brief) {
+      const repeated = tileIds.filter((id) => BRIEF_TILE_IDS.includes(id));
+      assert.deepEqual(repeated, [], `${label} ids ${repeated.join(",")}`);
+      BRIEF_TILE_IDS.forEach((id) => {
+        assert.equal(brief.includes(phrase(id)) && tileText.includes(phrase(id)), false, `${label} text ${id}`);
+      });
+    }
+    tileIds.forEach((id) => {
+      assert.equal(brief.includes(phrase(id)), false, `${label} tile text ${id}`);
+    });
+  }
+
+  try {
+    const forced = [
+      ids.slice(),
+      ["brief"],
+      ["brief", "this-week", "cardio", "muscles"],
+      ["headline", "pattern", "today", "food-yesterday", "weekly-goal", "weight-trend"],
+      ["brief", "headline", "readiness"],
+    ];
+    forced.forEach((items, index) => assertSplit(paint(items, []), `forced ${index}`));
+    for (let trial = 0; trial < 24; trial++) {
+      const items = ids.filter(() => rnd() < 0.45);
+      if (!items.length) items.push(rnd() < 0.5 ? "brief" : "today");
+      const hidden = ids.filter((id) => !items.includes(id) && rnd() < 0.35);
+      assertSplit(paint(items, hidden), `trial ${trial}`);
+    }
+    const hidden = paint(["this-week"], ["brief"]);
+    assert.doesNotMatch(hidden, /class="brief"/);
+    assert.match(hidden, /data-hw="this-week"/);
+
+    app.session = { user: { id: "u" } };
+    app.sb = {};
+    app.cloudPullOk = false;
+    app.state = { layout: {}, oura: { connected: false } };
+    const blocked = app.homeHTML();
+    assert.match(blocked, /data-action="home-edit"[^>]*disabled/);
+    app.cloudPullOk = true;
+    const open = app.homeHTML();
+    assert.doesNotMatch(open, /data-action="home-edit"[^>]*disabled/);
+    app.session = null;
+    assert.doesNotMatch(app.homeHTML(), /disabled/);
+  } finally {
+    ids.forEach((id) => { HOME_WIDGETS[id].render = prevRender[id]; });
+    app.state = prev.state;
+    app.ui = prev.ui;
+    app.today = prev.today;
+    app.pageHead = prev.pageHead;
+    app.firstName = prev.firstName;
+    app.esc = prev.esc;
+    app.greeting = prev.greeting;
+    app.fmtDate = prev.fmtDate;
+    app.weekCardHTML = prev.weekCardHTML;
+    app.snapshotFromApp = prev.snapshotFromApp;
+    app.src = prev.src;
+    app.session = prev.session;
+    app.sb = prev.sb;
+    app.cloudPullOk = prev.cloudPullOk;
+    app.briefHTML = prev.briefHTML;
+    app.weighReminderHTML = prev.weighReminderHTML;
+    app.readinessCardHTML = prev.readinessCardHTML;
+    app.muscleMapHTML = prev.muscleMapHTML;
+    app.widgetize = prev.widgetize;
   }
 });

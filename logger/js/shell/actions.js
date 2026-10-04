@@ -818,6 +818,7 @@ document.addEventListener("click", async (ev) => {
     case "r-remove": app.deleteRoutine(b.dataset.w); break;
     case "w-add": app.ui.sheet = "w-add"; app.ui.sd = {}; app.renderSheet(); break;
     case "home-edit":
+      if (app.homeEditBlocked && app.homeEditBlocked()) break;
       app.ui.homeEdit = true;
       app.ui.edit = null;
       app.ui.briefEdit = false;
@@ -832,13 +833,32 @@ document.addEventListener("click", async (ev) => {
       app.render();
       break;
     case "home-save": {
-      if (app.ui.homeDraft) app.commitHomeEditor(app.state, app.ui.homeDraft);
+      const draft = app.ui.homeDraft;
+      const same = draft && app.homeDraftUnchanged && app.homeDraftUnchanged(draft, app.homeEditorDraft(app.state));
+      if (draft && !same) app.commitHomeEditor(app.state, draft);
       app.ui.homeEdit = false;
       app.ui.homeDraft = null;
       app.ui.sheet = null;
-      app.save();
+      if (!same) {
+        app.save();
+        app.toast("Home saved.");
+      }
       app.render();
-      app.toast("Home saved.");
+      break;
+    }
+    case "home-up":
+    case "home-down": {
+      const draft = app.ui.homeDraft;
+      const id = b.dataset.id;
+      if (!draft || !Array.isArray(draft.items)) break;
+      const from = draft.items.indexOf(id);
+      const to = a === "home-up" ? from - 1 : from + 1;
+      if (from < 0 || to < 0 || to >= draft.items.length) break;
+      const next = draft.items.slice();
+      const [row] = next.splice(from, 1);
+      next.splice(to, 0, row);
+      draft.items = next;
+      app.render();
       break;
     }
     case "home-gallery":

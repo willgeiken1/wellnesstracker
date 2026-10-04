@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { visibleHomeIds } from "../shared/oura-gate.js";
+import { homeOuraWaiting, visibleHomeIds } from "../shared/oura-gate.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -93,19 +93,16 @@ app.homeWeekHTML = homeWeekHTML;
 
 const CATEGORY_LABEL = { recovery: "Recovery", training: "Training", nutrition: "Nutrition", body: "Body" };
 
-function homeEditButton() {
-  return `<button type="button" class="home-edit" data-action="home-edit">Edit</button>`;
+function homeEditBlocked() {
+  return !!(app.session && app.sb && !app.cloudPullOk);
 }
 
-function briefWithNudge() {
-  const brief = typeof app.briefHTML === "function" ? app.briefHTML() : "";
-  if (app.ui && app.ui.briefEdit) return brief;
-  const nudge = typeof app.weighReminderHTML === "function" ? app.weighReminderHTML() : "";
-  if (!nudge) return brief;
-  const close = brief.lastIndexOf("</section>");
-  if (close >= 0) return brief.slice(0, close) + nudge + brief.slice(close);
-  return `<section class="card brief" aria-label="Morning brief">${brief}${nudge}</section>`;
+function homeEditButton() {
+  const blocked = homeEditBlocked();
+  const off = blocked ? ` disabled aria-disabled="true"` : "";
+  return `<button type="button" class="home-edit" data-action="home-edit"${off}>Edit</button>`;
 }
+app.homeEditBlocked = homeEditBlocked;
 
 function sizeControls(id, widget, draft) {
   const sizes = widget.sizes || [widget.size];
@@ -123,11 +120,17 @@ function homeEditorHTML() {
   const draft = app.ui.homeDraft || app.homeEditorDraft(app.state);
   app.ui.homeDraft = draft;
   const grip = app.I && app.I.grip ? app.I.grip : "";
-  const rows = (draft.items || []).map((id) => {
+  const rows = (draft.items || []).map((id, index) => {
     const widget = app.HOME_WIDGETS[id];
     if (!widget) return "";
+    const upOff = index === 0 ? " disabled" : "";
+    const downOff = index === draft.items.length - 1 ? " disabled" : "";
     return `<div class="hw-row" data-id="${app.esc(id)}">
       <button type="button" class="hw-grip" aria-label="Drag to move ${app.esc(widget.name)}">${grip}</button>
+      <span class="hw-moves">
+        <button type="button" class="hw-move" data-action="home-up" data-id="${app.esc(id)}" aria-label="Move ${app.esc(widget.name)} up"${upOff}>Up</button>
+        <button type="button" class="hw-move" data-action="home-down" data-id="${app.esc(id)}" aria-label="Move ${app.esc(widget.name)} down"${downOff}>Down</button>
+      </span>
       <span class="hw-row-name">${app.esc(widget.name)}</span>
       ${sizeControls(id, widget, draft)}
       <button type="button" class="hw-remove" data-action="home-remove" data-id="${app.esc(id)}" aria-label="Remove ${app.esc(widget.name)}">Remove</button>
@@ -139,7 +142,7 @@ function homeEditorHTML() {
       <h1 class="page-title">Edit Home</h1>
       <button type="button" class="btn primary home-editor-save" data-action="home-save">Save</button>
     </div>
-    <p class="home-editor-note">Drag to reorder. Remove a card, or add one from the gallery. Save keeps this arrangement with your account.</p>
+    <p class="home-editor-note">Use Up and Down, or drag, to reorder. Remove a card, or add one from the gallery. Save keeps this arrangement with your account.</p>
     <div class="home-editor-list" data-home-list>
       ${rows || `<p class="home-editor-empty">No cards on Home yet. Add one from the gallery.</p>`}
     </div>
@@ -173,17 +176,25 @@ function homeGalleryHTML() {
 }
 app.homeGalleryHTML = homeGalleryHTML;
 
+function paintedHomeItems(state) {
+  const visible = visibleHomeIds(state);
+  const dup = new Set(app.BRIEF_TILE_IDS || []);
+  const brief = visible.includes("brief") && !visible.some((id) => dup.has(id));
+  return brief ? visible : visible.filter((id) => id !== "brief");
+}
+
 function homeHTML() {
   if (app.ui && app.ui.homeEdit) return homeEditorHTML();
   const t = app.today();
   const registry = typeof app.homeRegistryActive === "function" && app.homeRegistryActive(app.state);
-  const legacyEdit = app.ui && app.ui.edit === "home";
   const head = `
-    ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: legacyEdit ? app.addButtonHTML("home") : homeEditButton() })}
+    ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: homeEditButton() })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
   if (registry) {
     const data = typeof app.snapshotFromApp === "function" ? app.snapshotFromApp() : { live: true };
-    return head + briefWithNudge() + app.renderHomeWidgets(app.getHomeLayout(app.state), data);
+    const layout = app.getHomeLayout(app.state);
+    const wait = homeOuraWaiting(app.state) ? `<p class="sub oura-wait">Waiting for first sync</p>` : "";
+    return head + wait + app.renderHomeWidgets({ ...layout, items: paintedHomeItems(app.state) }, data);
   }
   const live = { live: true };
   const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}

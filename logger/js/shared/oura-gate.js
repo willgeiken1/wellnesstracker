@@ -51,19 +51,52 @@ export function seedOuraWidgets(layout, opt) {
   };
 }
 
-/* Ids Home should paint. hidden is the person's list. needsOura drops out with no ring and no demo.
+function dayBag(days) {
+  if (!days || typeof days !== "object" || Array.isArray(days)) return false;
+  return Object.keys(days).some((key) => days[key] && typeof days[key] === "object");
+}
+
+/* Demo counts as ready. A connected ring with no stored day does not. */
+export function ouraReady(state) {
+  if (!state) return false;
+  if (state.demo) return true;
+  if (dayBag(state.oura && state.oura.days)) return true;
+  if (typeof app.src === "function") {
+    try {
+      const src = app.src();
+      if (dayBag(src && src.oura)) return true;
+    } catch (e) { /* treat a missing store as no days */ }
+  }
+  return false;
+}
+
+/* Ids Home should paint. hidden is the person's list.
+   needsOura drops out with no ring, no demo, or a ring that has not synced a day.
    items and hidden are guarded because a v2 layout can omit them. */
 export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
   const layout = getHomeLayout(state);
   if (!layout) return [];
   const items = Array.isArray(layout.items) ? layout.items : [];
   const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
-  const oura = hasOura(state);
+  const oura = hasOura(state) && ouraReady(state);
   return items.filter((id) => {
     if (typeof id !== "string" || hidden.has(id)) return false;
     const widget = widgets && widgets[id];
     if (widget && widget.needsOura && !oura) return false;
     return true;
+  });
+}
+
+/* One line on Home when the layout wants Oura cards and the ring has no days yet. */
+export function homeOuraWaiting(state) {
+  if (!state || state.demo || ouraReady(state)) return false;
+  if (!state.oura || !state.oura.connected) return false;
+  const layout = getHomeLayout(state);
+  const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
+  const items = Array.isArray(layout.items) ? layout.items : [];
+  return items.some((id) => {
+    const widget = HOME_WIDGETS[id];
+    return !!(widget && widget.needsOura && !hidden.has(id));
   });
 }
 
@@ -84,7 +117,8 @@ export function gatedOuraStripHTML(state) {
     (widget.size === "small" ? small : medium).push(html);
   });
   const body = (small.length ? `<div class="stats">${small.join("")}</div>` : "") + medium.join("");
-  if (!body || !homeAwaitingSync()) return body;
+  if (!body) return "";
+  if (!homeAwaitingSync()) return body;
   return `<p class="sub oura-wait">Waiting for first sync</p>${body}`;
 }
 

@@ -28,18 +28,13 @@ const BOTH_SIZES = new Set([
   "pattern", "headline",
 ]);
 
-const BRIEF_METRICS = ["pattern", "oura", "train", "food", "week", "weight"];
-const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
+/* Tiles that repeat a line the Morning brief already paints. Oura tiles are not
+   in this list: the brief drops its own readiness line when those tiles show. */
+export const BRIEF_TILE_IDS = [
+  "headline", "pattern", "today", "food-yesterday", "weekly-goal", "weight-trend",
+];
 
-/* The brief's training tile is the same job as the hero, so it has no id of its own. */
-const METRIC_IDS = {
-  pattern: ["pattern"],
-  oura: ["readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps"],
-  train: [],
-  food: ["food-yesterday"],
-  week: ["weekly-goal"],
-  weight: ["weight-trend"],
-};
+const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -526,6 +521,17 @@ function renderCardio(data) {
   return `<section class="sec" data-hw="cardio"><div class="sec-h"><h3>Cardio</h3></div><div class="card cw"><button class="cw-ring" data-action="cardio-open" aria-label="Cardio: ${min} of ${goal} minutes this week"><svg viewBox="0 0 76 76" aria-hidden="true"><circle cx="38" cy="38" r="30" class="cw-bg"/><circle cx="38" cy="38" r="30" class="cw-fg" stroke-dasharray="${C * f} ${C}" transform="rotate(-90 38 38)"/></svg><span><b>${min}</b><small>/ ${goal} min</small></span></button><div class="cw-right"><span class="cw-label">Cardio this week</span></div></div></section>`;
 }
 
+function renderBrief() {
+  const brief = typeof app.briefHTML === "function" ? app.briefHTML() : "";
+  if (app.ui && app.ui.briefEdit) return brief;
+  const nudge = typeof app.weighReminderHTML === "function" ? app.weighReminderHTML() : "";
+  if (!nudge) return brief;
+  const close = brief.lastIndexOf("</section>");
+  if (close >= 0) return brief.slice(0, close) + nudge + brief.slice(close);
+  if (!brief) return "";
+  return `<section class="card brief" aria-label="Morning brief">${brief}${nudge}</section>`;
+}
+
 function renderLastNight(data) {
   const day = data && data.oura;
   if (!day || !day.total) return "";
@@ -565,6 +571,7 @@ export const HOME_WIDGETS = {
   "food-yesterday": widget({ id: "food-yesterday", name: "Yesterday's food", category: "nutrition", size: "small", needsOura: false, render: renderFoodYesterday }),
   "weight-trend": widget({ id: "weight-trend", name: "Weight trend", category: "body", size: "small", needsOura: false, render: renderWeight }),
   "cardio-minutes": widget({ id: "cardio-minutes", name: "Cardio minutes", category: "training", size: "small", needsOura: false, render: renderCardioMinutes }),
+  brief: widget({ id: "brief", name: "Morning brief", category: "training", size: "medium", needsOura: false, render: renderBrief }),
   today: widget({ id: "today", name: "Today's workout", category: "training", size: "medium", needsOura: false, render: renderToday }),
   "this-week": widget({ id: "this-week", name: "This week", category: "training", size: "medium", needsOura: false, render: renderThisWeek }),
   pattern: widget({ id: "pattern", name: "Today's pattern", category: "training", size: "medium", needsOura: false, render: renderPattern }),
@@ -669,17 +676,57 @@ export function homeRegistryActive(state) {
   return true;
 }
 
-/* The editor's starting arrangement. Unknown ids stay on the stored copy. */
+function ringOrDemo(state) {
+  if (!state) return false;
+  return !!(state.demo || (state.oura && state.oura.connected));
+}
+
+function storedHomeV2(state) {
+  const saved = state && state.layout && state.layout.homeV2;
+  return !!(saved && saved.v === 2 && Array.isArray(saved.items));
+}
+
+/* The editor's starting arrangement. Unknown ids stay on the stored copy.
+   A home that has never been saved starts from the trimmed stand-in: the brief
+   stays one card, its metric tiles stay out, and Oura ids stay out with no ring.
+   A stored layout, including a migration, is edited as stored. */
 export function homeEditorDraft(state) {
-  const layout = getHomeLayout(state);
-  const hidden = new Set(layout.hidden);
+  const stored = storedHomeV2(state);
+  const layout = stored ? getHomeLayout(state) : equivalentLayout(state);
+  const hiddenSet = new Set(layout.hidden);
+  let items = layout.items.filter((id) => !hiddenSet.has(id));
+  let hidden = layout.hidden.filter((id) => HOME_WIDGETS[id]);
+  if (!stored) {
+    if (items.includes("brief")) {
+      const dup = new Set(BRIEF_TILE_IDS);
+      items = items.filter((id) => !dup.has(id));
+      hidden = hidden.filter((id) => !dup.has(id));
+    }
+    if (!ringOrDemo(state)) {
+      const oura = (id) => !!(HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura);
+      items = items.filter((id) => !oura(id));
+      hidden = hidden.filter((id) => !oura(id));
+    }
+  }
   const raw = state && state.layout && state.layout.homeV2;
   const sizes = raw && raw.sizes && typeof raw.sizes === "object" && !Array.isArray(raw.sizes) ? { ...raw.sizes } : {};
-  return {
-    items: layout.items.filter((id) => !hidden.has(id)),
-    hidden: layout.hidden.filter((id) => HOME_WIDGETS[id]),
-    sizes,
-  };
+  return { items, hidden, sizes };
+}
+
+/* True when Save would store the same cards, order, hidden set, and sizes. */
+export function homeDraftUnchanged(draft, base) {
+  const items = stringIds(draft && draft.items).filter((id) => HOME_WIDGETS[id]);
+  const baseItems = stringIds(base && base.items).filter((id) => HOME_WIDGETS[id]);
+  if (items.length !== baseItems.length || items.some((id, i) => id !== baseItems[i])) return false;
+  const hide = (list, shown) => stringIds(list).filter((id) => HOME_WIDGETS[id] && !shown.includes(id)).sort();
+  const hidden = hide(draft && draft.hidden, items);
+  const baseHidden = hide(base && base.hidden, baseItems);
+  if (hidden.length !== baseHidden.length || hidden.some((id, i) => id !== baseHidden[i])) return false;
+  const sizes = sanitizeSizes(draft && draft.sizes, null);
+  const baseSizes = sanitizeSizes(base && base.sizes, null);
+  const keys = Object.keys(sizes).sort();
+  const baseKeys = Object.keys(baseSizes).sort();
+  return keys.length === baseKeys.length && keys.every((key, i) => key === baseKeys[i] && sizes[key] === baseSizes[key]);
 }
 
 /* Writes a real edit. Unknown ids already stored are put back by setHomeLayout. */
@@ -711,34 +758,18 @@ function legacyHomeView(state) {
   return { order: full, hidden };
 }
 
-function briefView(state) {
-  const b = state && state.brief && typeof state.brief === "object" && !Array.isArray(state.brief) ? state.brief : {};
-  const order = [];
-  (Array.isArray(b.order) ? b.order : []).forEach((id) => { if (BRIEF_METRICS.includes(id) && !order.includes(id)) order.push(id); });
-  BRIEF_METRICS.forEach((id) => { if (!order.includes(id)) order.push(id); });
-  const hidden = [...new Set((Array.isArray(b.hidden) ? b.hidden : []).filter((id) => BRIEF_METRICS.includes(id)))];
-  return { order, hidden };
-}
-
-/* Stand-in only. Visible legacy slots expand into v2 ids; everything else is hidden.
-   The Morning brief stays one card on screen until a saved homeV2 exists. */
+/* Stand-in only. The Morning brief is one card. A legacy hidden brief stays hidden.
+   Metric tiles are not copied out of the brief; the editor drops them before a save. */
 function equivalentLayout(state) {
   const legacy = legacyHomeView(state);
   const hiddenLegacy = new Set(legacy.hidden);
-  const brief = briefView(state);
-  const briefHidden = new Set(brief.hidden);
   const visible = [];
   const seen = new Set();
   const add = (id) => { if (!id || seen.has(id) || !HOME_WIDGETS[id]) return; seen.add(id); visible.push(id); };
   legacy.order.forEach((slot) => {
     if (hiddenLegacy.has(slot)) return;
-    if (slot === "brief") {
-      add("headline");
-      brief.order.forEach((metric) => {
-        if (briefHidden.has(metric)) return;
-        (METRIC_IDS[metric] || []).forEach(add);
-      });
-    } else if (slot === "readiness") add("readiness");
+    if (slot === "brief") add("brief");
+    else if (slot === "readiness") add("readiness");
     else if (slot === "today") add("today");
     else if (slot === "week") add("this-week");
     else if (slot === "cardio") add("cardio");
@@ -816,9 +847,11 @@ export function homeAwaitingSync() {
 
 app.HOME_WIDGETS = HOME_WIDGETS;
 app.HOME_REGISTRY_PAINT = HOME_REGISTRY_PAINT;
+app.BRIEF_TILE_IDS = BRIEF_TILE_IDS;
 app.homeRegistryActive = homeRegistryActive;
 app.widgetSize = widgetSize;
 app.homeEditorDraft = homeEditorDraft;
+app.homeDraftUnchanged = homeDraftUnchanged;
 app.commitHomeEditor = commitHomeEditor;
 app.getHomeLayout = getHomeLayout;
 app.setHomeLayout = setHomeLayout;
