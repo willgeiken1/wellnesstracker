@@ -14,14 +14,349 @@ export function inRange(day, from, to) {
   return validDay(day) && validDay(from) && validDay(to) && day >= from && day <= to;
 }
 
-function stripCheckins(data, from, to) {
+function timeMs(v) {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  if (typeof v === "string" && v) {
+    const t = Date.parse(v);
+    if (Number.isFinite(t) && t > 0) return t;
+  }
+  return null;
+}
+
+const ITEM_KEYS = ["loggedAt", "updatedAt", "createdAt", "at", "mod"];
+const SESSION_KEYS = ["mod", "loggedAt", "updatedAt", "createdAt", "startedAt", "finishedAt"];
+
+function latestTime(obj, keys) {
+  if (!obj || typeof obj !== "object") return null;
+  let best = null;
+  for (const k of keys) {
+    const t = timeMs(obj[k]);
+    if (t != null && (best == null || t > best)) best = t;
+  }
+  return best;
+}
+
+function sessionTime(s) {
+  let best = latestTime(s, SESSION_KEYS);
+  for (const e of (s && s.entries) || []) {
+    for (const x of (e && e.sets) || []) {
+      const t = timeMs(x && x.at);
+      if (t != null && (best == null || t > best)) best = t;
+    }
+  }
+  return best;
+}
+
+/* A purge with no cutoff still clears the whole range. Otherwise drop a log
+   with no timestamp, a timestamp more than a minute ahead, or a timestamp at
+   or before the delete. A fast clock's stamp counts as before the cutoff. */
+function dropBefore(stamp, before, now = Date.now()) {
+  if (before == null) return true;
+  return stamp == null || stamp > now + CLOCK_SKEW_MS || stamp <= before;
+}
+
+const CLOCK_SKEW_MS = 60_000;
+
+/* A stamp more than a minute ahead is not a real delete time. Drop it.
+   Anything inside that window, including a clock a minute fast, is kept. */
+function clampStamp(t, now) {
+  if (!(t > 0)) return null;
+  if (t > now + CLOCK_SKEW_MS) return null;
+  return t;
+}
+
+/* The cutoff to store and apply. The server uses this same instant: a stamp
+   more than a minute ahead becomes just before now, never now plus a minute.
+   Neutralising an unknown future delete time removes range logs made before a
+   device first sees the purge, and keeps logs made after. Removing those
+   earlier logs is the privacy-safe direction. A real earlier stamp still wins. */
+function neutralCutoff(p, now) {
+  if (!p) return null;
+  const deleted = timeMs(p.deletedAt);
+  const at = timeMs(p.at);
+  const usable = Math.max(clampStamp(deleted, now) || 0, clampStamp(at, now) || 0);
+  if (usable) return usable;
+  const raw = Math.max(deleted || 0, at || 0);
+  if (raw > now + CLOCK_SKEW_MS) return now > 0 ? now - 1 : now;
+  return null;
+}
+
+export function purgeCutoff(p, now = Date.now()) {
+  if (!p) return null;
+  const deleted = clampStamp(timeMs(p.deletedAt), now);
+  if (p.deletedAt != null && deleted != null) return deleted;
+  const at = clampStamp(timeMs(p.at), now);
+  if (at != null) return at;
+  return neutralCutoff(p, now);
+}
+
+function aheadOf(t, now) {
+  return t > now + CLOCK_SKEW_MS;
+}
+
+function neutralAt(now) {
+  return now > 0 ? now - 1 : now;
+}
+
+/* A future delete stamp is neutralised once. wDelAtRaw[d] is that raw value,
+   so the same stamp arriving again keeps the stored wDelAt[d] instead of
+   moving it forward to a later now. A different, newer raw value is a second
+   delete and is neutralised again. */
+function observeTomb(profile, d, now) {
+  if (!profile) return null;
+  const stamp = timeMs(profile.wDelAt && profile.wDelAt[d]);
+  const raw = timeMs(profile.wDelAtRaw && profile.wDelAtRaw[d]);
+  if (raw != null && stamp != null) return { stamp, raw, fresh: false };
+  if (stamp != null && aheadOf(stamp, now)) return { stamp: neutralAt(now), raw: stamp, fresh: true };
+  if (stamp != null) return { stamp, raw: null, fresh: false };
+  if (raw != null && aheadOf(raw, now)) return { stamp: neutralAt(now), raw, fresh: true };
+  return null;
+}
+
+function pickTomb(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  if (a.raw != null && a.raw === b.raw) {
+    if (a.fresh && !b.fresh) return b;
+    if (b.fresh && !a.fresh) return a;
+    /* Two first looks at the same stamp: the later clock covers more
+       pre-delete logs. A later fresh look does not move a stored one. */
+    return a.stamp >= b.stamp ? a : b;
+  }
+  if (a.raw != null && b.raw != null) return a.raw > b.raw ? a : b;
+  const rawSide = a.raw != null ? a : b;
+  const plain = rawSide === a ? b : a;
+  if (plain.stamp === rawSide.raw) return rawSide;
+  if (plain.stamp > rawSide.stamp) return { stamp: plain.stamp, raw: null, fresh: false };
+  return rawSide;
+}
+
+function latestWeighAt(profile, d) {
+  let best = null;
+  for (const w of (profile && profile.weighIns) || []) {
+    const t = w && w.date === d ? timeMs(w.at) : null;
+    if (t != null && (best == null || t > best)) best = t;
+  }
+  return best;
+}
+
+/* entryAt - 1 is written beside a new weigh-in so a legacy wDel cannot hide it.
+   It is not a second delete, and must not replace a frozen raw stamp. */
+function readdMarker(profile, d, obs) {
+  if (!obs || obs.raw != null) return false;
+  const at = latestWeighAt(profile, d);
+  return at != null && obs.stamp === at - 1;
+}
+
+function finite(n) {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+/* The newest sample in each day-window behind the fastest clock.
+   One phone keeps its own now. Two phones use the earlier now.
+   Three or more use the middle, so -1d / 0 / +1d agree on the same cutoff. */
+function judgeClocks(times) {
+  const xs = times.filter(finite);
+  if (!xs.length) return { clocks: [], now: null };
+  const max = Math.max(...xs);
+  const day = 86_400_000;
+  const picked = [];
+  for (const [a, b] of [[-0.5, 0.5], [-1.5, -0.5], [-2.5, -1.5]]) {
+    const lo = max + a * day;
+    const hi = max + b * day;
+    let best = null;
+    for (const t of xs) if (t >= lo && t < hi && (best == null || t > best)) best = t;
+    if (best != null) picked.push(best);
+  }
+  picked.sort((a, b) => a - b);
+  const now = picked.length >= 3 ? picked[Math.floor((picked.length - 1) / 2)] : picked[0];
+  return { clocks: picked, now };
+}
+
+function clockSamples(local, remote, now) {
+  return [
+    ...(local && local.clocks || []),
+    ...(remote && remote.clocks || []),
+    local && local.clockHint,
+    remote && remote.clockHint,
+    now,
+  ];
+}
+
+function aligned(clocks) {
+  if (!clocks || clocks.length < 3) return false;
+  const day = 86_400_000;
+  const s = [...clocks].sort((a, b) => a - b);
+  for (let i = 1; i < s.length; i++) {
+    const gap = s[i] - s[i - 1];
+    if (gap < day - 2 * 3600_000 || gap > day + 2 * 3600_000) return false;
+  }
+  return true;
+}
+
+function skewOffset(hint, judged) {
+  if (!finite(hint) || judged.now == null) return 0;
+  if (!judged.clocks.some((c) => Math.abs(c - hint) <= CLOCK_SKEW_MS)) return 0;
+  const off = hint - judged.now;
+  if (Math.abs(off) < 12 * 3600_000) return 0;
+  return off;
+}
+
+/* Stamp a local write on the shared clock. A phone a day fast stores true
+   time once the other phones' clocks are known, so its log does not sort
+   after a delete that really happened later. */
+export function localStamp(profile, now = Date.now()) {
+  const off = profile && profile.skewKnown && finite(profile.skewApplied) ? profile.skewApplied : 0;
+  if (profile && typeof profile === "object") profile.clockHint = now;
+  return now - off;
+}
+
+function applySkew(profile, judged) {
+  const src = profile && typeof profile === "object" ? profile : {};
+  const applied = finite(src.skewApplied) ? src.skewApplied : 0;
+  const hint = src.clockHint;
+  const live = finite(hint) && judged.clocks.some((c) => Math.abs(c - hint) <= CLOCK_SKEW_MS);
+  const learn = !src.skewKnown && live && aligned(judged.clocks);
+  const off = learn ? skewOffset(hint, judged) : applied;
+  const delta = learn ? off - applied : 0;
+  if (!delta) return { ...src, skewApplied: off, skewKnown: src.skewKnown === true || learn };
+  return {
+    ...src,
+    weighIns: (src.weighIns || []).map((w) => {
+      const at = timeMs(w && w.at);
+      return at == null ? w : { ...w, at: at - delta };
+    }),
+    updatedAt: finite(src.updatedAt) ? src.updatedAt - delta : src.updatedAt,
+    skewApplied: off,
+    skewKnown: true,
+  };
+}
+
+function mergeTombs(local, remote, now) {
+  const dates = new Set([
+    ...Object.keys((local && local.wDelAt) || {}),
+    ...Object.keys((local && local.wDelAtRaw) || {}),
+    ...Object.keys((remote && remote.wDelAt) || {}),
+    ...Object.keys((remote && remote.wDelAtRaw) || {}),
+  ]);
+  const wDelAt = {};
+  const wDelAtRaw = {};
+  for (const d of dates) {
+    let a = observeTomb(local, d, now);
+    let b = observeTomb(remote, d, now);
+    if (readdMarker(local, d, a) && b && b.raw != null) a = null;
+    if (readdMarker(remote, d, b) && a && a.raw != null) b = null;
+    const picked = pickTomb(a, b);
+    if (!picked) continue;
+    wDelAt[d] = picked.stamp;
+    if (picked.raw != null) wDelAtRaw[d] = picked.raw;
+  }
+  return { wDelAt, wDelAtRaw };
+}
+
+/* Latest purge cutoff that covers this date, or 0 when none does. */
+function coveringCutoff(purges, date, now) {
+  let cut = 0;
+  for (const p of purges || []) {
+    const c = purgeCutoff(p, now);
+    if (c != null && inRange(date, p.from, p.to) && c > cut) cut = c;
+  }
+  return cut;
+}
+
+/* A weigh-in outlives a tombstone only when its own log time is after both
+   the manual delete (wDelAt) and any purge covering that date.
+   A missing wDelAt does not raise the bar. A missing at never wins.
+   Dates that are only in wDel, with no timestamp, still hide the weigh-in
+   unless this returns true. */
+export function weighBeatsTombstone(purges, x, wDelAt, now = Date.now(), wDelAtRaw = null) {
+  const t = timeMs(x && x.at);
+  if (t == null || !x || !x.date) return false;
+  const tomb = timeMs(wDelAt && wDelAt[x.date]) || 0;
+  const raw = timeMs(wDelAtRaw && wDelAtRaw[x.date]) || 0;
+  const cut = coveringCutoff(purges, x.date, now);
+  if (!tomb && !cut) return false;
+  /* A stamp ahead of this clock was written by a fast clock. It loses, unless
+     it is later than the raw delete it is being compared with: that re-log
+     happened after the delete on the fast clock. */
+  if (aheadOf(t, now) && !(raw && t > raw)) return false;
+  return t > Math.max(tomb, cut);
+}
+
+/* True when this weigh-in was logged after a purge that covers its date. */
+export function weighAfterPurge(purges, x) {
+  return weighBeatsTombstone(purges, x, null);
+}
+
+/* Union of two profiles' weigh-ins. A manual delete is wDel plus wDelAt[date].
+   The weigh-in wins only when x.at is later than both that stamp and the purge. */
+export function mergeWeighIns(localProfile, remoteProfile, purges, now = Date.now()) {
+  const lp0 = localProfile && typeof localProfile === "object" ? localProfile : {};
+  const rp0 = remoteProfile && typeof remoteProfile === "object" ? remoteProfile : {};
+  const pool = judgeClocks([...(lp0.clocks || []), ...(rp0.clocks || []), lp0.clockHint, rp0.clockHint]);
+  const base = aligned(lp0.clocks) ? lp0.clocks : (aligned(rp0.clocks) ? rp0.clocks : null);
+  const judged = base ? judgeClocks(base) : pool;
+  const trueHint = (p) => finite(p && p.clockHint) ? p.clockHint - (p.skewKnown && finite(p.skewApplied) ? p.skewApplied : 0) : null;
+  const hints = [trueHint(lp0), trueHint(rp0)].filter(finite);
+  const judgeNow = hints.length ? Math.max(...hints) : (judged.now == null ? now : judged.now);
+  const nextClocks = aligned(pool.clocks) ? pool.clocks : (base || pool.clocks);
+  const lp = applySkew(lp0, judged);
+  const rp = applySkew(rp0, judged);
+  const wDel = new Set([...(lp.wDel || []), ...(rp.wDel || [])]);
+  const tombs = mergeTombs(lp, rp, judgeNow);
+  const wDelAt = tombs.wDelAt;
+  const wDelAtRaw = tombs.wDelAtRaw;
+  const byDate = new Map();
+  const newerLocal = (lp.updatedAt || 0) >= (rp.updatedAt || 0);
+  const lists = [rp.weighIns || [], lp.weighIns || []];
+  const wins = (x) => weighBeatsTombstone(purges, x, wDelAt, judgeNow, wDelAtRaw);
+  lists.forEach((list) => list.forEach((x) => {
+    if (!x || !x.date) return;
+    const blocked = wDel.has(x.date) || wDelAt[x.date] != null;
+    if (blocked && !wins(x)) return;
+    const prev = byDate.get(x.date);
+    if (!prev || (timeMs(x.at) || 0) >= (timeMs(prev.at) || 0)) byDate.set(x.date, x);
+  }));
+  for (const x of byDate.values()) {
+    if (!wins(x)) continue;
+    wDel.delete(x.date);
+    if (wDelAtRaw[x.date] == null) delete wDelAt[x.date];
+  }
+  return {
+    ...(newerLocal ? lp : rp),
+    weighIns: [...byDate.values()],
+    wDel: [...wDel],
+    wDelAt,
+    wDelAtRaw,
+    clocks: nextClocks,
+    clockHint: finite(now) ? now : judgeNow,
+    skewApplied: lp.skewApplied || 0,
+    skewKnown: lp.skewKnown === true,
+  };
+}
+
+/* loggedAt is when the session was written. Manual cardio also stores
+   finishedAt as that calendar day at noon, which is not the log time.
+   The edge runtime reads that noon as UTC, so it can land after a delete
+   that already happened. When loggedAt is present it is the only clock. */
+function cardioTime(s) {
+  if (!s || typeof s !== "object") return null;
+  const logged = timeMs(s.loggedAt);
+  if (logged != null) return logged;
+  const keys = s.src === "manual"
+    ? ["mod", "updatedAt", "createdAt", "at", "startedAt"]
+    : ["mod", "updatedAt", "createdAt", "at", "startedAt", "finishedAt"];
+  return latestTime(s, keys);
+}
+
+function stripCheckins(data, from, to, before, now) {
   let changed = false;
   if (Array.isArray(data.checkins)) {
     const ids = new Set(data.checkinDeleted || []);
     const next = [];
     for (const x of data.checkins) {
       const d = x && (x.date || x.day);
-      if (inRange(d, from, to)) {
+      if (inRange(d, from, to) && dropBefore(latestTime(x, ITEM_KEYS), before, now)) {
         changed = true;
         if (x.id) ids.add(x.id);
       } else next.push(x);
@@ -30,7 +365,10 @@ function stripCheckins(data, from, to) {
     data.checkinDeleted = [...ids];
   } else if (data.checkins && typeof data.checkins === "object") {
     for (const d of Object.keys(data.checkins)) {
-      if (inRange(d, from, to)) { delete data.checkins[d]; changed = true; }
+      if (inRange(d, from, to) && dropBefore(latestTime(data.checkins[d], ITEM_KEYS), before, now)) {
+        delete data.checkins[d];
+        changed = true;
+      }
     }
   }
   return changed;
@@ -42,9 +380,11 @@ export function stripRange(data, from, to, opts = {}) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   let changed = false;
 
+  const before = opts.before;
+  const now = opts.now ?? Date.now();
   const deleted = new Set(data.deleted || []);
   data.sessions = (data.sessions || []).filter((s) => {
-    if (s && inRange(s.date, from, to)) {
+    if (s && inRange(s.date, from, to) && dropBefore(sessionTime(s), before, now)) {
       changed = true;
       if (s.id) deleted.add(s.id);
       return false;
@@ -59,9 +399,19 @@ export function stripRange(data, from, to, opts = {}) {
     let foodChanged = false;
     for (const d of Object.keys(days)) {
       if (!inRange(d, from, to)) continue;
-      foodChanged = true;
-      for (const e of days[d] || []) if (e && e.id) fd.add(e.id);
-      delete days[d];
+      const keep = [];
+      let dayChanged = false;
+      for (const e of days[d] || []) {
+        if (dropBefore(latestTime(e, ITEM_KEYS), before, now)) {
+          dayChanged = true;
+          if (e && e.id) fd.add(e.id);
+        } else keep.push(e);
+      }
+      if (dayChanged) {
+        foodChanged = true;
+        if (keep.length) days[d] = keep;
+        else delete days[d];
+      }
     }
     if (foodChanged) {
       changed = true;
@@ -75,7 +425,7 @@ export function stripRange(data, from, to, opts = {}) {
     const cd = new Set(data.cardio.deleted || []);
     let cardioChanged = false;
     data.cardio.sessions = (data.cardio.sessions || []).filter((s) => {
-      if (s && inRange(s.date, from, to)) {
+      if (s && inRange(s.date, from, to) && dropBefore(cardioTime(s), before, now)) {
         cardioChanged = true;
         if (s.id) cd.add(s.id);
         return false;
@@ -91,27 +441,54 @@ export function stripRange(data, from, to, opts = {}) {
 
   if (data.measurements && typeof data.measurements === "object") {
     for (const d of Object.keys(data.measurements)) {
-      if (inRange(d, from, to)) { delete data.measurements[d]; changed = true; }
+      if (inRange(d, from, to) && dropBefore(latestTime(data.measurements[d], ITEM_KEYS), before, now)) {
+        delete data.measurements[d];
+        changed = true;
+      }
     }
   }
 
   if (data.profile && typeof data.profile === "object") {
     const wDel = new Set(data.profile.wDel || []);
-    const before = (data.profile.weighIns || []).length;
-    data.profile.weighIns = (data.profile.weighIns || []).filter((x) => {
-      if (x && inRange(x.date, from, to)) { wDel.add(x.date); return false; }
-      return true;
-    });
-    if (data.profile.weighIns.length !== before || wDel.size !== (data.profile.wDel || []).length) {
+    const tombs = mergeTombs(data.profile, null, now);
+    const wDelAt = tombs.wDelAt;
+    const wDelAtRaw = tombs.wDelAtRaw;
+    const kept = [];
+    let profileChanged = false;
+    const beat = before == null ? [] : [{ from, to, deletedAt: before }];
+    for (const x of data.profile.weighIns || []) {
+      if (x && inRange(x.date, from, to)) {
+        const wins = before != null && weighBeatsTombstone(beat, x, wDelAt, now, wDelAtRaw);
+        if (!wins) {
+          if (!wDel.has(x.date)) profileChanged = true;
+          wDel.add(x.date);
+          continue;
+        }
+        if (wDel.delete(x.date)) profileChanged = true;
+        if (wDelAtRaw[x.date] == null && wDelAt[x.date] != null) { delete wDelAt[x.date]; profileChanged = true; }
+      }
+      kept.push(x);
+    }
+    if (profileChanged || kept.length !== (data.profile.weighIns || []).length
+      || JSON.stringify(data.profile.wDelAt || {}) !== JSON.stringify(wDelAt)
+      || JSON.stringify(data.profile.wDelAtRaw || {}) !== JSON.stringify(wDelAtRaw)) {
       changed = true;
+      data.profile.weighIns = kept;
       data.profile.wDel = [...wDel];
+      data.profile.wDelAt = wDelAt;
+      data.profile.wDelAtRaw = wDelAtRaw;
       if (!opts.quiet) data.profile.updatedAt = Date.now();
     }
   }
 
   if (data.plan && typeof data.plan === "object") {
+    const at = data.planAt && typeof data.planAt === "object" ? data.planAt : null;
     for (const d of Object.keys(data.plan)) {
-      if (inRange(d, from, to)) { delete data.plan[d]; changed = true; }
+      if (!inRange(d, from, to)) continue;
+      if (at && !dropBefore(timeMs(at[d]), before, now)) continue;
+      delete data.plan[d];
+      if (at) delete at[d];
+      changed = true;
     }
   }
 
@@ -121,31 +498,63 @@ export function stripRange(data, from, to, opts = {}) {
     }
   }
 
-  if (stripCheckins(data, from, to)) changed = true;
+  if (stripCheckins(data, from, to, before, now)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
 }
 
-export function unionPurges(a, b) {
+function usableCutoff(p, now) {
+  return Math.max(clampStamp(timeMs(p && p.deletedAt), now) || 0, clampStamp(timeMs(p && p.at), now) || 0);
+}
+
+function rawAhead(p, now) {
+  return Math.max(timeMs(p && p.deletedAt) || 0, timeMs(p && p.at) || 0) > now + CLOCK_SKEW_MS;
+}
+
+export function unionPurges(a, b, now = Date.now()) {
   const map = new Map();
   for (const p of [...(a || []), ...(b || [])]) {
     if (!p || !validDay(p.from) || !validDay(p.to) || p.from > p.to) continue;
     const k = p.from + "\0" + p.to;
     const cur = map.get(k);
-    if (!cur) map.set(k, { from: p.from, to: p.to, at: p.at || 0, synced: !!p.synced });
-    else map.set(k, { from: p.from, to: p.to, at: Math.max(cur.at || 0, p.at || 0), synced: !!(cur.synced || p.synced) });
+    const usable = Math.max(usableCutoff(p, now), cur ? cur.usable : 0);
+    const ahead = rawAhead(p, now) || !!(cur && cur.ahead);
+    const stamp = usable || (ahead ? (now > 0 ? now - 1 : now) : 0);
+    map.set(k, { from: p.from, to: p.to, at: stamp, deletedAt: stamp, synced: !!((cur && cur.synced) || p.synced), usable, ahead });
   }
-  return [...map.values()];
+  return [...map.values()].map(({ usable, ahead, ...rest }) => rest);
+}
+
+/* Record a range delete. A repeat delete moves deletedAt. Marking the same
+   delete synced does not, or logs made in between would be wiped on the next sync. */
+export function notePurge(list, from, to, synced, now = Date.now()) {
+  const purges = Array.isArray(list) ? list : [];
+  if (!validDay(from) || !validDay(to) || from > to) return purges;
+  const hit = purges.find((p) => p && p.from === from && p.to === to);
+  if (hit) {
+    if (!synced) { hit.at = now; hit.deletedAt = now; }
+    else if (purgeCutoff(hit) == null) { hit.at = now; hit.deletedAt = now; }
+    hit.synced = !!synced;
+    return purges;
+  }
+  purges.push({ from, to, at: now, deletedAt: now, synced: !!synced });
+  return purges;
 }
 
 export function coveredBy(purges, day) {
   return (purges || []).some((p) => p && inRange(day, p.from, p.to));
 }
 
-/* Re-apply every stored purge. Quiet, so opening the app does not reshuffle sync timestamps. */
-export function applyPurges(data) {
+/* Re-apply every stored purge. Quiet, so opening the app does not reshuffle sync timestamps.
+   Only logs created or updated at or before deletedAt (or at, on older records) are removed. */
+export function applyPurges(data, now = Date.now()) {
   const purges = data.purges || [];
-  for (const p of purges) stripRange(data, p.from, p.to, { quiet: true });
+  for (const p of purges) {
+    if (!p) continue;
+    const before = neutralCutoff(p, now);
+    if (before != null) { p.at = before; p.deletedAt = before; }
+    stripRange(data, p.from, p.to, { quiet: true, before, now });
+  }
   data.purges = purges;
   return data;
 }

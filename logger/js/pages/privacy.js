@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { applyPurges, buildExportFiles, coveredBy, mergeCheckins, stripRange, unionPurges, validDay, zipStore } from "../shared/purge.js";
+import { applyPurges, buildExportFiles, coveredBy, localStamp, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
 
 /* Privacy center: export, date-range delete, account delete, and app lock. */
 
@@ -8,6 +8,9 @@ app.applyPurges = applyPurges;
 app.unionPurges = unionPurges;
 app.mergeCheckins = mergeCheckins;
 app.datePurged = (day) => coveredBy(app.state && app.state.purges, day);
+app.weighAfterPurge = weighAfterPurge;
+app.mergeWeighIns = mergeWeighIns;
+app.localStamp = localStamp;
 
 function needsLock() {
   const L = app.state && app.state.appLock;
@@ -113,7 +116,7 @@ function rangeSheetHTML() {
   const from = (app.ui.sd && app.ui.sd.from) || "";
   const to = (app.ui.sd && app.ui.sd.to) || "";
   return `<h3>Delete a date range</h3>
-    <p class="sub" style="margin:-6px 0 14px">Erases logs between these dates and keeps your account. Workouts, food, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and Oura days stored in Insight. Routines and favorites stay. A later Oura sync won't bring those days back. Oura's own copy is not deleted.</p>
+    <p class="sub" style="margin:-6px 0 14px">Erases logs between these dates and keeps your account. Workouts, food, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and Oura days stored in Insight. Logs added to those dates later are kept. Routines and favorites stay. A later Oura sync won't bring those days back. Oura's own copy is not deleted.</p>
     <label class="field-label" for="purge-from">From</label>
     <input class="text-in" id="purge-from" type="date" max="${app.today()}" value="${app.esc(from)}">
     <label class="field-label" for="purge-to">To</label>
@@ -181,24 +184,30 @@ async function exportAllData() {
 app.exportAllData = exportAllData;
 
 function rememberPurge(from, to, synced) {
-  const list = app.state.purges || [];
-  const hit = list.find((p) => p.from === from && p.to === to);
-  if (hit) { hit.at = Date.now(); hit.synced = !!synced; }
-  else list.push({ from, to, at: Date.now(), synced: !!synced });
-  app.state.purges = list;
+  app.state.purges = notePurge(app.state.purges, from, to, synced);
+}
+function purgePayload(from, to) {
+  const p = (app.state.purges || []).find((x) => x && x.from === from && x.to === to);
+  const deletedAt = purgeCutoff(p);
+  return deletedAt ? { from, to, deletedAt } : { from, to };
 }
 app.rememberPurge = rememberPurge;
 
-async function dropPhotosInRange(from, to) {
+function photoOlderThan(photo, before) {
+  if (before == null) return true;
+  const t = Date.parse(photo && photo.at || "");
+  return !Number.isFinite(t) || t <= before;
+}
+async function dropPhotosInRange(from, to, before) {
   if (!app.myPhotos || !app.deletePhoto) return;
-  const list = app.myPhotos().filter((p) => p.date >= from && p.date <= to);
+  const list = app.myPhotos().filter((p) => p.date >= from && p.date <= to && photoOlderThan(p, before));
   for (const p of list) {
     try { await app.deletePhoto(p.id); } catch (e) { /* keep going */ }
   }
 }
 async function dropPurgedPhotos() {
   for (const p of app.state.purges || []) {
-    if (p && p.from && p.to) await app.dropPhotosInRange(p.from, p.to);
+    if (p && p.from && p.to) await app.dropPhotosInRange(p.from, p.to, purgeCutoff(p));
   }
 }
 app.dropPurgedPhotos = dropPurgedPhotos;
@@ -210,7 +219,7 @@ async function flushPurges() {
   let any = false;
   for (const p of pending) {
     try {
-      const { error } = await app.sb.functions.invoke("purge-range", { body: { from: p.from, to: p.to } });
+      const { error } = await app.sb.functions.invoke("purge-range", { body: purgePayload(p.from, p.to) });
       if (!error) { p.synced = true; any = true; }
     } catch (e) { /* next launch tries again */ }
   }
@@ -236,7 +245,7 @@ async function purgeRange(from, to) {
     if (app.sb && app.session) {
       try { await app.cloudPush(); } catch (e) {}
       try {
-        const { error } = await app.sb.functions.invoke("purge-range", { body: { from, to } });
+        const { error } = await app.sb.functions.invoke("purge-range", { body: purgePayload(from, to) });
         if (!error) { rememberPurge(from, to, true); cloud = true; app.save(); }
       } catch (e) { cloud = false; }
     }
