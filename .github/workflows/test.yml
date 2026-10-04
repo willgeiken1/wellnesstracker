@@ -1,14 +1,29 @@
 name: Tests
 
 # --experimental-strip-types, used by tests that import the edge strip module, needs Node 22.6+.
+# PostgreSQL binaries are for tests/privacy-delete-sql.test.mjs (PG_BIN).
+# scripts/prepare-quota-db.sh loads the quota schema for tests/quota.test.mjs.
+# logger/tests/*.mjs that drive a browser are not part of this job.
 on:
   pull_request:
+    branches:
+      - main
   push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     name: Node tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
@@ -24,9 +39,15 @@ jobs:
       - name: Install PostgreSQL
         run: sudo apt-get update && sudo apt-get install -y postgresql
 
+      - name: Prepare quota database
+        run: bash scripts/prepare-quota-db.sh
+
       - name: Run tests
         run: |
           set -euo pipefail
           export PG_BIN="$(echo /usr/lib/postgresql/*/bin)"
-          mapfile -t files < <(find tests -maxdepth 1 -name '*.test.mjs' ! -name 'quota.test.mjs' | sort)
+          mapfile -t files < <(find tests -maxdepth 1 -name '*.test.mjs' | sort)
           node --experimental-strip-types --test "${files[@]}"
+
+      - name: Run home-layout unit script
+        run: node logger/tests/review-unit.mjs

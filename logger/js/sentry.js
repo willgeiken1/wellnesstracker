@@ -1,9 +1,10 @@
 import { app } from "./runtime.js";
 import { scrubBreadcrumb, scrubEvent, sentryUserId, stripUrlQuery } from "./sentry-scrub.js";
 import { usageSharingOn } from "./usage-pref.js";
+import "./version.js";
 
-/* Insight shell release. Bump this together with the CACHE name in sw.js. */
-export const SENTRY_RELEASE = "insight-shell-v29";
+/* Release is INSIGHT_APP_VERSION from version.js. The shell cache uses the same version. */
+export const SENTRY_RELEASE = globalThis.INSIGHT_APP_VERSION;
 
 const SENTRY_SRC = "https://browser.sentry-cdn.com/10.42.0/bundle.tracing.min.js";
 const SENTRY_INTEGRITY = "sha384-DIqcfVcfIewrWiNWfVZcGWExO5v673hkkC5ixJnmAprAfJajpUDEAL35QgkOB5gw";

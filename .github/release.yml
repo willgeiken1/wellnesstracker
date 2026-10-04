@@ -1,0 +1,16 @@
+# Groups pull requests on a GitHub Release when the notes are generated.
+# A pull request is filed under the first category whose label it carries.
+# Anything else, including an unlabeled pull request, lands in Other.
+changelog:
+  categories:
+    - title: Features
+      labels:
+        - enhancement
+        - feature
+    - title: Fixes
+      labels:
+        - bug
+        - fix
+    - title: Other
+      labels:
+        - "*"

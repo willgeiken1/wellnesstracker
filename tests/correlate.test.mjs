@@ -739,8 +739,10 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v29/);
-  assert.match(sentry, /insight-shell-v29/);
+  assert.match(sw, /importScripts\("\.\/js\/version\.js"\)/);
+  assert.match(sw, /globalThis\.INSIGHT_SHELL_CACHE/);
+  assert.match(sentry, /import "\.\/version\.js"/);
+  assert.match(sentry, /globalThis\.INSIGHT_APP_VERSION/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /SEE_ALL_LIMIT/);
   assert.match(engine, /mergeMirrors/);

@@ -217,8 +217,10 @@ test("the weekly report stays on the device and opens with an empty analytics ev
   const html = readFileSync(new URL("../logger/index.html", import.meta.url), "utf8");
   assert.match(events, /weekly_report_opened:\s*\(\)\s*=>\s*\(\{\}\)/);
   assert.match(actions, /capture\("weekly_report_opened"\)/);
-  assert.match(sw, /insight-shell-v29/);
-  assert.match(sentry, /insight-shell-v29/);
+  assert.match(sw, /importScripts\("\.\/js\/version\.js"\)/);
+  assert.match(sw, /globalThis\.INSIGHT_SHELL_CACHE/);
+  assert.match(sentry, /import "\.\/version\.js"/);
+  assert.match(sentry, /globalThis\.INSIGHT_APP_VERSION/);
   assert.match(weekly, /kgToDisp/);
   assert.match(weekly, /week-lead/);
   assert.match(sw, /js\/shared\/weekly\.js/);
