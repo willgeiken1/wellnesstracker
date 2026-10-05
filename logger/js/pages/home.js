@@ -1,6 +1,8 @@
 import { app } from "../runtime.js";
 import { homeOuraWaiting, visibleHomeIds } from "../shared/oura-gate.js";
+import { addToDraft, galleryEntries, needsSizeChoice, removeFromDraft, reorderDraft, sizeChoices, sizeLabel } from "../shared/home-edit.js";
 import "../shared/home-defaults.js";
+import "../shared/home-drag.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -92,8 +94,6 @@ function homeWeekHTML() {
 }
 app.homeWeekHTML = homeWeekHTML;
 
-const CATEGORY_LABEL = { recovery: "Recovery", training: "Training", nutrition: "Nutrition", body: "Body" };
-
 function homeEditBlocked() {
   return !!(app.session && app.sb && !app.cloudPullOk);
 }
@@ -108,77 +108,142 @@ function homeEditButton() {
 }
 app.homeEditBlocked = homeEditBlocked;
 
-function sizeControls(id, widget, draft) {
-  const sizes = widget.sizes || [widget.size];
-  if (sizes.length < 2) return "";
-  const current = draft.sizes && draft.sizes[id] && sizes.includes(draft.sizes[id]) ? draft.sizes[id] : widget.size;
-  const buttons = sizes.map((size) => {
-    const label = size === "small" ? "Small" : "Medium";
-    const on = current === size;
-    return `<button type="button" data-action="home-size" data-id="${app.esc(id)}" data-size="${size}" aria-pressed="${on}">${label}</button>`;
+/* Edit mode entry, shared by the Edit button and press-and-hold. */
+function enterHomeEdit() {
+  if (app.homeEditBlocked && app.homeEditBlocked()) return false;
+  app.ui.homeEdit = true;
+  app.ui.edit = null;
+  app.ui.briefEdit = false;
+  app.ui.sheet = null;
+  app.ui.homeAnnounce = "";
+  app.ui.homeDraft = app.homeEditorDraft(app.state);
+  app.render();
+  return true;
+}
+app.enterHomeEdit = enterHomeEdit;
+
+function liveSnapshot() {
+  try { return typeof app.snapshotFromApp === "function" ? app.snapshotFromApp() : { live: true }; } catch (e) { return { live: true }; }
+}
+
+/* A card with nothing to paint still gets a body, so it can be moved or removed. */
+function widgetBody(id, data) {
+  const entry = app.HOME_WIDGETS[id];
+  let html = "";
+  try { html = entry.render(data) || ""; } catch (e) { html = ""; }
+  if (String(html).trim()) return html;
+  return `<article class="hw hw-size-s" data-hw="${id}"><p class="hw-k">${app.esc(entry.name)}</p><p class="hw-sub">Nothing to show yet</p></article>`;
+}
+
+/* The real Home grid, painted from the draft. Card bodies are inert so a tap or a
+   hold never starts a workout; the slot is what moves. */
+function homeEditCardsHTML(draft) {
+  const data = liveSnapshot();
+  const layout = { items: draft.items || [], hidden: [], sizes: draft.sizes || {} };
+  const cards = layout.items.filter((id) => app.HOME_WIDGETS[id]).map((id, index, all) => {
+    const widget = app.HOME_WIDGETS[id];
+    const span = app.widgetSize(id, layout) === "medium" ? " span-m" : "";
+    const name = app.esc(widget.name);
+    return `<div class="hw-slot${span}" data-hw="${id}" data-id="${id}" tabindex="0" role="group" aria-label="${name}, ${index + 1} of ${all.length}. Arrow keys move it."><div class="hw-body" inert>${widgetBody(id, data)}</div><button type="button" class="hw-minus" data-action="home-remove" data-id="${id}" aria-label="Remove ${name}"><span aria-hidden="true">−</span></button></div>`;
   }).join("");
-  return `<div class="hw-size" role="group" aria-label="Size for ${app.esc(widget.name)}">${buttons}</div>`;
+  return `<div class="home-v2 editing" data-home-list>${cards || `<p class="home-editor-empty">No widgets on Home. Tap Add to pick some.</p>`}</div>`;
 }
 
 function homeEditorHTML() {
   const draft = app.ui.homeDraft || app.homeEditorDraft(app.state);
   app.ui.homeDraft = draft;
-  const grip = app.I && app.I.grip ? app.I.grip : "";
-  const rows = (draft.items || []).map((id, index) => {
-    const widget = app.HOME_WIDGETS[id];
-    if (!widget) return "";
-    const upOff = index === 0 ? " disabled" : "";
-    const downOff = index === draft.items.length - 1 ? " disabled" : "";
-    return `<div class="hw-row" data-id="${app.esc(id)}">
-      <button type="button" class="hw-grip" aria-label="Drag to move ${app.esc(widget.name)}">${grip}</button>
-      <span class="hw-moves">
-        <button type="button" class="hw-move" data-action="home-up" data-id="${app.esc(id)}" aria-label="Move ${app.esc(widget.name)} up"${upOff}>Up</button>
-        <button type="button" class="hw-move" data-action="home-down" data-id="${app.esc(id)}" aria-label="Move ${app.esc(widget.name)} down"${downOff}>Down</button>
-      </span>
-      <span class="hw-row-name">${app.esc(widget.name)}</span>
-      ${sizeControls(id, widget, draft)}
-      <button type="button" class="hw-remove" data-action="home-remove" data-id="${app.esc(id)}" aria-label="Remove ${app.esc(widget.name)}">Remove</button>
-    </div>`;
-  }).join("");
   return `<div class="home-editor">
     <div class="home-editor-top">
-      <button type="button" class="home-editor-cancel" data-action="home-cancel">Cancel</button>
       <h1 class="page-title">Edit Home</h1>
-      <button type="button" class="btn primary home-editor-save" data-action="home-save">Save</button>
+      <button type="button" class="home-editor-add" data-action="home-gallery" aria-label="Add widget">Add</button>
+      <button type="button" class="home-editor-save" data-action="home-save" aria-label="Done editing Home">Done</button>
     </div>
-    <p class="home-editor-note">Use Up and Down, or drag, to reorder. Remove a card, or add one from the gallery. Save keeps this arrangement with your account.</p>
-    <div class="home-editor-list" data-home-list>
-      ${rows || `<p class="home-editor-empty">No cards on Home yet. Add one from the gallery.</p>`}
-    </div>
-    <button type="button" class="btn home-editor-add" data-action="home-gallery">Add a card</button>
+    <p class="hw-live" role="status" aria-live="polite">${app.esc(app.ui.homeAnnounce || "")}</p>
+    ${homeEditCardsHTML(draft)}
   </div>`;
 }
 app.homeEditorHTML = homeEditorHTML;
 
+/* Keyboard and screen reader path for reordering: arrow keys on a focused card. */
+function homeMoveItem(id, delta) {
+  const draft = app.ui.homeDraft;
+  if (!draft) return;
+  const from = draft.items.indexOf(id);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= draft.items.length) return;
+  app.ui.homeDraft = { ...draft, ...reorderDraft(draft, id, to) };
+  app.ui.homeAnnounce = `${app.HOME_WIDGETS[id].name} moved to position ${to + 1} of ${draft.items.length}.`;
+  app.render();
+  const again = document.querySelector(`.hw-slot[data-id="${id}"]`);
+  if (again) again.focus();
+}
+app.homeMoveItem = homeMoveItem;
+
+/* Drag end hands over the new order. The draft stays in step without a repaint. */
+function homeSetOrder(id, to) {
+  const draft = app.ui.homeDraft;
+  if (!draft) return;
+  app.ui.homeDraft = { ...draft, ...reorderDraft(draft, id, to) };
+}
+app.homeSetOrder = homeSetOrder;
+
+function homeRemoveItem(id) {
+  const draft = app.ui.homeDraft;
+  if (!draft) return;
+  app.ui.homeDraft = { ...draft, ...removeFromDraft(draft, id) };
+  app.ui.homeAnnounce = `${(app.HOME_WIDGETS[id] || {}).name || "Widget"} removed.`;
+  app.render();
+}
+app.homeRemoveItem = homeRemoveItem;
+
+/* Closes the gallery and stays in edit mode with the new widget showing. */
+function homeAddItem(id, size) {
+  const draft = app.ui.homeDraft;
+  if (!draft || !app.HOME_WIDGETS[id]) return;
+  app.ui.homeDraft = { ...draft, ...addToDraft(draft, id, size) };
+  app.ui.homeAnnounce = `${app.HOME_WIDGETS[id].name} added.`;
+  app.ui.sheet = null;
+  app.render();
+  const added = document.querySelector(`.hw-slot[data-id="${id}"]`);
+  if (added && added.scrollIntoView) added.scrollIntoView({ block: "nearest" });
+}
+app.homeAddItem = homeAddItem;
+
+/* Preview of a card at one size, from the user's own data. A demo account's
+   renderers label their own numbers sample. */
+function galleryPreview(id, size, data) {
+  return `<div class="hw-prev hw-prev-${size}" inert aria-hidden="true"><div class="hw-prev-in">${widgetBody(id, data)}</div></div>`;
+}
+
+/* In-flow header: Cancel (with Back in the size step) left, title centered, close right.
+   It is a grid row, so nothing sits on top of anything else. */
+function galleryBar(title, back) {
+  return `<div class="hw-gal-bar"><div class="hw-gal-side">${back}<button type="button" class="hw-gal-cancel" data-action="sheet-close">Cancel</button></div><div class="hw-gal-title">${title}</div><div class="hw-gal-side end"><button type="button" class="hw-gal-x" data-action="sheet-close" aria-label="Close"><span aria-hidden="true">×</span></button></div></div>`;
+}
+
 function homeGalleryHTML() {
   const draft = app.ui.homeDraft || { items: [] };
-  const q = ((app.ui.sd && app.ui.sd.q) || "").trim().toLowerCase();
-  const have = new Set(draft.items || []);
-  const groups = {};
-  Object.keys(app.HOME_WIDGETS).forEach((id) => {
-    if (have.has(id)) return;
-    const widget = app.HOME_WIDGETS[id];
-    if (q && !widget.name.toLowerCase().includes(q) && !id.includes(q)) return;
-    (groups[widget.category] = groups[widget.category] || []).push(widget);
-  });
-  const body = ["recovery", "training", "nutrition", "body"].filter((key) => groups[key]).map((key) => {
-    const rows = groups[key].map((widget) => {
-      const meta = `${widget.needsOura ? "Oura · " : ""}${widget.size === "small" ? "Small card" : "Medium card"}`;
-      return `<div class="hw-gal-row"><span><b>${app.esc(widget.name)}</b><em class="hw-gal-meta">${app.esc(meta)}</em></span><button type="button" class="btn small primary" data-action="home-add" data-id="${app.esc(widget.id)}">Add</button></div>`;
-    }).join("");
-    return `<div class="mini-l">${CATEGORY_LABEL[key]}</div>${rows}`;
-  }).join("");
-  return `<h3>Add a card</h3>
-    <label class="field-label" for="home-q">Search</label>
-    <input class="text-in" id="home-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search cards" value="${app.esc((app.ui.sd && app.ui.sd.q) || "")}">
-    ${body || `<p class="sub">${q ? "No cards match that search." : "Every card is already on Home."}</p>`}`;
+  const sd = app.ui.sd || {};
+  const data = liveSnapshot();
+  const pick = sd.pick && app.HOME_WIDGETS[sd.pick] && !(draft.items || []).includes(sd.pick) ? app.HOME_WIDGETS[sd.pick] : null;
+  if (pick) {
+    const options = sizeChoices(pick.id).map((size) =>
+      `<div class="hw-gal-item hw-gal-size${size === "medium" ? " span-m" : ""}"><button type="button" class="hw-gal-hit" data-action="home-add" data-id="${app.esc(pick.id)}" data-size="${size}" aria-label="Add ${app.esc(pick.name)}, ${sizeLabel(size).toLowerCase()}"></button>${galleryPreview(pick.id, size, data)}<b>${sizeLabel(size)}</b></div>`).join("");
+    const back = `<button type="button" class="hw-gal-back" data-action="home-gal-back" aria-label="Back to all widgets"><span aria-hidden="true">‹</span></button>`;
+    return `<div class="hw-gal-top">${galleryBar(`<b>${app.esc(pick.name)}</b><em>Choose a size</em>`, back)}</div>
+      <div class="hw-gal-scroll"><div class="hw-gal-grid">${options}</div></div>`;
+  }
+  const q = sd.q || "";
+  const entries = galleryEntries(draft, app.state, q);
+  const items = entries.map((e) =>
+    `<div class="hw-gal-item${e.size === "medium" ? " span-m" : ""}"><button type="button" class="hw-gal-hit" data-action="home-gal-pick" data-id="${app.esc(e.id)}" aria-label="${app.esc(e.title)}, ${app.esc(e.subtitle)}"></button>${galleryPreview(e.id, e.size, data)}<b>${app.esc(e.title)}</b><em>${app.esc(e.subtitle)}</em></div>`).join("");
+  const none = q.trim() ? "No widgets match that search." : "Every widget is already on Home.";
+  const search = `<label class="hw-gal-find"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="text-in hw-gal-search" id="home-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search Widgets" aria-label="Search widgets" value="${app.esc(q)}"></label>`;
+  return `<div class="hw-gal-top">${galleryBar("<b>Add Widget</b>", "")}${search}</div>
+    <div class="hw-gal-scroll">${items ? `<div class="hw-gal-grid">${items}</div>` : `<p class="sub hw-gal-none">${none}</p>`}</div>`;
 }
 app.homeGalleryHTML = homeGalleryHTML;
+app.galleryNeedsSize = needsSizeChoice;
 
 /* The brief card stays when it still has a line to show. When every enabled
    metric is already a tile, and the headline tile is up, the shell is omitted. */
@@ -216,53 +281,3 @@ function homeHTML() {
 }
 app.visibleHomeIds = visibleHomeIds;
 app.homeHTML = homeHTML;
-
-if (typeof document !== "undefined") {
-  document.addEventListener("pointerdown", (ev) => {
-    const grip = ev.target.closest && ev.target.closest(".hw-grip");
-    if (!grip || !app.ui || !app.ui.homeEdit) return;
-    ev.preventDefault();
-    const row = grip.closest(".hw-row");
-    if (!row) return;
-    const rect = row.getBoundingClientRect();
-    app.homeDrag = { row, box: row.parentElement, grab: ev.clientY - rect.top, ty: 0, moved: false };
-    row.classList.add("dragging");
-    try { grip.setPointerCapture(ev.pointerId); } catch (e) { /* the drag still follows the pointer */ }
-  });
-
-  document.addEventListener("pointermove", (ev) => {
-    const drag = app.homeDrag;
-    if (!drag) return;
-    ev.preventDefault();
-    const y = ev.clientY;
-    const row = drag.row;
-    if (Math.abs(y - (drag.grab + row.getBoundingClientRect().top - drag.ty)) > 4) drag.moved = true;
-    const place = () => {
-      const top = row.getBoundingClientRect().top - drag.ty;
-      drag.ty = y - drag.grab - top;
-      row.style.transform = `translateY(${drag.ty}px)`;
-    };
-    place();
-    const prev = row.previousElementSibling;
-    const next = row.nextElementSibling;
-    if (prev && y < prev.getBoundingClientRect().top + prev.offsetHeight / 2) { drag.box.insertBefore(row, prev); place(); }
-    else if (next && y > next.getBoundingClientRect().top + next.offsetHeight / 2) { drag.box.insertBefore(next, row); place(); }
-    const scroller = row.closest(".pane") || document.scrollingElement;
-    if (scroller) {
-      if (y < 96) scroller.scrollTop -= 16;
-      else if (y > window.innerHeight - 150) scroller.scrollTop += 16;
-    }
-  }, { passive: false });
-
-  const endHomeDrag = () => {
-    const drag = app.homeDrag;
-    if (!drag) return;
-    app.homeDrag = null;
-    drag.row.classList.remove("dragging");
-    drag.row.style.transform = "";
-    if (!drag.moved || !app.ui || !app.ui.homeDraft) return;
-    app.ui.homeDraft.items = [...drag.box.querySelectorAll(".hw-row")].map((row) => row.dataset.id).filter(Boolean);
-  };
-  document.addEventListener("pointerup", endHomeDrag);
-  document.addEventListener("pointercancel", endHomeDrag);
-}

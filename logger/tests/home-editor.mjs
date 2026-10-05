@@ -43,6 +43,7 @@ async function boot(browser, mode) {
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     deviceScaleFactor: 2,
+    reducedMotion: "reduce",
   });
   const page = await context.newPage();
   const errors = [];
@@ -109,18 +110,15 @@ async function topOf(page, selector) {
 
 async function editorContrast(page, mode) {
   check(mode + " editor starts below the status bar", await topOf(page, ".home-editor-top") >= 59);
-  assertReadable(mode + " cancel", await fieldStyle(page, ".home-editor-cancel"));
-  assertReadable(mode + " save", await fieldStyle(page, ".home-editor-save"));
-  assertReadable(mode + " card name", await fieldStyle(page, ".hw-row-name"));
-  assertReadable(mode + " remove", await fieldStyle(page, ".hw-remove"));
-  assertReadable(mode + " move", await fieldStyle(page, ".hw-move:not(:disabled)"));
-  if (await page.locator(".hw-size button").count()) assertReadable(mode + " size", await fieldStyle(page, ".hw-size button"));
-  assertReadable(mode + " note", await fieldStyle(page, ".home-editor-note"));
-  const grip = await page.locator(".hw-grip").first().evaluate((el) => ({
-    h: el.getBoundingClientRect().height,
-    touch: getComputedStyle(el).touchAction,
-  }));
-  check(mode + " grip is a 48px touch target", grip.h >= 48 && grip.touch === "none", JSON.stringify(grip));
+  assertReadable(mode + " add", await fieldStyle(page, ".home-editor-add"));
+  assertReadable(mode + " done", await fieldStyle(page, ".home-editor-save"));
+  const hit = await page.locator(".hw-minus").first().evaluate((el) => {
+    const q = getComputedStyle(el, "::before");
+    return { h: el.getBoundingClientRect().height + 2 * Math.abs(parseFloat(q.top)), w: el.getBoundingClientRect().width + 2 * Math.abs(parseFloat(q.left)) };
+  });
+  check(mode + " minus badge has a 44pt hit area", hit.h >= 44 && hit.w >= 44, JSON.stringify(hit));
+  const bar = await page.locator(".home-editor-add").evaluate((el) => el.getBoundingClientRect().height);
+  check(mode + " Add is 44pt tall", bar >= 44, String(bar));
 }
 
 async function galleryContrast(page, mode) {
@@ -128,9 +126,25 @@ async function galleryContrast(page, mode) {
   check(mode + " gallery stays below the status bar", !!box && box.y >= 59, box && String(box.y));
   assertReadable(mode + " search", await fieldStyle(page, "#home-q"));
   assertReadable(mode + " search placeholder", await fieldStyle(page, "#home-q", "::placeholder"));
-  assertReadable(mode + " sheet title", await fieldStyle(page, ".home-gallery h3"));
-  assertReadable(mode + " gallery meta", await fieldStyle(page, ".hw-gal-meta"));
-  assertReadable(mode + " add", await fieldStyle(page, ".hw-gal-row .btn"));
+  const bar = await page.evaluate(() => {
+    const pick = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height, hit: !!top && (top === el || el.contains(top)) };
+    };
+    return { cancel: pick(".hw-gal-cancel"), close: pick(".hw-gal-x") };
+  });
+  check(mode + " gallery has Cancel and close", !!(bar.cancel && bar.close), JSON.stringify(bar));
+  if (bar.cancel && bar.close) {
+    const apart = bar.cancel.r <= bar.close.l || bar.close.r <= bar.cancel.l || bar.cancel.b <= bar.close.t || bar.close.b <= bar.cancel.t;
+    check(mode + " Cancel and close do not overlap", apart, JSON.stringify(bar));
+    check(mode + " Cancel and close are 44pt", bar.cancel.h >= 44 && bar.cancel.w >= 44 && bar.close.h >= 44 && bar.close.w >= 44, JSON.stringify(bar));
+    check(mode + " Cancel and close are what a tap reaches", bar.cancel.hit && bar.close.hit, JSON.stringify(bar));
+  }
+  assertReadable(mode + " gallery title", await fieldStyle(page, ".hw-gal-item b"));
+  assertReadable(mode + " gallery subtitle", await fieldStyle(page, ".hw-gal-item em"));
 }
 
 async function main() {
@@ -152,27 +166,28 @@ async function main() {
   await page.locator("[data-action='home-edit']").click();
   await page.waitForTimeout(200);
   await editorContrast(page, "dark");
-  const move = await page.locator(".hw-row[data-id='brief'] .hw-move").first().evaluate((el) => el.getBoundingClientRect().height);
-  check("move buttons are 44px", move >= 44, String(move));
   await page.screenshot({ path: ART + "/home_editor_dark.png", animations: "disabled" });
 
   const before = await page.evaluate(() => app.ui.homeDraft.items.slice());
-  const grip = page.locator(".hw-row[data-id='brief'] .hw-grip");
-  const next = page.locator(".hw-row[data-id='this-week']");
-  const g = await grip.boundingBox();
+  const from = page.locator(".hw-slot[data-id='brief']");
+  const next = page.locator(".hw-slot[data-id='this-week']");
+  const g = await from.boundingBox();
   const n = await next.boundingBox();
   await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
   await page.mouse.down();
-  await page.mouse.move(g.x + g.width / 2, n.y + n.height - 4, { steps: 12 });
+  await page.mouse.move(g.x + g.width / 2, n.y + n.height / 2, { steps: 14 });
+  check("dragged card lifts", await from.evaluate((el) => el.classList.contains("dragging") && /scale\(1\.04\)/.test(el.style.transform) === true));
   await page.mouse.up();
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(400);
   const dragged = await page.evaluate(() => app.ui.homeDraft.items.slice());
   check("drag reorders before save", dragged.indexOf("brief") > before.indexOf("brief") && dragged[0] !== "brief", dragged.slice(0, 4).join(">"));
+  check("drag settles with no leftover transform", await from.evaluate((el) => !el.style.transform && !el.style.order && !el.classList.contains("settling")));
 
-  await page.locator("[data-action='home-down'][data-id='brief']").click();
+  await page.locator(".hw-slot[data-id='brief']").focus();
+  await page.keyboard.press("ArrowDown");
   await page.waitForTimeout(100);
   const stepped = await page.evaluate(() => app.ui.homeDraft.items.slice());
-  check("down button moves the brief", stepped.indexOf("brief") > dragged.indexOf("brief"), stepped.join(">"));
+  check("arrow key moves the brief", stepped.indexOf("brief") > dragged.indexOf("brief"), stepped.join(">"));
 
   await page.locator("[data-action='home-remove'][data-id='muscles']").click();
   await page.waitForTimeout(100);
@@ -184,17 +199,15 @@ async function main() {
   await page.locator("#home-q").fill("Food today");
   await page.waitForTimeout(150);
   assertReadable("dark search typed", await fieldStyle(page, "#home-q"));
-  check("search filters the gallery", await page.locator("[data-action='home-add'][data-id='food-today']").count() === 1);
+  check("search filters the gallery", await page.locator("[data-action='home-gal-pick'][data-id='food-today']").count() === 1);
   await page.screenshot({ path: ART + "/home_gallery_dark.png", animations: "disabled" });
-  await page.locator("[data-action='home-add'][data-id='food-today']").click();
+  await page.locator("[data-action='home-gal-pick'][data-id='food-today']").click();
   await page.waitForTimeout(150);
-  check("add puts the card on the draft", await page.evaluate(() => app.ui.homeDraft.items.includes("food-today")));
-  await page.locator(".sheet-back").click();
-  await page.waitForTimeout(100);
-  await page.locator("[data-action='home-size'][data-id='food-today'][data-size='medium']").click();
-  await page.waitForTimeout(100);
-  check("size stays in the draft", await page.evaluate(() => app.ui.homeDraft.sizes["food-today"] === "medium"));
-  assertReadable("dark size", await fieldStyle(page, ".hw-size button"));
+  check("a two-size card asks for a size", await page.locator("[data-action='home-add'][data-id='food-today'][data-size='medium']").count() === 1);
+  await page.locator("[data-action='home-add'][data-id='food-today'][data-size='medium']").click();
+  await page.waitForTimeout(150);
+  check("add puts the card on the draft at the chosen size", await page.evaluate(() => app.ui.homeDraft.items.includes("food-today") && app.ui.homeDraft.sizes["food-today"] === "medium"));
+  check("the sheet closes and edit mode stays", await page.locator(".home-gallery").count() === 0 && await page.locator(".hw-slot[data-id='food-today']").count() === 1);
 
   await page.locator("[data-action='home-save']").click();
   await page.waitForTimeout(250);
@@ -256,7 +269,7 @@ async function main() {
   await page.waitForTimeout(120);
   assertReadable("light search typed", await fieldStyle(page, "#home-q"));
   await page.screenshot({ path: ART + "/home_gallery_light.png", animations: "disabled" });
-  await page.locator(".sheet-back").click();
+  await page.keyboard.press("Escape");
   await page.waitForTimeout(100);
   await page.locator("[data-action='home-save']").click();
   await page.waitForTimeout(200);

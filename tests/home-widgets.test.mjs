@@ -392,8 +392,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v32/);
-  assert.match(sentry, /insight-shell-v32/);
+  assert.match(sw, /insight-shell-v33/);
+  assert.match(sentry, /insight-shell-v33/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
@@ -606,9 +606,10 @@ test("a real home edit paints the registry and keeps the weigh-in nudge inside t
     app.ui.homeEdit = true;
     const editor = app.homeHTML();
     assert.match(editor, /data-action="home-save"/);
-    assert.match(editor, /data-action="home-size" data-id="headline" data-size="small"/);
-    assert.match(editor, /data-action="home-size" data-id="headline" data-size="medium"/);
-    assert.doesNotMatch(editor, /data-action="home-size" data-id="today"|future-widget/);
+    assert.match(editor, /data-action="home-gallery"/);
+    assert.match(editor, /class="hw-slot span-m" data-hw="headline"/);
+    assert.match(editor, /data-action="home-remove" data-id="headline" aria-label="Remove Daily headline"/);
+    assert.doesNotMatch(editor, /home-up|home-down|home-size|hw-grip|future-widget/);
   } finally {
     app.state = prev.state;
     app.ui = prev.ui;
