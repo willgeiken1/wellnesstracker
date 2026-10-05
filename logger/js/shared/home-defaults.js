@@ -52,6 +52,11 @@ function legacyReadinessCard(state, data) {
   return !legacyHidden(state, "readiness") && hasData("readiness", data);
 }
 
+/* The legacy Readiness card already shows the day's advice ("Train as planned"). */
+export function readinessCardShowing(state, data) {
+  return !homeRegistryActive(state) && legacyReadinessCard(state, data || liveData());
+}
+
 /* Default tiles that would paint right now. */
 export function defaultTileIds(state, data) {
   if (homeRegistryActive(state)) return [];

@@ -242,8 +242,14 @@ test("the brief and the Readiness card give the same advice", () => {
       const v = legacyView(s);
       const advice = app.readinessAdvice(score);
       assert.ok(v.card.includes(advice.tip), `card ${score}`);
-      assert.ok(v.brief.includes(`<b>${advice.title}</b>`), `brief ${score}`);
+      /* Today hidden, Readiness card showing: the card gives the advice and the brief does not repeat it. */
+      assert.ok(!v.brief.includes(`<b>${advice.title}</b>`), `no duplicate advice at ${score}`);
       assert.doesNotMatch(v.brief, /Rest suggested/, `no conflict at ${score}`);
+      /* With the Readiness card hidden too, the brief carries the same advice. */
+      s.layout = { home: { order: [], hidden: ["today", "readiness"] } };
+      const bare = legacyView(s);
+      assert.ok(bare.brief.includes(`<b>${advice.title}</b>`), `brief ${score}`);
+      assert.doesNotMatch(bare.brief, /Rest suggested/, `no conflict at ${score} without the card`);
     }
     assert.equal(app.readinessAdvice(70).title, "Train as planned");
     assert.equal(app.readinessLevel(40).tip, app.readinessAdvice(40).tip);
@@ -345,6 +351,7 @@ test("randomized account states hold every Home defaults invariant", () => {
         const train = v.brief.match(/data-metric="train"[\s\S]*?<b>([^<]*)<\/b>/);
         if (train && s.plan[TODAY] !== "push" && s.plan[TODAY] !== "rest") assert.equal(train[1], advice.title, where);
         if (cardShows) assert.ok(v.card.includes(advice.tip), where);
+        if (cardShows && !s.layout.homeV2 && train) assert.notEqual(train[1], advice.title, `brief repeats the Readiness card. ${where}`);
         if (train && ring !== "none" && ring !== "lapsed" && ring !== "waiting" && s.plan[TODAY] !== "rest") assert.doesNotMatch(v.brief, /Rest suggested/, where);
       }
     }

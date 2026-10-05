@@ -1,7 +1,7 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, findingsForView, loggedDays, pickForToday, todayLine } from "./correlate.js";
 import { hasOura } from "./oura-gate.js";
-import { homeCardShowing } from "./home-defaults.js";
+import { homeCardShowing, readinessCardShowing } from "./home-defaults.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
    The headline uses readiness, lift status, and effect() — no network.
@@ -145,6 +145,8 @@ function trainMetric() {
   /* Same score and same function as the Readiness card, so the two agree. */
   const advice = planned !== "rest" && o && o.readiness != null ? app.readinessAdvice(o.readiness) : null;
   if (advice) {
+    /* The Readiness card already gives this advice, so the brief does not repeat it. */
+    if (readinessCardShowing(app.state)) return null;
     const low = advice.cls === "down";
     return { id: "train", label: "Training", value: advice.title, meta: low ? "Readiness is low" : "Nothing is planned", sub: "No session on the plan.", tone: low ? "down" : null };
   }
