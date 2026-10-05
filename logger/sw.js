@@ -3,13 +3,19 @@
 // The cache is only the offline fallback. CACHE name changes drop old copies on activate.
 // Cross-origin requests (Sentry and PostHog CDNs and ingest, Supabase, fonts) are not intercepted.
 // The shell still starts if either script cannot be downloaded.
-// v30. v26–v28 are reserved. v27 is the correlation release on main. v29 is the weigh-in delete follow-up.
+// v32. v30 is the home editor release (#20). v31 is #14. v26–v28 are reserved.
+// v27 is the correlation release on main. v29 is the weigh-in delete follow-up.
 // On a slow network (captive portal, lie-fi) a navigation may fall back to the cached page.
 // That page and every file it loads come from the same generation. A cached page does not
 // pull new scripts, and a fresh page does not fill a slow script from the previous cache.
+// A network document that matches index.html is served as one generation. The new shell
+// is used only when every shell file has arrived. If any file is still out at the asset
+// timeout, the page gets the live cache, which is one complete generation, and boots
+// that version. A fast module is never paired with a slow module from the other copy.
 // The fetch handler never writes the live cache. A refresh is staged in a second cache
-// and copied over only after every shell file is there.
-const CACHE = "insight-shell-v30";
+// and copied over only after every shell file is there. The copy overwrites live entries
+// before it drops stale ones, so the live cache is never emptied.
+const CACHE = "insight-shell-v32";
 const STAGE = CACHE + "-next";
 const SHELL = ["./", "./apple-touch-icon.png", "./css/appearance.css", "./css/base.css", "./css/brief.css", "./css/home-widgets.css", "./css/weekly.css", "./css/cardio.css", "./css/food.css", "./css/goals.css", "./css/platform.css", "./css/polish.css", "./css/privacy.css", "./css/progress.css", "./css/session.css", "./css/theme.css", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./index.html", "./js/data/body.js", "./js/data/state.js", "./js/main.js", "./js/pages/cardio.js", "./js/pages/food.js", "./js/pages/goals.js", "./js/pages/home.js", "./js/pages/insights.js", "./js/pages/insight-widgets.js", "./js/pages/privacy.js", "./js/pages/progress.js", "./js/pages/session.js", "./js/pages/settings.js", "./js/pages/workouts.js", "./js/runtime.js", "./js/sentry.js", "./js/sentry-scrub.js", "./js/usage.js", "./js/usage-events.js", "./js/usage-pref.js", "./js/shared/analyze.js", "./js/shared/brief.js", "./js/shared/weekly.js", "./js/shared/cloud.js", "./js/shared/correlate.js", "./js/shared/home-defaults.js", "./js/shared/home-migrate.js", "./js/shared/home-widgets.js", "./js/shared/oura-gate.js", "./js/shared/icons.js", "./js/shared/muscles.js", "./js/shared/platform.js", "./js/shared/profile.js", "./js/shared/purge.js", "./js/shared/widgets.js", "./js/shell/actions.js", "./js/shell/pager.js", "./js/shell/timer.js", "./js/shell/workout.js", "./manifest.json"];
 
@@ -18,15 +24,102 @@ const ASSET_TIMEOUT_MS = (self.__SW_TEST_TIMEOUTS && self.__SW_TEST_TIMEOUTS.ass
 const PAGE_CAP = 24;
 
 // resultingClientId → "cache" | "network" | "same".
-// "same" is a network document that matches the cached shell, so a stalled asset
-// may use that cache. "network" is a newer document and does not.
+// "same" is a network document whose index.html matches the live cache. Its assets
+// wait for one shell generation: the new files if they all arrive in time, otherwise
+// the live cache. They do not wait on a single module that never resolves.
 const pageSource = new Map();
+// clientId → Promise<{ gen: "old" | "new", bodies: Map<path, Response> }>
+const shellChoice = new Map();
+// Resolves while the live cache is between generations. Readers snapshot after it.
+let swapGate = Promise.resolve();
 
 function rememberPage(id, source) {
   if (!id) return;
   if (pageSource.has(id)) pageSource.delete(id);
   pageSource.set(id, source);
   while (pageSource.size > PAGE_CAP) pageSource.delete(pageSource.keys().next().value);
+}
+
+function shellPath(input) {
+  const raw = typeof input === "string" ? input : (input && input.url) || "";
+  let path = raw;
+  try {
+    path = new URL(raw, (self.location && self.location.origin) || "https://app.test").pathname;
+  } catch (e) {
+    path = String(raw).split("?")[0];
+  }
+  if (!path || path === "/" || path === "/index.html") return "/";
+  return path;
+}
+
+const SHELL_KEYS = [...new Set(SHELL.map((url) => shellPath(url)))];
+
+function rememberChoice(id, choice) {
+  if (!id) return;
+  if (shellChoice.has(id)) shellChoice.delete(id);
+  shellChoice.set(id, choice);
+  while (shellChoice.size > PAGE_CAP) shellChoice.delete(shellChoice.keys().next().value);
+}
+
+async function shellSnap(live) {
+  const snap = new Map();
+  await Promise.all(SHELL.map(async (url) => {
+    const hit = await live.match(url);
+    if (hit) snap.set(shellPath(url), typeof hit.clone === "function" ? hit.clone() : hit);
+  }));
+  return snap;
+}
+
+// index.html can stay byte-for-byte identical across a JS-only deploy. Hold this
+// page's assets until the new shell is complete, or until the asset timeout, and
+// then answer every one of them from that single generation.
+function chooseShell(clientId) {
+  if (shellChoice.has(clientId)) return shellChoice.get(clientId);
+  let settled = false;
+  let resolveChoice;
+  const choice = new Promise((resolve) => { resolveChoice = resolve; });
+  rememberChoice(clientId, choice);
+  const finish = (value) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    resolveChoice(value);
+  };
+  let oldBodies = new Map();
+  const prepare = (async () => {
+    const live = await caches.open(CACHE);
+    await swapGate;
+    oldBodies = await shellSnap(live);
+  })().catch(() => {});
+  const timer = setTimeout(() => {
+    prepare.then(() => finish({ gen: "old", bodies: oldBodies }), () => finish({ gen: "old", bodies: oldBodies }));
+  }, ASSET_TIMEOUT_MS);
+  (async () => {
+    await prepare;
+    const freshBodies = new Map();
+    let incomplete = false;
+    await Promise.all(SHELL.map(async (url) => {
+      let net;
+      try { net = await fetch(new Request(url, { cache: "reload" })); }
+      catch (e) { incomplete = true; return; }
+      if (!net || !net.ok || (net.type !== "basic" && net.type !== "default")) {
+        incomplete = true;
+        return;
+      }
+      const forPage = typeof net.clone === "function" ? net.clone() : net;
+      freshBodies.set(shellPath(url), forPage);
+    }));
+    if (settled) return;
+    if (incomplete || freshBodies.size !== SHELL_KEYS.length) finish({ gen: "old", bodies: oldBodies });
+    else finish({ gen: "new", bodies: freshBodies });
+  })().catch(() => finish({ gen: "old", bodies: oldBodies }));
+  return choice;
+}
+
+function bodyFrom(decision, req) {
+  const picked = decision.bodies && decision.bodies.get(shellPath(req.url));
+  if (!picked) return null;
+  return typeof picked.clone === "function" ? picked.clone() : picked;
 }
 
 function shellRefreshOn() {
@@ -121,11 +214,23 @@ function refreshShell() {
       if (!hit) { await caches.delete(STAGE); return; }
       ready.push([url, typeof hit.clone === "function" ? hit.clone() : hit]);
     }
-    const live = await caches.open(CACHE);
-    const old = typeof live.keys === "function" ? await live.keys() : [];
-    await Promise.all(old.map((k) => live.delete(k)));
-    for (const [url, res] of ready) await live.put(url, res);
-    await caches.delete(STAGE);
+    let releaseSwap;
+    const locked = new Promise((resolve) => { releaseSwap = resolve; });
+    const previous = swapGate;
+    swapGate = previous.then(() => locked);
+    await previous;
+    try {
+      const live = await caches.open(CACHE);
+      for (const [url, res] of ready) await live.put(url, res);
+      const keep = new Set(SHELL_KEYS);
+      const old = typeof live.keys === "function" ? await live.keys() : [];
+      for (const key of old) {
+        if (!keep.has(shellPath(key))) await live.delete(key);
+      }
+      await caches.delete(STAGE);
+    } finally {
+      releaseSwap();
+    }
   })().catch(() => caches.delete(STAGE)).finally(() => { refreshPromise = null; });
   return refreshPromise;
 }
@@ -151,9 +256,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Same deploy as the cache: a stalled file can use that copy.
+  // One generation for this document: the new shell if it is complete, else the live cache.
   if (known === "same") {
-    event.respondWith(raceWithTimeout(fetchFresh(req), ASSET_TIMEOUT_MS, getCached));
+    const choice = shellChoice.get(event.clientId);
+    event.respondWith((choice || Promise.resolve({ gen: "old", bodies: new Map() })).then(async (decision) => {
+      const picked = bodyFrom(decision, req);
+      if (picked) return picked;
+      if (decision.gen === "old") {
+        const cached = await getCached();
+        if (cached) return cached;
+      }
+      return fetchFresh(req);
+    }));
     return;
   }
 
@@ -173,7 +287,11 @@ self.addEventListener("fetch", (event) => {
       const cached = await getCached();
       const fresh = await generationOf(res);
       const prev = await generationOf(cached);
-      if (fresh && prev && fresh === prev) source = "same";
+      const clientId = event.resultingClientId || "";
+      if (fresh && prev && fresh === prev && clientId) {
+        source = "same";
+        event.waitUntil(chooseShell(clientId));
+      }
     }
     rememberPage(event.resultingClientId || "", source);
     return res;

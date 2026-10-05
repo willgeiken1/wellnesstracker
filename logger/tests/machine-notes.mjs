@@ -251,7 +251,11 @@ async function main() {
   check("edits to different notes both survive", merged.both["Pec Fly Machine"].text === "Seat 7" && merged.both.Dips.text === "New dips" && merged.both["Calf Raises"].text === "High", JSON.stringify(merged.both));
   check("newest edit to the same note wins", merged.newest["Pec Fly Machine"].text === "Seat 9" && merged.olderRemote["Pec Fly Machine"].text === "Seat 9");
   check("first sync on an empty phone keeps cloud notes", merged.firstSync === "Wide");
-  check("legacy notes are not replaced by a newer settings blob", merged.legacyLocal === "Seat 4" && merged.legacyOther === "Wide grip", JSON.stringify(merged));
+  // Both legacy strings are at 0. merge_user_data keeps the note stored first.
+  // The client adopts that stored note on an equal at, including 0. Convergence
+  // with the server beats keeping the local copy. A newer settingsAt does not
+  // decide the note on its own; the stored note text does.
+  check("legacy notes are not replaced by a newer settings blob", merged.legacyLocal === "Seat 1" && merged.legacyOther === "Wide grip", JSON.stringify(merged));
 
   await page.evaluate(() => {
     app.ui.workoutOpen = false;

@@ -32,6 +32,7 @@ function load({ fetchImpl, cached = {}, home = null, cacheMap = null, shellRefre
   const handlers = {};
   const puts = [];
   const added = [];
+  const ops = [];
   const stores = shared || new Map();
   const self = {
     __SW_TEST_TIMEOUTS: { nav: NAV, asset: ASSET },
@@ -63,9 +64,11 @@ function load({ fetchImpl, cached = {}, home = null, cacheMap = null, shellRefre
       return {
         put: async (req, res) => {
           puts.push([name, req, res]);
+          ops.push({ op: "put", name, key: cacheNorm(req) });
           if (box) box.set(cacheNorm(req), typeof res.clone === "function" ? res.clone() : res);
         },
         delete: async (req) => {
+          ops.push({ op: "del", name, key: cacheNorm(req) });
           if (box) box.delete(cacheNorm(req));
           return true;
         },
@@ -95,7 +98,7 @@ function load({ fetchImpl, cached = {}, home = null, cacheMap = null, shellRefre
     self, caches, fetch: fetchImpl, Request: FakeRequest, URL, Promise, setTimeout, clearTimeout,
   });
   vm.runInContext(src, ctx);
-  return { handlers, puts, added, stores };
+  return { handlers, puts, added, stores, ops };
 }
 
 function dispatch(handlers, req, ids = {}) {
@@ -481,4 +484,151 @@ test("a newer network page does not fill a stalled asset from the previous cache
   const asset = dispatch(handlers, new FakeRequest("https://app.test/js/usage-pref.js"), { clientId: "newer" });
   assert.equal((await asset.responded).tag, "net-pref");
   assert.ok(Date.now() - t0 >= ASSET);
+});
+
+function oldShellMap() {
+  return {
+    "/": shellFile("html", "PAGE"),
+    "/index.html": shellFile("html", "PAGE"),
+    "/js/usage.js": shellFile("old-usage", "old usage"),
+    "/js/usage-pref.js": shellFile("old-pref", "old pref"),
+  };
+}
+
+function deployFetch(prefWait) {
+  return async (req) => {
+    const path = new URL(req.url).pathname;
+    if (path === "/" || path === "/index.html") return shellFile("html", "PAGE");
+    if (path === "/js/usage.js") return shellFile("new-usage", "import { NEW_THING } from './usage-pref.js'");
+    if (path === "/js/usage-pref.js") {
+      await prefWait();
+      return shellFile("new-pref", "export const NEW_THING = 1");
+    }
+    return shellFile("rest", "same-bytes");
+  };
+}
+
+test("orig: a slow JS-only deploy boots the cached shell instead of waiting on one module", async () => {
+  const delay = ASSET + 80;
+  const { handlers } = load({
+    record: true,
+    cacheMap: oldShellMap(),
+    fetchImpl: deployFetch(() => sleep(delay)),
+  });
+  const page = dispatch(handlers, nav(), { resultingClientId: "orig" });
+  assert.equal((await page.responded).tag, "html");
+  await sleep(20);
+  const t0 = Date.now();
+  const usage = dispatch(handlers, new FakeRequest("https://app.test/js/usage.js"), { clientId: "orig" });
+  const pref = dispatch(handlers, new FakeRequest("https://app.test/js/usage-pref.js"), { clientId: "orig" });
+  assert.equal((await usage.responded).tag, "old-usage");
+  assert.equal((await pref.responded).tag, "old-pref");
+  const took = Date.now() - t0;
+  assert.ok(took < delay - 30, `modules stayed pending for ${took}ms`);
+});
+
+test("a complete JS-only deploy is served as the new shell", async () => {
+  const { handlers } = load({
+    record: true,
+    cacheMap: oldShellMap(),
+    fetchImpl: deployFetch(() => Promise.resolve()),
+  });
+  const page = dispatch(handlers, nav(), { resultingClientId: "fast" });
+  assert.equal((await page.responded).tag, "html");
+  const usage = dispatch(handlers, new FakeRequest("https://app.test/js/usage.js"), { clientId: "fast" });
+  const pref = dispatch(handlers, new FakeRequest("https://app.test/js/usage-pref.js"), { clientId: "fast" });
+  assert.equal((await usage.responded).tag, "new-usage");
+  assert.equal((await pref.responded).tag, "new-pref");
+});
+
+test("partialstage: a partial next cache is not served as the live shell", async () => {
+  let releasePref;
+  const prefGate = new Promise((resolve) => { releasePref = resolve; });
+  const { handlers, stores } = load({
+    record: true,
+    shellRefresh: true,
+    cacheMap: oldShellMap(),
+    fetchImpl: deployFetch(() => prefGate),
+  });
+  const page = dispatch(handlers, nav(), { resultingClientId: "partial" });
+  assert.equal((await page.responded).tag, "html");
+  await until(() => storedTag(stores, STAGE_NAME, "/js/usage.js") === "new-usage");
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/usage.js"), "old-usage");
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/usage-pref.js"), "old-pref");
+  assert.equal(storedTag(stores, STAGE_NAME, "/js/usage-pref.js"), null);
+  const usage = dispatch(handlers, new FakeRequest("https://app.test/js/usage.js"), { clientId: "partial" });
+  const pref = dispatch(handlers, new FakeRequest("https://app.test/js/usage-pref.js"), { clientId: "partial" });
+  assert.equal((await usage.responded).tag, "old-usage");
+  assert.equal((await pref.responded).tag, "old-pref");
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/usage.js"), "old-usage");
+  assert.equal(storedTag(stores, STAGE_NAME, "/js/usage-pref.js"), null);
+  releasePref();
+  await Promise.all(page.waits);
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/usage.js"), "new-usage");
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/usage-pref.js"), "new-pref");
+  assert.equal(stores.has(STAGE_NAME), false);
+});
+
+test("bump: a waiting cache bump does not pair new usage.js with the old pref", async () => {
+  let releasePref;
+  const prefGate = new Promise((resolve) => { releasePref = resolve; });
+  const fetchImpl = deployFetch(() => prefGate);
+  const oldWorker = load({
+    record: true,
+    shellRefresh: true,
+    cacheMap: oldShellMap(),
+    fetchImpl,
+  });
+  const bumped = SRC.replaceAll(CACHE_NAME, "insight-shell-v99");
+  const newWorker = load({ record: true, src: bumped, stores: oldWorker.stores, fetchImpl });
+  const installWaits = [];
+  newWorker.handlers.install({ waitUntil: (p) => installWaits.push(p) });
+  const page = dispatch(oldWorker.handlers, nav(), { resultingClientId: "bump" });
+  assert.equal((await page.responded).tag, "html");
+  await sleep(20);
+  const usage = dispatch(oldWorker.handlers, new FakeRequest("https://app.test/js/usage.js"), { clientId: "bump" });
+  const pref = dispatch(oldWorker.handlers, new FakeRequest("https://app.test/js/usage-pref.js"), { clientId: "bump" });
+  assert.equal((await usage.responded).tag, "old-usage");
+  assert.equal((await pref.responded).tag, "old-pref");
+  assert.equal(storedTag(oldWorker.stores, CACHE_NAME, "/js/usage.js"), "old-usage");
+  assert.equal(storedTag(oldWorker.stores, CACHE_NAME, "/js/usage-pref.js"), "old-pref");
+  releasePref();
+  await Promise.all(page.waits.concat(installWaits));
+  assert.equal(storedTag(oldWorker.stores, "insight-shell-v99", "/js/usage.js"), "new-usage");
+  assert.equal(storedTag(oldWorker.stores, "insight-shell-v99", "/js/usage-pref.js"), "new-pref");
+});
+
+test("swap overwrites live shell entries before pruning stale ones", async () => {
+  const cacheMap = {
+    "/": shellFile("old-html", "PAGE"),
+    "/js/usage.js": shellFile("old-usage", "old usage"),
+    "/js/obsolete.js": shellFile("obsolete", "gone"),
+  };
+  const { handlers, ops, stores } = load({
+    record: true,
+    shellRefresh: true,
+    cacheMap,
+    fetchImpl: async (req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/" || path === "/index.html") return shellFile("html", "PAGE");
+      return shellFile("new" + path, "new " + path);
+    },
+  });
+  const page = dispatch(handlers, nav(), { resultingClientId: "swap" });
+  await page.responded;
+  await Promise.all(page.waits);
+  const live = ops.filter((op) => op.name === CACHE_NAME);
+  const firstDel = live.findIndex((op) => op.op === "del");
+  assert.ok(firstDel > 0, "live cache deleted a key before overwriting the shell");
+  assert.ok(live.slice(0, firstDel).every((op) => op.op === "put"));
+  const seen = new Set(["/", "/js/usage.js", "/js/obsolete.js"]);
+  for (const op of live) {
+    if (op.op === "put") seen.add(op.key);
+    if (op.op === "del") seen.delete(op.key);
+    assert.ok(seen.size > 0, "live cache was empty during the swap");
+    assert.ok(seen.has("/js/usage.js"), "usage.js was removed before the new copy was stored");
+  }
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/usage.js"), "new/js/usage.js");
+  assert.equal(storedTag(stores, CACHE_NAME, "/js/obsolete.js"), null);
+  assert.equal(stores.has(STAGE_NAME), false);
 });

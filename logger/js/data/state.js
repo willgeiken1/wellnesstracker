@@ -163,17 +163,17 @@ function normalizeMachineNotes(raw) {
 app.normalizeMachineNotes = normalizeMachineNotes;
 
 /* Per note, the newer edit wins. A missing key never deletes the other side's note.
-   An equal `at` above 0 keeps the other copy. merge_user_data already did that
-   with a strict `>`: the note stored in the row wins a real timestamp tie, and
-   the reply is that stored note. Legacy strings normalize to at 0, and two of
-   those are not a tie to settle — the local note stays. */
+   An equal `at`, including 0, adopts the other copy. merge_user_data uses a strict
+   `>`: the note stored in the row wins a tie, and the reply is that stored note.
+   Legacy strings normalize to at 0. Keeping the local copy there made two phones
+   diverge, so the client follows the stored note on every equal at. */
 function mergeMachineNotes(local, remote) {
   const out = app.normalizeMachineNotes(local);
   Object.entries(app.normalizeMachineNotes(remote)).forEach(([k, b]) => {
     const a = out[k];
     const atB = b.at || 0;
     const atA = a ? (a.at || 0) : -1;
-    if (!a || atB > atA || (atB > 0 && atB === atA)) out[k] = b;
+    if (!a || atB > atA || atB === atA) out[k] = b;
   });
   return out;
 }

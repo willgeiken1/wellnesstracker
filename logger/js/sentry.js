@@ -3,7 +3,7 @@ import { scrubBreadcrumb, scrubEvent, sentryUserId, stripUrlQuery } from "./sent
 import { usageSharingOn } from "./usage-pref.js";
 
 /* Insight shell release. Bump this together with the CACHE name in sw.js. */
-export const SENTRY_RELEASE = "insight-shell-v30";
+export const SENTRY_RELEASE = "insight-shell-v32";
 
 const SENTRY_SRC = "https://browser.sentry-cdn.com/10.42.0/bundle.tracing.min.js";
 const SENTRY_INTEGRITY = "sha384-DIqcfVcfIewrWiNWfVZcGWExO5v673hkkC5ixJnmAprAfJajpUDEAL35QgkOB5gw";
