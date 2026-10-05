@@ -4,6 +4,7 @@
 // no element wider than the viewport, no empty cards, no "connect" filler beyond one entry point.
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
+import { launchOfflineBrowser } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
@@ -90,7 +91,7 @@ async function audit(page, tab, w) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+  const browser = await launchOfflineBrowser(chromium, process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   for (const theme of THEMES) for (const data of DATA) for (const [w, h] of SIZES) {
     const { context, page, errors } = await boot(browser, theme, data, w, h);
     for (const tab of TABS) {

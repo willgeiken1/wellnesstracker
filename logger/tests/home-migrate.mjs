@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../js/shared/home-migrate.js";
+import { launchOfflineBrowser, isOfflineNoise } from "./browser-launch.mjs";
 import { getHomeLayout, setHomeLayout, HOME_WIDGETS } from "../js/shared/home-widgets.js";
 
 const require = createRequire(import.meta.url);
@@ -467,10 +468,7 @@ async function boot(browser, state) {
 }
 
 async function browserCases() {
-  const browser = await chromium.launch({
-    executablePath: CHROME,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  const browser = await launchOfflineBrowser(chromium, { executablePath: CHROME });
   const seed = savedBlob();
   const a = await boot(browser, seed);
   const loaded = await a.page.evaluate(() => ({
@@ -623,7 +621,8 @@ async function browserCases() {
   });
   check("weigh-in nudge renders inside the brief when one is due", nudge.insideBrief && !nudge.aboveStack && /Time for a weigh-in/.test(nudge.text), nudge);
 
-  check("no console errors", a.errors.length === 0 && b.errors.length === 0 && upgraded.errors.length === 0 && due.errors.length === 0, [...a.errors, ...b.errors, ...upgraded.errors, ...due.errors]);
+  const consoleErrors = [a, b, upgraded, due].flatMap((run) => run.errors.filter((e) => !isOfflineNoise(e)));
+  check("no console errors", consoleErrors.length === 0, consoleErrors.join(" | "));
   await browser.close();
 }
 

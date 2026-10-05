@@ -3,6 +3,7 @@
 
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
+import { launchOfflineBrowser, isOfflineNoise } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
@@ -32,9 +33,8 @@ function parse(c) {
 }
 
 async function launch() {
-  return chromium.launch({
+  return launchOfflineBrowser(chromium, {
     executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
 }
 
@@ -277,7 +277,7 @@ async function main() {
   check("light reload keeps the registry", light.mode === "light" && light.registry, light);
   check("light home starts below the status bar", light.title >= 59, String(light.title));
 
-  const interesting = errors.filter((e) => !/supabase|Failed to fetch|net::|favicon|fonts\.google|fonts\.gstatic/i.test(e));
+  const interesting = errors.filter((e) => !isOfflineNoise(e));
   check("no console errors", interesting.length === 0, interesting.join(" | "));
   await browser.close();
   if (fails.length) { console.log("FAILED", fails.join(", ")); process.exit(1); }

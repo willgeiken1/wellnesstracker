@@ -2,6 +2,7 @@
 //   PLAYWRIGHT_PATH=... CHROME_PATH=... node logger/tests/form-contrast.mjs
 
 import { createRequire } from "node:module";
+import { launchOfflineBrowser } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
@@ -29,11 +30,8 @@ function parse(c) {
 }
 
 async function launch() {
-  const args = ["--no-sandbox", "--disable-dev-shm-usage"];
-  if (process.env.CHROME_PATH) {
-    return chromium.launch({ executablePath: process.env.CHROME_PATH, args });
-  }
-  return chromium.launch({ channel: "chrome", args });
+  if (process.env.CHROME_PATH) return launchOfflineBrowser(chromium, { executablePath: process.env.CHROME_PATH });
+  return launchOfflineBrowser(chromium, { channel: "chrome" });
 }
 
 async function boot(browser) {

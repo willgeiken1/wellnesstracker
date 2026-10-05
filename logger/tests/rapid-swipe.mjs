@@ -3,6 +3,7 @@
 // Uses Playwright touch events at 390x844.
 
 import { createRequire } from "node:module";
+import { launchOfflineBrowser, isOfflineNoise } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
@@ -21,9 +22,8 @@ function check(name, cond, extra) {
 }
 
 async function boot(reduced) {
-  const browser = await chromium.launch({
+  const browser = await launchOfflineBrowser(chromium, {
     executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -245,7 +245,7 @@ async function main() {
   await page.click('#tabs .tab[data-tab="home"]');
   await settled(page, "home", "tap back home");
 
-  const interesting = errors.filter((e) => !/supabase|Failed to fetch|net::|favicon|fonts\.google|fonts\.gstatic/i.test(e));
+  const interesting = errors.filter((e) => !isOfflineNoise(e));
   check("no console errors", interesting.length === 0, interesting.join(" | "));
   await browser.close();
 
