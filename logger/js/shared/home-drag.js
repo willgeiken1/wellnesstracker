@@ -226,4 +226,10 @@ if (typeof document !== "undefined") {
     const recent = performance.now() - holdFiredAt < 1200;
     if ((app.ui && app.ui.homeEdit && ev.target.closest && ev.target.closest(".hw-slot")) || recent) ev.preventDefault();
   });
+  /* A hold in progress, or one that just fired, must not start a text selection. */
+  document.addEventListener("selectstart", (ev) => {
+    if (!hold && performance.now() - holdFiredAt >= 1200) return;
+    if (ev.target && ev.target.closest && ev.target.closest("input, textarea, [contenteditable]")) return;
+    ev.preventDefault();
+  });
 }
