@@ -1003,8 +1003,11 @@ test("the registry brief drops repeated metrics and keeps a start action", () =>
     const legacy = app.briefHTML();
     assert.doesNotMatch(legacy, /data-action="brief-edit"/);
     assert.match(legacy, /data-action="brief-size"/);
-    assert.match(legacy, /data-action="start" data-id="push"/);
     assert.match(legacy, /class="brief-h"/);
+    /* The legacy Today hero already shows the planned workout, so the brief leaves it out. */
+    assert.doesNotMatch(legacy, /data-metric="train"|data-action="start"/);
+    app.state = { ...base, layout: { home: { order: ["brief", "today"], hidden: ["today"] } } };
+    assert.match(app.briefHTML(), /data-action="start" data-id="push"/);
   } finally {
     app.state = prev.state;
     app.ui = prev.ui;

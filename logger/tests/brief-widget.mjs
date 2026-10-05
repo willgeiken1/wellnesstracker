@@ -104,7 +104,7 @@ async function main() {
   await page.waitForTimeout(300);
   check("demo still shows the brief", await page.locator(".wdg[data-w='brief'] .brief").count() === 1 && await page.evaluate(() => app.state.demo === true));
   const demoText = await page.locator(".wdg[data-w='brief']").innerText();
-  check("demo brief has tiles", /Readiness|Training|This week/.test(demoText), demoText.slice(0, 240));
+  check("demo brief has tiles", /Readiness|Training|This week|Yesterday|Patterns|Good for you|May be holding you back/.test(demoText), demoText.slice(0, 240));
 
   await page.evaluate(() => { app.ui.briefEdit = true; app.render(); });
   await page.waitForTimeout(150);

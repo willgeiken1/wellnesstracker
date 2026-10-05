@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, findingsForView, loggedDays, pickForToday, todayLine } from "./correlate.js";
-import { hasOura, ouraWidgetShowing } from "./oura-gate.js";
+import { hasOura } from "./oura-gate.js";
+import { homeCardShowing } from "./home-defaults.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
    The headline uses readiness, lift status, and effect() — no network.
@@ -109,12 +110,12 @@ function proteinLowDays() {
 }
 
 export function ouraMetric() {
-  if (!hasOura(app.state) || ouraWidgetShowing(app.state, "readiness")) return null;
+  if (!hasOura(app.state) || homeCardShowing(app.state, "readiness")) return null;
   const o = app.latestOura(app.src().oura);
   if (!o || o.readiness == null) return null;
   const lv = app.readinessLevel(o.readiness);
   const when = o.date === app.today() ? "Today" : o.date === app.addDays(app.today(), -1) ? "Yesterday" : app.fmtDate(o.date, { month: "short", day: "numeric" });
-  const sleepOnTile = ouraWidgetShowing(app.state, "sleep-score");
+  const sleepOnTile = homeCardShowing(app.state, "sleep-score");
   return {
     id: "oura", label: "Readiness", value: String(o.readiness), tone: lv.cls, bar: o.readiness,
     meta: sleepOnTile ? null : (o.sleepScore != null ? `Sleep ${o.sleepScore}` : "No sleep score"),
@@ -123,6 +124,7 @@ export function ouraMetric() {
 }
 
 function trainMetric() {
+  if (homeCardShowing(app.state, "today")) return null;
   const t = app.today();
   const active = app.activeSession();
   if (active) return { id: "train", label: "Training", value: active.name, meta: "In progress", sub: "Pick up where you left off." };
@@ -139,11 +141,15 @@ function trainMetric() {
   }
   if (doneToday.length) return { id: "train", label: "Training", value: doneToday.map((s) => s.name).join(" + "), meta: "Done today", sub: "Logged for today." };
   const o = app.latestOura(app.src().oura);
-  const fresh = o && (o.date === t || o.date === app.addDays(t, -1)) ? o.readiness : null;
   const st = app.weekGoalStatus();
+  /* Same score and same function as the Readiness card, so the two agree. */
+  const advice = planned !== "rest" && o && o.readiness != null ? app.readinessAdvice(o.readiness) : null;
+  if (advice) {
+    const low = advice.cls === "down";
+    return { id: "train", label: "Training", value: advice.title, meta: low ? "Readiness is low" : "Nothing is planned", sub: "No session on the plan.", tone: low ? "down" : null };
+  }
   let why = "Nothing is planned";
   if (planned === "rest") why = "It's on the plan";
-  else if (fresh != null && fresh < 70) why = "Readiness is low";
   else if (st && st.done >= st.goal) why = "Weekly goal is already in";
   return { id: "train", label: "Training", value: planned === "rest" ? "Rest day" : "Rest suggested", meta: why, sub: planned === "rest" ? "Take the day." : "No session on the plan.", empty: planned !== "rest" && why === "Nothing is planned" };
 }
@@ -212,7 +218,7 @@ function patternMetric() {
   const good = row.valence === "good";
   return {
     id: "pattern",
-    label: good ? "Good for you" : "Working against you",
+    label: good ? "Good for you" : "May be holding you back",
     value: line,
     meta: "What affects you",
     tone: good ? "up" : "down",
@@ -223,7 +229,10 @@ function patternMetric() {
 function briefMetrics() {
   const byId = { pattern: patternMetric(), oura: ouraMetric(), train: trainMetric(), food: foodMetric(), week: weekMetric(), weight: weightMetric() };
   const prefs = app.briefPrefs();
-  return prefs.order.filter((id) => !prefs.hidden.includes(id)).map((id) => byId[id]).filter(Boolean);
+  const rows = prefs.order.filter((id) => !prefs.hidden.includes(id)).map((id) => byId[id]).filter(Boolean);
+  /* In compact mode an empty "What affects you" slot has nothing to say, so it goes last. */
+  if (prefs.size === "compact") rows.sort((a, b) => (a.id === "pattern" && a.empty ? 1 : 0) - (b.id === "pattern" && b.empty ? 1 : 0));
+  return rows;
 }
 app.briefMetrics = briefMetrics;
 
@@ -252,10 +261,13 @@ const TILE_COVERS_METRIC = {
   "weight-trend": "weight",
 };
 
+/* Tiles on Home that already say what a brief metric says. A registry Home answers
+   from its layout. The legacy Home answers from the Today hero and default tiles. */
 function registryTiles() {
-  if (typeof app.homeRegistryActive !== "function" || !app.homeRegistryActive(app.state)) return null;
-  if (typeof app.visibleHomeIds !== "function") return null;
-  return new Set(app.visibleHomeIds(app.state));
+  if (typeof app.homeRegistryActive === "function" && app.homeRegistryActive(app.state) && typeof app.visibleHomeIds === "function") {
+    return new Set(app.visibleHomeIds(app.state));
+  }
+  return new Set(Object.keys(TILE_COVERS_METRIC).filter((id) => homeCardShowing(app.state, id)));
 }
 
 function metricHTML(m) {

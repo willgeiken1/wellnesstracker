@@ -315,25 +315,26 @@ test("a saved homeV2 keeps the readiness card and the brief while the flag is of
   const hits = readinessHits(app.homeHTML());
   assert.equal(hits.tile, 0);
   assert.equal(hits.card, 1);
-  assert.equal(hits.brief, 1);
+  /* The legacy Readiness card has the score and the default sleep tile has the sleep
+     score, so the brief repeats neither. */
+  assert.equal(hits.brief, 0);
   assert.equal(ouraWidgetShowing(app.state, "readiness"), false);
   assert.equal(ouraWidgetShowing(app.state, "sleep-score"), false);
-  assert.equal(ouraMetric().value, "70");
-  assert.equal(ouraMetric().meta, "Sleep 81");
+  assert.equal(ouraMetric(), null);
 });
 
-test("the brief keeps sleep while the registry is not painted", () => {
+test("the brief defers readiness to the default tile when the legacy card is hidden", () => {
   stubHomeShell();
   app.state = state({
     oura: { connected: true, days: { "2026-10-04": { date: "2026-10-04", readiness: 70, sleepScore: 72 } } },
-    layout: { homeV2: layout(["readiness", "sleep-score"], { ouraSeeded: true, migrated: true, migratedAt: 2 }) },
+    layout: { homeV2: layout(["readiness", "sleep-score"], { ouraSeeded: true, migrated: true, migratedAt: 2 }), home: { order: [], hidden: ["readiness"] } },
     workouts: [],
     plan: {},
   });
-  const shown = ouraMetric();
-  assert.equal(shown.value, "70");
-  assert.equal(shown.meta, "Sleep 72");
-  assert.match(shown.meta, /Sleep/);
+  /* With the card hidden the default readiness tile paints, so the brief still defers. */
+  assert.equal(ouraMetric(), null);
+  app.state.oura.days = { "2026-10-04": { date: "2026-10-04", readiness: 70 } };
+  assert.equal(ouraMetric(), null);
   assert.equal(ouraWidgetShowing(app.state, "sleep-score"), false);
 });
 

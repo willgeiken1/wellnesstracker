@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { homeOuraWaiting, visibleHomeIds } from "../shared/oura-gate.js";
+import "../shared/home-defaults.js";
 
 /* Home page and the render entry (replaced by the pager). */
 /* ================= Rendering ================= */
@@ -204,7 +205,9 @@ function homeHTML() {
     return head + wait + app.renderHomeWidgets({ ...layout, items: paintedHomeItems(app.state) }, data);
   }
   const live = { live: true };
-  const stack = app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
+  /* Default tiles sit above the slots, so hiding a slot never hides them. */
+  const defaults = app.defaultHomeStripHTML(typeof app.snapshotFromApp === "function" ? app.snapshotFromApp() : live);
+  const stack = defaults + app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
     <!--w:week-->${app.HOME_WIDGETS["this-week"].render(live)}
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>

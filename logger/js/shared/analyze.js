@@ -111,10 +111,17 @@ app.latestOura = latestOura;
 const dash = (v, f) => (v == null || Number.isNaN(v) ? "–" : f(v));
 app.dash = dash;
 
+/* The one recommendation for a readiness score. The Readiness card and the
+   Morning Brief both read it, so they cannot disagree. title is the short form. */
+function readinessAdvice(r) {
+  if (r >= 85) return { cls: "up", word: "Primed", title: "Good day to push", tip: "Good day to push for a heavier set or a PR." };
+  if (r >= 70) return { cls: "ok", word: "Good", title: "Train as planned", tip: "Train as planned." };
+  return { cls: "down", word: "Low", title: "Go easy today", tip: "Recovery is low. Consider lighter weights or fewer sets today." };
+}
+app.readinessAdvice = readinessAdvice;
 function readinessLevel(r) {
-  if (r >= 85) return { cls: "up", word: "Primed", tip: "Good day to push for a heavier set or a PR." };
-  if (r >= 70) return { cls: "ok", word: "Good", tip: "Train as planned." };
-  return { cls: "down", word: "Low", tip: "Recovery is low. Consider lighter weights or fewer sets today." };
+  const { cls, word, tip } = readinessAdvice(r);
+  return { cls, word, tip };
 }
 app.readinessLevel = readinessLevel;
 

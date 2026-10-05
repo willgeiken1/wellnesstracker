@@ -768,9 +768,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   }
   const gateImport = brief.match(/import\s*\{([^}]+)\}\s*from\s*"\.\/oura-gate\.js"/);
   assert.ok(gateImport, "brief imports from oura-gate.js");
-  for (const name of ["hasOura", "ouraWidgetShowing"]) {
-    assert.match(gateImport[1], new RegExp("\\b" + name + "\\b"));
-  }
+  assert.match(gateImport[1], /\bhasOura\b/);
+  assert.match(brief, /import\s*\{\s*homeCardShowing\s*\}\s*from\s*"\.\/home-defaults\.js"/);
   assert.match(brief, /m\.link === "affects" && m\.empty/);
   assert.doesNotMatch(brief, /No strong pattern yet/);
   assert.doesNotMatch(brief, /m\.empty && m\.sub/);
