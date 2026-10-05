@@ -218,7 +218,7 @@ function patternMetric() {
   const good = row.valence === "good";
   return {
     id: "pattern",
-    label: good ? "Good for you" : "May be holding you back",
+    label: good ? "Good for you" : "Worth watching",
     value: line,
     meta: "What affects you",
     tone: good ? "up" : "down",

@@ -266,7 +266,7 @@ test("the empty Your week card is hidden, and What affects you moves last in com
 test("the pattern wording is neutral", () => {
   const brief = readFileSync(new URL("../logger/js/shared/brief.js", import.meta.url), "utf8");
   const widgets = readFileSync(new URL("../logger/js/shared/home-widgets.js", import.meta.url), "utf8");
-  assert.match(brief, /May be holding you back/);
+  assert.match(brief, /Worth watching/);
   assert.doesNotMatch(brief + widgets, /Working against you/);
 });
 

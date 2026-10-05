@@ -216,7 +216,7 @@ function patternFrom(input, today) {
     const line = row && todayLine(row);
     if (!line) return null;
     const good = row.valence === "good";
-    return { label: good ? "Good for you" : "May be holding you back", line, tone: good ? "up" : "down" };
+    return { label: good ? "Good for you" : "Worth watching", line, tone: good ? "up" : "down" };
   } catch (e) {
     return null;
   }
@@ -229,7 +229,7 @@ function patternNow() {
     const line = row && todayLine(row);
     if (!line) return null;
     const good = row.valence === "good";
-    return { label: good ? "Good for you" : "May be holding you back", line, tone: good ? "up" : "down" };
+    return { label: good ? "Good for you" : "Worth watching", line, tone: good ? "up" : "down" };
   } catch (e) {
     return null;
   }
