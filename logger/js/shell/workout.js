@@ -170,7 +170,7 @@ function renderSheet() {
   }
   const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : "sheet-card";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
-    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Add a card" : "Sheet"}"><div class="grabber"></div>
-    <button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>${inner}</div>`;
+    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : "Sheet"}"><div class="grabber"></div>
+    ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;
 }
 app.renderSheet = renderSheet;

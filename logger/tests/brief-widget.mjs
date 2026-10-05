@@ -27,6 +27,7 @@ async function boot(state) {
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     deviceScaleFactor: 2,
+    reducedMotion: "reduce",
   });
   const page = await context.newPage();
   const errors = [];
@@ -63,38 +64,41 @@ async function main() {
   await page.locator("[data-action='home-edit']").click();
   await page.waitForTimeout(200);
   check("home editor opens", await page.locator(".home-editor").count() === 1);
-  check("brief has move and remove", await page.locator(".hw-row[data-id='brief'] [data-action='home-down']").count() === 1 && await page.locator(".hw-row[data-id='brief'] [data-action='home-remove']").count() === 1);
-  await page.locator(".hw-row[data-id='brief']").screenshot({ path: ART + "/brief_widget_edit.png", animations: "disabled" });
+  check("brief has a minus badge", await page.locator(".hw-slot[data-id='brief'] [data-action='home-remove']").count() === 1);
+  await page.locator(".hw-slot[data-id='brief']").screenshot({ path: ART + "/brief_widget_edit.png", animations: "disabled" });
 
   const before = await page.evaluate(() => app.ui.homeDraft.items.slice());
-  await page.locator(".hw-row[data-id='brief'] [data-action='home-down']").click();
+  await page.locator(".hw-slot[data-id='brief']").focus();
+  await page.keyboard.press("ArrowDown");
   await page.waitForTimeout(200);
   const after = await page.evaluate(() => app.ui.homeDraft.items.slice());
-  check("reorder moves the brief", after.indexOf("brief") > before.indexOf("brief"), after.join(">"));
+  check("arrow key moves the brief", after.indexOf("brief") > before.indexOf("brief"), after.join(">"));
 
-  await page.locator(".hw-row[data-id='brief'] [data-action='home-remove']").click();
+  await page.locator(".hw-slot[data-id='brief'] [data-action='home-remove']").click();
   await page.waitForTimeout(200);
   check("brief hidden", await page.evaluate(() => !app.ui.homeDraft.items.includes("brief") && app.ui.homeDraft.hidden.includes("brief")));
   await page.locator("[data-action='home-gallery']").click();
   await page.waitForTimeout(200);
-  check("add menu lists morning brief", (await page.locator("#sheet").innerText()).includes("Morning brief"));
-  await page.locator("[data-action='home-add'][data-id='brief']").click();
+  check("gallery lists morning brief", (await page.locator("#sheet").innerText()).includes("Morning brief"));
+  await page.locator("[data-action='home-gal-pick'][data-id='brief']").click();
   await page.waitForTimeout(250);
   check("brief re-added", await page.evaluate(() => app.ui.homeDraft.items.includes("brief")));
-  await page.evaluate(() => document.querySelector(".sheet-back").click());
-  await page.waitForTimeout(150);
-  await page.locator("[data-action='home-cancel']").click();
+  await page.evaluate(() => { app.ui.homeEdit = false; app.ui.homeDraft = null; app.render(); });
   await page.waitForTimeout(200);
-  check("cancel keeps the legacy brief", await page.locator("#pane-home .wdg[data-w='brief'] .brief").count() === 1);
+  check("leaving without Done keeps the legacy brief", await page.locator("#pane-home .wdg[data-w='brief'] .brief").count() === 1);
 
   const card = page.locator("#pane-home .wdg[data-w='brief']");
+  /* Edit mode scrolled the pane (the re-added card is scrolled into view), so bring the brief back first. */
+  await card.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(100);
   const box = await card.boundingBox();
   await page.mouse.move(box.x + 24, box.y + 40);
   await page.mouse.down();
   await page.waitForTimeout(700);
   await page.mouse.up();
   await page.waitForTimeout(250);
-  check("home long-press does not open the old editor", await page.evaluate(() => app.ui.edit) == null && await page.locator(".home-editor").count() === 0);
+  check("home long-press opens Home edit mode, not the old editor", await page.evaluate(() => app.ui.edit) == null && await page.locator(".home-editor").count() === 1);
+  await page.evaluate(() => { app.ui.homeEdit = false; app.ui.homeDraft = null; app.render(); });
 
   await page.locator(".avatar").click();
   await page.waitForTimeout(300);

@@ -230,6 +230,12 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && (ev.target.id === "authPw" || ev.target.id === "authEmail")) { ev.preventDefault(); app.signIn(app.ui.sd.mode); }
   if (ev.key === "Enter" && ev.target.id === "dlg-in") { ev.preventDefault(); app.closeDialog(true); }
   if (ev.key === "Escape" && !app.$("#dialog").hidden) app.closeDialog(false);
+  else if (ev.key === "Escape" && app.ui.sheet === "home-gallery") { app.ui.sheet = null; app.renderSheet(); }
+  const slot = ev.target.closest && ev.target.closest(".hw-slot");
+  if (slot && app.ui.homeEdit && !app.ui.sheet && slot === ev.target) {
+    const step = ev.key === "ArrowUp" || ev.key === "ArrowLeft" ? -1 : ev.key === "ArrowDown" || ev.key === "ArrowRight" ? 1 : 0;
+    if (step) { ev.preventDefault(); app.homeMoveItem(slot.dataset.id, step); }
+  }
 });
 
 let swipe = null;
@@ -822,21 +828,7 @@ document.addEventListener("click", async (ev) => {
     case "w-remove": app.hideWidget(app.ui.edit, b.dataset.w); break;
     case "r-remove": app.deleteRoutine(b.dataset.w); break;
     case "w-add": app.ui.sheet = "w-add"; app.ui.sd = {}; app.renderSheet(); break;
-    case "home-edit":
-      if (app.homeEditBlocked && app.homeEditBlocked()) break;
-      app.ui.homeEdit = true;
-      app.ui.edit = null;
-      app.ui.briefEdit = false;
-      app.ui.sheet = null;
-      app.ui.homeDraft = app.homeEditorDraft(app.state);
-      app.render();
-      break;
-    case "home-cancel":
-      app.ui.homeEdit = false;
-      app.ui.homeDraft = null;
-      app.ui.sheet = null;
-      app.render();
-      break;
+    case "home-edit": app.enterHomeEdit(); break;
     case "home-save": {
       const draft = app.ui.homeDraft;
       const same = draft && app.homeDraftUnchanged && app.homeDraftUnchanged(draft, app.homeEditorDraft(app.state));
@@ -851,57 +843,21 @@ document.addEventListener("click", async (ev) => {
       app.render();
       break;
     }
-    case "home-up":
-    case "home-down": {
-      const draft = app.ui.homeDraft;
-      const id = b.dataset.id;
-      if (!draft || !Array.isArray(draft.items)) break;
-      const from = draft.items.indexOf(id);
-      const to = a === "home-up" ? from - 1 : from + 1;
-      if (from < 0 || to < 0 || to >= draft.items.length) break;
-      const next = draft.items.slice();
-      const [row] = next.splice(from, 1);
-      next.splice(to, 0, row);
-      draft.items = next;
-      app.render();
-      break;
-    }
     case "home-gallery":
       app.ui.sheet = "home-gallery";
       app.ui.sd = { q: "" };
       app.renderSheet();
       break;
-    case "home-add": {
+    case "home-gal-pick": {
       const id = b.dataset.id;
-      const draft = app.ui.homeDraft;
-      if (!draft || !app.HOME_WIDGETS[id] || draft.items.includes(id)) break;
-      draft.items.push(id);
-      draft.hidden = (draft.hidden || []).filter((item) => item !== id);
-      app.render();
+      if (!app.HOME_WIDGETS[id]) break;
+      if (app.galleryNeedsSize(id)) { app.ui.sd = { q: (app.ui.sd && app.ui.sd.q) || "", pick: id }; app.renderSheet(); }
+      else app.homeAddItem(id);
       break;
     }
-    case "home-remove": {
-      const id = b.dataset.id;
-      const draft = app.ui.homeDraft;
-      if (!draft) break;
-      draft.items = draft.items.filter((item) => item !== id);
-      draft.hidden = draft.hidden || [];
-      if (app.HOME_WIDGETS[id] && !draft.hidden.includes(id)) draft.hidden.push(id);
-      app.render();
-      break;
-    }
-    case "home-size": {
-      const draft = app.ui.homeDraft;
-      const id = b.dataset.id;
-      const size = b.dataset.size;
-      const widget = app.HOME_WIDGETS[id];
-      if (!draft || !widget || !(widget.sizes || []).includes(size)) break;
-      draft.sizes = draft.sizes || {};
-      if (size === widget.size) delete draft.sizes[id];
-      else draft.sizes[id] = size;
-      app.render();
-      break;
-    }
+    case "home-gal-back": app.ui.sd = { q: (app.ui.sd && app.ui.sd.q) || "" }; app.renderSheet(); break;
+    case "home-add": app.homeAddItem(b.dataset.id, b.dataset.size); break;
+    case "home-remove": app.homeRemoveItem(b.dataset.id); break;
     case "w-add-one": app.showWidget(app.ui.edit, b.dataset.w); app.ui.sheet = null; app.render(); app.toast(`${app.WIDGETS[app.ui.edit][b.dataset.w]} added.`); break;
     case "ms-list": app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; app.renderSheet(); break;
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }
