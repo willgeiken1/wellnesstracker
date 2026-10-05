@@ -1,15 +1,16 @@
 // Home Morning Brief widget. Run with the app served at BASE (default :8765):
-//   PLAYWRIGHT_PATH=... node logger/tests/brief-widget.mjs
+//   PLAYWRIGHT_PATH=... CHROME_PATH=... ARTIFACTS_DIR=... node logger/tests/brief-widget.mjs
 
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
+import { launchOfflineBrowser, isOfflineNoise } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const { chromium } = pw;
 
 const BASE = process.env.BASE || "http://127.0.0.1:8765";
-const ART = "/opt/cursor/artifacts";
+const ART = process.env.ARTIFACTS_DIR || "/opt/cursor/artifacts";
 mkdirSync(ART, { recursive: true });
 const fails = [];
 
@@ -19,9 +20,8 @@ function check(name, cond, extra) {
 }
 
 async function boot(state) {
-  const browser = await chromium.launch({
-    executablePath: "/usr/local/bin/google-chrome",
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  const browser = await launchOfflineBrowser(chromium, {
+    executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
   });
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -132,7 +132,7 @@ async function main() {
   await page.evaluate(() => { app.state.theme = { mode: "dark", accent: "citrus" }; app.applyTheme(); app.render(); });
   check("dark still shows brief", await page.locator(".brief").count() === 1);
 
-  const interesting = errors.filter((e) => !/supabase|Failed to fetch|net::|favicon|fonts\.google|fonts\.gstatic/i.test(e));
+  const interesting = errors.filter((e) => !isOfflineNoise(e));
   check("no console errors", interesting.length === 0, interesting.join(" | "));
   await browser.close();
 

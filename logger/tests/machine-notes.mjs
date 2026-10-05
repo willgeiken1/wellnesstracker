@@ -1,15 +1,16 @@
 // Machine settings notes and the pinned edit-mode Done button.
-//   PLAYWRIGHT_PATH=... node logger/tests/machine-notes.mjs
+//   PLAYWRIGHT_PATH=... CHROME_PATH=... ARTIFACTS_DIR=... node logger/tests/machine-notes.mjs
 
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
+import { launchOfflineBrowser, isOfflineNoise } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const { chromium } = pw;
 
 const BASE = process.env.BASE || "http://127.0.0.1:8765";
-const ART = "/opt/cursor/artifacts";
+const ART = process.env.ARTIFACTS_DIR || "/opt/cursor/artifacts";
 mkdirSync(ART, { recursive: true });
 const fails = [];
 
@@ -19,11 +20,9 @@ function check(name, cond, extra) {
 }
 
 async function launch() {
-  const browser = await chromium.launch({
-    executablePath: "/usr/local/bin/google-chrome",
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  return launchOfflineBrowser(chromium, {
+    executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
   });
-  return browser;
 }
 
 async function boot(browser, state) {
@@ -292,7 +291,8 @@ async function main() {
   }));
   check("rename carries the note", renamed.next === "Seat 6" && renamed.prev === "" && renamed.tomb && renamed.tomb.gone, JSON.stringify(renamed));
 
-  check("no console errors", errors.length === 0, errors.join(" | "));
+  const liveErrors = errors.filter((e) => !isOfflineNoise(e));
+  check("no console errors", liveErrors.length === 0, liveErrors.join(" | "));
   await page.context().close();
 
   const pill = await boot(browser, null);
@@ -402,7 +402,8 @@ async function main() {
   check("routines edit mode", await p.evaluate(() => app.ui.edit) === "routines");
   await assertPinned("routines");
 
-  check("done-pill page has no console errors", pill.errors.length === 0, pill.errors.join(" | "));
+  const pillErrors = pill.errors.filter((e) => !isOfflineNoise(e));
+  check("done-pill page has no console errors", pillErrors.length === 0, pillErrors.join(" | "));
   await browser.close();
 
   if (fails.length) {

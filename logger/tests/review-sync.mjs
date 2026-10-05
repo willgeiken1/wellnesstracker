@@ -5,6 +5,7 @@
 
 import { createRequire } from "node:module";
 import { pickHomeV2 } from "../js/shared/home-migrate.js";
+import { launchOfflineBrowser } from "./browser-launch.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
@@ -31,7 +32,7 @@ function mergeRow(stored, incoming) {
   return next;
 }
 
-const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+const browser = await launchOfflineBrowser(chromium, { executablePath: CHROME });
 
 async function device(base, local, name) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
