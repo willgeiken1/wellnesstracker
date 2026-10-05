@@ -216,7 +216,7 @@ function patternFrom(input, today) {
     const line = row && todayLine(row);
     if (!line) return null;
     const good = row.valence === "good";
-    return { label: good ? "Good for you" : "Working against you", line, tone: good ? "up" : "down" };
+    return { label: good ? "Good for you" : "Worth watching", line, tone: good ? "up" : "down" };
   } catch (e) {
     return null;
   }
@@ -229,7 +229,7 @@ function patternNow() {
     const line = row && todayLine(row);
     if (!line) return null;
     const good = row.valence === "good";
-    return { label: good ? "Good for you" : "Working against you", line, tone: good ? "up" : "down" };
+    return { label: good ? "Good for you" : "Worth watching", line, tone: good ? "up" : "down" };
   } catch (e) {
     return null;
   }
@@ -362,7 +362,8 @@ function small(id, label, value, sub, tone) {
 
 function ouraMiss(id, label) {
   if (homeAwaitingSync()) return small(id, label, "–", "");
-  return small(id, label, "No Oura yet", "Connect a ring to see this");
+  /* hw-miss marks a tile with nothing to say. renderHomeWidgets leaves it off Home. */
+  return small(id, label, "No Oura yet", "Connect a ring to see this").replace('class="hw ', 'class="hw hw-miss ');
 }
 
 function daySub(data, extra) {
@@ -835,7 +836,7 @@ export function renderHomeWidgets(layout, data) {
     const entry = HOME_WIDGETS[id];
     if (!entry) return "";
     const html = entry.render(data) || "";
-    if (!String(html).trim()) return "";
+    if (!String(html).trim() || String(html).includes("hw-miss")) return "";
     const span = widgetSize(id, layout) === "medium" ? " span-m" : "";
     return `<div class="hw-slot${span}" data-hw="${id}">${html}</div>`;
   }).join("");

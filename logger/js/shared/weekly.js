@@ -489,6 +489,7 @@ function weekCardHTML() {
   const due = weekCardDue(typeof app.today === "function" ? app.today() : "", dismissedList());
   if (!due.show || !due.start) return "";
   const report = buildWeek(reportSource(), due.start);
+  if (!report || report.empty) return "";
   const stats = [];
   if (report.workouts.n > 0) stats.push(["Workouts", String(report.workouts.n)]);
   if (report.metrics.readiness.n) stats.push(["Readiness", fmtMean(report.metrics.readiness, "score")]);
