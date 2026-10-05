@@ -29,6 +29,22 @@ html[data-mode="dark"] { color-scheme: dark; }
 html[data-mode="light"] { color-scheme: light; }
 body { min-height: 100vh; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* Touch surface. A long press on Home enters edit mode, so Home cards and the shell
+   chrome opt out of text selection and the iOS callout. manipulation drops double-tap
+   zoom but keeps pan; drag handles set touch-action: none themselves.
+   Pinch is blocked by the viewport meta, not a gesturestart handler: with
+   maximum-scale=1 and 16px fields there is nothing left for a handler to fix. */
+html, body { touch-action: manipulation; }
+body { -webkit-tap-highlight-color: transparent; }
+.home-v2, .hw, .hw-slot, .hero, #pane-home .card, #pane-home .sec,
+#tabs, .page-head, .home-editor-top, .home-edit, .sheet-back, .sheet-x {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+}
+/* Fields and copyable prose stay selectable, even inside the surfaces above. */
+input, textarea, [contenteditable], .hint, .prose,
+#pane-home :is(input, textarea, [contenteditable], .hint, .prose) {
+  -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
+}
 /* :where() keeps this at zero specificity so .add-row input can stay on --raised
    and the date rule below can turn native appearance back on.
    -webkit-text-fill-color is what iOS uses for textarea glyphs; color alone stays black. */
