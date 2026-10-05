@@ -73,3 +73,4 @@ If Insight changes in a way that affects your information, this page will be upd
 ## Contact
 
 Questions, or a request to delete your account: insight.wellnessos@gmail.com
+<!-- pages-retrigger: 2026-10-05 -->
