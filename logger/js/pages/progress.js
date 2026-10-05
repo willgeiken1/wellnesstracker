@@ -166,16 +166,16 @@ function photosHTML() {
     ${bw || `<div class="sec-h"><h3>Bodyweight</h3></div><div class="card"><p class="sub">Log weigh-ins to see your trend and weekly rate.</p><button class="btn primary block" data-action="weigh-open" style="margin-top:12px">Log weigh-in</button></div>`}
     ${app.measurementsHTML()}
     <div class="sec-h" style="margin-top:22px"><h3>Photos</h3>
-      <div style="display:flex;gap:8px"><button class="btn small ${app.PH.compare ? "primary" : ""}" data-action="ph-compare">${app.PH.compare ? "Done" : "Compare"}</button>
-      <button class="btn small primary" data-action="ph-add-today">Add</button></div></div>
+      ${ph.length ? `<div style="display:flex;gap:8px"><button class="btn small ${app.PH.compare ? "primary" : ""}" data-action="ph-compare">${app.PH.compare ? "Done" : "Compare"}</button>
+      <button class="btn small primary" data-action="ph-add-today">Add</button></div>` : ""}</div>
     <p class="sub" style="margin:-6px 0 12px">${ph.length ? app.pl(ph.length, "photo") + " since " + app.fmtDate(ph[0].date, { month: "short", year: "numeric" }) + ". Private to you." : "Private to you."}</p>
-    ${app.PH.compare ? `<p class="sub" style="margin:-8px 0 12px">${app.PH.pick.length === 0 ? "Tap a day with a photo to pick the first one." : app.PH.pick.length === 1 ? "Now tap a second day." : "Tap a day to swap it out."}</p>` : ""}
-    ${cmp}
-    <div class="sec-h"><h3 class="cal-month">${app.fmtDate(first, { month: "long", year: "numeric" })}</h3>
+    ${ph.length && app.PH.compare ? `<p class="sub" style="margin:-8px 0 12px">${app.PH.pick.length === 0 ? "Tap a day with a photo to pick the first one." : app.PH.pick.length === 1 ? "Now tap a second day." : "Tap a day to swap it out."}</p>` : ""}
+    ${ph.length ? cmp : ""}
+    ${ph.length ? `<div class="sec-h"><h3 class="cal-month">${app.fmtDate(first, { month: "long", year: "numeric" })}</h3>
       <div class="week-nav"><button class="icon-btn" data-action="ph-month" data-d="-1" aria-label="Previous month">${app.I.chevL}</button>
       <button class="icon-btn" data-action="ph-month" data-d="1" aria-label="Next month" ${month >= app.today().slice(0, 7) ? "disabled" : ""}><span style="transform:scaleX(-1);display:grid">${app.I.chevL}</span></button></div></div>
     <div class="cal-head">${["M", "T", "W", "T", "F", "S", "S"].map((d) => `<span>${d}</span>`).join("")}</div>
-    <div class="cal">${cells.join("")}</div>
+    <div class="cal">${cells.join("")}</div>` : ""}
     ${strip ? `<div class="sec-h" style="margin-top:22px"><h3>Over time</h3><span class="sec-sub">One photo per month</span></div><div class="timeline">${strip}</div>` : `<div class="card" style="margin-top:22px"><h4>Start your timeline</h4><p class="sub">Take a photo every week or two in the same spot, same lighting, same pose. Small changes are hard to see day to day and obvious over months.</p><button class="btn primary block" data-action="ph-add-today" style="margin-top:12px">Add today's photo</button></div>`}
     <input type="file" id="ph-file" accept="image/*" capture="environment" hidden>`;
 }

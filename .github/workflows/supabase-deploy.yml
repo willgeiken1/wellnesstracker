@@ -24,6 +24,9 @@ jobs:
     name: Deploy
     # Manual runs from other branches would ship that branch to production.
     if: github.ref == 'refs/heads/main'
+    # Will must add himself as a required reviewer under Settings > Environments > production,
+    # so `supabase db push --yes` waits for approval before it touches the live database.
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -31,12 +34,12 @@ jobs:
       SUPABASE_PROJECT_REF: pvodxxmfgflvgvbdotlv
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Install Supabase CLI
-        uses: supabase/setup-cli@v3.0.1
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: 2.119.0
 

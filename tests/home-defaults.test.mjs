@@ -276,11 +276,12 @@ test("the pattern wording is neutral", () => {
   assert.doesNotMatch(brief + widgets, /Working against you/);
 });
 
-test("the shell caches the defaults module and keeps the same cache name", () => {
+test("the shell caches the defaults module on the v32 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /insight-shell-v30"/);
-  assert.doesNotMatch(sw, /insight-shell-v3[1-9]/);
+  assert.match(sw, /const CACHE = "insight-shell-v32"/);
+  assert.match(sw, /const STAGE = CACHE \+ "-next"/);
+  assert.doesNotMatch(sw, /insight-shell-v30"/);
 });
 
 test("randomized account states hold every Home defaults invariant", () => {

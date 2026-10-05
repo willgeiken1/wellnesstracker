@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
+import { needsSleepRecovery, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -72,7 +73,7 @@ app.insightsWrapHTML = insightsWrapHTML;
 
 function affectsCard(r) {
   const tone = r.valence === "good" ? "good" : r.valence === "bad" ? "bad" : "neutral";
-  const mark = tone === "good" ? "Good for you" : tone === "bad" ? "Working against you" : "Just a pattern";
+  const mark = tone === "good" ? "Good for you" : tone === "bad" ? "Worth watching" : "Just a pattern";
   const conf = r.confidence === "high" ? "High confidence" : "Medium confidence";
   const hi = r.confidence === "high" ? " hi" : "";
   return `<article class="card aff-card ${tone}">
@@ -92,26 +93,41 @@ function affectsEmpty(days) {
 }
 app.affectsEmpty = affectsEmpty;
 
+function findingKey(r) {
+  return r ? String(r.outcome) + "\0" + String(r.factor) + "\0" + (Number(r.lag) || 0) : "";
+}
+
 /* What affects you. Correlations only, and no health values leave the phone. */
 function affectsHTML() {
-  let rows = [];
+  let top = [];
+  let more = [];
   let days = 0;
+  let picked = null;
   try {
     const src = app.correlationSource();
     days = loggedDays(src);
-    rows = listFindings(app.correlations());
-  } catch (e) { rows = []; }
+    const rows = app.correlations();
+    picked = pickForToday(rows, src, app.today());
+    ({ top, more } = splitFindings(rows, src, app.today()));
+  } catch (e) { top = []; more = []; }
   const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
   const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;
-  if (!rows.length) {
+  if (!top.length && !more.length) {
     const title = days < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet";
     return head + `<div class="card aff-empty"><h4>${title}</h4><p class="sub">${affectsEmpty(days)}</p></div>`;
   }
   const open = !!app.ui.affectsAll;
-  const capped = rows.slice(0, SEE_ALL_LIMIT);
-  const shown = open ? capped : capped.slice(0, DISPLAY_LIMIT);
-  const more = capped.length > DISPLAY_LIMIT;
-  const toggle = more ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + DISPLAY_LIMIT : "See all " + capped.length}</button>` : "";
+  // listFindings(rows) is top.concat(more). The brief's pick stays in See all even past the cap.
+  let all = top.concat(more);
+  const want = findingKey(picked);
+  if (want && !all.some((r) => findingKey(r) === want)) all = all.concat(picked);
+  let visible = all.slice(0, SEE_ALL_LIMIT);
+  if (want && !visible.some((r) => findingKey(r) === want)) {
+    const hit = all.find((r) => findingKey(r) === want);
+    if (hit) visible = visible.slice(0, Math.max(0, SEE_ALL_LIMIT - 1)).concat(hit);
+  }
+  const shown = open ? visible : top;
+  const toggle = more.length ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + top.length : "See all " + visible.length}</button>` : "";
   return head + shown.map(affectsCard).join("") + toggle;
 }
 app.affectsHTML = affectsHTML;
@@ -123,7 +139,7 @@ function insightsHTML(embedded) {
   const reports = app.weeklyListHTML ? app.weeklyListHTML() : "";
   const affects = app.affectsHTML();
   if (sessions.length < 3) return head + reports + affects + (app.state.demo ? "" : app.goalsSectionHTML(app.liftSeries(sessions))) + `<div class="card"><h4>Keep logging</h4>
-    <p class="sub">Insights start appearing after a few workouts and get more reliable every week. Lift trends need 4 sessions of a lift; sleep and readiness comparisons need Oura connected.</p>
+    <p class="sub">Insights start appearing after a few workouts and get more reliable every week. Lift trends need 4 sessions of a lift${nights || app.state.demo ? "; sleep and readiness comparisons need Oura connected" : ""}.</p>
     ${app.state.demo ? "" : `<button class="btn primary block" data-action="demo-on" style="margin-top:12px">Preview with sample data</button>`}</div>`;
 
   // 1. Lift progress
@@ -148,11 +164,28 @@ function insightsHTML(embedded) {
     { label: "Under 6.5h", test: (v) => v < 6.5 }, { label: "6.5–7.5h", test: (v) => v >= 6.5 && v < 7.5 }, { label: "7.5h+", test: (v) => v >= 7.5 }]);
   const wk = app.effect(perfs, (d) => { const p = o[app.addDays(d, -1)]; return p && p.steps != null ? p.steps : null; }, [
     { label: "After 15k+ steps", test: (v) => v >= 15000 }, { label: "After < 15k", test: (v) => v < 15000 }]);
-  const need = nights ? "Needs at least 3 sessions in each group to compare." : "Connect Oura to unlock this.";
+  const need = "Needs at least 3 sessions in each group to compare.";
   const wkSentence = (() => { const a = wk[0], b = wk[1]; if (a.n < 3 || b.n < 3) return null; const d = b.avg - a.avg;
     return Math.abs(d) < 1 ? "Busy days on your feet don't seem to affect the next day's lifts so far."
       : d > 0 ? `After heavy days on your feet (15k+ steps, like a long warehouse shift), your lifts run about ${d.toFixed(1)}% lower the next day.`
               : `Interestingly, you've lifted ${Math.abs(d).toFixed(1)}% better after your busiest days.`; })();
+
+  let effectsHTML = "";
+  if (nights) {
+    effectsHTML = `<div class="sec-h" style="margin-top:22px"><h3>What affects your lifts</h3></div>
+    <p class="sub aff-note">Each bar shows how strong your sessions were compared with your recent average for those lifts.</p>
+    ${app.effectCard("Readiness", rd, app.compareSentence(rd, "on 85+ readiness days", "on days under 70"), need)}
+    ${app.effectCard("Sleep the night before", sl, app.compareSentence(sl, "after 7.5+ hours of sleep", "after less than 6.5"), need)}
+    ${app.effectCard("Work the day before", wk, wkSentence, need)}`;
+  } else if (needsSleepRecovery(app.state, nights)) {
+    const label = sleepRecoveryLabel(app.state, !!app.session);
+    const sub = sleepRecoveryCopy(app.state);
+    const action = !app.session ? 'data-action="iseg" data-s="recovery"'
+      : label === "Sync now" ? 'data-action="oura-sync"' : 'data-action="oura-connect"';
+    effectsHTML = `<div class="card oura-nudge"><div><h4>Add sleep and recovery</h4>
+      <p class="sub">${sub}</p></div>
+      <button class="btn small" ${action}>${label}</button></div>`;
+  }
 
   // 3. Training load vs HRV (last 8 weeks)
   const mon = app.mondayOf(app.today()), weeks = [...Array(8)].map((_, i) => app.addDays(mon, (i - 7) * 7));
@@ -160,7 +193,7 @@ function insightsHTML(embedded) {
   const wHrv = weeks.map((w) => app.avg([...Array(7)].map((_, i) => o[app.addDays(w, i)]).filter(Boolean).map((x) => x.hrv).filter((v) => v != null)));
   const hrvBase = app.avg(Object.keys(o).sort().slice(-30).map((k) => o[k].hrv).filter((v) => v != null));
   const lastFull = 6; // last complete week
-  let loadMsg = nights ? "Your training volume and recovery look balanced." : "Connect Oura to compare training volume with recovery.";
+  let loadMsg = nights ? "Your training volume and recovery look balanced." : "Working sets across your last 8 weeks.";
   if (nights && wHrv[lastFull] != null && hrvBase) {
     const prevSets = app.avg(wSets.slice(2, lastFull).filter((x) => x > 0)) || 0;
     if (wHrv[lastFull] < hrvBase * 0.92 && wSets[lastFull] >= prevSets) loadMsg = `<b class="warn">Possible fatigue building:</b> last week's HRV averaged ${Math.round(wHrv[lastFull])} ms, below your ${Math.round(hrvBase)} ms baseline, while volume stayed high. A lighter week could help.`;
@@ -186,12 +219,8 @@ function insightsHTML(embedded) {
     <!--w:lifts--><div class="sec-h"><h3>Lift progress</h3><span class="sec-sub">${counts.up} up · ${counts.flat} flat · ${counts.down} down</span></div>
     <div class="card lifts">${liftsHTML || `<p class="sub">Log weighted sets to see trends.</p>`}</div>
     <!--w:prs-->${app.prBoardHTML(sessions)}
-    <!--w:effects--><div class="sec-h" style="margin-top:22px"><h3>What affects your lifts</h3></div>
-    <p class="sub" style="margin:-6px 0 10px">Each bar shows how strong your sessions were compared with your recent average for those lifts.</p>
-    ${app.effectCard("Readiness", rd, app.compareSentence(rd, "on 85+ readiness days", "on days under 70"), need)}
-    ${app.effectCard("Sleep the night before", sl, app.compareSentence(sl, "after 7.5+ hours of sleep", "after less than 6.5"), need)}
-    ${app.effectCard("Work the day before", wk, wkSentence, need)}
-    <!--w:load--><div class="sec-h" style="margin-top:22px"><h3>Training load vs recovery</h3></div>
+    <!--w:effects-->${effectsHTML}
+    <!--w:load--><div class="sec-h" style="margin-top:22px"><h3>${nights ? "Training load vs recovery" : "Weekly training volume"}</h3></div>
     <div class="card"><p class="sub">${loadMsg}</p>
       <div class="mini-l">Sets per week</div>${app.chartSVG({ labels: weeks, series: [{ type: "bar", data: wSets }], h: 100, yMin: 0 })}
       ${nights ? `<div class="mini-l">Average HRV (ms)</div>${app.chartSVG({ labels: weeks, series: [{ data: wHrv, cls: "ln" }], h: 100, guide: hrvBase })}` : ""}</div>

@@ -33,10 +33,20 @@ function schedulePush() {
 }
 app.schedulePush = schedulePush;
 
+/* Only these app lock fields sync. A Face ID credential belongs to one phone and stays in its localStorage. */
+function syncedAppLock(lock) {
+  if (!lock || typeof lock !== "object" || Array.isArray(lock)) return { enabled: false, updatedAt: 0 };
+  const out = { enabled: !!lock.enabled, updatedAt: typeof lock.updatedAt === "number" && Number.isFinite(lock.updatedAt) ? lock.updatedAt : 0 };
+  if (lock.method === "platform" || lock.method === "passcode") out.method = lock.method;
+  if (typeof lock.passcodeHash === "string" && lock.passcodeHash) out.passcodeHash = lock.passcodeHash;
+  return out;
+}
+app.syncedAppLock = syncedAppLock;
+
 function userDataBlob() {
   return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
            deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(), planAt: app.state.planAt || {},
-           appLock: app.state.appLock || { enabled: false, updatedAt: 0 }, purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
+           appLock: syncedAppLock(app.state.appLock), purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
 }
 
 /* PostgREST says this when the migration has not been applied yet. */
@@ -94,9 +104,19 @@ async function cloudPush() {
   try {
     const { data, error } = await app.sb.rpc("merge_user_data", { p_data: blob });
     if (!error && data && typeof data === "object") {
-      if (data.machineNotes && typeof data.machineNotes === "object") app.state.machineNotes = data.machineNotes;
+      // A note edited while this push was in flight is newer than the reply, so merge instead of replacing.
+      let notesChanged = false;
+      if (data.machineNotes && typeof data.machineNotes === "object") {
+        const before = JSON.stringify(app.normalizeMachineNotes(app.state.machineNotes));
+        app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, data.machineNotes);
+        notesChanged = JSON.stringify(app.state.machineNotes) !== before;
+      }
       if (data.layout) keepHomeV2(data.layout);
       rememberCloudPush();
+      if (notesChanged) {
+        app.save();
+        if (typeof app.render === "function") app.render();
+      }
       return;
     }
     if (!(error && mergeRpcMissing(error))) return;
@@ -115,7 +135,8 @@ function mergeRemote(r) {
     app.state.checkins = c.checkins;
     app.state.checkinDeleted = c.checkinDeleted;
   }
-  if (r.appLock && (r.appLock.updatedAt || 0) > ((app.state.appLock && app.state.appLock.updatedAt) || 0)) app.state.appLock = r.appLock;
+  // A synced credentialId (from an older build) is ignored. This phone's own credential is never touched here.
+  if (r.appLock && (r.appLock.updatedAt || 0) > ((app.state.appLock && app.state.appLock.updatedAt) || 0)) app.state.appLock = syncedAppLock(r.appLock);
   const deleted = new Set([...(app.state.deleted || []), ...(r.deleted || [])]);
   const byId = new Map();
   // This phone's copy goes first so it wins ties (e.g. right after converting units).

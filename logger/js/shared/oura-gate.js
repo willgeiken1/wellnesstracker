@@ -151,6 +151,34 @@ export function noteOuraConnected(state, connected, opt) {
   return true;
 }
 
+/* Insights with no nights. Never-connected and a connected ring with no days
+   both need the card. Demo hides it; sample nights are a separate path. */
+export function needsSleepRecovery(state, nights) {
+  if (!state || state.demo) return false;
+  return !nights;
+}
+
+/* 403, an expired membership, or an inactive token. A ring that just connected
+   and has not synced yet is not one of these. */
+export function ouraMembershipLapsed(state) {
+  const err = state && state.oura && state.oura.lastError;
+  if (typeof err !== "string" || !err) return false;
+  return /403|lapsed|inactive|expired/i.test(err);
+}
+
+export function sleepRecoveryLabel(state, signedIn) {
+  if (!signedIn) return "Learn more";
+  if (ouraMembershipLapsed(state)) return "Reconnect";
+  if (state && state.oura && state.oura.connected) return "Sync now";
+  return "Connect Oura";
+}
+
+export function sleepRecoveryCopy(state) {
+  if (ouraMembershipLapsed(state)) return "Reconnect Oura to bring sleep and readiness back. This stays empty when the membership has lapsed.";
+  if (state && state.oura && state.oura.connected) return "Oura is connected. Sleep and readiness show up after the first sync.";
+  return "Connect an Oura Ring to see how sleep and readiness affect your lifts.";
+}
+
 export function ouraReturnDialog(code) {
   if (code === "connected") {
     return {

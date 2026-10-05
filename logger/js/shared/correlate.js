@@ -56,7 +56,7 @@ const METRICS = {
    same story told twice (sleep score versus hours, HRV versus readiness). */
 const OURA_IDS = new Set(["readiness", "sleepScore", "sleepHours", "deepHours", "remHours", "lightHours", "awakeMin", "steps", "hrv", "rhr", "temp"]);
 
-export const DISPLAY_LIMIT = 8;
+export const DISPLAY_LIMIT = 5;
 export const SEE_ALL_LIMIT = 25;
 export const DAYS_FOR_A_PATTERN = MIN_PER_GROUP * 2;
 
@@ -1108,7 +1108,8 @@ function changeWords(result) {
   if (useAbs) {
     const shown = formatAbs(result.diff);
     if (shown === "0") return "about the same";
-    const unit = result.outcome === "liftPerf" ? " points" : "";
+    // liftPerf is a session's est. 1RM as % above the lift's recent average, so a gap is percentage points.
+    const unit = result.outcome === "liftPerf" ? " percentage points" : "";
     return shown + unit + (result.diff > 0 ? " higher" : " lower");
   }
   const shown = formatPercent(result.percent);
@@ -1358,24 +1359,128 @@ export function findingsForView(rows) {
   return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).slice().sort((a, b) => viewGroup(a) - viewGroup(b) || byStrength(a, b));
 }
 
-/* The first screen keeps the ranked order, but will not stack one outcome
-   or one kind of factor. Everything else stays available for See all. */
-export function listFindings(rows) {
-  const ranked = findingsForView(rows);
-  const picked = [];
-  const rest = [];
+export const STORY_CAP = 2;
+
+/* One outcome, one kind of factor, one direction. Late eating, fat and carbs
+   all pulling HRV down are the same story. */
+export function storyKey(row) {
+  const v = row && row.valence;
+  const p = Number(row && row.percent) || 0;
+  const dir = v === "good" || v === "bad" || v === "neutral" ? v : p > 0 ? "up" : p < 0 ? "down" : "flat";
+  return row.outcome + "|" + factorFamily(row) + "|" + dir;
+}
+
+function textOrder(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/* Same as the view order, then by name so ties never depend on input order. */
+function byViewStable(a, b) {
+  return viewGroup(a) - viewGroup(b) || byStrength(a, b)
+    || textOrder(String(a.outcome), String(b.outcome))
+    || textOrder(String(a.factor), String(b.factor))
+    || (Number(a.lag) || 0) - (Number(b.lag) || 0);
+}
+
+/* Inside one story a high-confidence finding outranks a stronger medium one.
+   Strength still orders two findings with the same confidence. */
+function byStoryMember(a, b) {
+  const ca = a && a.confidence === "high" ? 0 : 1;
+  const cb = b && b.confidence === "high" ? 0 : 1;
+  return ca - cb || byViewStable(a, b);
+}
+
+/* The first screen will not stack one outcome, one kind of factor, or one
+   story, and is never padded with rows that break those caps. The next
+   STORY_CAP rows of a story stay in See all. Anything past that cap is kept
+   at the end of See all instead of being dropped, so a high finding and the
+   brief's pick cannot disappear. pickForToday (high confidence, q <= 0.001,
+   good or bad) is pinned into the first screen. */
+export function splitFindings(rows, input, today) {
+  const eligible = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
+  const grouped = new Map();
+  eligible.forEach((r) => {
+    const story = storyKey(r);
+    if (!grouped.has(story)) grouped.set(story, []);
+    grouped.get(story).push(r);
+  });
+  const slots = [];
+  const overflow = [];
+  grouped.forEach((members) => {
+    members.sort(byStoryMember);
+    members.forEach((r, i) => {
+      if (i < STORY_CAP) {
+        if (!slots[i]) slots[i] = [];
+        slots[i].push(r);
+      } else overflow.push(r);
+    });
+  });
+  const kept = [];
+  slots.forEach((slot) => {
+    slot.sort(byViewStable);
+    kept.push(...slot);
+  });
+  overflow.sort(byViewStable);
+
+  const top = [];
+  const more = [];
   const outcomes = {};
   const families = {};
-  ranked.forEach((r) => {
+  const shown = {};
+  kept.forEach((r) => {
+    const story = storyKey(r);
     const outcome = r.outcome;
     const family = factorFamily(r);
-    if (picked.length < DISPLAY_LIMIT && (outcomes[outcome] || 0) < OUTCOME_CAP && (families[family] || 0) < FAMILY_CAP) {
-      picked.push(r);
+    if (top.length < DISPLAY_LIMIT && !shown[story] && (outcomes[outcome] || 0) < OUTCOME_CAP && (families[family] || 0) < FAMILY_CAP) {
+      top.push(r);
+      shown[story] = true;
       outcomes[outcome] = (outcomes[outcome] || 0) + 1;
       families[family] = (families[family] || 0) + 1;
-    } else rest.push(r);
+    } else more.push(r);
   });
-  return picked.concat(rest);
+  more.push(...overflow);
+  if (arguments.length < 2) return { top, more };
+  return placePick(top, more, pickForToday(rows, input, today));
+}
+
+function rowKey(r) {
+  return String(r && r.outcome) + "\0" + String(r && r.factor) + "\0" + (Number(r && r.lag) || 0);
+}
+
+function roomFor(kept, r) {
+  if (kept.length >= DISPLAY_LIMIT) return false;
+  const story = storyKey(r);
+  const family = factorFamily(r);
+  let sameStory = false;
+  let outcomes = 0;
+  let families = 0;
+  for (let i = 0; i < kept.length; i++) {
+    const k = kept[i];
+    if (storyKey(k) === story) sameStory = true;
+    if (k.outcome === r.outcome) outcomes++;
+    if (factorFamily(k) === family) families++;
+  }
+  return !sameStory && outcomes < OUTCOME_CAP && families < FAMILY_CAP;
+}
+
+/* The brief's pick leads the first screen. Other rows keep their order and
+   still obey the caps; nothing is dropped from the full list. */
+function placePick(top, more, picked) {
+  if (!picked) return { top, more };
+  const key = rowKey(picked);
+  const rest = top.concat(more).filter((r) => rowKey(r) !== key);
+  const kept = [picked];
+  const overflow = [];
+  rest.forEach((r) => {
+    if (roomFor(kept, r)) kept.push(r);
+    else overflow.push(r);
+  });
+  return { top: kept, more: overflow };
+}
+
+export function listFindings(rows, input, today) {
+  const { top, more } = arguments.length < 2 ? splitFindings(rows) : splitFindings(rows, input, today);
+  return top.concat(more);
 }
 
 /* One numeric series, same line-reflected adjustment evaluate() uses for cuts.

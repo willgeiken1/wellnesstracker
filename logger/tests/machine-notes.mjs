@@ -143,7 +143,8 @@ async function main() {
   await page.waitForSelector("#workout .ex");
   const rows = await page.locator("#workout .ex").count();
   const controls = await page.locator("#workout .ms-chip, #workout .ms-add").count();
-  check("every exercise shows a chip or link", rows > 1 && controls === rows, `${controls} of ${rows}`);
+  const machineRows = await page.evaluate(() => [...document.querySelectorAll("#workout .ex")].filter((li) => /machine|cable|smith|plate[- ]?loaded|pulldown|pec deck|leg press|hack squat|selectorized|assisted/i.test(li.innerText) || li.querySelector(".ms-chip")).length);
+  check("machine exercises show a chip or link, others don't", rows > 1 && controls === machineRows && controls >= 1, `${controls} of ${machineRows} machine rows (${rows} rows)`);
   check("saved note shows as a chip", (await page.locator("#workout .ms-chip span").first().innerText()) === "Seat 4");
   check("unsaved exercise shows the link", await page.locator("#workout .ms-add", { hasText: "Machine settings" }).count() >= 1);
   const chipHtml = await page.locator("#workout .ms-chip").first().innerHTML();
@@ -156,7 +157,7 @@ async function main() {
 
   await page.locator("#workout .ms-chip").first().click();
   await page.waitForSelector("#ms-text");
-  check("editor has no Clear button", await page.locator("[data-action='ms-clear']").count() === 0 && !(await page.locator("#sheet").innerText()).includes("Clear"));
+  check("editor offers Clear for a saved note", await page.locator("[data-action='ms-clear']").count() === 1);
   check("editor keeps the saved text", await page.locator("#ms-text").inputValue() === "Seat 4");
   await page.locator("#ms-text").fill("Seat 6");
   await page.locator("[data-action='ms-save']").click();
@@ -183,7 +184,7 @@ async function main() {
   await page.locator("[data-action='ms-save']").click();
   await page.waitForTimeout(100);
   check("empty save does not wipe the note", (await page.locator("#workout .ms-chip span").first().innerText()) === "Seat 6");
-  check("Clear stays absent", await page.locator("[data-action='ms-clear']").count() === 0);
+  check("sheet stays open after an empty save", await page.locator("#ms-text").count() === 1);
   await page.locator("#ms-text").fill("Seat 7");
   await page.locator("[data-action='ms-save']").click();
   await page.waitForTimeout(150);
@@ -250,7 +251,11 @@ async function main() {
   check("edits to different notes both survive", merged.both["Pec Fly Machine"].text === "Seat 7" && merged.both.Dips.text === "New dips" && merged.both["Calf Raises"].text === "High", JSON.stringify(merged.both));
   check("newest edit to the same note wins", merged.newest["Pec Fly Machine"].text === "Seat 9" && merged.olderRemote["Pec Fly Machine"].text === "Seat 9");
   check("first sync on an empty phone keeps cloud notes", merged.firstSync === "Wide");
-  check("legacy notes are not replaced by a newer settings blob", merged.legacyLocal === "Seat 4" && merged.legacyOther === "Wide grip", JSON.stringify(merged));
+  // Both legacy strings are at 0. merge_user_data keeps the note stored first.
+  // The client adopts that stored note on an equal at, including 0. Convergence
+  // with the server beats keeping the local copy. A newer settingsAt does not
+  // decide the note on its own; the stored note text does.
+  check("legacy notes are not replaced by a newer settings blob", merged.legacyLocal === "Seat 1" && merged.legacyOther === "Wide grip", JSON.stringify(merged));
 
   await page.evaluate(() => {
     app.ui.workoutOpen = false;

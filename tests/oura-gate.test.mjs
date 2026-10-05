@@ -7,8 +7,11 @@ import { ouraMetric } from "../logger/js/shared/brief.js";
 import {
   gatedOuraStripHTML,
   hasOura,
+  needsSleepRecovery,
   noteOuraConnected,
   ouraReturnDialog,
+  sleepRecoveryCopy,
+  sleepRecoveryLabel,
   ouraWidgetShowing,
   seedOuraWidgets,
   visibleHomeIds,
@@ -237,8 +240,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v30/);
-  assert.match(sentry, /insight-shell-v30/);
+  assert.match(sw, /insight-shell-v32/);
+  assert.match(sentry, /insight-shell-v32/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });
@@ -414,6 +417,25 @@ test("oura personas on the registry home hide empty tiles", () => {
   assert.match(ready, /data-hw="readiness"/);
   assert.match(ready, /86/);
   assert.doesNotMatch(ready, /Waiting for first sync|No Oura yet|hw-v">–/);
+});
+
+test("lapsed Oura needs the sleep card, and a reconnect label, while demo stays hidden", () => {
+  const lapsed = state({ oura: { connected: true, lastSync: null, days: {}, lastError: "Oura daily_sleep request failed (403)" } });
+  const never = state({ oura: { connected: false, lastSync: null, days: {} } });
+  const withNights = state({ oura: { connected: true, days: { "2026-06-01": { readiness: 80 } } } });
+  const demo = state({ demo: true, oura: { connected: false, days: {} } });
+  assert.equal(needsSleepRecovery(lapsed, 0), true);
+  assert.equal(needsSleepRecovery(never, 0), true);
+  assert.equal(needsSleepRecovery(withNights, 1), false);
+  assert.equal(needsSleepRecovery(demo, 0), false);
+  const fresh = state({ oura: { connected: true, lastSync: null, days: {}, lastError: null } });
+  assert.equal(sleepRecoveryLabel(lapsed, true), "Reconnect");
+  assert.equal(sleepRecoveryLabel(fresh, true), "Sync now");
+  assert.equal(sleepRecoveryLabel(never, true), "Connect Oura");
+  assert.equal(sleepRecoveryLabel(never, false), "Learn more");
+  assert.match(sleepRecoveryCopy(fresh), /first sync/);
+  assert.doesNotMatch(sleepRecoveryCopy(fresh), /lapsed|Reconnect/);
+  assert.match(sleepRecoveryCopy(lapsed), /lapsed/);
 });
 
 test("the OAuth dialog sends people to Settings", () => {

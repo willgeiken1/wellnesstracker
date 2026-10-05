@@ -25,6 +25,7 @@ function markUnlocked() {
   app.lockPrompted = false;
   app.ui.lockMode = "main";
   app.ui.lockMsg = "";
+  app.ui.lockBioFailed = false;
   document.documentElement.classList.remove("lock-first");
   if (app.checkProfileGate) app.checkProfileGate();
   app.render();
@@ -37,12 +38,124 @@ function lockState() {
 }
 app.lockState = lockState;
 
-function usageRow() {
-  const on = app.usageSharingOn ? app.usageSharingOn() : true;
+/* The Face ID credential is per phone and per account. It lives in localStorage, never in app.state.appLock. */
+const LOCK_CRED_PREFIX = "insight-lock-cred:";
+
+function lockCredKey(ownerId) {
+  return LOCK_CRED_PREFIX + (ownerId || "local");
+}
+app.lockCredKey = lockCredKey;
+
+/* Which account id the credential was stored under. The lookup keeps using it
+   when ownerId and the session id trade places, so Face ID is not set up again. */
+const LOCK_BOUND_KEY = "insight-lock-cred-id";
+
+function accountIds() {
+  const ids = [];
+  const add = (id) => {
+    if (typeof id === "string" && id && ids.indexOf(id) < 0) ids.push(id);
+  };
+  add(app.state && app.state.ownerId);
+  add(app.session && app.session.user && app.session.user.id);
+  return ids;
+}
+
+function readCred(id) {
+  try {
+    const v = localStorage.getItem(lockCredKey(id || "local"));
+    return typeof v === "string" && v ? v : null;
+  } catch (e) { return null; }
+}
+
+function boundId() {
+  try {
+    const v = localStorage.getItem(LOCK_BOUND_KEY);
+    return typeof v === "string" && v ? v : "";
+  } catch (e) { return ""; }
+}
+
+function writeBound(id) {
+  try { if (id) localStorage.setItem(LOCK_BOUND_KEY, id); } catch (e) {}
+}
+
+/* Prefer the key that already holds this phone's credential. A credential saved
+   before sign-in (the "local" key) moves onto the account once, and is not
+   handed to a different account. */
+function lockStorageId() {
+  const accounts = accountIds();
+  const bound = boundId();
+  if (bound && bound !== "local" && accounts.indexOf(bound) >= 0 && readCred(bound)) return bound;
+  for (let i = 0; i < accounts.length; i++) {
+    if (readCred(accounts[i])) {
+      writeBound(accounts[i]);
+      return accounts[i];
+    }
+  }
+  if (readCred("local")) {
+    if (!accounts.length) return "local";
+    const dest = accounts[0];
+    if (!readCred(dest)) {
+      try {
+        localStorage.setItem(lockCredKey(dest), readCred("local"));
+        localStorage.removeItem(lockCredKey("local"));
+      } catch (e) {}
+    }
+    writeBound(dest);
+    return dest;
+  }
+  return accounts[0] || "local";
+}
+
+function lockOwner() {
+  return lockStorageId();
+}
+
+function localLockCred(ownerId) {
+  if (arguments.length) return readCred(ownerId || "local");
+  return readCred(lockStorageId());
+}
+app.localLockCred = localLockCred;
+
+function setLocalLockCred(credentialId, ownerId) {
+  const id = arguments.length > 1 ? (ownerId || "local") : lockStorageId();
+  const key = lockCredKey(id);
+  try {
+    if (credentialId) {
+      localStorage.setItem(key, String(credentialId));
+      writeBound(id);
+    } else {
+      localStorage.removeItem(key);
+      if (boundId() === id) localStorage.removeItem(LOCK_BOUND_KEY);
+    }
+  } catch (e) {}
+}
+app.setLocalLockCred = setLocalLockCred;
+
+/* Older builds kept credentialId in the synced appLock. Keep it as this phone's credential if this phone has none, then drop it from state.
+   If it came from another phone, Face ID fails here and the lock screen offers to set it up on this phone. */
+function adoptLegacyLockCred() {
+  const L = app.state && app.state.appLock;
+  if (!app.syncedAppLock || !L || typeof L !== "object" || !Object.prototype.hasOwnProperty.call(L, "credentialId")) return;
+  if (L.credentialId && L.enabled && L.method !== "passcode" && !localLockCred()) setLocalLockCred(L.credentialId);
+  app.state.appLock = app.syncedAppLock(L);
+  try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) {}
+}
+app.adoptLegacyLockCred = adoptLegacyLockCred;
+adoptLegacyLockCred();
+
+function switchRow(title, sub, on, action) {
   return `<div class="set-row usage-row">
-      <span class="usage-copy"><b>Share anonymous usage data</b><span class="sub">Crash reports and which features get used. No workouts, food, notes, photos, or email.</span></span>
-      <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" data-action="usage-share" aria-label="Share anonymous usage data"><i></i></button>
+      <span class="usage-copy"><b>${title}</b><span class="sub">${sub}</span></span>
+      <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" data-action="${action}" aria-label="${title}"><i></i></button>
     </div>`;
+}
+
+/* Both choices live in localStorage on this phone only. They never go into app.state. */
+function usageRow() {
+  const crash = app.crashReportsOn ? app.crashReportsOn() : true;
+  const analytics = app.analyticsOn ? app.analyticsOn() : false;
+  return switchRow("Send crash reports", "What broke, plus the device and browser. No workouts, food, notes, photos, or email.", crash, "crash-share")
+    + switchRow("Share usage analytics", "Which features get used, linked to your account ID. Off unless you turn it on. No workouts, food, notes, photos, or email.", analytics, "usage-share");
 }
 
 function privacySectionHTML() {
@@ -70,8 +183,8 @@ function summarySheetHTML() {
     <p class="sub">Plain version. The full policy is <a href="../privacy.md" target="_blank" rel="noopener">privacy.md</a>.</p>
     <div class="priv-block"><b>On this phone and in your account</b><p class="sub">Your email and password (the password isn't stored in a readable form). Profile, weigh-ins, workouts, sets, routines, food logs, cardio, measurements, goals, settings, and progress photos you choose to add.</p></div>
     <div class="priv-block"><b>Oura, if you connect it</b><p class="sub">Sleep, readiness, HRV, resting heart rate, temperature, and steps. The login that fetches this sits in a private table the app itself can't read.</p></div>
-    <div class="priv-block"><b>Who else sees it</b><p class="sub">Supabase holds the account, backup, and photos. Anthropic receives a meal photo and any note you type with it, and a written meal description if you submit one for an estimate. Insight doesn't keep that photo. Open Food Facts receives a barcode number when you look one up. Oura sends ring data only after you connect. Sentry, hosted in the US, gets a crash report: what broke, the device and browser, and your anonymous account id if you're signed in. No health data, and IP addresses aren't stored. PostHog, hosted in the US, gets anonymous notes about which features get used, from a short fixed list, with no health values. It discards IP data and doesn't record the screen. Both follow Share anonymous usage data. That switch is on unless you turn it off, and the choice stays on this phone. Nobody else using Insight can open your logs. We don't sell data or show ads.</p></div>
-    <div class="priv-block"><b>Your choices</b><p class="sub">Turn off Share anonymous usage data to stop crash reports and those feature notes. Export a zip of CSV files, delete the logs between two dates, or delete the whole account. App lock stays on this device. We never receive your face, fingerprint, or device passcode.</p></div>`;
+    <div class="priv-block"><b>Who else sees it</b><p class="sub">Supabase holds the account, backup, and photos. Anthropic receives a meal photo and any note you type with it, and a written meal description if you submit one for an estimate. Insight doesn't keep that photo. Open Food Facts receives a barcode number when you look one up. Oura sends ring data only after you connect. Sentry, hosted in the US, gets a crash report: what broke, the device and browser, and your account ID if you're signed in. No health data, and IP addresses aren't stored. Send crash reports is on unless you turn it off. PostHog, hosted in the US, gets which features get used, from a short fixed list, with no health values, only if you turn on Share usage analytics. That switch is off unless you turn it on. PostHog data is linked to your account ID, so it isn't anonymous. Location lookup from IP is turned off, and the screen isn't recorded. Both choices stay on this phone. Nobody else using Insight can open your logs. We don't sell data or show ads.</p></div>
+    <div class="priv-block"><b>Your choices</b><p class="sub">Turn off Send crash reports to stop crash reports. Share usage analytics stays off unless you turn it on, and turning it off stops PostHog. Export a zip of CSV files, delete the logs between two dates, or delete the whole account. App lock follows your account, but Face ID is set up separately on each phone. We never receive your face, fingerprint, or device passcode.</p></div>`;
 }
 app.summarySheetHTML = summarySheetHTML;
 
@@ -276,6 +389,7 @@ app.clearPhotoStore = clearPhotoStore;
 async function eraseThisPhone() {
   clearTimeout(app.pushTimer);
   await app.clearPhotoStore();
+  setLocalLockCred(null);
   try { localStorage.removeItem(app.KEY); } catch (e) {}
   try { sessionStorage.removeItem("insight-unlocked"); } catch (e) {}
   app.replaceState(app.load());
@@ -358,7 +472,7 @@ async function platformAvailable() {
 app.platformAvailable = platformAvailable;
 
 async function registerPlatformKey() {
-  const user = app.session.user;
+  const user = (app.session && app.session.user) || { id: lockOwner(), email: "" };
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
@@ -380,7 +494,10 @@ async function registerPlatformKey() {
 app.registerPlatformKey = registerPlatformKey;
 
 function turnLockOn(patch) {
-  app.state.appLock = { enabled: true, method: "platform", credentialId: null, passcodeHash: null, updatedAt: Date.now(), ...patch };
+  const { credentialId, ...rest } = patch || {};
+  const next = { enabled: true, method: "platform", passcodeHash: null, updatedAt: Date.now(), ...rest };
+  setLocalLockCred(next.method === "platform" ? credentialId : null);
+  app.state.appLock = app.syncedAppLock(next);
   try { sessionStorage.setItem("insight-unlocked", "1"); } catch (e) {}
   app.save();
   app.ui.sheet = null;
@@ -423,7 +540,7 @@ async function savePasscodeLock() {
   if (a.length < 6 || b.length < 6) { app.toast("Use 6 digits."); return; }
   if (a !== b) { app.toast("Those codes don't match."); return; }
   const passcodeHash = await app.hashPasscode(a);
-  app.turnLockOn({ method: "passcode", credentialId: null, passcodeHash });
+  app.turnLockOn({ method: "passcode", passcodeHash });
   app.toast("App lock is on. Insight will ask for this code when you open it.");
 }
 app.savePasscodeLock = savePasscodeLock;
@@ -431,6 +548,7 @@ app.savePasscodeLock = savePasscodeLock;
 async function disableAppLock() {
   if (!(await app.ask({ title: "Turn off app lock?", body: "Insight will open without Face ID or a passcode on this phone.", ok: "Turn off" }))) return;
   app.state.appLock = { enabled: false, updatedAt: Date.now() };
+  setLocalLockCred(null);
   app.save();
   app.render();
   app.toast("App lock is off.");
@@ -438,8 +556,9 @@ async function disableAppLock() {
 app.disableAppLock = disableAppLock;
 
 async function unlockWithBiometric() {
-  const L = app.lockState();
-  if (!L.credentialId || !navigator.credentials) {
+  const credentialId = localLockCred();
+  if (!credentialId) { await app.setupDeviceLock(); return; }
+  if (!navigator.credentials) {
     app.ui.lockMsg = "Face ID isn't available here. Sign in with your password to open Insight.";
     app.ui.lockMode = "relogin";
     app.renderLock(true);
@@ -451,17 +570,49 @@ async function unlockWithBiometric() {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         timeout: 60000,
         userVerification: "required",
-        allowCredentials: [{ type: "public-key", id: app.b64urlToBuf(L.credentialId), transports: ["internal"] }],
+        allowCredentials: [{ type: "public-key", id: app.b64urlToBuf(credentialId), transports: ["internal"] }],
       },
     });
     if (!cred) throw new Error("cancelled");
+    app.ui.lockBioFailed = false;
     app.markUnlocked();
   } catch (e) {
-    app.ui.lockMsg = "That didn't unlock. Try again, or sign in with your password. Your logs stay put either way.";
+    // The stored credential may belong to another phone (older builds synced it). Offer a fresh one for this phone.
+    app.ui.lockBioFailed = true;
+    app.ui.lockMsg = "That didn't unlock. Try again, set up Face ID on this phone, or sign in with your password. Your logs stay put either way.";
     app.renderLock(true);
   }
 }
 app.unlockWithBiometric = unlockWithBiometric;
+
+/* Lock is on for the account but this phone has no credential yet. Registering one asks for Face ID or the device passcode,
+   the same check an unlock does. The synced lock settings don't change. */
+async function setupDeviceLock() {
+  const fallback = app.lockState().passcodeHash ? "passcode" : "relogin";
+  if (!window.PublicKeyCredential || !navigator.credentials || !navigator.credentials.create) {
+    app.ui.lockMsg = fallback === "passcode" ? "Face ID isn't available here. Use your app passcode." : "Face ID isn't available here. Sign in with your password to open Insight.";
+    app.ui.lockMode = fallback;
+    app.renderLock(true);
+    return;
+  }
+  try {
+    const credentialId = await app.registerPlatformKey();
+    setLocalLockCred(credentialId);
+    app.ui.lockBioFailed = false;
+    app.markUnlocked();
+    app.toast("Face ID is set up on this phone.");
+  } catch (e) {
+    const name = e && e.name;
+    if (name === "AbortError" || name === "NotAllowedError") {
+      app.ui.lockMsg = "Face ID wasn't set up. Try again, or sign in with your password.";
+    } else {
+      app.ui.lockMsg = fallback === "passcode" ? "Face ID isn't available here. Use your app passcode." : "Face ID isn't available here. Sign in with your password to open Insight.";
+      app.ui.lockMode = fallback;
+    }
+    app.renderLock(true);
+  }
+}
+app.setupDeviceLock = setupDeviceLock;
 
 async function unlockWithPasscode() {
   const L = app.lockState();
@@ -514,11 +665,14 @@ function renderLock(force) {
   const el = app.$("#lock");
   if (!el) return;
   document.body.classList.add("locked");
-  const mode = app.ui.lockMode || (app.lockState().method === "passcode" ? "passcode" : "main");
+  const L = app.lockState();
+  const hasCred = !!localLockCred();
+  // Face ID lock without a credential on this phone: the app passcode comes first if there is one.
+  const mode = app.ui.lockMode || (L.method === "passcode" || (!hasCred && L.passcodeHash) ? "passcode" : "main");
   if (!force && !el.hidden && el.dataset.mode === mode) return;
   el.hidden = false;
   el.dataset.mode = mode;
-  const L = app.lockState();
+  const setupBtn = `<button class="btn block" data-action="lock-setup" style="margin-top:8px">Set up Face ID on this phone</button>`;
   const msg = app.ui.lockMsg ? `<p class="lock-msg">${app.esc(app.ui.lockMsg)}</p>` : "";
   const email = app.esc((app.session && app.session.user && app.session.user.email) || app.ui.lockEmail || "");
   let body;
@@ -539,12 +693,21 @@ function renderLock(force) {
       <label class="field-label" for="lock-code">Passcode</label>
       <input class="text-in" id="lock-code" inputmode="numeric" autocomplete="off" maxlength="6" aria-label="Passcode">
       <button class="btn primary block" data-action="lock-code-go">Unlock</button>
+      ${L.method !== "passcode" && !hasCred ? setupBtn : ""}
       <button class="link-btn lock-alt" data-action="lock-relogin">Forgot it? Sign in again</button>`;
+  } else if (!hasCred) {
+    body = `<h1>Insight is locked</h1>
+      <p class="sub">App lock is on for your account, but Face ID isn't set up on this phone yet.</p>
+      ${msg}
+      <button class="btn primary block" data-action="lock-setup">Set up Face ID on this phone</button>
+      ${L.passcodeHash ? `<button class="btn block" data-action="lock-show-pass" style="margin-top:8px">Use app passcode</button>` : ""}
+      <button class="link-btn lock-alt" data-action="lock-relogin">Sign in again instead</button>`;
   } else {
     body = `<h1>Insight is locked</h1>
       <p class="sub">Unlock with Face ID, Touch ID, or your device passcode.</p>
       ${msg}
       <button class="btn primary block" data-action="lock-bio">Unlock</button>
+      ${app.ui.lockBioFailed ? setupBtn : ""}
       ${L.passcodeHash ? `<button class="btn block" data-action="lock-show-pass" style="margin-top:8px">Use app passcode</button>` : ""}
       <button class="link-btn lock-alt" data-action="lock-relogin">Sign in again instead</button>`;
   }
