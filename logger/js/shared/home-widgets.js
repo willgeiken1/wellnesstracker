@@ -2,33 +2,39 @@ import { app } from "../runtime.js";
 import { correlate, pickForToday, todayLine } from "./correlate.js";
 
 /* Home widget registry.
-   HOME_REGISTRY_PAINT stays false until the Home editor ships. Home keeps the
-   legacy Morning Brief stack for every user, including a saved homeV2.
-   getHomeLayout() only describes the v2 stand-in. Step 2 persists a migration;
-   this file does not.
+   Painting is per user: homeRegistryActive is true only for a stored homeV2
+   that is a real edit (v is the number 2, items is an array, and the copy is
+   not migrated). Everyone else keeps the legacy Home. HOME_REGISTRY_PAINT
+   stays false and is not the paint switch.
 
    homeV2 lives on layout so it rides along in user_data, but cloud merge
    keeps it off the wholesale layout replace and picks a winner by updatedAt.
-   A missing homeV2 is only an in-memory stand-in (updatedAt 0). setHomeLayout
-   is a user edit: it keeps unknown fields, clears migrated, migratedAt, and
-   migratedFrom, and stamps now. */
+   A missing homeV2 is only an in-memory stand-in (updatedAt 0). getHomeLayout
+   never writes. setHomeLayout is a user edit: it spreads the previous homeV2,
+   keeps unknown string ids in items and hidden, clears migrated, migratedAt,
+   and migratedFrom, and stamps now.
 
-/* Off until the editor can save a v2 arrangement. Home must not paint from
-   the registry before that, or a migrated homeV2 drops the Morning Brief. */
+   sizes, when present, maps an id to "small" or "medium" only where that
+   differs from the registry default. Unknown id keys are kept and not rendered. */
+
+/* Not the paint switch. A migrated homeV2 must keep the legacy stack, and
+   older builds still read this flag. homeRegistryActive decides for this one. */
 export const HOME_REGISTRY_PAINT = false;
 
-const BRIEF_METRICS = ["pattern", "oura", "train", "food", "week", "weight"];
-const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
+/* Default size is HOME_WIDGETS[id].size. These also accept the other size. */
+const BOTH_SIZES = new Set([
+  "readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps",
+  "weekly-goal", "food-today", "food-yesterday", "weight-trend", "cardio-minutes",
+  "pattern", "headline",
+]);
 
-/* The brief's training tile is the same job as the hero, so it has no id of its own. */
-const METRIC_IDS = {
-  pattern: ["pattern"],
-  oura: ["readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps"],
-  train: [],
-  food: ["food-yesterday"],
-  week: ["weekly-goal"],
-  weight: ["weight-trend"],
-};
+/* Tiles that repeat a line the Morning brief already paints. Oura tiles are not
+   in this list: the brief drops its own readiness line when those tiles show. */
+export const BRIEF_TILE_IDS = [
+  "headline", "pattern", "today", "food-yesterday", "weekly-goal", "weight-trend",
+];
+
+const LEGACY_ORDER = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -515,6 +521,17 @@ function renderCardio(data) {
   return `<section class="sec" data-hw="cardio"><div class="sec-h"><h3>Cardio</h3></div><div class="card cw"><button class="cw-ring" data-action="cardio-open" aria-label="Cardio: ${min} of ${goal} minutes this week"><svg viewBox="0 0 76 76" aria-hidden="true"><circle cx="38" cy="38" r="30" class="cw-bg"/><circle cx="38" cy="38" r="30" class="cw-fg" stroke-dasharray="${C * f} ${C}" transform="rotate(-90 38 38)"/></svg><span><b>${min}</b><small>/ ${goal} min</small></span></button><div class="cw-right"><span class="cw-label">Cardio this week</span></div></div></section>`;
 }
 
+function renderBrief() {
+  const brief = typeof app.briefHTML === "function" ? app.briefHTML() : "";
+  if (app.ui && app.ui.briefEdit) return brief;
+  const nudge = typeof app.weighReminderHTML === "function" ? app.weighReminderHTML() : "";
+  if (!nudge) return brief;
+  const close = brief.lastIndexOf("</section>");
+  if (close >= 0) return brief.slice(0, close) + nudge + brief.slice(close);
+  if (!brief) return "";
+  return `<section class="card brief" aria-label="Morning brief">${brief}${nudge}</section>`;
+}
+
 function renderLastNight(data) {
   const day = data && data.oura;
   if (!day || !day.total) return "";
@@ -525,11 +542,13 @@ function renderLastNight(data) {
 }
 
 function widget(spec) {
+  const sizes = BOTH_SIZES.has(spec.id) ? ["small", "medium"] : [spec.size];
   return {
     id: spec.id,
     name: spec.name,
     category: spec.category,
     size: spec.size,
+    sizes,
     needsOura: spec.needsOura,
     render(data) { return spec.render(asData(data)); },
     preview(sample) {
@@ -552,6 +571,7 @@ export const HOME_WIDGETS = {
   "food-yesterday": widget({ id: "food-yesterday", name: "Yesterday's food", category: "nutrition", size: "small", needsOura: false, render: renderFoodYesterday }),
   "weight-trend": widget({ id: "weight-trend", name: "Weight trend", category: "body", size: "small", needsOura: false, render: renderWeight }),
   "cardio-minutes": widget({ id: "cardio-minutes", name: "Cardio minutes", category: "training", size: "small", needsOura: false, render: renderCardioMinutes }),
+  brief: widget({ id: "brief", name: "Morning brief", category: "training", size: "medium", needsOura: false, render: renderBrief }),
   today: widget({ id: "today", name: "Today's workout", category: "training", size: "medium", needsOura: false, render: renderToday }),
   "this-week": widget({ id: "this-week", name: "This week", category: "training", size: "medium", needsOura: false, render: renderThisWeek }),
   pattern: widget({ id: "pattern", name: "Today's pattern", category: "training", size: "medium", needsOura: false, render: renderPattern }),
@@ -567,14 +587,167 @@ function isHomeV2(raw) {
   return !!(raw && raw.v === 2 && Array.isArray(raw.items));
 }
 
-/* Known catalog ids, first occurrence only. Null, blanks, duplicates, and unknown ids drop out.
-   TODO: setHomeLayout drops unknown ids. Revisit in the step 4 editor. */
+/* Known catalog ids, first occurrence only. Used when reading a layout to paint.
+   Unknown ids stay in the stored copy and are left out of this list. */
 function widgetIds(list) {
   const out = [];
   (Array.isArray(list) ? list : []).forEach((id) => {
     if (typeof id === "string" && HOME_WIDGETS[id] && !out.includes(id)) out.push(id);
   });
   return out;
+}
+
+/* Every non-blank string once, including ids this build does not know. */
+function stringIds(list) {
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach((id) => {
+    if (typeof id === "string" && id && !out.includes(id)) out.push(id);
+  });
+  return out;
+}
+
+/* Keep unknown ids a newer client stored when this build rewrites the list. */
+function withPreservedUnknown(prevList, nextList) {
+  const next = stringIds(nextList);
+  const prev = stringIds(prevList);
+  const have = new Set(next);
+  prev.forEach((id, index) => {
+    if (HOME_WIDGETS[id] || have.has(id)) return;
+    let at = next.length;
+    let placed = false;
+    for (let j = index - 1; j >= 0; j--) {
+      const pos = next.indexOf(prev[j]);
+      if (pos >= 0) { at = pos + 1; placed = true; break; }
+    }
+    if (!placed) {
+      for (let j = index + 1; j < prev.length; j++) {
+        const pos = next.indexOf(prev[j]);
+        if (pos >= 0) { at = pos; break; }
+      }
+    }
+    next.splice(at, 0, id);
+    have.add(id);
+  });
+  return next;
+}
+
+function sizeChoice(value) {
+  return value === "small" || value === "medium" ? value : null;
+}
+
+/* Known ids store only a non-default supported size. Unknown id keys are kept. */
+function sanitizeSizes(draftSizes, prevSizes) {
+  const out = {};
+  const prev = prevSizes && typeof prevSizes === "object" && !Array.isArray(prevSizes) ? prevSizes : {};
+  const draft = draftSizes && typeof draftSizes === "object" && !Array.isArray(draftSizes) ? draftSizes : null;
+  Object.keys(prev).forEach((id) => {
+    if (HOME_WIDGETS[id]) return;
+    const choice = sizeChoice(prev[id]);
+    if (choice) out[id] = choice;
+  });
+  const source = draft || prev;
+  Object.keys(source).forEach((id) => {
+    const choice = sizeChoice(source[id]);
+    if (!choice) return;
+    const entry = HOME_WIDGETS[id];
+    if (!entry) { out[id] = choice; return; }
+    const allowed = entry.sizes || [entry.size];
+    if (!allowed.includes(choice) || choice === entry.size) return;
+    out[id] = choice;
+  });
+  return out;
+}
+
+export function widgetSize(id, layout) {
+  const entry = HOME_WIDGETS[id];
+  if (!entry) return "medium";
+  const allowed = entry.sizes || [entry.size];
+  const choice = layout && layout.sizes && layout.sizes[id];
+  if (typeof choice === "string" && allowed.includes(choice)) return choice;
+  return entry.size;
+}
+
+/* True when this phone should paint the registry Home. A migration is not an edit. */
+export function homeRegistryActive(state) {
+  const saved = state && state.layout && state.layout.homeV2;
+  if (!isHomeV2(saved)) return false;
+  if (saved.migrated === true) return false;
+  if (typeof saved.migratedAt === "number" && saved.migratedAt > 0) return false;
+  return true;
+}
+
+function ringOrDemo(state) {
+  if (!state) return false;
+  return !!(state.demo || (state.oura && state.oura.connected));
+}
+
+function storedHomeV2(state) {
+  const saved = state && state.layout && state.layout.homeV2;
+  return !!(saved && saved.v === 2 && Array.isArray(saved.items));
+}
+
+function concealEmpty(items, hidden, id) {
+  if (!items.includes(id)) return { items, hidden };
+  return { items: items.filter((x) => x !== id), hidden: hidden.includes(id) ? hidden : hidden.concat(id) };
+}
+
+/* The editor's starting arrangement. Unknown ids stay on the stored copy.
+   A home that has never been saved starts from the trimmed stand-in: the brief
+   stays one card, its metric tiles stay out, and Oura ids stay out with no ring.
+   A real edit is opened as stored. A migration drops Oura ids when there is no
+   ring, and hides an empty weekly goal or an empty weigh-in tile. */
+export function homeEditorDraft(state) {
+  const stored = storedHomeV2(state);
+  const layout = stored ? getHomeLayout(state) : equivalentLayout(state);
+  const hiddenSet = new Set(layout.hidden);
+  let items = layout.items.filter((id) => !hiddenSet.has(id));
+  let hidden = layout.hidden.filter((id) => HOME_WIDGETS[id]);
+  const stripOura = () => {
+    const oura = (id) => !!(HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura);
+    items = items.filter((id) => !oura(id));
+    hidden = hidden.filter((id) => !oura(id));
+  };
+  if (!stored) {
+    if (items.includes("brief")) {
+      const dup = new Set(BRIEF_TILE_IDS);
+      items = items.filter((id) => !dup.has(id));
+      hidden = hidden.filter((id) => !dup.has(id));
+    }
+    if (!ringOrDemo(state)) stripOura();
+  } else if (!homeRegistryActive(state)) {
+    if (!ringOrDemo(state)) stripOura();
+    const goal = state && state.goals && state.goals.sessionsPerWeek;
+    if (!goal) ({ items, hidden } = concealEmpty(items, hidden, "weekly-goal"));
+    const weighs = state && state.profile && Array.isArray(state.profile.weighIns) ? state.profile.weighIns : [];
+    if (!weighs.length && !(state && state.demo)) ({ items, hidden } = concealEmpty(items, hidden, "weight-trend"));
+  }
+  const raw = state && state.layout && state.layout.homeV2;
+  const sizes = raw && raw.sizes && typeof raw.sizes === "object" && !Array.isArray(raw.sizes) ? { ...raw.sizes } : {};
+  return { items, hidden, sizes };
+}
+
+/* True when Save would store the same cards, order, hidden set, and sizes. */
+export function homeDraftUnchanged(draft, base) {
+  const items = stringIds(draft && draft.items).filter((id) => HOME_WIDGETS[id]);
+  const baseItems = stringIds(base && base.items).filter((id) => HOME_WIDGETS[id]);
+  if (items.length !== baseItems.length || items.some((id, i) => id !== baseItems[i])) return false;
+  const hide = (list, shown) => stringIds(list).filter((id) => HOME_WIDGETS[id] && !shown.includes(id)).sort();
+  const hidden = hide(draft && draft.hidden, items);
+  const baseHidden = hide(base && base.hidden, baseItems);
+  if (hidden.length !== baseHidden.length || hidden.some((id, i) => id !== baseHidden[i])) return false;
+  const sizes = sanitizeSizes(draft && draft.sizes, null);
+  const baseSizes = sanitizeSizes(base && base.sizes, null);
+  const keys = Object.keys(sizes).sort();
+  const baseKeys = Object.keys(baseSizes).sort();
+  return keys.length === baseKeys.length && keys.every((key, i) => key === baseKeys[i] && sizes[key] === baseSizes[key]);
+}
+
+/* Writes a real edit. Unknown ids already stored are put back by setHomeLayout. */
+export function commitHomeEditor(state, draft) {
+  if (!state || typeof state !== "object") throw new Error("commitHomeEditor needs a state object");
+  const items = stringIds(draft && draft.items).filter((id) => HOME_WIDGETS[id]);
+  const hidden = stringIds(draft && draft.hidden).filter((id) => HOME_WIDGETS[id] && !items.includes(id));
+  return setHomeLayout(state, { items, hidden, sizes: draft && draft.sizes });
 }
 
 function cloneHomeV2(raw) {
@@ -598,34 +771,18 @@ function legacyHomeView(state) {
   return { order: full, hidden };
 }
 
-function briefView(state) {
-  const b = state && state.brief && typeof state.brief === "object" && !Array.isArray(state.brief) ? state.brief : {};
-  const order = [];
-  (Array.isArray(b.order) ? b.order : []).forEach((id) => { if (BRIEF_METRICS.includes(id) && !order.includes(id)) order.push(id); });
-  BRIEF_METRICS.forEach((id) => { if (!order.includes(id)) order.push(id); });
-  const hidden = [...new Set((Array.isArray(b.hidden) ? b.hidden : []).filter((id) => BRIEF_METRICS.includes(id)))];
-  return { order, hidden };
-}
-
-/* Stand-in only. Visible legacy slots expand into v2 ids; everything else is hidden.
-   The Morning brief stays one card on screen until a saved homeV2 exists. */
+/* Stand-in only. The Morning brief is one card. A legacy hidden brief stays hidden.
+   Metric tiles are not copied out of the brief; the editor drops them before a save. */
 function equivalentLayout(state) {
   const legacy = legacyHomeView(state);
   const hiddenLegacy = new Set(legacy.hidden);
-  const brief = briefView(state);
-  const briefHidden = new Set(brief.hidden);
   const visible = [];
   const seen = new Set();
   const add = (id) => { if (!id || seen.has(id) || !HOME_WIDGETS[id]) return; seen.add(id); visible.push(id); };
   legacy.order.forEach((slot) => {
     if (hiddenLegacy.has(slot)) return;
-    if (slot === "brief") {
-      add("headline");
-      brief.order.forEach((metric) => {
-        if (briefHidden.has(metric)) return;
-        (METRIC_IDS[metric] || []).forEach(add);
-      });
-    } else if (slot === "readiness") add("readiness");
+    if (slot === "brief") add("brief");
+    else if (slot === "readiness") add("readiness");
     else if (slot === "today") add("today");
     else if (slot === "week") add("this-week");
     else if (slot === "cardio") add("cardio");
@@ -651,17 +808,20 @@ export function setHomeLayout(state, layout) {
   const prev = state.layout && state.layout.homeV2 && typeof state.layout.homeV2 === "object" && !Array.isArray(state.layout.homeV2)
     ? state.layout.homeV2
     : {};
+  const sizes = sanitizeSizes(layout && layout.sizes, prev.sizes);
   const next = {
     ...prev,
     v: 2,
-    items: widgetIds(layout && layout.items),
-    hidden: widgetIds(layout && layout.hidden),
+    items: withPreservedUnknown(prev.items, layout && layout.items),
+    hidden: withPreservedUnknown(prev.hidden, layout && layout.hidden),
     updatedAt: Date.now(),
   };
   delete next.migrated;
   delete next.migratedAt;
   delete next.migratedFrom;
   if (layout && layout.ouraSeeded === true) next.ouraSeeded = true;
+  if (Object.keys(sizes).length) next.sizes = sizes;
+  else delete next.sizes;
   state.layout = state.layout && typeof state.layout === "object" && !Array.isArray(state.layout) ? state.layout : {};
   state.layout.homeV2 = next;
   return next;
@@ -676,7 +836,7 @@ export function renderHomeWidgets(layout, data) {
     if (!entry) return "";
     const html = entry.render(data) || "";
     if (!String(html).trim()) return "";
-    const span = entry.size === "medium" ? " span-m" : "";
+    const span = widgetSize(id, layout) === "medium" ? " span-m" : "";
     return `<div class="hw-slot${span}" data-hw="${id}">${html}</div>`;
   }).join("");
   return `<div class="home-v2">${body}</div>`;
@@ -700,6 +860,12 @@ export function homeAwaitingSync() {
 
 app.HOME_WIDGETS = HOME_WIDGETS;
 app.HOME_REGISTRY_PAINT = HOME_REGISTRY_PAINT;
+app.BRIEF_TILE_IDS = BRIEF_TILE_IDS;
+app.homeRegistryActive = homeRegistryActive;
+app.widgetSize = widgetSize;
+app.homeEditorDraft = homeEditorDraft;
+app.homeDraftUnchanged = homeDraftUnchanged;
+app.commitHomeEditor = commitHomeEditor;
 app.getHomeLayout = getHomeLayout;
 app.setHomeLayout = setHomeLayout;
 app.renderHomeWidgets = renderHomeWidgets;

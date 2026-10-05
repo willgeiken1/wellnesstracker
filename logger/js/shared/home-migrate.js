@@ -14,20 +14,24 @@
    updatedAt is compared only between copies of the same kind.
 
    pickHomeV2 caps a timestamp at about one day past now so a skewed clock
-   cannot win forever. Equal timestamps break by the JSON of items+hidden,
-   so two phones converge. ouraSeeded sticks to whichever copy is kept.
+   cannot win forever. Equal timestamps prefer the copy with more distinct
+   ids (items union hidden), then the JSON of items, hidden, and sizes, so
+   two phones converge and an older client that drops an unknown id cannot
+   erase it by rewriting the same updatedAt. ouraSeeded sticks to whichever
+   copy is kept.
    A copy must have a numeric v of exactly 2 (the string "2" is rejected) and
-   an items array; hidden, when present, must be an array. Ids are strings
-   that exist in HOME_WIDGETS. An empty items array is a real layout that
-   shows nothing and can win. A non-empty items array that contains none of
-   those ids is malformed, and pickHomeV2 keeps the other copy.
+   an items array; hidden, when present, must be an array. Ids are strings.
+   Unknown strings stay in items and hidden so a newer client's cards are not
+   dropped. An empty items array is a real layout that shows nothing and can
+   win. A non-empty items array that contains none of the HOME_WIDGETS ids is
+   malformed, and pickHomeV2 keeps the other copy.
 
    Old keys stay in place so a cached older client still has its order.
    Never-customized state returns null (missing layout, empty order, or only
    the automatic one-map hide). Step 1's default applies then. A stored size
    with no order, hidden list, or updatedAt is not a customization.
 
-   Unknown ids are dropped. The brief, when visible, expands in place: saved
+   Unknown ids in the old Home order are dropped. The brief, when visible, expands in place: saved
    metrics first, then any current brief metric that was not listed. oura →
    readiness + sleep score, train is dropped, food → food yesterday, week →
    weekly goal, weight → weight trend, pattern → pattern. The headline is
@@ -68,10 +72,11 @@ function strings(list) {
   return out;
 }
 
-function knownIds(list) {
+/* Non-blank strings once. Unknown ids stay; nulls, numbers, and blanks do not. */
+function storedIds(list) {
   const out = [];
   (Array.isArray(list) ? list : []).forEach((id) => {
-    if (typeof id === "string" && HOME_WIDGETS[id] && !out.includes(id)) out.push(id);
+    if (typeof id === "string" && id && !out.includes(id)) out.push(id);
   });
   return out;
 }
@@ -144,15 +149,16 @@ function clampAt(at, now) {
 }
 
 /* null when the record cannot be a layout. A clean record is returned as-is.
-   items: [] is valid. A non-empty list with no HOME_WIDGETS id is not. */
+   items: [] is valid. A non-empty list with no HOME_WIDGETS id is not.
+   Unknown string ids are kept. */
 function asV2(home, now) {
   if (!home || typeof home !== "object" || Array.isArray(home)) return null;
   if (typeof home.v !== "number" || home.v !== 2) return null;
   if (!Array.isArray(home.items)) return null;
   if ("hidden" in home && home.hidden != null && !Array.isArray(home.hidden)) return null;
-  const items = knownIds(home.items);
-  if (home.items.length > 0 && items.length === 0) return null;
-  const hidden = knownIds(Array.isArray(home.hidden) ? home.hidden : []).filter((id) => !items.includes(id));
+  const items = storedIds(home.items);
+  if (home.items.length > 0 && !items.some((id) => HOME_WIDGETS[id])) return null;
+  const hidden = storedIds(Array.isArray(home.hidden) ? home.hidden : []).filter((id) => !items.includes(id));
   const at = clampAt(home.updatedAt, now);
   const sameItems = items.length === home.items.length && items.every((id, i) => id === home.items[i]);
   const hiddenSrc = Array.isArray(home.hidden) ? home.hidden : [];
@@ -162,8 +168,32 @@ function asV2(home, now) {
   return { ...home, v: 2, items, hidden, updatedAt: at };
 }
 
+/* Postgres jsonb sorts object keys by length, then bytewise. */
+function pgKeyOrder(a, b) {
+  if (a.length !== b.length) return a.length - b.length;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function canonicalSizes(home) {
+  const raw = home && home.sizes;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  Object.keys(raw).sort(pgKeyOrder).forEach((key) => { out[key] = raw[key]; });
+  return out;
+}
+
+/* Second tie-break, used only when both copies have the same distinct-id count. */
 function contentKey(home) {
-  return JSON.stringify({ items: home.items || [], hidden: home.hidden || [] });
+  return JSON.stringify({ items: home.items || [], hidden: home.hidden || [], sizes: canonicalSizes(home) });
+}
+
+function distinctIdCount(home) {
+  const ids = new Set();
+  (home && home.items || []).forEach((id) => { if (typeof id === "string" && id) ids.add(id); });
+  (home && home.hidden || []).forEach((id) => { if (typeof id === "string" && id) ids.add(id); });
+  return ids.size;
 }
 
 function withSticky(winner, other) {
@@ -250,7 +280,7 @@ export function applyHomeMigration(state, now = Date.now(), opts) {
   return state;
 }
 
-/* Same kind: newer updatedAt, then a deterministic items+hidden order.
+/* Same kind: newer updatedAt, then more distinct ids, then items, hidden, and sizes.
    An edit beats a migration. ouraSeeded sticks. */
 export function pickHomeV2(localLayout, remoteLayout, now = Date.now()) {
   const local = asV2(localLayout && localLayout.homeV2, now);
@@ -272,10 +302,16 @@ export function pickHomeV2(localLayout, remoteLayout, now = Date.now()) {
     if (rt > lt) { winner = remote; other = local; }
     else if (lt > rt) { winner = local; other = remote; }
     else {
-      const lk = contentKey(local);
-      const rk = contentKey(remote);
-      if (rk > lk) { winner = remote; other = local; }
-      else { winner = local; other = remote; }
+      const ln = distinctIdCount(local);
+      const rn = distinctIdCount(remote);
+      if (rn > ln) { winner = remote; other = local; }
+      else if (ln > rn) { winner = local; other = remote; }
+      else {
+        const lk = contentKey(local);
+        const rk = contentKey(remote);
+        if (rk > lk) { winner = remote; other = local; }
+        else { winner = local; other = remote; }
+      }
     }
   }
   return withSticky(winner, other);

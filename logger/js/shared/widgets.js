@@ -56,7 +56,7 @@ function widgetChrome(page, id, last) {
 }
 app.widgetChrome = widgetChrome;
 
-const editPage = () => app.ui.tab === "home" ? "home" : app.ui.tab === "food" && app.ui.fseg !== "recent" ? "food"
+const editPage = () => app.ui.tab === "home" ? null : app.ui.tab === "food" && app.ui.fseg !== "recent" ? "food"
   : app.ui.tab === "insights" ? (app.ui.iseg === "recovery" ? "recovery" : "trends") : app.ui.tab === "workouts" && !app.ui.detail && app.ui.wseg !== "history" ? "routines" : null;
 app.editPage = editPage;
 
@@ -148,7 +148,7 @@ app.wEatClick = wEatClick;
 app.wdrag = wdrag;
 
 document.addEventListener("pointerdown", (ev) => {
-  if (app.ui.edit || app.ui.briefEdit || app.ui.sheet || ev.button > 0) return;
+  if (app.ui.edit || app.ui.briefEdit || app.ui.homeEdit || app.ui.sheet || ev.button > 0) return;
   const w = ev.target.closest(".wdgs .wdg, .wcard[data-action=open-w]"); if (!w) return;
   const page = app.editPage(); if (!page) return;
   app.wlp = { x: ev.clientX, y: ev.clientY, t: setTimeout(() => {

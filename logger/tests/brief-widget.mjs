@@ -51,7 +51,8 @@ async function main() {
   check("brief is the first widget", (await widgetOrder(page))[0] === "brief", (await widgetOrder(page)).join(">"));
   const label = await page.locator(".brief-k").innerText();
   check("brief label", /morning brief/i.test(label), label);
-  check("expand and edit controls", await page.locator("[data-action='brief-size']").count() === 1 && await page.locator("[data-action='brief-edit']").count() === 1);
+  check("one Edit on legacy home", await page.locator("[data-action='home-edit']").count() === 1 && await page.locator("[data-action='brief-edit']").count() === 0);
+  check("expand stays on the brief", await page.locator("[data-action='brief-size']").count() === 1);
 
   await page.locator("[data-action='brief-size']").click();
   await page.waitForTimeout(150);
@@ -59,40 +60,41 @@ async function main() {
   await page.locator("[data-action='brief-size']").click();
   await page.waitForTimeout(100);
 
+  await page.locator("[data-action='home-edit']").click();
+  await page.waitForTimeout(200);
+  check("home editor opens", await page.locator(".home-editor").count() === 1);
+  check("brief has move and remove", await page.locator(".hw-row[data-id='brief'] [data-action='home-down']").count() === 1 && await page.locator(".hw-row[data-id='brief'] [data-action='home-remove']").count() === 1);
+  await page.locator(".hw-row[data-id='brief']").screenshot({ path: ART + "/brief_widget_edit.png", animations: "disabled" });
+
+  const before = await page.evaluate(() => app.ui.homeDraft.items.slice());
+  await page.locator(".hw-row[data-id='brief'] [data-action='home-down']").click();
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => app.ui.homeDraft.items.slice());
+  check("reorder moves the brief", after.indexOf("brief") > before.indexOf("brief"), after.join(">"));
+
+  await page.locator(".hw-row[data-id='brief'] [data-action='home-remove']").click();
+  await page.waitForTimeout(200);
+  check("brief hidden", await page.evaluate(() => !app.ui.homeDraft.items.includes("brief") && app.ui.homeDraft.hidden.includes("brief")));
+  await page.locator("[data-action='home-gallery']").click();
+  await page.waitForTimeout(200);
+  check("add menu lists morning brief", (await page.locator("#sheet").innerText()).includes("Morning brief"));
+  await page.locator("[data-action='home-add'][data-id='brief']").click();
+  await page.waitForTimeout(250);
+  check("brief re-added", await page.evaluate(() => app.ui.homeDraft.items.includes("brief")));
+  await page.evaluate(() => document.querySelector(".sheet-back").click());
+  await page.waitForTimeout(150);
+  await page.locator("[data-action='home-cancel']").click();
+  await page.waitForTimeout(200);
+  check("cancel keeps the legacy brief", await page.locator("#pane-home .wdg[data-w='brief'] .brief").count() === 1);
+
   const card = page.locator("#pane-home .wdg[data-w='brief']");
   const box = await card.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + 90);
+  await page.mouse.move(box.x + 24, box.y + 40);
   await page.mouse.down();
   await page.waitForTimeout(700);
   await page.mouse.up();
   await page.waitForTimeout(250);
-  check("home edit mode", await page.evaluate(() => app.ui.edit) === "home");
-  check("brief has move and remove", await page.locator(".wdg[data-w='brief'] .wdg-grip").count() === 1 && await page.locator(".wdg[data-w='brief'] .wdg-x").count() === 1);
-  await card.screenshot({ path: ART + "/brief_widget_edit.png", animations: "disabled" });
-
-  const before = await widgetOrder(page);
-  const grip = page.locator(".wdg[data-w='brief'] .wdg-grip");
-  const gr = await grip.boundingBox();
-  const today = await page.locator(".wdg[data-w='today']").boundingBox();
-  await page.mouse.move(gr.x + 16, gr.y + 16);
-  await page.mouse.down();
-  await page.mouse.move(gr.x + 16, today.y + today.height - 8, { steps: 10 });
-  await page.mouse.up();
-  await page.waitForTimeout(300);
-  const after = await widgetOrder(page);
-  check("reorder moves the brief", after.indexOf("brief") > before.indexOf("brief"), after.join(">"));
-
-  await page.locator(".wdg[data-w='brief'] .wdg-x").click({ force: true });
-  await page.waitForTimeout(200);
-  check("brief hidden", await page.locator(".wdg[data-w='brief']").count() === 0);
-  await page.locator("[data-action='w-add']").click();
-  await page.waitForTimeout(200);
-  check("add menu lists morning brief", (await page.locator("#sheet").innerText()).includes("Morning brief"));
-  await page.locator("[data-action='w-add-one'][data-w='brief']").click();
-  await page.waitForTimeout(250);
-  check("brief re-added", await page.locator(".wdg[data-w='brief'] .brief").count() === 1);
-  await page.locator("[data-action='w-done']").click({ force: true });
-  await page.waitForTimeout(200);
+  check("home long-press does not open the old editor", await page.evaluate(() => app.ui.edit) == null && await page.locator(".home-editor").count() === 0);
 
   await page.locator(".avatar").click();
   await page.waitForTimeout(300);
@@ -104,7 +106,7 @@ async function main() {
   const demoText = await page.locator(".wdg[data-w='brief']").innerText();
   check("demo brief has tiles", /Readiness|Training|This week/.test(demoText), demoText.slice(0, 240));
 
-  await page.locator("[data-action='brief-edit']").click();
+  await page.evaluate(() => { app.ui.briefEdit = true; app.render(); });
   await page.waitForTimeout(150);
   const switches = page.locator(".brief-edit .switch");
   const n = await switches.count();

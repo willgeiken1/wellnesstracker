@@ -41,8 +41,9 @@ export function briefHeadline({ proteinLowDays, readiness, focus, effectRows, li
 }
 app.briefHeadline = briefHeadline;
 
-function briefPrefs() {
-  const b = app.state.brief && typeof app.state.brief === "object" && !Array.isArray(app.state.brief) ? app.state.brief : {};
+function briefPrefs(state) {
+  const source = state || app.state;
+  const b = source.brief && typeof source.brief === "object" && !Array.isArray(source.brief) ? source.brief : {};
   const known = new Set(BRIEF_METRICS.map((m) => m[0]));
   const order = [];
   (Array.isArray(b.order) ? b.order : []).forEach((id) => { if (known.has(id) && !order.includes(id)) order.push(id); });
@@ -130,7 +131,10 @@ function trainMetric() {
   if (planned && planned !== "rest") {
     const w = app.workoutById(planned);
     if (w && !doneToday.some((s) => s.workoutId === planned)) {
-      return { id: "train", label: "Training", value: w.name, meta: app.pl(w.exercises.length, "exercise"), sub: "On today's plan." };
+      return {
+        id: "train", label: "Training", value: w.name, meta: app.pl(w.exercises.length, "exercise"), sub: "On today's plan.",
+        link: "start", workoutId: w.id,
+      };
     }
   }
   if (doneToday.length) return { id: "train", label: "Training", value: doneToday.map((s) => s.name).join(" + "), meta: "Done today", sub: "Logged for today." };
@@ -240,7 +244,30 @@ function briefTodayHeadline() {
 }
 app.briefTodayHeadline = briefTodayHeadline;
 
+const TILE_COVERS_METRIC = {
+  pattern: "pattern",
+  today: "train",
+  "food-yesterday": "food",
+  "weekly-goal": "week",
+  "weight-trend": "weight",
+};
+
+function registryTiles() {
+  if (typeof app.homeRegistryActive !== "function" || !app.homeRegistryActive(app.state)) return null;
+  if (typeof app.visibleHomeIds !== "function") return null;
+  return new Set(app.visibleHomeIds(app.state));
+}
+
 function metricHTML(m) {
+  if (m.link === "start" && m.workoutId) {
+    return `<li class="brief-metric" data-metric="${m.id}">
+      <button class="brief-hit" data-action="start" data-id="${app.esc(m.workoutId)}">
+        <span class="brief-l">${app.esc(m.label)}</span>
+        <b>${app.esc(m.value)}</b>
+        ${m.meta ? `<span class="brief-m">${app.esc(m.meta)}</span>` : ""}
+        ${m.sub ? `<span class="brief-s">${app.esc(m.sub)}</span>` : ""}
+      </button></li>`;
+  }
   if (m.link === "affects" && m.empty) {
     return `<li class="brief-metric span empty" data-metric="${m.id}">
       <button class="brief-hit" data-action="open-affects"><span class="brief-l">Patterns</span><span class="brief-line">${app.esc(m.value)}</span></button></li>`;
@@ -279,18 +306,48 @@ function briefHTML() {
       <ul class="brief-edit">${rows}</ul></section>`;
   }
   const expanded = prefs.size === "expanded";
-  const items = app.briefMetrics();
+  const tiles = registryTiles();
+  let items = app.briefMetrics();
+  let showHeadline = true;
+  if (tiles) {
+    const drop = new Set();
+    Object.entries(TILE_COVERS_METRIC).forEach(([tile, metric]) => { if (tiles.has(tile)) drop.add(metric); });
+    items = items.filter((m) => m && !drop.has(m.id));
+    showHeadline = !tiles.has("headline");
+  }
   const visible = prefs.order.filter((id) => !prefs.hidden.includes(id));
   const body = items.length ? `<ul class="brief-metrics">${items.map(metricHTML).join("")}</ul>` : (visible.length ? "" : `<p class="brief-note">All metrics are off. Edit the brief to turn one on.</p>`);
+  const headline = showHeadline ? `<h2 class="brief-h">${app.esc(app.briefTodayHeadline())}</h2>` : "";
   return `<section class="card brief${expanded ? " expanded" : ""}" data-brief-size="${prefs.size}" aria-label="Morning brief">
     <div class="brief-top"><p class="brief-k">Morning brief</p><div class="brief-tools">
       <button data-action="brief-size" aria-pressed="${expanded}">${expanded ? "Compact" : "Expand"}</button>
-      <button data-action="brief-edit">Edit</button></div></div>
-    <h2 class="brief-h">${app.esc(app.briefTodayHeadline())}</h2>
+      </div></div>
+    ${headline}
     ${body}
   </section>`;
 }
 app.briefHTML = briefHTML;
+
+/* True when the registry brief would be only the label and Expand. */
+function briefPaintEmpty(state) {
+  if (typeof app.homeRegistryActive !== "function" || !app.homeRegistryActive(state)) return false;
+  if (typeof app.visibleHomeIds !== "function") return false;
+  const tiles = new Set(app.visibleHomeIds(state));
+  if (!tiles.has("brief") || !tiles.has("headline")) return false;
+  const prefs = app.briefPrefs(state);
+  const enabled = prefs.order.filter((id) => !prefs.hidden.includes(id));
+  if (!enabled.length) return false;
+  const covered = {
+    pattern: tiles.has("pattern"),
+    oura: tiles.has("readiness") || !hasOura(state),
+    train: tiles.has("today"),
+    food: tiles.has("food-yesterday"),
+    week: tiles.has("weekly-goal"),
+    weight: tiles.has("weight-trend"),
+  };
+  return enabled.every((id) => covered[id]);
+}
+app.briefPaintEmpty = briefPaintEmpty;
 
 if (typeof document !== "undefined") {
   document.addEventListener("pointerdown", (ev) => {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { HOME_WIDGETS, getHomeLayout } from "../logger/js/shared/home-widgets.js";
+import { pickHomeV2 } from "../logger/js/shared/home-migrate.js";
 import { ouraMetric } from "../logger/js/shared/brief.js";
 import {
   gatedOuraStripHTML,
@@ -57,18 +58,23 @@ test("Oura widgets drop out of Home without a ring or demo", () => {
   assert.equal(HOME_WIDGETS["not-a-widget"], undefined);
   assert.deepEqual(visibleHomeIds(s), ["weekly-goal", "today"]);
   s.oura.connected = true;
+  assert.deepEqual(visibleHomeIds(s), ["weekly-goal", "today"]);
+  s.oura.days = { "2026-10-04": { date: "2026-10-04", readiness: 80 } };
   assert.deepEqual(visibleHomeIds(s), ["readiness", "sleep-score", "weekly-goal", "last-night", "today"]);
   s.oura.connected = false;
+  s.oura.days = {};
   s.demo = true;
   assert.deepEqual(visibleHomeIds(s), ["readiness", "sleep-score", "weekly-goal", "last-night", "today"]);
 });
 
 test("hidden stays the person's list and is not a disconnect switch", () => {
   const s = state({
-    oura: { connected: true },
+    oura: { connected: true, days: { "2026-10-04": { readiness: 70 } } },
     layout: { homeV2: layout(["readiness", "sleep-score", "weekly-goal"], { hidden: ["sleep-score"] }) },
   });
   assert.deepEqual(visibleHomeIds(s), ["readiness", "weekly-goal"]);
+  s.oura.days = {};
+  assert.deepEqual(visibleHomeIds(s), ["weekly-goal"]);
 });
 
 test("seed prepends only ids that are not already placed", () => {
@@ -128,6 +134,8 @@ test("connect seeds, disconnect keeps the layout, reconnect does not restore a r
   assert.deepEqual(getHomeLayout(s).items, ["sleep-score", "weekly-goal", "today"]);
   assert.equal(getHomeLayout(s).ouraSeeded, true);
   assert.equal(getHomeLayout(s).updatedAt, stamped);
+  assert.deepEqual(visibleHomeIds(s), ["weekly-goal", "today"]);
+  s.oura.days = { "2026-10-04": { readiness: 1 } };
   assert.deepEqual(visibleHomeIds(s), ["sleep-score", "weekly-goal", "today"]);
 });
 
@@ -174,17 +182,19 @@ test("the Home strip paints Oura tiles only when they are visible", () => {
   app.src = () => ({ oura: {} });
   assert.equal(gatedOuraStripHTML(s), "");
   s.oura.connected = true;
+  assert.equal(gatedOuraStripHTML(s), "");
+  s.oura.days = { "2026-10-04": { date: "2026-10-04", readiness: 80, sleepScore: 70 } };
+  app.src = () => ({ oura: s.oura.days });
   const html = gatedOuraStripHTML(s);
   assert.match(html, /data-hw="readiness"/);
   assert.match(html, /data-hw="sleep-score"/);
   assert.doesNotMatch(html, /data-hw="last-night"/);
-  assert.equal((html.match(/Waiting for first sync/g) || []).length, 1);
-  assert.match(html, /class="sub oura-wait"/);
-  assert.match(html, /hw-v">–</);
-  assert.doesNotMatch(html, /<b>Waiting/);
-  assert.doesNotMatch(html, /weekly-goal|Connect a ring|No Oura yet|Open Recovery|data-tab="recovery"/);
+  assert.doesNotMatch(html, /Waiting for first sync|hw-v">–|No Oura yet|Connect a ring/);
+  assert.doesNotMatch(html, /weekly-goal|Open Recovery|data-tab="recovery"/);
   s.demo = true;
   s.oura.connected = false;
+  s.oura.days = {};
+  app.src = () => ({ oura: {} });
   assert.match(gatedOuraStripHTML(s), /data-hw="readiness"/);
   app.state = prev.state;
   app.src = prev.src;
@@ -212,7 +222,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
   app.state = bare;
   app.src = () => ({ oura: {} });
   assert.equal(getHomeLayout(bare).updatedAt, 0);
-  assert.ok(visibleHomeIds(bare).includes("readiness"));
+  assert.ok(visibleHomeIds(bare).includes("today"));
+  assert.equal(visibleHomeIds(bare).includes("readiness"), false);
   assert.doesNotThrow(() => gatedOuraStripHTML(bare));
   const empty = state({ layout: { homeV2: { v: 2, items: [], hidden: [] } }, oura: { connected: true, days: {} } });
   assert.deepEqual(visibleHomeIds(empty), []);
@@ -226,8 +237,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v29/);
-  assert.match(sentry, /insight-shell-v29/);
+  assert.match(sw, /insight-shell-v30/);
+  assert.match(sentry, /insight-shell-v30/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });
@@ -297,7 +308,7 @@ test("a saved homeV2 keeps the readiness card and the brief while the flag is of
   const day = { date: "2026-10-04", readiness: 70, sleepScore: 81 };
   app.state = state({
     oura: { connected: true, days: { "2026-10-04": day } },
-    layout: { homeV2: layout(["readiness", "sleep-score", "today"], { hidden: ["readiness"], ouraSeeded: true }) },
+    layout: { homeV2: layout(["readiness", "sleep-score", "today"], { hidden: ["readiness"], ouraSeeded: true, migrated: true, migratedAt: 2 }) },
     workouts: [],
     plan: {},
   });
@@ -315,7 +326,7 @@ test("the brief keeps sleep while the registry is not painted", () => {
   stubHomeShell();
   app.state = state({
     oura: { connected: true, days: { "2026-10-04": { date: "2026-10-04", readiness: 70, sleepScore: 72 } } },
-    layout: { homeV2: layout(["readiness", "sleep-score"], { ouraSeeded: true }) },
+    layout: { homeV2: layout(["readiness", "sleep-score"], { ouraSeeded: true, migrated: true, migratedAt: 2 }) },
     workouts: [],
     plan: {},
   });
@@ -324,6 +335,84 @@ test("the brief keeps sleep while the registry is not painted", () => {
   assert.equal(shown.meta, "Sleep 72");
   assert.match(shown.meta, /Sleep/);
   assert.equal(ouraWidgetShowing(app.state, "sleep-score"), false);
+});
+
+test("a first Oura seed does not outrank an edit newer than the pulled copy", () => {
+  const stale = { v: 2, items: ["today", "weekly-goal", "future-widget"], hidden: ["next-card"], updatedAt: 1000 };
+  const refused = seedOuraWidgets(stale, { pulledUpdatedAt: 5000 });
+  assert.equal(refused, stale);
+  assert.equal(refused.ouraSeeded, undefined);
+  assert.equal(refused.updatedAt, 1000);
+
+  const seeded = seedOuraWidgets(stale, { pulledUpdatedAt: 1000 });
+  assert.notEqual(seeded, stale);
+  assert.equal(seeded.ouraSeeded, true);
+  assert.equal(seeded.updatedAt, 1001);
+  assert.ok(seeded.updatedAt < 5000);
+  assert.deepEqual(seeded.items.slice(0, 2), ["readiness", "sleep-score"]);
+  assert.ok(seeded.items.includes("future-widget"));
+  assert.deepEqual(seeded.hidden, ["next-card"]);
+
+  const edit = { v: 2, items: ["cardio", "today", "future-widget"], hidden: ["readiness"], updatedAt: 5000 };
+  const winner = pickHomeV2({ homeV2: seeded }, { homeV2: edit }, 10_000);
+  assert.deepEqual(winner.items, ["cardio", "today", "future-widget"]);
+  assert.equal(winner.ouraSeeded, true);
+
+  const phone = state({
+    layout: { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1000 } },
+  });
+  assert.equal(noteOuraConnected(phone, true, { pulledUpdatedAt: 5000 }), false);
+  assert.equal(phone.layout.homeV2.ouraSeeded, undefined);
+  assert.deepEqual(phone.layout.homeV2.items, ["today"]);
+  assert.equal(phone.layout.homeV2.updatedAt, 1000);
+});
+
+test("oura personas on the registry home hide empty tiles", () => {
+  stubHomeShell();
+  const items = ["readiness", "sleep-score", "sleep-duration", "hrv", "resting-hr", "steps", "brief", "cardio"];
+  const card = {
+    kind: "snapshot",
+    today: "2026-10-04",
+    demo: false,
+    oura: null,
+    weekGoal: null,
+    cardio: { minutes: 12, goal: 150 },
+    headline: "Train",
+    muscleMode: "basic",
+  };
+  app.snapshotFromApp = () => card;
+  const personas = [
+    { name: "none", connected: false, lastError: null },
+    { name: "lapsed", connected: true, lastError: "token lapsed" },
+    { name: "inactive", connected: true, lastError: "membership_inactive" },
+  ];
+  for (const persona of personas) {
+    app.state = state({
+      oura: { connected: persona.connected, lastError: persona.lastError, days: {} },
+      layout: { homeV2: layout(items) },
+      workouts: [],
+      plan: {},
+    });
+    app.src = () => ({ oura: {} });
+    const html = app.homeHTML();
+    assert.equal(app.state.oura.lastError, persona.lastError, persona.name);
+    assert.match(html, /data-hw="cardio"/, persona.name);
+    assert.doesNotMatch(html, /data-hw="readiness"|data-hw="sleep-score"|data-hw="hrv"|data-hw="steps"|No Oura yet|hw-v">–/, persona.name);
+    if (persona.name === "lapsed") assert.equal((html.match(/Waiting for first sync/g) || []).length, 1, persona.name);
+    else assert.doesNotMatch(html, /Waiting for first sync/, persona.name);
+  }
+  card.oura = { date: "2026-10-04", readiness: 86, sleepScore: 81 };
+  app.state = state({
+    oura: { connected: true, lastError: null, days: { "2026-10-04": card.oura } },
+    layout: { homeV2: layout(["readiness", "cardio"]) },
+    workouts: [],
+    plan: {},
+  });
+  app.src = () => ({ oura: app.state.oura.days });
+  const ready = app.homeHTML();
+  assert.match(ready, /data-hw="readiness"/);
+  assert.match(ready, /86/);
+  assert.doesNotMatch(ready, /Waiting for first sync|No Oura yet|hw-v">–/);
 });
 
 test("the OAuth dialog sends people to Settings", () => {

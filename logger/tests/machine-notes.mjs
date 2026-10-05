@@ -292,8 +292,10 @@ async function main() {
 
   const pill = await boot(browser, null);
   const p = pill.page;
-  await hold(p, "#pane-home .wdg");
-  check("home edit mode", await p.evaluate(() => app.ui.edit) === "home");
+  await p.locator('.tab[data-tab="food"]').click();
+  await p.waitForTimeout(250);
+  await hold(p, "#pane-food .wdg");
+  check("food edit mode", await p.evaluate(() => app.ui.edit) === "food");
   await p.locator(".done-pill").screenshot({ path: ART + "/done_pill_pinned.png", animations: "disabled" });
 
   async function assertPinned(label) {
@@ -317,7 +319,7 @@ async function main() {
     check(`${label} pill is outside the scrolling pane`, mounted === "done-slot");
   }
 
-  await assertPinned("home");
+  await assertPinned("food");
   const homeClears = await p.evaluate(() => {
     const pane = document.querySelector(".pane.active");
     pane.scrollTop = pane.scrollHeight;
@@ -326,12 +328,12 @@ async function main() {
     const box = last.getBoundingClientRect();
     return { bottom: box.bottom, pill: pill.top, scrollable: pane.scrollHeight > pane.clientHeight + 40 };
   });
-  check("home can scroll", homeClears.scrollable, JSON.stringify(homeClears));
-  check("home content scrolls above the pill", homeClears.bottom <= homeClears.pill + 1, JSON.stringify(homeClears));
+  check("food can scroll", homeClears.scrollable, JSON.stringify(homeClears));
+  check("food content scrolls above the pill", homeClears.bottom <= homeClears.pill + 1, JSON.stringify(homeClears));
 
   for (const mode of ["light", "dark"]) {
     await p.evaluate((mode) => { app.state.theme = { mode, accent: "citrus" }; app.applyTheme(); app.render(); }, mode);
-    await assertPinned(`home ${mode}`);
+    await assertPinned(`food ${mode}`);
   }
 
   const resting = await pillBox(p);
@@ -376,13 +378,6 @@ async function main() {
   await p.locator(".done-pill").click();
   await p.waitForTimeout(150);
   check("Done leaves edit mode", await p.evaluate(() => app.ui.edit) === null && await p.locator(".done-pill").count() === 0);
-
-  await p.locator('.tab[data-tab="food"]').click();
-  await p.waitForTimeout(250);
-  await hold(p, "#pane-food .wdg");
-  check("food edit mode", await p.evaluate(() => app.ui.edit) === "food");
-  await assertPinned("food");
-  await p.locator(".done-pill").click();
 
   await p.locator('.tab[data-tab="insights"]').click();
   await p.waitForTimeout(250);

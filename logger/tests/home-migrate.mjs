@@ -245,7 +245,7 @@ function regressions() {
   const bad = [null, "x", [], { homeV2: null }, { homeV2: "x" }, { homeV2: { v: 1, items: [] } }, { homeV2: { v: 2 } }, { homeV2: { v: 2, items: "x" } }, { homeV2: { v: 2, hidden: ["today"], updatedAt: 99 } }];
   check("5 malformed remotes never replace a good local", bad.every((r) => pickHomeV2(local, r) === local.homeV2));
   const junk = pickHomeV2(local, { homeV2: { v: 2, items: [1, null, "nope", "today", "today"], hidden: ["nope", "hrv"], updatedAt: 50 } });
-  check("5 junk ids are filtered", eq(junk.items, ["today"]) && eq(junk.hidden, ["hrv"]), junk);
+  check("5 junk ids are filtered and unknown ids stay", eq(junk.items, ["nope", "today"]) && eq(junk.hidden, ["hrv"]), junk);
   const stringV = { homeV2: { v: "2", items: ["steps"], hidden: [], updatedAt: 999 } };
   check("string v is rejected", pickHomeV2(local, stringV) === local.homeV2);
   const onlyUnknown = { homeV2: { v: 2, items: ["nope", "zzz"], hidden: [], updatedAt: 99 } };
@@ -259,6 +259,10 @@ function regressions() {
   const left = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1, migratedAt: 5 } };
   const right = { homeV2: { v: 2, items: ["cardio"], hidden: [], updatedAt: 1, migratedAt: 6 } };
   check("tie on updatedAt converges", eq(pickHomeV2(left, right).items, pickHomeV2(right, left).items));
+  const sizedA = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "s", aa: "m" } } };
+  const sizedB = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "m", aa: "s" } } };
+  const sizeWinner = pickHomeV2(sizedA, sizedB);
+  check("sizes break a same-millisecond tie", sizeWinner.sizes.z === "s" && pickHomeV2(sizedB, sizedA).sizes.z === "s", sizeWinner.sizes);
 
   const now = 1_700_000_000_000;
   const skewed = pickHomeV2(
@@ -272,6 +276,17 @@ function regressions() {
   const capped = pickHomeV2(year, twoDays, now);
   const cappedBack = pickHomeV2(twoDays, year, now);
   check("clocks past the cap tie-break instead of the further one winning", eq(capped.items, cappedBack.items) && capped.updatedAt === now + 864e5, capped);
+
+  const withBrief = { homeV2: { v: 2, items: ["brief", "this-week", "cardio"], hidden: [], updatedAt: 1000 } };
+  const stripped = { homeV2: { v: 2, items: ["this-week", "cardio"], hidden: [], updatedAt: 1000 } };
+  const keptBrief = pickHomeV2(withBrief, stripped, 2000);
+  const keptBriefBack = pickHomeV2(stripped, withBrief, 2000);
+  check("old client stripping brief loses the tie", keptBrief.items.includes("brief") && eq(keptBrief.items, keptBriefBack.items), keptBrief.items);
+  const hiddenBrief = { homeV2: { v: 2, items: ["this-week"], hidden: ["brief"], updatedAt: 1000 } };
+  const noHidden = { homeV2: { v: 2, items: ["this-week"], hidden: [], updatedAt: 1000 } };
+  const keptHidden = pickHomeV2(hiddenBrief, noHidden, 2000);
+  const keptHiddenBack = pickHomeV2(noHidden, hiddenBrief, 2000);
+  check("old client stripping a hidden brief loses the tie", keptHidden.hidden.includes("brief") && eq(keptHidden.hidden, keptHiddenBack.hidden), keptHidden);
 }
 
 const PG_USER = process.env.PG_USER || "postgres";
@@ -289,6 +304,7 @@ function rpcCases() {
   const dir = new URL("../..", import.meta.url);
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
+  execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261005000000_home_v2_brief_rank.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
   pgSql(`insert into auth.users (id) values ('${uid}') on conflict (id) do nothing`);
   pgSql(`delete from public.user_data where user_id = '${uid}'`);
@@ -369,6 +385,33 @@ function rpcCases() {
     layout: { homeV2: { v: 2, items: ["nope", "today"], hidden: [], updatedAt: 30 } },
   }));
   check("a mix of known and unknown ids stays valid", eq(mixed.items, ["nope", "today"]) && mixed.ouraSeeded === true, mixed);
+  const briefOnly = homeOf(call({
+    settingsAt: 6,
+    layout: { homeV2: { v: 2, items: ["brief"], hidden: [], updatedAt: 40 } },
+  }));
+  check("brief is an allowlisted id", eq(briefOnly.items, ["brief"]), briefOnly);
+  const ranked = pgSql(`select public.home_v2_pick(
+    '{"v":2,"items":["today"],"hidden":[],"updatedAt":5,"sizes":{"z":"s","aa":"m"}}'::jsonb,
+    '{"v":2,"items":["today"],"hidden":[],"updatedAt":5,"sizes":{"z":"m","aa":"s"}}'::jsonb,
+    1000)::text`).trim();
+  const rankedHome = JSON.parse(ranked);
+  const clientRank = pickHomeV2(
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "s", aa: "m" } } },
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5, sizes: { z: "m", aa: "s" } } },
+    1000
+  );
+  check("sql sizes tie-break matches the client", rankedHome.sizes.z === "s" && clientRank.sizes.z === rankedHome.sizes.z, rankedHome.sizes);
+  const sqlBrief = (stored, incoming) => JSON.parse(pgSql(`select public.home_v2_pick('${JSON.stringify(stored)}'::jsonb, '${JSON.stringify(incoming)}'::jsonb, 2000)::text`).trim());
+  const richBrief = { v: 2, items: ["brief", "this-week", "cardio"], hidden: [], updatedAt: 1000 };
+  const poorBrief = { v: 2, items: ["this-week", "cardio"], hidden: [], updatedAt: 1000 };
+  const sqlKept = sqlBrief(richBrief, poorBrief);
+  const sqlKeptBack = sqlBrief(poorBrief, richBrief);
+  check("sql old client stripping brief keeps the richer copy", sqlKept.items.includes("brief") && eq(sqlKept.items, sqlKeptBack.items), sqlKept.items);
+  const richHidden = { v: 2, items: ["this-week"], hidden: ["brief"], updatedAt: 1000 };
+  const poorHidden = { v: 2, items: ["this-week"], hidden: [], updatedAt: 1000 };
+  const sqlHidden = sqlBrief(richHidden, poorHidden);
+  const sqlHiddenBack = sqlBrief(poorHidden, richHidden);
+  check("sql old client stripping a hidden brief keeps it", sqlHidden.hidden.includes("brief") && eq(sqlHidden.hidden, sqlHiddenBack.hidden), sqlHidden);
 
   let unauth = "";
   try {

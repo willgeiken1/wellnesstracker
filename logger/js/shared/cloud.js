@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { applyHomeMigration, pickHomeV2 } from "./home-migrate.js";
+import { applyHomeMigration, homeV2Migrated, pickHomeV2 } from "./home-migrate.js";
 import { noteOuraConnected, ouraReturnDialog } from "./oura-gate.js";
 
 /* Supabase account, backup, and Oura sync. */
@@ -56,7 +56,15 @@ function layoutObject(layout) {
   return layout && typeof layout === "object" && !Array.isArray(layout) ? layout : null;
 }
 
+/* The last pulled real edit. A seed compares against this instead of the clock. */
+function rememberPulledHome(remoteLayout) {
+  const home = remoteLayout && remoteLayout.homeV2;
+  if (!home || typeof home !== "object" || Array.isArray(home) || homeV2Migrated(home)) return;
+  if (typeof home.updatedAt === "number" && Number.isFinite(home.updatedAt)) app.homeV2PulledAt = home.updatedAt;
+}
+
 function keepHomeV2(remoteLayout) {
+  rememberPulledHome(layoutObject(remoteLayout));
   const picked = pickHomeV2(app.state.layout, layoutObject(remoteLayout));
   if (!picked) return;
   if (!layoutObject(app.state.layout)) app.state.layout = {};
@@ -128,6 +136,7 @@ function mergeRemote(r) {
   app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, r.machineNotes);
   const layoutBefore = app.state.layout;
   const remoteLayout = layoutObject(r.layout);
+  rememberPulledHome(remoteLayout);
   if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) {
     if (r.muscleMode) app.state.muscleMode = r.muscleMode;
     if (remoteLayout) app.state.layout = remoteLayout;
