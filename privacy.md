@@ -1,6 +1,6 @@
 # Insight Privacy Policy
 
-_Last updated: October 4, 2026_
+_Last updated: October 5, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. This page explains, in plain language, what information Insight handles, where it goes, and the choices you have.
 
@@ -72,4 +72,4 @@ If Insight changes in a way that affects your information, this page will be upd
 
 ## Contact
 
-Questions, or a request to delete your account: willgeiken1@icloud.com
+Questions, or a request to delete your account: insight.wellnessos@gmail.com

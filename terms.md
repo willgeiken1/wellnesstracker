@@ -1,6 +1,6 @@
 # Insight Terms of Service
 
-_Last updated: October 4, 2026_
+_Last updated: October 5, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. By creating an account or using Insight, you agree to these terms.
 
@@ -42,4 +42,4 @@ These terms may be updated. If you keep using Insight after the date at the top 
 
 ## Contact
 
-willgeiken1@icloud.com
+insight.wellnessos@gmail.com
