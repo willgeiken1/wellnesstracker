@@ -104,22 +104,34 @@
 /* Widgets in edit mode: the same cards on the same grid, bodies inert. */
 .home-v2.editing { padding-top: 6px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .hw-slot { position: relative; min-width: 0; }
+/* iOS style jiggle. Tune the angle and the cycle length here. Only edit mode lists
+   (.home-v2.editing) carry the animation, so the gallery and its previews never match. */
+.home-v2.editing {
+  --hw-wobble-angle: 1.25deg;
+  --hw-wobble-ms: 270ms;
+}
 .editing .hw-slot {
   border-radius: 20px;
   cursor: grab;
   outline-offset: 3px;
-  animation: hw-wiggle .26s ease-in-out infinite alternate;
+  animation: hw-wobble var(--hw-wobble-ms) ease-in-out infinite alternate;
 }
-.editing .hw-slot:nth-child(2n) { animation-duration: .3s; animation-delay: -.11s; }
-.editing .hw-slot:nth-child(3n) { animation-duration: .23s; animation-delay: -.07s; }
+/* Cards are out of step: different lengths, negative delays, and opposite directions. */
+.editing .hw-slot:nth-child(2n) { animation-duration: calc(var(--hw-wobble-ms) * 1.1); animation-delay: -110ms; animation-direction: alternate-reverse; }
+.editing .hw-slot:nth-child(3n) { animation-duration: calc(var(--hw-wobble-ms) * .93); animation-delay: -70ms; }
+.editing .hw-slot:nth-child(4n) { animation-duration: calc(var(--hw-wobble-ms) * 1.17); animation-delay: -150ms; }
+.editing .hw-slot:nth-child(5n) { animation-duration: calc(var(--hw-wobble-ms) * 1.04); animation-delay: -190ms; animation-direction: alternate-reverse; }
+.editing .hw-slot:nth-child(6n) { animation-duration: calc(var(--hw-wobble-ms) * .86); animation-delay: -30ms; animation-direction: alternate-reverse; }
+.editing .hw-slot:nth-child(7n) { animation-duration: calc(var(--hw-wobble-ms) * 1.07); animation-delay: -90ms; }
+.editing .hw-slot:nth-child(8n) { animation-duration: calc(var(--hw-wobble-ms) * .98); animation-delay: -230ms; animation-direction: alternate-reverse; }
 .editing .hw-body { display: contents; }
 .editing .hw-slot > .hw-body > * { height: 100%; }
 .editing .hw-slot.span-m > .hw-body > * { height: auto; }
 .editing .hw-slot:focus-visible { outline: 2px solid var(--accent-text); }
 /* rotate is its own property, so the FLIP and drag transforms are left alone. */
-@keyframes hw-wiggle {
-  from { rotate: -.45deg; }
-  to { rotate: .45deg; }
+@keyframes hw-wobble {
+  from { rotate: calc(var(--hw-wobble-angle) * -1); }
+  to { rotate: var(--hw-wobble-angle); }
 }
 .editing .hw-slot.dragging,
 .editing .hw-slot.settling {
@@ -157,7 +169,8 @@
 .hw-minus::before { content: ""; position: absolute; inset: -9px; }
 .dragging-any .hw-minus { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
-  .editing .hw-slot { animation: none; }
+  .editing .hw-slot,
+  .editing .hw-slot:nth-child(n) { animation: none; rotate: none; }
   .editing .hw-slot.dragging { transition: none; }
 }
 

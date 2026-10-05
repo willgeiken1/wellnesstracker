@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { pickHomeV2 } from "../logger/js/shared/home-migrate.js";
 import { HOME_WIDGETS, commitHomeEditor, getHomeLayout, homeEditorDraft } from "../logger/js/shared/home-widgets.js";
@@ -241,4 +242,58 @@ test("gallery markup never nests interactive elements inside a button", async ()
     app.homeHeroHTML = keep.hero; app.homeWeekHTML = keep.week;
     HOME_WIDGETS.pattern.render = keep.pattern; HOME_WIDGETS.headline.render = keep.headline;
   }
+});
+
+test("edit mode jiggle is wired to .editing .hw-slot, off while lifted, off for reduced motion, and never in the gallery", () => {
+  const css = readFileSync(new URL("../logger/css/home-widgets.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const home = readFileSync(new URL("../logger/js/pages/home.js", import.meta.url), "utf8");
+  const rules = [];
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(css))) rules.push({ sel: m[1].trim(), body: m[2] });
+  const block = (name) => css.slice(css.indexOf(name));
+
+  const keyframes = css.match(/@keyframes hw-wobble\s*\{[\s\S]*?\}\s*\}/);
+  assert.ok(keyframes, "wobble keyframes exist");
+  assert.match(keyframes[0], /rotate:/, "wobble uses the independent rotate property");
+  assert.doesNotMatch(keyframes[0], /transform:/, "wobble leaves transform to drag and FLIP");
+
+  const hook = rules.find((r) => r.sel === ".editing .hw-slot" && /animation:\s*hw-wobble/.test(r.body));
+  assert.ok(hook, "the wobble is attached to .editing .hw-slot");
+  assert.match(css, /--hw-wobble-angle:\s*1\.25deg/);
+  assert.match(css, /--hw-wobble-ms:\s*270ms/);
+  assert.ok(rules.some((r) => /nth-child/.test(r.sel) && /animation-delay:\s*-/.test(r.body)), "negative staggered delays");
+  assert.ok(rules.some((r) => /nth-child/.test(r.sel) && /alternate-reverse/.test(r.body)), "alternating direction");
+
+  /* Resolve the cascade for the first 8 cards: the last matching nth-child rule wins at equal specificity. */
+  const combos = [];
+  for (let n = 1; n <= 8; n++) {
+    const get = (prop, fallback) => {
+      let value = fallback;
+      rules.forEach((r) => {
+        if (!/^\.editing \.hw-slot(:nth-child\((\d+)n\))?$/.test(r.sel)) return;
+        const k = r.sel.match(/nth-child\((\d+)n\)/);
+        if (k && n % Number(k[1])) return;
+        const d = r.body.match(new RegExp(`${prop}:\\s*([^;]+)`));
+        if (d) value = d[1].trim();
+      });
+      return value;
+    };
+    combos.push([get("animation-duration", "base"), get("animation-delay", "0"), get("animation-direction", "alternate")].join("|"));
+  }
+  assert.equal(new Set(combos).size, 8, `first 8 cards wobble out of sync: ${combos.join(" / ")}`);
+
+  assert.match(home, /class="home-v2 editing"/, "edit-mode markup carries the editing class on the list");
+
+  const lifted = rules.find((r) => /\.editing \.hw-slot\.dragging/.test(r.sel) && /animation:\s*none/.test(r.body));
+  assert.ok(lifted && /\.editing \.hw-slot\.settling/.test(lifted.sel), "dragging and settling cards do not wobble");
+  assert.ok(css.indexOf(lifted.sel) > css.indexOf(hook.sel), "the lifted rule comes after the wobble rule");
+
+  const reduced = block("@media (prefers-reduced-motion: reduce)");
+  assert.match(reduced.slice(0, reduced.indexOf("}\n}") + 3), /\.editing \.hw-slot[^{]*\{\s*animation:\s*none/);
+
+  rules.filter((r) => /hw-wobble|animation|rotate/.test(r.body)).forEach((r) => {
+    assert.ok(!/home-gallery|hw-prev|hw-gal/.test(r.sel), `wobble leaks into ${r.sel}`);
+    assert.ok(/\.editing/.test(r.sel) || /@keyframes/.test(r.sel) || /--hw-wobble/.test(r.body) || r.sel.startsWith("from") || r.sel.startsWith("to"), `animation outside edit mode: ${r.sel}`);
+  });
 });
