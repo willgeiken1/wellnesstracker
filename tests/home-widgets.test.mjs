@@ -606,9 +606,10 @@ test("a real home edit paints the registry and keeps the weigh-in nudge inside t
     app.ui.homeEdit = true;
     const editor = app.homeHTML();
     assert.match(editor, /data-action="home-save"/);
-    assert.match(editor, /data-action="home-size" data-id="headline" data-size="small"/);
-    assert.match(editor, /data-action="home-size" data-id="headline" data-size="medium"/);
-    assert.doesNotMatch(editor, /data-action="home-size" data-id="today"|future-widget/);
+    assert.match(editor, /data-action="home-gallery"/);
+    assert.match(editor, /class="hw-slot span-m" data-hw="headline"/);
+    assert.match(editor, /data-action="home-remove" data-id="headline" aria-label="Remove Daily headline"/);
+    assert.doesNotMatch(editor, /home-up|home-down|home-size|hw-grip|future-widget/);
   } finally {
     app.state = prev.state;
     app.ui = prev.ui;

@@ -149,6 +149,7 @@ app.wdrag = wdrag;
 
 document.addEventListener("pointerdown", (ev) => {
   if (app.ui.edit || app.ui.briefEdit || app.ui.homeEdit || app.ui.sheet || ev.button > 0) return;
+  if (app.ui.tab === "home") return;   // Home edit mode is opened by home-drag.js
   const w = ev.target.closest(".wdgs .wdg, .wcard[data-action=open-w]"); if (!w) return;
   const page = app.editPage(); if (!page) return;
   app.wlp = { x: ev.clientX, y: ev.clientY, t: setTimeout(() => {

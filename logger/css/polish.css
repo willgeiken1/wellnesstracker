@@ -12,6 +12,7 @@
   --r-xl: 28px;
   --elev-1: 0 1px 1px rgba(0, 0, 0, .22);
   --elev-2: 0 14px 32px rgba(0, 0, 0, .28);
+  --hw-lift-shadow: 0 22px 44px rgba(0, 0, 0, .5), 0 4px 12px rgba(0, 0, 0, .35);
   --inset-hi: inset 0 1px 0 rgba(255, 255, 255, .08);
   --inset-lo: inset 0 -1px 0 rgba(0, 0, 0, .28);
   --sheen: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 42%);
@@ -31,6 +32,7 @@ button.stat { width: 100%; text-align: left; }
 :root[data-mode="light"] {
   --elev-1: 0 1px 2px rgba(20, 20, 20, .05);
   --elev-2: 0 12px 28px rgba(20, 20, 20, .07);
+  --hw-lift-shadow: 0 20px 40px rgba(20, 20, 20, .22), 0 4px 10px rgba(20, 20, 20, .12);
   --inset-hi: inset 0 1px 0 rgba(255, 255, 255, .95);
   --inset-lo: inset 0 -1px 0 rgba(20, 20, 20, .05);
   --sheen: linear-gradient(180deg, rgba(255, 255, 255, .65), rgba(255, 255, 255, 0) 46%);
