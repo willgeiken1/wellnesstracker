@@ -3,3 +3,4 @@ tokens.json
 .venv/
 __pycache__/
 supabase/.temp/
+node_modules/

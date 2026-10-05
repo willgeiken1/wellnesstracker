@@ -1,5 +1,5 @@
 // Rapid tab-swipe stress test. Run from the repo with the app already served:
-//   node logger/tests/rapid-swipe.mjs
+//   PLAYWRIGHT_PATH=... CHROME_PATH=... node logger/tests/rapid-swipe.mjs
 // Uses Playwright touch events at 390x844.
 
 import { createRequire } from "node:module";
@@ -22,7 +22,7 @@ function check(name, cond, extra) {
 
 async function boot(reduced) {
   const browser = await chromium.launch({
-    executablePath: "/usr/local/bin/google-chrome",
+    executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const context = await browser.newContext({

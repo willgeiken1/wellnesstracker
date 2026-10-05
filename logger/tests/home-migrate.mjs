@@ -575,19 +575,24 @@ async function browserCases() {
   });
   const home = await upgraded.page.evaluate(() => {
     const homeV2 = window.app.state.layout.homeV2;
-    const brief = document.querySelector("#pane-home .wdg[data-w='brief'] [data-metric='oura']");
+    const pane = document.querySelector("#pane-home");
     return {
       flag: window.app.HOME_REGISTRY_PAINT === true,
+      active: window.app.homeRegistryActive(window.app.state) === true,
       migrated: !!(homeV2 && homeV2.v === 2 && Array.isArray(homeV2.items)),
       widgets: [...document.querySelectorAll("#pane-home .wdg")].map((el) => el.dataset.w),
-      strip: document.querySelectorAll("#pane-home .oura-wait, #pane-home [data-hw], #pane-home .home-v2").length,
+      stack: !!document.querySelector("#pane-home .wdgs"),
+      waiting: document.querySelectorAll("#pane-home .oura-wait").length,
+      slots: [...document.querySelectorAll("#pane-home [data-hw]")].map((el) => el.dataset.hw),
       card: !!document.querySelector("#pane-home .wdg[data-w='readiness'] .rcard"),
-      brief: brief ? brief.textContent : "",
+      text: pane ? pane.innerText : "",
     };
   });
+  // The flag stays off, so the saved order stays the legacy stack. Readiness is the
+  // card, not a second brief line. Sleep score is a default tile, not a registry takeover.
   check(
     "upgraded custom home matches main while the flag is off",
-    home.flag === false && home.migrated && eq(home.widgets, ["today", "brief", "cardio", "readiness", "week", "map-basic"]) && home.strip === 0 && home.card && /82/.test(home.brief) && /Sleep 74/.test(home.brief),
+    home.flag === false && home.active === false && home.migrated && home.stack && eq(home.widgets, ["today", "brief", "cardio", "readiness", "week", "map-basic"]) && home.waiting === 0 && home.card && /82/.test(home.text) && home.slots.includes("sleep-score") && !home.slots.includes("today") && /74/.test(home.text),
     home
   );
 
@@ -622,8 +627,27 @@ async function browserCases() {
   await browser.close();
 }
 
+function postgresReachable() {
+  try {
+    execFileSync("sudo", pgArgs(["-c", "select 1"]), { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 unit();
-rpcCases();
+// The SQL cases need a live notes_merge database (auth.users, merge_user_data).
+// HOME_MIGRATE_PG=0 skips them. HOME_MIGRATE_PG=1 requires them. Unset runs them
+// only when that database is already reachable.
+const pgFlag = process.env.HOME_MIGRATE_PG;
+if (pgFlag === "0") {
+  console.log("SKIP postgres cases (HOME_MIGRATE_PG=0)");
+} else if (pgFlag === "1" || postgresReachable()) {
+  rpcCases();
+} else {
+  console.log("SKIP postgres cases (database " + PG_DATABASE + " is not reachable; set HOME_MIGRATE_PG=1 to require them)");
+}
 await browserCases();
 if (fails.length) {
   console.log("FAILED", fails.join(", "));

@@ -1,5 +1,5 @@
 // Home Morning Brief widget. Run with the app served at BASE (default :8765):
-//   PLAYWRIGHT_PATH=... node logger/tests/brief-widget.mjs
+//   PLAYWRIGHT_PATH=... CHROME_PATH=... ARTIFACTS_DIR=... node logger/tests/brief-widget.mjs
 
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
@@ -9,7 +9,7 @@ const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const { chromium } = pw;
 
 const BASE = process.env.BASE || "http://127.0.0.1:8765";
-const ART = "/opt/cursor/artifacts";
+const ART = process.env.ARTIFACTS_DIR || "/opt/cursor/artifacts";
 mkdirSync(ART, { recursive: true });
 const fails = [];
 
@@ -20,7 +20,7 @@ function check(name, cond, extra) {
 
 async function boot(state) {
   const browser = await chromium.launch({
-    executablePath: "/usr/local/bin/google-chrome",
+    executablePath: process.env.CHROME_PATH || "/usr/local/bin/google-chrome",
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const context = await browser.newContext({

@@ -1,0 +1,9 @@
+{
+  "name": "wellnesstracker",
+  "private": true,
+  "type": "module",
+  "description": "Playwright is installed for the browser harnesses under logger/tests. The app itself has no package dependencies.",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

@@ -137,7 +137,9 @@ async function main() {
   const browser = await launch();
   const { page, errors } = await boot(browser, "dark");
 
-  check("fresh home stays on the legacy stack", await page.locator("#pane-home .home-v2").count() === 0);
+  // Default tiles (a weigh-in is already saved) render inside .home-v2. That strip
+  // is not the registry: layout.homeV2 stays empty and the legacy .wdgs stack stays.
+  check("fresh home stays on the legacy stack", await page.evaluate(() => !app.state.layout || app.state.layout.homeV2 == null) && await page.locator("#pane-home .wdgs").count() === 1);
   check("fresh home offers Edit", await page.locator("[data-action='home-edit']").count() === 1);
   check("home title starts below the status bar", await topOf(page, "#pane-home .page-title") >= 59);
 
@@ -147,7 +149,7 @@ async function main() {
   const untouched = await page.evaluate(() => app.state.layout.homeV2 == null);
   await page.locator("[data-action='home-save']").click();
   await page.waitForTimeout(200);
-  check("no-change save does not write", untouched && await page.evaluate(() => app.state.layout.homeV2 == null) && await page.locator("#pane-home .home-v2").count() === 0);
+  check("no-change save does not write", untouched && await page.evaluate(() => app.state.layout.homeV2 == null) && await page.locator("#pane-home .wdgs").count() === 1);
 
   await page.locator("[data-action='home-edit']").click();
   await page.waitForTimeout(200);

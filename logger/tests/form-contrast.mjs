@@ -1,5 +1,5 @@
 // Form controls must not render dark text on a dark field.
-//   PLAYWRIGHT_PATH=... node logger/tests/form-contrast.mjs
+//   PLAYWRIGHT_PATH=... CHROME_PATH=... node logger/tests/form-contrast.mjs
 
 import { createRequire } from "node:module";
 
@@ -29,10 +29,11 @@ function parse(c) {
 }
 
 async function launch() {
-  return chromium.launch({
-    channel: "chrome",
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  const args = ["--no-sandbox", "--disable-dev-shm-usage"];
+  if (process.env.CHROME_PATH) {
+    return chromium.launch({ executablePath: process.env.CHROME_PATH, args });
+  }
+  return chromium.launch({ channel: "chrome", args });
 }
 
 async function boot(browser) {
