@@ -8,6 +8,8 @@ export const OFFLINE_CHROME_ARGS = [
   "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
 ];
 
+export { guardNetwork } from "./e2e/fixtures/network-guard.mjs";
+
 export async function launchOfflineBrowser(chromium, overrides = {}) {
   const options = { args: OFFLINE_CHROME_ARGS.concat(overrides.args || []) };
   if (overrides.executablePath) options.executablePath = overrides.executablePath;
