@@ -4,7 +4,7 @@ import { onDevHost } from "./usage-events.js";
 import { usageSharingOn } from "./usage-pref.js";
 
 /* Insight shell release. Bump this together with the CACHE name in sw.js. */
-export const SENTRY_RELEASE = "insight-shell-v37";
+export const SENTRY_RELEASE = "insight-shell-v38";
 
 /* Errors only. The tracing build is larger and this app does not send traces. */
 const SENTRY_SRC = "https://browser.sentry-cdn.com/10.42.0/bundle.min.js";

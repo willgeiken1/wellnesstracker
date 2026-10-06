@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, findingsForView, loggedDays, pickForToday, todayLine } from "./correlate.js";
+import { DAYS_FOR_A_PATTERN, addDays, claimSupported, findingsForView, loggedDays, pickForToday, todayLine, weightTrend } from "./correlate.js";
 import { hasOura } from "./oura-gate.js";
 import { homeCardShowing, readinessCardShowing } from "./home-defaults.js";
 
@@ -17,18 +17,38 @@ const BRIEF_METRICS = [
 ];
 app.BRIEF_METRICS = BRIEF_METRICS;
 
+/* A readiness score only drives today's advice when it is from today or yesterday. */
+export const READINESS_FRESH_DAYS = 1;
+
+export function readinessForAdvice(ouraDay, today) {
+  if (!ouraDay || ouraDay.readiness == null || typeof today !== "string") return null;
+  const date = ouraDay.date;
+  if (typeof date !== "string") return null;
+  for (let i = 0; i <= READINESS_FRESH_DAYS; i++) {
+    if (date === addDays(today, -i)) return ouraDay.readiness;
+  }
+  return null;
+}
+
+function effectHeadline(rows) {
+  const hi = (rows || []).find((r) => r.label === "high");
+  const lo = (rows || []).find((r) => r.label === "low");
+  if (!hi || !lo || hi.n < 3 || lo.n < 3 || hi.avg == null || lo.avg == null) return null;
+  const d = hi.avg - lo.avg;
+  let text = null;
+  if (d >= 1) text = "You lift stronger on high-readiness days";
+  else if (d <= -1) text = "You lift stronger on low-readiness days";
+  if (!text) return null;
+  const firm = claimSupported(lo.values || lo.xs, hi.values || hi.xs);
+  return firm ? text : `So far, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+}
+
 export function briefHeadline({ proteinLowDays, readiness, focus, effectRows, lifts } = {}) {
   if (proteinLowDays >= 3) return `Protein was low ${proteinLowDays} days in a row`;
   if (readiness >= 85 && focus) return `Readiness is high, good day for ${focus}`;
   if (readiness != null && readiness < 70) return "Readiness is low, keep today easy";
-  const rows = effectRows || [];
-  const hi = rows.find((r) => r.label === "high");
-  const lo = rows.find((r) => r.label === "low");
-  if (hi && lo && hi.n >= 3 && lo.n >= 3 && hi.avg != null && lo.avg != null) {
-    const d = hi.avg - lo.avg;
-    if (d >= 1) return "You lift stronger on high-readiness days";
-    if (d <= -1) return "You lift stronger on low-readiness days";
-  }
+  const fromEffect = effectHeadline(effectRows);
+  if (fromEffect) return fromEffect;
   const list = (lifts || []).filter((l) => l && l.name && l.cls !== "wait");
   const down = list.filter((l) => l.cls === "down").sort((a, b) => (a.pctWeek || 0) - (b.pctWeek || 0));
   if (down.length) return `${down[0].name} is declining`;
@@ -89,11 +109,7 @@ function scheduledFocus() {
 }
 
 function freshReadiness() {
-  const o = app.latestOura(app.src().oura);
-  if (!o || o.readiness == null) return null;
-  const t = app.today();
-  if (o.date !== t && o.date !== app.addDays(t, -1)) return null;
-  return o.readiness;
+  return readinessForAdvice(app.latestOura(app.src().oura), app.today());
 }
 
 function proteinLowDays() {
@@ -140,10 +156,11 @@ function trainMetric() {
     }
   }
   if (doneToday.length) return { id: "train", label: "Training", value: doneToday.map((s) => s.name).join(" + "), meta: "Done today", sub: "Logged for today." };
-  const o = app.latestOura(app.src().oura);
   const st = app.weekGoalStatus();
-  /* Same score and same function as the Readiness card, so the two agree. */
-  const advice = planned !== "rest" && o && o.readiness != null ? app.readinessAdvice(o.readiness) : null;
+  /* Same score and same function as the Readiness card, so the two agree.
+     A ring that has not synced today or yesterday does not get a vote. */
+  const score = readinessForAdvice(app.latestOura(app.src().oura), t);
+  const advice = planned !== "rest" && score != null ? app.readinessAdvice(score) : null;
   if (advice) {
     /* The Readiness card already gives this advice, so the brief does not repeat it. */
     if (readinessCardShowing(app.state)) return null;
@@ -185,10 +202,11 @@ function weightMetric() {
   if (!w.length) return { id: "weight", label: "Weight", value: "No weigh-ins", meta: "A few mornings show the trend", sub: "Log one from Progress or the reminder.", empty: true };
   const last = w[w.length - 1];
   const shown = app.fmtW(app.kgToDisp(last.kg));
-  const r = app.weightRate();
-  if (!r) return { id: "weight", label: "Weight", value: shown, meta: "Need a few more over 10 days", sub: "The weekly rate shows up after that." };
-  const dir = r.perWeek > 0.05 ? "Gaining" : r.perWeek < -0.05 ? "Losing" : "Holding steady";
-  return { id: "weight", label: "Weight", value: `${app.signed(r.perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
+  const trend = weightTrend(w, app.today());
+  if (!trend.ready) return { id: "weight", label: "Weight", value: shown, meta: "Too early to tell", sub: "Five weigh-ins over 14 days show the weekly rate." };
+  const perWeek = app.kgToDisp(trend.perWeekKg);
+  const dir = perWeek > 0.05 ? "Gaining" : perWeek < -0.05 ? "Losing" : "Holding steady";
+  return { id: "weight", label: "Weight", value: `${app.signed(perWeek, 1)} ${app.wUnit()}/wk`, meta: `Last ${shown}`, sub: `${dir} over the last month.` };
 }
 
 function patternEmpty(days, rows) {

@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { addDays, findingsForWeek } from "./correlate.js";
+import { addDays, claimSupported, findingsForWeek } from "./correlate.js";
 
 /* In-app weekly report. Numbers stay on the device. Dismiss state is a list of
    week-start dates in the existing user blob, not a new table. */
@@ -78,6 +78,7 @@ function metricOf(series, priorSeries, better) {
     delta: avg != null && before != null ? avg - before : null,
     series,
     better,
+    supported: claimSupported(cur, prev),
   };
 }
 
@@ -219,11 +220,12 @@ export function weekHeadline(report) {
   else {
     const ready = report.metrics.readiness;
     const sleep = report.metrics.sleepHours;
-    if (ready && ready.delta != null && ready.delta >= 1) extra = "readiness was up";
-    else if (sleep && sleep.delta != null && sleep.delta >= 0.25) extra = "you slept a bit longer";
+    const hedged = (metric, phrase) => (metric && metric.supported ? phrase : `${phrase} so far`);
+    if (ready && ready.delta != null && ready.delta >= 1) extra = hedged(ready, "readiness was up");
+    else if (sleep && sleep.delta != null && sleep.delta >= 0.25) extra = hedged(sleep, "you slept a bit longer");
     else if (report.food && report.food.days >= 5) extra = "meals were logged most days";
-    else if (ready && ready.delta != null && ready.delta <= -1) extra = "recovery was a little quieter";
-    else if (sleep && sleep.delta != null && sleep.delta <= -0.25) extra = "sleep ran a bit short";
+    else if (ready && ready.delta != null && ready.delta <= -1) extra = hedged(ready, "recovery was a little quieter");
+    else if (sleep && sleep.delta != null && sleep.delta <= -0.25) extra = hedged(sleep, "sleep ran a bit short");
   }
   if (train && extra) return `${train}, and ${extra}.`;
   if (train) return `${train}.`;

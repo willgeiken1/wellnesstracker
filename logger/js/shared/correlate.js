@@ -18,6 +18,47 @@
 export const MIN_PER_GROUP = 7;
 export const LATE_HOUR = 21;
 
+/* A food day is one place's decision. One snack is not a low-calorie day.
+   The day counts when at least two meals were logged, or calories reach
+   FOOD_COMPLETE_KCAL. Thinner days are missing. */
+export const FOOD_COMPLETE_KCAL = 1000;
+export const FOOD_COMPLETE_MEALS = 2;
+
+/* Weekly rate. Under 5 weigh-ins, or a span under 14 days, is too early to tell.
+   Only the last 28 days are fitted. */
+export const WEIGHT_TREND_MIN_POINTS = 5;
+export const WEIGHT_TREND_MIN_SPAN = 14;
+export const WEIGHT_TREND_WINDOW = 28;
+
+/* Typos and ring-off nights are missing, not data. Ordinary high and low days
+   stay inside. 9,999 kcal, a 0 readiness, or a 20-hour "night" are dropped
+   before any comparison. */
+export const METRIC_BOUNDS = {
+  readiness: [1, 100],
+  sleepScore: [1, 100],
+  sleepHours: [0.5, 16],
+  deepHours: [0, 8],
+  remHours: [0, 8],
+  lightHours: [0, 12],
+  awakeMin: [0, 720],
+  steps: [0, 80000],
+  hrv: [1, 250],
+  rhr: [25, 120],
+  temp: [-3, 3],
+  workoutVolume: [0, 2000000],
+  liftPerf: [-100, 100],
+  calories: [0, 8000],
+  protein: [0, 600],
+  carbs: [0, 1500],
+  fat: [0, 500],
+  weight: [30, 300],
+  cardioMin: [0, 720],
+  cardioKcal: [0, 5000],
+  waist: [40, 200],
+  arms: [10, 80],
+  chest: [50, 200],
+};
+
 const CONFIDENCE_WEIGHT = { low: 1, medium: 2, high: 3 };
 
 /* Metrics the logger already stores. Extra numeric fields on a day are picked
@@ -101,11 +142,86 @@ function finite(v) {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+export function plausibleValue(id, value) {
+  const n = finite(value);
+  if (n == null) return null;
+  const bounds = METRIC_BOUNDS[id];
+  if (!bounds) return n;
+  if (n < bounds[0] || n > bounds[1]) return null;
+  return n;
+}
+
+/* Drop numbers outside METRIC_BOUNDS. Booleans and unknown keys stay.
+   Called before detrending so a typo never enters a comparison, while
+   detrendDays itself stays a pure numeric transform. */
+export function sanitizeDays(days) {
+  if (!days) return {};
+  const out = {};
+  const dates = Object.keys(days);
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    const bucket = days[date];
+    if (!bucket || typeof bucket !== "object") continue;
+    const copy = {};
+    let any = false;
+    for (const k in bucket) {
+      const v = bucket[k];
+      if (typeof v === "number") {
+        const n = plausibleValue(k, v);
+        if (n == null) continue;
+        copy[k] = n;
+        any = true;
+      } else {
+        copy[k] = v;
+        any = true;
+      }
+    }
+    if (any) out[date] = copy;
+  }
+  return out;
+}
+
 export function mean(xs) {
   if (!xs.length) return null;
   let s = 0;
   for (let i = 0; i < xs.length; i++) s += xs[i];
   return s / xs.length;
+}
+
+/* One fit for Goals, the Home weight tile, and the morning brief.
+   Fewer than 5 weigh-ins, or a span under 14 days, is too early to tell. */
+export function weightTrend(weighIns, today) {
+  const rows = (Array.isArray(weighIns) ? weighIns : [])
+    .filter((x) => x && typeof x.date === "string" && finite(x.kg) != null)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const end = typeof today === "string" && today ? today : (rows.length ? rows[rows.length - 1].date : null);
+  const eligible = end ? rows.filter((x) => x.date <= end) : rows;
+  const last = eligible.length ? eligible[eligible.length - 1] : null;
+  const early = { ready: false, phrase: "too early to tell", last, perWeekKg: null, pct: null };
+  if (!end) return early;
+  const start = addDays(end, -WEIGHT_TREND_WINDOW);
+  const recent = eligible.filter((x) => x.date >= start);
+  if (recent.length < WEIGHT_TREND_MIN_POINTS) return early;
+  const t0 = dayNumber(recent[0].date);
+  const xs = recent.map((x) => dayNumber(x.date) - t0);
+  const span = xs[xs.length - 1] - xs[0];
+  if (span < WEIGHT_TREND_MIN_SPAN) return early;
+  const ys = recent.map((x) => x.kg);
+  const mx = mean(xs);
+  const my = mean(ys);
+  let sxx = 0;
+  let sxy = 0;
+  for (let i = 0; i < xs.length; i++) {
+    const dx = xs[i] - mx;
+    sxx += dx * dx;
+    sxy += dx * (ys[i] - my);
+  }
+  const slope = sxx === 0 ? 0 : sxy / sxx;
+  const perWeekKg = slope * 7;
+  const lastKg = ys[ys.length - 1];
+  const pct = lastKg ? perWeekKg / lastKg * 100 : null;
+  return { ready: true, phrase: null, last, perWeekKg, pct };
 }
 
 function variance(xs, m) {
@@ -387,7 +503,7 @@ export function effect(perfs, valueOf, buckets) {
       const v = valueOf(perfs[i].date);
       if (v != null && b.test(v)) xs.push(perfs[i].perf);
     }
-    return { label: b.label, avg: mean(xs), n: xs.length };
+    return { label: b.label, avg: mean(xs), n: xs.length, values: xs };
   });
 }
 
@@ -469,7 +585,21 @@ export function suppressedStory(factor, outcome, lag, ouraExtra) {
   if (lag === 0 && isOura(factor.source || factor.id, ouraExtra) && isOura(outcome, ouraExtra)) return true;
   if (isTrainingFactor(factor) && isTrainingOutcome(outcome)) return true;
   if (lag === 0 && isLaterFactor(factor) && MORNING_IDS.has(outcome)) return true;
+  /* A morning weigh-in is already on the scale before that day's meals.
+     Food can line up with the next morning, not this one. */
+  if (lag === 0 && outcome === "weight" && isFoodFactor(factor)) return true;
   return false;
+}
+
+const FOOD_FACTOR_IDS = new Set([
+  "calories", "protein", "carbs", "fat", "lateEating",
+  "caloriesOverTarget", "proteinOverTarget", "carbsOverTarget", "fatOverTarget",
+]);
+
+function isFoodFactor(factor) {
+  const id = String(factor && factor.id || "");
+  const metric = factorMetric(factor);
+  return FOOD_FACTOR_IDS.has(metric) || FOOD_FACTOR_IDS.has(id);
 }
 
 function outcomeAllowed(id, weightDir) {
@@ -509,11 +639,52 @@ function putNum(bucket, key, value) {
   bucket[key] = n;
 }
 
-function hourOf(at) {
+function deviceTimeZone() {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone) return zone;
+  } catch (e) { /* UTC is only the fallback when the zone cannot be read */ }
+  return "UTC";
+}
+
+const HAS_ZONE = /(?:Z|[+-]\d{2}:?\d{2})$/;
+
+function hourInZone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  let hour = NaN;
+  let minute = 0;
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].type === "hour") hour = Number(parts[i].value);
+    else if (parts[i].type === "minute") minute = Number(parts[i].value);
+  }
+  if (!Number.isFinite(hour)) return null;
+  if (hour === 24) hour = 0;
+  return hour + minute / 60;
+}
+
+/* Wall-clock strings (no Z and no offset) are already local. A Z or numeric
+   offset is an absolute instant, stored that way by toISOString(), and is
+   read in the user's zone. UTC hours made a 9 pm meal look like mid-afternoon. */
+export function localHour(at, timeZone) {
   if (typeof at !== "string") return null;
   const m = at.match(/T(\d{2}):(\d{2})/);
   if (!m) return null;
-  return Number(m[1]) + Number(m[2]) / 60;
+  const wall = Number(m[1]) + Number(m[2]) / 60;
+  if (!HAS_ZONE.test(at.trim())) return wall;
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return null;
+  const zone = timeZone || deviceTimeZone();
+  try {
+    const local = hourInZone(d, zone);
+    return local == null ? null : local;
+  } catch (e) {
+    return d.getHours() + d.getMinutes() / 60;
+  }
 }
 
 function setVolume(set) {
@@ -591,8 +762,19 @@ function addCheckins(days, checkins) {
   });
 }
 
-/* Turn a user_data blob (or the smaller shape the app passes) into one row per day. */
-export function extractDays(data) {
+function sanitizeBucket(bucket) {
+  const keys = Object.keys(bucket);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (typeof bucket[k] !== "number") continue;
+    if (plausibleValue(k, bucket[k]) == null) delete bucket[k];
+  }
+}
+
+/* Turn a user_data blob (or the smaller shape the app passes) into one row per day.
+   timeZone reads Z timestamps in that IANA zone. The device zone is the default. */
+export function extractDays(data, timeZone) {
+  const zone = typeof timeZone === "string" && timeZone ? timeZone : deviceTimeZone();
   const src = data || {};
   const days = {};
   const phrases = {};
@@ -650,25 +832,29 @@ export function extractDays(data) {
   Object.keys(foodDays).forEach((date) => {
     const entries = foodDays[date];
     if (!Array.isArray(entries) || !entries.length) return;
-    active.push(date);
     let kcal = 0, p = 0, c = 0, f = 0, any = false, stamped = false, late = false;
+    const meals = new Set();
     entries.forEach((e) => {
       if (!e || !e.base) return;
       const servings = finite(e.servings) != null ? e.servings : 1;
       const bk = finite(e.base.kcal), bp = finite(e.base.p), bc = finite(e.base.c), bf = finite(e.base.f);
       if (bk == null && bp == null && bc == null && bf == null) return;
       any = true;
+      if (e.meal) meals.add(String(e.meal));
       kcal += (bk || 0) * servings;
       p += (bp || 0) * servings;
       c += (bc || 0) * servings;
       f += (bf || 0) * servings;
-      const hour = hourOf(e.at);
+      const hour = localHour(e.at, zone);
       if (hour != null) {
         stamped = true;
         if (hour >= LATE_HOUR) late = true;
       }
     });
     if (!any) return;
+    if (!(kcal >= FOOD_COMPLETE_KCAL || meals.size >= FOOD_COMPLETE_MEALS)) return;
+    if (plausibleValue("calories", kcal) == null) return;
+    active.push(date);
     const bucket = dayBucket(days, date);
     bucket.calories = kcal;
     bucket.protein = p;
@@ -727,10 +913,18 @@ export function extractDays(data) {
     Object.keys(lift).forEach((date) => putNum(dayBucket(days, date), "liftPerf", lift[date]));
   }
 
+  Object.keys(days).forEach((date) => {
+    sanitizeBucket(days[date]);
+    if (!Object.keys(days[date]).length) delete days[date];
+  });
+
+  /* A day with no log is missing, not a rest day. Only a day that already
+     has something logged can be "didn't work out" or "no cardio". */
   const span = active.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
   if (span.length) {
     eachDay(span[0], span[span.length - 1]).forEach((date) => {
-      const bucket = dayBucket(days, date);
+      if (!days[date]) return;
+      const bucket = days[date];
       if (bucket.workedOut !== true) bucket.workedOut = false;
       if (bucket.didCardio !== true) bucket.didCardio = false;
       Object.keys(typeCounts).forEach((id) => {
@@ -1087,6 +1281,18 @@ export function confidenceOf(q, n1, n2, d) {
   return "low";
 }
 
+/* Enough days in both groups, and the same Welch bar the cards already use.
+   A headline that cannot clear this stays hedged or stays quiet. */
+export function claimSupported(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length < MIN_PER_GROUP || b.length < MIN_PER_GROUP) return false;
+  for (let i = 0; i < a.length; i++) if (finite(a[i]) == null) return false;
+  for (let i = 0; i < b.length; i++) if (finite(b[i]) == null) return false;
+  const stats = welch(a, b);
+  const conf = confidenceOf(stats.p, a.length, b.length, stats.d);
+  return conf === "medium" || conf === "high";
+}
+
 function formatPercent(p) {
   const a = Math.abs(p);
   if (a >= 9.95) return String(Math.round(a));
@@ -1192,10 +1398,11 @@ function flatOutcome(map) {
 }
 
 function evaluate(days, phrases, options, ouraExtra) {
+  const clean = sanitizeDays(days);
   const minN = options.minPerGroup == null ? MIN_PER_GROUP : options.minPerGroup;
   const lags = options.lags || [0, 1];
   const weightDir = options.weightDir || null;
-  const adjusted = detrendDays(days);
+  const adjusted = detrendDays(clean);
   const idx = dayIndex(adjusted);
   const factors = buildFactors(adjusted, phrases || {});
   const outcomes = numericSeries(adjusted).filter((id) => outcomeAllowed(id, weightDir) && (!options.outcomes || options.outcomes.indexOf(id) !== -1));
@@ -1493,7 +1700,7 @@ function adjustedSeries(days, id) {
   const map = Object.create(null);
   const pts = [];
   for (let i = 0; i < dates.length; i++) {
-    const y = finite(days[dates[i]] && days[dates[i]][id]);
+    const y = plausibleValue(id, days[dates[i]] && days[dates[i]][id]);
     if (y != null) pts.push({ t: dayNumber(dates[i]), y, d: dates[i] });
   }
   const n = pts.length;
@@ -1542,7 +1749,7 @@ function factorActive(days, row, date) {
    stays there too: those were false claims on Home. Yesterday's trigger on
    a next-day pattern comes first. Otherwise the top good or bad finding. */
 export function pickForToday(rows, input, today) {
-  const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
+  const days = sanitizeDays(isPrebuilt(input) ? input.days : extractDays(input || {}).days);
   const ranked = findingsForView(rows).filter((r) => r.confidence === "high" && r.q <= 0.001 && (r.valence === "good" || r.valence === "bad"));
   if (!today || !ranked.length) return ranked[0] ? { ...ranked[0], because: "overall" } : null;
   const yesterday = addDays(today, -1);
@@ -1554,7 +1761,7 @@ export function pickForToday(rows, input, today) {
 /* Good or bad findings whose factor actually happened between start and end.
    Same ranking, labels, and temporal rules as the Insights list. */
 export function findingsForWeek(rows, input, start, end, limit) {
-  const days = isPrebuilt(input) ? input.days : extractDays(input || {}).days;
+  const days = sanitizeDays(isPrebuilt(input) ? input.days : extractDays(input || {}).days);
   const cap = limit == null ? 3 : limit;
   const ranked = findingsForView(rows).filter((r) => r.valence === "good" || r.valence === "bad");
   const hit = [];
