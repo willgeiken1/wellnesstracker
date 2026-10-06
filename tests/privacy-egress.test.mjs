@@ -128,3 +128,143 @@ test("a fake HRV and weight error leaves no health value through either filter",
     else globalThis.location = savedLocation;
   }
 });
+
+/* mulberry32, seed fixed so a failure names the same inputs next run. */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function rand() {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const HEALTH_NAMES = ["hrv", "readiness", "weight", "kcal", "calories", "sleep", "protein", "meal", "note"];
+const MEAL_WORDS = ["oats", "chicken", "salmon", "rice", "yogurt", "banana", "toast", "egg"];
+const SEPS = [".", "_", "-"];
+const JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+
+function pick(rand, list) {
+  return list[Math.floor(rand() * list.length)];
+}
+
+function mixCase(rand, word) {
+  return [...word].map((ch) => (rand() < 0.5 ? ch.toUpperCase() : ch)).join("");
+}
+
+test("seeded random health keys, numbers, and meal words do not survive either filter", () => {
+  const savedStorage = globalThis.localStorage;
+  const savedLocation = globalThis.location;
+  globalThis.localStorage = {
+    getItem(key) { return key === "insight-share-analytics" ? "1" : null; },
+    setItem() {},
+    removeItem() {},
+  };
+  globalThis.location = { hostname: "willgeiken1.github.io", protocol: "https:" };
+  const rand = mulberry32(0xC0FFEE);
+  try {
+    for (let trial = 0; trial < 32; trial++) {
+      const bases = [pick(rand, HEALTH_NAMES)];
+      let key = mixCase(rand, bases[0]);
+      if (rand() < 0.7) {
+        bases.push(pick(rand, HEALTH_NAMES));
+        key += pick(rand, SEPS) + mixCase(rand, bases[1]);
+      }
+      if (rand() < 0.5) key = "$" + key;
+      const meal = mixCase(rand, pick(rand, MEAL_WORDS));
+      const number = `${200 + Math.floor(rand() * 700)}.${10 + Math.floor(rand() * 90)}`;
+      let refresh = "rt_";
+      for (let i = 0; i < 8; i++) refresh += "abcdef"[Math.floor(rand() * 6)];
+      const fragment = `#access_token=${JWT}&refresh_token=${refresh}&${key}=${number}`;
+      const path = `https://cdn.example/food/${meal}`;
+      const needles = [key, meal, number, JWT, refresh, ...bases];
+
+      const sentry = scrubEvent({
+        message: { formatted: `${meal} ${number} ${key}`, params: [meal, number, key, JWT] },
+        logentry: { message: `${meal} ${key}`, formatted: number, params: [meal, number, refresh] },
+        exception: {
+          values: [{
+            type: meal,
+            value: `${meal} ${number} ${JWT}`,
+            mechanism: {
+              type: meal,
+              handled: false,
+              data: { [key]: number, note: meal, url: `${path}${fragment}`, info: refresh },
+            },
+          }],
+        },
+        extra: { [key]: number, meal, note: meal },
+        contexts: {
+          app: { app_name: meal, [key]: number },
+          culture: { locale: "en-US" },
+          trace: { op: "pageload", data: { url: `${path}${fragment}`, [key]: meal, status: "ok" } },
+          health: { [key]: number },
+        },
+        tags: { browser: meal, url: `${path}${fragment}`, [key]: number, transaction: `/food/${meal}` },
+        fingerprint: [meal, `${key}-${number}`, "{{ default }}", "TypeError"],
+        transaction: `/food/${meal}/${key}`,
+        breadcrumbs: [
+          {
+            category: "navigation",
+            type: "navigation",
+            data: { from: `/logger/${fragment}`, to: `/food/${meal}${fragment}` },
+          },
+          {
+            category: "fetch",
+            type: "http",
+            message: `GET /food/${meal}`,
+            data: { method: "GET", url: `${path}?${key}=${number}${fragment}`, status_code: Number(number) },
+          },
+        ],
+        request: { url: `${path}?${key}=${number}${fragment}`, data: { [key]: meal } },
+      });
+      const sentryRaw = JSON.stringify(sentry).toLowerCase();
+      for (const needle of needles) {
+        assert.equal(sentryRaw.includes(String(needle).toLowerCase()), false, `sentry trial ${trial} still has ${needle}`);
+      }
+      assert.equal(sentry.message, "message");
+      assert.deepEqual(sentry.logentry, { message: "log" });
+      assert.equal(sentry.exception.values[0].value, "Error");
+      assert.equal(sentry.contexts.culture.locale, "en-US");
+
+      const viewed = sanitizePosthogEvent({
+        event: "tab_viewed",
+        properties: {
+          tab: "home",
+          [key]: number,
+          [meal]: meal,
+          $browser: meal,
+          $os: meal,
+          $lib: "web",
+          $current_url: `${path}?${key}=${number}${fragment}`,
+          $pathname: `/food/${meal}`,
+          $screen_height: Number(number),
+          $referrer: `https://cdn.example/${meal}${fragment}`,
+          $initial_utm_source: meal,
+          distinct_id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+          $geoip_city_name: meal,
+        },
+        $set: { [key]: number, $browser: meal, $meal: meal, $current_url: `https://cdn.example/${meal}${fragment}` },
+        $set_once: {
+          [key]: meal,
+          $os: "iOS",
+          $initial_current_url: `${path}?note=${number}${fragment}`,
+          $screen_width: Number(number),
+        },
+      });
+      assert.equal(viewed.event, "tab_viewed");
+      assert.equal(viewed.properties.tab, "home");
+      assert.equal(viewed.properties.$lib, "web");
+      assert.equal(viewed.$set_once.$os, "iOS");
+      const posthogRaw = JSON.stringify(viewed).toLowerCase();
+      for (const needle of needles) {
+        assert.equal(posthogRaw.includes(String(needle).toLowerCase()), false, `posthog trial ${trial} still has ${needle}`);
+      }
+    }
+  } finally {
+    globalThis.localStorage = savedStorage;
+    if (savedLocation === undefined) delete globalThis.location;
+    else globalThis.location = savedLocation;
+  }
+});

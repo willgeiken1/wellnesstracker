@@ -2,7 +2,7 @@ import { expect, MUST_FAIL_WITH, test } from "./fixtures/app.mjs";
 
 const PROBES = [
   "https://o4512196136206336.ingest.us.sentry.io/api/4512196143742976/envelope/",
-  "https://browser.sentry-cdn.com/10.42.0/bundle.tracing.min.js",
+  "https://browser.sentry-cdn.com/10.42.0/bundle.min.js",
   "https://us.i.posthog.com/e/",
   "https://us-assets.i.posthog.com/static/array.js",
   "https://example.com/must-not-leave",

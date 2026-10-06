@@ -28,6 +28,15 @@ export function scrubString(value) {
   return stripUrlQuery(redacted);
 }
 
+/* stripUrlQuery keeps a fragment on purpose. Tokens and health values also sit
+   after # (supabase-js clears signup and recovery tokens into the hash). */
+export function scrubUrl(value) {
+  if (typeof value !== "string") return value;
+  const clean = scrubString(value);
+  const hash = clean.indexOf("#");
+  return hash < 0 ? clean : clean.slice(0, hash);
+}
+
 function dropKey(key) {
   if (typeof key !== "string") return false;
   const k = key.toLowerCase();
@@ -60,18 +69,6 @@ function hasHealthWord(value) {
   return new RegExp(HEALTH_WORD, "i").test(value);
 }
 
-/* Numbers are measurements. Health words name the measurement or the note. */
-function stripHealthText(value) {
-  if (typeof value !== "string") return "";
-  const stripped = value
-    .replace(new RegExp(HEALTH_WORD, "gi"), " ")
-    .replace(/\d+(?:[.,]\d+)?/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!/[A-Za-z0-9]/.test(stripped)) return "";
-  return stripped;
-}
-
 function isHealthKey(key) {
   return hasHealthWord(String(key).replace(/[._-]+/g, " "));
 }
@@ -84,7 +81,14 @@ const TAG_ALLOW = new Set([
   "level", "handled", "mechanism", "environment", "release", "url", "transaction", "user",
 ]);
 const TX_PART = /^(?:index\.html|logger|home|workouts|food|progress|insights|settings|cardio)$/i;
-const SAFE_FINGERPRINT = /^(?:\{\{\s*default\s*\}\}|[A-Za-z][A-Za-z0-9_]{0,63})$/;
+const SAFE_FINGERPRINT = /^(?:\{\{\s*default\s*\}\}|[A-Za-z][A-Za-z0-9_]*Error)$/;
+const HTTP_METHOD = /^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i;
+const LOCALE_RE = /^[a-z]{2}(?:-[A-Za-z]{2})?$/;
+const TZ_RE = /^[A-Za-z]+(?:\/[A-Za-z_]+)+$/;
+const ID_RE = /^(?:[0-9a-f]{16,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const ENUM_VALUE = /^(?:ok|cancelled|unknown|pageload|navigation|http\.client|generic|onerror|instrument|chained|synthetic|fatal|error|warning|info|debug|production|Chrome|Firefox|Safari|Edge|Opera|iOS|Android|Windows|Mac OS X|Linux|Chrome OS)$/i;
+const URLISH_KEY = /(url|referrer|href)$/i;
+const MECH_TYPE = /^(?:generic|onerror|instrument|chained|synthetic)$/;
 
 function allowKeys(obj, allow) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
@@ -111,12 +115,18 @@ function scrubTags(tags) {
   if (!tags || typeof tags !== "object" || Array.isArray(tags)) return null;
   const out = {};
   for (const [key, value] of Object.entries(tags)) {
-    if (!TAG_ALLOW.has(String(key).toLowerCase())) continue;
+    const lower = String(key).toLowerCase();
+    if (!TAG_ALLOW.has(lower)) continue;
+    if (lower === "url" || lower === "transaction") {
+      const endpoint = typeof value === "string"
+        ? (lower === "transaction" ? safeRoute(value) : scrubEndpoint(value))
+        : undefined;
+      if (endpoint) out[key] = endpoint;
+      continue;
+    }
     if (typeof value === "boolean") { out[key] = value; continue; }
     if (typeof value !== "string") continue;
-    const clean = stripHealthText(value);
-    if (!clean) continue;
-    out[key] = clean;
+    if (ENUM_VALUE.test(value) || LOCALE_RE.test(value) || ID_RE.test(value)) out[key] = value;
   }
   return Object.keys(out).length ? out : null;
 }
@@ -146,42 +156,103 @@ function scrubTransaction(value) {
   return "/" + kept.join("/");
 }
 
+/* Absolute URLs keep scheme and host only. Relative URLs keep a known route. */
+export function scrubEndpoint(value) {
+  if (typeof value !== "string") return undefined;
+  const clean = scrubUrl(value).trim();
+  if (!clean) return undefined;
+  if (/^https?:\/\//i.test(clean)) {
+    try {
+      const url = new URL(clean);
+      if (url.username || url.password) return undefined;
+      if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+      return url.origin;
+    } catch (e) {
+      return undefined;
+    }
+  }
+  return scrubTransaction(clean);
+}
+
+export function safeRoute(value) {
+  if (typeof value !== "string") return undefined;
+  return scrubTransaction(scrubUrl(value));
+}
+
 function safeErrorType(type) {
   if (typeof type !== "string") return "Error";
-  if (!/^[A-Za-z_$][\w$]{0,80}$/.test(type)) return "Error";
-  if (hasHealthWord(type) || /\d/.test(type)) return "Error";
+  if (!/^[A-Za-z][A-Za-z0-9]*Error$/.test(type)) return "Error";
+  if (hasHealthWord(type)) return "Error";
   return type;
+}
+
+/* Allowed context bags and mechanism.data are still free-form. Keep only
+   values that cannot be a measurement, a meal, or a note. */
+function scrubLooseValue(key, value, depth) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" || value == null) return undefined;
+  if (Array.isArray(value)) {
+    const items = [];
+    for (let i = 0; i < value.length; i++) {
+      const item = scrubLooseValue(String(i), value[i], depth + 1);
+      if (item !== undefined) items.push(item);
+    }
+    return items.length ? items : undefined;
+  }
+  if (typeof value === "object") return scrubLooseObject(value, depth + 1);
+  if (typeof value !== "string" || !value) return undefined;
+  if (URLISH_KEY.test(String(key))) return scrubEndpoint(value);
+  if (LOCALE_RE.test(value) || TZ_RE.test(value) || ID_RE.test(value) || ENUM_VALUE.test(value)) return value;
+  if (HTTP_METHOD.test(value)) return value.toUpperCase();
+  return undefined;
+}
+
+function scrubLooseObject(value, depth = 0) {
+  if (depth > 8 || !value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const out = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (isHealthKey(key) || dropKey(key)) continue;
+    const clean = scrubLooseValue(key, item, depth);
+    if (clean !== undefined) out[key] = clean;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function scrubException(exception) {
   if (!exception || typeof exception !== "object" || !Array.isArray(exception.values)) return;
   exception.values = exception.values.map((entry) => {
-    if (!entry || typeof entry !== "object") return entry;
+    if (!entry || typeof entry !== "object") return { type: "Error", value: "Error" };
     const type = safeErrorType(entry.type);
-    return { ...entry, type, value: type };
+    const next = { type, value: type };
+    if (entry.stacktrace) next.stacktrace = entry.stacktrace;
+    if (entry.mechanism && typeof entry.mechanism === "object") {
+      const mech = {};
+      if (typeof entry.mechanism.type === "string" && MECH_TYPE.test(entry.mechanism.type)) mech.type = entry.mechanism.type;
+      if (typeof entry.mechanism.handled === "boolean") mech.handled = entry.mechanism.handled;
+      const data = scrubLooseObject(entry.mechanism.data);
+      if (data) mech.data = data;
+      if (Object.keys(mech).length) next.mechanism = mech;
+    }
+    return next;
   });
 }
 
+/* The app never calls captureMessage. SDK message and logentry text, including
+   object form {formatted, params}, is replaced with a fixed label. */
 function scrubLogentry(event) {
-  const entry = event.logentry;
-  if (!entry || typeof entry !== "object") return;
-  for (const key of ["message", "formatted"]) {
-    if (typeof entry[key] !== "string") continue;
-    const clean = stripHealthText(entry[key]);
-    if (clean) entry[key] = clean;
-    else delete entry[key];
-  }
+  if (event.message != null) event.message = "message";
+  if (event.logentry != null) event.logentry = { message: "log" };
 }
 
 function scrubFetchMessage(message) {
-  const stripped = stripUrlQuery(scrubString(message));
-  const match = stripped.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\S+)/i);
-  if (!match) {
-    const clean = stripHealthText(stripped);
-    return clean || undefined;
-  }
-  const url = stripHealthText(match[2]);
-  return url ? `${match[1].toUpperCase()} ${url}` : match[1].toUpperCase();
+  if (typeof message !== "string") return undefined;
+  const stripped = scrubUrl(message).trim();
+  const match = stripped.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)(?:\s+(\S+))?/i);
+  if (!match) return undefined;
+  const method = match[1].toUpperCase();
+  if (!match[2]) return method;
+  const endpoint = scrubEndpoint(match[2]);
+  return endpoint ? `${method} ${endpoint}` : method;
 }
 
 const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -202,13 +273,17 @@ export function scrubEvent(event) {
     delete next.request.headers;
     delete next.request.data;
     delete next.request.query_string;
-    if (typeof next.request.url === "string") next.request.url = stripUrlQuery(next.request.url);
+    if (typeof next.request.url === "string") {
+      const url = scrubEndpoint(next.request.url);
+      if (url) next.request.url = url;
+      else delete next.request.url;
+    }
   }
   const extra = allowKeys(next.extra, EXTRA_ALLOW);
   if (extra) next.extra = dropHealthKeys(extra);
   else delete next.extra;
-  const contexts = allowKeys(next.contexts, CONTEXT_ALLOW);
-  if (contexts) next.contexts = dropHealthKeys(contexts);
+  const contexts = scrubContexts(next.contexts);
+  if (contexts) next.contexts = contexts;
   else delete next.contexts;
   const tags = scrubTags(next.tags);
   if (tags) next.tags = tags;
@@ -216,26 +291,35 @@ export function scrubEvent(event) {
   const fingerprint = scrubFingerprint(next.fingerprint);
   if (fingerprint) next.fingerprint = fingerprint;
   else delete next.fingerprint;
-  const transaction = scrubTransaction(next.transaction);
+  const transaction = safeRoute(next.transaction);
   if (transaction) next.transaction = transaction;
   else delete next.transaction;
-  if (typeof next.message === "string") {
-    const message = stripHealthText(next.message);
-    if (message) next.message = message;
-    else delete next.message;
-  }
   scrubLogentry(next);
   scrubException(next.exception);
   if (Array.isArray(next.breadcrumbs)) next.breadcrumbs = next.breadcrumbs.map((crumb) => scrubBreadcrumb(crumb)).filter(Boolean);
   return next;
 }
 
+function scrubContexts(contexts) {
+  const allowed = allowKeys(contexts, CONTEXT_ALLOW);
+  if (!allowed) return null;
+  const out = {};
+  for (const [key, value] of Object.entries(allowed)) {
+    const clean = scrubLooseObject(value);
+    if (clean) out[key] = clean;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function httpData(data) {
   const src = data || {};
   const out = {};
-  if (typeof src.method === "string") out.method = src.method;
-  if (typeof src.status_code === "number") out.status_code = src.status_code;
-  if (typeof src.url === "string") out.url = stripUrlQuery(src.url);
+  if (typeof src.method === "string" && HTTP_METHOD.test(src.method)) out.method = src.method.toUpperCase();
+  if (Number.isInteger(src.status_code) && src.status_code >= 100 && src.status_code <= 599) out.status_code = src.status_code;
+  if (typeof src.url === "string") {
+    const url = scrubEndpoint(src.url);
+    if (url) out.url = url;
+  }
   return out;
 }
 
@@ -259,8 +343,8 @@ export function scrubBreadcrumb(breadcrumb) {
   if (category === "navigation" || breadcrumb.type === "navigation") {
     const data = breadcrumb.data || {};
     next.data = {
-      from: typeof data.from === "string" ? stripUrlQuery(data.from) : undefined,
-      to: typeof data.to === "string" ? stripUrlQuery(data.to) : undefined,
+      from: typeof data.from === "string" ? scrubEndpoint(data.from) : undefined,
+      to: typeof data.to === "string" ? scrubEndpoint(data.to) : undefined,
     };
     return next;
   }

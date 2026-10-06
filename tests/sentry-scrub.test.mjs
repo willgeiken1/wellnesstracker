@@ -39,7 +39,7 @@ test("http breadcrumbs keep method and status and drop bodies and queries", () =
   assert.deepEqual(crumb.data, {
     method: "POST",
     status_code: 400,
-    url: "https://x.supabase.co/functions/v1/food-describe",
+    url: "https://x.supabase.co",
   });
   assert.equal(JSON.stringify(crumb).includes("chicken"), false);
   assert.equal(JSON.stringify(crumb).includes("oats"), false);
@@ -101,7 +101,7 @@ test("events keep a user id only and drop request bodies, headers, and queries",
   });
   const raw = JSON.stringify(event);
   assert.deepEqual(event.user, { id: "11111111-1111-1111-1111-111111111111" });
-  assert.equal(event.request.url, "http://127.0.0.1:4173/");
+  assert.equal(event.request.url, "http://127.0.0.1:4173");
   assert.equal(event.request.query_string, undefined);
   assert.equal(event.request.headers, undefined);
   assert.equal(event.request.data, undefined);
@@ -167,7 +167,7 @@ test("scrubEvent drops health numbers and meal text from message, exception, ext
     }],
   });
   assertNoHealth(event, "scrubEvent");
-  assert.equal(event.message, "sync failed");
+  assert.equal(event.message, "message");
   assert.equal(event.exception.values[0].value, "Error");
   assert.equal(event.exception.values[0].stacktrace.frames[0].filename, "http://localhost/js/food.js");
   assert.equal(event.contexts.culture.locale, "en-US");
@@ -180,7 +180,7 @@ test("scrubEvent drops health numbers and meal text from message, exception, ext
   assert.deepEqual(event.fingerprint, ["{{ default }}"]);
   assert.equal(event.transaction, "/food");
   assert.equal(event.breadcrumbs[0].data.arguments, undefined);
-  assert.equal(event.breadcrumbs[0].data.url, "https://x.supabase.co/functions/v1/food-describe");
+  assert.equal(event.breadcrumbs[0].data.url, "https://x.supabase.co");
 });
 
 test("fetch breadcrumb messages do not keep health text after the url", () => {
@@ -195,11 +195,84 @@ test("fetch breadcrumb messages do not keep health text after the url", () => {
   assert.equal(JSON.stringify(crumb).includes("oats"), false);
   assert.equal(crumb.data.method, "GET");
   assert.equal(crumb.data.status_code, 200);
-  assert.equal(crumb.data.url, "https://x.supabase.co/x");
-  assert.match(crumb.message, /^GET /);
+  assert.equal(crumb.data.url, "https://x.supabase.co");
+  assert.equal(crumb.message, "GET");
 });
 
-test("sentry.js passes the scrubbers to init, uses the errors-only bundle, and stays off on dev hosts", async () => {
+test("fetch breadcrumb messages keep a route template and drop path segments", () => {
+  const crumb = scrubBreadcrumb({
+    category: "fetch",
+    type: "http",
+    message: "GET /food/oats",
+    data: { method: "GET", url: "https://x.supabase.co/food/oats?note=breakfast", status_code: 200 },
+  });
+  assert.equal(crumb.message, "GET /food");
+  assert.equal(crumb.data.url, "https://x.supabase.co");
+  assert.equal(JSON.stringify(crumb).includes("oats"), false);
+  assert.equal(JSON.stringify(crumb).includes("breakfast"), false);
+});
+
+test("navigation crumbs and request urls drop token fragments and health fragments", () => {
+  const crumb = scrubBreadcrumb({
+    type: "navigation",
+    category: "navigation",
+    data: {
+      from: `/logger/#access_token=${JWT}&refresh_token=refresh-secret`,
+      to: "/logger/#weight=82",
+    },
+  });
+  const crumbRaw = JSON.stringify(crumb);
+  assert.equal(crumbRaw.includes(JWT), false);
+  assert.equal(crumbRaw.includes("refresh-secret"), false);
+  assert.equal(crumbRaw.includes("access_token"), false);
+  assert.equal(crumbRaw.includes("refresh_token"), false);
+  assert.equal(crumbRaw.includes("weight"), false);
+  assert.equal(crumbRaw.includes("82"), false);
+  assert.equal(crumb.data.from, "/logger");
+  assert.equal(crumb.data.to, "/logger");
+
+  const event = scrubEvent({
+    request: { url: `https://willgeiken1.github.io/logger/?meal=oats#weight=82&access_token=${JWT}` },
+    tags: { url: "/food/oats#weight=82", browser: "Chrome" },
+    message: { formatted: "sync failed weight 82", params: ["oats", 82] },
+    logentry: { message: "note oats", formatted: "weight 82.4", params: ["chicken", 82.4] },
+    contexts: {
+      app: { app_name: "oats", app_version: "82" },
+      culture: { locale: "en-US", timezone: "America/Chicago" },
+      trace: { op: "pageload", data: { url: "https://x.supabase.co/food/oats#weight=82", status: "ok" } },
+    },
+    exception: {
+      values: [{
+        type: "TypeError",
+        value: "weight 82 oats",
+        mechanism: { type: "generic", handled: false, data: { weight: 82, note: "oats", fn: "saveMeal" } },
+      }],
+    },
+  });
+  const raw = JSON.stringify(event);
+  assert.equal(raw.includes(JWT), false);
+  assert.equal(raw.includes("weight"), false);
+  assert.equal(raw.includes("oats"), false);
+  assert.equal(raw.includes("82"), false);
+  assert.equal(raw.includes("chicken"), false);
+  assert.equal(event.request.url, "https://willgeiken1.github.io");
+  assert.equal(event.tags.url, "/food");
+  assert.equal(event.tags.browser, "Chrome");
+  assert.equal(event.message, "message");
+  assert.deepEqual(event.logentry, { message: "log" });
+  assert.equal(event.contexts.app, undefined);
+  assert.equal(event.contexts.culture.locale, "en-US");
+  assert.equal(event.contexts.culture.timezone, "America/Chicago");
+  assert.equal(event.contexts.trace.op, "pageload");
+  assert.equal(event.contexts.trace.data.url, "https://x.supabase.co");
+  assert.equal(event.contexts.trace.data.status, "ok");
+  assert.equal(event.exception.values[0].value, "TypeError");
+  assert.equal(event.exception.values[0].mechanism.type, "generic");
+  assert.equal(event.exception.values[0].mechanism.handled, false);
+  assert.equal(event.exception.values[0].mechanism.data, undefined);
+});
+
+test("sentry.js loads the errors-only bundle on production hosts and stays off on dev hosts", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
   assert.match(src, /bundle\.min\.js/);
@@ -242,8 +315,19 @@ test("sentry.js passes the scrubbers to init, uses the errors-only bundle, and s
     assert.doesNotMatch(prod.scripts[0].src, /tracing/);
     assert.equal(prod.inits.length, 1);
     const opts = prod.inits[0];
+    assert.equal(typeof opts.beforeSend, "function");
+    assert.equal(typeof opts.beforeBreadcrumb, "function");
     assert.equal(opts.tracesSampleRate, 0);
     assert.equal(opts.integrations.some((item) => item && item.name === "BrowserTracing"), false);
+    assert.equal(opts.integrations.some((item) => item && item.name === "Breadcrumbs"), true);
+
+    const pages = await bootAt({ hostname: "willgeiken1.github.io", protocol: "https:" });
+    assert.equal(pages.inits.length, 1, "willgeiken1.github.io");
+    assert.match(pages.scripts[0].src, /\/bundle\.min\.js$/);
+    assert.equal(pages.inits[0].tracesSampleRate, 0);
+    assert.equal(typeof pages.inits[0].beforeSend, "function");
+    assert.equal(typeof pages.inits[0].beforeBreadcrumb, "function");
+    assert.equal(pages.inits[0].integrations.some((item) => item && item.name === "BrowserTracing"), false);
     const scrubbed = opts.beforeSend({
       message: "HRV 55 / weight 82.4",
       exception: { values: [{ type: "Error", value: "HRV 55 / weight 82.4" }] },

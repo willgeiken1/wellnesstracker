@@ -22,7 +22,7 @@
    Every other event, including pageviews, heatmaps, and exceptions, is dropped.
    Every event that passes carries $geoip_disable. */
 
-import { stripUrlQuery } from "./sentry-scrub.js";
+import { safeRoute, stripUrlQuery } from "./sentry-scrub.js";
 import { analyticsOn } from "./usage-pref.js";
 
 export const USAGE_TABS = ["home", "workouts", "food", "progress", "insights", "settings", "cardio"];
@@ -60,24 +60,52 @@ export function sanitizeCapture(name, props) {
 }
 
 /* SDK fields the product events actually use. Anything else, including a
-   health metric someone prefixed with $, is dropped. */
+   health metric someone prefixed with $, is dropped. Numeric SDK keys
+   ($screen_*, versions, $time) are omitted: a measurement is a number. */
 const AUTO_KEYS = new Set([
-  "$lib", "$lib_version",
-  "$browser", "$browser_version", "$os", "$os_version", "$device", "$device_type",
+  "$lib",
+  "$browser", "$os", "$device_type",
   "$device_id", "$user_id", "$anon_distinct_id",
   "$current_url", "$host", "$pathname", "$referrer", "$referring_domain",
-  "$screen_height", "$screen_width", "$viewport_height", "$viewport_width",
-  "$browser_language", "$browser_language_prefix", "$timezone", "$timezone_offset",
-  "$session_id", "$window_id", "$pageview_id", "$insert_id", "$time",
+  "$browser_language", "$browser_language_prefix", "$timezone",
+  "$session_id", "$window_id", "$pageview_id", "$insert_id",
   "$session_entry_url", "$session_entry_host", "$session_entry_pathname",
   "$session_entry_referrer", "$session_entry_referring_domain",
-  "$geoip_disable", "$process_person_profile", "$config_defaults", "$initialization_time",
-  "$initial_browser", "$initial_browser_version", "$initial_os", "$initial_os_version",
-  "$initial_device_type", "$initial_current_url", "$initial_pathname", "$initial_host",
+  "$geoip_disable", "$process_person_profile", "$config_defaults",
+  "$initial_browser", "$initial_os", "$initial_device_type",
+  "$initial_current_url", "$initial_pathname", "$initial_host",
   "$initial_referrer", "$initial_referring_domain",
   "$initial_utm_source", "$initial_utm_medium", "$initial_utm_campaign",
   "$initial_utm_content", "$initial_utm_term", "$initial_browser_language",
 ]);
+
+const URL_KEYS = new Set([
+  "$current_url", "$referrer", "$session_entry_url", "$session_entry_referrer",
+  "$initial_current_url", "$initial_referrer",
+]);
+const PATH_KEYS = new Set(["$pathname", "$session_entry_pathname", "$initial_pathname"]);
+const HOST_KEYS = new Set([
+  "$host", "$referring_domain", "$session_entry_host", "$session_entry_referring_domain",
+  "$initial_host", "$initial_referring_domain",
+]);
+const LOCALE_KEYS = new Set(["$browser_language", "$browser_language_prefix", "$initial_browser_language"]);
+const BOOL_KEYS = new Set(["$geoip_disable", "$process_person_profile"]);
+const ID_KEYS = new Set(["$device_id", "$user_id", "$anon_distinct_id", "$session_id", "$window_id", "$pageview_id", "$insert_id"]);
+const UTM_KEYS = new Set(["$initial_utm_source", "$initial_utm_medium", "$initial_utm_campaign", "$initial_utm_content", "$initial_utm_term"]);
+const ENUM_VALUES = {
+  $lib: ["web"],
+  $browser: ["chrome", "firefox", "safari", "edge", "opera", "mobile safari", "chrome ios", "samsung internet"],
+  $os: ["windows", "mac os x", "ios", "android", "linux", "chrome os"],
+  $device_type: ["desktop", "mobile", "tablet"],
+  $initial_browser: ["chrome", "firefox", "safari", "edge", "opera", "mobile safari", "chrome ios", "samsung internet"],
+  $initial_os: ["windows", "mac os x", "ios", "android", "linux", "chrome os"],
+  $initial_device_type: ["desktop", "mobile", "tablet"],
+  $config_defaults: ["unset"],
+};
+const LOCALE_RE = /^[a-z]{2}(?:-[A-Za-z]{2})?$/;
+const TZ_RE = /^[A-Za-z]+(?:\/[A-Za-z_]+)+$/;
+const SDK_ID_RE = /^(?:[0-9a-f]{16,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const HOST_RE = /^(?:localhost|[\w-]+(?:\.[\w-]+)+)(?::\d{2,5})?$/i;
 
 function isGeoKey(lower) {
   if (lower === "$geoip_disable") return false;
@@ -121,16 +149,81 @@ export function pushCapped(queue, entry, max = STUB_QUEUE_MAX) {
   return queue;
 }
 
+function enumValue(key, value) {
+  const allowed = ENUM_VALUES[key];
+  if (!allowed || typeof value !== "string") return undefined;
+  return allowed.includes(value.toLowerCase()) ? value : undefined;
+}
+
+function posthogOrigin(value) {
+  const clean = scrubAutoString(value);
+  if (clean == null || !clean) return undefined;
+  try {
+    const url = new URL(clean);
+    if (url.username || url.password) return undefined;
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    return url.origin;
+  } catch (e) {
+    return undefined;
+  }
+}
+
+function posthogPath(value) {
+  const clean = scrubAutoString(value);
+  if (clean == null || !clean) return undefined;
+  let path = clean;
+  if (/^https?:\/\//i.test(clean)) {
+    try { path = new URL(clean).pathname; } catch (e) { return undefined; }
+  }
+  return safeRoute(path);
+}
+
+function posthogHost(value) {
+  const clean = scrubAutoString(value);
+  if (clean == null || !clean) return undefined;
+  let host = clean;
+  if (/^https?:\/\//i.test(clean)) {
+    try { host = new URL(clean).host; } catch (e) { return undefined; }
+  }
+  return HOST_RE.test(host) ? host : undefined;
+}
+
+/* distinct_id "d" and UUIDs stay. A plain word (a meal name) does not. */
+function scrubIdentity(value) {
+  const clean = scrubAutoString(value);
+  if (clean == null || !/^[A-Za-z0-9_-]{1,80}$/.test(clean)) return undefined;
+  if (SDK_ID_RE.test(clean) || clean.length <= 2 || /\d/.test(clean)) return clean;
+  return undefined;
+}
+
+function safeUtm(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9._-]{1,40}$/.test(value)) return undefined;
+  if (!/[\d._-]/.test(value)) return undefined;
+  return value;
+}
+
+function scrubAutoValue(key, value) {
+  const lower = String(key).toLowerCase();
+  if (BOOL_KEYS.has(lower)) return typeof value === "boolean" ? value : undefined;
+  if (lower === "distinct_id" || lower === "token") return scrubIdentity(value);
+  if (typeof value !== "string") return undefined;
+  if (URL_KEYS.has(lower)) return posthogOrigin(value);
+  if (PATH_KEYS.has(lower)) return posthogPath(value);
+  if (HOST_KEYS.has(lower)) return posthogHost(value);
+  if (ENUM_VALUES[lower]) return enumValue(lower, value);
+  if (lower === "$timezone") return TZ_RE.test(value) ? value : undefined;
+  if (LOCALE_KEYS.has(lower)) return LOCALE_RE.test(value) ? value : undefined;
+  if (ID_KEYS.has(lower)) return SDK_ID_RE.test(value) ? value : undefined;
+  if (UTM_KEYS.has(lower)) return safeUtm(value);
+  return undefined;
+}
+
 function scrubProperties(props) {
   const out = {};
   Object.keys(props).forEach((key) => {
     if (!keepAutoKey(key)) return;
-    const value = props[key];
-    if (typeof value === "string") {
-      const clean = scrubAutoString(value);
-      if (clean !== null) out[key] = clean;
-    }
-    else if (value == null || typeof value === "number" || typeof value === "boolean") out[key] = value;
+    const clean = scrubAutoValue(key, props[key]);
+    if (clean !== undefined) out[key] = clean;
   });
   return out;
 }

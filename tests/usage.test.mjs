@@ -143,8 +143,8 @@ test("before_send drops autocapture and strips identity traits and query strings
   assert.equal(viewed.properties.note, undefined);
   assert.equal(viewed.properties.email, undefined);
   assert.equal(viewed.properties.$set, undefined);
-  assert.equal(viewed.properties.$current_url, "http://localhost:4173/");
-  assert.equal(viewed.properties.$referrer, "https://example.com/start");
+  assert.equal(viewed.properties.$current_url, "http://localhost:4173");
+  assert.equal(viewed.properties.$referrer, "https://example.com");
   assert.equal(viewed.properties.$lib, "web");
   assert.equal(JSON.stringify(viewed).includes("ada@example.com"), false);
   assert.equal(JSON.stringify(viewed).includes("felt tired"), false);
@@ -169,9 +169,9 @@ test("before_send strips the URL fragment so magic-link tokens never leave", () 
       $lib: "web",
     },
   });
-  assert.equal(out.properties.$current_url, "http://localhost/");
-  assert.equal(out.properties.$referrer, "https://proj.supabase.co/auth/v1/verify");
-  assert.equal(out.properties.$initial_current_url, "http://localhost/");
+  assert.equal(out.properties.$current_url, "http://localhost");
+  assert.equal(out.properties.$referrer, "https://proj.supabase.co");
+  assert.equal(out.properties.$initial_current_url, "http://localhost");
   assert.equal(out.properties.$lib, "web");
   assert.equal(/access_token|refresh_token/.test(JSON.stringify(out)), false);
 });
@@ -282,7 +282,7 @@ test("top-level $set and $set_once keep only allowlisted keys", () => {
   assert.equal(out.properties.tab, "home");
   assert.equal(out.properties.$set, undefined);
   assert.deepEqual(out.$set, { $browser: "Chrome" });
-  assert.deepEqual(out.$set_once, { $os: "iOS", $initial_current_url: "https://x/food" });
+  assert.deepEqual(out.$set_once, { $os: "iOS", $initial_current_url: "https://x" });
   for (const needle of ["55", "82.4", "chicken", "Austin", "ada@example.com", "oats", "access_token", "41", "hrv", "readiness"]) {
     assert.equal(raw.includes(needle), false, needle);
   }
