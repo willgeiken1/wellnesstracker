@@ -7,6 +7,8 @@
 exclude:
   - tests
   - logger/tests
+  - scripts
+  - scripts/
   - playwright.config.mjs
   - package.json
   - package-lock.json

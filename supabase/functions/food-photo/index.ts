@@ -8,7 +8,7 @@ import { cors, json, requireUser } from "../_shared/http.ts";
 import { FOOD_MODEL_ID } from "../_shared/food-model.js";
 import { consumeQuota, PHOTO_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
 
-const MODEL = Deno.env.get("FOOD_MODEL") ?? FOOD_MODEL_ID;
+const MODEL = (Deno.env.get("FOOD_MODEL") ?? "").trim() || FOOD_MODEL_ID;
 
 const PROMPT = `You estimate nutrition from meal photos for a fitness app.
 Identify each distinct food or drink you can see and estimate its portion and nutrition.

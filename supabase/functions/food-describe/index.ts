@@ -9,7 +9,7 @@ import { parseFoodEstimate } from "../_shared/food-estimate.js";
 import { FOOD_MODEL_ID } from "../_shared/food-model.js";
 import { consumeQuota, DESCRIBE_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
 
-const MODEL = Deno.env.get("FOOD_MODEL") ?? FOOD_MODEL_ID;
+const MODEL = (Deno.env.get("FOOD_MODEL") ?? "").trim() || FOOD_MODEL_ID;
 
 const PROMPT = `You estimate nutrition from a written meal description for a fitness app.
 Split it into each distinct food or drink and estimate its portion and nutrition.
