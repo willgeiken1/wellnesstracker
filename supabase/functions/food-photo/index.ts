@@ -2,12 +2,13 @@
 // Body: { image: <base64 JPEG, no data: prefix>, hint?: string, localDate: "YYYY-MM-DD", timeZone: "America/Chicago" }
 // The daily cap is 10 photos, counted on the phone's local date. The limit is enforced
 // atomically by consume_ai_quota (describe, at 20, uses the same function).
-// Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-sonnet-5-5)
+// Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-haiku-4-5-20251001)
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { cors, json, requireUser } from "../_shared/http.ts";
+import { FOOD_MODEL_ID } from "../_shared/food-model.js";
 import { consumeQuota, PHOTO_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
 
-const MODEL = Deno.env.get("FOOD_MODEL") ?? "claude-sonnet-5-5";
+const MODEL = Deno.env.get("FOOD_MODEL") ?? FOOD_MODEL_ID;
 
 const PROMPT = `You estimate nutrition from meal photos for a fitness app.
 Identify each distinct food or drink you can see and estimate its portion and nutrition.

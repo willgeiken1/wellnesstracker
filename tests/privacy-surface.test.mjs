@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { FOOD_MODEL_ID } from "../supabase/functions/_shared/food-model.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -14,11 +15,20 @@ function bodyFields(src) {
   return [...new Set([...src.matchAll(/\bbody\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]))].sort();
 }
 
-test("food AI request bodies are meal text or an image plus a hint", () => {
+test("food AI uses Haiku and sends only meal text or an image plus a hint", () => {
   const food = read("../logger/js/pages/food.js");
   const photoFn = read("../supabase/functions/food-photo/index.ts");
   const describeFn = read("../supabase/functions/food-describe/index.ts");
   const forbidden = /\b(?:oura|readiness|hrv|sleep|weight|kcal|calories|protein)\b/i;
+
+  assert.equal(FOOD_MODEL_ID, "claude-haiku-4-5-20251001");
+  for (const src of [photoFn, describeFn]) {
+    assert.match(src, /from "\.\.\/_shared\/food-model\.js"/);
+    assert.match(src, /Deno\.env\.get\("FOOD_MODEL"\) \?\? FOOD_MODEL_ID/);
+    assert.match(src, /max_tokens: 1500/);
+    assert.doesNotMatch(src, /claude-sonnet/);
+    assert.doesNotMatch(src, /\b(?:oura|readiness)\b/i);
+  }
 
   const photoBody = invokeBody(food, "food-photo");
   const describeBody = invokeBody(food, "food-describe");
