@@ -13,9 +13,14 @@
    weekly_report_opened                   a weekly report was opened
 
    PostHog's own $identify, $create_alias, $opt_in, and $opt_out may pass.
-   $set and $set_once are removed so an email cannot ride along with identify.
+   Automatic $ properties are an allowlist of SDK keys. Unknown $ keys, including
+   $hrv or $calories, are dropped. $ip, $geoip_*, city, and lat/long are dropped.
+   $set and $set_once are not inside properties on the CaptureResult before_send
+   sees: the SDK copies them onto the event, and returning `{...event}` used to
+   send them unchanged. They are rebuilt from the same allowlist, so a health
+   value cannot ride along into the stored event.
    Every other event, including pageviews, heatmaps, and exceptions, is dropped.
-   Every event that passes carries $geoip_disable, and $ip / $geoip_* are removed. */
+   Every event that passes carries $geoip_disable. */
 
 import { stripUrlQuery } from "./sentry-scrub.js";
 import { analyticsOn } from "./usage-pref.js";
@@ -54,14 +59,45 @@ export function sanitizeCapture(name, props) {
   return { event: name, properties };
 }
 
+/* SDK fields the product events actually use. Anything else, including a
+   health metric someone prefixed with $, is dropped. */
+const AUTO_KEYS = new Set([
+  "$lib", "$lib_version",
+  "$browser", "$browser_version", "$os", "$os_version", "$device", "$device_type",
+  "$device_id", "$user_id", "$anon_distinct_id",
+  "$current_url", "$host", "$pathname", "$referrer", "$referring_domain",
+  "$screen_height", "$screen_width", "$viewport_height", "$viewport_width",
+  "$browser_language", "$browser_language_prefix", "$timezone", "$timezone_offset",
+  "$session_id", "$window_id", "$pageview_id", "$insert_id", "$time",
+  "$session_entry_url", "$session_entry_host", "$session_entry_pathname",
+  "$session_entry_referrer", "$session_entry_referring_domain",
+  "$geoip_disable", "$process_person_profile", "$config_defaults", "$initialization_time",
+  "$initial_browser", "$initial_browser_version", "$initial_os", "$initial_os_version",
+  "$initial_device_type", "$initial_current_url", "$initial_pathname", "$initial_host",
+  "$initial_referrer", "$initial_referring_domain",
+  "$initial_utm_source", "$initial_utm_medium", "$initial_utm_campaign",
+  "$initial_utm_content", "$initial_utm_term", "$initial_browser_language",
+]);
+
+function isGeoKey(lower) {
+  if (lower === "$geoip_disable") return false;
+  if (lower === "$ip" || lower.includes("geoip")) return true;
+  if (lower === "$city" || lower === "city" || lower.endsWith("_city") || lower.includes("city_name")) return true;
+  if (lower.includes("latitude") || lower.includes("longitude")) return true;
+  if (lower === "$lat" || lower === "$lng" || lower === "$lon" || lower === "lat" || lower === "lng" || lower === "lon") return true;
+  return false;
+}
+
+function isPersonNameKey(lower) {
+  return lower === "name" || lower === "$name" || lower.endsWith("_name") || lower.endsWith(".name");
+}
+
 function keepAutoKey(key) {
   if (typeof key !== "string") return false;
   const lower = key.toLowerCase();
-  if (lower.includes("email") || lower.includes("name") || lower === "$set" || lower === "$set_once") return false;
-  if (lower === "$groups" || lower === "$initial_person_info") return false;
-  if (lower === "$ip" || lower.startsWith("$geoip")) return false;
-  if (key.startsWith("$")) return true;
-  return key === "distinct_id" || key === "token";
+  if (isGeoKey(lower) || lower.includes("email") || isPersonNameKey(lower)) return false;
+  if (lower === "distinct_id" || lower === "token") return true;
+  return AUTO_KEYS.has(lower);
 }
 
 const TOKEN_LIKE = /access_token|refresh_token|eyJ[A-Za-z0-9_-]{10,}\./;
@@ -137,18 +173,34 @@ function noGeo(props) {
   return { ...props, $geoip_disable: true };
 }
 
+/* $set / $set_once are person-property bags. Keep the same SDK keys as events. */
+function scrubPersonBag(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const clean = scrubProperties(value);
+  return Object.keys(clean).length ? clean : undefined;
+}
+
+function finishEvent(event, properties) {
+  const next = { event: event.event, properties: noGeo(properties) };
+  if (event.uuid != null) next.uuid = event.uuid;
+  if (event.timestamp != null) next.timestamp = event.timestamp;
+  const set = scrubPersonBag(event.$set);
+  const setOnce = scrubPersonBag(event.$set_once);
+  if (set) next.$set = set;
+  if (setOnce) next.$set_once = setOnce;
+  return next;
+}
+
 /* Second line of defense for the PostHog before_send hook. */
 export function sanitizePosthogEvent(event) {
   try {
     if (!analyticsOn() || onDevHost()) return null;
     if (!event || typeof event !== "object" || typeof event.event !== "string") return null;
     const incoming = event.properties && typeof event.properties === "object" ? event.properties : {};
-    if (IDENTITY_EVENTS.has(event.event)) {
-      return { ...event, properties: noGeo(scrubProperties(incoming)) };
-    }
+    if (IDENTITY_EVENTS.has(event.event)) return finishEvent(event, scrubProperties(incoming));
     const clean = sanitizeCapture(event.event, incoming);
     if (!clean) return null;
-    return { ...event, properties: noGeo({ ...scrubProperties(incoming), ...clean.properties }) };
+    return finishEvent(event, { ...scrubProperties(incoming), ...clean.properties });
   } catch (e) {
     return null;
   }
