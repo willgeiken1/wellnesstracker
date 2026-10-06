@@ -2,9 +2,26 @@
 // Photos are chosen by taken_at, then removed from storage before any SQL.
 // A storage error returns 500 so the client leaves the purge unsynced and retries.
 // progress_photos is not deleted by purge_user_range_rows; this deletes by id.
+// The service role bypasses the bucket policy, so a path is removed only when it
+// is exactly "{userId}/{file}" for this caller. Any other path is skipped.
+// The caller's progress_photos rows are still deleted.
 import { addPurge, photoDue, resolveCutoff, stripRange } from "./strip.ts";
 
 type Bag = Record<string, any>;
+
+function ownPhotoPath(userId: string, path: unknown): path is string {
+  if (typeof userId !== "string" || userId.length === 0) return false;
+  if (userId === "." || userId === ".." || userId.includes("/") || userId.includes("\\")) return false;
+  if (typeof path !== "string" || path.length === 0) return false;
+  if (path.includes("\\") || path.startsWith("/")) return false;
+  const parts = path.split("/");
+  if (parts.length !== 2) return false;
+  const folder = parts[0];
+  const name = parts[1];
+  if (folder !== userId || folder === "." || folder === "..") return false;
+  if (name.length === 0 || name === "." || name === "..") return false;
+  return true;
+}
 
 export async function deleteRange(admin: Bag, userId: string, body: Bag, now = Date.now()): Promise<{ status: number; body: Bag }> {
   const from = body.from;
@@ -19,7 +36,7 @@ export async function deleteRange(admin: Bag, userId: string, body: Bag, now = D
   if (photoErr) return { status: 500, body: { error: "Couldn't delete that range from the account. Try again." } };
 
   const due = (photos || []).filter((p: Bag) => p && photoDue(p.taken_at, cutoff, now));
-  const paths = due.map((p: Bag) => p.path).filter((p: string) => !!p);
+  const paths = due.map((p: Bag) => p.path).filter((p): p is string => ownPhotoPath(userId, p));
   if (paths.length) {
     const bucket = admin.storage.from("progress");
     for (let i = 0; i < paths.length; i += 100) {

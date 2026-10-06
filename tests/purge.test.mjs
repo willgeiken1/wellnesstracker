@@ -471,10 +471,10 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
     const clamped = resolveCutoff({ purges: [] }, "2026-10-01", "2026-10-04", Date.parse("2030-01-01T00:00:00Z"), now);
     const cutoff = deletedAt;
     const photos = [
-      { id: "old", path: "u/old.jpg", taken_at: new Date(cutoff - 1000).toISOString() },
-      { id: "same", path: "u/same.jpg", taken_at: new Date(cutoff).toISOString() },
-      { id: "new", path: "u/new.jpg", taken_at: new Date(cutoff + 1000).toISOString() },
-      { id: "blank", path: "u/blank.jpg", taken_at: null },
+      { id: "old", path: "user-1/old.jpg", taken_at: new Date(cutoff - 1000).toISOString() },
+      { id: "same", path: "user-1/same.jpg", taken_at: new Date(cutoff).toISOString() },
+      { id: "new", path: "user-1/new.jpg", taken_at: new Date(cutoff + 1000).toISOString() },
+      { id: "blank", path: "user-1/blank.jpg", taken_at: null },
     ];
     let removed = null;
     let deletedIds = null;
@@ -570,7 +570,7 @@ test("the edge strip matches weigh-in tombstones, manual cardio, photo cutoff, a
   assert.equal(got.dueNew, false);
   assert.equal(got.status, 200);
   assert.equal(got.goodRpc, "purge_user_range_rows");
-  assert.deepEqual(got.removed.sort(), ["u/blank.jpg", "u/old.jpg", "u/same.jpg"]);
+  assert.deepEqual(got.removed.sort(), ["user-1/blank.jpg", "user-1/old.jpg", "user-1/same.jpg"]);
   assert.deepEqual(got.deletedIds.sort(), ["blank", "old", "same"]);
   assert.equal(got.failStatus, 500);
   assert.equal(got.failDeleted, null);
@@ -604,8 +604,8 @@ test("the server clamp ignores a year-ahead purge and the save reads the blob ag
     let saved = null;
     let removed = null;
     const photos = [
-      { id: "old", path: "u/old.jpg", taken_at: new Date(T - 1000).toISOString() },
-      { id: "new", path: "u/new.jpg", taken_at: new Date(T + 60_000).toISOString() },
+      { id: "old", path: "user-1/old.jpg", taken_at: new Date(T - 1000).toISOString() },
+      { id: "new", path: "user-1/new.jpg", taken_at: new Date(T + 60_000).toISOString() },
     ];
     const admin = {
       from(table) {
@@ -655,7 +655,7 @@ test("the server clamp ignores a year-ahead purge and the save reads the blob ag
   assert.equal(got.status, 200);
   assert.equal(got.reads, 2);
   assert.deepEqual(got.sessions, ["during"]);
-  assert.deepEqual(got.removed, ["u/old.jpg"]);
+  assert.deepEqual(got.removed, ["user-1/old.jpg"]);
 });
 
 test("a phone one day fast loses the photo and weigh-in on the server", () => {
@@ -684,9 +684,9 @@ test("a phone one day fast loses the photo and weigh-in on the server", () => {
       purges: [],
     };
     const photos = [
-      { id: "fast", path: "u/fast.jpg", taken_at: new Date(fast).toISOString() },
-      { id: "now", path: "u/now.jpg", taken_at: new Date(now).toISOString() },
-      { id: "old", path: "u/old.jpg", taken_at: new Date(now - 86_400_000).toISOString() },
+      { id: "fast", path: "user-1/fast.jpg", taken_at: new Date(fast).toISOString() },
+      { id: "now", path: "user-1/now.jpg", taken_at: new Date(now).toISOString() },
+      { id: "old", path: "user-1/old.jpg", taken_at: new Date(now - 86_400_000).toISOString() },
     ];
     let reads = 0;
     let saved = null;
@@ -743,7 +743,7 @@ test("a phone one day fast loses the photo and weigh-in on the server", () => {
   assert.equal(got.deletedAt, now - 1);
   assert.deepEqual(got.sessions, ["seen-later"]);
   assert.deepEqual(got.weigh, [71]);
-  assert.deepEqual(got.removed.sort(), ["u/fast.jpg", "u/old.jpg"]);
+  assert.deepEqual(got.removed.sort(), ["user-1/fast.jpg", "user-1/old.jpg"]);
   assert.deepEqual(got.deletedIds.sort(), ["fast", "old"]);
 });
 
@@ -770,8 +770,8 @@ test("a repeat delete from a fast clock removes logs made since the earlier dele
       purges: [{ from, to, at: stored, deletedAt: stored, synced: true }],
     };
     const photos = [
-      { id: "two", path: "u/two.jpg", taken_at: new Date(logged).toISOString() },
-      { id: "now", path: "u/now.jpg", taken_at: new Date(now).toISOString() },
+      { id: "two", path: "user-1/two.jpg", taken_at: new Date(logged).toISOString() },
+      { id: "now", path: "user-1/now.jpg", taken_at: new Date(now).toISOString() },
     ];
     let saved = null;
     let removed = null;
@@ -819,8 +819,65 @@ test("a repeat delete from a fast clock removes logs made since the earlier dele
   assert.equal(got.status, 200);
   assert.equal(got.deletedAt, now - 1);
   assert.deepEqual(got.weigh, [71]);
-  assert.deepEqual(got.removed, ["u/two.jpg"]);
+  assert.deepEqual(got.removed, ["user-1/two.jpg"]);
   assert.deepEqual(got.deletedIds, ["two"]);
+});
+
+test("a purge removes only the caller's own photo path and still deletes the rows", () => {
+  const rangeUrl = new URL("../supabase/functions/_shared/range.ts", import.meta.url).href;
+  const script = `
+    import { deleteRange } from ${JSON.stringify(rangeUrl)};
+    const now = Date.parse("2026-10-04T16:00:00Z");
+    const taken = new Date(now - 86_400_000).toISOString();
+    const photos = [
+      { id: "ok", path: "user-1/ok.jpg", taken_at: taken },
+      { id: "foreign", path: "user-2/secret.jpg", taken_at: taken },
+      { id: "traversal", path: "user-1/../user-2/secret.jpg", taken_at: taken },
+      { id: "slash", path: "/user-1/ok.jpg", taken_at: taken },
+      { id: "backslash", path: "user-1\\\\ok.jpg", taken_at: taken },
+      { id: "dots", path: "user-1/..", taken_at: taken },
+      { id: "dot", path: "user-1/.", taken_at: taken },
+      { id: "empty", path: "user-1/", taken_at: taken },
+      { id: "nested", path: "user-1/a/b.jpg", taken_at: taken },
+    ];
+    let removed = null;
+    let deletedIds = null;
+    const admin = {
+      from(table) {
+        const api = {
+          op: "select",
+          select() { api.op = "select"; return api; },
+          delete() { api.op = "delete"; return api; },
+          eq() { return api; },
+          gte() { return api; },
+          lte() { return api; },
+          in(key, ids) { api.ids = ids; return api; },
+          upsert() { return Promise.resolve({ error: null }); },
+          maybeSingle() { return Promise.resolve({ data: { data: { purges: [] } }, error: null }); },
+          then(resolve, reject) {
+            if (table === "progress_photos" && api.op === "delete") deletedIds = api.ids;
+            const payload = table === "progress_photos" && api.op === "select" ? { data: photos, error: null } : { error: null };
+            return Promise.resolve(payload).then(resolve, reject);
+          },
+        };
+        return api;
+      },
+      storage: { from() { return { remove(paths) { removed = paths; return Promise.resolve({ error: null }); } }; } },
+      rpc() { return Promise.resolve({ error: null }); },
+    };
+    const res = await deleteRange(admin, "user-1", { from: "2026-10-01", to: "2026-10-04", deletedAt: now - 1000 }, now);
+    console.log(JSON.stringify({ status: res.status, removed, deletedIds }));
+  `;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    env: { ...process.env, TZ: "UTC" },
+  });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const got = JSON.parse(r.stdout.trim().split("\n").pop());
+  assert.equal(got.status, 200);
+  assert.deepEqual(got.removed, ["user-1/ok.jpg"]);
+  assert.deepEqual(got.deletedIds.sort(), ["backslash", "dot", "dots", "empty", "foreign", "nested", "ok", "slash", "traversal"]);
 });
 
 test("csv escapes quotes and the zip round-trips", async () => {
