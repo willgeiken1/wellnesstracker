@@ -4,3 +4,6 @@ tokens.json
 __pycache__/
 supabase/.temp/
 node_modules/
+test-results/
+playwright-report/
+blob-report/
