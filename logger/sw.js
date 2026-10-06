@@ -3,7 +3,7 @@
 // The cache is only the offline fallback. CACHE name changes drop old copies on activate.
 // Cross-origin requests (Sentry and PostHog CDNs and ingest, Supabase, fonts) are not intercepted.
 // The shell still starts if either script cannot be downloaded.
-// v37. v36 is the privacy-filter release. v35 is the JM Press release (#33). v34 is the touch QoL release (#30). v33 is the Home edit UX release (#29). v32 is the home QA release (#22). v30 is the home editor release (#20). v31 is #14. v26–v28 are reserved.
+// v37 is the privacy-filter release (#38). v36 is the exercise bank release (#35). v35 is the JM Press release (#33). v34 is the touch QoL release (#30). v33 is the Home edit UX release (#29). v32 is the home QA release (#22). v30 is the home editor release (#20). v31 is #14. v26–v28 are reserved.
 // v27 is the correlation release on main. v29 is the weigh-in delete follow-up.
 // On a slow network (captive portal, lie-fi) a navigation may fall back to the cached page.
 // That page and every file it loads come from the same generation. A cached page does not
