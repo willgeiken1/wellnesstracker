@@ -1,0 +1,26 @@
+# Legacy GitHub Pages (Deploy from a branch) builds this repo with Jekyll 3.10.
+# Jekyll 3 replaces its default exclude list when this key is set, and GitHub
+# only adds CNAME back when that list is untouched, so the defaults are repeated.
+# App URLs stay put: /logger/ including sw.js, the manifest, and the icons.
+# Still published on purpose: privacy.md (the app links to ../privacy.md),
+# terms.md, and README.md (jekyll-readme-index serves it at /).
+exclude:
+  - tests
+  - logger/tests
+  - playwright.config.mjs
+  - package.json
+  - package-lock.json
+  - docs
+  - oura.py
+  - supabase
+  - CNAME
+  - .sass-cache
+  - .jekyll-cache
+  - gemfiles
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
