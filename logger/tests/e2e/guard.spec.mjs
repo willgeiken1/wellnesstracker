@@ -1,6 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { test as appTest } from "./fixtures/app.mjs";
-import { guardNetwork } from "./fixtures/network-guard.mjs";
+import { expect, MUST_FAIL_WITH, test } from "./fixtures/app.mjs";
 
 const PROBES = [
   "https://o4512196136206336.ingest.us.sentry.io/api/4512196143742976/envelope/",
@@ -10,9 +8,11 @@ const PROBES = [
   "https://example.com/must-not-leave",
 ];
 
+const REFUSE = 'Refusing to run: serviceWorkers must be "block"';
+
 test("network guard aborts Sentry, PostHog, and any other non-local host", async ({ browser }) => {
   const context = await browser.newContext({ serviceWorkers: "block" });
-  const guard = await guardNetwork(context);
+  const guard = context.__insightGuard;
   const page = await context.newPage();
   const failed = [];
   const finished = [];
@@ -33,15 +33,24 @@ test("network guard aborts Sentry, PostHog, and any other non-local host", async
   expect(guard.continued.some((url) => /sentry|posthog|example\.com/i.test(url))).toBe(false);
   expect(failed.filter((url) => PROBES.some((probe) => url.startsWith(probe))).length).toBe(PROBES.length);
   expect(finished.filter((url) => PROBES.some((probe) => url.startsWith(probe)))).toEqual([]);
-  expect(() => guard.assertClean()).toThrow(/Network guard/);
+  expect(() => guard.assertClean()).toThrow(/Network guard blocked requests that must not leave the runner/);
+  guard.hits.length = 0;
   await context.close();
 });
 
-appTest.describe("serviceWorkers allow is refused", () => {
-  appTest.use({ serviceWorkers: "allow" });
-  // A single test.use override used to skip route() on WebKit and leak the
-  // password grant. The fixture must fail this before any page loads.
-  appTest.fail("app fixture refuses a context that allows service workers", async ({ page }) => {
+// The wrapper throws in the test body. test.fail() alone would accept any
+// error; the annotation requires this message.
+test.fail("browser.newContext with serviceWorkers allow is refused", {
+  annotation: { type: MUST_FAIL_WITH, description: REFUSE },
+}, async ({ browser }) => {
+  await browser.newContext({ serviceWorkers: "allow" });
+});
+
+test.describe("serviceWorkers allow is refused", () => {
+  test.use({ serviceWorkers: "allow" });
+  test.fail("app fixture refuses a context that allows service workers", {
+    annotation: { type: MUST_FAIL_WITH, description: REFUSE },
+  }, async ({ page }) => {
     await page.goto("about:blank");
   });
 });

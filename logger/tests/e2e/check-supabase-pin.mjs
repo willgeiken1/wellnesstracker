@@ -9,12 +9,28 @@ if (!pinned) {
   console.warn("WARNING: @supabase/supabase-js is not pinned in devDependencies.");
   process.exit(0);
 }
-const res = await fetch("https://registry.npmjs.org/@supabase/supabase-js/latest");
+let res;
+try {
+  res = await fetch("https://registry.npmjs.org/@supabase/supabase-js/latest", {
+    signal: AbortSignal.timeout(8000),
+  });
+} catch (err) {
+  const message = err && err.message ? err.message : err;
+  console.warn(`WARNING: npm registry unreachable (${message}). Pin remains ${pinned}.`);
+  process.exit(0);
+}
 if (!res.ok) {
   console.warn(`WARNING: could not read the latest supabase-js version (${res.status}). Pin remains ${pinned}.`);
   process.exit(0);
 }
-const latest = (await res.json()).version;
+let latest;
+try {
+  latest = (await res.json()).version;
+} catch (err) {
+  const message = err && err.message ? err.message : err;
+  console.warn(`WARNING: npm registry returned an unreadable body (${message}). Pin remains ${pinned}.`);
+  process.exit(0);
+}
 if (latest !== pinned) {
   console.warn(
     `WARNING: pinned @supabase/supabase-js@${pinned} is not latest 2.x (${latest}). ` +

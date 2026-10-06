@@ -1,6 +1,8 @@
 // Fail fast unless the URL we are about to test is this app.
 // logger/index.html owns the marker: <title>Insight</title>.
 
+import { assertLoopbackOnly, webkitWillRun } from "./loopback-only.mjs";
+
 const MARKER = "<title>Insight</title>";
 
 export async function assertInsight(baseURL) {
@@ -22,6 +24,9 @@ export async function assertInsight(baseURL) {
 }
 
 export default async function globalSetup(config) {
+  // Covers `npx playwright test --project iphone-webkit`, which never enters
+  // run-smoke.mjs. Chromium-only invocations do not take this branch.
+  if (webkitWillRun(config)) await assertLoopbackOnly();
   const baseURL = config.projects && config.projects[0] && config.projects[0].use && config.projects[0].use.baseURL;
   if (!baseURL) throw new Error("Playwright config has no baseURL; cannot verify the Insight app.");
   await assertInsight(baseURL);

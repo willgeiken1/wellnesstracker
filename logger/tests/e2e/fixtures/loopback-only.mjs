@@ -22,6 +22,35 @@ function loopbackAccepts() {
   });
 }
 
+let announced = false;
+
+export function projectNamesFromArgv(argv = process.argv) {
+  const selected = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--project" || arg === "-p") {
+      if (argv[i + 1]) selected.push(argv[++i]);
+    } else if (arg.startsWith("--project=")) {
+      selected.push(arg.slice("--project=".length));
+    }
+  }
+  return selected;
+}
+
+// globalSetup sees every project in the config, including ones this invocation
+// will not run. Direct `npx playwright test --project iphone-webkit` must still
+// fail closed, and a chromium-only run must not.
+export function webkitWillRun(config, argv = process.argv) {
+  const projects = (config && config.projects) || [];
+  const webkit = new Set(
+    projects.filter((project) => project.use && project.use.browserName === "webkit").map((project) => project.name)
+  );
+  if (!webkit.size) return false;
+  const selected = projectNamesFromArgv(argv);
+  if (!selected.length) return true;
+  return selected.some((name) => webkit.has(name));
+}
+
 export async function assertLoopbackOnly() {
   const names = netdevIfaces();
   if (names.length !== 1 || names[0] !== "lo") {
@@ -33,5 +62,8 @@ export async function assertLoopbackOnly() {
   if (!(await loopbackAccepts())) {
     throw new Error("Refusing to run WebKit: loopback is not accepting connections. The OS lock did not come up.");
   }
-  console.log("OS lock active: only loopback is present");
+  if (!announced) {
+    console.log("OS lock active: only loopback is present");
+    announced = true;
+  }
 }
