@@ -44,7 +44,8 @@ test("progress photo paths stay inside the owner's folder", { timeout: 120_000 }
 
   const migration = readFileSync(MIGRATION, "utf8");
   assert.match(migration, /progress_photos_path_owner/);
-  assert.match(migration, /path ~ \('\^' \|\| user_id::text \|\| '\/\[\^\/\]\+\$'\)/);
+  assert.match(migration, /path ~ \('\^' \|\| user_id::text \|\| '\/\[\^\/\\\\\]\+\$'\)/);
+  assert.match(migration, /split_part\(path, '\/', 2\) not in \('\.', '\.\.'\)/);
   assert.match(migration, /own photos: insert/);
   assert.match(migration, /own photos: update/);
   assert.doesNotMatch(migration, /update\s+public\.progress_photos/i);
@@ -151,7 +152,8 @@ test("progress photo paths stay inside the owner's folder", { timeout: 120_000 }
     `);
     assert.match(insertCheck, /auth\.uid\(\) = user_id/);
     assert.match(insertCheck, /user_id/);
-    assert.match(insertCheck, /\[\^\/\]\+/);
+    assert.match(insertCheck, /\[\^\/\\\\\]\+/);
+    assert.match(insertCheck, /split_part|'\.'|'\.\.'/);
 
     const asOwner = sql(`
       select set_config('request.jwt.claim.sub', '${SELF}', false);
