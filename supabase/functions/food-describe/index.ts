@@ -2,13 +2,14 @@
 // Body: { text: string, localDate: "YYYY-MM-DD", timeZone: "America/Chicago" }
 // Cap is 20 descriptions a day, on the phone's local date, via consume_ai_quota.
 // A failed estimate is given back. The description is not stored.
-// Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-sonnet-5-5)
+// Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-haiku-4-5-20251001)
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { cors, json, requireUser } from "../_shared/http.ts";
 import { parseFoodEstimate } from "../_shared/food-estimate.js";
+import { FOOD_MODEL_ID } from "../_shared/food-model.js";
 import { consumeQuota, DESCRIBE_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
 
-const MODEL = Deno.env.get("FOOD_MODEL") ?? "claude-sonnet-5-5";
+const MODEL = (Deno.env.get("FOOD_MODEL") ?? "").trim() || FOOD_MODEL_ID;
 
 const PROMPT = `You estimate nutrition from a written meal description for a fitness app.
 Split it into each distinct food or drink and estimate its portion and nutrition.
