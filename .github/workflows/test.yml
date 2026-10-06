@@ -60,6 +60,10 @@ jobs:
   pr-smoke:
     name: PR smoke
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write # actions/cache cannot reserve the browser cache without this
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,10 +86,13 @@ jobs:
       - name: Install WebKit
         run: npx playwright install --with-deps webkit
 
+      - name: Warn if supabase-js pin drifted from latest 2.x
+        run: node logger/tests/e2e/check-supabase-pin.mjs
+
       - name: Run PR smoke
         env:
           PW_PROJECTS: iphone-webkit
-        run: npm run pw:smoke
+        run: bash logger/tests/e2e/with-os-lock.sh npm run pw:smoke
 
       - name: Upload failure artifacts
         if: failure()

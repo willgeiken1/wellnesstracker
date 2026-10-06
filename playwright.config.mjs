@@ -61,10 +61,10 @@ export default defineConfig({
     colorScheme: "dark",
     timezoneId: "UTC",
     // sw.js calls skipWaiting() and clients.claim(). Once it controls the page,
-    // WebKit issues its fetches outside Playwright's route layer (Chromium does
-    // not). That let a password grant reach the real Supabase host. Blocking
-    // registration keeps every request on the stub and the network guard.
-    // The app still loads from localhost, which is where the worker would register.
+    // WebKit issues its fetches outside Playwright's route layer. The app fixture
+    // refuses to run unless this stays "block", and the WebKit CI job also enters
+    // a loopback-only network namespace. The app is still opened on localhost,
+    // which is where the worker would register.
     serviceWorkers: "block",
   },
   projects: [

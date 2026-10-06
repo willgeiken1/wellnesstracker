@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { test as appTest } from "./fixtures/app.mjs";
 import { guardNetwork } from "./fixtures/network-guard.mjs";
 
 const PROBES = [
@@ -10,7 +11,7 @@ const PROBES = [
 ];
 
 test("network guard aborts Sentry, PostHog, and any other non-local host", async ({ browser }) => {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ serviceWorkers: "block" });
   const guard = await guardNetwork(context);
   const page = await context.newPage();
   const failed = [];
@@ -34,4 +35,13 @@ test("network guard aborts Sentry, PostHog, and any other non-local host", async
   expect(finished.filter((url) => PROBES.some((probe) => url.startsWith(probe)))).toEqual([]);
   expect(() => guard.assertClean()).toThrow(/Network guard/);
   await context.close();
+});
+
+appTest.describe("serviceWorkers allow is refused", () => {
+  appTest.use({ serviceWorkers: "allow" });
+  // A single test.use override used to skip route() on WebKit and leak the
+  // password grant. The fixture must fail this before any page loads.
+  appTest.fail("app fixture refuses a context that allows service workers", async ({ page }) => {
+    await page.goto("about:blank");
+  });
 });

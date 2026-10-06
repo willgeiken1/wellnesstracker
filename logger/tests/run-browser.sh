@@ -14,6 +14,12 @@
 # review-unit.mjs is plain Node and is not part of this browser run.
 set -euo pipefail
 
+# Opt-in loopback lock for local runs that also execute WebKit smoke.
+# CI's browser job does not set this; the PR smoke job uses with-os-lock.sh itself.
+if [[ "${INSIGHT_OS_LOCK:-}" == "1" && "${INSIGHT_NETNS:-}" != "1" ]]; then
+  exec bash "$(cd "$(dirname "$0")" && pwd)/e2e/with-os-lock.sh" bash "$0" "$@"
+fi
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
@@ -54,8 +60,19 @@ free_port() {
   node -e 'const s=require("net").createServer(); s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port)); s.close();});'
 }
 
+# Prints the port. Exits 2 when the URL is not a local http origin we can bind.
 port_from_url() {
-  node -e 'const u=new URL(process.argv[1]); process.stdout.write(u.port || (u.protocol==="https:"?"443":"80"))' "$1"
+  node -e '
+    const raw = process.argv[1];
+    let url;
+    try { url = new URL(raw); } catch { process.stderr.write("BASE/OLD is not a URL: " + raw + "\n"); process.exit(2); }
+    const host = url.hostname;
+    if (url.protocol !== "http:" || (host !== "127.0.0.1" && host !== "localhost") || !url.port) {
+      process.stderr.write("Refusing " + raw + ". Use http://127.0.0.1:<port> or http://localhost:<port>. The harness will not rewrite it.\n");
+      process.exit(2);
+    }
+    process.stdout.write(url.port);
+  ' "$1"
 }
 
 assert_insight() {
@@ -66,26 +83,27 @@ assert_insight() {
 }
 
 # Always bind a server we started. Never curl an existing listener and proceed.
+# Prints the server pid on stdout. Every other message goes to stderr.
 start_static() {
   local port="$1"
   local logfile="$2"
   local label="$3"
-  local -n pid_ref="$4"
+  local url="$4"
   if port_is_taken "$port"; then
-    echo "Port ${port} is already in use. Refusing to reuse that server — it may be a different app. Unset INSIGHT_TEST_PORT to pick a free port." >&2
+    echo "Port ${port} is already in use. Refusing to reuse that server — it may be a different app. Unset INSIGHT_TEST_PORT or BASE to pick a free port." >&2
     exit 1
   fi
-  local url="http://127.0.0.1:${port}"
-  echo "starting ${label} at ${url}"
+  echo "starting ${label} at ${url}" >&2
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$ROOT/logger" >"$logfile" 2>&1 &
-  pid_ref=$!
+  local pid=$!
   local ready=0
+  local _
   for _ in $(seq 1 50); do
     if curl -sf -o /dev/null --max-time 1 "${url}/index.html"; then
       ready=1
       break
     fi
-    if ! kill -0 "$pid_ref" 2>/dev/null; then
+    if ! kill -0 "$pid" 2>/dev/null; then
       break
     fi
     sleep 0.2
@@ -93,20 +111,31 @@ start_static() {
   if [[ "$ready" != 1 ]]; then
     echo "${label} did not start on port ${port}" >&2
     cat "$logfile" >&2 || true
+    kill "$pid" 2>/dev/null || true
     exit 1
   fi
   assert_insight "$url"
-  echo "confirmed Insight at ${url}"
+  echo "confirmed Insight at ${url}" >&2
+  echo "$pid"
 }
 
-if [[ -n "${INSIGHT_TEST_PORT:-}" ]]; then
-  PORT="$INSIGHT_TEST_PORT"
+if [[ -n "${BASE:-}" && -n "${INSIGHT_TEST_PORT:-}" ]]; then
+  base_port="$(port_from_url "$BASE")"
+  if [[ "$base_port" != "$INSIGHT_TEST_PORT" ]]; then
+    echo "BASE is ${BASE} but INSIGHT_TEST_PORT is ${INSIGHT_TEST_PORT}. They must name the same port." >&2
+    exit 1
+  fi
+  PORT="$base_port"
 elif [[ -n "${BASE:-}" ]]; then
   PORT="$(port_from_url "$BASE")"
+elif [[ -n "${INSIGHT_TEST_PORT:-}" ]]; then
+  PORT="$INSIGHT_TEST_PORT"
+  BASE="http://127.0.0.1:${PORT}"
 else
   PORT="$(free_port)"
+  BASE="http://127.0.0.1:${PORT}"
 fi
-export BASE="http://127.0.0.1:${PORT}"
+export BASE
 
 SERVER_PID=""
 OLD_PID=""
@@ -123,7 +152,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-start_static "$PORT" "$ARTIFACTS_DIR/static-server.log" "Insight" SERVER_PID
+SERVER_PID="$(start_static "$PORT" "$ARTIFACTS_DIR/static-server.log" "Insight" "$BASE")"
 
 echo "PLAYWRIGHT_PATH=$PLAYWRIGHT_PATH"
 echo "CHROME_PATH=$CHROME_PATH"
@@ -156,10 +185,11 @@ if [[ -n "${OLD:-}" ]]; then
   OLD_PORT="$(port_from_url "$OLD")"
 else
   OLD_PORT="$(free_port)"
+  OLD="http://127.0.0.1:${OLD_PORT}"
 fi
 export NEW="${NEW:-$BASE}"
-export OLD="http://127.0.0.1:${OLD_PORT}"
-start_static "$OLD_PORT" "$ARTIFACTS_DIR/static-server-old.log" "Insight (second origin)" OLD_PID
+export OLD
+OLD_PID="$(start_static "$OLD_PORT" "$ARTIFACTS_DIR/static-server-old.log" "Insight (second origin)" "$OLD")"
 echo "=== logger/tests/review-sync.mjs ($NEW and $OLD) ==="
 node logger/tests/review-sync.mjs
 

@@ -126,6 +126,11 @@ async function handleSupabase(route, state) {
 }
 
 export async function installSupabaseStub(context, state) {
+  // The app loads https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2 (floating
+  // 2.x). This stub serves the pinned devDependency instead. If the pin falls
+  // behind latest 2.x, PR smoke can pass against an older client than production.
+  // CI warns when `npm view @supabase/supabase-js version` differs. Do not change
+  // the script tag in index.html from this suite.
   await context.route(/https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, async (route) => {
     if (route.request().method() === "OPTIONS") {
       await send(route, 204, "");
