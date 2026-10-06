@@ -1385,36 +1385,91 @@ function utcForLocal(y, mo, d, h, mi, timeZone) {
   return instant;
 }
 
+/* Every UTC minute that displays as this civil time. Overlap returns two.
+   A spring-forward gap returns none. Built from Intl, not from localHour. */
+function instantsForLocal(y, mo, d, h, mi, timeZone) {
+  const found = [];
+  const start = Date.UTC(y, mo - 1, d, h, mi) - 18 * 3600000;
+  for (let t = start; t < start + 36 * 3600000; t += 60000) {
+    const parts = zoneParts(new Date(t), timeZone);
+    if (+parts.year === y && +parts.month === mo && +parts.day === d && +parts.hour === h && +parts.minute === mi) {
+      found.push(new Date(t).toISOString());
+    }
+  }
+  return found;
+}
+
+const LATE_EATING_DEFAULT_SEED = 20261006;
+
+function assertWallHour(zone, iso, hour, minute, seed, label) {
+  const expected = hour + minute / 60;
+  const late = expected >= LATE_HOUR;
+  const where = `seed=${seed} ${label} ${zone} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${iso}`;
+  const parts = zoneParts(new Date(iso), zone);
+  assert.equal(+parts.hour, hour, where + " utc instant");
+  assert.equal(+parts.minute, minute, where + " utc instant");
+  const got = localHour(iso, zone);
+  assert.ok(got != null && Math.abs(got - expected) < 1e-9, where + " localHour " + got);
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  const extracted = extractDays({
+    foodDays: {
+      [date]: [{ meal: "dinner", base: { kcal: 1500, p: 50, c: 140, f: 40 }, servings: 1, at: iso }],
+    },
+  }, zone);
+  assert.equal(extracted.days[date] && extracted.days[date].lateEating, late, where + " lateEating");
+}
+
+function assertChosenWall(zone, y, mo, d, hour, minute, seed, label) {
+  const found = instantsForLocal(y, mo, d, hour, minute, zone);
+  assert.ok(found.length >= 1, `seed=${seed} ${label} ${zone} ${y}-${mo}-${d} ${hour}:${minute} has no instant`);
+  found.forEach((iso) => assertWallHour(zone, iso, hour, minute, seed, label));
+}
+
 test("late meals follow local time across random time zones", () => {
   const fromEnv = process.env.LATE_EATING_SEED;
   const seed = fromEnv != null && fromEnv !== "" && Number.isFinite(Number(fromEnv))
     ? Number(fromEnv) >>> 0
-    : Math.floor(Math.random() * 0x7fffffff);
+    : LATE_EATING_DEFAULT_SEED;
   console.log("late-eating seed=" + seed);
   const rnd = mulberry32(seed);
-  const zones = Intl.supportedValuesOf("timeZone");
+
+  const chicago = "America/Chicago";
+  assert.deepEqual(instantsForLocal(2026, 3, 8, 2, 30, chicago), [], `seed=${seed} Chicago spring gap`);
+  assertChosenWall(chicago, 2026, 3, 8, 1, 59, seed, "Chicago spring before");
+  assertChosenWall(chicago, 2026, 3, 8, 3, 0, seed, "Chicago spring after");
+  const fold = instantsForLocal(2026, 11, 1, 1, 30, chicago);
+  assert.equal(fold.length, 2, `seed=${seed} Chicago fall overlap ${fold.join(" ")}`);
+  fold.forEach((iso) => assertWallHour(chicago, iso, 1, 30, seed, "Chicago fall"));
+  assertChosenWall(chicago, 2026, 3, 8, 20, 59, seed, "Chicago 20:59");
+  assertChosenWall(chicago, 2026, 3, 8, 21, 0, seed, "Chicago 21:00");
+  assertChosenWall(chicago, 2026, 11, 1, 20, 59, seed, "Chicago fall 20:59");
+  assertChosenWall(chicago, 2026, 11, 1, 21, 0, seed, "Chicago fall 21:00");
+
+  const zones = ["Asia/Kolkata", "America/St_Johns", "Asia/Kathmandu", "Australia/Eucla", "Pacific/Chatham"];
+  const days = [[2026, 1, 15], [2026, 7, 15]];
+  const clocks = [[20, 59], [21, 0], [23, 59], [0, 0], [0, 30]];
+  zones.forEach((zone) => {
+    days.forEach(([y, mo, d]) => {
+      clocks.forEach(([hour, minute]) => {
+        assertChosenWall(zone, y, mo, d, hour, minute, seed, "edge");
+      });
+    });
+  });
+
+  const allZones = Intl.supportedValuesOf("timeZone");
   let checked = 0;
-  for (let n = 0; n < 40; n++) {
-    const zone = zones[Math.floor(rnd() * zones.length)];
+  for (let n = 0; n < 500; n++) {
+    const zone = allZones[Math.floor(rnd() * allZones.length)];
     const hour = Math.floor(rnd() * 24);
     const minute = Math.floor(rnd() * 60);
     const month = 1 + Math.floor(rnd() * 12);
     const day = 1 + Math.floor(rnd() * 27);
     const instant = utcForLocal(2026, month, day, hour, minute, zone);
     if (!instant) continue;
-    const iso = instant.toISOString();
-    const got = localHour(iso, zone);
-    assert.ok(Math.abs(got - (hour + minute / 60)) < 1e-6, zone + " " + iso + " -> " + got);
-    const late = got >= LATE_HOUR;
-    const extracted = extractDays({
-      foodDays: {
-        "2026-06-15": [{ meal: "dinner", base: { kcal: 1500, p: 50, c: 140, f: 40 }, servings: 1, at: iso }],
-      },
-    }, zone);
-    assert.equal(extracted.days["2026-06-15"].lateEating, late, zone + " " + iso);
+    assertWallHour(zone, instant.toISOString(), hour, minute, seed, "trial " + n);
     checked++;
   }
-  assert.ok(checked >= 30, "checked " + checked);
+  assert.ok(checked >= 450, `seed=${seed} checked ${checked}`);
 });
 
 test("food does not explain the same morning's weigh-in", () => {
