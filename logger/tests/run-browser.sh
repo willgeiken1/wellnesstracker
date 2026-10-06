@@ -82,8 +82,30 @@ assert_insight() {
   ' "$1"
 }
 
+# Pids started by this script. The EXIT trap reaps them. Record a pid before
+# any check that can fail: assert_insight used to run inside $(start_static),
+# so a failed check exited the subshell and left python running.
+PIDS=()
+STARTED_PID=""
+
+cleanup() {
+  local pid
+  for pid in "${PIDS[@]}"; do
+    kill "$pid" 2>/dev/null || true
+  done
+  for pid in "${PIDS[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
+}
+trap cleanup EXIT
+
 # Always bind a server we started. Never curl an existing listener and proceed.
-# Prints the server pid on stdout. Every other message goes to stderr.
+# Do not call this inside $(...): a failing check would exit only the subshell.
+# Binds 127.0.0.1. The URL may be http://127.0.0.1:<port> or http://localhost:<port>;
+# both are this loopback socket. Harness BASE stays 127.0.0.1 so the page
+# hostname is not "localhost" and the service worker does not register.
+# Playwright smoke uses http://localhost on a server it starts itself, and it
+# blocks service workers.
 start_static() {
   local port="$1"
   local logfile="$2"
@@ -93,9 +115,11 @@ start_static() {
     echo "Port ${port} is already in use. Refusing to reuse that server — it may be a different app. Unset INSIGHT_TEST_PORT or BASE to pick a free port." >&2
     exit 1
   fi
-  echo "starting ${label} at ${url}" >&2
+  echo "starting ${label} at ${url} (bind 127.0.0.1)" >&2
   python3 -m http.server "$port" --bind 127.0.0.1 --directory "$ROOT/logger" >"$logfile" 2>&1 &
   local pid=$!
+  PIDS+=("$pid")
+  STARTED_PID=$pid
   local ready=0
   local _
   for _ in $(seq 1 50); do
@@ -111,12 +135,13 @@ start_static() {
   if [[ "$ready" != 1 ]]; then
     echo "${label} did not start on port ${port}" >&2
     cat "$logfile" >&2 || true
-    kill "$pid" 2>/dev/null || true
     exit 1
   fi
-  assert_insight "$url"
+  if ! assert_insight "$url"; then
+    echo "Insight check failed for ${url}; stopping server ${pid}" >&2
+    exit 1
+  fi
   echo "confirmed Insight at ${url}" >&2
-  echo "$pid"
 }
 
 if [[ -n "${BASE:-}" && -n "${INSIGHT_TEST_PORT:-}" ]]; then
@@ -130,6 +155,8 @@ elif [[ -n "${BASE:-}" ]]; then
   PORT="$(port_from_url "$BASE")"
 elif [[ -n "${INSIGHT_TEST_PORT:-}" ]]; then
   PORT="$INSIGHT_TEST_PORT"
+  # Same host the process binds. Not localhost: the service worker registers
+  # only for hostname localhost, and these harnesses do not block it.
   BASE="http://127.0.0.1:${PORT}"
 else
   PORT="$(free_port)"
@@ -137,22 +164,8 @@ else
 fi
 export BASE
 
-SERVER_PID=""
-OLD_PID=""
-
-cleanup() {
-  if [[ -n "$SERVER_PID" ]]; then
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
-  fi
-  if [[ -n "$OLD_PID" ]]; then
-    kill "$OLD_PID" 2>/dev/null || true
-    wait "$OLD_PID" 2>/dev/null || true
-  fi
-}
-trap cleanup EXIT
-
-SERVER_PID="$(start_static "$PORT" "$ARTIFACTS_DIR/static-server.log" "Insight" "$BASE")"
+start_static "$PORT" "$ARTIFACTS_DIR/static-server.log" "Insight" "$BASE"
+SERVER_PID=$STARTED_PID
 
 echo "PLAYWRIGHT_PATH=$PLAYWRIGHT_PATH"
 echo "CHROME_PATH=$CHROME_PATH"
@@ -189,7 +202,8 @@ else
 fi
 export NEW="${NEW:-$BASE}"
 export OLD
-OLD_PID="$(start_static "$OLD_PORT" "$ARTIFACTS_DIR/static-server-old.log" "Insight (second origin)" "$OLD")"
+start_static "$OLD_PORT" "$ARTIFACTS_DIR/static-server-old.log" "Insight (second origin)" "$OLD"
+OLD_PID=$STARTED_PID
 echo "=== logger/tests/review-sync.mjs ($NEW and $OLD) ==="
 node logger/tests/review-sync.mjs
 

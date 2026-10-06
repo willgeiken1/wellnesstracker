@@ -1,5 +1,7 @@
-// Serves logger/ for Playwright. Listens on 127.0.0.1 and ::1 so the
-// browser can open http://localhost (the service worker refuses 127.0.0.1).
+// Serves logger/ for Playwright. Binds 127.0.0.1 and, when it can, ::1.
+// Those are the loopback addresses of localhost, which is the origin Playwright
+// opens (http://localhost:<port>). The service worker registers only for that
+// hostname or for https. Tests keep serviceWorkers blocked.
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";

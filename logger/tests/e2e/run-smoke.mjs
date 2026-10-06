@@ -2,10 +2,12 @@
 // PW_PROJECTS=iphone-webkit (comma-separated) forces the list. CI sets that.
 // With no WebKit browser, the Chromium iPhone project still runs.
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertSpecsUseAppFixture } from "./check-imports.mjs";
+import { selfTestExpectedFailure } from "./fixtures/app.mjs";
 import { assertLoopbackOnly } from "./fixtures/loopback-only.mjs";
 
 const require = createRequire(import.meta.url);
@@ -32,18 +34,18 @@ if (!requested.length && !present.includes("iphone-webkit")) {
 }
 
 const specDir = dirname(fileURLToPath(import.meta.url));
-for (const name of readdirSync(specDir)) {
-  if (!name.endsWith(".spec.mjs") || name === "guard.spec.mjs") continue;
-  const text = readFileSync(join(specDir, name), "utf8");
-  if (text.includes("@playwright/test")) {
-    console.error(`pw:smoke: ${name} imports @playwright/test. Import test from ./fixtures/app.mjs so the guard and service-worker lock always apply.`);
-    process.exit(1);
-  }
-  if (!/from\s+["']\.\/fixtures\/app\.mjs["']/.test(text)) {
-    console.error(`pw:smoke: ${name} must import from ./fixtures/app.mjs.`);
-    process.exit(1);
-  }
+try {
+  selfTestExpectedFailure();
+  assertSpecsUseAppFixture(specDir);
+} catch (err) {
+  console.error(err && err.message ? err.message : err);
+  process.exit(1);
 }
+
+// PW_REPEAT=N runs each test N times with retries still 0, so a guard hit
+// cannot pass on a later attempt. Unexpected failures are the flake count.
+const repeat = Number(process.env.PW_REPEAT || "");
+const repeatArgs = Number.isInteger(repeat) && repeat > 1 ? [`--repeat-each=${repeat}`] : [];
 
 if (projects.includes("iphone-webkit")) {
   try {
@@ -54,6 +56,6 @@ if (projects.includes("iphone-webkit")) {
   }
 }
 
-const args = [cli, "test", ...projects.flatMap((name) => ["--project", name]), ...process.argv.slice(2)];
+const args = [cli, "test", ...projects.flatMap((name) => ["--project", name]), ...repeatArgs, ...process.argv.slice(2)];
 const result = spawnSync(process.execPath, args, { stdio: "inherit" });
 process.exit(result.status == null ? 1 : result.status);

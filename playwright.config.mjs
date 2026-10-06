@@ -30,7 +30,11 @@ function resolvePort() {
 }
 
 const port = resolvePort();
-// The service worker registers only on localhost or https, not 127.0.0.1.
+// One origin for the browser and the readiness check: http://localhost:<port>.
+// The process still binds 127.0.0.1 (and ::1 when it can). That is localhost's
+// loopback address, not a second host. The service worker registers only when
+// the hostname is localhost or the page is https, so the browser origin stays
+// localhost. Tests still set serviceWorkers: "block".
 const baseURL = `http://localhost:${port}`;
 
 const iphone = {
@@ -44,8 +48,12 @@ export default defineConfig({
   testDir: "logger/tests/e2e",
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
-  // A pass on retry is reported as flaky. Target stays under 2%.
-  retries: process.env.CI ? 1 : 0,
+  // retries stay 0 in CI and locally. A guard hit must fail the attempt that
+  // saw it. A retry would report that hit as a flake and the run could go
+  // green. Measure flake with repeats instead (still retries 0):
+  //   PW_REPEAT=20 bash logger/tests/e2e/with-os-lock.sh npm run pw:smoke
+  // Unexpected failures across those repeats are the flake count.
+  retries: 0,
   forbidOnly: !!process.env.CI,
   timeout: 30_000,
   expect: { timeout: 10_000 },
@@ -93,7 +101,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "node logger/tests/e2e/fixtures/static-server.mjs",
-    url: `http://127.0.0.1:${port}/index.html`,
+    url: `${baseURL}/index.html`,
     // Never attach to a server already on this port. It may be a different app.
     reuseExistingServer: false,
     timeout: 20_000,
