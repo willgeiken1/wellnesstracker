@@ -215,13 +215,28 @@ function foodHistoryHTML() {
 app.foodHistoryHTML = foodHistoryHTML;
 
 /* ---------- Sheets ---------- */
-const AI_CONSENT_KEY = "insight-ai-consent";
+function aiConsentKey(id = (app.session && app.session.user && app.session.user.id) || "local") {
+  return "insight-ai-consent:" + id;
+}
 let aiConsentNext = null, aiConsentPreviousSheet = null;
 
 function aiConsentGiven() {
-  try { return globalThis.localStorage.getItem(AI_CONSENT_KEY) === "1"; } catch (e) { return false; }
+  try { return globalThis.localStorage.getItem(aiConsentKey()) === "1"; } catch (e) { return false; }
 }
 app.aiConsentGiven = aiConsentGiven;
+
+app.clearAIConsent = function (id) {
+  try { globalThis.localStorage.removeItem(aiConsentKey(id)); } catch (e) {}
+};
+
+app.clearAllAIConsent = function () {
+  try {
+    for (let i = globalThis.localStorage.length - 1; i >= 0; i--) {
+      const key = globalThis.localStorage.key(i);
+      if (key && key.startsWith("insight-ai-consent")) globalThis.localStorage.removeItem(key);
+    }
+  } catch (e) {}
+};
 
 function withAIConsent(next) {
   if (app.aiConsentGiven()) { next(); return; }
@@ -233,7 +248,7 @@ function withAIConsent(next) {
 app.withAIConsent = withAIConsent;
 
 function aiConsentAllow() {
-  try { globalThis.localStorage.setItem(AI_CONSENT_KEY, "1"); } catch (e) {}
+  try { globalThis.localStorage.setItem(aiConsentKey(), "1"); } catch (e) {}
   const next = aiConsentNext;
   aiConsentNext = null;
   aiConsentPreviousSheet = null;
@@ -257,7 +272,7 @@ function foodAIConsentSheetHTML() {
     <p><a href="https://willgeiken1.github.io/wellnesstracker/privacy" target="_blank" rel="noopener">Privacy policy</a></p>
     <button class="btn primary block" data-action="ai-consent-allow">Allow</button>
     <button class="btn block" data-action="ai-consent-cancel">Cancel</button>
-    <p class="sub small">You'll only be asked once on this phone.</p>`;
+    <p class="sub small">You'll only be asked once for this account.</p>`;
 }
 app.foodAIConsentSheetHTML = foodAIConsentSheetHTML;
 
@@ -457,7 +472,11 @@ async function analyzeFoodPhoto(file, reuse) {
   app.ui.sheet = "food-review"; app.ui.sd = { meal: app.autoMeal(), ...app.ui.sd, loading: true, error: null, items: [] }; app.renderSheet();
   try {
     if (!app.sb || !app.session) throw new Error("Sign in (Settings → Account) to use food photos.");
+    const id = app.session.user && app.session.user.id;
     const image = reuse || await app.compressForAI(file);
+    if (!app.aiConsentGiven() || !app.session || !app.session.user || app.session.user.id !== id) {
+      throw new Error("Nothing was sent because the account changed. Try again.");
+    }
     app.ui.sd.image = image;
     const { data, error } = await app.sb.functions.invoke("food-photo", { body: { image, hint: app.ui.sd.hint || "", ...app.aiClock() } });
     if (error) {
