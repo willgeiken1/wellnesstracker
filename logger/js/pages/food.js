@@ -267,7 +267,7 @@ function aiConsentCancel() {
 app.aiConsentCancel = aiConsentCancel;
 
 function foodAIConsentSheetHTML() {
-  return `<h3>Before your first AI estimate</h3>
+  return `<h3 class="ai-consent-title">Before your first AI estimate</h3>
     <p class="sub">To estimate nutrition, Insight sends your meal photo and any note you add, or the meal you type, to Anthropic (Claude). Nothing else from Insight is included. Insight doesn't keep the photo or the text after the estimate comes back.</p>
     <p><a href="https://willgeiken1.github.io/wellnesstracker/privacy" target="_blank" rel="noopener">Privacy policy</a></p>
     <button class="btn primary block" data-action="ai-consent-allow">Allow</button>
