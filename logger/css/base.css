@@ -224,6 +224,7 @@ body.timer-on:not(.in-workout) #view { padding-bottom: calc(var(--tabs-h) + 190p
 /* ---------- Settings ---------- */
 .group { background: var(--surface); border-radius: 16px; padding: 4px 16px; margin-bottom: 14px; }
 .set-row { display: flex; justify-content: space-between; align-items: center; min-height: 54px; width: 100%; text-align: left; border-bottom: 1px solid var(--line); gap: 12px; }
+a.set-row { color: var(--text); text-decoration: none; }
 .set-row:last-child { border-bottom: 0; }
 .set-row .sub { color: var(--muted); font-size: 15px; }
 .group-label { color: var(--muted); font-size: 14px; margin: 22px 4px 8px; }

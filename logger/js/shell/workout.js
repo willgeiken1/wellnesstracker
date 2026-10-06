@@ -96,6 +96,7 @@ function renderSheet() {
       ${app.state.workouts.map((w) => `<button class="opt" data-action="set-plan" data-id="${app.esc(w.id)}" aria-pressed="${cur === w.id}"><span>${app.esc(w.name)}</span><span class="sec-sub">${app.pl(w.exercises.length, "exercise")}</span></button>`).join("")}
       <button class="opt" data-action="set-plan" data-id="rest" aria-pressed="${cur === "rest"}"><span>Rest day</span></button>
       ${cur ? `<button class="opt clear" data-action="set-plan" data-id="">Clear plan</button>` : ""}`;
+  } else if (app.ui.sheet === "ai-consent") { inner = app.foodAIConsentSheetHTML();
   } else if (app.ui.sheet === "food-add") { inner = app.foodAddSheetHTML();
   } else if (app.ui.sheet === "food-photo") { inner = app.foodPhotoSheetHTML();
   } else if (app.ui.sheet === "food-describe") { inner = app.foodDescribeSheetHTML();

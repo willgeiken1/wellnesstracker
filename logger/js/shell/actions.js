@@ -439,7 +439,9 @@ document.addEventListener("click", async (ev) => {
     case "fseg": app.ui.fseg = b.dataset.s; app.render(); window.scrollTo(0, 0); break;
     case "qmeal": app.ui.qMeal = b.dataset.m; app.render(); break;
     case "review-meal": app.ui.sd.meal = b.dataset.m; app.renderSheet(); break;
-    case "food-snap": { app.ui.sd = { meal: app.autoMeal() }; const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
+    case "ai-consent-allow": app.aiConsentAllow(); break;
+    case "ai-consent-cancel": app.aiConsentCancel(); break;
+    case "food-snap": { app.withAIConsent(() => { app.ui.sd = { meal: app.autoMeal() }; const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } }); break; }
     case "food-quick-barcode": app.ui.sheet = "food-barcode"; app.ui.sd = { meal: app.autoMeal() }; app.renderSheet(); app.startBarcode(); break;
     case "food-quick-manual": app.ui.sheet = "food-manual"; app.ui.sd = { meal: app.autoMeal() }; app.renderSheet(); break;
     case "food-reanalyze": { app.ui.sd.hint = ((app.$("#food-hint") || {}).value || "").trim(); app.analyzeFoodPhoto(null, app.ui.sd.image); break; }
@@ -462,7 +464,7 @@ document.addEventListener("click", async (ev) => {
     case "food-cal-day": app.ui.foodDay = b.dataset.date === app.today() ? null : b.dataset.date; app.ui.fseg = "day"; app.ui.sheet = null; app.render(); window.scrollTo(0, 0); break;
     case "food-day": { const d = app.addDays(app.ui.foodDay || app.today(), +b.dataset.d); app.ui.foodDay = d > app.today() ? app.today() : d; app.render(); break; }
     case "food-add": app.ui.sheet = "food-add"; app.ui.sd = { meal: b.dataset.meal }; app.renderSheet(); break;
-    case "food-photo": { app.ui.sd = { meal: app.ui.sd.meal || app.autoMeal(), hint: "" }; app.ui.sheet = null; app.renderSheet(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
+    case "food-photo": { app.withAIConsent(() => { app.ui.sd = { meal: app.ui.sd.meal || app.autoMeal(), hint: "" }; app.ui.sheet = null; app.renderSheet(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } }); break; }
     case "food-describe": {
       const meal = (app.ui.sd && app.ui.sd.meal) || app.autoMeal();
       const text = (app.ui.sd && app.ui.sd.text) || "";
@@ -474,10 +476,10 @@ document.addEventListener("click", async (ev) => {
     }
     case "food-describe-go": {
       app.ui.sd.text = ((app.$("#food-describe") || {}).value || "").trim();
-      await app.analyzeFoodText();
+      app.withAIConsent(() => { app.analyzeFoodText(); });
       break;
     }
-    case "food-photo-go": { app.ui.sd.hint = ((app.$("#food-hint") || {}).value || "").trim(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } break; }
+    case "food-photo-go": { app.ui.sd.hint = ((app.$("#food-hint") || {}).value || "").trim(); app.withAIConsent(() => { app.ui.sheet = "food-photo"; app.renderSheet(); const inp = app.$("#food-file"); if (inp) { inp.value = ""; inp.click(); } }); break; }
     case "food-manual": app.ui.sheet = "food-manual"; app.ui.sd = { meal: app.ui.sd.meal || "snacks" }; app.renderSheet(); break;
     case "food-edit": app.ui.sheet = "food-manual"; app.ui.sd = { edit: b.dataset.id }; app.renderSheet(); break;
     case "food-saved": app.ui.sheet = "food-saved"; app.ui.sd = { meal: app.ui.sd.meal || "snacks", q: "" }; app.renderSheet(); break;

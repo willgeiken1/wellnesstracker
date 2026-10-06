@@ -3,7 +3,7 @@
 # only adds CNAME back when that list is untouched, so the defaults are repeated.
 # App URLs stay put: /logger/ including sw.js, the manifest, and the icons.
 # Still published on purpose: privacy.md (the app links to ../privacy.md),
-# terms.md, and README.md (jekyll-readme-index serves it at /).
+# terms.md, support.md, and README.md (jekyll-readme-index serves it at /).
 exclude:
   - tests
   - logger/tests
