@@ -143,8 +143,8 @@ test("before_send drops autocapture and strips identity traits and query strings
   assert.equal(viewed.properties.note, undefined);
   assert.equal(viewed.properties.email, undefined);
   assert.equal(viewed.properties.$set, undefined);
-  assert.equal(viewed.properties.$current_url, "http://localhost:4173/");
-  assert.equal(viewed.properties.$referrer, "https://example.com/start");
+  assert.equal(viewed.properties.$current_url, "http://localhost:4173");
+  assert.equal(viewed.properties.$referrer, "https://example.com");
   assert.equal(viewed.properties.$lib, "web");
   assert.equal(JSON.stringify(viewed).includes("ada@example.com"), false);
   assert.equal(JSON.stringify(viewed).includes("felt tired"), false);
@@ -169,24 +169,156 @@ test("before_send strips the URL fragment so magic-link tokens never leave", () 
       $lib: "web",
     },
   });
-  assert.equal(out.properties.$current_url, "http://localhost/");
-  assert.equal(out.properties.$referrer, "https://proj.supabase.co/auth/v1/verify");
-  assert.equal(out.properties.$initial_current_url, "http://localhost/");
+  assert.equal(out.properties.$current_url, "http://localhost");
+  assert.equal(out.properties.$referrer, "https://proj.supabase.co");
+  assert.equal(out.properties.$initial_current_url, "http://localhost");
   assert.equal(out.properties.$lib, "web");
   assert.equal(/access_token|refresh_token/.test(JSON.stringify(out)), false);
 });
 
-test("before_send drops token-looking auto property values", () => {
+test("before_send drops token-looking values and unknown dollar keys", () => {
   const jwt = "eyJhbGciOiJIUzI1NiJ9.payload.sig";
   const out = sanitizePosthogEvent({
     event: "$identify",
-    properties: { $x: jwt, $y: "has refresh_token inside", $z: "http://h/p/access_token", $ok: "fine", distinct_id: "d" },
+    properties: {
+      $current_url: "http://h/" + jwt,
+      $referrer: "has refresh_token inside",
+      $pathname: "http://h/p/access_token",
+      $ok: "fine",
+      $hrv: 55,
+      $lib: "web",
+      distinct_id: "d",
+    },
   });
-  assert.equal(out.properties.$x, undefined);
-  assert.equal(out.properties.$y, undefined);
-  assert.equal(out.properties.$z, undefined);
-  assert.equal(out.properties.$ok, "fine");
+  assert.equal(out.properties.$current_url, undefined);
+  assert.equal(out.properties.$referrer, undefined);
+  assert.equal(out.properties.$pathname, undefined);
+  assert.equal(out.properties.$ok, undefined);
+  assert.equal(out.properties.$hrv, undefined);
+  assert.equal(out.properties.$lib, "web");
   assert.equal(out.properties.distinct_id, "d");
+});
+
+test("before_send drops health-named dollar keys, city, and lat/long", () => {
+  const viewed = sanitizePosthogEvent({
+    event: "tab_viewed",
+    properties: {
+      tab: "food",
+      $hrv: 55,
+      $readiness: 41,
+      $weight: 82.4,
+      $kcal: 450,
+      $sleep: 7.2,
+      $protein: 30,
+      $meal: "chicken breast",
+      $lib: "web",
+      $city: "Austin",
+      $latitude: 30.27,
+      $longitude: -97.74,
+      $ip: "203.0.113.9",
+      $geoip_city_name: "Austin",
+      city: "Austin",
+      latitude: 30.27,
+      longitude: -97.74,
+      readiness: 41,
+    },
+  });
+  assert.equal(viewed.properties.tab, "food");
+  assert.equal(viewed.properties.$lib, "web");
+  assert.equal(viewed.properties.$geoip_disable, true);
+  const raw = JSON.stringify(viewed).toLowerCase();
+  for (const needle of ["55", "82.4", "7.2", "450", "chicken", "austin", "203.0.113.9", "hrv", "readiness", "weight", "30.27", "-97.74"]) {
+    assert.equal(raw.includes(needle), false, needle);
+  }
+});
+
+test("identity and food events drop health dollar keys", () => {
+  const identify = sanitizePosthogEvent({
+    event: "$identify",
+    properties: {
+      distinct_id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      $hrv: 55,
+      $meal: "chicken breast",
+      $lib: "web",
+    },
+  });
+  assert.equal(identify.properties.distinct_id, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+  assert.equal(identify.properties.$lib, "web");
+  assert.equal(identify.properties.$hrv, undefined);
+  assert.equal(identify.properties.$meal, undefined);
+  assert.equal(JSON.stringify(identify).includes("chicken"), false);
+
+  const food = sanitizePosthogEvent({
+    event: "food_logged",
+    properties: { method: "manual", $calories: 450, $note: "oats and honey", $hrv: { v: 55 } },
+  });
+  assert.equal(food.properties.method, "manual");
+  assert.equal(food.properties.$calories, undefined);
+  assert.equal(food.properties.$note, undefined);
+  assert.equal(JSON.stringify(food).includes("oats"), false);
+  assert.equal(JSON.stringify(food).includes("450"), false);
+  assert.equal(JSON.stringify(food).includes("55"), false);
+});
+
+test("top-level $set and $set_once keep only allowlisted keys", () => {
+  const out = sanitizePosthogEvent({
+    event: "tab_viewed",
+    properties: { tab: "home", $lib: "web", $set: { hrv: 55 } },
+    $set: {
+      hrv: 55,
+      weight: 82.4,
+      $meal: "chicken breast",
+      $browser: "Chrome",
+      $geoip_city_name: "Austin",
+      email: "ada@example.com",
+    },
+    $set_once: {
+      readiness: 41,
+      $os: "iOS",
+      $initial_current_url: "https://x/food?note=oats#access_token=abc",
+    },
+  });
+  const raw = JSON.stringify(out);
+  assert.equal(out.properties.tab, "home");
+  assert.equal(out.properties.$set, undefined);
+  assert.deepEqual(out.$set, { $browser: "Chrome" });
+  assert.deepEqual(out.$set_once, { $os: "iOS", $initial_current_url: "https://x" });
+  for (const needle of ["55", "82.4", "chicken", "Austin", "ada@example.com", "oats", "access_token", "41", "hrv", "readiness"]) {
+    assert.equal(raw.includes(needle), false, needle);
+  }
+});
+
+test("PostHog init disables replay, exceptions, autocapture, and heatmaps", async () => {
+  const scripts = [];
+  const saved = globalThis.localStorage;
+  globalThis.localStorage = memoryStorage({ "insight-share-analytics": "1" });
+  globalThis.document = {
+    createElement: () => ({ dataset: {} }),
+    getElementsByTagName: () => [],
+    head: { appendChild: (el) => scripts.push(el) },
+  };
+  globalThis.window = globalThis;
+  globalThis.location = { hostname: "insight.example.com", protocol: "https:" };
+  delete globalThis.posthog;
+  try {
+    await import("../logger/js/usage.js?initopts=" + Math.random());
+    const { app } = await import("../logger/js/runtime.js");
+    app.capture("tab_viewed", { tab: "home" });
+    assert.equal(scripts.length, 1);
+    const config = window.posthog._i[0][1];
+    assert.equal(config.autocapture, false);
+    assert.equal(config.capture_exceptions, false);
+    assert.equal(config.capture_heatmaps, false);
+    assert.equal(config.disable_session_recording, true);
+    assert.equal(config.capture_pageview, false);
+    assert.equal(config.before_send, sanitizePosthogEvent);
+  } finally {
+    globalThis.localStorage = saved;
+    delete globalThis.document;
+    delete globalThis.window;
+    delete globalThis.posthog;
+    delete globalThis.location;
+  }
 });
 
 test("the stub queue is capped and keeps the newest entries", () => {
@@ -299,12 +431,12 @@ test("local development never loads PostHog", async () => {
   assert.equal(prod.scripts, 1);
 });
 
-test("the shell caches the usage modules with the v36 release", () => {
+test("the shell caches the usage modules with the v37 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v36/);
+  assert.match(sw, /insight-shell-v37/);
   assert.match(sw, /\.\/js\/usage\.js/);
   assert.match(sw, /\.\/js\/usage-events\.js/);
   assert.match(sw, /\.\/js\/usage-pref\.js/);
-  assert.match(sentry, /insight-shell-v36/);
+  assert.match(sentry, /insight-shell-v37/);
 });

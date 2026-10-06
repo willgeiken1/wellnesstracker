@@ -276,10 +276,10 @@ test("the pattern wording is neutral", () => {
   assert.doesNotMatch(brief + widgets, /Working against you/);
 });
 
-test("the shell caches the defaults module on the v36 release", () => {
+test("the shell caches the defaults module on the v37 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /const CACHE = "insight-shell-v36"/);
+  assert.match(sw, /const CACHE = "insight-shell-v37"/);
   assert.match(sw, /const STAGE = CACHE \+ "-next"/);
   assert.doesNotMatch(sw, /insight-shell-v30"/);
 });
