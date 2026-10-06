@@ -391,6 +391,7 @@ async function eraseThisPhone() {
   await app.clearPhotoStore();
   setLocalLockCred(null);
   try { localStorage.removeItem(app.KEY); } catch (e) {}
+  if (app.clearAllAIConsent) app.clearAllAIConsent();
   try { sessionStorage.removeItem("insight-unlocked"); } catch (e) {}
   app.replaceState(app.load());
   app.applyTheme();

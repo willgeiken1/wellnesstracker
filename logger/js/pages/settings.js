@@ -202,6 +202,9 @@ function settingsHTML() {
       <button class="set-row" data-action="import"><span>Restore from a backup</span>${app.I.chevR}</button>
     </div>
     <p class="hint">${app.session ? "Your workouts back up to your account automatically. You can still export a copy any time." : "Workouts are saved on this phone only until you sign in. Export a backup every week or so."}${app.IS_IOS ? " Always open Insight from the Home Screen icon, not a Safari tab, because iOS keeps their data separate." : ""}</p>
-    <p class="hint">Weights are in ${app.units() === "metric" ? "kilograms" : "pounds"}; change units in your profile. Leave weight blank to log a bodyweight set.</p>`;
+    <p class="hint">Weights are in ${app.units() === "metric" ? "kilograms" : "pounds"}; change units in your profile. Leave weight blank to log a bodyweight set.</p>
+    <div class="group-label">About</div><div class="group">
+      <a class="set-row" href="https://repdb.co" target="_blank" rel="noopener"><span>Exercise data by RepDB (repdb.co)</span>${app.I.chevR}</a>
+    </div>`;
 }
 app.settingsHTML = settingsHTML;

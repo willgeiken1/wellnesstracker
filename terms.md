@@ -1,6 +1,6 @@
 # Insight Terms of Service
 
-_Last updated: October 5, 2026_
+_Last updated: October 6, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. By creating an account or using Insight, you agree to these terms.
 
@@ -34,7 +34,7 @@ To the fullest extent the law allows, the developer is not liable for any injury
 
 ## Ending your use
 
-You can stop using Insight at any time. To have your account and its data deleted, contact the address below.
+You can stop using Insight at any time. You can delete your account and its data yourself in Settings → Privacy → Delete account, or email the address below and we'll delete it for you.
 
 ## Changes
 

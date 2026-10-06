@@ -1,6 +1,6 @@
 # Insight Privacy Policy
 
-_Last updated: October 5, 2026_
+_Last updated: October 6, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. This page explains, in plain language, what information Insight handles, where it goes, and the choices you have.
 
@@ -26,17 +26,17 @@ Insight is a personal fitness app built and run by an individual developer as a 
 - **Anthropic** estimates nutrition. When you use "Snap your plate," a resized copy of the photo, and any note you type with it, is sent through Insight's server to Anthropic's Claude service. A written meal description you submit for an estimate is sent the same way. Insight does not keep the photo or the description after the estimate comes back. Anthropic handles that content under its own terms and privacy policy.
 - **Open Food Facts** looks up packaged foods. When you scan or type a barcode, only the barcode number is sent.
 - **Oura** supplies your ring data when you choose to connect it, using your permission.
-- **Sentry** receives error reports when something in the app crashes. A report can include the crash details, basic device and browser information, and the anonymous id of your Supabase account if you are signed in. It does not include workouts, food, notes, photos, health numbers, or your email. IP addresses are not stored. Sentry is hosted in the United States.
-- **PostHog** receives anonymous notes about which features get used. The list is short and fixed: which tab you opened; that a workout was saved; that a food log was saved and whether it came from a photo, a written description, or a manual entry; that the morning brief was changed; that the readiness plan was switched between normal and readiness; that a data export finished; or that Insights was opened. Those notes do not include health values, food text, notes, photos, or email. PostHog discards IP data and does not record your screen. PostHog is hosted in the United States.
+- **Sentry** receives error reports when something in the app crashes. A report can include the crash details, basic device and browser information, and the id of your Insight account if you are signed in, so crash reports are linked to your account id. It does not include workouts, food, notes, photos, health numbers, or your email. IP addresses are not stored. Sentry is hosted in the United States.
+- **PostHog** receives notes about which features get used, only if you turn on Share usage analytics. These notes are linked to your account id, so they are not anonymous. The list is short and fixed: which tab you opened; that a workout was saved; that a food log was saved and whether it came from a photo, a written description, or a manual entry; that the morning brief was changed; that the readiness plan was switched between normal and readiness; that a data export finished; that Insights was opened; or that a weekly report was opened. Those notes do not include health values, food text, notes, photos, or email. Location lookup from the IP address is turned off, and PostHog does not record your screen. PostHog is hosted in the United States.
 - **GitHub Pages** hosts the app's files. **Google Fonts** and public code libraries (jsDelivr, and unpkg when the barcode scanner loads) deliver fonts and code to your browser. Like any website, these services can see your IP address and basic browser information when your device downloads from them.
 
-Sentry and PostHog run only while **Share anonymous usage data** is on. That switch is in Settings → Privacy. It is on by default. The choice is kept on this device, not in your account. Turning it off stops both.
+Sentry and PostHog have separate switches in Settings → Privacy. **Send crash reports** controls Sentry. It is on by default, and you can turn it off. **Share usage analytics** controls PostHog. It is off until you turn it on. If you used an earlier version of Insight with its single sharing switch on, that choice carried over to this phone, and you can turn it off at any time. Both choices are kept on this device, not in your account.
 
 ## What Insight does not do
 
 - It does not sell your information.
 - It does not show ads.
-- It does not use advertising trackers. Crash reports and the anonymous feature-usage notes above are sent only while Share anonymous usage data is on.
+- It does not use advertising trackers. Crash reports are sent only while Send crash reports is on, and the feature-usage notes above only while Share usage analytics is on.
 - It does not currently share your data with other Insight users. Other users cannot see your workouts, food, photos, or health data.
 
 ## Where your data lives
@@ -45,7 +45,8 @@ A copy of your data is kept in your browser on your device so Insight works offl
 
 ## Your choices
 
-- **Share anonymous usage data** in Settings → Privacy. On by default, and remembered on this device. Turn it off to stop crash reports to Sentry and feature-usage notes to PostHog. Your workouts, food, and account are unchanged either way.
+- **Send crash reports** in Settings → Privacy. On by default, and remembered on this device. Turn it off to stop crash reports to Sentry.
+- **Share usage analytics** in Settings → Privacy. Off until you turn it on, and remembered on this device. Turn it on to send the feature-usage notes above to PostHog; turn it off to stop them. Your workouts, food, and account are unchanged either way.
 - **Edit or delete your information** inside the app: profile, workouts, sets, food entries, goals, cardio sessions, and photos can all be changed or deleted.
 - **Delete a date range** in Settings → Privacy. This removes workouts, food logs, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and stored Oura days between the two dates you pick. Your account, routines, and saved meals stay. Oura's own copy of your ring data is not deleted. A later sync will not bring those days back into Insight.
 - **Export your data** in Settings → Privacy. Insight downloads a zip of CSV files (workouts, sets, food, measurements, weigh-ins, cardio, Oura days, goals, and a list of progress photos). The photo image files are not in the zip.

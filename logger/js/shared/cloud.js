@@ -308,11 +308,13 @@ async function signIn(mode) {
 app.signIn = signIn;
 
 async function signOut(opts) {
+  const id = app.session && app.session.user && app.session.user.id;
   const skipPush = opts && opts.skipPush;
   clearTimeout(app.pushTimer);
   if (!skipPush) { try { await app.cloudPush(); } catch (e) {} }   // make sure the latest is backed up first
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
+  if (app.clearAIConsent) { app.clearAIConsent(id); app.clearAIConsent("local"); }
   app.cloudPullOk = false;
   if (app.syncSentryUser) app.syncSentryUser(null);
   if (app.syncUsageUser) app.syncUsageUser(null);
