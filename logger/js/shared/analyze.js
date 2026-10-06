@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { correlate as runCorrelations, effect as bucketEffect } from "./correlate.js";
+import { correlate as runCorrelations, effect as bucketEffect, claimSupported, studentP, MIN_PER_GROUP } from "./correlate.js";
 
 /* Charts and the numbers behind Insights. */
 /* ================= Oura + insights ================= */
@@ -140,11 +140,30 @@ function liftSeries(sessions) {
 }
 app.liftSeries = liftSeries;
 
+function slopeP(xs, ys, slope, mx, my) {
+  const n = xs.length;
+  let sxx = 0;
+  let sse = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - mx;
+    sxx += dx * dx;
+    const resid = ys[i] - (my + slope * dx);
+    sse += resid * resid;
+  }
+  const df = n - 2;
+  if (df <= 0 || sxx === 0) return slope === 0 ? 1 : 0;
+  const se = Math.sqrt((sse / df) / sxx);
+  if (se === 0) return slope === 0 ? 1 : 0;
+  return studentP(slope / se, df);
+}
+
 function liftStatus(series) {
-  if (series.length < 4) return { cls: "wait", label: `Collecting data (${series.length}/4)`, pct: null };
+  const need = MIN_PER_GROUP;
+  const n = series ? series.length : 0;
+  if (n < need) return { cls: "wait", label: `Collecting data (${n}/${need})`, pct: null, n, significant: false };
   const cutoff = app.addDays(app.today(), -42);
   let pts = series.filter((p) => p.date >= cutoff);
-  if (pts.length < 4) pts = series.slice(-6);
+  if (pts.length < need) pts = series.slice(-Math.max(need, 6));
   const t0 = app.parseDay(pts[0].date);
   const xs = pts.map((p) => (app.parseDay(p.date) - t0) / 86400000), ys = pts.map((p) => p.v);
   const mx = app.avg(xs), my = app.avg(ys);
@@ -155,12 +174,14 @@ function liftStatus(series) {
   const pct = slope * span / (my - slope * (mx - xs[0])) * 100;
   const best = Math.max(...series.map((p) => p.v));
   const sincePR = series.length - 1 - series.map((p) => p.v).lastIndexOf(best);
+  const p = slopeP(xs, ys, slope, mx, my);
+  const significant = p <= 0.05;
   let cls, label;
-  if (pctWeek >= 0.4) { cls = "up"; label = "Progressing"; }
-  else if (pctWeek <= -0.6) { cls = "down"; label = "Declining"; }
+  if (significant && pctWeek >= 0.4) { cls = "up"; label = "Progressing"; }
+  else if (significant && pctWeek <= -0.6) { cls = "down"; label = "Declining"; }
   else if (sincePR >= 3) { cls = "flat"; label = "Plateau"; }
   else { cls = "up"; label = "Holding steady"; }
-  return { cls, label, pct, pctWeek, best, sincePR, weeks: Math.max(1, Math.round(span / 7)) };
+  return { cls, label, pct, pctWeek, best, sincePR, weeks: Math.max(1, Math.round(span / 7)), n: pts.length, significant, p };
 }
 app.liftStatus = liftStatus;
 
@@ -258,11 +279,16 @@ app.effectCard = effectCard;
 
 function compareSentence(rows, better, worse) {
   const hi = rows[rows.length - 1], lo = rows[0];
-  if (hi.n < 3 || lo.n < 3) return null;
+  if (!hi || !lo || hi.n < 3 || lo.n < 3 || hi.avg == null || lo.avg == null) return null;
   const d = hi.avg - lo.avg;
   if (Math.abs(d) < 1) return `So far there's little difference between ${worse} and ${better}.`;
-  return d > 0 ? `You lift about ${d.toFixed(1)}% stronger ${better} than ${worse}.`
-               : `Surprisingly, you've lifted ${Math.abs(d).toFixed(1)}% better ${worse} than ${better}.`;
+  const firm = claimSupported(lo.values || lo.xs, hi.values || hi.xs);
+  if (d > 0) {
+    const body = `you lift about ${d.toFixed(1)}% stronger ${better} than ${worse}.`;
+    return firm ? `You lift about ${d.toFixed(1)}% stronger ${better} than ${worse}.` : `So far, ${body}`;
+  }
+  const body = `you've lifted ${Math.abs(d).toFixed(1)}% better ${worse} than ${better}.`;
+  return firm ? `Surprisingly, ${body}` : `So far, ${body}`;
 }
 app.compareSentence = compareSentence;
 

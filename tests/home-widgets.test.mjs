@@ -92,7 +92,7 @@ test("small cards render their numbers, and steps and last night stay blank with
   assert.match(HOME_WIDGETS["weight-trend"].preview({
     today: "2026-10-04", sessions: [], foodDays: {}, oura: {},
     weighIns: [{ date: "2026-10-01", kg: 80 }],
-  }), /Need a few more over 10 days/);
+  }), /Too early to tell/);
   assert.match(HOME_WIDGETS["last-night"].render(snap), /Last night/);
   assert.match(HOME_WIDGETS["last-night"].render(snap), /Deep/);
   assert.equal(HOME_WIDGETS.steps.render({ kind: "snapshot", steps: null, oura: { readiness: 70, date: "2026-10-04" } }), "");
@@ -392,8 +392,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v37/);
-  assert.match(sentry, /insight-shell-v37/);
+  assert.match(sw, /insight-shell-v38/);
+  assert.match(sentry, /insight-shell-v38/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);

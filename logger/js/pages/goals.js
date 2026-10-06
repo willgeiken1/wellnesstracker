@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { weightTrend } from "../shared/correlate.js";
 
 /* Weekly goals, lift goals, and the PR board. */
 /* ================= Goals, PRs, bodyweight rate ================= */
@@ -166,14 +167,9 @@ const DIR_RANGES = {
 app.DIR_RANGES = DIR_RANGES;
 
 function weightRate() {
-  const w = app.weighIns().filter((x) => x.date >= app.addDays(app.today(), -28));
-  if (w.length < 3) return null;
-  const t0 = app.parseDay(w[0].date), xs = w.map((x) => (app.parseDay(x.date) - t0) / 86400000), ys = w.map((x) => x.kg);
-  if (xs[xs.length - 1] < 10) return null;
-  const mx = app.avg(xs), my = app.avg(ys);
-  const slope = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / (xs.reduce((a, x) => a + (x - mx) ** 2, 0) || 1);
-  const perWeekKg = slope * 7;
-  return { perWeek: app.kgToDisp(perWeekKg), pct: perWeekKg / ys[ys.length - 1] * 100 };
+  const trend = weightTrend(app.weighIns(), app.today());
+  if (!trend.ready) return null;
+  return { perWeek: app.kgToDisp(trend.perWeekKg), pct: trend.pct };
 }
 app.weightRate = weightRate;
 
@@ -181,7 +177,7 @@ function weightRateHTML() {
   const dir = app.goals().weightDir, r = app.weightRate();
   const pick = `<div class="seg2 dir-seg">${[["gain", "Gaining"], ["maintain", "Maintaining"], ["lose", "Losing"]].map(([k, l]) =>
     `<button data-action="goal-dir" data-d="${k}" aria-pressed="${dir === k}">${l}</button>`).join("")}</div>`;
-  if (!r) return `<p class="sub small">${dir ? "Log a few weigh-ins over 10+ days to see your weekly rate." : "Are you gaining, maintaining or losing right now?"}</p>${pick}`;
+  if (!r) return `<p class="sub small">${dir ? "Too early to tell. The weekly rate needs 5 weigh-ins over 14 days." : "Are you gaining, maintaining or losing right now?"}</p>${pick}`;
   const range = dir && app.DIR_RANGES[dir];
   let msg = "";
   if (range) {

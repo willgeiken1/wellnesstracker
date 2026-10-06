@@ -14,8 +14,12 @@ import {
   correlate,
   effect,
   effectiveN,
+  claimSupported,
   extractDays,
+  FOOD_COMPLETE_KCAL,
+  FOOD_COMPLETE_MEALS,
   findingsForView,
+  localHour,
   loggedDays,
   factorFamily,
   FAMILY_CAP,
@@ -30,6 +34,10 @@ import {
   suppressedStory,
   todayLine,
   valenceOf,
+  weightTrend,
+  METRIC_BOUNDS,
+  plausibleValue,
+  sanitizeDays,
   welch,
 } from "../logger/js/shared/correlate.js";
 
@@ -108,7 +116,10 @@ test("effect() bucket averages stay the same for the Insights screen", () => {
     { label: "Under 6.5h", test: (v) => v < 6.5 },
   ];
   const rows = effect(perfs, valueOf, buckets);
-  assert.deepEqual(rows, legacyEffect(perfs, valueOf, buckets));
+  const bare = (list) => list.map(({ values, ...rest }) => rest);
+  assert.deepEqual(bare(rows), legacyEffect(perfs, valueOf, buckets));
+  assert.deepEqual(rows[0].values, [2]);
+  assert.deepEqual(rows[2].values, [4, 8]);
   assert.equal(rows[0].label, "Readiness < 70");
   assert.equal(rows[0].n, 1);
   assert.equal(rows[0].avg, 2);
@@ -118,7 +129,7 @@ test("effect() bucket averages stay the same for the Insights screen", () => {
   assert.equal(rows[2].avg, 6);
   assert.equal(rows[3].n, 0);
   assert.equal(rows[3].avg, null);
-  assert.deepEqual(app.effect(perfs, valueOf, buckets), rows);
+  assert.deepEqual(bare(app.effect(perfs, valueOf, buckets)), bare(rows));
 });
 
 test("a planted next-day effect is found and worded in plain language", () => {
@@ -838,8 +849,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v37/);
-  assert.match(sentry, /insight-shell-v37/);
+  assert.match(sw, /insight-shell-v38/);
+  assert.match(sentry, /insight-shell-v38/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /SEE_ALL_LIMIT/);
   assert.match(engine, /mergeMirrors/);
@@ -934,12 +945,22 @@ const NOISE_METRICS = {
 };
 const NOISE_FLAGS = ["workedOut", "didCardio", "lateEating", "proteinOverTarget", "caloriesOverTarget", "carbsOverTarget", "fatOverTarget"];
 
+function clampMetric(id, value) {
+  const bounds = METRIC_BOUNDS[id];
+  if (!bounds) return value;
+  if (value < bounds[0]) return bounds[0];
+  if (value > bounds[1]) return bounds[1];
+  return value;
+}
+
+/* Gaussian tails are clamped into METRIC_BOUNDS so this false-discovery
+   check uses days the engine still treats as real. */
 function noiseDays(n, seed, effect) {
   const rnd = mulberry32(seed);
   const days = {};
   for (let i = 0; i < n; i++) {
     const row = {};
-    for (const [k, spec] of Object.entries(NOISE_METRICS)) row[k] = spec[0] + gauss(rnd) * spec[1];
+    for (const [k, spec] of Object.entries(NOISE_METRICS)) row[k] = clampMetric(k, spec[0] + gauss(rnd) * spec[1]);
     NOISE_FLAGS.forEach((flag) => { row[flag] = rnd() < 0.45; });
     if (!row.workedOut) row.workoutVolume = 0;
     days[dateAt(i, "2026-01-01")] = row;
@@ -947,7 +968,10 @@ function noiseDays(n, seed, effect) {
   if (effect) {
     for (let i = 1; i < n; i++) {
       const prev = days[dateAt(i - 1, "2026-01-01")];
-      if (prev && prev.workedOut) days[dateAt(i, "2026-01-01")].readiness += effect;
+      if (prev && prev.workedOut) {
+        const day = days[dateAt(i, "2026-01-01")];
+        day.readiness = clampMetric("readiness", day.readiness + effect);
+      }
     }
   }
   return days;
@@ -1317,4 +1341,227 @@ test("the correlation cache reruns only when a save bumps the revision", () => {
     app.goals = prevGoals;
     app.setCount = prevSetCount;
   }
+});
+
+test("Z timestamps use the local hour for late meals", () => {
+  assert.equal(FOOD_COMPLETE_KCAL, 1000);
+  assert.equal(FOOD_COMPLETE_MEALS, 2);
+  const meal = (at) => extractDays({
+    foodDays: {
+      "2026-01-15": [{ meal: "dinner", base: { kcal: 1400, p: 40, c: 120, f: 40 }, servings: 1, at }],
+    },
+  }, "America/New_York");
+  assert.equal(localHour("2026-01-16T02:00:00.000Z", "America/New_York"), 21);
+  assert.equal(meal("2026-01-16T02:00:00.000Z").days["2026-01-15"].lateEating, true);
+  assert.equal(localHour("2026-01-15T21:00:00.000Z", "America/New_York"), 16);
+  assert.equal(meal("2026-01-15T21:00:00.000Z").days["2026-01-15"].lateEating, false);
+  assert.equal(localHour("2026-03-02T21:15:00"), 21.25);
+  assert.equal(localHour("2026-03-01T18:00:00"), 18);
+});
+
+function zoneParts(date, timeZone) {
+  const out = {};
+  new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).forEach((p) => { if (p.type !== "literal") out[p.type] = p.value; });
+  if (out.hour === "24") out.hour = "00";
+  return out;
+}
+
+function utcForLocal(y, mo, d, h, mi, timeZone) {
+  const guess = Date.UTC(y, mo - 1, d, h, mi, 0);
+  const shown = zoneParts(new Date(guess), timeZone);
+  const asUTC = Date.UTC(+shown.year, +shown.month - 1, +shown.day, +shown.hour, +shown.minute, +shown.second);
+  const instant = new Date(guess - (asUTC - guess));
+  const check = zoneParts(instant, timeZone);
+  if (+check.year !== y || +check.month !== mo || +check.day !== d || +check.hour !== h || +check.minute !== mi) return null;
+  return instant;
+}
+
+test("late meals follow local time across random time zones", () => {
+  const fromEnv = process.env.LATE_EATING_SEED;
+  const seed = fromEnv != null && fromEnv !== "" && Number.isFinite(Number(fromEnv))
+    ? Number(fromEnv) >>> 0
+    : Math.floor(Math.random() * 0x7fffffff);
+  console.log("late-eating seed=" + seed);
+  const rnd = mulberry32(seed);
+  const zones = Intl.supportedValuesOf("timeZone");
+  let checked = 0;
+  for (let n = 0; n < 40; n++) {
+    const zone = zones[Math.floor(rnd() * zones.length)];
+    const hour = Math.floor(rnd() * 24);
+    const minute = Math.floor(rnd() * 60);
+    const month = 1 + Math.floor(rnd() * 12);
+    const day = 1 + Math.floor(rnd() * 27);
+    const instant = utcForLocal(2026, month, day, hour, minute, zone);
+    if (!instant) continue;
+    const iso = instant.toISOString();
+    const got = localHour(iso, zone);
+    assert.ok(Math.abs(got - (hour + minute / 60)) < 1e-6, zone + " " + iso + " -> " + got);
+    const late = got >= LATE_HOUR;
+    const extracted = extractDays({
+      foodDays: {
+        "2026-06-15": [{ meal: "dinner", base: { kcal: 1500, p: 50, c: 140, f: 40 }, servings: 1, at: iso }],
+      },
+    }, zone);
+    assert.equal(extracted.days["2026-06-15"].lateEating, late, zone + " " + iso);
+    checked++;
+  }
+  assert.ok(checked >= 30, "checked " + checked);
+});
+
+test("food does not explain the same morning's weigh-in", () => {
+  assert.equal(suppressedStory({ id: "calories:median", source: "calories" }, "weight", 0, null), true);
+  assert.equal(suppressedStory({ id: "lateEating" }, "weight", 0, null), true);
+  assert.equal(suppressedStory({ id: "proteinOverTarget" }, "weight", 0, null), true);
+  assert.equal(suppressedStory({ id: "calories:median", source: "calories" }, "weight", 1, null), false);
+  assert.equal(suppressedStory({ id: "workedOut" }, "weight", 0, null), false);
+
+  const same = fill(28, (i) => ({
+    calories: i % 2 === 0 ? 3200 : 1800,
+    protein: 140,
+    weight: i % 2 === 0 ? 82 : 80,
+  }));
+  assert.equal(correlate({ days: same }, { weightDir: "gain" }).some((r) => r.source === "calories" && r.outcome === "weight" && r.lag === 0), false);
+
+  const next = fill(28, (i) => {
+    const row = { calories: i % 2 === 0 ? 3200 : 1800, protein: 140 };
+    if (i > 0) row.weight = (i - 1) % 2 === 0 ? 82 : 80;
+    return row;
+  });
+  const rows = correlate({ days: next }, { weightDir: "gain" });
+  assert.equal(rows.some((r) => r.source === "calories" && r.outcome === "weight" && r.lag === 0), false);
+  assert.ok(rows.some((r) => r.source === "calories" && r.outcome === "weight" && r.lag === 1));
+});
+
+test("days with no log are missing, not rest days", () => {
+  const { days } = extractDays({
+    sessions: [
+      { date: "2026-04-01", finishedAt: "2026-04-01T18:00:00", workoutId: "push", name: "Push", entries: [{ sets: [{ w: 100, r: 5 }] }] },
+      { date: "2026-04-04", finishedAt: "2026-04-04T18:00:00", workoutId: "pull", name: "Pull", entries: [{ sets: [{ w: 80, r: 5 }] }] },
+    ],
+    oura: { "2026-04-02": { readiness: 70, total: 7 * 3600 } },
+  });
+  assert.equal(days["2026-04-01"].workedOut, true);
+  assert.equal(days["2026-04-02"].workedOut, false);
+  assert.equal(days["2026-04-02"].didCardio, false);
+  assert.equal(days["2026-04-03"], undefined);
+  assert.equal(days["2026-04-04"].workedOut, true);
+});
+
+test("one snack is not a low-calorie day", () => {
+  const { days } = extractDays({
+    foodDays: {
+      "2026-05-01": [{ meal: "snacks", base: { kcal: 180, p: 5, c: 20, f: 6 }, servings: 1, at: "2026-05-01T15:00:00" }],
+      "2026-05-02": [{ meal: "lunch", base: { kcal: 2200, p: 120, c: 200, f: 70 }, servings: 1, at: "2026-05-02T12:00:00" }],
+      "2026-05-03": [
+        { meal: "breakfast", base: { kcal: 300, p: 20, c: 30, f: 10 }, servings: 1 },
+        { meal: "dinner", base: { kcal: 400, p: 30, c: 40, f: 12 }, servings: 1 },
+      ],
+    },
+  });
+  assert.equal(days["2026-05-01"], undefined);
+  assert.equal(days["2026-05-02"].calories, 2200);
+  assert.equal(days["2026-05-03"].calories, 700);
+});
+
+test("extreme values are dropped before a comparison", () => {
+  assert.equal(plausibleValue("calories", 9999), null);
+  assert.equal(plausibleValue("calories", 2400), 2400);
+  assert.equal(plausibleValue("readiness", 0), null);
+  assert.equal(plausibleValue("sleepHours", 20), null);
+  assert.equal(plausibleValue("weight", 999), null);
+  const raw = fill(16, (i) => ({
+    calories: i === 4 ? 9999 : 2400,
+    readiness: 70 + (i % 3),
+    weight: i === 2 ? 999 : 80,
+  }));
+  const cleaned = detrendDays(sanitizeDays(raw));
+  assert.equal(cleaned[dateAt(4)].calories, undefined);
+  assert.equal(cleaned[dateAt(2)].weight, undefined);
+  assert.ok(cleaned[dateAt(0)].calories != null);
+  const blob = extractDays({
+    foodDays: {
+      "2026-06-01": [{ meal: "dinner", base: { kcal: 9999, p: 10, c: 10, f: 10 }, servings: 1 }],
+      "2026-06-02": [{ meal: "dinner", base: { kcal: 2400, p: 150, c: 200, f: 70 }, servings: 1 }],
+    },
+    oura: { "2026-06-01": { readiness: 0, total: 20 * 3600, hrv: 0, sleepScore: 0 } },
+  });
+  assert.equal(blob.days["2026-06-01"], undefined);
+  assert.equal(blob.days["2026-06-02"].calories, 2400);
+  const rows = correlate({ days: raw });
+  assert.equal(rows.some((r) => r.source === "calories" && r.meanWith > 5000), false);
+});
+
+test("a headline needs the same bar as a card, or it says so far", () => {
+  assert.equal(claimSupported([1, 2, 3], [8, 9, 10]), false);
+  assert.equal(claimSupported(Array(8).fill(1), Array(8).fill(1)), false);
+  assert.equal(claimSupported(Array(8).fill(0), Array(8).fill(4)), true);
+  assert.match(
+    app.compareSentence(
+      [{ n: 3, avg: 0 }, { n: 3, avg: 5 }],
+      "on 85+ readiness days",
+      "on days under 70",
+    ),
+    /^So far, you lift about 5\.0% stronger/,
+  );
+  assert.match(
+    app.compareSentence(
+      [
+        { n: 8, avg: 0, values: Array(8).fill(0) },
+        { n: 8, avg: 5, values: Array(8).fill(5) },
+      ],
+      "on 85+ readiness days",
+      "on days under 70",
+    ),
+    /^You lift about 5\.0% stronger/,
+  );
+
+  const prev = { today: app.today, addDays: app.addDays, parseDay: app.parseDay };
+  app.today = () => "2026-06-01";
+  app.addDays = addDays;
+  app.parseDay = (s) => new Date(s + "T12:00:00Z");
+  try {
+    const rising = [];
+    for (let i = 0; i < 4; i++) rising.push({ date: addDays("2026-05-01", i * 3), v: 100 + i * 5 });
+    const early = app.liftStatus(rising);
+    assert.equal(early.cls, "wait");
+    assert.match(early.label, /Collecting data \(4\/7\)/);
+    const steady = [];
+    for (let i = 0; i < 8; i++) steady.push({ date: addDays("2026-04-01", i * 3), v: 100 + i * 2 });
+    const later = app.liftStatus(steady);
+    assert.equal(later.significant, true);
+    assert.equal(later.label, "Progressing");
+  } finally {
+    app.today = prev.today;
+    app.addDays = prev.addDays;
+    app.parseDay = prev.parseDay;
+  }
+});
+
+test("the weight trend stays quiet until five weigh-ins span 14 days", () => {
+  const early = [
+    { date: "2026-09-01", kg: 80 },
+    { date: "2026-09-10", kg: 81 },
+    { date: "2026-09-20", kg: 82 },
+  ];
+  const thin = weightTrend(early, "2026-09-20");
+  assert.equal(thin.ready, false);
+  assert.equal(thin.phrase, "too early to tell");
+  const shortSpan = [];
+  for (let i = 0; i < 5; i++) shortSpan.push({ date: addDays("2026-09-01", i * 2), kg: 80 + i * 0.2 });
+  assert.equal(weightTrend(shortSpan, "2026-09-09").ready, false);
+  const enough = [];
+  for (let i = 0; i < 5; i++) enough.push({ date: addDays("2026-09-01", i * 4), kg: 80 + i * 0.3 });
+  const trend = weightTrend(enough, "2026-09-17");
+  assert.equal(trend.ready, true);
+  assert.ok(trend.perWeekKg > 0);
+  assert.equal(trend.last.kg, 81.2);
 });

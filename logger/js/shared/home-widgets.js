@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { correlate, pickForToday, todayLine } from "./correlate.js";
+import { correlate, pickForToday, todayLine, weightTrend } from "./correlate.js";
 
 /* Home widget registry.
    Painting is per user: homeRegistryActive is true only for a stored homeV2
@@ -161,21 +161,13 @@ function fmtWeight(kg) {
 }
 
 function weightModel(list, today) {
-  const rows = [...(list || [])].filter((x) => x && x.date && x.kg != null).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const rows = [...(list || [])].filter((x) => x && x.date && x.kg != null);
   if (!rows.length) return { empty: true };
-  const last = rows[rows.length - 1];
+  const trend = weightTrend(rows, today);
+  const last = trend.last || rows[rows.length - 1];
   const shown = fmtWeight(last.kg);
-  const recent = rows.filter((x) => x.date >= addDays(today, -28));
-  if (recent.length < 3) return { empty: false, value: shown, sub: "Need a few more over 10 days" };
-  const t0 = Date.parse(recent[0].date + "T12:00:00");
-  const xs = recent.map((x) => (Date.parse(x.date + "T12:00:00") - t0) / 86400000);
-  const ys = recent.map((x) => x.kg);
-  if (xs[xs.length - 1] - xs[0] < 10) return { empty: false, value: shown, sub: "Need a few more over 10 days" };
-  const mx = xs.reduce((a, x) => a + x, 0) / xs.length;
-  const my = ys.reduce((a, y) => a + y, 0) / ys.length;
-  const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0) || 1;
-  const perWeekKg = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / den * 7;
-  const perWeek = typeof app.kgToDisp === "function" ? app.kgToDisp(perWeekKg) : perWeekKg;
+  if (!trend.ready) return { empty: false, value: shown, sub: "Too early to tell" };
+  const perWeek = typeof app.kgToDisp === "function" ? app.kgToDisp(trend.perWeekKg) : trend.perWeekKg;
   return { empty: false, value: `${signed(perWeek, 1)} ${weightUnit()}/wk`, sub: `Last ${shown}` };
 }
 

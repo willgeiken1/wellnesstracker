@@ -81,6 +81,17 @@ test("comparisons use logged days only, and a lower resting heart rate is an imp
   assert.ok(Math.abs(report.metrics.sleepHours.mean - (8 + 7.5 + 6) / 3) < 1e-9);
   assert.equal(report.weight, null);
   assert.equal(report.empty, false);
+  assert.equal(report.metrics.readiness.supported, false);
+  assert.equal(report.headline, "Readiness was up so far.");
+});
+
+test("a full week on both sides can say readiness was up", () => {
+  const oura = {};
+  for (let i = 0; i < 7; i++) oura[addDays("2026-09-21", i)] = { readiness: 70 };
+  for (let i = 0; i < 7; i++) oura[addDays("2026-09-28", i)] = { readiness: 82 };
+  const report = buildWeek({ oura }, "2026-09-28");
+  assert.equal(report.metrics.readiness.n, 7);
+  assert.equal(report.metrics.readiness.supported, true);
   assert.equal(report.headline, "Readiness was up.");
 });
 
@@ -217,8 +228,8 @@ test("the weekly report stays on the device and opens with an empty analytics ev
   const html = readFileSync(new URL("../logger/index.html", import.meta.url), "utf8");
   assert.match(events, /weekly_report_opened:\s*\(\)\s*=>\s*\(\{\}\)/);
   assert.match(actions, /capture\("weekly_report_opened"\)/);
-  assert.match(sw, /insight-shell-v37/);
-  assert.match(sentry, /insight-shell-v37/);
+  assert.match(sw, /insight-shell-v38/);
+  assert.match(sentry, /insight-shell-v38/);
   assert.match(weekly, /kgToDisp/);
   assert.match(weekly, /week-lead/);
   assert.match(sw, /js\/shared\/weekly\.js/);
