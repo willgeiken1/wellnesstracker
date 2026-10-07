@@ -29,6 +29,7 @@ import {
   SEE_ALL_LIMIT,
   splitFindings,
   STORY_CAP,
+  UNFAVORABLE_MARK,
   storyKey,
   studentP,
   suppressedStory,
@@ -728,23 +729,22 @@ test("the first screen allows 2 cards per outcome, 3 per family, 1 per story", (
   Object.values(byStory).forEach((n) => assert.equal(n, 1));
   assert.ok(new Set(top.map((r) => r.outcome)).size >= 3);
   assert.deepEqual(listed, top.concat(more));
+  assert.equal(STORY_CAP, 1);
   const seen = {};
-  let overflowAt = listed.length;
-  listed.forEach((r, i) => {
+  listed.forEach((r) => {
     const story = storyKey(r);
     seen[story] = (seen[story] || 0) + 1;
-    if (seen[story] > STORY_CAP && overflowAt === listed.length) overflowAt = i;
+    assert.equal(seen[story], 1);
+    const covered = new Set([r.factor, ...(r.folded || []).map((x) => x.factor)]);
+    rows.filter((x) => storyKey(x) === story).forEach((x) => assert.ok(covered.has(x.factor)));
   });
-  listed.slice(0, overflowAt).forEach((r) => {
-    const n = listed.slice(0, overflowAt).filter((x) => storyKey(x) === storyKey(r)).length;
-    assert.ok(n <= STORY_CAP);
-  });
-  // Nothing is dropped. liftPerf spans several families, and the sleep story
-  // keeps every high row, with the extras after the cap.
+  // liftPerf still spans several families. Each family is one card, and the
+  // sleep story keeps its strongest factor and folds the rest.
   assert.ok(listed.filter((r) => r.outcome === "liftPerf").length > OUTCOME_CAP);
   const sleep = listed.filter((r) => r.outcome === "liftPerf" && factorFamily(r) === "sleep");
-  assert.ok(sleep.length > STORY_CAP);
-  assert.equal(listed.length, rows.length);
+  assert.equal(sleep.length, 1);
+  assert.ok(sleep[0].folded && sleep[0].folded.length > 0);
+  assert.ok(listed.length < rows.length);
 });
 
 function hrvRow(factor, source, strength, extra) {
@@ -760,12 +760,14 @@ test("late eating, fat and carbs pulling HRV down are one story", () => {
   assert.equal(new Set(rows.map(storyKey)).size, 1);
   const { top, more } = splitFindings(rows);
   const listed = listFindings(rows);
-  assert.equal(listed.length, rows.length);
-  assert.deepEqual(listed.map((r) => r.factor), ["lateEating", "carbs:median", "fat:median"]);
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].factor, "lateEating");
+  assert.deepEqual((listed[0].folded || []).map((r) => r.factor), ["carbs:median", "fat:median"]);
   assert.equal(top.length, 1);
   assert.equal(top[0].factor, "lateEating");
-  assert.deepEqual(more.map((r) => r.factor), ["carbs:median", "fat:median"]);
+  assert.deepEqual(more, []);
   assert.deepEqual(listed, top.concat(more));
+  assert.deepEqual(listFindings(rows.slice().reverse()).map((r) => r.factor), ["lateEating"]);
 });
 
 test("a weaker high finding is kept ahead of stronger mediums in the same story", () => {
@@ -778,9 +780,9 @@ test("a weaker high finding is kept ahead of stronger mediums in the same story"
   const listed = listFindings(rows);
   assert.equal(top[0].factor, "carbs:median");
   assert.equal(top[0].confidence, "high");
-  assert.ok(listed.some((r) => r.factor === "carbs:median"));
-  assert.ok(more.some((r) => r.factor === "lateEating" || r.factor === "fat:median"));
-  assert.equal(listed.length, 3);
+  assert.equal(listed.length, 1);
+  assert.deepEqual(more, []);
+  assert.deepEqual((listed[0].folded || []).map((r) => r.factor), ["lateEating", "fat:median"]);
   assert.deepEqual(listFindings(rows.slice().reverse()).map((r) => r.factor), listed.map((r) => r.factor));
 });
 
@@ -807,7 +809,9 @@ test("splitFindings never pads the first screen with cap-breaking rows", () => {
   const { top, more } = splitFindings(rows);
   assert.ok(top.length < DISPLAY_LIMIT);
   assert.deepEqual(top.map((r) => r.factor), ["lateEating", "sleepHours:median"]);
-  assert.deepEqual(more.map((r) => r.factor), ["steps:median", "fat:median", "deepHours:median"]);
+  assert.deepEqual((top[0].folded || []).map((r) => r.factor), ["fat:median"]);
+  assert.deepEqual((top[1].folded || []).map((r) => r.factor), ["deepHours:median"]);
+  assert.deepEqual(more.map((r) => r.factor), ["steps:median"]);
   assert.deepEqual(listFindings(rows), top.concat(more));
   assert.deepEqual(splitFindings([]), { top: [], more: [] });
 });
@@ -818,9 +822,11 @@ test("ties are broken by name, so input order does not matter", () => {
   const c = hrvRow("steps:median", "steps", 50, { lag: 0 });
   const d = hrvRow("steps:median", "steps", 50);
   const order = (rows) => listFindings(rows).map((r) => r.outcome + "|" + r.factor + "|" + r.lag);
-  const want = ["hrv|sleepHours:median|1", "hrv|steps:median|0", "rhr|lateEating|1", "hrv|steps:median|1"];
+  const want = ["hrv|sleepHours:median|1", "hrv|steps:median|0", "rhr|lateEating|1"];
   assert.deepEqual(order([a, b, c, d]), want);
   assert.deepEqual(order([d, c, b, a]), want);
+  const steps = listFindings([a, b, c, d]).find((r) => r.factor === "steps:median");
+  assert.deepEqual((steps.folded || []).map((r) => r.lag), [1]);
   const strong = hrvRow("deepHours:median", "deepHours", 51, { outcome: "rhr", factor: "zzz" });
   assert.equal(listFindings([a, strong])[0], strong);
 });
@@ -849,8 +855,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v41/);
-  assert.match(sentry, /insight-shell-v41/);
+  assert.match(sw, /insight-shell-v44/);
+  assert.match(sentry, /insight-shell-v44/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /SEE_ALL_LIMIT/);
   assert.match(engine, /mergeMirrors/);
@@ -869,8 +875,12 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.doesNotMatch(brief, /app\.affectsEmpty\(/);
   assert.doesNotMatch(brief, /No pattern is strong enough to trust yet/);
   assert.match(brief, /Nothing clear yet/);
-  assert.match(brief, /See Insights/);
+  assert.match(brief, /Possible patterns, see Insights/);
   assert.match(brief, /brief-l">Patterns</);
+  assert.match(insights, /A habit started and kept for a month won't produce a finding/);
+  assert.equal(UNFAVORABLE_MARK, "Not your better days");
+  assert.match(insights, /UNFAVORABLE_MARK/);
+  assert.doesNotMatch(insights + brief, /Working against you/);
   const correlateImport = brief.match(/import\s*\{([^}]+)\}\s*from\s*"\.\/correlate\.js"/);
   assert.ok(correlateImport, "brief imports from correlate.js");
   for (const name of ["DAYS_FOR_A_PATTERN", "loggedDays", "pickForToday", "todayLine", "findingsForView"]) {
@@ -1107,7 +1117,10 @@ test("the brief shows only a high-confidence finding", () => {
   const picked = pickForToday([medium, high], { days }, dateAt(2));
   assert.equal(picked.confidence, "high");
   assert.ok(picked.q <= 0.001);
-  assert.equal(listFindings([medium, high]).some((r) => r.confidence === "medium"), true);
+  const listed = listFindings([medium, high]);
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].confidence, "high");
+  assert.equal(listed[0].folded[0].confidence, "medium");
 });
 
 test("line reflection keeps a flat series flat, removes a slope, and leaves noisy ends unamplified", () => {

@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, addDays, claimSupported, findingsForView, loggedDays, pickForToday, todayLine, weightTrend } from "./correlate.js";
+import { DAYS_FOR_A_PATTERN, UNFAVORABLE_MARK, addDays, claimSupported, findingsForView, loggedDays, pickForToday, todayLine, weightTrend } from "./correlate.js";
 import { hasOura } from "./oura-gate.js";
 import { homeCardShowing, readinessCardShowing } from "./home-defaults.js";
 
@@ -215,7 +215,7 @@ function patternEmpty(days, rows) {
   return {
     id: "pattern",
     label: "What affects you",
-    value: seeInsights ? "See Insights" : (n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet"),
+    value: seeInsights ? "Possible patterns, see Insights" : (n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet"),
     empty: true,
     link: "affects",
   };
@@ -238,7 +238,7 @@ function patternMetric() {
   const good = row.valence === "good";
   return {
     id: "pattern",
-    label: good ? "Good for you" : "Worth watching",
+    label: good ? "Good for you" : UNFAVORABLE_MARK,
     value: line,
     meta: "What affects you",
     tone: good ? "up" : "down",
@@ -250,8 +250,8 @@ function briefMetrics() {
   const byId = { pattern: patternMetric(), oura: ouraMetric(), train: trainMetric(), food: foodMetric(), week: weekMetric(), weight: weightMetric() };
   const prefs = app.briefPrefs();
   const rows = prefs.order.filter((id) => !prefs.hidden.includes(id)).map((id) => byId[id]).filter(Boolean);
-  /* In compact mode an empty "What affects you" slot has nothing to say, so it goes last. */
-  if (prefs.size === "compact") rows.sort((a, b) => (a.id === "pattern" && a.empty ? 1 : 0) - (b.id === "pattern" && b.empty ? 1 : 0));
+  /* Compact has no room for an empty "What affects you" slot. Expanded still shows it. */
+  if (prefs.size === "compact") return rows.filter((m) => !(m.id === "pattern" && m.empty));
   return rows;
 }
 app.briefMetrics = briefMetrics;
@@ -301,8 +301,9 @@ function metricHTML(m) {
       </button></li>`;
   }
   if (m.link === "affects" && m.empty) {
+    const quiet = m.value === "Possible patterns, see Insights";
     return `<li class="brief-metric span empty" data-metric="${m.id}">
-      <button class="brief-hit" data-action="open-affects"><span class="brief-l">Patterns</span><span class="brief-line">${app.esc(m.value)}</span></button></li>`;
+      <button class="brief-hit" data-action="open-affects">${quiet ? "" : `<span class="brief-l">Patterns</span>`}<span class="brief-line">${app.esc(m.value)}</span></button></li>`;
   }
   if (m.link === "affects") {
     return `<li class="brief-metric span${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">

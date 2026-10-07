@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, UNFAVORABLE_MARK, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
 import { needsSleepRecovery, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import "./insight-widgets.js";
 
@@ -73,7 +73,7 @@ app.insightsWrapHTML = insightsWrapHTML;
 
 function affectsCard(r) {
   const tone = r.valence === "good" ? "good" : r.valence === "bad" ? "bad" : "neutral";
-  const mark = tone === "good" ? "Good for you" : tone === "bad" ? "Worth watching" : "Just a pattern";
+  const mark = tone === "good" ? "Good for you" : tone === "bad" ? UNFAVORABLE_MARK : "Just a pattern";
   const conf = r.confidence === "high" ? "High confidence" : "Medium confidence";
   const hi = r.confidence === "high" ? " hi" : "";
   return `<article class="card aff-card ${tone}">
@@ -110,14 +110,14 @@ function affectsHTML() {
     picked = pickForToday(rows, src, app.today());
     ({ top, more } = splitFindings(rows, src, app.today()));
   } catch (e) { top = []; more = []; }
-  const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes.</p>`;
+  const note = `<p class="sub aff-note">These line up what tends to happen together. They are correlations, not causes. A habit started and kept for a month won't produce a finding, because there is no other kind of day to compare it with.</p>`;
   const head = `<div class="sec-h aff-h"><h3>What affects you</h3></div>${note}`;
   if (!top.length && !more.length) {
     const title = days < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet";
     return head + `<div class="card aff-empty"><h4>${title}</h4><p class="sub">${affectsEmpty(days)}</p></div>`;
   }
   const open = !!app.ui.affectsAll;
-  // listFindings(rows) is top.concat(more). The brief's pick stays in See all even past the cap.
+  // listFindings(rows) is top.concat(more). One story is one card. The brief's pick is that card when the story is the one on the brief.
   let all = top.concat(more);
   const want = findingKey(picked);
   if (want && !all.some((r) => findingKey(r) === want)) all = all.concat(picked);
@@ -230,7 +230,7 @@ function insightsHTML(embedded) {
       <div class="pp"><div class="pp-bar"><i style="width:${push + pull ? push / (push + pull) * 100 : 50}%"></i></div>
       <div class="pp-l"><span>Push ${push.toFixed(0)} sets/wk</span><span>Pull ${pull.toFixed(0)} sets/wk</span></div></div></div>
     ${app.trendWidgetsHTML()}
-    <!--w:end--><p class="hint">These patterns show what tends to go together in your data, not proof of what causes what. They get more reliable the more you log.</p>`);
+    <!--w:end--><p class="hint">These patterns show what tends to go together in your data, not proof of what causes what. They get more reliable the more you log. A habit started and kept for a month won't produce a finding, because there is no other kind of day to compare it with.</p>`);
 }
 app.insightsHTML = insightsHTML;
 

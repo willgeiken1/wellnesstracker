@@ -15,6 +15,7 @@
 .hw-sub { margin: 3px 0 0; color: #C9C9CF; font-size: 13px; line-height: 1.4; }
 :root[data-mode="light"] .hw-sub { color: #5A5C60; }
 .hw-line { margin: 3px 0 0; color: var(--text); font-weight: 600; font-size: 15px; line-height: 1.4; letter-spacing: -.015em; }
+.hw-quiet .hw-line { color: var(--muted); font-weight: 600; }
 .hw-h { margin: 6px 0 0; font-family: var(--display); font-weight: 600; font-size: 22px; letter-spacing: -.03em; line-height: 1.15; }
 .hw-hit {
   display: grid;

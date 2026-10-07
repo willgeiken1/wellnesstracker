@@ -256,30 +256,34 @@ test("the brief and the Readiness card give the same advice", () => {
   } finally { restoreApp(); }
 });
 
-test("the empty Your week card is hidden, and What affects you moves last in compact", () => {
+test("the empty Your week card is hidden, and an empty What affects you stays off the compact brief", () => {
   try {
     stubApp(account());
     assert.equal(app.weekCardHTML(), "", "a new user has no Your week card");
     const v = legacyView(account({ layout: { home: { order: [], hidden: ["today"] } } }));
     const order = [...v.brief.matchAll(/data-metric="([a-z]+)"/g)].map((m) => m[1]);
-    assert.equal(order[order.length - 1], "pattern");
+    assert.equal(order.includes("pattern"), false);
     const roomy = account({ brief: { order: ["pattern", "train", "food", "week", "weight"], hidden: [], size: "expanded" }, layout: { home: { order: [], hidden: ["today"] } } });
     const e = legacyView(roomy);
     assert.equal([...e.brief.matchAll(/data-metric="([a-z]+)"/g)][0][1], "pattern");
+    assert.match(e.brief, /A couple more weeks|Nothing clear yet|Possible patterns, see Insights/);
   } finally { restoreApp(); }
 });
 
 test("the pattern wording is neutral", () => {
   const brief = readFileSync(new URL("../logger/js/shared/brief.js", import.meta.url), "utf8");
   const widgets = readFileSync(new URL("../logger/js/shared/home-widgets.js", import.meta.url), "utf8");
-  assert.match(brief, /Worth watching/);
-  assert.doesNotMatch(brief + widgets, /Working against you/);
+  const insights = readFileSync(new URL("../logger/js/pages/insights.js", import.meta.url), "utf8");
+  const weekly = readFileSync(new URL("../logger/js/shared/weekly.js", import.meta.url), "utf8");
+  assert.match(brief, /UNFAVORABLE_MARK/);
+  assert.match(brief, /Possible patterns, see Insights/);
+  assert.doesNotMatch(brief + widgets + insights + weekly, /Working against you|Worth watching/);
 });
 
-test("the shell caches the defaults module on the v41 release", () => {
+test("the shell caches the defaults module on the v44 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /const CACHE = "insight-shell-v41"/);
+  assert.match(sw, /const CACHE = "insight-shell-v44"/);
   assert.match(sw, /const STAGE = CACHE \+ "-next"/);
   assert.doesNotMatch(sw, /insight-shell-v30"/);
 });
