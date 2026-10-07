@@ -397,16 +397,20 @@ function foodSavedSheetHTML() {
 }
 app.foodSavedSheetHTML = foodSavedSheetHTML;
 
+const BC_SERVINGS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
+
 function foodBarcodeSheetHTML() {
   if (app.ui.sd.product) {
-    const p = app.ui.sd.product, unit = app.ui.sd.unit || (p.serving ? "serving" : "g"), amt = app.ui.sd.amt || (unit === "serving" ? "1" : "100");
+    const p = app.ui.sd.product, unit = app.ui.sd.unit || (p.serving ? "serving" : "g");
+    const servingAmt = parseFloat(app.ui.sd.amt);
+    const amt = unit === "serving" ? (BC_SERVINGS.includes(servingAmt) ? servingAmt : 1) : app.ui.sd.amt || "100";
     const per = unit === "serving" ? p.serving : p.per100, mult = unit === "serving" ? (parseFloat(amt) || 0) : (parseFloat(amt) || 0) / 100;
     const x = { kcal: per.kcal * mult, p: per.p * mult, c: per.c * mult, f: per.f * mult };
     return `<h3>${app.esc(p.name)}</h3>${p.brand ? `<p class="sub" style="margin:-6px 0 12px">${app.esc(p.brand)}</p>` : ""}
       <div class="seg2 pf-seg">${p.serving ? `<button data-action="bc-unit" data-u="serving" aria-pressed="${unit === "serving"}">Servings${p.servingLabel ? ` (${app.esc(p.servingLabel)})` : ""}</button>` : ""}
         <button data-action="bc-unit" data-u="g" aria-pressed="${unit === "g"}">Grams</button></div>
       <label class="field-label" for="bc-amt">${unit === "serving" ? "How many servings" : "How many grams"}</label>
-      <input class="text-in" id="bc-amt" inputmode="decimal" value="${app.esc(amt)}">
+      ${unit === "serving" ? `<select class="text-in" id="bc-amt">${BC_SERVINGS.map((n) => `<option value="${n}"${n === amt ? " selected" : ""}>${n}×</option>`).join("")}</select>` : `<input class="text-in" id="bc-amt" inputmode="decimal" value="${app.esc(amt)}">`}
       <div class="fr-total"><b>${app.r0(x.kcal)} cal</b><span>P ${app.r0(x.p)} · C ${app.r0(x.c)} · F ${app.r0(x.f)}</span></div>
       <label class="swap-keep"><input type="checkbox" id="food-fav"> Save as a favorite</label>
       <button class="btn primary block" data-action="bc-save">Add to ${app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1]}</button>
