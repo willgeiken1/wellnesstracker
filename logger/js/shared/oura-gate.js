@@ -56,10 +56,19 @@ function dayBag(days) {
   return Object.keys(days).some((key) => days[key] && typeof days[key] === "object");
 }
 
-/* Demo counts as ready. A connected ring with no stored day does not. */
+/* API 403 is stored as membership_inactive. The connection row stays, and so do
+   old days. Those days are not a live ring. */
+export function ouraMembershipInactive(state) {
+  const err = state && state.oura && state.oura.lastError;
+  return typeof err === "string" && err.toLowerCase().includes("membership_inactive");
+}
+
+/* Demo counts as ready. A connected ring with no stored day does not.
+   A lapsed membership does not, even when old days are still on the phone. */
 export function ouraReady(state) {
   if (!state) return false;
   if (state.demo) return true;
+  if (ouraMembershipInactive(state)) return false;
   if (dayBag(state.oura && state.oura.days)) return true;
   if (typeof app.src === "function") {
     try {
@@ -71,7 +80,8 @@ export function ouraReady(state) {
 }
 
 /* Ids Home should paint. hidden is the person's list.
-   needsOura drops out with no ring, no demo, or a ring that has not synced a day.
+   needsOura drops out with no ring, no demo, a ring that has not synced a day,
+   or a lapsed membership (membership_inactive) even when old days are stored.
    items and hidden are guarded because a v2 layout can omit them. */
 export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
   const layout = getHomeLayout(state);
@@ -85,6 +95,26 @@ export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
     if (widget && widget.needsOura && !oura) return false;
     return true;
   });
+}
+
+/* One notice when Oura tiles are withheld because the membership lapsed.
+   Demo keeps its sample tiles. An edited Home that never asked for Oura stays quiet.
+   The legacy Home lost its Readiness card, so the notice stands in for it. */
+export function homeOuraReconnect(state) {
+  if (!state || state.demo || !ouraMembershipInactive(state)) return false;
+  if (!homeRegistryActive(state)) return true;
+  const layout = getHomeLayout(state);
+  const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
+  const items = Array.isArray(layout.items) ? layout.items : [];
+  return items.some((id) => {
+    const widget = HOME_WIDGETS[id];
+    return !!(widget && widget.needsOura && !hidden.has(id));
+  });
+}
+
+export function homeOuraReconnectHTML(state) {
+  if (!homeOuraReconnect(state)) return "";
+  return `<div class="card oura-nudge"><div><h4>Reconnect Oura</h4><p class="sub">Sleep and readiness stay off Home until the membership is active again.</p></div><button class="btn small" data-action="oura-connect">Reconnect</button></div>`;
 }
 
 /* One line on Home when the layout wants Oura cards and the ring has no days yet. */

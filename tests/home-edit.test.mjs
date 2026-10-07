@@ -73,6 +73,10 @@ test("gallery hides Oura cards without a ring or sample data", () => {
   });
   const ring = galleryEntries(draft, { ...NO_RING(), oura: { connected: true } }, "").map((e) => e.id);
   assert.ok(ring.includes("readiness") && ring.includes("last-night"));
+  const lapsed = galleryEntries(draft, { ...NO_RING(), oura: { connected: true, lastError: "membership_inactive" } }, "").map((e) => e.id);
+  IDS.forEach((id) => {
+    assert.equal(lapsed.includes(id), !HOME_WIDGETS[id].needsOura, id);
+  });
   assert.equal(galleryEntries(draft, DEMO(), "").length, IDS.length);
 });
 

@@ -1,11 +1,12 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
-import { needsSleepRecovery, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
+import { needsSleepRecovery, ouraMembershipInactive, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
 /* ---------- Screens ---------- */
 function readinessCardHTML() {
+  if (ouraMembershipInactive(app.state)) return "";
   const o = app.latestOura(app.src().oura);
   if (!o) return "";
   const lv = app.readinessLevel(o.readiness);
