@@ -294,7 +294,7 @@ document.addEventListener("input", (ev) => {
   if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
   if (el.dataset.cf && app.ui.sheet === "cardio-log") { app.updateLogTotals(); return; }
   if (el.id === "food-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#food-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
-  if (el.id === "bc-amt") { app.ui.sd.amt = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#bc-amt"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  if (el.id === "bc-amt") { app.ui.sd.amt = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#bc-amt"); if (n) { n.focus(); if (n.tagName === "INPUT") n.setSelectionRange(pos, pos); } return; }
   if (el.dataset.pf) { app.ui.pf[el.dataset.pf] = el.value; return; }
   if (el.id === "wi-v") { app.ui.sd.v = el.value; return; }
   if (el.id === "wi-d") { app.ui.sd.d = el.value; return; }
