@@ -75,19 +75,69 @@ function finishSession(s, quiet) {
 }
 app.finishSession = finishSession;
 
-function stepPair(i, d, wf, rf, bw) {
+function stepPair(i, d, wf, rf, bw, hint) {
+  const ph = (field, fallback) => {
+    const h = hint && hint[field];
+    return h ? app.esc(h) : fallback;
+  };
+  const kind = (field) => (field === "r" || field === "rR") ? "reps" : "weight";
   return `<div class="steppers">
         <div class="stepper"><label for="${wf}-${i}">Weight (${app.wUnit()})</label><div class="step-row">
           <button data-action="step" data-field="${wf}" data-d="-${app.wStep()}" data-i="${i}" aria-label="Weight minus ${app.wStep()}">−</button>
-          <input id="${wf}-${i}" data-field="${wf}" data-i="${i}" inputmode="decimal" autocomplete="off" placeholder="${bw ? "BW" : "0"}" value="${app.esc(d[wf] || "")}">
+          <input id="${wf}-${i}" data-field="${wf}" data-i="${i}" ${app.setNumAttrs(kind(wf))} placeholder="${ph(wf, bw ? "BW" : "0")}" value="${app.esc(d[wf] || "")}">
           <button data-action="step" data-field="${wf}" data-d="${app.wStep()}" data-i="${i}" aria-label="Weight plus ${app.wStep()}">+</button></div></div>
         <div class="stepper"><label for="${rf}-${i}">Reps</label><div class="step-row">
           <button data-action="step" data-field="${rf}" data-d="-1" data-i="${i}" aria-label="Reps minus 1">−</button>
-          <input id="${rf}-${i}" data-field="${rf}" data-i="${i}" inputmode="numeric" autocomplete="off" placeholder="0" value="${app.esc(d[rf] || "")}">
+          <input id="${rf}-${i}" data-field="${rf}" data-i="${i}" ${app.setNumAttrs(kind(rf))} placeholder="${ph(rf, "0")}" value="${app.esc(d[rf] || "")}">
           <button data-action="step" data-field="${rf}" data-d="1" data-i="${i}" aria-label="Reps plus 1">+</button></div></div>
       </div>`;
 }
 app.stepPair = stepPair;
+
+/* Strip a bad character in place. Rebuilding the sheet would drop focus and jump the page. */
+function commitSetField(el) {
+  const field = app.setNumberField(el);
+  if (!field) return false;
+  const raw = String(el.value == null ? "" : el.value);
+  const clean = app.sanitizeSetInput(field, raw);
+  if (clean !== raw) {
+    const pos = typeof el.selectionStart === "number" ? el.selectionStart : raw.length;
+    const next = app.sanitizeSetInput(field, raw.slice(0, pos)).length;
+    el.value = clean;
+    if (typeof el.setSelectionRange === "function") {
+      try { el.setSelectionRange(next, next); } catch (e) {}
+    }
+    if (typeof el.scrollLeft === "number") el.scrollLeft = 0;
+  }
+  if (el.dataset && el.dataset.field && el.dataset.i != null && app.activeSession) {
+    const s = app.activeSession();
+    if (s) {
+      const e = app.liveExercises(s)[+el.dataset.i];
+      if (e) app.draftFor(s, e.name)[field] = el.value;
+    }
+  }
+  return true;
+}
+app.commitSetField = commitSetField;
+
+function guardSetFieldKey(ev) {
+  const field = app.setNumberField(ev && ev.target);
+  if (!field || !ev || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+  if (app.setFieldAllowsKey(field, ev.key)) return false;
+  ev.preventDefault();
+  return true;
+}
+app.guardSetFieldKey = guardSetFieldKey;
+
+function guardSetFieldBeforeInput(ev) {
+  const field = app.setNumberField(ev && ev.target);
+  if (!field || !ev || ev.inputType !== "insertText") return false;
+  const data = ev.data == null ? "" : String(ev.data);
+  if (app.sanitizeSetInput(field, data) === data) return false;
+  ev.preventDefault();
+  return true;
+}
+app.guardSetFieldBeforeInput = guardSetFieldBeforeInput;
 
 function logSet(i) {
   const s = app.activeSession(); if (!s) return;
@@ -227,6 +277,7 @@ document.addEventListener("pointerup", app.endDrag);
 document.addEventListener("pointercancel", app.endDrag);
 
 document.addEventListener("keydown", (ev) => {
+  if (app.guardSetFieldKey(ev)) return;
   if (ev.key === "Enter" && (ev.target.id === "authPw" || ev.target.id === "authEmail")) { ev.preventDefault(); app.signIn(app.ui.sd.mode); }
   if (ev.key === "Enter" && ev.target.id === "dlg-in") { ev.preventDefault(); app.closeDialog(true); }
   if (ev.key === "Escape" && !app.$("#dialog").hidden) app.closeDialog(false);
@@ -275,8 +326,11 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "food-fav") app.ui.sd.fav = ev.target.checked;
 });
 
+document.addEventListener("beforeinput", (ev) => { app.guardSetFieldBeforeInput(ev); });
+
 document.addEventListener("input", (ev) => {
   const el = ev.target;
+  if (app.commitSetField(el)) return;
   if (el.id === "exName") { app.ui.sd.name = el.value; return; }
   if (el.id === "authEmail") { app.ui.sd.email = el.value; return; }
   if (el.dataset.fi != null && app.ui.sd.items) {
@@ -298,7 +352,7 @@ document.addEventListener("input", (ev) => {
   if (el.dataset.pf) { app.ui.pf[el.dataset.pf] = el.value; return; }
   if (el.id === "wi-v") { app.ui.sd.v = el.value; return; }
   if (el.id === "wi-d") { app.ui.sd.d = el.value; return; }
-  if (!el.dataset.field || el.dataset.i == null) return;
+  if (!el.dataset.field || el.dataset.i == null || app.setNumberField(el)) return;
   const s = app.activeSession(); if (!s) return;
   const e = app.liveExercises(s)[+el.dataset.i];
   if (e) app.draftFor(s, e.name)[el.dataset.field] = el.value;

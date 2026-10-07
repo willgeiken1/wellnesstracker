@@ -261,7 +261,7 @@ a.set-row { color: var(--text); text-decoration: none; }
 .step-row { display: grid; grid-template-columns: 46px 1fr 46px; height: 56px; background: var(--bg); border-radius: 12px; overflow: hidden; }
 .step-row button { font-size: 26px; color: var(--muted); }
 .step-row button:active { background: var(--raised); color: var(--text); }
-.step-row input { width: 100%; min-width: 0; border: 0; background: transparent; text-align: center; font-family: var(--display); font-weight: 700; font-size: 28px; padding: 0; }
+.step-row input { width: 100%; min-width: 0; border: 0; background: transparent; text-align: center; font-family: var(--display); font-weight: 700; font-size: 28px; padding: 0; overflow: hidden; }
 .step-row input::placeholder { color: #5D646C; }
 .note { width: 100%; margin-top: 12px; height: 48px; border-radius: 12px; border: 0; background: var(--bg); padding: 0 14px; font-size: 16px; }
 .note::placeholder { color: #6E757D; }

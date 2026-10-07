@@ -3,7 +3,7 @@
 // The cache is only the offline fallback. CACHE name changes drop old copies on activate.
 // Cross-origin requests (Sentry and PostHog CDNs and ingest, Supabase, fonts) are not intercepted.
 // The shell still starts if either script cannot be downloaded.
-// v39 is the store readiness release (AI consent sheet, RepDB credit). v38 is the insight accuracy release (#41)
+// v41 is the set-entry release (stable weight and reps typing, empty next set). v40 is the barcode servings dropdown. v39 is the store readiness release (AI consent sheet, RepDB credit). v38 is the insight accuracy release (#41)
 // v37 is the privacy-filter release (#38). v36 is the exercise bank release (#35). v35 is the JM Press release (#33). v34 is the touch QoL release (#30). v33 is the Home edit UX release (#29). v32 is the home QA release (#22). v30 is the home editor release (#20). v31 is #14. v26–v28 are reserved.
 // v27 is the correlation release on main. v29 is the weigh-in delete follow-up.
 // On a slow network (captive portal, lie-fi) a navigation may fall back to the cached page.
@@ -16,7 +16,7 @@
 // The fetch handler never writes the live cache. A refresh is staged in a second cache
 // and copied over only after every shell file is there. The copy overwrites live entries
 // before it drops stale ones, so the live cache is never emptied.
-const CACHE = "insight-shell-v39";
+const CACHE = "insight-shell-v41";
 const STAGE = CACHE + "-next";
 const SHELL = ["./", "./apple-touch-icon.png", "./css/appearance.css", "./css/base.css", "./css/brief.css", "./css/home-widgets.css", "./css/weekly.css", "./css/cardio.css", "./css/food.css", "./css/goals.css", "./css/platform.css", "./css/polish.css", "./css/privacy.css", "./css/progress.css", "./css/session.css", "./css/theme.css", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./index.html", "./js/data/body.js", "./js/data/state.js", "./js/main.js", "./js/pages/cardio.js", "./js/pages/food.js", "./js/pages/goals.js", "./js/pages/home.js", "./js/pages/insights.js", "./js/pages/insight-widgets.js", "./js/pages/privacy.js", "./js/pages/progress.js", "./js/pages/session.js", "./js/pages/settings.js", "./js/pages/workouts.js", "./js/runtime.js", "./js/sentry.js", "./js/sentry-scrub.js", "./js/usage.js", "./js/usage-events.js", "./js/usage-pref.js", "./js/shared/analyze.js", "./js/shared/brief.js", "./js/shared/weekly.js", "./js/shared/cloud.js", "./js/shared/correlate.js", "./js/shared/home-defaults.js", "./js/shared/home-drag.js", "./js/shared/home-edit.js", "./js/shared/home-migrate.js", "./js/shared/home-widgets.js", "./js/shared/oura-gate.js", "./js/shared/icons.js", "./js/shared/muscles.js", "./js/shared/platform.js", "./js/shared/profile.js", "./js/shared/purge.js", "./js/shared/widgets.js", "./js/shell/actions.js", "./js/shell/pager.js", "./js/shell/timer.js", "./js/shell/workout.js", "./manifest.json"];
 
