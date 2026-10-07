@@ -230,6 +230,18 @@ test("missing outcomes and missing factors are skipped, not treated as zero", ()
   // The raw step is 8 versus 2. A 29-day window on 30 days removes most of that level change.
   assert.ok(kept.meanWith > kept.meanWithout);
 
+  const alternate = {};
+  for (let i = 0; i < 30; i++) {
+    const on = i % 2 === 0;
+    const row = { liftPerf: on ? 8 : 2 };
+    if (i < 20) row.sleepHours = on ? 8 : 6;
+    alternate[dateAt(i, "2026-08-01")] = row;
+  }
+  const alt = correlate({ days: alternate }).find((r) => r.source === "sleepHours" && r.outcome === "liftPerf" && r.lag === 0);
+  assert.ok(alt, "daily alternation");
+  assert.ok(alt.nWith + alt.nWithout <= 20);
+  assert.ok(alt.meanWith > alt.meanWithout);
+
   const blank = fill(20, () => ({ workedOut: true }));
   assert.equal(correlate({ days: blank }).length, 0);
 });
@@ -849,8 +861,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v41/);
-  assert.match(sentry, /insight-shell-v41/);
+  assert.match(sw, /insight-shell-v42/);
+  assert.match(sentry, /insight-shell-v42/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /SEE_ALL_LIMIT/);
   assert.match(engine, /mergeMirrors/);
@@ -1203,7 +1215,7 @@ test("replaceState and wipeLogs bump correlationRev", () => {
 
 test("autocorrelation rho 0.7 on untrended data stays quiet", () => {
   const rho = 0.7;
-  const seeds = 24;
+  const seeds = 100;
   const n = 90;
   let shown = 0;
   let high = 0;
@@ -1237,7 +1249,7 @@ test("autocorrelation rho 0.7 on untrended data stays quiet", () => {
   const highRate = high / seeds;
   console.log("rho 0.7 untrended false-finding rate: shown " + rate.toFixed(3) + "/user, high " + highRate.toFixed(3) + "/user, brief " + (briefUsers / seeds).toFixed(3) + " of users, " + seeds + " seeds x " + n + " days");
   assert.ok(rate < 1, "mean shown " + rate);
-  assert.ok(briefUsers / seeds < 0.15, "brief users " + (briefUsers / seeds));
+  assert.ok(briefUsers / seeds < 0.03, "brief users " + (briefUsers / seeds));
 });
 
 function ar1Series(rnd, n, rho, mean, sd) {
@@ -1505,10 +1517,37 @@ test("days with no log are missing, not rest days", () => {
     oura: { "2026-04-02": { readiness: 70, total: 7 * 3600 } },
   });
   assert.equal(days["2026-04-01"].workedOut, true);
-  assert.equal(days["2026-04-02"].workedOut, false);
+  assert.equal(days["2026-04-02"].workedOut, undefined);
+  assert.equal(days["2026-04-02"].readiness, 70);
   assert.equal(days["2026-04-02"].didCardio, false);
   assert.equal(days["2026-04-03"], undefined);
   assert.equal(days["2026-04-04"].workedOut, true);
+});
+
+test("an Oura-only day is not counted as no workout", () => {
+  const { days } = extractDays({
+    sessions: [
+      { date: "2026-04-01", finishedAt: "2026-04-01T18:00:00", workoutId: "push", name: "Push", entries: [{ sets: [{ w: 100, r: 5 }] }] },
+    ],
+    oura: {
+      "2026-04-02": { readiness: 70, total: 7 * 3600, steps: 8000 },
+      "2026-04-03": { readiness: 60, total: 6 * 3600 },
+    },
+    foodDays: {
+      "2026-04-03": [
+        { meal: "lunch", base: { kcal: 700, p: 40, c: 60, f: 20 }, servings: 1 },
+        { meal: "dinner", base: { kcal: 800, p: 45, c: 70, f: 22 }, servings: 1 },
+      ],
+    },
+    cardio: [{ date: "2026-04-04", segments: [{ min: 20 }] }],
+  });
+  assert.equal(days["2026-04-01"].workedOut, true);
+  assert.equal(days["2026-04-02"].workedOut, undefined);
+  assert.equal(days["2026-04-02"].steps, 8000);
+  assert.equal(days["2026-04-03"].workedOut, false);
+  assert.equal(days["2026-04-03"].calories, 1500);
+  assert.equal(days["2026-04-04"].workedOut, false);
+  assert.equal(days["2026-04-04"].didCardio, true);
 });
 
 test("one snack is not a low-calorie day", () => {

@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { FOOD_COMPLETE_KCAL, FOOD_COMPLETE_MEALS, weightTrend } from "../shared/correlate.js";
 
 /* Stall detective, real maintenance, bulk quality, and workout efficiency.
    Numbers come only from logged data. Demo mode reads the sample bundle. */
@@ -14,6 +15,22 @@ function sessions() { return app.src().sessions || []; }
 function weighInsIn() {
   if (app.state.demo) return [...((demoExtra().weighIns) || [])].sort((a, b) => a.date.localeCompare(b.date));
   return app.weighIns();
+}
+
+/* A food day counts only with 2 meals or FOOD_COMPLETE_KCAL, same as correlations. */
+function completeKcal(date) {
+  const entries = app.state.demo ? ((demoExtra().foodDays || {})[date] || []) : (app.dayEntries(date) || []);
+  if (!entries.length) return null;
+  let kcal = 0;
+  const meals = new Set();
+  entries.forEach((e) => {
+    if (!e || !e.base) return;
+    const s = e.servings || 1;
+    kcal += (e.base.kcal || 0) * s;
+    if (e.meal) meals.add(String(e.meal));
+  });
+  if (!(kcal >= FOOD_COMPLETE_KCAL || meals.size >= FOOD_COMPLETE_MEALS)) return null;
+  return kcal;
 }
 
 function totalsOn(date) {
@@ -292,16 +309,25 @@ function maintenanceReport() {
   const end = app.today();
   const start = app.addDays(end, -28);
   const logged = [];
-  eachDate(start, end, (d) => { const t = totalsOn(d); if (t) logged.push(t.kcal); });
-  const wis = weighInsIn().filter((w) => w.date >= start && w.date <= end);
-  const span = wis.length >= 2 ? (app.parseDay(wis[wis.length - 1].date) - app.parseDay(wis[0].date)) / 86400000 : 0;
-  if (logged.length < 14 || wis.length < 3 || span < 14) return { empty: true, days: logged.length, weighIns: wis.length, span };
-  const slope = linSlope(wis, (p) => p.kg);
+  eachDate(start, end, (d) => { const kcal = completeKcal(d); if (kcal != null) logged.push(kcal); });
+  const wis = weighInsIn().filter((w) => w && w.date >= start && w.date <= end);
+  const trend = weightTrend(wis, end);
+  const dates = [];
+  const seen = new Set();
+  wis.forEach((w) => {
+    if (!w || typeof w.kg !== "number" || seen.has(w.date)) return;
+    seen.add(w.date);
+    dates.push(w.date);
+  });
+  dates.sort();
+  const span = dates.length >= 2 ? (app.parseDay(dates[dates.length - 1]) - app.parseDay(dates[0])) / 86400000 : 0;
+  if (logged.length < 14 || !trend.ready) return { empty: true, days: logged.length, weighIns: dates.length, span, scale: trend.ready };
+  const slope = trend.perWeekKg / 7;
   const intake = app.avg(logged);
   const maint = Math.round((intake - slope * 7700) / 10) * 10;
   const auto = app.autoTargets();
   const tdee = auto && auto.basis ? auto.basis.tdee : null;
-  return { empty: false, maint, intake, slope, days: logged.length, weighIns: wis.length, tdee };
+  return { empty: false, maint, intake, slope, days: logged.length, weighIns: dates.length, tdee };
 }
 app.maintenanceReport = maintenanceReport;
 
@@ -324,10 +350,10 @@ function maintenanceHTML() {
   const rep = maintenanceReport();
   const title = "Real maintenance calories";
   if (rep.empty) {
-    const food = rep.days >= 14, scale = rep.weighIns >= 3 && rep.span >= 14;
-    const msg = food && !scale ? "Log weigh-ins on 3+ days over 2 weeks to unlock this."
+    const food = rep.days >= 14, scale = !!rep.scale;
+    const msg = food && !scale ? "Log 5 weigh-ins over 14 days to unlock this."
       : scale && !food ? "Log food on 14+ days in the last month to unlock this."
-      : "Log weigh-ins on 3+ days over 2 weeks, and food on 14+ days, to unlock this.";
+      : "Log 5 weigh-ins over 14 days, and food on 14+ days, to unlock this.";
     return widgetShell(title, `<p class="sub">${msg}</p>`);
   }
   const g = goalAdj();
@@ -342,6 +368,7 @@ function maintenanceHTML() {
     <p class="ins-why">Based on ${app.pl(rep.days, "logged day")} and ${app.pl(rep.weighIns, "weigh-in")}. Unlogged meals make this read low.</p>
     ${apply}`);
 }
+app.maintenanceHTML = maintenanceHTML;
 
 function applyRealMaintenance() {
   if (app.state.demo) { app.toast("Turn off sample data before changing your targets."); return; }
