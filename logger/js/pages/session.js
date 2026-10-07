@@ -388,15 +388,55 @@ function findSetTarget(t) {
 }
 app.findSetTarget = findSetTarget;
 
+/* Weight stays a text field (type=number blanks the value when a space lands).
+   inputmode brings up the keypad; pattern does the same for reps on iOS. */
+export function setNumAttrs(kind) {
+  const reps = kind === "reps";
+  return `type="text" inputmode="${reps ? "numeric" : "decimal"}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"${reps ? ` pattern="[0-9]*"` : ""}`;
+}
+app.setNumAttrs = setNumAttrs;
+
+/* Live logger fields use data-field. The edit sheet uses se-w / se-r ids. */
+export function setNumberField(el) {
+  if (!el || typeof el !== "object") return "";
+  const f = el.dataset && el.dataset.field;
+  if (f === "w" || f === "r" || f === "wR" || f === "rR") return f;
+  const id = el.id || "";
+  if (id === "se-w" || id === "se-r" || id === "se-wR" || id === "se-rR") return id.slice(3);
+  return "";
+}
+app.setNumberField = setNumberField;
+
+/* Drop spaces and other non-digits without touching the saved set.
+   A trailing dot stays so "135." can still become "135.5". */
+export function sanitizeSetInput(field, raw) {
+  let s = String(raw == null ? "" : raw);
+  if (field === "r" || field === "rR") return s.replace(/\D/g, "");
+  s = s.replace(/,/g, ".").replace(/[^\d.]/g, "");
+  const dot = s.indexOf(".");
+  if (dot >= 0) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, "");
+  return s;
+}
+app.sanitizeSetInput = sanitizeSetInput;
+
+export function setFieldAllowsKey(field, key) {
+  const k = String(key == null ? "" : key);
+  if (k.length !== 1) return true;
+  if (k >= "0" && k <= "9") return true;
+  if ((field === "w" || field === "wR") && (k === "." || k === ",")) return true;
+  return false;
+}
+app.setFieldAllowsKey = setFieldAllowsKey;
+
 function seSteppers(wid, rid, x) {
   return `<div class="steppers">
       <div class="stepper"><label for="${wid}">Weight (${app.wUnit()})</label><div class="step-row">
         <button data-action="se-step" data-f="${wid}" data-d="-${app.wStep()}" aria-label="Weight minus ${app.wStep()}">−</button>
-        <input id="${wid}" inputmode="decimal" autocomplete="off" placeholder="${app.canBW(app.ui.sd.ex) ? "BW" : "0"}" value="${x.w == null ? "" : app.fmtNum(x.w)}">
+        <input id="${wid}" ${setNumAttrs("weight")} placeholder="${app.canBW(app.ui.sd.ex) ? "BW" : "0"}" value="${x.w == null ? "" : app.fmtNum(x.w)}">
         <button data-action="se-step" data-f="${wid}" data-d="${app.wStep()}" aria-label="Weight plus ${app.wStep()}">+</button></div></div>
       <div class="stepper"><label for="${rid}">Reps</label><div class="step-row">
         <button data-action="se-step" data-f="${rid}" data-d="-1" aria-label="Reps minus 1">−</button>
-        <input id="${rid}" inputmode="numeric" autocomplete="off" value="${x.r}">
+        <input id="${rid}" ${setNumAttrs("reps")} value="${x.r}">
         <button data-action="se-step" data-f="${rid}" data-d="1" aria-label="Reps plus 1">+</button></div></div></div>`;
 }
 app.seSteppers = seSteppers;
@@ -409,11 +449,11 @@ function setEditSheetHTML() {
     ${x.uni ? `<div class="side-l">Left</div>${app.seSteppers("se-w", "se-r", x.uni.l)}<div class="side-l">Right</div>${app.seSteppers("se-wR", "se-rR", x.uni.r)}` : `<div class="steppers">
       <div class="stepper"><label for="se-w">Weight (${app.wUnit()})</label><div class="step-row">
         <button data-action="se-step" data-f="se-w" data-d="-${app.wStep()}" aria-label="Weight minus ${app.wStep()}">−</button>
-        <input id="se-w" inputmode="decimal" autocomplete="off" placeholder="${app.canBW(e.exercise) ? "BW" : "0"}" value="${x.w == null ? "" : app.fmtNum(x.w)}">
+        <input id="se-w" ${setNumAttrs("weight")} placeholder="${app.canBW(e.exercise) ? "BW" : "0"}" value="${x.w == null ? "" : app.fmtNum(x.w)}">
         <button data-action="se-step" data-f="se-w" data-d="${app.wStep()}" aria-label="Weight plus ${app.wStep()}">+</button></div></div>
       <div class="stepper"><label for="se-r">Reps</label><div class="step-row">
         <button data-action="se-step" data-f="se-r" data-d="-1" aria-label="Reps minus 1">−</button>
-        <input id="se-r" inputmode="numeric" autocomplete="off" value="${x.r}">
+        <input id="se-r" ${setNumAttrs("reps")} value="${x.r}">
         <button data-action="se-step" data-f="se-r" data-d="1" aria-label="Reps plus 1">+</button></div></div></div>`}
     <input class="note" id="se-note" autocomplete="off" placeholder="Note (optional)" value="${app.esc(x.note || "")}">
     <div class="tags" role="group" aria-label="Set type">

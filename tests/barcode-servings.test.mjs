@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 import { app } from "../logger/js/runtime.js";
 import "../logger/js/pages/food.js";
+import "../logger/js/pages/session.js";
 
 const listeners = new Map();
 globalThis.document = {
