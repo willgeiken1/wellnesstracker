@@ -240,8 +240,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v40/);
-  assert.match(sentry, /insight-shell-v40/);
+  assert.match(sw, /insight-shell-v43/);
+  assert.match(sentry, /insight-shell-v43/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });
@@ -417,6 +417,84 @@ test("oura personas on the registry home hide empty tiles", () => {
   assert.match(ready, /data-hw="readiness"/);
   assert.match(ready, /86/);
   assert.doesNotMatch(ready, /Waiting for first sync|No Oura yet|hw-v">–/);
+});
+
+test("edited Home: no Oura, lapsed membership, and an active ring", () => {
+  stubHomeShell();
+  const day = { date: "2026-10-04", readiness: 86, sleepScore: 81, total: 27000, hrv: 60, rhr: 52 };
+  const items = ["readiness", "sleep-score", "hrv", "steps", "last-night", "weekly-goal", "today", "cardio"];
+  const snap = (oura) => () => ({
+    kind: "snapshot",
+    today: "2026-10-04",
+    demo: false,
+    oura,
+    weekGoal: { done: 1, goal: 3 },
+    cardio: { minutes: 12, goal: 150 },
+    headline: "Train",
+    muscleMode: "basic",
+  });
+  const cases = [
+    { name: "none", connected: false, lastError: null, days: {}, showOura: false },
+    { name: "lapsed", connected: true, lastError: "membership_inactive", days: { "2026-10-04": day }, showOura: false },
+    { name: "active", connected: true, lastError: null, days: { "2026-10-04": day }, showOura: true },
+  ];
+  for (const c of cases) {
+    const saved = layout(items);
+    app.state = state({
+      oura: { connected: c.connected, lastError: c.lastError, days: c.days },
+      layout: { homeV2: saved },
+      workouts: [],
+      plan: {},
+    });
+    app.src = () => ({ oura: c.days, sessions: [] });
+    app.snapshotFromApp = snap(c.days["2026-10-04"] || null);
+    const ids = visibleHomeIds(app.state);
+    const html = app.homeHTML();
+    assert.equal(JSON.stringify(app.state.layout.homeV2), JSON.stringify(saved), c.name);
+    assert.match(html, /data-hw="weekly-goal"/, c.name);
+    assert.match(html, /data-hw="today"/, c.name);
+    assert.match(html, /data-hw="cardio"/, c.name);
+    assert.doesNotMatch(html, /No Oura yet|Connect a ring|hw-miss|hw-v">–/, c.name);
+    if (c.showOura) {
+      assert.ok(ids.includes("readiness") && ids.includes("sleep-score") && ids.includes("last-night"), c.name);
+      assert.match(html, /data-hw="readiness"/, c.name);
+      assert.match(html, />86</, c.name);
+      assert.match(html, />81</, c.name);
+      assert.doesNotMatch(html, /Reconnect Oura/, c.name);
+    } else {
+      for (const id of ["readiness", "sleep-score", "hrv", "steps", "last-night"]) assert.equal(ids.includes(id), false, `${c.name} ${id}`);
+      assert.doesNotMatch(html, /data-hw="readiness"|data-hw="sleep-score"|data-hw="hrv"|data-hw="steps"|data-hw="last-night"/, c.name);
+      assert.doesNotMatch(html, />86<|>81</, c.name);
+      assert.doesNotMatch(html, /data-metric="oura"/, c.name);
+      if (c.name === "lapsed") assert.match(html, /Reconnect Oura/, c.name);
+      else assert.doesNotMatch(html, /Reconnect Oura/, c.name);
+    }
+  }
+
+  const only = layout(["readiness", "sleep-score", "hrv", "last-night"]);
+  app.state = state({
+    oura: { connected: true, lastError: "membership_inactive", days: { "2026-10-04": day } },
+    layout: { homeV2: only },
+    workouts: [],
+    plan: {},
+  });
+  app.src = () => ({ oura: app.state.oura.days, sessions: [] });
+  app.snapshotFromApp = snap(day);
+  const replaced = app.homeHTML();
+  assert.equal(JSON.stringify(app.state.layout.homeV2.items), JSON.stringify(only.items));
+  assert.doesNotMatch(replaced, /data-hw="readiness"|data-hw="sleep-score"|data-hw="hrv"|data-hw="last-night"/);
+  assert.doesNotMatch(replaced, />86<|>81</);
+  assert.match(replaced, /Reconnect Oura/);
+  assert.match(replaced, /data-hw="today"/);
+  assert.match(replaced, /data-hw="this-week"/);
+  assert.match(replaced, /data-hw="cardio"/);
+  assert.doesNotMatch(replaced, /No Oura yet|Nothing logged|No goal yet|No weigh-ins|hw-miss/);
+
+  app.state.layout.homeV2 = layout(["readiness"], { hidden: ["today", "this-week", "brief", "cardio"] });
+  const quiet = app.homeHTML();
+  assert.match(quiet, /Reconnect Oura/);
+  assert.doesNotMatch(quiet, /data-hw="today"|data-hw="readiness"|data-hw="this-week"|data-hw="cardio"/);
+  assert.doesNotMatch(quiet, />86</);
 });
 
 test("lapsed Oura needs the sleep card, and a reconnect label, while demo stays hidden", () => {

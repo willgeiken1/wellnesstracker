@@ -431,12 +431,12 @@ test("local development never loads PostHog", async () => {
   assert.equal(prod.scripts, 1);
 });
 
-test("the shell caches the usage modules with the v40 release", () => {
+test("the shell caches the usage modules with the v43 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v40/);
+  assert.match(sw, /insight-shell-v43/);
   assert.match(sw, /\.\/js\/usage\.js/);
   assert.match(sw, /\.\/js\/usage-events\.js/);
   assert.match(sw, /\.\/js\/usage-pref\.js/);
-  assert.match(sentry, /insight-shell-v40/);
+  assert.match(sentry, /insight-shell-v43/);
 });

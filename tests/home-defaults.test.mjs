@@ -157,7 +157,7 @@ test("a person with no ring gets food, weekly goal and weight tiles, only with d
 
 test("a lapsed membership gets the no-ring defaults and no Oura tiles", () => {
   const s = account({
-    oura: { connected: true, lastError: "membership_inactive", days: {} },
+    oura: { connected: true, lastError: "membership_inactive", days: ringDays(86, 81) },
     goals: { sessionsPerWeek: 3 },
   });
   try {
@@ -165,6 +165,10 @@ test("a lapsed membership gets the no-ring defaults and no Oura tiles", () => {
     assert.deepEqual(tileIdsIn(v.strip), ["weekly-goal"]);
     assert.doesNotMatch(v.strip, EMPTY_TILE);
     assert.doesNotMatch(v.strip, /data-hw="(readiness|sleep-score)"/);
+    assert.equal(v.card, "");
+    assert.doesNotMatch(v.brief, /data-metric="oura"/);
+    assert.doesNotMatch(v.card + v.strip + v.brief, />86<|>81</);
+    assert.doesNotMatch(v.brief, /Readiness is (high|low)/);
   } finally { restoreApp(); }
 });
 
@@ -276,10 +280,10 @@ test("the pattern wording is neutral", () => {
   assert.doesNotMatch(brief + widgets, /Working against you/);
 });
 
-test("the shell caches the defaults module on the v40 release", () => {
+test("the shell caches the defaults module on the v43 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /const CACHE = "insight-shell-v40"/);
+  assert.match(sw, /const CACHE = "insight-shell-v43"/);
   assert.match(sw, /const STAGE = CACHE \+ "-next"/);
   assert.doesNotMatch(sw, /insight-shell-v30"/);
 });
@@ -320,9 +324,10 @@ test("randomized account states hold every Home defaults invariant", () => {
         /* A real edit paints only its own cards: no strip, nothing empty for a ring that is not there. */
         assert.equal(v.strip, "", where);
         const painted = tileIdsIn(html);
-        if (ring === "none") assert.equal(painted.some((id) => HOME_WIDGETS[id].needsOura), false, where);
-        if (!days[TODAY] && ring !== "demo") assert.equal(painted.some((id) => HOME_WIDGETS[id].needsOura), false, `no Oura tile without a day. ${where}`);
+        if (ring === "none" || ring === "lapsed") assert.equal(painted.some((id) => HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura), false, where);
+        if (!days[TODAY] && ring !== "demo") assert.equal(painted.some((id) => HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura), false, `no Oura tile without a day. ${where}`);
         assert.doesNotMatch(html, /Connect a ring|No Oura yet|hw-miss/, where);
+        if (ring === "lapsed" && days[TODAY]) assert.doesNotMatch(html, new RegExp(`>${days[TODAY].readiness}<`), `stored readiness stays off an edited Home. ${where}`);
         continue;
       }
       const ids = tileIdsIn(v.strip);
@@ -330,6 +335,11 @@ test("randomized account states hold every Home defaults invariant", () => {
       assert.deepEqual(defaultHomeIds(s), ouraUser ? OURA_DEFAULT_IDS : PLAIN_DEFAULT_IDS, where);
       ids.forEach((id) => assert.ok(defaultHomeIds(s).includes(id), `${id} is a default for this user. ${where}`));
       assert.doesNotMatch(v.strip, EMPTY_TILE, where);
+      if (ring === "lapsed") {
+        assert.doesNotMatch(v.strip, /data-hw="(readiness|sleep-score)"/, where);
+        assert.doesNotMatch(v.card, /rcard/, where);
+        assert.doesNotMatch(v.brief, /data-metric="oura"/, where);
+      }
       assert.equal(new Set(ids).size, ids.length, where);
       const cardShows = v.card.includes("rcard") && !hiddenSlots.includes("readiness");
       if (cardShows) assert.equal(ids.includes("readiness"), false, `no duplicate readiness. ${where}`);
@@ -350,7 +360,8 @@ test("randomized account states hold every Home defaults invariant", () => {
       if (days[TODAY]) {
         const advice = app.readinessAdvice(days[TODAY].readiness);
         const train = v.brief.match(/data-metric="train"[\s\S]*?<b>([^<]*)<\/b>/);
-        if (train && s.plan[TODAY] !== "push" && s.plan[TODAY] !== "rest") assert.equal(train[1], advice.title, where);
+        if (train && ring !== "lapsed" && s.plan[TODAY] !== "push" && s.plan[TODAY] !== "rest") assert.equal(train[1], advice.title, where);
+        if (train && ring === "lapsed" && s.plan[TODAY] !== "push" && s.plan[TODAY] !== "rest") assert.notEqual(train[1], advice.title, `stored readiness does not coach a lapsed membership. ${where}`);
         if (cardShows) assert.ok(v.card.includes(advice.tip), where);
         if (cardShows && !s.layout.homeV2 && train) assert.notEqual(train[1], advice.title, `brief repeats the Readiness card. ${where}`);
         if (train && ring !== "none" && ring !== "lapsed" && ring !== "waiting" && s.plan[TODAY] !== "rest") assert.doesNotMatch(v.brief, /Rest suggested/, where);
