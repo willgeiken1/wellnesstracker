@@ -293,6 +293,28 @@ function compareSentence(rows, better, worse) {
 app.compareSentence = compareSentence;
 
 /* ---------- Charts (hand-drawn SVG, no libraries) ---------- */
+/* A range under 2 (lb or kg on screen) rounds to the same integer more than
+   once. Use a decimal while the labels stay unique, otherwise drop the repeat. */
+function chartTickText(vals, fmt) {
+  const plain = vals.map((v) => String(fmt(v)));
+  if (new Set(plain).size === plain.length) return plain;
+  const span = vals[vals.length - 1] - vals[0];
+  let best = plain;
+  if (span > 0 && span < 2) {
+    for (let digits = 1; digits <= 2; digits++) {
+      const next = vals.map((v) => v.toFixed(digits));
+      best = next;
+      if (new Set(next).size === next.length) return next;
+    }
+  }
+  const seen = new Set();
+  return best.map((lab) => {
+    if (seen.has(lab)) return "";
+    seen.add(lab);
+    return lab;
+  });
+}
+
 function chartSVG({ labels, series, h = 130, yMin, yMax, guide, fmt = (v) => Math.round(v) }) {
   const W = 340, P = { l: 30, r: 8, t: 10, b: 20 }, n = labels.length, iw = W - P.l - P.r, ih = h - P.t - P.b;
   const all = series.flatMap((s) => s.data.filter((v) => v != null)).concat(guide != null ? [guide] : []);
@@ -300,9 +322,14 @@ function chartSVG({ labels, series, h = 130, yMin, yMax, guide, fmt = (v) => Mat
   let lo = yMin ?? Math.min(...all), hi = yMax ?? Math.max(...all);
   if (yMin == null || yMax == null) { const pad = (hi - lo) * 0.12 || 1; if (yMin == null) lo -= pad; if (yMax == null) hi += pad; }
   const X = (i) => P.l + (n === 1 ? iw / 2 : i * iw / (n - 1));
-  const Y = (v) => P.t + ih - (v - lo) / (hi - lo) * ih;
+  const Y = (v) => P.t + ih - (v - lo) / (hi - lo || 1) * ih;
   let g = "";
-  [0, 0.5, 1].forEach((f) => { const v = lo + (hi - lo) * f; g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${P.l - 5}" y="${Y(v) + 3}" text-anchor="end">${fmt(v)}</text>`; });
+  const ticks = [0, 0.5, 1].map((f) => lo + (hi - lo) * f);
+  chartTickText(ticks, fmt).forEach((lab, i) => {
+    const v = ticks[i];
+    g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}"/>`;
+    if (lab) g += `<text class="ax" x="${P.l - 5}" y="${Y(v) + 3}" text-anchor="end">${lab}</text>`;
+  });
   [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i).forEach((i) =>
     g += `<text class="ax" x="${X(i)}" y="${h - 5}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}">${app.fmtDate(labels[i], { month: "short", day: "numeric" })}</text>`);
   if (guide != null) g += `<line class="guide" x1="${P.l}" x2="${W - P.r}" y1="${Y(guide)}" y2="${Y(guide)}"/>`;

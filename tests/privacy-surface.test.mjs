@@ -84,7 +84,11 @@ test("food AI uses Haiku and sends only meal text or an image plus a hint", () =
   const food = read("../logger/js/pages/food.js");
   const photoFn = read("../supabase/functions/food-photo/index.ts");
   const describeFn = read("../supabase/functions/food-describe/index.ts");
-  const forbidden = /\b(?:oura|readiness|hrv|sleep|weight|kcal|calories|protein)\b/i;
+  const forbidden = /(?:oura|readiness|hrv|sleep|weight|kcal|calories|protein)/i;
+  assert.match("sleepScore", forbidden);
+  assert.match("oura_days", forbidden);
+  assert.match("\nweight", forbidden);
+  assert.doesNotMatch("steps", forbidden);
 
   assert.equal(FOOD_MODEL_ID, "claude-haiku-4-5-20251001");
   for (const src of [photoFn, describeFn]) {
@@ -92,7 +96,9 @@ test("food AI uses Haiku and sends only meal text or an image plus a hint", () =
     assert.match(src, /\(Deno\.env\.get\("FOOD_MODEL"\) \?\? ""\)\.trim\(\) \|\| FOOD_MODEL_ID/);
     assert.match(src, /max_tokens: 1500/);
     assert.doesNotMatch(src, /claude-sonnet/);
-    assert.doesNotMatch(src, /\b(?:oura|readiness|hrv|sleep|weight)\b/i);
+    assert.doesNotMatch(src, /(?:oura|readiness|hrv|sleep|weight)/i);
+    assert.doesNotMatch(src, /\.from\(/);
+    assert.doesNotMatch(src, /createClient/);
     assert.deepEqual(topLevelKeys(stringifyObject(src)), ["model", "max_tokens", "messages"]);
   }
 
@@ -107,8 +113,10 @@ test("food AI uses Haiku and sends only meal text or an image plus a hint", () =
 
   assert.deepEqual(bodyFields(photoFn), ["hint", "image", "localDate", "timeZone"]);
   assert.deepEqual(bodyFields(describeFn), ["localDate", "text", "timeZone"]);
-  assert.doesNotMatch(photoFn, /body\.(?:oura|readiness|hrv|sleep|weight|kcal|protein|note)\b/);
-  assert.doesNotMatch(describeFn, /body\.(?:oura|readiness|hrv|sleep|weight|kcal|protein|image|note)\b/);
+  assert.doesNotMatch(photoFn, /body\.(?:oura|readiness|hrv|sleep|weight|kcal|protein|note)/);
+  assert.doesNotMatch(describeFn, /body\.(?:oura|readiness|hrv|sleep|weight|kcal|protein|image|note)/);
+  assert.match("body.sleepScore", /body\.(?:oura|readiness|hrv|sleep|weight|kcal|protein|note)/);
+  assert.match("body.oura_days", /body\.(?:oura|readiness|hrv|sleep|weight|kcal|protein|note)/);
   assert.match(describeFn, /The meal: " \+ text/);
   assert.match(photoFn, /media_type: "image\/jpeg", data: image/);
   assert.match(photoFn, /The user adds: \$\{hint\}/);

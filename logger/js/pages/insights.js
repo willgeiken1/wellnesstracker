@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
 import { needsSleepRecovery, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
+import { readinessForAdvice } from "../shared/brief.js";
 import "./insight-widgets.js";
 
 /* Insights and Recovery markup. */
@@ -9,9 +10,10 @@ function readinessCardHTML() {
   const o = app.latestOura(app.src().oura);
   if (!o) return "";
   const lv = app.readinessLevel(o.readiness);
+  const tip = readinessForAdvice(o, app.today()) != null ? `<span>${lv.tip}</span>` : "";
   return `<button class="rcard" data-action="tab" data-tab="recovery">
     <span class="rcard-n ${lv.cls}">${o.readiness}</span>
-    <span class="rcard-t"><b>Readiness · ${lv.word}</b><span>${lv.tip}</span><span class="rcard-s">Slept ${app.dash(o.total, app.fmtHM)} · HRV ${app.dash(o.hrv, (v) => v + " ms")}${app.state.demo ? " · sample data" : ""}</span></span></button>`;
+    <span class="rcard-t"><b>Readiness · ${lv.word}</b>${tip}<span class="rcard-s">Slept ${app.dash(o.total, app.fmtHM)} · HRV ${app.dash(o.hrv, (v) => v + " ms")}${app.state.demo ? " · sample data" : ""}</span></span></button>`;
 }
 app.readinessCardHTML = readinessCardHTML;
 
