@@ -1566,7 +1566,12 @@ export function findingsForView(rows) {
   return (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium")).slice().sort((a, b) => viewGroup(a) - viewGroup(b) || byStrength(a, b));
 }
 
-export const STORY_CAP = 2;
+/* One visible card per story. The rest are folded onto that card. */
+export const STORY_CAP = 1;
+
+/* Soft label for an unfavorable pattern. It names the pattern. It does not
+   say the pattern is harming anyone. */
+export const UNFAVORABLE_MARK = "Not your better days";
 
 /* One outcome, one kind of factor, one direction. Late eating, fat and carbs
    all pulling HRV down are the same story. */
@@ -1597,37 +1602,42 @@ function byStoryMember(a, b) {
   return ca - cb || byViewStable(a, b);
 }
 
-/* The first screen will not stack one outcome, one kind of factor, or one
-   story, and is never padded with rows that break those caps. The next
-   STORY_CAP rows of a story stay in See all. Anything past that cap is kept
-   at the end of See all instead of being dropped, so a high finding and the
-   brief's pick cannot disappear. pickForToday (high confidence, q <= 0.001,
-   good or bad) is pinned into the first screen. */
-export function splitFindings(rows, input, today) {
-  const eligible = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
+/* Keep the lead of a story and fold the rows that repeat it. A high
+   confidence row outranks a stronger medium one. The brief's pick, when it
+   is one of those rows, is the card that stays visible. */
+function foldStories(rows, picked) {
   const grouped = new Map();
-  eligible.forEach((r) => {
+  rows.forEach((r) => {
     const story = storyKey(r);
     if (!grouped.has(story)) grouped.set(story, []);
     grouped.get(story).push(r);
   });
-  const slots = [];
-  const overflow = [];
+  const pickKey = picked ? rowKey(picked) : "";
+  const kept = [];
   grouped.forEach((members) => {
     members.sort(byStoryMember);
-    members.forEach((r, i) => {
-      if (i < STORY_CAP) {
-        if (!slots[i]) slots[i] = [];
-        slots[i].push(r);
-      } else overflow.push(r);
-    });
+    let leadAt = 0;
+    if (pickKey) {
+      const hit = members.findIndex((r) => rowKey(r) === pickKey);
+      if (hit >= 0) leadAt = hit;
+    }
+    const lead = members[leadAt];
+    const folded = members.filter((_, i) => i !== leadAt);
+    kept.push(folded.length ? { ...lead, folded } : lead);
   });
-  const kept = [];
-  slots.forEach((slot) => {
-    slot.sort(byViewStable);
-    kept.push(...slot);
-  });
-  overflow.sort(byViewStable);
+  kept.sort(byViewStable);
+  return kept;
+}
+
+/* The first screen will not stack one outcome, one kind of factor, or one
+   story, and is never padded with rows that break those caps. A story keeps
+   its strongest row. The others are folded onto that card instead of being
+   listed again. pickForToday (high confidence, q <= 0.001, good or bad) is
+   pinned into the first screen, and it is the card for its own story. */
+export function splitFindings(rows, input, today) {
+  const eligible = (rows || []).filter((r) => r && (r.confidence === "high" || r.confidence === "medium"));
+  const picked = arguments.length < 2 ? null : pickForToday(rows, input, today);
+  const kept = foldStories(eligible, picked);
 
   const top = [];
   const more = [];
@@ -1645,9 +1655,8 @@ export function splitFindings(rows, input, today) {
       families[family] = (families[family] || 0) + 1;
     } else more.push(r);
   });
-  more.push(...overflow);
-  if (arguments.length < 2) return { top, more };
-  return placePick(top, more, pickForToday(rows, input, today));
+  if (!picked) return { top, more };
+  return placePick(top, more, picked);
 }
 
 function rowKey(r) {
@@ -1670,13 +1679,16 @@ function roomFor(kept, r) {
   return !sameStory && outcomes < OUTCOME_CAP && families < FAMILY_CAP;
 }
 
-/* The brief's pick leads the first screen. Other rows keep their order and
-   still obey the caps; nothing is dropped from the full list. */
+/* The brief's pick leads the first screen. Other cards keep their order and
+   still obey the caps. Folded rows stay on their story's card. */
 function placePick(top, more, picked) {
   if (!picked) return { top, more };
   const key = rowKey(picked);
-  const rest = top.concat(more).filter((r) => rowKey(r) !== key);
-  const kept = [picked];
+  const all = top.concat(more);
+  const existing = all.find((r) => rowKey(r) === key);
+  const lead = existing && existing.folded ? { ...picked, folded: existing.folded } : picked;
+  const rest = all.filter((r) => rowKey(r) !== key);
+  const kept = [lead];
   const overflow = [];
   rest.forEach((r) => {
     if (roomFor(kept, r)) kept.push(r);

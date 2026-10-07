@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { addDays, claimSupported, findingsForWeek } from "./correlate.js";
+import { UNFAVORABLE_MARK, addDays, claimSupported, findingsForWeek } from "./correlate.js";
 
 /* In-app weekly report. Numbers stay on the device. Dismiss state is a list of
    week-start dates in the existing user blob, not a new table. */
@@ -469,7 +469,7 @@ function weekFindings(start, end) {
 
 function findingCard(r) {
   const toneName = r.valence === "good" ? "good" : "bad";
-  const mark = toneName === "good" ? "Good for you" : "Worth watching";
+  const mark = toneName === "good" ? "Good for you" : UNFAVORABLE_MARK;
   return `<article class="card aff-card ${toneName}">
     <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
     <p class="aff-s">${app.esc(r.lead || r.sentence || "")}</p>

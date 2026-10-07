@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { correlate, pickForToday, todayLine, weightTrend } from "./correlate.js";
+import { UNFAVORABLE_MARK, correlate, pickForToday, todayLine, weightTrend } from "./correlate.js";
 
 /* Home widget registry.
    Painting is per user: homeRegistryActive is true only for a stored homeV2
@@ -200,30 +200,34 @@ function heroModel(sessions, today) {
   return { mode: "empty", chips };
 }
 
+function patternQuiet() {
+  return { empty: true, label: "Today's pattern", line: "Possible patterns, see Insights" };
+}
+
 function patternFrom(input, today) {
-  if (!input) return null;
+  if (!input) return patternQuiet();
   try {
     const rows = correlate(input, {});
     const row = pickForToday(rows, input, today);
     const line = row && todayLine(row);
-    if (!line) return null;
+    if (!line) return patternQuiet();
     const good = row.valence === "good";
-    return { label: good ? "Good for you" : "Worth watching", line, tone: good ? "up" : "down" };
+    return { label: good ? "Good for you" : UNFAVORABLE_MARK, line, tone: good ? "up" : "down" };
   } catch (e) {
-    return null;
+    return patternQuiet();
   }
 }
 
 function patternNow() {
-  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function" || typeof app.today !== "function") return null;
+  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function" || typeof app.today !== "function") return patternQuiet();
   try {
     const row = pickForToday(app.correlations(), app.correlationSource(), app.today());
     const line = row && todayLine(row);
-    if (!line) return null;
+    if (!line) return patternQuiet();
     const good = row.valence === "good";
-    return { label: good ? "Good for you" : "Worth watching", line, tone: good ? "up" : "down" };
+    return { label: good ? "Good for you" : UNFAVORABLE_MARK, line, tone: good ? "up" : "down" };
   } catch (e) {
-    return null;
+    return patternQuiet();
   }
 }
 
@@ -482,8 +486,9 @@ function renderThisWeek(data) {
 
 function renderPattern(data) {
   const pattern = data && data.kind === "snapshot" ? data.pattern : (data && data.live ? patternNow() : data && data.pattern);
-  if (!pattern || !pattern.line) {
-    return `<section class="hw hw-m" data-hw="pattern"><p class="hw-k">Today's pattern</p><p class="hw-line">Nothing stands out for today yet.</p></section>`;
+  if (!pattern || !pattern.line || pattern.empty) {
+    const line = pattern && pattern.line ? pattern.line : "Possible patterns, see Insights";
+    return `<button class="hw hw-m hw-hit hw-quiet" data-hw="pattern" data-action="open-affects"><span class="hw-k">Today's pattern</span><span class="hw-line">${esc(line)}</span></button>`;
   }
   const tone = pattern.tone === "up" ? " tone-up" : pattern.tone === "down" ? " tone-down" : "";
   return `<button class="hw hw-m hw-hit${tone}" data-hw="pattern" data-action="open-affects"><span class="hw-k">${esc(pattern.label || "Today's pattern")}</span><span class="hw-line">${esc(pattern.line)}</span><span class="hw-sub">What affects you</span></button>`;

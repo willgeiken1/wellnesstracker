@@ -89,6 +89,13 @@ test("small cards render their numbers, and steps and last night stay blank with
   assert.match(HOME_WIDGETS.headline.render(snap), /Train as planned/);
   assert.match(HOME_WIDGETS.pattern.render(snap), /Sleep was long/);
   assert.match(HOME_WIDGETS.pattern.render(snap), /What affects you/);
+  const quiet = HOME_WIDGETS.pattern.render({ kind: "snapshot", pattern: null });
+  assert.match(quiet, /Possible patterns, see Insights/);
+  assert.match(quiet, /data-action="open-affects"/);
+  assert.match(quiet, /hw-quiet/);
+  assert.doesNotMatch(quiet, /Nothing stands out/);
+  const liveQuiet = HOME_WIDGETS.pattern.render({ live: true });
+  assert.match(liveQuiet, /Possible patterns, see Insights/);
   assert.match(HOME_WIDGETS["weight-trend"].preview({
     today: "2026-10-04", sessions: [], foodDays: {}, oura: {},
     weighIns: [{ date: "2026-10-01", kg: 80 }],
@@ -392,8 +399,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v41/);
-  assert.match(sentry, /insight-shell-v41/);
+  assert.match(sw, /insight-shell-v44/);
+  assert.match(sentry, /insight-shell-v44/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
