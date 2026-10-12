@@ -15,7 +15,8 @@ function renderWorkout() {
       <button class="btn small primary" data-action="finish">Finish</button></div></div>
     <ul class="list" id="wo-list">${list.length ? list.map((e, i) => app.exerciseHTML(s, e, i)).join("")
       : `<li class="empty">No exercises yet. Add one below.</li>`}</ul>
-    <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>`;
+    <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>
+    ${s.origin === "freestyle" ? `<button class="link-btn free-save" data-action="save-routine">Save as routine</button>` : ""}`;
 }
 app.renderWorkout = renderWorkout;
 
@@ -170,7 +171,8 @@ function renderSheet() {
       <div class="sheet-actions">${editing ? `<button class="btn danger" data-action="ex-delete">Remove</button>` : ""}
         <button class="btn primary" data-action="ex-save">${editing ? "Save" : "Add exercise"}</button></div>`;
   }
-  const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : "sheet-card";
+  const bankSheet = app.ui.sheet === "picker" || app.ui.sheet === "live-add" || app.ui.sheet === "swap";
+  const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : bankSheet ? "sheet-card bank" : "sheet-card";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : "Sheet"}"><div class="grabber"></div>
     ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;

@@ -5,13 +5,80 @@ import { app } from "../runtime.js";
 const GEAR_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
 app.GEAR_SVG = GEAR_SVG;
 
+function slugRoutineId(name) {
+  let id = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workout";
+  while (app.workoutById(id)) id += "-2";
+  return id;
+}
+app.slugRoutineId = slugRoutineId;
+
+/* A blank session. workoutId cannot collide with a routine slug. */
+function freestyleSession() {
+  const id = app.uid();
+  return {
+    id, date: app.today(), workoutId: "fs:" + id, name: "Freestyle", origin: "freestyle",
+    startedAt: new Date().toISOString(), finishedAt: null, entries: [], extra: []
+  };
+}
+app.freestyleSession = freestyleSession;
+
+function routineExercisesFrom(s) {
+  return app.liveExercises(s).map((e) => {
+    const o = { name: e.name, muscles: [...(e.muscles || [])] };
+    if (e.adv && e.adv.length) o.adv = [...e.adv];
+    return o;
+  });
+}
+app.routineExercisesFrom = routineExercisesFrom;
+
+/* Creates a routine, or updates the one this freestyle session already saved. */
+function commitFreestyleRoutine(s, name) {
+  const trimmed = String(name || "").trim();
+  if (!s || !trimmed) return null;
+  const exercises = routineExercisesFrom(s);
+  if (!exercises.length) return null;
+  let routine = s.origin === "freestyle" ? app.workoutById(s.workoutId) : null;
+  if (routine) {
+    routine.name = trimmed;
+    routine.exercises = exercises;
+  } else {
+    routine = { id: slugRoutineId(trimmed), name: trimmed, exercises };
+    app.state.workouts.push(routine);
+  }
+  s.workoutId = routine.id;
+  s.name = trimmed;
+  s.origin = "freestyle";
+  s.extra = [];
+  s.swaps = {};
+  s.mod = Date.now();
+  return routine;
+}
+app.commitFreestyleRoutine = commitFreestyleRoutine;
+
+async function startFreestyle() {
+  const cur = app.activeSession();
+  if (cur) {
+    if (cur.origin === "freestyle") { app.openWorkout(); return; }
+    if (!(await app.ask({ title: `${cur.name} is still in progress`, body: "Finish it and start a freestyle workout?", ok: "Finish and start" }))) return;
+    app.finishSession(cur, true);
+  }
+  app.state.sessions.push(freestyleSession());
+  app.ui.drafts = {};
+  app.ui.open = null;
+  app.save();
+  app.openWorkout();
+}
+app.startFreestyle = startFreestyle;
+
 function workoutsHTML() {
   const seg = `<div class="seg2" role="tablist"><button data-action="wseg" data-seg="routines" aria-pressed="${app.ui.wseg === "routines"}">Routines</button>
     <button data-action="wseg" data-seg="history" aria-pressed="${app.ui.wseg === "history"}">History</button></div>`;
   const plus = `<button class="plus-btn" data-action="new-workout" aria-label="New workout">${app.PLUS_SVG}</button>`;
   if (app.ui.wseg === "history") return app.pageHead("Workouts", "", { below: plus }) + seg + app.historyHTML(true);
   if (app.ui.edit === "routines") return `${app.pageHead("Workouts", "Drag to reorder · × to delete", { below: plus })}${seg}${app.routinesEditHTML()}`;
+  const free = `<button class="free-start" data-action="start-freestyle"><b>Freestyle</b><span>Blank workout. Add exercises as you go.</span></button>`;
   return `${app.pageHead("Workouts", "Tap one to edit or start it · hold to rearrange", { below: plus })}${seg}
+    ${free}
     ${app.state.workouts.map((w, wi) => {
       const all = app.muscleMode() === "advanced" ? app.uniq(w.exercises.flatMap(app.advOf)).map((k) => app.ADV[k]) : [...new Set(w.exercises.flatMap((e) => e.muscles))].map((m) => app.MUSCLES[m]).filter(Boolean);
       const ms = all.length > 6 ? [...all.slice(0, 6), `+${all.length - 6} more`] : all;
@@ -69,7 +136,7 @@ function historyHTML(embedded) {
         <div class="hist-n">${app.setCount(s)}<span>sets</span></div></summary>
       <div class="hist-body">${s.entries.filter((e) => e.sets.length).map((e) =>
         `<div class="hist-ex"><b>${app.esc(e.exercise)}</b><span class="hs-row">${e.sets.map((x, j) => `<button class="hs${x.tag === "warmup" ? " wu" : ""}" data-action="hist-set" data-id="${app.esc(s.id)}" data-ex="${app.esc(e.exercise)}" data-s="${j}" aria-label="Edit set ${j + 1} of ${app.esc(e.exercise)}">${x.tag === "warmup" ? "W " : ""}${app.fmtSet(x)}</button>`).join("")}</span></div>`).join("")}
-        <div class="hist-actions"><button class="link-btn" data-action="summary" data-id="${app.esc(s.id)}">View summary</button>
+        <div class="hist-actions">${s.origin === "freestyle" ? `<button class="link-btn" data-action="save-routine" data-id="${app.esc(s.id)}">Save as routine</button>` : ""}<button class="link-btn" data-action="summary" data-id="${app.esc(s.id)}">View summary</button>
         <button class="link-btn danger" data-action="delete-s" data-id="${app.esc(s.id)}">Delete this workout</button></div></div>
       </details></li>`;
   }).join("")}</ul>`;

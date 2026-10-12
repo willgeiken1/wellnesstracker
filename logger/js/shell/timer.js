@@ -11,7 +11,10 @@ app.audio = audio;
 function ensureAudio() {
   try {
     if (!app.audio) app.audio = new (window.AudioContext || window.webkitAudioContext)();
-    if (app.audio.state === "suspended") app.audio.resume();
+    if (app.audio.state === "suspended") {
+      const pending = app.audio.resume();
+      if (pending && typeof pending.catch === "function") pending.catch(() => { app.audio = null; });
+    }
   } catch (e) { app.audio = null; }
 }
 app.ensureAudio = ensureAudio;

@@ -377,6 +377,7 @@ function summaryHTML(id) {
       `<li class="pr-li"><span>${app.esc(p.name)}</span><b>${app.fmtSet(p.x)}</b><small>${app.prText(p.x)}</small></li>`).join("")}</ul>` : ""}
     ${muscles.length ? `<p class="sub small">Worked: ${muscles.join(", ")}</p>` : ""}
     <p class="sub small">Volume is weight × reps across working sets. Warm-ups and bodyweight sets aren't included.</p>
+    ${s.origin === "freestyle" ? `<button class="link-btn free-save" data-action="save-routine" data-id="${app.esc(s.id)}">Save as routine</button>` : ""}
     <button class="btn primary block" data-action="sheet-close" style="margin-top:14px">Done</button>`;
 }
 app.summaryHTML = summaryHTML;
@@ -469,10 +470,10 @@ function swapSheetHTML() {
   const cur = app.liveExercises(s)[app.ui.sd.i]; if (!cur) return "";
   const w = app.workoutById(s.workoutId);
   const inList = new Set(app.liveExercises(s).map((e) => e.name.toLowerCase()));
+  const routineBox = w ? `<label class="swap-keep"><input type="checkbox" id="swap-routine" ${app.ui.sd.routine ? "checked" : ""}> Also change it in my ${app.esc(w.name)} routine</label>` : "";
   return `<h3>Swap ${app.esc(cur.name)}</h3>
-    <label class="swap-keep"><input type="checkbox" id="swap-routine" ${app.ui.sd.routine ? "checked" : ""}> Also change it in my ${app.esc(w ? w.name : "")} routine</label>
-    <input class="text-in" id="pick-q" type="search" autocomplete="off" placeholder="Search ${app.ASSETS.bank.length} exercises" value="${app.esc(app.ui.sd.q || "")}">
-    <div id="pk-body">${app.bankListHTML({ q: app.ui.sd.q, action: "swap-pick", open: app.ui.sd.open, similar: app.advOf(cur), exclude: inList, customHint: "Type it below to use it anyway." })}</div>
+    ${routineBox}
+    ${app.bankSearchHTML({ action: "swap-pick", open: app.ui.sd.open, similar: app.advOf(cur), exclude: inList })}
     <div class="add-row"><input id="swap-new" placeholder="Or type a new exercise" autocomplete="off"><button data-action="swap-new">Use</button></div>
     <p class="sub small">The swapped exercise keeps its own history and PRs.</p>`;
 }

@@ -48,6 +48,7 @@ function userDataBlob() {
            deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(), planAt: app.state.planAt || {},
            appLock: syncedAppLock(app.state.appLock), purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
 }
+app.userDataBlob = userDataBlob;
 
 /* PostgREST says this when the migration has not been applied yet. */
 function mergeRpcMissing(error) {

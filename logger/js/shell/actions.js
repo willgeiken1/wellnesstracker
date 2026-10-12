@@ -342,7 +342,8 @@ document.addEventListener("input", (ev) => {
   }
   if (el.id === "ms-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#ms-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "home-q" && app.ui.sheet === "home-gallery") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#home-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
-  if (el.id === "pick-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#pick-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  // Replacing the sheet refocuses the field. On an iPhone home-screen app that scrolls the viewport and the list blinks.
+  if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
   if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
@@ -384,6 +385,7 @@ document.addEventListener("click", async (ev) => {
       app.save(); app.ui.sheet = null; app.render(); break;
     case "sheet-close": app.ui.sheet = null; app.renderSheet(); break;
     case "start": app.startWorkout(b.dataset.id); break;
+    case "start-freestyle": await app.startFreestyle(); break;
     case "resume": app.openWorkout(); break;
     case "minimize": app.ui.workoutOpen = false; app.render(); break;
     case "finish": {
@@ -716,6 +718,27 @@ document.addEventListener("click", async (ev) => {
     }
     case "swap-open": app.ui.sheet = "swap"; app.ui.sd = { i, q: "", routine: false }; app.renderSheet(); break;
     case "swap-pick": app.applySwap(b.dataset.name); break;
+    case "bank-create": {
+      const name = (b.dataset.name || (app.ui.sd && app.ui.sd.q) || "").trim();
+      if (!name) break;
+      if (app.ui.sheet === "live-add") app.liveAdd(name);
+      else if (app.ui.sheet === "swap") app.applySwap(name);
+      else app.pickExercise(name, "create");
+      break;
+    }
+    case "save-routine": {
+      const s = b.dataset.id ? app.state.sessions.find((x) => x.id === b.dataset.id) : app.activeSession();
+      if (!s) break;
+      const linked = s.origin === "freestyle" ? app.workoutById(s.workoutId) : null;
+      const name = await app.ask({ title: "Save as routine", body: "Name it and it shows up with your other routines.", ok: "Save", input: linked ? linked.name : "" });
+      if (!name) break;
+      const routine = app.commitFreestyleRoutine(s, name);
+      if (!routine) { app.toast("Add an exercise before saving a routine."); break; }
+      app.save();
+      app.toast(`Saved ${routine.name}.`);
+      app.render();
+      break;
+    }
     case "swap-new": { const n = ((app.$("#swap-new") || {}).value || "").trim(); if (!n) { app.toast("Type an exercise name."); break; } app.applySwap(n); break; }
     case "summary": app.ui.sheet = "summary"; app.ui.sd = { id: b.dataset.id }; app.renderSheet(); break;
     case "goal-week": app.ui.sheet = "goalweek"; app.ui.sd = {}; app.renderSheet(); break;
@@ -829,8 +852,7 @@ document.addEventListener("click", async (ev) => {
     case "new-workout": {
       const name = await app.ask({ title: "New workout", body: "Give it a name, like Upper or Arms.", ok: "Create", input: "" });
       if (!name) break;
-      let id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workout";
-      while (app.workoutById(id)) id += "-2";
+      const id = app.slugRoutineId(name);
       app.state.workouts.push({ id, name, exercises: [] });
       app.save(); app.ui.detail = id; app.render(); break;
     }
