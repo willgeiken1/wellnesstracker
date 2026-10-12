@@ -13,6 +13,14 @@ export const PURGE_TABLES = [
   "oura_oauth_states",
   "progress_photos",
   "ai_usage",
+  "reports",
+  "reactions",
+  "comments",
+  "shared_items",
+  "friend_invites",
+  "friendships",
+  "blocks",
+  "social_settings",
 ];
 
 export function liveGate(env) {
