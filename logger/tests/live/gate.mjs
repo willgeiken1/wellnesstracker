@@ -64,6 +64,10 @@ export function assertConfigured(gate) {
   }
 }
 
+export function purgeSkippedOnSchedule(eventName) {
+  return eventName === "schedule";
+}
+
 export function serviceRoleOk(serviceRole, publishableKey) {
   if (typeof serviceRole !== "string") return false;
   const key = serviceRole.trim();

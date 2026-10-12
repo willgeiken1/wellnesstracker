@@ -1,7 +1,8 @@
 name: Live checks
 
 # Deployed GitHub Pages and the throwaway account only.
-# Manual from the Actions tab, and weekly on Monday at 16:00 UTC.
+# Manual from the Actions tab runs the page check and the account delete.
+# The Monday 16:00 UTC schedule runs the page check only.
 # This file has no pull_request or push trigger, so a missing secret cannot fail PR CI.
 # The job also skips with a green result when the email or password secret is absent.
 
@@ -65,4 +66,10 @@ jobs:
           INSIGHT_TEST_EMAIL: ${{ secrets.INSIGHT_TEST_EMAIL }}
           INSIGHT_TEST_PASSWORD: ${{ secrets.INSIGHT_TEST_PASSWORD }}
           INSIGHT_TEST_SERVICE_ROLE_KEY: ${{ secrets.INSIGHT_TEST_SERVICE_ROLE_KEY }}
-        run: npm run pw:live
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            npm run pw:live -- --project=live-boot
+          else
+            npm run pw:live
+          fi

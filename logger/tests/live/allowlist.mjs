@@ -4,7 +4,7 @@
 
 import { PAGES_HOST, SUPABASE_HOST } from "./project.mjs";
 
-const STATIC_HOSTS = new Set([
+export const STATIC_HOSTS = Object.freeze([
   PAGES_HOST,
   "cdn.jsdelivr.net",
   "fastly.jsdelivr.net",
@@ -12,7 +12,19 @@ const STATIC_HOSTS = new Set([
   "fonts.gstatic.com",
 ]);
 
+const STATIC_HOST_SET = new Set(STATIC_HOSTS);
 const ALLOWED_FUNCTION = "delete-account";
+const FUNCTION_MARKER = "/functions/v1/";
+
+function rawPath(url) {
+  const match = /^[a-z][a-z0-9+.-]*:(?:\/\/[^/?#]*)?([^?#]*)/i.exec(url);
+  return match ? match[1] : "";
+}
+
+function pathUnsafe(path) {
+  if (/%(?:2f|2e)/i.test(path)) return true;
+  return path.split("/").some((segment) => segment === "." || segment === "..");
+}
 
 export function describeDenied(url) {
   let parsed;
@@ -28,17 +40,24 @@ export function describeDenied(url) {
 }
 
 export function liveRequestAllowed(url) {
+  if (typeof url !== "string" || !url) return false;
   let parsed;
   try { parsed = new URL(url); }
   catch { return false; }
   if (parsed.protocol === "data:" || parsed.protocol === "blob:") return true;
-  if (STATIC_HOSTS.has(parsed.hostname)) return true;
+  if (pathUnsafe(rawPath(url))) return false;
+  if (STATIC_HOST_SET.has(parsed.hostname)) return parsed.protocol === "https:";
   if (parsed.hostname !== SUPABASE_HOST) return false;
   if (parsed.protocol !== "https:" && parsed.protocol !== "wss:") return false;
-  const marker = "/functions/v1/";
-  const at = parsed.pathname.indexOf(marker);
+  const at = parsed.pathname.indexOf(FUNCTION_MARKER);
   if (at < 0) return true;
-  const name = decodeURIComponent(parsed.pathname.slice(at + marker.length).split("/")[0] || "");
+  if (parsed.protocol !== "https:") return false;
+  let rest = parsed.pathname.slice(at + FUNCTION_MARKER.length);
+  if (rest.endsWith("/")) rest = rest.slice(0, -1);
+  if (!rest || rest.includes("/")) return false;
+  let name;
+  try { name = decodeURIComponent(rest); }
+  catch { return false; }
   return name === ALLOWED_FUNCTION;
 }
 

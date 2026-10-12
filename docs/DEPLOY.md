@@ -29,7 +29,7 @@ The Supabase CLI is pinned to **2.119.0**.
 
 ## Live checks
 
-`.github/workflows/live-checks.yml` opens the deployed GitHub Pages app and, when the service role secret is set, deletes a throwaway account and checks that its rows are gone. It does not run on pull requests or pushes. Run it from the Actions tab with **Run workflow**, or wait for the Monday 16:00 UTC schedule. Pick this branch before the workflow is on `main`.
+`.github/workflows/live-checks.yml` opens the deployed GitHub Pages app. **Run workflow** also deletes a throwaway account and checks that its rows and progress photo are gone, when the service role secret is set. The Monday 16:00 UTC schedule runs the page check only and does not delete the account. The workflow does not run on pull requests or pushes. Pick this branch before the workflow is on `main`.
 
 The job stays green and skips when the email or password secret is missing. It does not print any of these values.
 
@@ -39,7 +39,7 @@ Add the secrets under Settings → Secrets and variables → Actions:
 | --- | --- | --- |
 | `INSIGHT_TEST_EMAIL` | yes, or the job skips | A mailbox you can throw away. The local part must contain `insight-live` as its own word, for example `you+insight-live@gmail.com`. The job can reset this password and it deletes the account. Do not use a personal login. |
 | `INSIGHT_TEST_PASSWORD` | yes, or the job skips | Password for that address. 8 to 200 characters. |
-| `INSIGHT_TEST_SERVICE_ROLE_KEY` | yes for the delete check | Service role (or secret) key for project `pvodxxmfgflvgvbdotlv`. Email confirmation is on, so CI cannot finish signup by itself. The key is used only to confirm this address and, after delete, to count that user's rows. The page check still runs when this secret is absent; the delete check skips. |
+| `INSIGHT_TEST_SERVICE_ROLE_KEY` | yes for the delete check | Service role (or secret) key for project `pvodxxmfgflvgvbdotlv`. Email confirmation is on, so CI cannot finish signup by itself. The key is used only to confirm this address, seed that user's rows and one progress photo, and after delete count that those are gone. The page check still runs when this secret is absent; the delete check skips. |
 
 The service role can read every account. The test refuses any address that does not carry the `insight-live` marker, and it does not list other users.
 

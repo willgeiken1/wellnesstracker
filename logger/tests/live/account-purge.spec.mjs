@@ -1,5 +1,5 @@
-import { assertAccountPurged, ensureThrowawayUser } from "./account.mjs";
-import { assertConfigured, liveGate, PROBE_NAME, redactText } from "./gate.mjs";
+import { assertAccountPurged, ensureThrowawayUser, seedPurgeTargets } from "./account.mjs";
+import { assertConfigured, liveGate, PROBE_NAME, purgeSkippedOnSchedule, redactText } from "./gate.mjs";
 import { expect, test } from "./fixtures.mjs";
 
 const gate = liveGate(process.env);
@@ -109,6 +109,10 @@ async function waitForServerRow(page) {
 test.describe("throwaway account purge", () => {
   test.skip(gate.skip, gate.reason);
   test.skip(!gate.skip && !gate.serviceRole, "INSIGHT_TEST_SERVICE_ROLE_KEY is not set. Skipping account delete.");
+  test.skip(
+    purgeSkippedOnSchedule(process.env.GITHUB_EVENT_NAME),
+    "Scheduled live checks run the page boot only. Account delete runs from workflow_dispatch."
+  );
   test.describe.configure({ mode: "serial" });
 
   test("deletes the throwaway account and purges its data", async ({ page }) => {
@@ -138,6 +142,12 @@ test.describe("throwaway account purge", () => {
     await ensureProbeProfile(page);
     await logProbeWeighIn(page);
     await waitForServerRow(page);
+
+    try {
+      await seedPurgeTargets({ userId, serviceRole: gate.serviceRole });
+    } catch (err) {
+      rethrowRedacted(err, "Could not seed the throwaway rows. Not deleting.");
+    }
 
     const capturedId = await page.evaluate(() => (window.app.session && window.app.session.user && window.app.session.user.id) || "");
     if (capturedId !== userId) throw new Error("Refusing to delete: the signed-in user did not match the throwaway account.");

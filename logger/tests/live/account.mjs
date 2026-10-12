@@ -6,11 +6,19 @@
 import { createClient } from "@supabase/supabase-js";
 import { assertConfigured, PURGE_TABLES, serviceRoleOk, throwawayEmailOk } from "./gate.mjs";
 import { SB_PUBLISHABLE_KEY, SB_URL } from "./project.mjs";
+import { requireCount, requireStorageList } from "./purge-check.mjs";
 
 export { PURGE_TABLES };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROGRESS_BUCKET = "progress";
+const PROBE_DAY = "2020-01-15";
+const PROBE_FILE = "live-probe.jpg";
+const PROBE_TOKEN = "live-probe";
+const TINY_JPEG = Uint8Array.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+  0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+]);
 
 function memoryStorage() {
   const bag = new Map();
@@ -149,29 +157,66 @@ export async function countRowsForUser(admin, table, userId) {
     .from(table)
     .select("user_id", { count: "exact", head: true })
     .eq("user_id", userId);
-  if (error) {
-    const missing = /does not exist|schema cache|could not find the table/i.test(String(error.message || ""));
-    if (missing) return 0;
-    throw new Error(`Could not count ${table} after delete (status ${statusOf(error)}).`);
-  }
-  if (typeof count !== "number") throw new Error(`Could not count ${table} after delete.`);
-  return count;
+  return requireCount(table, error, count);
 }
 
 async function assertStorageEmpty(admin, userId) {
   assertUuid(userId);
   const listed = await admin.storage.from(PROGRESS_BUCKET).list(userId, { limit: 100 });
-  if (listed.error) {
-    const msg = String(listed.error.message || "");
-    if (/not found/i.test(msg)) return;
-    throw new Error(`Could not list progress storage (status ${statusOf(listed.error)}).`);
-  }
-  const names = (listed.data || [])
-    .map((item) => item && item.name)
-    .filter((name) => name && name !== ".emptyFolderPlaceholder");
+  const names = requireStorageList(listed.error, listed.data);
   if (names.length) {
     throw new Error(`progress storage still has ${names.length} object(s) for the deleted test user.`);
   }
+}
+
+async function mustWrite(table, write) {
+  const { error } = await write;
+  if (error) throw new Error(`Could not seed ${table} (status ${statusOf(error)}).`);
+}
+
+export async function seedPurgeTargets({ userId, serviceRole }) {
+  assertUuid(userId);
+  const admin = adminClient(serviceRole);
+  const existing = await countRowsForUser(admin, "user_data", userId);
+  if (existing < 1) throw new Error("user_data was not written before the purge check.");
+  const soon = new Date(Date.now() + 3_600_000).toISOString();
+  const photoPath = `${userId}/${PROBE_FILE}`;
+  await mustWrite("oura_days", admin.from("oura_days").upsert(
+    { user_id: userId, day: PROBE_DAY, data: { probe: 1 } },
+    { onConflict: "user_id,day" }
+  ));
+  await mustWrite("oura_connections", admin.from("oura_connections").upsert(
+    { user_id: userId, last_sync: new Date().toISOString() },
+    { onConflict: "user_id" }
+  ));
+  await mustWrite("oura_tokens", admin.from("oura_tokens").upsert(
+    { user_id: userId, access_token: PROBE_TOKEN, refresh_token: PROBE_TOKEN, expires_at: soon },
+    { onConflict: "user_id" }
+  ));
+  await mustWrite("oura_oauth_states", admin.from("oura_oauth_states").upsert(
+    { state: userId, user_id: userId },
+    { onConflict: "state" }
+  ));
+  await mustWrite("progress_photos", admin.from("progress_photos").upsert(
+    { id: userId, user_id: userId, day: PROBE_DAY, pose: "front", path: photoPath },
+    { onConflict: "id" }
+  ));
+  await mustWrite("ai_usage", admin.from("ai_usage").upsert(
+    { user_id: userId, day: PROBE_DAY, kind: "photo", count: 1 },
+    { onConflict: "user_id,day,kind" }
+  ));
+  const uploaded = await admin.storage.from(PROGRESS_BUCKET).upload(photoPath, TINY_JPEG, {
+    contentType: "image/jpeg",
+    upsert: true,
+  });
+  if (uploaded.error) throw new Error(`Could not seed progress storage (status ${statusOf(uploaded.error)}).`);
+  for (const table of PURGE_TABLES) {
+    const count = await countRowsForUser(admin, table, userId);
+    if (count < 1) throw new Error(`${table} was not seeded.`);
+  }
+  const listed = await admin.storage.from(PROGRESS_BUCKET).list(userId, { limit: 100 });
+  const names = requireStorageList(listed.error, listed.data);
+  if (!names.includes(PROBE_FILE)) throw new Error("progress storage was not seeded.");
 }
 
 export async function assertAccountPurged({ userId, email, password, serviceRole }) {

@@ -5,16 +5,18 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertSpecsUseAppFixture } from "../logger/tests/e2e/check-imports.mjs";
-import { describeDenied, liveRequestAllowed } from "../logger/tests/live/allowlist.mjs";
+import { describeDenied, liveRequestAllowed, STATIC_HOSTS } from "../logger/tests/live/allowlist.mjs";
 import {
   assertConfigured,
   liveGate,
   passwordOk,
+  purgeSkippedOnSchedule,
   PURGE_TABLES,
   redactText,
   serviceRoleOk,
   throwawayEmailOk,
 } from "../logger/tests/live/gate.mjs";
+import { requireCount, requireStorageList } from "../logger/tests/live/purge-check.mjs";
 import { EXPECTED_SUPABASE_HOST, LIVE_BASE_URL, PAGES_HOST, SB_URL, SUPABASE_HOST } from "../logger/tests/live/project.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,6 +139,8 @@ test("the live workflow is manual or weekly and does not print secrets", () => {
   assert.match(src, /INSIGHT_TEST_EMAIL/);
   assert.match(src, /INSIGHT_TEST_PASSWORD/);
   assert.match(src, /INSIGHT_TEST_SERVICE_ROLE_KEY/);
+  assert.match(src, /\[ "\$GITHUB_EVENT_NAME" = "schedule" \]/);
+  assert.match(src, /--project=live-boot/);
   const lines = src.split("\n");
   for (const line of lines) {
     assert.doesNotMatch(line, /^\s*pull_request:/);
@@ -144,6 +148,279 @@ test("the live workflow is manual or weekly and does not print secrets", () => {
     assert.doesNotMatch(line, /^\s*cache:/);
     assert.doesNotMatch(line, /set -x/);
     assert.doesNotMatch(line, /echo .*\$(\{|\{?\{? secrets\.|INSIGHT_TEST_)/);
+  }
+  const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
+  assert.match(spec, /purgeSkippedOnSchedule\(process\.env\.GITHUB_EVENT_NAME\)/);
+});
+
+test("a scheduled run skips the account delete", () => {
+  assert.equal(purgeSkippedOnSchedule("schedule"), true);
+  assert.equal(purgeSkippedOnSchedule("workflow_dispatch"), false);
+  assert.equal(purgeSkippedOnSchedule(undefined), false);
+  assert.equal(purgeSkippedOnSchedule(""), false);
+});
+
+test("count and storage errors fail closed", () => {
+  const messages = [
+    "relation does not exist",
+    "column user_id does not exist",
+    "Could not find the table in the schema cache",
+    "could not find the table",
+  ];
+  for (const message of messages) {
+    assert.throws(() => requireCount("user_data", { message, status: 404 }, 0), /Could not count user_data/);
+  }
+  assert.throws(() => requireCount("ai_usage", { message: "not found" }, null), /Could not count ai_usage/);
+  assert.equal(requireCount("user_data", null, 0), 0);
+  assert.throws(() => requireStorageList({ message: "Object not found", status: 404 }, []), /Could not list progress storage/);
+  assert.throws(() => requireStorageList({ message: "Bucket not found" }, null), /Could not list progress storage/);
+  assert.throws(() => requireStorageList(null, null), /Could not list progress storage/);
+  assert.deepEqual(requireStorageList(null, []), []);
+  assert.deepEqual(requireStorageList(null, [{ name: ".emptyFolderPlaceholder" }]), []);
+  assert.deepEqual(requireStorageList(null, [{ name: "live-probe.jpg" }]), ["live-probe.jpg"]);
+  const account = readFileSync(join(root, "logger/tests/live/account.mjs"), "utf8");
+  assert.match(account, /requireCount\(table, error, count\)/);
+  assert.match(account, /requireStorageList\(listed\.error, listed\.data\)/);
+  assert.equal(account.includes("schema cache"), false);
+  assert.equal(account.includes("if (missing) return 0"), false);
+  assert.match(account, /seedPurgeTargets/);
+});
+
+const GATE_SEED = 20261012;
+
+function mulberry32(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, list) {
+  return list[Math.floor(rng() * list.length)];
+}
+
+function randInt(rng, n) {
+  return Math.floor(rng() * n);
+}
+
+function chunk(rng, max) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const n = 1 + randInt(rng, max);
+  let out = "";
+  for (let i = 0; i < n; i++) out += alphabet[randInt(rng, alphabet.length)];
+  return out;
+}
+
+function casedMarker(rng) {
+  return [..."insight-live"].map((ch) => (ch === "-" || rng() < 0.5 ? ch : ch.toUpperCase())).join("");
+}
+
+function goodDomain(rng) {
+  const host = chunk(rng, 10).toLowerCase();
+  const tld = pick(rng, ["com", "org", "net", "io", "co"]);
+  if (rng() < 0.3) return `${host}.mail.${tld}`;
+  return `${host}.${tld}`;
+}
+
+function goodEmail(rng) {
+  const marker = casedMarker(rng);
+  const seps = [".", "+", "_", "-"];
+  const mode = randInt(rng, 4);
+  let local = marker;
+  if (mode === 1) local = `${chunk(rng, 8)}${pick(rng, seps)}${marker}`;
+  else if (mode === 2) local = `${marker}${pick(rng, seps)}${chunk(rng, 8)}`;
+  else if (mode === 3) local = `${chunk(rng, 6)}${pick(rng, seps)}${marker}${pick(rng, seps)}${chunk(rng, 6)}`;
+  return `${local}@${goodDomain(rng)}`;
+}
+
+function rejectEmail(rng, kind) {
+  const marker = casedMarker(rng);
+  const seps = [".", "+", "_", "-"];
+  const local = `${chunk(rng, 4)}${pick(rng, seps)}${marker}`;
+  if (kind === "glued") {
+    const left = chunk(rng, 4);
+    const right = chunk(rng, 4);
+    const mode = randInt(rng, 3);
+    const glued = mode === 0 ? `${left}${marker}` : mode === 1 ? `${marker}${right}` : `${left}${marker}${right}`;
+    return `${glued}@${goodDomain(rng)}`;
+  }
+  if (kind === "two-at") return `${local}@${chunk(rng, 3).toLowerCase()}@${goodDomain(rng)}`;
+  if (kind === "space") {
+    const space = pick(rng, [" ", "\t", "\n"]);
+    return pick(rng, [
+      `${chunk(rng, 3)}${space}${marker}@${goodDomain(rng)}`,
+      `${marker}@ex${space}ample.com`,
+      ` ${marker}@example.com`,
+    ]);
+  }
+  if (kind === "unicode") {
+    const mark = pick(rng, ["í", "é", "ü", "你", "ø"]);
+    const good = goodEmail(rng);
+    const at = randInt(rng, good.length);
+    return `${good.slice(0, at)}${mark}${good.slice(at)}`;
+  }
+  if (kind === "domain") {
+    const domain = pick(rng, ["localhost", "example.c", ".example.com", "example.com.", "example..com", "com", "", ".com"]);
+    return `${local}@${domain}`;
+  }
+  return `${"a".repeat(40)}.${marker}.${"b".repeat(200)}@example.com`;
+}
+
+function show(value) {
+  return JSON.stringify(value);
+}
+
+test("throwawayEmailOk holds on seeded random addresses", () => {
+  const rng = mulberry32(GATE_SEED);
+  const accepted = [
+    "owner+insight-live@example.com",
+    "a.insight-live.b@example.com",
+    "owner_insight-live@example.com",
+    "owner-INSIGHT-LIVE@Example.COM",
+    goodEmail(rng),
+  ];
+  const rejected = [
+    "xinsight-live@example.com",
+    "insight-lived@example.com",
+    "abinsight-livecd@example.com",
+    "owner+insight-live@foo@example.com",
+    "owner +insight-live@example.com",
+    "owner+insight-live@exämple.com",
+    "insight-live@localhost",
+    "insight-live@example.c",
+    "insight-live@.example.com",
+    "insight-live@example.com.",
+    "insight-live@example..com",
+    `${"a".repeat(40)}.insight-live.${"b".repeat(200)}@example.com`,
+  ];
+  for (let i = 0; i < 24; i++) accepted.push(goodEmail(rng));
+  for (const kind of ["glued", "two-at", "space", "unicode", "domain", "long"]) {
+    for (let i = 0; i < 8; i++) rejected.push(rejectEmail(rng, kind));
+  }
+  for (const email of accepted) {
+    assert.equal(email.length <= 254, true, `seed ${GATE_SEED} accept length ${show(email)}`);
+    assert.equal(throwawayEmailOk(email), true, `seed ${GATE_SEED} accept ${show(email)}`);
+  }
+  for (const email of rejected) {
+    assert.equal(throwawayEmailOk(email), false, `seed ${GATE_SEED} reject ${show(email)}`);
+  }
+});
+
+function goodStaticUrl(rng) {
+  const host = pick(rng, STATIC_HOSTS);
+  const path = pick(rng, [
+    "/",
+    "/index.html",
+    "/wellnesstracker/logger/index.html",
+    "/npm/@supabase/supabase-js@2",
+    `/${chunk(rng, 6)}.html`,
+    "/css?family=Lexend",
+  ]);
+  return `https://${host}${path}`;
+}
+
+function goodDeleteUrl(rng) {
+  const suffix = pick(rng, ["", "/", "?confirm=DELETE", "/?x=1"]);
+  return `https://${SUPABASE_HOST}/functions/v1/delete-account${suffix}`;
+}
+
+function rejectUrl(rng, kind) {
+  const host = SUPABASE_HOST;
+  const staticHost = pick(rng, STATIC_HOSTS);
+  const fn = pick(rng, ["food-photo", "food-describe", "oura-sync", "oura-connect", "purge-range", "delete_account", "delete-accounts", `fn-${chunk(rng, 6).toLowerCase()}`]);
+  if (kind === "function") {
+    return pick(rng, [
+      `https://${host}/functions/v1/${fn}`,
+      `https://${host}/functions/v1/${fn}/`,
+      `https://${host}/functions/v1/delete-account/${fn}`,
+    ]);
+  }
+  if (kind === "encoded") {
+    return pick(rng, [
+      `https://${host}/functions%2Fv1%2Fdelete-account`,
+      `https://${host}/functions/v1/delete-account%2F${fn}`,
+      `https://${host}/functions/v1/delete-account%2f..%2f${fn}`,
+      `https://${staticHost}/a%2Fb`,
+      `https://${staticHost}/a%2eb`,
+    ]);
+  }
+  if (kind === "dot") {
+    return pick(rng, [
+      `https://${host}/functions/v1/${fn}/../delete-account`,
+      `https://${host}/functions/v1/./delete-account`,
+      `https://${host}/functions/v1/delete-account/./`,
+      `https://${staticHost}/a/../index.html`,
+      `https://${staticHost}/./index.html`,
+    ]);
+  }
+  if (kind === "http") {
+    return pick(rng, [
+      `http://${host}/functions/v1/delete-account`,
+      `http://${staticHost}/index.html`,
+      `http://${host}/auth/v1/token`,
+    ]);
+  }
+  if (kind === "ws") {
+    return pick(rng, [
+      `ws://${host}/realtime/v1/websocket`,
+      `ws://${host}/functions/v1/delete-account`,
+      `ws://${staticHost}/`,
+      `wss://${staticHost}/socket`,
+    ]);
+  }
+  if (kind === "lookalike") {
+    const base = pick(rng, [host, ...STATIC_HOSTS]);
+    const name = pick(rng, [`${base}.evil.com`, `evil.${base}`, `not-${base}`, `${base}.example.com`]);
+    return `https://${name}/functions/v1/delete-account`;
+  }
+  return pick(rng, [
+    `https://example.com/functions/v1/delete-account`,
+    `https://${chunk(rng, 8).toLowerCase()}.example.com/`,
+    `https://example.org/`,
+  ]);
+}
+
+test("liveRequestAllowed holds on seeded random urls", () => {
+  const rng = mulberry32(GATE_SEED);
+  const accepted = [
+    `https://${SUPABASE_HOST}/functions/v1/delete-account`,
+    `https://${SUPABASE_HOST}/functions/v1/delete-account/`,
+    `https://${PAGES_HOST}/wellnesstracker/logger/index.html`,
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
+    "https://fonts.googleapis.com/css?family=Lexend",
+    "https://fonts.gstatic.com/s/lexend/v1.woff2",
+  ];
+  const rejected = [
+    `https://${SUPABASE_HOST}/functions/v1/food-photo`,
+    `https://${SUPABASE_HOST}/functions/v1/oura-sync`,
+    `https://${SUPABASE_HOST}/functions%2Fv1%2Fdelete-account`,
+    `https://${SUPABASE_HOST}/functions/v1/delete-account%2Ffood-photo`,
+    `https://${SUPABASE_HOST}/functions/v1/food-photo/../delete-account`,
+    `https://${SUPABASE_HOST}/functions/v1/./delete-account`,
+    `http://${SUPABASE_HOST}/functions/v1/delete-account`,
+    `http://${PAGES_HOST}/wellnesstracker/logger/`,
+    `ws://${SUPABASE_HOST}/realtime/v1/websocket`,
+    `ws://${PAGES_HOST}/`,
+    "https://example.com/functions/v1/delete-account",
+    `https://${PAGES_HOST}.evil.com/logger/`,
+    `https://${SUPABASE_HOST}.evil.com/functions/v1/delete-account`,
+    `https://evil.${SUPABASE_HOST}/functions/v1/delete-account`,
+  ];
+  for (let i = 0; i < 16; i++) {
+    accepted.push(goodStaticUrl(rng));
+    accepted.push(goodDeleteUrl(rng));
+  }
+  for (const kind of ["function", "encoded", "dot", "http", "ws", "host", "lookalike"]) {
+    for (let i = 0; i < 8; i++) rejected.push(rejectUrl(rng, kind));
+  }
+  for (const url of accepted) {
+    assert.equal(liveRequestAllowed(url), true, `seed ${GATE_SEED} accept ${show(url)}`);
+  }
+  for (const url of rejected) {
+    assert.equal(liveRequestAllowed(url), false, `seed ${GATE_SEED} reject ${show(url)}`);
   }
 });
 
