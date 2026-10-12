@@ -92,9 +92,22 @@ test("exercise search stays put while typing and then filters in place", async (
 
 test("a freestyle workout can log a set and be saved as a routine", async ({ page }) => {
   const assertQuiet = await openApp(page);
+  await expect(page.getByRole("button", { name: "Empty workout" })).toBeVisible();
+  await page.locator(".wk.today").click();
+  await expect(page.locator("#sheet").getByRole("button", { name: "Empty workout" })).toBeVisible();
+  await page.locator("#sheet [data-action='sheet-close']").last().click();
+
   await page.getByRole("button", { name: "Workouts" }).click();
-  await page.locator(".free-start").click();
+  const start = page.getByRole("button", { name: "Start freestyle workout" });
+  await expect(start).toBeVisible();
+  const startBox = await start.boundingBox();
+  const cardBox = await page.locator(".wcard").first().boundingBox();
+  expect(startBox.y).toBeLessThan(cardBox.y);
+  await start.click();
   await expect(page.locator("#workout .wo-title h2")).toHaveText("Freestyle");
+  const save = page.locator(".wo-top [data-action='save-routine']");
+  await expect(save).toBeVisible();
+  await expect(save).toHaveText("Save as routine");
   await page.locator('[data-action="live-add-open"]').click();
   await expect(page.locator("#add-routine")).toHaveCount(0);
   const input = page.locator("#pick-q");
@@ -108,7 +121,8 @@ test("a freestyle workout can log a set and be saved as a routine", async ({ pag
   await page.locator('[data-action="log"]').click();
   await expect(page.locator("#workout .set-v").first()).toContainText("100");
 
-  await page.locator('[data-action="save-routine"]').click();
+  await expect(save).toBeVisible();
+  await save.click();
   await expect(page.locator("#dlg-in")).toBeVisible();
   await page.locator("#dlg-in").fill("Saturday Lift");
   await page.locator('[data-action="dlg-ok"]').click();
@@ -125,5 +139,6 @@ test("a freestyle workout can log a set and be saved as a routine", async ({ pag
   await expect(page.locator('[data-action="open-w"][data-id="saturday-lift"]')).toContainText("Saturday Lift");
   await page.locator('[data-action="open-w"][data-id="saturday-lift"]').click();
   await expect(page.locator("#elist")).toContainText("Bench Press");
+  await expect(page.locator("#elist")).toContainText("100 × 8");
   assertQuiet();
 });

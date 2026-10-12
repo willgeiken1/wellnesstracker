@@ -29,7 +29,7 @@ app.render = render;
 function startChips(label) {
   return `<p class="hero-s">${label}</p><div class="chips">${app.state.workouts.map((w) =>
     `<button class="chip" data-action="start" data-id="${app.esc(w.id)}">${app.esc(w.name)}</button>`).join("")}
-    <button class="chip" data-action="start-freestyle">Freestyle</button></div>`;
+    <button class="chip" data-action="start-freestyle">Empty workout</button></div>`;
 }
 app.startChips = startChips;
 
@@ -48,7 +48,7 @@ function homeHeroHTML() {
     return `<div class="hero"><p class="hero-k">Planned for today</p><h2 class="hero-t">${app.esc(w.name)}</h2>
       <p class="hero-s">${app.pl(w.exercises.length, "exercise")}</p>
       <button class="btn primary block" data-action="start" data-id="${app.esc(w.id)}">Start ${app.esc(w.name)}</button>
-      <button class="hero-free" data-action="start-freestyle">Freestyle</button></div>`;
+      <button class="hero-free" data-action="start-freestyle">Empty workout</button></div>`;
   }
   if (doneToday.length) {
     const sets = doneToday.reduce((n, s) => n + app.setCount(s), 0);

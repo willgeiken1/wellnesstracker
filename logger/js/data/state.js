@@ -342,7 +342,16 @@ function hintSide(side) {
   return { w: side.w != null ? app.fmtNum(side.w) : "", r: side.r != null ? String(side.r) : "" };
 }
 
-/* Most recent working set in this session, else the most recent one from history.
+/* Sets stored on the routine are the targets for the next time this exercise comes up. */
+function templateSets(s, name) {
+  const w = s && app.workoutById(s.workoutId);
+  const ex = w && (w.exercises || []).find((e) => e.name === name);
+  if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) return null;
+  return ex.sets;
+}
+app.templateSets = templateSets;
+
+/* A routine target fills the next empty set. Otherwise the last working set in this session, else history.
    Warm-ups are skipped when a working set exists. Does not read the suggestion. */
 function setFieldHints(s, name) {
   const pick = (sets) => {
@@ -351,7 +360,9 @@ function setFieldHints(s, name) {
     const list = work.length ? work : sets;
     return list[list.length - 1];
   };
-  const src = pick(app.setsFor(s, name)) || pick(app.lastSets(name, s.id));
+  const targets = app.templateSets(s, name);
+  const logged = targets ? app.setsFor(s, name).filter((x) => x.tag !== "warmup").length : 0;
+  const src = targets ? targets[Math.min(logged, targets.length - 1)] : (pick(app.setsFor(s, name)) || pick(app.lastSets(name, s.id)));
   if (!src) return null;
   const L = hintSide(src.uni ? src.uni.l : src);
   const R = hintSide(src.uni ? src.uni.r : src);

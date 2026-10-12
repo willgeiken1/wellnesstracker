@@ -50,14 +50,10 @@
 #pk-body { overflow-anchor: none; }
 .pk-empty { margin: 16px 0 8px; }
 .pk-empty p { margin: 0 0 12px; color: var(--muted); }
-.free-start {
-  width: 100%; text-align: left; margin: 2px 0 14px; padding: 14px 16px;
-  border-radius: 22px; border: 1.5px dashed var(--line); background: transparent;
-}
-.free-start b { display: block; font-family: var(--display); font-weight: 600; font-size: 22px; letter-spacing: -.02em; }
-.free-start span { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+.free-start { width: 100%; margin: 0 0 16px; }
 .hero-free { display: block; margin: 12px auto 0; color: var(--muted); font-weight: 600; font-size: 15px; }
 .free-save { display: block; margin: 6px auto 0; }
+.wo-top .free-save { grid-column: 1 / -1; height: 44px; margin: 4px 0 0; }
 .live-add-btn { margin: 14px 16px 0; width: calc(100% - 32px); }
 .swap-keep input[type="checkbox"] { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; margin: 0; flex: 0 0 auto; border-radius: 7px;
   border: 2px solid var(--muted); background: transparent; display: grid; place-items: center; }

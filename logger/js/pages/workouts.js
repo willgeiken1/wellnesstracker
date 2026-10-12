@@ -22,10 +22,26 @@ function freestyleSession() {
 }
 app.freestyleSession = freestyleSession;
 
+/* Working sets become the next session's targets. A warm-up is kept only when nothing else was logged. */
+function targetSetsFrom(s, name) {
+  const entry = (s.entries || []).find((e) => e.exercise === name);
+  if (!entry || !entry.sets || !entry.sets.length) return [];
+  const work = entry.sets.filter((x) => x.tag !== "warmup");
+  const list = work.length ? work : entry.sets;
+  return list.map((x) => {
+    const o = { w: x.w, r: x.r };
+    if (x.uni) o.uni = { l: { w: x.uni.l.w, r: x.uni.l.r }, r: { w: x.uni.r.w, r: x.uni.r.r } };
+    return o;
+  });
+}
+app.targetSetsFrom = targetSetsFrom;
+
 function routineExercisesFrom(s) {
   return app.liveExercises(s).map((e) => {
     const o = { name: e.name, muscles: [...(e.muscles || [])] };
     if (e.adv && e.adv.length) o.adv = [...e.adv];
+    const sets = targetSetsFrom(s, e.name);
+    if (sets.length) o.sets = sets;
     return o;
   });
 }
@@ -74,11 +90,10 @@ function workoutsHTML() {
   const seg = `<div class="seg2" role="tablist"><button data-action="wseg" data-seg="routines" aria-pressed="${app.ui.wseg === "routines"}">Routines</button>
     <button data-action="wseg" data-seg="history" aria-pressed="${app.ui.wseg === "history"}">History</button></div>`;
   const plus = `<button class="plus-btn" data-action="new-workout" aria-label="New workout">${app.PLUS_SVG}</button>`;
-  if (app.ui.wseg === "history") return app.pageHead("Workouts", "", { below: plus }) + seg + app.historyHTML(true);
+  const startFree = `<button class="btn block free-start" data-action="start-freestyle">Start freestyle workout</button>`;
+  if (app.ui.wseg === "history") return app.pageHead("Workouts", "", { below: plus }) + startFree + seg + app.historyHTML(true);
   if (app.ui.edit === "routines") return `${app.pageHead("Workouts", "Drag to reorder · × to delete", { below: plus })}${seg}${app.routinesEditHTML()}`;
-  const free = `<button class="free-start" data-action="start-freestyle"><b>Freestyle</b><span>Blank workout. Add exercises as you go.</span></button>`;
-  return `${app.pageHead("Workouts", "Tap one to edit or start it · hold to rearrange", { below: plus })}${seg}
-    ${free}
+  return `${app.pageHead("Workouts", "Tap one to edit or start it · hold to rearrange", { below: plus })}${startFree}${seg}
     ${app.state.workouts.map((w, wi) => {
       const all = app.muscleMode() === "advanced" ? app.uniq(w.exercises.flatMap(app.advOf)).map((k) => app.ADV[k]) : [...new Set(w.exercises.flatMap((e) => e.muscles))].map((m) => app.MUSCLES[m]).filter(Boolean);
       const ms = all.length > 6 ? [...all.slice(0, 6), `+${all.length - 6} more`] : all;
@@ -101,6 +116,7 @@ function detailHTML() {
         <button class="erow-main" data-action="edit-ex" data-i="${i}">
           <div class="erow-n">${app.esc(e.name)}</div>
           <div class="erow-m${e.muscles.length ? "" : " none"}">${e.muscles.length ? app.esc(app.musclesLabel(e, 4)) : "No muscles set"}</div>
+          ${e.sets && e.sets.length ? `<div class="erow-m">${e.sets.map((x) => app.esc(app.fmtSet(x))).join(", ")}</div>` : ""}
         </button>
         <span class="handle" aria-label="Drag to reorder ${app.esc(e.name)}">${app.I.grip}</span>
       </li>`).join("")}</ul>

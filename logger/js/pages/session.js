@@ -211,6 +211,18 @@ function readinessRows(sessions, name) {
    hit the target reps on every working set at the top weight -> add weight; missed -> repeat; missed twice running -> step back ~10%.
    Then nudge from last session's RPE, then from today's readiness. */
 function suggestion(name, sessionId) {
+  const cur = app.state.sessions.find((s) => s.id === sessionId);
+  const stored = cur && app.templateSets(cur, name);
+  if (stored) {
+    const done = app.setsFor(cur, name).filter(app.isWork).length;
+    const next = stored[Math.min(done, stored.length - 1)];
+    return {
+      w: next.w, r: next.r, kind: next.w == null ? "bw" : "same", sets: stored.length, inc: 0,
+      why: `Target from this routine: ${stored.map((x) => app.fmtSet(x)).join(", ")}.`,
+      adjusted: false, plain: false, canReady: false,
+      base: { w: next.w, r: next.r, sets: stored.length },
+    };
+  }
   const histS = app.finished().filter((s) => s.id !== sessionId);
   const hist = histS
     .map((s) => ({ s, e: s.entries.find((e) => e.exercise === name) }))
@@ -218,7 +230,6 @@ function suggestion(name, sessionId) {
   if (!hist.length) return null;
   const work = (e) => e.sets.filter(app.isWork);
   const last = work(hist[0].e);
-  const cur = app.state.sessions.find((s) => s.id === sessionId);
   const dismissed = !!(cur && Array.isArray(cur.plain) && cur.plain.includes(name));
   const opts = {
     avgRpe: meanRpe(last),

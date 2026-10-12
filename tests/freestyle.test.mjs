@@ -17,6 +17,7 @@ globalThis.document = {
 const { app } = await import("../logger/js/runtime.js");
 await import("../logger/js/data/state.js");
 await import("../logger/js/pages/workouts.js");
+await import("../logger/js/pages/session.js");
 await import("../logger/js/shared/cloud.js");
 
 test("a freestyle workout becomes one routine and can be updated in place", () => {
@@ -28,13 +29,21 @@ test("a freestyle workout becomes one routine and can be updated in place", () =
   assert.equal(app.commitFreestyleRoutine(s, "  "), null);
   assert.equal(app.commitFreestyleRoutine(s, "Upper"), null);
 
-  s.extra = [{ name: "Bench Press", muscles: ["chest"], adv: ["pecUpper"] }];
+  s.extra = [
+    { name: "Bench Press", muscles: ["chest"], adv: ["pecUpper"] },
+    { name: "Row", muscles: ["lats"] },
+  ];
+  s.entries = [
+    { exercise: "Row", muscles: ["lats"], sets: [{ w: 60, r: 10, tag: "warmup" }, { w: 80, r: 8 }] },
+    { exercise: "Bench Press", muscles: ["chest"], sets: [{ w: 100, r: 8 }, { w: 100, r: 6 }] },
+  ];
   const created = app.commitFreestyleRoutine(s, "Upper");
   assert.ok(created);
   assert.equal(created.name, "Upper");
-  assert.equal(created.exercises.length, 1);
-  assert.equal(created.exercises[0].name, "Bench Press");
+  assert.deepEqual(created.exercises.map((e) => e.name), ["Bench Press", "Row"]);
   assert.deepEqual(created.exercises[0].adv, ["pecUpper"]);
+  assert.deepEqual(created.exercises[0].sets, [{ w: 100, r: 8 }, { w: 100, r: 6 }]);
+  assert.deepEqual(created.exercises[1].sets, [{ w: 80, r: 8 }]);
   assert.equal(s.workoutId, created.id);
   assert.equal(s.name, "Upper");
   assert.equal(s.origin, "freestyle");
@@ -42,11 +51,12 @@ test("a freestyle workout becomes one routine and can be updated in place", () =
   assert.deepEqual(s.swaps, {});
   assert.equal(app.slugRoutineId("Push"), "push-2");
 
-  s.extra = [{ name: "Row", muscles: ["lats"] }];
+  s.entries.find((e) => e.exercise === "Bench Press").sets.push({ w: 105, r: 5 });
   const updated = app.commitFreestyleRoutine(s, "Upper 2");
   assert.equal(updated.id, created.id);
   assert.equal(updated.name, "Upper 2");
   assert.deepEqual(updated.exercises.map((e) => e.name), ["Bench Press", "Row"]);
+  assert.deepEqual(updated.exercises[0].sets, [{ w: 100, r: 8 }, { w: 100, r: 6 }, { w: 105, r: 5 }]);
   assert.equal(app.state.workouts.filter((w) => w.id === created.id).length, 1);
   assert.deepEqual(s.extra, []);
 
@@ -58,4 +68,18 @@ test("a freestyle workout becomes one routine and can be updated in place", () =
   const blob = app.userDataBlob();
   assert.ok(blob.workouts.some((w) => w.id === created.id && w.exercises.some((e) => e.name === "Row")));
   assert.ok(blob.sessions.some((x) => x.origin === "freestyle" && x.name === "Upper 2"));
+
+  const next = { id: "next", workoutId: created.id, name: "Upper 2", entries: [], finishedAt: null };
+  app.state.sessions.push(next);
+  assert.deepEqual(app.setFieldHints(next, "Bench Press"), { w: "100", r: "8", wR: "100", rR: "8" });
+  let sg = app.suggestion("Bench Press", next.id);
+  assert.equal(sg.w, 100);
+  assert.equal(sg.r, 8);
+  assert.equal(sg.sets, 3);
+  assert.match(sg.why, /100 × 8/);
+  next.entries = [{ exercise: "Bench Press", sets: [{ w: 100, r: 8 }, { w: 100, r: 6 }] }];
+  assert.deepEqual(app.setFieldHints(next, "Bench Press"), { w: "105", r: "5", wR: "105", rR: "5" });
+  sg = app.suggestion("Bench Press", next.id);
+  assert.equal(sg.w, 105);
+  assert.equal(sg.r, 5);
 });
