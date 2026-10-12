@@ -7,8 +7,12 @@ import { ouraMetric } from "../logger/js/shared/brief.js";
 import {
   gatedOuraStripHTML,
   hasOura,
+  homeOuraReconnect,
+  homeOuraWaiting,
   needsSleepRecovery,
   noteOuraConnected,
+  ouraMembershipInactive,
+  ouraReady,
   ouraReturnDialog,
   sleepRecoveryCopy,
   sleepRecoveryLabel,
@@ -240,8 +244,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v44/);
-  assert.match(sentry, /insight-shell-v44/);
+  assert.match(sw, /insight-shell-v45/);
+  assert.match(sentry, /insight-shell-v45/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });
@@ -386,9 +390,10 @@ test("oura personas on the registry home hide empty tiles", () => {
   };
   app.snapshotFromApp = () => card;
   const personas = [
-    { name: "none", connected: false, lastError: null },
-    { name: "lapsed", connected: true, lastError: "token lapsed" },
-    { name: "inactive", connected: true, lastError: "membership_inactive" },
+    { name: "none", connected: false, lastError: null, wait: false },
+    { name: "sync-error", connected: true, lastError: "Oura daily_sleep request failed (500)", wait: true },
+    { name: "inactive", connected: true, lastError: "membership_inactive", wait: false },
+    { name: "forbidden", connected: true, lastError: "Oura daily_sleep request failed (403)", wait: false },
   ];
   for (const persona of personas) {
     app.state = state({
@@ -402,7 +407,7 @@ test("oura personas on the registry home hide empty tiles", () => {
     assert.equal(app.state.oura.lastError, persona.lastError, persona.name);
     assert.match(html, /data-hw="cardio"/, persona.name);
     assert.doesNotMatch(html, /data-hw="readiness"|data-hw="sleep-score"|data-hw="hrv"|data-hw="steps"|No Oura yet|hw-v">–/, persona.name);
-    if (persona.name === "lapsed") assert.equal((html.match(/Waiting for first sync/g) || []).length, 1, persona.name);
+    if (persona.wait) assert.equal((html.match(/Waiting for first sync/g) || []).length, 1, persona.name);
     else assert.doesNotMatch(html, /Waiting for first sync/, persona.name);
   }
   card.oura = { date: "2026-10-04", readiness: 86, sleepScore: 81 };
@@ -495,6 +500,37 @@ test("edited Home: no Oura, lapsed membership, and an active ring", () => {
   assert.match(quiet, /Reconnect Oura/);
   assert.doesNotMatch(quiet, /data-hw="today"|data-hw="readiness"|data-hw="this-week"|data-hw="cardio"/);
   assert.doesNotMatch(quiet, />86</);
+});
+
+test("oura-sync 403 is a lapsed membership, and a 500 is still a first sync", () => {
+  const err = "Oura daily_sleep request failed (403)";
+  const day = { date: "2026-10-04", readiness: 80, sleepScore: 70 };
+  const lapsed = state({
+    oura: { connected: true, lastError: err, days: { "2026-10-04": day } },
+    layout: { homeV2: layout(["readiness", "sleep-score", "today"]) },
+  });
+  assert.equal(ouraMembershipInactive(lapsed), true);
+  assert.equal(ouraReady(lapsed), false);
+  assert.equal(homeOuraWaiting(lapsed), false);
+  assert.equal(homeOuraReconnect(lapsed), true);
+  assert.equal(visibleHomeIds(lapsed).includes("readiness"), false);
+  assert.equal(visibleHomeIds(lapsed).includes("sleep-score"), false);
+  const expired = state({ oura: { connected: true, lastError: "Oura login expired. Reconnect Oura in the app. (401)", days: { "2026-10-04": day } } });
+  assert.equal(ouraMembershipInactive(expired), true);
+  const syncError = state({
+    oura: { connected: true, lastError: "Oura daily_sleep request failed (500)", days: {} },
+    layout: { homeV2: layout(["readiness", "today"]) },
+  });
+  assert.equal(ouraMembershipInactive(syncError), false);
+  const prevSrc = app.src;
+  app.src = () => ({ oura: {} });
+  try {
+    assert.equal(ouraReady(syncError), false);
+    assert.equal(homeOuraWaiting(syncError), true);
+  } finally {
+    app.src = prevSrc;
+  }
+  assert.equal(ouraMembershipInactive(state({ oura: { connected: true, lastError: null, days: {} } })), false);
 });
 
 test("lapsed Oura needs the sleep card, and a reconnect label, while demo stays hidden", () => {

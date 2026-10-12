@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { app } from "../logger/js/runtime.js";
 import "../logger/js/shared/analyze.js";
+import "../logger/js/pages/insights.js";
 import {
   DAYS_FOR_A_PATTERN,
   DISPLAY_LIMIT,
@@ -22,6 +23,7 @@ import {
   localHour,
   loggedDays,
   factorFamily,
+  factorShort,
   FAMILY_CAP,
   listFindings,
   OUTCOME_CAP,
@@ -843,6 +845,66 @@ test("ties are broken by name, so input order does not matter", () => {
   assert.equal(listFindings([a, strong])[0], strong);
 });
 
+test("every eligible finding is reachable on a story card, including folded factors", () => {
+  const rows = [
+    hrvRow("lateEating", undefined, 90, { phrase: "you eat late", lead: "On days you eat late, your HRV is lower.", outcomeLabel: "HRV", nWith: 12 }),
+    hrvRow("fat:median", "fat", 80, { phrase: "your fat is above your usual", lead: "On days your fat is above your usual, your HRV is lower.", outcomeLabel: "HRV", nWith: 12 }),
+    hrvRow("carbs:median", "carbs", 65, { phrase: "your carbs are above your usual", lead: "On days your carbs are above your usual, your HRV is lower.", outcomeLabel: "HRV", nWith: 12 }),
+    hrvRow("sleepHours:median", "sleepHours", 70, { phrase: "you sleep more than usual", lead: "On days you sleep more than usual, your HRV is lower.", outcomeLabel: "HRV", nWith: 11 }),
+    hrvRow("deepHours:median", "deepHours", 60, { phrase: "your deep sleep is longer than usual", lead: "On days your deep sleep is longer than usual, your HRV is lower.", outcomeLabel: "HRV", nWith: 11 }),
+    hrvRow("steps:median", "steps", 50, { phrase: "you get more steps than usual", lead: "On days you get more steps than usual, your HRV is lower.", outcomeLabel: "HRV", nWith: 10 }),
+  ];
+  const eligible = rows.filter((r) => r.confidence === "high" || r.confidence === "medium");
+  const prev = {
+    correlations: app.correlations,
+    correlationSource: app.correlationSource,
+    today: app.today,
+    ui: app.ui,
+    esc: app.esc,
+    pl: app.pl,
+  };
+  const factorsIn = (html) => [...html.matchAll(/data-factors="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/).filter(Boolean));
+  try {
+    app.esc = (s) => String(s == null ? "" : s);
+    app.pl = (n, w) => `${n} ${w}`;
+    app.today = () => "2026-10-04";
+    app.correlationSource = () => ({ days: {} });
+    app.correlations = () => rows;
+    app.ui = { affectsAll: false };
+    const collapsed = app.affectsHTML();
+    assert.match(collapsed, /Also: fat, carbs/);
+    assert.match(collapsed, /Also: deep sleep/);
+    assert.match(collapsed, /On days you eat late/);
+    assert.doesNotMatch(collapsed, /On days you get more steps/);
+    app.ui = { affectsAll: true };
+    const open = app.affectsHTML();
+    const shown = new Set(factorsIn(open));
+    eligible.forEach((r) => assert.ok(shown.has(r.factor), r.factor));
+    assert.equal(shown.size, eligible.length);
+    const listed = listFindings(rows);
+    listed.forEach((card) => {
+      assert.match(open, new RegExp(card.lead.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      (card.folded || []).forEach((f) => {
+        const name = factorShort(f);
+        assert.match(open, new RegExp("Also: [^<]*" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      });
+    });
+    const covered = new Set();
+    listed.forEach((card) => {
+      covered.add(card.factor);
+      (card.folded || []).forEach((f) => covered.add(f.factor));
+    });
+    eligible.forEach((r) => assert.ok(covered.has(r.factor), "missing " + r.factor));
+  } finally {
+    app.correlations = prev.correlations;
+    app.correlationSource = prev.correlationSource;
+    app.today = prev.today;
+    app.ui = prev.ui;
+    app.esc = prev.esc;
+    app.pl = prev.pl;
+  }
+});
+
 test("the Insights screen still calls effect(), and the engine does not phone home", () => {
   const insights = readFileSync(new URL("../logger/js/pages/insights.js", import.meta.url), "utf8");
   const analyze = readFileSync(new URL("../logger/js/shared/analyze.js", import.meta.url), "utf8");
@@ -867,8 +929,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v44/);
-  assert.match(sentry, /insight-shell-v44/);
+  assert.match(sw, /insight-shell-v45/);
+  assert.match(sentry, /insight-shell-v45/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /SEE_ALL_LIMIT/);
   assert.match(engine, /mergeMirrors/);
@@ -903,6 +965,13 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(gateImport[1], /\bhasOura\b/);
   assert.match(brief, /import\s*\{\s*homeCardShowing,\s*readinessCardShowing\s*\}\s*from\s*"\.\/home-defaults\.js"/);
   assert.match(brief, /m\.link === "affects" && m\.empty/);
+  assert.match(brief, /quiet: seeInsights/);
+  assert.doesNotMatch(brief, /m\.value === /);
+  const weeklySrc = readFileSync(new URL("../logger/js/shared/weekly.js", import.meta.url), "utf8");
+  assert.match(insights, /foldedAlso/);
+  assert.match(weeklySrc, /foldedAlso/);
+  assert.match(insights, /aff-also/);
+  assert.match(weeklySrc, /aff-also/);
   assert.doesNotMatch(brief, /No strong pattern yet/);
   assert.doesNotMatch(brief, /m\.empty && m\.sub/);
   assert.match(engine, /benjaminiHochberg/);

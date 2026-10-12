@@ -294,15 +294,27 @@ app.compareSentence = compareSentence;
 
 /* ---------- Charts (hand-drawn SVG, no libraries) ---------- */
 /* A range under 2 (lb or kg on screen) rounds to the same integer more than
-   once. Use a decimal while the labels stay unique, otherwise drop the repeat. */
+   once. Use a decimal while the labels stay unique, otherwise drop the repeat.
+   A custom fmt may end in a unit (h, k, m). The decimal keeps that suffix. */
+function tickUnit(label) {
+  const m = /^([^0-9+\-]*)([+\-]?[0-9][0-9,]*(?:\.[0-9]+)?)(.*)$/.exec(String(label));
+  if (!m) return null;
+  return { prefix: m[1], suffix: m[3] };
+}
+
 function chartTickText(vals, fmt) {
   const plain = vals.map((v) => String(fmt(v)));
   if (new Set(plain).size === plain.length) return plain;
   const span = vals[vals.length - 1] - vals[0];
   let best = plain;
   if (span > 0 && span < 2) {
+    const parts = plain.map(tickUnit);
+    const head = parts[0];
+    const same = !!(head && parts.every((p) => p && p.prefix === head.prefix && p.suffix === head.suffix));
+    const prefix = same ? head.prefix : "";
+    const suffix = same ? head.suffix : "";
     for (let digits = 1; digits <= 2; digits++) {
-      const next = vals.map((v) => v.toFixed(digits));
+      const next = vals.map((v) => prefix + Number(v).toFixed(digits) + suffix);
       best = next;
       if (new Set(next).size === next.length) return next;
     }

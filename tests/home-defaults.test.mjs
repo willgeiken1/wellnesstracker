@@ -159,7 +159,11 @@ test("the defaults are the agreed ids per user type", () => {
   const lapsed = account({ oura: { connected: true, lastError: "membership_inactive", days: ringDays() } });
   assert.equal(ouraLapsed(lapsed), true);
   assert.deepEqual(defaultHomeIds(lapsed), PLAIN_DEFAULT_IDS);
-  assert.deepEqual(defaultHomeIds(account({ oura: { connected: true, lastError: "token lapsed", days: {} } })), OURA_DEFAULT_IDS);
+  const forbidden = account({ oura: { connected: true, lastError: "Oura daily_sleep request failed (403)", days: ringDays() } });
+  assert.equal(ouraLapsed(forbidden), true);
+  assert.deepEqual(defaultHomeIds(forbidden), PLAIN_DEFAULT_IDS);
+  assert.deepEqual(defaultHomeIds(account({ oura: { connected: true, lastError: "token lapsed", days: {} } })), PLAIN_DEFAULT_IDS);
+  assert.deepEqual(defaultHomeIds(account({ oura: { connected: true, lastError: "Oura daily_sleep request failed (500)", days: {} } })), OURA_DEFAULT_IDS);
 });
 
 test("a person with no ring gets food, weekly goal and weight tiles, only with data", () => {
@@ -296,6 +300,27 @@ test("the empty Your week card is hidden, and an empty What affects you stays of
   } finally { restoreApp(); }
 });
 
+test("the brief quiet pattern is a flag on the metric", () => {
+  const prev = { correlations: app.correlations, correlationSource: app.correlationSource };
+  try {
+    const roomy = account({ brief: { order: ["pattern", "train"], hidden: [], size: "expanded" }, layout: { home: { order: [], hidden: ["today"] } } });
+    stubApp(roomy);
+    app.correlations = () => [];
+    app.correlationSource = () => ({ days: {} });
+    const empty = app.briefHTML();
+    assert.match(empty, /A couple more weeks/);
+    assert.match(empty, /brief-l">Patterns/);
+    app.correlations = () => [{ confidence: "medium", valence: "good", q: 0.04, strength: 1, factor: "fat:median", source: "fat", outcome: "hrv", lag: 1 }];
+    const quiet = app.briefHTML();
+    assert.match(quiet, /Possible patterns, see Insights/);
+    assert.doesNotMatch(quiet, /brief-l">Patterns/);
+  } finally {
+    app.correlations = prev.correlations;
+    app.correlationSource = prev.correlationSource;
+    restoreApp();
+  }
+});
+
 test("the pattern wording is neutral", () => {
   const brief = readFileSync(new URL("../logger/js/shared/brief.js", import.meta.url), "utf8");
   const widgets = readFileSync(new URL("../logger/js/shared/home-widgets.js", import.meta.url), "utf8");
@@ -306,10 +331,10 @@ test("the pattern wording is neutral", () => {
   assert.doesNotMatch(brief + widgets + insights + weekly, /Working against you|Worth watching/);
 });
 
-test("the shell caches the defaults module on the v44 release", () => {
+test("the shell caches the defaults module on the v45 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /const CACHE = "insight-shell-v44"/);
+  assert.match(sw, /const CACHE = "insight-shell-v45"/);
   assert.match(sw, /const STAGE = CACHE \+ "-next"/);
   assert.doesNotMatch(sw, /insight-shell-v30"/);
 });

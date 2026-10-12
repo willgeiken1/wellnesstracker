@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { UNFAVORABLE_MARK, addDays, claimSupported, findingsForWeek } from "./correlate.js";
+import { UNFAVORABLE_MARK, addDays, claimSupported, findingsForWeek, foldedAlso } from "./correlate.js";
 
 /* In-app weekly report. Numbers stay on the device. Dismiss state is a list of
    week-start dates in the existing user blob, not a new table. */
@@ -470,9 +470,13 @@ function weekFindings(start, end) {
 function findingCard(r) {
   const toneName = r.valence === "good" ? "good" : "bad";
   const mark = toneName === "good" ? "Good for you" : UNFAVORABLE_MARK;
-  return `<article class="card aff-card ${toneName}">
+  const also = foldedAlso(r);
+  const alsoHTML = also ? `<p class="aff-also">${app.esc(also)}</p>` : "";
+  const ids = [r && r.factor].concat((r && r.folded || []).map((f) => f && f.factor)).filter(Boolean);
+  return `<article class="card aff-card ${toneName}" data-factors="${ids.map((id) => app.esc(id)).join(" ")}">
     <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
     <p class="aff-s">${app.esc(r.lead || r.sentence || "")}</p>
+    ${alsoHTML}
   </article>`;
 }
 

@@ -218,6 +218,7 @@ function patternEmpty(days, rows) {
     label: "What affects you",
     value: seeInsights ? "Possible patterns, see Insights" : (n < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet"),
     empty: true,
+    quiet: seeInsights,
     link: "affects",
   };
 }
@@ -302,9 +303,8 @@ function metricHTML(m) {
       </button></li>`;
   }
   if (m.link === "affects" && m.empty) {
-    const quiet = m.value === "Possible patterns, see Insights";
     return `<li class="brief-metric span empty" data-metric="${m.id}">
-      <button class="brief-hit" data-action="open-affects">${quiet ? "" : `<span class="brief-l">Patterns</span>`}<span class="brief-line">${app.esc(m.value)}</span></button></li>`;
+      <button class="brief-hit" data-action="open-affects">${m.quiet ? "" : `<span class="brief-l">Patterns</span>`}<span class="brief-line">${app.esc(m.value)}</span></button></li>`;
   }
   if (m.link === "affects") {
     return `<li class="brief-metric span${m.tone ? ` tone-${m.tone}` : ""}" data-metric="${m.id}">

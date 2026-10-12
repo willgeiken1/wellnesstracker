@@ -395,6 +395,12 @@ body.timer-on:not(.in-workout) #view {
   letter-spacing: -.015em;
   color: var(--text);
 }
+.aff-also {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
 .aff-chips {
   display: flex;
   flex-wrap: wrap;
