@@ -534,6 +534,29 @@ function metricMeta(id) {
   return { label, plural: /s$/i.test(label) && !/(readiness|sleep|hours|ss)$/i.test(label) };
 }
 
+/* Short name for a folded factor on a story card: "fat", "carbs", "late eating". */
+export function factorShort(row) {
+  const factor = String(row && row.factor || "").replace(/:(median|tertile)$/, "");
+  if (factor && METRICS[factor]) return METRICS[factor].label;
+  if (factor) return metricMeta(factor).label;
+  const source = String(row && row.source || "");
+  if (METRICS[source]) return METRICS[source].label;
+  return source ? metricMeta(source).label : "";
+}
+
+/* Visible line for the rows a story folded onto its lead card. */
+export function foldedAlso(row) {
+  const names = [];
+  const seen = new Set();
+  (row && row.folded || []).forEach((f) => {
+    const name = factorShort(f);
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  });
+  return names.length ? "Also: " + names.join(", ") : "";
+}
+
 /* Parent metric for a yes/no factor, when it is just a cut of that metric. */
 const BOOLEAN_SOURCE = {
   workedOut: "workoutVolume",

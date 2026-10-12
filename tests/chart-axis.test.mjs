@@ -35,3 +35,33 @@ test("a bodyweight chart under 2 lb does not repeat an integer tick", () => {
     app.fmtDate = prev;
   }
 });
+
+test("a tight chart keeps a custom unit suffix on decimal ticks", () => {
+  const prev = app.fmtDate;
+  app.fmtDate = () => "Oct 1";
+  try {
+    const labels = ["2026-10-01", "2026-10-02", "2026-10-03"];
+    const cases = [
+      { suffix: "h", yMin: 7.1, yMax: 7.9, data: [7.2, 7.4, 7.8] },
+      { suffix: "k", yMin: 1.1, yMax: 1.9, data: [1.2, 1.4, 1.8] },
+      { suffix: "m", yMin: 12.1, yMax: 12.9, data: [12.2, 12.4, 12.8] },
+    ];
+    for (const c of cases) {
+      const svg = app.chartSVG({
+        labels,
+        series: [{ data: c.data, cls: "ln" }],
+        h: 110,
+        yMin: c.yMin,
+        yMax: c.yMax,
+        fmt: (v) => v.toFixed(0) + c.suffix,
+      });
+      const ticks = yLabels(svg).filter(Boolean);
+      assert.equal(new Set(ticks).size, ticks.length, c.suffix);
+      assert.ok(ticks.length >= 2, c.suffix);
+      assert.ok(ticks.every((lab) => lab.endsWith(c.suffix)), ticks.join(","));
+      assert.ok(ticks.some((lab) => lab.includes(".")), ticks.join(","));
+    }
+  } finally {
+    app.fmtDate = prev;
+  }
+});

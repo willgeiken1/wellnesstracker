@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { UNFAVORABLE_MARK, correlate, pickForToday, todayLine, weightTrend } from "./correlate.js";
+import { DAYS_FOR_A_PATTERN, UNFAVORABLE_MARK, correlate, findingsForView, loggedDays, pickForToday, todayLine, weightTrend } from "./correlate.js";
 
 /* Home widget registry.
    Painting is per user: homeRegistryActive is true only for a stored homeV2
@@ -200,34 +200,39 @@ function heroModel(sessions, today) {
   return { mode: "empty", chips };
 }
 
-function patternQuiet() {
-  return { empty: true, label: "Today's pattern", line: "Possible patterns, see Insights" };
+/* Same empty copy as the brief. "Possible patterns" only when a finding exists. */
+function patternQuiet(days, rows) {
+  const seeInsights = findingsForView(rows || []).length > 0;
+  const line = seeInsights ? "Possible patterns, see Insights" : ((days || 0) < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet");
+  return { empty: true, label: "Today's pattern", line };
 }
 
 function patternFrom(input, today) {
-  if (!input) return patternQuiet();
+  if (!input) return patternQuiet(0, []);
   try {
     const rows = correlate(input, {});
     const row = pickForToday(rows, input, today);
     const line = row && todayLine(row);
-    if (!line) return patternQuiet();
+    if (!line) return patternQuiet(loggedDays(input), rows);
     const good = row.valence === "good";
     return { label: good ? "Good for you" : UNFAVORABLE_MARK, line, tone: good ? "up" : "down" };
   } catch (e) {
-    return patternQuiet();
+    return patternQuiet(0, []);
   }
 }
 
 function patternNow() {
-  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function" || typeof app.today !== "function") return patternQuiet();
+  if (typeof app.correlations !== "function" || typeof app.correlationSource !== "function" || typeof app.today !== "function") return patternQuiet(0, []);
   try {
-    const row = pickForToday(app.correlations(), app.correlationSource(), app.today());
+    const src = app.correlationSource();
+    const rows = app.correlations();
+    const row = pickForToday(rows, src, app.today());
     const line = row && todayLine(row);
-    if (!line) return patternQuiet();
+    if (!line) return patternQuiet(loggedDays(src), rows);
     const good = row.valence === "good";
     return { label: good ? "Good for you" : UNFAVORABLE_MARK, line, tone: good ? "up" : "down" };
   } catch (e) {
-    return patternQuiet();
+    return patternQuiet(0, []);
   }
 }
 
@@ -487,7 +492,7 @@ function renderThisWeek(data) {
 function renderPattern(data) {
   const pattern = data && data.kind === "snapshot" ? data.pattern : (data && data.live ? patternNow() : data && data.pattern);
   if (!pattern || !pattern.line || pattern.empty) {
-    const line = pattern && pattern.line ? pattern.line : "Possible patterns, see Insights";
+    const line = pattern && pattern.line ? pattern.line : "A couple more weeks";
     return `<button class="hw hw-m hw-hit hw-quiet" data-hw="pattern" data-action="open-affects"><span class="hw-k">Today's pattern</span><span class="hw-line">${esc(line)}</span></button>`;
   }
   const tone = pattern.tone === "up" ? " tone-up" : pattern.tone === "down" ? " tone-down" : "";

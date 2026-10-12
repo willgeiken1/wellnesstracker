@@ -12,7 +12,7 @@ function invokeBody(src, name) {
 }
 
 function bodyFields(src) {
-  return [...new Set([...src.matchAll(/\bbody\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]))].sort();
+  return [...new Set([...src.matchAll(/body\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]))].sort();
 }
 
 function stringifyObject(src) {

@@ -56,11 +56,12 @@ function dayBag(days) {
   return Object.keys(days).some((key) => days[key] && typeof days[key] === "object");
 }
 
-/* API 403 is stored as membership_inactive. The connection row stays, and so do
-   old days. Those days are not a live ring. */
+/* oura-sync stores `Oura <path> request failed (403)`, and a refresh failure
+   as `Oura login expired...`. The literal membership_inactive string is not
+   what the connection row gets. Same match as ouraMembershipLapsed. The
+   connection row stays, and so do old days. Those days are not a live ring. */
 export function ouraMembershipInactive(state) {
-  const err = state && state.oura && state.oura.lastError;
-  return typeof err === "string" && err.toLowerCase().includes("membership_inactive");
+  return ouraMembershipLapsed(state);
 }
 
 /* Demo counts as ready. A connected ring with no stored day does not.
@@ -81,7 +82,7 @@ export function ouraReady(state) {
 
 /* Ids Home should paint. hidden is the person's list.
    needsOura drops out with no ring, no demo, a ring that has not synced a day,
-   or a lapsed membership (membership_inactive) even when old days are stored.
+   or a lapsed membership (403, lapsed, inactive, expired) even when old days are stored.
    items and hidden are guarded because a v2 layout can omit them. */
 export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
   const layout = getHomeLayout(state);
@@ -121,8 +122,7 @@ export function homeOuraReconnectHTML(state) {
 export function homeOuraWaiting(state) {
   if (!state || state.demo || ouraReady(state)) return false;
   if (!state.oura || !state.oura.connected) return false;
-  const err = state.oura.lastError;
-  if (typeof err === "string" && err.toLowerCase().includes("membership_inactive")) return false;
+  if (ouraMembershipInactive(state)) return false;
   const layout = getHomeLayout(state);
   const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
   const items = Array.isArray(layout.items) ? layout.items : [];

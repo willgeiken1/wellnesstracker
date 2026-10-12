@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, UNFAVORABLE_MARK, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, UNFAVORABLE_MARK, foldedAlso, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
 import { needsSleepRecovery, ouraMembershipInactive, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import { readinessForAdvice } from "../shared/brief.js";
 import "./insight-widgets.js";
@@ -74,14 +74,25 @@ function insightsWrapHTML() {
 }
 app.insightsWrapHTML = insightsWrapHTML;
 
+function storyFactorIds(r) {
+  const ids = [];
+  if (r && r.factor) ids.push(String(r.factor));
+  (r && r.folded || []).forEach((f) => { if (f && f.factor) ids.push(String(f.factor)); });
+  return ids;
+}
+
 function affectsCard(r) {
   const tone = r.valence === "good" ? "good" : r.valence === "bad" ? "bad" : "neutral";
   const mark = tone === "good" ? "Good for you" : tone === "bad" ? UNFAVORABLE_MARK : "Just a pattern";
   const conf = r.confidence === "high" ? "High confidence" : "Medium confidence";
   const hi = r.confidence === "high" ? " hi" : "";
-  return `<article class="card aff-card ${tone}">
+  const also = foldedAlso(r);
+  const alsoHTML = also ? `<p class="aff-also">${app.esc(also)}</p>` : "";
+  const factors = storyFactorIds(r).map((id) => app.esc(id)).join(" ");
+  return `<article class="card aff-card ${tone}" data-factors="${factors}">
     <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
     <p class="aff-s">${app.esc(r.lead || r.sentence)}</p>
+    ${alsoHTML}
     <div class="aff-chips"><span class="aff-chip${hi}">${conf}</span><span class="aff-chip">${app.pl(r.nWith, "day")}</span></div>
   </article>`;
 }

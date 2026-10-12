@@ -90,12 +90,14 @@ test("small cards render their numbers, and steps and last night stay blank with
   assert.match(HOME_WIDGETS.pattern.render(snap), /Sleep was long/);
   assert.match(HOME_WIDGETS.pattern.render(snap), /What affects you/);
   const quiet = HOME_WIDGETS.pattern.render({ kind: "snapshot", pattern: null });
-  assert.match(quiet, /Possible patterns, see Insights/);
+  assert.match(quiet, /A couple more weeks/);
+  assert.doesNotMatch(quiet, /Possible patterns, see Insights/);
   assert.match(quiet, /data-action="open-affects"/);
   assert.match(quiet, /hw-quiet/);
   assert.doesNotMatch(quiet, /Nothing stands out/);
   const liveQuiet = HOME_WIDGETS.pattern.render({ live: true });
-  assert.match(liveQuiet, /Possible patterns, see Insights/);
+  assert.match(liveQuiet, /A couple more weeks/);
+  assert.doesNotMatch(liveQuiet, /Possible patterns, see Insights/);
   assert.match(HOME_WIDGETS["weight-trend"].preview({
     today: "2026-10-04", sessions: [], foodDays: {}, oura: {},
     weighIns: [{ date: "2026-10-01", kg: 80 }],
@@ -105,6 +107,34 @@ test("small cards render their numbers, and steps and last night stay blank with
   assert.equal(HOME_WIDGETS.steps.render({ kind: "snapshot", steps: null, oura: { readiness: 70, date: "2026-10-04" } }), "");
   assert.equal(HOME_WIDGETS["last-night"].render({ kind: "snapshot", oura: { readiness: 70 } }), "");
   assert.match(HOME_WIDGETS.readiness.render({ kind: "snapshot", oura: null }), /No Oura yet/);
+});
+
+test("a pattern with no findings uses the empty copy, and findings still point at Insights", () => {
+  const prev = { correlations: app.correlations, correlationSource: app.correlationSource, today: app.today };
+  try {
+    app.today = () => "2026-10-04";
+    app.correlations = () => [];
+    app.correlationSource = () => ({ days: {} });
+    const early = HOME_WIDGETS.pattern.render({ live: true });
+    assert.match(early, /A couple more weeks/);
+    assert.doesNotMatch(early, /Possible patterns, see Insights/);
+    const days = {};
+    for (let i = 0; i < 16; i++) {
+      const d = new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10);
+      days[d] = { steps: 1000 + i };
+    }
+    app.correlationSource = () => ({ days });
+    const clear = HOME_WIDGETS.pattern.render({ live: true });
+    assert.match(clear, /Nothing clear yet/);
+    assert.doesNotMatch(clear, /Possible patterns, see Insights/);
+    app.correlations = () => [{ confidence: "medium", valence: "good", q: 0.04, strength: 1, factor: "fat:median", source: "fat", outcome: "hrv", lag: 1 }];
+    const see = HOME_WIDGETS.pattern.render({ live: true });
+    assert.match(see, /Possible patterns, see Insights/);
+  } finally {
+    app.correlations = prev.correlations;
+    app.correlationSource = prev.correlationSource;
+    app.today = prev.today;
+  }
 });
 
 test("preview accepts a demo bundle and the live sections delegate when asked", () => {
@@ -399,8 +429,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v44/);
-  assert.match(sentry, /insight-shell-v44/);
+  assert.match(sw, /insight-shell-v45/);
+  assert.match(sentry, /insight-shell-v45/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
