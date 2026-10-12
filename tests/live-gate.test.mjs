@@ -16,7 +16,7 @@ import {
   serviceRoleOk,
   throwawayEmailOk,
 } from "../logger/tests/live/gate.mjs";
-import { requireCount, requireStorageList } from "../logger/tests/live/purge-check.mjs";
+import { pollUntil, requireCount, requireStorageList } from "../logger/tests/live/purge-check.mjs";
 import { EXPECTED_SUPABASE_HOST, LIVE_BASE_URL, PAGES_HOST, SB_URL, SUPABASE_HOST } from "../logger/tests/live/project.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -216,6 +216,34 @@ test("count and storage errors fail closed", () => {
   assert.equal(account.includes("schema cache"), false);
   assert.equal(account.includes("if (missing) return 0"), false);
   assert.match(account, /seedPurgeTargets/);
+  assert.match(account, /pollUntil/);
+  assert.match(account, /alreadyExists\(created\.error\)/);
+  assert.match(account, /deleteThrowawayAccount/);
+  const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
+  assert.match(spec, /cloudPush/);
+  assert.match(spec, /deleteThrowawayAccount/);
+  assert.equal(spec.includes("waitForFunction(async"), false);
+});
+
+test("the user_data poll waits and still fails closed", async () => {
+  let reads = 0;
+  await pollUntil(async () => {
+    reads += 1;
+    return reads >= 3;
+  }, { timeoutMs: 200, intervalMs: 10, missing: "user_data was not written before the purge check." });
+  assert.equal(reads, 3);
+  await assert.rejects(
+    () => pollUntil(async () => false, { timeoutMs: 30, intervalMs: 10, missing: "user_data was not written before the purge check." }),
+    /user_data was not written before the purge check/
+  );
+  await assert.rejects(
+    () => pollUntil(async () => { throw new Error("Could not read user_data before the purge check (status 404)."); }, {
+      timeoutMs: 200,
+      intervalMs: 10,
+      missing: "user_data was not written before the purge check.",
+    }),
+    /Could not read user_data/
+  );
 });
 
 const GATE_SEED = Number(process.env.LIVE_GATE_SEED ?? 20261012);

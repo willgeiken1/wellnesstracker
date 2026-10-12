@@ -1,4 +1,4 @@
-import { assertAccountPurged, ensureThrowawayUser, seedPurgeTargets } from "./account.mjs";
+import { assertAccountPurged, deleteThrowawayAccount, ensureThrowawayUser, seedPurgeTargets } from "./account.mjs";
 import { assertConfigured, liveGate, PROBE_NAME, purgeSkippedOnSchedule, redactText } from "./gate.mjs";
 import { expect, test } from "./fixtures.mjs";
 
@@ -95,15 +95,10 @@ async function logProbeWeighIn(page) {
   });
 }
 
-async function waitForServerRow(page) {
-  await page.waitForFunction(async () => {
-    const user = window.app.session && window.app.session.user;
-    if (!user || !window.app.sb) return false;
-    const { data, error } = await window.app.sb.from("user_data").select("data").eq("user_id", user.id).maybeSingle();
-    if (error || !data || !data.data || !data.data.profile) return false;
-    const profile = data.data.profile;
-    return profile.name === "Live Probe" && Array.isArray(profile.weighIns) && profile.weighIns.length > 0;
-  }, null, { timeout: 25_000 });
+async function flushCloudPush(page) {
+  await page.evaluate(async () => {
+    if (window.app && typeof window.app.cloudPush === "function") await window.app.cloudPush();
+  });
 }
 
 test.describe("throwaway account purge", () => {
@@ -120,77 +115,91 @@ test.describe("throwaway account purge", () => {
     assertConfigured(gate);
     let userId = "";
     try {
-      ({ userId } = await ensureThrowawayUser({
-        email: gate.email,
-        password: gate.password,
-        serviceRole: gate.serviceRole,
-      }));
-    } catch (err) {
-      rethrowRedacted(err, "Could not prepare the throwaway account. Not deleting.");
-    }
-
-    await page.goto("index.html");
-    await page.waitForFunction(() => window.app && typeof window.app.render === "function" && window.app.sb);
-    const phase = await signInThrowaway(page);
-    if (phase === "locked") throw new Error("Refusing to run: the throwaway account has app lock on. Not deleting.");
-
-    const signedInEmail = await page.evaluate(() => (window.app.session && window.app.session.user && window.app.session.user.email) || "");
-    if (signedInEmail.toLowerCase() !== gate.email.toLowerCase()) {
-      throw new Error("Refusing to delete: the signed-in account is not the throwaway account.");
-    }
-
-    await ensureProbeProfile(page);
-    await logProbeWeighIn(page);
-    await waitForServerRow(page);
-
-    try {
-      await seedPurgeTargets({ userId, serviceRole: gate.serviceRole });
-    } catch (err) {
-      rethrowRedacted(err, "Could not seed the throwaway rows. Not deleting.");
-    }
-
-    const capturedId = await page.evaluate(() => (window.app.session && window.app.session.user && window.app.session.user.id) || "");
-    if (capturedId !== userId) throw new Error("Refusing to delete: the signed-in user did not match the throwaway account.");
-    const probeName = await page.evaluate(() => (window.app.state.profile && window.app.state.profile.name) || "");
-    if (probeName !== PROBE_NAME) throw new Error("Refusing to delete: profile was not saved as the live probe.");
-
-    if ((await page.evaluate(() => window.app.ui && window.app.ui.tab)) !== "settings") await openSettings(page);
-    const pending = page.waitForResponse((res) => {
       try {
-        const url = new URL(res.url());
-        return res.request().method() === "POST" && /\/functions\/v1\/delete-account\/?$/.test(url.pathname);
-      } catch { return false; }
-    });
-    const deletedToast = page.waitForFunction(() => {
-      const toast = document.getElementById("toast");
-      return !!(toast && (toast.textContent || "").includes("Your account was deleted."));
-    });
-    await page.locator('[data-action="priv-delete"]').click();
-    await expect(page.locator("#del-go")).toHaveText("Delete my account");
-    await page.locator("#del-confirm").fill("DELETE");
-    await expect(page.locator("#del-go")).toBeEnabled();
-    await page.locator("#del-go").click();
-    const response = await pending;
-    let ok = false;
-    try {
-      const body = await response.json();
-      ok = !!body && body.ok === true && Object.keys(body).length === 1;
-    } catch { ok = false; }
-    if (response.status() !== 200 || !ok) {
-      throw new Error(`delete-account did not report ok (status ${response.status()}).`);
-    }
-    await deletedToast;
-    await page.waitForFunction(() => !window.app.session);
+        ({ userId } = await ensureThrowawayUser({
+          email: gate.email,
+          password: gate.password,
+          serviceRole: gate.serviceRole,
+        }));
+      } catch (err) {
+        rethrowRedacted(err, "Could not prepare the throwaway account. Not deleting.");
+      }
 
-    try {
-      await assertAccountPurged({
-        userId,
-        email: gate.email,
-        password: gate.password,
-        serviceRole: gate.serviceRole,
+      await page.goto("index.html");
+      await page.waitForFunction(() => window.app && typeof window.app.render === "function" && window.app.sb);
+      const phase = await signInThrowaway(page);
+      if (phase === "locked") throw new Error("Refusing to run: the throwaway account has app lock on. Not deleting.");
+
+      const signedInEmail = await page.evaluate(() => (window.app.session && window.app.session.user && window.app.session.user.email) || "");
+      if (signedInEmail.toLowerCase() !== gate.email.toLowerCase()) {
+        throw new Error("Refusing to delete: the signed-in account is not the throwaway account.");
+      }
+
+      await ensureProbeProfile(page);
+      await logProbeWeighIn(page);
+      await flushCloudPush(page);
+
+      try {
+        await seedPurgeTargets({ userId, serviceRole: gate.serviceRole });
+      } catch (err) {
+        rethrowRedacted(err, "Could not seed the throwaway rows. Not deleting.");
+      }
+
+      const capturedId = await page.evaluate(() => (window.app.session && window.app.session.user && window.app.session.user.id) || "");
+      if (capturedId !== userId) throw new Error("Refusing to delete: the signed-in user did not match the throwaway account.");
+      const probeName = await page.evaluate(() => (window.app.state.profile && window.app.state.profile.name) || "");
+      if (probeName !== PROBE_NAME) throw new Error("Refusing to delete: profile was not saved as the live probe.");
+
+      if ((await page.evaluate(() => window.app.ui && window.app.ui.tab)) !== "settings") await openSettings(page);
+      const pending = page.waitForResponse((res) => {
+        try {
+          const url = new URL(res.url());
+          return res.request().method() === "POST" && /\/functions\/v1\/delete-account\/?$/.test(url.pathname);
+        } catch { return false; }
       });
+      const deletedToast = page.waitForFunction(() => {
+        const toast = document.getElementById("toast");
+        return !!(toast && (toast.textContent || "").includes("Your account was deleted."));
+      });
+      await page.locator('[data-action="priv-delete"]').click();
+      await expect(page.locator("#del-go")).toHaveText("Delete my account");
+      await page.locator("#del-confirm").fill("DELETE");
+      await expect(page.locator("#del-go")).toBeEnabled();
+      await page.locator("#del-go").click();
+      const response = await pending;
+      let ok = false;
+      try {
+        const body = await response.json();
+        ok = !!body && body.ok === true && Object.keys(body).length === 1;
+      } catch { ok = false; }
+      if (response.status() !== 200 || !ok) {
+        throw new Error(`delete-account did not report ok (status ${response.status()}).`);
+      }
+      await deletedToast;
+      await page.waitForFunction(() => !window.app.session);
+
+      try {
+        await assertAccountPurged({
+          userId,
+          email: gate.email,
+          password: gate.password,
+          serviceRole: gate.serviceRole,
+        });
+      } catch (err) {
+        rethrowRedacted(err, "Account purge check failed.");
+      }
     } catch (err) {
-      rethrowRedacted(err, "Account purge check failed.");
+      if (userId) {
+        try {
+          await deleteThrowawayAccount({ userId, email: gate.email, serviceRole: gate.serviceRole });
+        } catch (cleanupErr) {
+          const detail = redactText(cleanupErr && cleanupErr.message ? cleanupErr.message : "Could not delete the throwaway account.", secrets);
+          const wrapped = new Error(`${err && err.message ? err.message : "Account purge failed."} ${detail}`);
+          if (err && err.stack) wrapped.stack = err.stack;
+          throw wrapped;
+        }
+      }
+      throw err;
     }
   });
 });
