@@ -97,7 +97,10 @@ async function logProbeWeighIn(page) {
 
 async function flushCloudPush(page) {
   await page.evaluate(async () => {
-    if (window.app && typeof window.app.cloudPush === "function") await window.app.cloudPush();
+    if (!window.app || typeof window.app.cloudPush !== "function") {
+      throw new Error("The page did not expose cloudPush. Not deleting.");
+    }
+    await window.app.cloudPush();
   });
 }
 
@@ -194,8 +197,9 @@ test.describe("throwaway account purge", () => {
           await deleteThrowawayAccount({ userId, email: gate.email, serviceRole: gate.serviceRole });
         } catch (cleanupErr) {
           const detail = redactText(cleanupErr && cleanupErr.message ? cleanupErr.message : "Could not delete the throwaway account.", secrets);
-          const wrapped = new Error(`${err && err.message ? err.message : "Account purge failed."} ${detail}`);
-          if (err && err.stack) wrapped.stack = err.stack;
+          const message = redactText(err && err.message ? err.message : "Account purge failed.", secrets);
+          const wrapped = new Error(`${message} ${detail}`);
+          wrapped.stack = redactText(err && err.stack ? err.stack : "", secrets);
           throw wrapped;
         }
       }

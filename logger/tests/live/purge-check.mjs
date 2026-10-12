@@ -3,6 +3,30 @@
 // A count error or a storage list error is a failed check, including
 // "does not exist", "schema cache", and "not found".
 
+import { PROBE_NAME, throwawayEmailOk } from "./gate.mjs";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function throwawayUserIdOk(userId) {
+  return typeof userId === "string" && UUID.test(userId);
+}
+
+export function deleteRefusal({ email, userId, loadedEmail } = {}) {
+  if (!throwawayEmailOk(email)) return "email";
+  if (!throwawayUserIdOk(userId)) return "uuid";
+  if (loadedEmail === undefined) return "";
+  if (typeof loadedEmail !== "string" || loadedEmail.toLowerCase() !== String(email).toLowerCase() || !throwawayEmailOk(loadedEmail)) {
+    return "mismatch";
+  }
+  return "";
+}
+
+export function probeLanded(row) {
+  const profile = row && row.data && row.data.profile;
+  const weighIns = profile && profile.weighIns;
+  return !!(profile && profile.name === PROBE_NAME && Array.isArray(weighIns) && weighIns.length > 0);
+}
+
 function statusOf(error) {
   if (!error || typeof error !== "object") return "unknown";
   return error.status || error.statusCode || "unknown";
