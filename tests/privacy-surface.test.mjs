@@ -146,6 +146,14 @@ test("delete account requires DELETE and removes the known tables", () => {
     "oura_oauth_states",
     "progress_photos",
     "ai_usage",
+    "reports",
+    "reactions",
+    "comments",
+    "shared_items",
+    "friend_invites",
+    "friendships",
+    "blocks",
+    "social_settings",
   ]);
   assert.match(edge, /body\.confirm !== "DELETE"/);
   assert.match(privacy, /typed !== "DELETE"/);
