@@ -98,3 +98,36 @@ test("five weigh-ins over 14 days share one rate", () => {
     Object.assign(app, prev);
   }
 });
+
+test("same-day weigh-ins are one point", () => {
+  const doubled = [
+    { date: "2026-09-01", kg: 80 },
+    { date: "2026-09-05", kg: 80 },
+    { date: "2026-09-05", kg: 82 },
+    { date: "2026-09-09", kg: 81 },
+    { date: "2026-09-13", kg: 82 },
+    { date: "2026-09-17", kg: 82 },
+    { date: "2026-09-17", kg: 84 },
+  ];
+  const averaged = [
+    { date: "2026-09-01", kg: 80 },
+    { date: "2026-09-05", kg: 81 },
+    { date: "2026-09-09", kg: 81 },
+    { date: "2026-09-13", kg: 82 },
+    { date: "2026-09-17", kg: 83 },
+  ];
+  const merged = weightTrend(doubled, "2026-09-17");
+  const once = weightTrend(averaged, "2026-09-17");
+  assert.equal(merged.ready, true);
+  assert.ok(Math.abs(merged.perWeekKg - once.perWeekKg) < 1e-9);
+  assert.ok(Math.abs(merged.last.kg - 83) < 1e-9);
+
+  const fourDays = [
+    { date: "2026-09-01", kg: 80 },
+    { date: "2026-09-01", kg: 80.2 },
+    { date: "2026-09-08", kg: 81 },
+    { date: "2026-09-15", kg: 82 },
+    { date: "2026-09-20", kg: 82.4 },
+  ];
+  assert.equal(weightTrend(fourDays, "2026-09-20").ready, false);
+});
