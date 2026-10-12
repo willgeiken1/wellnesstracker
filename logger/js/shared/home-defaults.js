@@ -1,6 +1,6 @@
 import { app } from "../runtime.js";
 import { HOME_WIDGETS, homeRegistryActive, renderHomeWidgets } from "./home-widgets.js";
-import { hasOura, visibleHomeIds } from "./oura-gate.js";
+import { hasOura, ouraMembershipInactive, visibleHomeIds } from "./oura-gate.js";
 
 /* Home defaults for people who have not edited Home.
    A real edit (homeRegistryActive) is never touched: nothing here writes homeV2.
@@ -14,7 +14,7 @@ export const PLAIN_DEFAULT_IDS = ["food-today", "weekly-goal", "weight-trend"];
 /* A lapsed membership keeps its connection row and gets no new data. */
 export function ouraLapsed(state) {
   const o = state && state.oura;
-  return !!(o && o.connected && typeof o.lastError === "string" && o.lastError.toLowerCase().includes("membership_inactive"));
+  return !!(o && o.connected && ouraMembershipInactive(state));
 }
 
 export function defaultHomeIds(state) {
@@ -49,6 +49,7 @@ function hasData(id, data) {
 /* The Readiness card is part of the legacy Home when there is a score and the
    person has not hidden it. */
 function legacyReadinessCard(state, data) {
+  if (ouraMembershipInactive(state)) return false;
   return !legacyHidden(state, "readiness") && hasData("readiness", data);
 }
 

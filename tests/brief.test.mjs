@@ -4,6 +4,7 @@ import test from "node:test";
 import { app } from "../logger/js/runtime.js";
 import "../logger/js/shared/analyze.js";
 import { addDays } from "../logger/js/shared/correlate.js";
+import "../logger/js/pages/insights.js";
 import { READINESS_FRESH_DAYS, briefHeadline, readinessForAdvice } from "../logger/js/shared/brief.js";
 
 test("a high-readiness leg day uses the local headline", () => {
@@ -124,6 +125,38 @@ test("stale readiness does not say go easy today", () => {
     assert.equal(trainOn("2026-10-01").value, "Rest suggested");
     assert.equal(trainOn("2026-10-05").value, "Go easy today");
     assert.equal(trainOn("2026-10-06").value, "Go easy today");
+  } finally {
+    Object.assign(app, prev);
+  }
+});
+
+test("the Home readiness card shows advice only for today or yesterday", () => {
+  const prev = {
+    state: app.state,
+    today: app.today,
+    latestOura: app.latestOura,
+    src: app.src,
+    dash: app.dash,
+    fmtHM: app.fmtHM,
+  };
+  const card = (date) => {
+    app.today = () => "2026-10-06";
+    app.state = { demo: false };
+    app.latestOura = () => ({ date, readiness: 40, total: 25000, hrv: 42 });
+    app.src = () => ({ oura: {} });
+    app.dash = (v, f) => (v == null ? "–" : f(v));
+    app.fmtHM = () => "7h 00m";
+    return app.readinessCardHTML();
+  };
+  try {
+    const stale = card("2026-10-01");
+    assert.match(stale, /Readiness · Low/);
+    assert.match(stale, />40</);
+    assert.doesNotMatch(stale, /Recovery is low|lighter weights|Go easy/);
+    assert.match(card("2026-10-05"), /Recovery is low/);
+    assert.match(card("2026-10-06"), /lighter weights/);
+    app.latestOura = () => ({ readiness: 40, total: 25000, hrv: 42 });
+    assert.doesNotMatch(app.readinessCardHTML(), /Recovery is low|lighter weights/);
   } finally {
     Object.assign(app, prev);
   }

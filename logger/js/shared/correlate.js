@@ -188,13 +188,17 @@ export function mean(xs) {
   return s / xs.length;
 }
 
-/* One fit for Goals, the Home weight tile, and the morning brief.
+/* One fit for Goals, the Home weight tile, the morning brief, and maintenance.
+   Same-day weigh-ins are one point (their average), so a second log that day
+   does not count as another day or pull the slope.
    Fewer than 5 weigh-ins, or a span under 14 days, is too early to tell. */
 export function weightTrend(weighIns, today) {
-  const rows = (Array.isArray(weighIns) ? weighIns : [])
-    .filter((x) => x && typeof x.date === "string" && finite(x.kg) != null)
-    .slice()
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const rows = mergeSameDayWeighIns(
+    (Array.isArray(weighIns) ? weighIns : [])
+      .filter((x) => x && typeof x.date === "string" && finite(x.kg) != null)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+  );
   const end = typeof today === "string" && today ? today : (rows.length ? rows[rows.length - 1].date : null);
   const eligible = end ? rows.filter((x) => x.date <= end) : rows;
   const last = eligible.length ? eligible[eligible.length - 1] : null;
@@ -222,6 +226,23 @@ export function weightTrend(weighIns, today) {
   const lastKg = ys[ys.length - 1];
   const pct = lastKg ? perWeekKg / lastKg * 100 : null;
   return { ready: true, phrase: null, last, perWeekKg, pct };
+}
+
+function mergeSameDayWeighIns(rows) {
+  const byDate = new Map();
+  for (let i = 0; i < rows.length; i++) {
+    const x = rows[i];
+    const prev = byDate.get(x.date);
+    if (!prev) byDate.set(x.date, { date: x.date, kg: x.kg, n: 1 });
+    else {
+      prev.n += 1;
+      prev.kg += (x.kg - prev.kg) / prev.n;
+    }
+  }
+  const out = [];
+  byDate.forEach((row) => out.push({ date: row.date, kg: row.kg }));
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
 }
 
 function variance(xs, m) {
@@ -771,6 +792,18 @@ function sanitizeBucket(bucket) {
   }
 }
 
+/* True when every key on the day came from the ring. workedOut is not set yet. */
+function ouraOnlyBucket(bucket, extra) {
+  const keys = Object.keys(bucket);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (k === "workedOut" || k === "didCardio") continue;
+    if (OURA_IDS.has(k) || (extra && extra.has(k))) continue;
+    return false;
+  }
+  return true;
+}
+
 /* Turn a user_data blob (or the smaller shape the app passes) into one row per day.
    timeZone reads Z timestamps in that IANA zone. The device zone is the default. */
 export function extractDays(data, timeZone) {
@@ -918,14 +951,15 @@ export function extractDays(data, timeZone) {
     if (!Object.keys(days[date]).length) delete days[date];
   });
 
-  /* A day with no log is missing, not a rest day. Only a day that already
-     has something logged can be "didn't work out" or "no cardio". */
+  /* A day with no log is missing, not a rest day. Only a day the person
+     logged (a workout, a complete food day, a weigh-in, cardio, and so on)
+     can be "didn't work out". An Oura-only day is a ring sync, not a rest day. */
   const span = active.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
   if (span.length) {
     eachDay(span[0], span[span.length - 1]).forEach((date) => {
       if (!days[date]) return;
       const bucket = days[date];
-      if (bucket.workedOut !== true) bucket.workedOut = false;
+      if (bucket.workedOut !== true && !ouraOnlyBucket(bucket, ouraKeys)) bucket.workedOut = false;
       if (bucket.didCardio !== true) bucket.didCardio = false;
       Object.keys(typeCounts).forEach((id) => {
         if (bucket.workedOut === true) bucket[id] = bucket[id] === true;

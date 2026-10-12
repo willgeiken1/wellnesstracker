@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { homeOuraWaiting, visibleHomeIds } from "../shared/oura-gate.js";
+import { hasOura, homeOuraReconnectHTML, homeOuraWaiting, ouraMembershipInactive, visibleHomeIds } from "../shared/oura-gate.js";
 import { addToDraft, galleryEntries, needsSizeChoice, removeFromDraft, reorderDraft, sizeChoices, sizeLabel } from "../shared/home-edit.js";
 import "../shared/home-defaults.js";
 import "../shared/home-drag.js";
@@ -245,15 +245,28 @@ function homeGalleryHTML() {
 app.homeGalleryHTML = homeGalleryHTML;
 app.galleryNeedsSize = needsSizeChoice;
 
-/* The brief card stays when it still has a line to show. When every enabled
+/* Training cards that still make a Home when every Oura tile is withheld.
+   Food, goal, and weight stay out: those say "nothing logged" when empty.
+   The brief card stays when it still has a line to show. When every enabled
    metric is already a tile, and the headline tile is up, the shell is omitted. */
+const PLAIN_FILL_IDS = ["today", "this-week", "brief", "cardio"];
+
+function ouraSuppressed(state) {
+  return !!(state && !state.demo && (ouraMembershipInactive(state) || !hasOura(state)));
+}
+
 function paintedHomeItems(state) {
-  const visible = visibleHomeIds(state);
-  if (!visible.includes("brief")) return visible;
-  if (typeof app.briefPaintEmpty === "function" && app.briefPaintEmpty(state)) {
-    return visible.filter((id) => id !== "brief");
+  let visible = visibleHomeIds(state);
+  if (visible.includes("brief") && typeof app.briefPaintEmpty === "function" && app.briefPaintEmpty(state)) {
+    visible = visible.filter((id) => id !== "brief");
   }
-  return visible;
+  if (!ouraSuppressed(state)) return visible;
+  const widgets = app.HOME_WIDGETS || {};
+  if (visible.some((id) => widgets[id] && !widgets[id].needsOura)) return visible;
+  const layout = typeof app.getHomeLayout === "function" ? app.getHomeLayout(state) : { hidden: [] };
+  const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
+  const fill = PLAIN_FILL_IDS.filter((id) => widgets[id] && !hidden.has(id) && !visible.includes(id));
+  return visible.concat(fill);
 }
 
 function homeHTML() {
@@ -263,11 +276,12 @@ function homeHTML() {
   const head = `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: homeEditButton() })}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
+  const reconnect = homeOuraReconnectHTML(app.state);
   if (registry) {
     const data = typeof app.snapshotFromApp === "function" ? app.snapshotFromApp() : { live: true };
     const layout = app.getHomeLayout(app.state);
     const wait = homeOuraWaiting(app.state) ? `<p class="sub oura-wait">Waiting for first sync</p>` : "";
-    return head + wait + app.renderHomeWidgets({ ...layout, items: paintedHomeItems(app.state) }, data);
+    return head + wait + reconnect + app.renderHomeWidgets({ ...layout, items: paintedHomeItems(app.state) }, data);
   }
   const live = { live: true };
   /* Default tiles sit above the slots, so hiding a slot never hides them. */
@@ -277,7 +291,7 @@ function homeHTML() {
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>
     <!--w:map-basic--><section class="sec">${app.muscleMapHTML("basic")}</section>`);
-  return head + stack;
+  return head + reconnect + stack;
 }
 app.visibleHomeIds = visibleHomeIds;
 app.homeHTML = homeHTML;
