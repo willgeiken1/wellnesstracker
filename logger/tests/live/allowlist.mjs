@@ -44,7 +44,9 @@ export function liveRequestAllowed(url) {
   let parsed;
   try { parsed = new URL(url); }
   catch { return false; }
+  // data: and blob: stay inside the page, so they are not treated as network hosts.
   if (parsed.protocol === "data:" || parsed.protocol === "blob:") return true;
+  if (parsed.username || parsed.password || parsed.port) return false;
   if (pathUnsafe(rawPath(url))) return false;
   if (STATIC_HOST_SET.has(parsed.hostname)) return parsed.protocol === "https:";
   if (parsed.hostname !== SUPABASE_HOST) return false;

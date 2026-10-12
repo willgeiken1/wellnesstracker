@@ -132,15 +132,31 @@ test("purge checks cover every table delete-account knows", () => {
   assert.equal(account.includes("const PURGE_TABLES"), false);
 });
 
+function workflowSteps(src) {
+  const steps = [];
+  let current = null;
+  for (const line of src.split("\n")) {
+    const name = line.match(/^      - name: (.+)$/);
+    if (name) {
+      current = { name: name[1].trim(), lines: [line] };
+      steps.push(current);
+      continue;
+    }
+    if (current) current.lines.push(line);
+  }
+  return steps.map((step) => ({ name: step.name, text: step.lines.join("\n") }));
+}
+
+function ifCondition(step) {
+  const line = step.text.split("\n").find((item) => item.trim().startsWith("if:"));
+  return line ? line.trim() : "";
+}
+
 test("the live workflow is manual or weekly and does not print secrets", () => {
   const src = readFileSync(join(root, ".github/workflows/live-checks.yml"), "utf8");
   assert.match(src, /workflow_dispatch:/);
   assert.match(src, /schedule:/);
-  assert.match(src, /INSIGHT_TEST_EMAIL/);
-  assert.match(src, /INSIGHT_TEST_PASSWORD/);
-  assert.match(src, /INSIGHT_TEST_SERVICE_ROLE_KEY/);
-  assert.match(src, /\[ "\$GITHUB_EVENT_NAME" = "schedule" \]/);
-  assert.match(src, /--project=live-boot/);
+  assert.equal(src.includes("GITHUB_EVENT_NAME"), false);
   const lines = src.split("\n");
   for (const line of lines) {
     assert.doesNotMatch(line, /^\s*pull_request:/);
@@ -149,6 +165,22 @@ test("the live workflow is manual or weekly and does not print secrets", () => {
     assert.doesNotMatch(line, /set -x/);
     assert.doesNotMatch(line, /echo .*\$(\{|\{?\{? secrets\.|INSIGHT_TEST_)/);
   }
+  const steps = workflowSteps(src);
+  const boot = steps.find((step) => step.text.includes("--project=live-boot"));
+  const purge = steps.find((step) => step.text.includes("--project=live-purge"));
+  assert.ok(boot, "page check step");
+  assert.ok(purge, "purge step");
+  assert.equal(ifCondition(boot), "if: steps.gate.outputs.present == 'true'");
+  assert.equal(ifCondition(purge), "if: steps.gate.outputs.present == 'true' && github.event_name == 'workflow_dispatch'");
+  assert.match(boot.text, /INSIGHT_TEST_EMAIL/);
+  assert.match(boot.text, /INSIGHT_TEST_PASSWORD/);
+  assert.equal(boot.text.includes("INSIGHT_TEST_SERVICE_ROLE_KEY"), false);
+  const keySteps = steps.filter((step) => step.text.includes("INSIGHT_TEST_SERVICE_ROLE_KEY"));
+  assert.deepEqual(keySteps.map((step) => step.name), [purge.name]);
+  const keyLines = src.split("\n").filter((line) => line.includes("INSIGHT_TEST_SERVICE_ROLE_KEY"));
+  assert.deepEqual(keyLines.map((line) => line.trim()), [
+    "INSIGHT_TEST_SERVICE_ROLE_KEY: ${{ secrets.INSIGHT_TEST_SERVICE_ROLE_KEY }}",
+  ]);
   const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
   assert.match(spec, /purgeSkippedOnSchedule\(process\.env\.GITHUB_EVENT_NAME\)/);
 });
@@ -186,7 +218,7 @@ test("count and storage errors fail closed", () => {
   assert.match(account, /seedPurgeTargets/);
 });
 
-const GATE_SEED = 20261012;
+const GATE_SEED = Number(process.env.LIVE_GATE_SEED ?? 20261012);
 
 function mulberry32(seed) {
   let state = seed >>> 0;
@@ -273,6 +305,57 @@ function show(value) {
   return JSON.stringify(value);
 }
 
+function boundary(ch) {
+  return ch === "" || ch === "." || ch === "+" || ch === "_" || ch === "-";
+}
+
+function referenceEmailOk(email) {
+  if (typeof email !== "string" || !email || email.length > 254 || /\s/.test(email)) return false;
+  const parts = email.split("@");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+  const local = parts[0];
+  const domain = parts[1];
+  if (!/^[A-Za-z0-9._+-]+$/.test(local)) return false;
+  if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(domain)) return false;
+  if (domain.startsWith(".") || domain.endsWith(".") || domain.includes("..")) return false;
+  const marker = "insight-live";
+  const lower = local.toLowerCase();
+  let from = 0;
+  while (from < lower.length) {
+    const at = lower.indexOf(marker, from);
+    if (at < 0) return false;
+    const before = at === 0 ? "" : lower[at - 1];
+    const afterAt = at + marker.length;
+    const after = afterAt >= lower.length ? "" : lower[afterAt];
+    if (boundary(before) && boundary(after)) return true;
+    from = at + 1;
+  }
+  return false;
+}
+
+function referenceRequestAllowed(url) {
+  let parsed;
+  try { parsed = new URL(url); }
+  catch { return false; }
+  if (parsed.protocol === "data:" || parsed.protocol === "blob:") return true;
+  if (parsed.username !== "" || parsed.password !== "" || parsed.port !== "") return false;
+  const schemeAt = url.indexOf("://");
+  const pathAt = schemeAt < 0 ? -1 : url.indexOf("/", schemeAt + 3);
+  const rawPath = pathAt < 0 ? "" : url.slice(pathAt).split("?")[0].split("#")[0];
+  if (/%2f/i.test(rawPath) || /%2e/i.test(rawPath)) return false;
+  if (rawPath.split("/").includes(".") || rawPath.split("/").includes("..")) return false;
+  if (STATIC_HOSTS.includes(parsed.hostname)) return parsed.protocol === "https:";
+  if (parsed.hostname !== SUPABASE_HOST) return false;
+  if (parsed.protocol !== "https:" && parsed.protocol !== "wss:") return false;
+  const segments = parsed.pathname.split("/").filter((segment) => segment !== "");
+  const functionCall = segments[0] === "functions" && segments[1] === "v1";
+  if (!functionCall) return true;
+  if (parsed.protocol !== "https:") return false;
+  if (segments.length !== 3) return false;
+  try { return decodeURIComponent(segments[2]) === "delete-account"; }
+  catch { return false; }
+}
+
 test("throwawayEmailOk holds on seeded random addresses", () => {
   const rng = mulberry32(GATE_SEED);
   const accepted = [
@@ -303,9 +386,11 @@ test("throwawayEmailOk holds on seeded random addresses", () => {
   for (const email of accepted) {
     assert.equal(email.length <= 254, true, `seed ${GATE_SEED} accept length ${show(email)}`);
     assert.equal(throwawayEmailOk(email), true, `seed ${GATE_SEED} accept ${show(email)}`);
+    assert.equal(referenceEmailOk(email), throwawayEmailOk(email), `seed ${GATE_SEED} email reference ${show(email)}`);
   }
   for (const email of rejected) {
     assert.equal(throwawayEmailOk(email), false, `seed ${GATE_SEED} reject ${show(email)}`);
+    assert.equal(referenceEmailOk(email), throwawayEmailOk(email), `seed ${GATE_SEED} email reference ${show(email)}`);
   }
 });
 
@@ -376,6 +461,16 @@ function rejectUrl(rng, kind) {
     const name = pick(rng, [`${base}.evil.com`, `evil.${base}`, `not-${base}`, `${base}.example.com`]);
     return `https://${name}/functions/v1/delete-account`;
   }
+  if (kind === "userinfo") {
+    return pick(rng, [
+      `https://evil@${host}/functions/v1/delete-account`,
+      `https://evil:secret@${host}/auth/v1/token`,
+      `https://evil@${staticHost}/index.html`,
+      `https://cdn.jsdelivr.net:444/npm/pkg`,
+      `https://${host}:8443/functions/v1/delete-account`,
+      `https://${staticHost}:444/`,
+    ]);
+  }
   return pick(rng, [
     `https://example.com/functions/v1/delete-account`,
     `https://${chunk(rng, 8).toLowerCase()}.example.com/`,
@@ -392,6 +487,10 @@ test("liveRequestAllowed holds on seeded random urls", () => {
     "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
     "https://fonts.googleapis.com/css?family=Lexend",
     "https://fonts.gstatic.com/s/lexend/v1.woff2",
+    // data: and blob: stay inside the page. They are allowed, including encoded slashes.
+    "data:text/plain,insight",
+    "data:image/jpeg;base64,a%2Fb",
+    `blob:https://${PAGES_HOST}/11111111-1111-1111-1111-111111111111`,
   ];
   const rejected = [
     `https://${SUPABASE_HOST}/functions/v1/food-photo`,
@@ -408,19 +507,26 @@ test("liveRequestAllowed holds on seeded random urls", () => {
     `https://${PAGES_HOST}.evil.com/logger/`,
     `https://${SUPABASE_HOST}.evil.com/functions/v1/delete-account`,
     `https://evil.${SUPABASE_HOST}/functions/v1/delete-account`,
+    `https://evil@${SUPABASE_HOST}/functions/v1/delete-account`,
+    `https://evil:secret@${SUPABASE_HOST}/auth/v1/token`,
+    `https://${SUPABASE_HOST}:8443/functions/v1/delete-account`,
+    "https://cdn.jsdelivr.net:444/npm/@supabase/supabase-js@2",
   ];
   for (let i = 0; i < 16; i++) {
     accepted.push(goodStaticUrl(rng));
     accepted.push(goodDeleteUrl(rng));
+    accepted.push(i % 2 === 0 ? `data:text/plain,${chunk(rng, 6)}` : `blob:https://${PAGES_HOST}/${chunk(rng, 8)}`);
   }
-  for (const kind of ["function", "encoded", "dot", "http", "ws", "host", "lookalike"]) {
+  for (const kind of ["function", "encoded", "dot", "http", "ws", "host", "lookalike", "userinfo"]) {
     for (let i = 0; i < 8; i++) rejected.push(rejectUrl(rng, kind));
   }
   for (const url of accepted) {
     assert.equal(liveRequestAllowed(url), true, `seed ${GATE_SEED} accept ${show(url)}`);
+    assert.equal(referenceRequestAllowed(url), liveRequestAllowed(url), `seed ${GATE_SEED} url reference ${show(url)}`);
   }
   for (const url of rejected) {
     assert.equal(liveRequestAllowed(url), false, `seed ${GATE_SEED} reject ${show(url)}`);
+    assert.equal(referenceRequestAllowed(url), liveRequestAllowed(url), `seed ${GATE_SEED} url reference ${show(url)}`);
   }
 });
 

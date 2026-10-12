@@ -29,7 +29,7 @@ The Supabase CLI is pinned to **2.119.0**.
 
 ## Live checks
 
-`.github/workflows/live-checks.yml` opens the deployed GitHub Pages app. **Run workflow** also deletes a throwaway account and checks that its rows and progress photo are gone, when the service role secret is set. The Monday 16:00 UTC schedule runs the page check only and does not delete the account. The workflow does not run on pull requests or pushes. Pick this branch before the workflow is on `main`.
+`.github/workflows/live-checks.yml` opens the deployed GitHub Pages app. **Run workflow** also deletes a throwaway account and checks that its rows and progress photo are gone, when the service role secret is set. The Monday 16:00 UTC schedule runs the page check only. That step receives the email and password, and it does not receive the service role key. The workflow does not run on pull requests or pushes. Pick this branch before the workflow is on `main`.
 
 The job stays green and skips when the email or password secret is missing. It does not print any of these values.
 

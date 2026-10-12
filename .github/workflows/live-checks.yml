@@ -60,16 +60,17 @@ jobs:
         if: steps.gate.outputs.present == 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Run live checks
+      - name: Run live page check
         if: steps.gate.outputs.present == 'true'
         env:
           INSIGHT_TEST_EMAIL: ${{ secrets.INSIGHT_TEST_EMAIL }}
           INSIGHT_TEST_PASSWORD: ${{ secrets.INSIGHT_TEST_PASSWORD }}
+        run: npm run pw:live -- --project=live-boot
+
+      - name: Run live account purge
+        if: steps.gate.outputs.present == 'true' && github.event_name == 'workflow_dispatch'
+        env:
+          INSIGHT_TEST_EMAIL: ${{ secrets.INSIGHT_TEST_EMAIL }}
+          INSIGHT_TEST_PASSWORD: ${{ secrets.INSIGHT_TEST_PASSWORD }}
           INSIGHT_TEST_SERVICE_ROLE_KEY: ${{ secrets.INSIGHT_TEST_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            npm run pw:live -- --project=live-boot
-          else
-            npm run pw:live
-          fi
+        run: npm run pw:live -- --project=live-purge
