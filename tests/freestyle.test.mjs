@@ -96,3 +96,79 @@ test("a freestyle workout becomes one routine and can be updated in place", () =
   assert.equal(sg.w, 105);
   assert.equal(sg.r, 5);
 });
+
+test("live order, removal, and a linked routine survive a reload", () => {
+  const s = app.freestyleSession();
+  s.extra = [
+    { name: "Bench Press", muscles: ["chest"] },
+    { name: "Row", muscles: ["lats"] },
+  ];
+  s.entries = [{ exercise: "Bench Press", muscles: ["chest"], sets: [{ w: 100, r: 8 }] }];
+  app.state.sessions.push(s);
+  app.reorderLive(1, 0, s);
+  assert.deepEqual(app.liveExercises(s).map((e) => e.name), ["Row", "Bench Press"]);
+  const cut = app.applyLiveRemoval(s, 0);
+  assert.equal(cut.name, "Row");
+  assert.deepEqual(app.liveExercises(s).map((e) => e.name), ["Bench Press"]);
+  app.restoreLive(s, cut.snap);
+  assert.deepEqual(app.liveExercises(s).map((e) => e.name), ["Row", "Bench Press"]);
+  app.applyLiveRemoval(s, 0);
+  const routine = app.commitFreestyleRoutine(s, "Order Lift");
+  assert.deepEqual(routine.exercises.map((e) => e.name), ["Bench Press"]);
+  assert.equal(s.workoutId, routine.id);
+  assert.equal(s.name, "Order Lift");
+  app.save();
+
+  const loaded = app.migrate(JSON.parse(localStorage.getItem(app.KEY)));
+  const back = loaded.sessions.find((x) => x.id === s.id);
+  assert.equal(back.origin, "freestyle");
+  assert.equal(back.workoutId, routine.id);
+  assert.equal(back.name, "Order Lift");
+  assert.deepEqual(back.order, ["Bench Press"]);
+  assert.equal(back.entries.find((e) => e.exercise === "Bench Press").sets[0].w, 100);
+  assert.equal(back.entries.some((e) => e.exercise === "Row"), false);
+
+  const prev = app.state;
+  app.replaceState(loaded);
+  try {
+    assert.deepEqual(app.liveExercises(back).map((e) => e.name), ["Bench Press"]);
+    back.finishedAt = new Date().toISOString();
+    const unsaved = app.freestyleSession();
+    unsaved.finishedAt = new Date().toISOString();
+    unsaved.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 40, r: 5 }] }];
+    app.state.sessions.push(unsaved);
+    const hist = app.historyHTML(true);
+    assert.match(hist, /Order Lift/);
+    assert.match(hist, /Squat/);
+    assert.doesNotMatch(hist, /Freestyle/);
+
+    const stale = app.freestyleSession();
+    stale.date = "1999-01-01";
+    const oldPush = { id: "old-push-resume", date: "1999-01-01", workoutId: "push", name: "Push", finishedAt: null, entries: [], startedAt: "1999-01-01T10:00:00" };
+    app.state.sessions.push(stale, oldPush);
+    app.closeStaleSessions();
+    assert.equal(stale.finishedAt, null);
+    assert.ok(oldPush.finishedAt);
+    app.ui.workoutOpen = false;
+    app.resumeOpenWorkout();
+    assert.equal(app.ui.workoutOpen, true);
+    assert.equal(app.logsStartRest({ origin: "freestyle" }), false);
+    assert.equal(app.logsStartRest({ origin: undefined, name: "Push" }), true);
+  } finally {
+    app.replaceState(prev);
+  }
+});
+
+test("removing an exercise during a routine workout does not change the routine", () => {
+  const template = app.workoutById("push").exercises.map((e) => e.name);
+  const s = {
+    id: "live-push", date: app.today(), workoutId: "push", name: "Push",
+    startedAt: new Date().toISOString(), finishedAt: null,
+    entries: [{ exercise: "Dips", muscles: ["chest"], sets: [{ w: 0, r: 8 }] }],
+  };
+  const i = app.liveExercises(s).findIndex((e) => e.name === "Dips");
+  assert.ok(i >= 0);
+  app.applyLiveRemoval(s, i);
+  assert.equal(app.liveExercises(s).some((e) => e.name === "Dips"), false);
+  assert.deepEqual(app.workoutById("push").exercises.map((e) => e.name), template);
+});

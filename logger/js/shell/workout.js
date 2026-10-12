@@ -13,7 +13,8 @@ function renderWorkout() {
       <div class="wo-title"><h2>${app.esc(s.name)}</h2><span id="elapsed"></span></div>
       <div class="wo-actions"><button class="btn small cancel" data-action="cancel-workout">Cancel</button>
       <button class="btn small primary" data-action="finish">Finish</button></div>
-      ${s.origin === "freestyle" ? `<button class="btn block free-save" data-action="save-routine">Save as routine</button>` : ""}</div>
+      ${s.origin === "freestyle" ? `<button class="btn block free-save" data-action="save-routine">Save as routine</button>
+      <button class="btn block free-rest" data-action="start-rest">Start rest</button>` : ""}</div>
     <ul class="list" id="wo-list">${list.length ? list.map((e, i) => app.exerciseHTML(s, e, i)).join("")
       : `<li class="empty">No exercises yet. Add one below.</li>`}</ul>
     <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>`;
@@ -52,11 +53,15 @@ function exerciseHTML(s, e, i) {
   const prev = app.lastSets(e.name, s.id);
   const open = app.ui.open === i;
   let html = `<li class="ex${open ? " open" : ""}">
+    <div class="ex-bar">
+    <span class="handle" aria-label="Drag to reorder ${app.esc(e.name)}">${app.I.grip}</span>
     <button class="ex-head" data-action="toggle" data-i="${i}" aria-expanded="${open}">
       <span class="ex-name">${app.esc(e.name)}</span>
       <span class="ex-count${done.length ? " has" : ""}">${done.filter(app.isWork).length || (done.length ? "W" : "")}</span>
       <span class="ex-last">${e.original ? `Swapped in for ${app.esc(e.original)} · ` : ""}${app.esc(prev ? "Last: " + prev.filter((x) => x.tag !== "warmup").map(app.fmtSet).join(", ") : "No previous sets")}</span>
     </button>
+    <button class="ex-x" data-action="ex-remove" data-i="${i}" aria-label="Remove ${app.esc(e.name)}">×</button>
+    </div>
     <div class="ex-ms">${machineChipHTML(e.name)}</div>`;
   if (open) {
     const d = app.draftFor(s, e.name);

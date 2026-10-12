@@ -67,6 +67,7 @@ function commitFreestyleRoutine(s, name, opts) {
   s.origin = "freestyle";
   s.extra = [];
   s.swaps = {};
+  s.removed = [];
   s.mod = Date.now();
   return routine;
 }
@@ -141,6 +142,124 @@ function mountStartBar() {
 }
 app.mountStartBar = mountStartBar;
 
+/* History uses the routine name once a freestyle workout is saved. The placeholder "Freestyle" is never a title. */
+function historyTitle(s) {
+  if (s.origin === "freestyle" && (!s.name || s.name === "Freestyle")) {
+    const routine = app.workoutById(s.workoutId);
+    if (routine) return routine.name;
+    const order = Array.isArray(s.order) ? s.order : [];
+    const names = [];
+    (s.entries || []).forEach((e) => {
+      if (e.sets && e.sets.length && !names.includes(e.exercise)) names.push(e.exercise);
+    });
+    names.sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia < 0 ? 1000 : ia) - (ib < 0 ? 1000 : ib);
+    });
+    if (!names.length) return "Workout";
+    return names.length > 3 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", ");
+  }
+  return s.name;
+}
+app.historyTitle = historyTitle;
+
+function liveSnapshot(s) {
+  return {
+    extra: app.copy(s.extra || []),
+    entries: app.copy(s.entries || []),
+    order: Array.isArray(s.order) ? [...s.order] : null,
+    swaps: app.copy(s.swaps || {}),
+    removed: [...(s.removed || [])],
+    open: app.ui.open,
+  };
+}
+app.liveSnapshot = liveSnapshot;
+
+function restoreLive(s, snap) {
+  s.extra = snap.extra;
+  s.entries = snap.entries;
+  s.order = snap.order;
+  s.swaps = snap.swaps;
+  s.removed = snap.removed;
+  app.ui.open = snap.open;
+  s.mod = Date.now();
+}
+app.restoreLive = restoreLive;
+
+function reorderLive(from, to, session) {
+  const s = session || app.activeSession();
+  if (!s || from === to || from < 0 || to < 0) return;
+  const names = app.liveExercises(s).map((e) => e.name);
+  if (from >= names.length || to >= names.length) return;
+  const [moved] = names.splice(from, 1);
+  names.splice(to, 0, moved);
+  s.order = names;
+  const o = app.ui.open;
+  if (o != null) {
+    if (o === from) app.ui.open = to;
+    else if (from < to && o > from && o <= to) app.ui.open = o - 1;
+    else if (from > to && o >= to && o < from) app.ui.open = o + 1;
+  }
+  s.mod = Date.now();
+  app.save();
+}
+app.reorderLive = reorderLive;
+
+function applyLiveRemoval(s, i) {
+  const list = app.liveExercises(s);
+  const e = list[i];
+  if (!s || !e) return null;
+  const snap = liveSnapshot(s);
+  s.removed = [...(s.removed || [])];
+  [e.original, e.name].forEach((n) => { if (n && !s.removed.includes(n)) s.removed.push(n); });
+  if (e.original && s.swaps) delete s.swaps[e.original];
+  s.extra = (s.extra || []).filter((x) => x.name !== e.name);
+  s.entries = (s.entries || []).filter((x) => x.exercise !== e.name);
+  if (Array.isArray(s.order)) s.order = s.order.filter((n) => n !== e.name);
+  if (app.ui.open === i) app.ui.open = null;
+  else if (app.ui.open != null && app.ui.open > i) app.ui.open -= 1;
+  if (app.ui.drafts) delete app.ui.drafts[e.name];
+  s.mod = Date.now();
+  return { name: e.name, snap };
+}
+app.applyLiveRemoval = applyLiveRemoval;
+
+async function removeLiveExercise(i) {
+  const s = app.activeSession();
+  if (!s) return;
+  const e = app.liveExercises(s)[i];
+  if (!e) return;
+  const logged = app.setsFor(s, e.name);
+  if (logged.length) {
+    const ok = await app.ask({
+      title: `Remove ${e.name}?`,
+      body: `${app.pl(logged.length, "set")} will be removed from this workout.`,
+      ok: "Remove",
+      cancel: "Keep",
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  const removed = applyLiveRemoval(s, i);
+  if (!removed) return;
+  app.save();
+  app.renderWorkout();
+  app.tick();
+  app.toast(`Removed ${removed.name}`, () => {
+    restoreLive(s, removed.snap);
+    app.save();
+    app.renderWorkout();
+    app.tick();
+  });
+}
+app.removeLiveExercise = removeLiveExercise;
+
+/* A freestyle log never starts the rest timer. The user taps Start rest, which uses the existing timer. */
+function logsStartRest(s) {
+  return !!(s && s.origin !== "freestyle");
+}
+app.logsStartRest = logsStartRest;
+
 function historyHTML(embedded) {
   const list = app.finished().filter((s) => app.setCount(s) > 0);
   const head = embedded ? `<p class="sub" style="margin:0 0 10px">${app.pl(list.length, "workout")} logged</p>`
@@ -149,7 +268,7 @@ function historyHTML(embedded) {
   return head + `<ul class="hist">${list.map((s) => {
     const dur = s.startedAt && s.finishedAt ? app.fmtDur(new Date(s.finishedAt) - new Date(s.startedAt)) : "";
     return `<li><details><summary>
-        <div><div class="hist-t">${app.esc(s.name)}</div><div class="hist-d">${app.fmtDate(s.date)}${dur ? " · " + dur : ""}</div></div>
+        <div><div class="hist-t">${app.esc(historyTitle(s))}</div><div class="hist-d">${app.fmtDate(s.date)}${dur ? " · " + dur : ""}</div></div>
         <div class="hist-n">${app.setCount(s)}<span>sets</span></div></summary>
       <div class="hist-body">${s.entries.filter((e) => e.sets.length).map((e) =>
         `<div class="hist-ex"><b>${app.esc(e.exercise)}</b><span class="hs-row">${e.sets.map((x, j) => `<button class="hs${x.tag === "warmup" ? " wu" : ""}" data-action="hist-set" data-id="${app.esc(s.id)}" data-ex="${app.esc(e.exercise)}" data-s="${j}" aria-label="Edit set ${j + 1} of ${app.esc(e.exercise)}">${x.tag === "warmup" ? "W " : ""}${app.fmtSet(x)}</button>`).join("")}</span></div>`).join("")}

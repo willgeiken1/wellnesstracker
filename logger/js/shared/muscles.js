@@ -356,6 +356,8 @@ function liveAdd(name) {
   }
   const before = list.length;
   const ex = app.exObjFrom(name) || { name, muscles: [] };
+  s.removed = (s.removed || []).filter((n) => n !== ex.name);
+  if (Array.isArray(s.order) && !s.order.includes(ex.name)) s.order = [...s.order, ex.name];
   if (app.ui.sd.routine && w) { w.exercises.push(ex); app.toast(`${ex.name} added to today and your ${w.name} routine.`); }
   else { s.extra = [...(s.extra || []), ex]; app.toast(`${ex.name} added to today's workout.`); }
   if (before === 0) {

@@ -274,8 +274,15 @@ app.save = save;
 let state = app.load();
 app.replaceState(state);
 
-// A workout left open from a previous day gets closed automatically
-app.state.sessions.forEach((s) => { if (!s.finishedAt && s.date < app.today()) s.finishedAt = s.date + "T23:59:00"; });
+/* A workout left open from a previous day gets closed automatically.
+   A freestyle workout stays in progress so reopening the app can resume it. */
+function closeStaleSessions() {
+  app.state.sessions.forEach((s) => {
+    if (!s.finishedAt && s.date < app.today() && s.origin !== "freestyle") s.finishedAt = s.date + "T23:59:00";
+  });
+}
+app.closeStaleSessions = closeStaleSessions;
+closeStaleSessions();
 
 app.save();
 
@@ -287,6 +294,14 @@ app.workoutById = workoutById;
 
 const activeSession = () => app.state.sessions.find((s) => !s.finishedAt);
 app.activeSession = activeSession;
+
+/* An unfinished freestyle workout opens itself. Exercises, sets, order, and the linked routine are already in local storage. */
+function resumeOpenWorkout() {
+  const s = app.activeSession();
+  if (s && s.origin === "freestyle") app.ui.workoutOpen = true;
+}
+app.resumeOpenWorkout = resumeOpenWorkout;
+resumeOpenWorkout();
 
 const finished = () => app.state.sessions.filter((s) => s.finishedAt)
   .sort((a, b) => (a.date === b.date ? String(b.startedAt).localeCompare(String(a.startedAt)) : a.date < b.date ? 1 : -1));
@@ -305,14 +320,33 @@ function musclesBetween(from, to) {
 }
 app.musclesBetween = musclesBetween;
 
-/* Exercises shown in a live workout: the template, plus anything logged that isn't in it */
+/* Exercises shown in a live workout: the template, plus anything logged that isn't in it.
+   s.removed hides a template exercise for this session. s.order is the live order. */
 function liveExercises(s) {
   const w = app.workoutById(s.workoutId);
   const sw = s.swaps || {};
-  const list = w ? w.exercises.map((e) => sw[e.name] ? { name: sw[e.name].name, muscles: sw[e.name].muscles, adv: sw[e.name].adv, original: e.name } : { name: e.name, muscles: e.muscles, adv: e.adv }) : [];
-  (s.extra || []).forEach((x) => { if (!list.some((y) => y.name === x.name)) list.push({ ...x, extra: true }); });
-  s.entries.forEach((e) => { if (!list.some((x) => x.name === e.exercise)) list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv }); });
-  return list;
+  const removed = new Set(s.removed || []);
+  const list = [];
+  if (w) w.exercises.forEach((e) => {
+    if (removed.has(e.name)) return;
+    if (sw[e.name]) list.push({ name: sw[e.name].name, muscles: sw[e.name].muscles, adv: sw[e.name].adv, original: e.name });
+    else list.push({ name: e.name, muscles: e.muscles, adv: e.adv });
+  });
+  (s.extra || []).forEach((x) => {
+    if (removed.has(x.name) || list.some((y) => y.name === x.name)) return;
+    list.push({ ...x, extra: true });
+  });
+  (s.entries || []).forEach((e) => {
+    if (removed.has(e.exercise) || list.some((x) => x.name === e.exercise)) return;
+    list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv });
+  });
+  const order = Array.isArray(s.order) ? s.order : null;
+  if (!order || !order.length) return list;
+  const rank = new Map(order.map((n, i) => [n, i]));
+  return list
+    .map((e, i) => ({ e, i, r: rank.has(e.name) ? rank.get(e.name) : order.length + i }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.e);
 }
 app.liveExercises = liveExercises;
 
