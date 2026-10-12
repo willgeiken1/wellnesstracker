@@ -47,13 +47,14 @@ function routineExercisesFrom(s) {
 }
 app.routineExercisesFrom = routineExercisesFrom;
 
-/* Creates a routine, or updates the one this freestyle session already saved. */
-function commitFreestyleRoutine(s, name) {
+/* Creates a routine, updates the one this freestyle session already saved, or saves a separate copy. */
+function commitFreestyleRoutine(s, name, opts) {
   const trimmed = String(name || "").trim();
   if (!s || !trimmed) return null;
   const exercises = routineExercisesFrom(s);
   if (!exercises.length) return null;
-  let routine = s.origin === "freestyle" ? app.workoutById(s.workoutId) : null;
+  const copy = !!(opts && opts.copy);
+  let routine = !copy && s.origin === "freestyle" ? app.workoutById(s.workoutId) : null;
   if (routine) {
     routine.name = trimmed;
     routine.exercises = exercises;

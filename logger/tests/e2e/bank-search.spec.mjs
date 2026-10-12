@@ -129,6 +129,12 @@ test("a freestyle workout can log a set and be saved as a routine", async ({ pag
   await expect(page.locator("#toast")).toContainText("Saved Saturday Lift");
   await expect(page.locator("#workout .wo-title h2")).toHaveText("Saturday Lift");
 
+  await save.click();
+  await expect(page.getByRole("button", { name: "Update Saturday Lift" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save as new copy" })).toBeVisible();
+  await page.getByRole("button", { name: "Update Saturday Lift" }).click();
+  await expect(page.locator("#toast")).toContainText("Updated Saturday Lift");
+
   await page.locator('[data-action="finish"]').click();
   await expect(page.locator("#dialog")).toContainText("Finish Saturday Lift?");
   await page.locator('[data-action="dlg-ok"]').click();
@@ -136,8 +142,54 @@ test("a freestyle workout can log a set and be saved as a routine", async ({ pag
   await expect(page.locator("#sheet")).toContainText("Save as routine");
   await page.locator("#sheet").getByRole("button", { name: "Done" }).click();
 
-  await expect(page.locator('[data-action="open-w"][data-id="saturday-lift"]')).toContainText("Saturday Lift");
+  await expect(page.locator('[data-action="open-w"][data-id="saturday-lift"]')).toHaveCount(1);
   await page.locator('[data-action="open-w"][data-id="saturday-lift"]').click();
+  await expect(page.locator("#elist")).toContainText("Bench Press");
+  await expect(page.locator("#elist")).toContainText("100 × 8");
+  assertQuiet();
+});
+
+test("finishing an unsaved freestyle offers a name or Not now", async ({ page }) => {
+  const assertQuiet = await openApp(page);
+  await page.getByRole("button", { name: "Workouts" }).click();
+  await page.getByRole("button", { name: "Start freestyle workout" }).click();
+  await page.locator('[data-action="live-add-open"]').click();
+  await page.locator("#pick-q").fill("bench");
+  await expect(page.locator('#pk-body [data-name="Bench Press"]')).toBeVisible();
+  await page.locator('#pk-body [data-name="Bench Press"]').click();
+  await page.locator(".sheet-card.bank").getByRole("button", { name: "Done" }).click();
+  await page.locator("#w-0").fill("100");
+  await page.locator("#r-0").fill("8");
+  await page.locator('[data-action="log"]').click();
+
+  await page.locator('[data-action="finish"]').click();
+  await expect(page.locator("#dialog")).toContainText("Finish Freestyle?");
+  await page.locator('[data-action="dlg-ok"]').click();
+  await expect(page.locator("#dlg-in")).toBeVisible();
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator("#sheet")).toContainText("Freestyle done");
+  await expect(page.locator("#sheet")).toContainText("Save as routine");
+
+  await page.locator("#sheet [data-action='save-routine']").click();
+  await expect(page.locator("#dialog")).toContainText("Save as routine");
+  await expect(page.getByRole("button", { name: "Save as new copy" })).toHaveCount(0);
+  await page.locator("#dlg-in").fill("Sunday Lift");
+  await page.locator('[data-action="dlg-ok"]').click();
+  await expect(page.locator("#toast")).toContainText("Saved Sunday Lift");
+
+  await page.locator("#sheet [data-action='save-routine']").click();
+  await expect(page.getByRole("button", { name: "Update Sunday Lift" })).toBeVisible();
+  await page.getByRole("button", { name: "Save as new copy" }).click();
+  await expect(page.locator("#dlg-in")).toBeVisible();
+  await page.locator("#dlg-in").fill("Sunday Copy");
+  await page.locator('[data-action="dlg-ok"]').click();
+  await expect(page.locator("#toast")).toContainText("Saved Sunday Copy");
+  await page.locator("#sheet").getByRole("button", { name: "Done" }).click();
+
+  await page.locator('[data-action="wseg"][data-seg="routines"]').click();
+  await expect(page.locator('[data-action="open-w"][data-id="sunday-lift"]')).toContainText("Sunday Lift");
+  await expect(page.locator('[data-action="open-w"][data-id="sunday-copy"]')).toContainText("Sunday Copy");
+  await page.locator('[data-action="open-w"][data-id="sunday-lift"]').click();
   await expect(page.locator("#elist")).toContainText("Bench Press");
   await expect(page.locator("#elist")).toContainText("100 × 8");
   assertQuiet();

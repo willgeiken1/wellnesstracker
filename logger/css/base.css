@@ -309,6 +309,7 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .dlg p { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0 0 18px; }
 .dlg .text-in { margin-bottom: 18px; }
 .dlg-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dlg-actions.stack { grid-template-columns: 1fr; }
 .btn.danger-fill { background: var(--danger-fill, #FF7B7B); color: var(--danger-on, #141414); }
 .wo-actions { display: flex; gap: 6px; }
 .btn.small.cancel { background: rgba(255, 90, 78, .15); color: var(--red); }

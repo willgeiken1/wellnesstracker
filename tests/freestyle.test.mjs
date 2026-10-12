@@ -60,14 +60,27 @@ test("a freestyle workout becomes one routine and can be updated in place", () =
   assert.equal(app.state.workouts.filter((w) => w.id === created.id).length, 1);
   assert.deepEqual(s.extra, []);
 
+  const kept = app.workoutById(created.id).exercises.map((e) => e.name);
+  const copy = app.commitFreestyleRoutine(s, "Upper copy", { copy: true });
+  assert.ok(copy);
+  assert.notEqual(copy.id, created.id);
+  assert.equal(copy.name, "Upper copy");
+  assert.equal(s.workoutId, copy.id);
+  assert.deepEqual(copy.exercises.map((e) => e.name), ["Bench Press", "Row"]);
+  assert.deepEqual(copy.exercises[0].sets.map((x) => x.w), [100, 100, 105]);
+  assert.equal(app.workoutById(created.id).name, "Upper 2");
+  assert.deepEqual(app.workoutById(created.id).exercises.map((e) => e.name), kept);
+  assert.equal(app.state.workouts.filter((w) => w.name === "Upper 2" || w.name === "Upper copy").length, 2);
+
   app.state.sessions.push(s);
   app.save();
   const raw = JSON.parse(localStorage.getItem(app.KEY));
   assert.ok(raw.workouts.some((w) => w.id === created.id && w.name === "Upper 2" && w.exercises.some((e) => e.name === "Bench Press")));
-  assert.ok(raw.sessions.some((x) => x.id === s.id && x.origin === "freestyle" && x.workoutId === created.id));
+  assert.ok(raw.sessions.some((x) => x.id === s.id && x.origin === "freestyle" && x.workoutId === copy.id));
   const blob = app.userDataBlob();
   assert.ok(blob.workouts.some((w) => w.id === created.id && w.exercises.some((e) => e.name === "Row")));
-  assert.ok(blob.sessions.some((x) => x.origin === "freestyle" && x.name === "Upper 2"));
+  assert.ok(blob.workouts.some((w) => w.id === copy.id && w.name === "Upper copy"));
+  assert.ok(blob.sessions.some((x) => x.origin === "freestyle" && x.name === "Upper copy"));
 
   const next = { id: "next", workoutId: created.id, name: "Upper 2", entries: [], finishedAt: null };
   app.state.sessions.push(next);

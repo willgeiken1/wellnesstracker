@@ -18,13 +18,14 @@ app.toast = toast;
 let dlgResolve = null;
 app.dlgResolve = dlgResolve;
 
-function ask({ title, body = "", ok = "OK", cancel = "Cancel", danger = false, input = null }) {
+function ask({ title, body = "", ok = "OK", cancel = "Cancel", danger = false, input = null, stack = false }) {
   const el = app.$("#dialog");
+  const okBtn = `<button class="btn ${danger ? "danger-fill" : "primary"}" data-action="dlg-ok">${app.esc(ok)}</button>`;
+  const cancelBtn = `<button class="btn" data-action="dlg-cancel">${app.esc(cancel)}</button>`;
   el.innerHTML = `<div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t">
     <h3 id="dlg-t">${app.esc(title)}</h3>${body ? `<p>${app.esc(body)}</p>` : ""}
     ${input != null ? `<input class="text-in" id="dlg-in" autocomplete="off" value="${app.esc(input)}">` : ""}
-    <div class="dlg-actions"><button class="btn" data-action="dlg-cancel">${app.esc(cancel)}</button>
-    <button class="btn ${danger ? "danger-fill" : "primary"}" data-action="dlg-ok">${app.esc(ok)}</button></div></div>`;
+    <div class="dlg-actions${stack ? " stack" : ""}">${stack ? okBtn + cancelBtn : cancelBtn + okBtn}</div></div>`;
   el.hidden = false;
   const inp = app.$("#dlg-in");
   if (inp) setTimeout(() => { inp.focus(); inp.select(); }, 50);
@@ -394,6 +395,14 @@ document.addEventListener("click", async (ev) => {
         ? await app.ask({ title: `Finish ${s.name}?`, body: `${app.pl(app.setCount(s), "set")} will be saved to your history.`, ok: "Finish" })
         : await app.ask({ title: "No sets logged", body: "There's nothing to save, so this workout will be discarded.", ok: "Discard", danger: true });
       if (!ok) break;
+      if (s.origin === "freestyle" && !app.workoutById(s.workoutId) && app.setCount(s)) {
+        const name = await app.ask({ title: "Save as routine?", body: "Name it and it shows up with your other routines.", ok: "Save", cancel: "Not now", input: "" });
+        if (name) {
+          const routine = app.commitFreestyleRoutine(s, name);
+          if (routine) { app.save(); app.toast(`Saved ${routine.name}.`); }
+          else app.toast("Add an exercise before saving a routine.");
+        }
+      }
       app.finishSession(s, false); app.render(); break;
     }
     case "cancel-workout": {
@@ -730,12 +739,23 @@ document.addEventListener("click", async (ev) => {
       const s = b.dataset.id ? app.state.sessions.find((x) => x.id === b.dataset.id) : app.activeSession();
       if (!s) break;
       const linked = s.origin === "freestyle" ? app.workoutById(s.workoutId) : null;
-      const name = await app.ask({ title: "Save as routine", body: "Name it and it shows up with your other routines.", ok: "Save", input: linked ? linked.name : "" });
-      if (!name) break;
-      const routine = app.commitFreestyleRoutine(s, name);
+      let routine = null;
+      if (linked) {
+        const update = await app.ask({ title: "Save as routine", body: "This workout already has a routine.", ok: `Update ${linked.name}`, cancel: "Save as new copy", stack: true });
+        if (update) routine = app.commitFreestyleRoutine(s, linked.name);
+        else {
+          const name = await app.ask({ title: "Save as new copy", body: "Name the copy and it shows up with your other routines.", ok: "Save", input: "" });
+          if (!name) break;
+          routine = app.commitFreestyleRoutine(s, name, { copy: true });
+        }
+      } else {
+        const name = await app.ask({ title: "Save as routine", body: "Name it and it shows up with your other routines.", ok: "Save", input: "" });
+        if (!name) break;
+        routine = app.commitFreestyleRoutine(s, name);
+      }
       if (!routine) { app.toast("Add an exercise before saving a routine."); break; }
       app.save();
-      app.toast(`Saved ${routine.name}.`);
+      app.toast(linked && routine.id === linked.id ? `Updated ${routine.name}.` : `Saved ${routine.name}.`);
       app.render();
       break;
     }
