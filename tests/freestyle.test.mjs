@@ -161,14 +161,23 @@ test("live order, removal, and a linked routine survive a reload", () => {
   }
 });
 
-test("an empty freestyle session is discarded on launch and does not reopen", () => {
+test("an abandoned empty freestyle is discarded locally and a live one stays", () => {
   const prev = app.state;
   const base = JSON.parse(JSON.stringify(prev));
   base.sessions = (base.sessions || []).filter((s) => s.finishedAt);
   base.deleted = [...(base.deleted || [])];
   app.replaceState(base);
-  const empty = app.freestyleSession();
-  empty.extra = [{ name: "Bench Press", muscles: ["chest"] }];
+  const live = app.freestyleSession();
+  const withExtra = app.freestyleSession();
+  withExtra.extra = [{ name: "Bench Press", muscles: ["chest"] }];
+  const oldEmpty = app.freestyleSession();
+  oldEmpty.date = "1999-01-01";
+  oldEmpty.startedAt = "1999-01-01T08:00:00";
+  oldEmpty.extra = [];
+  const stale = app.freestyleSession();
+  stale.mod = Date.now() - app.EMPTY_FREESTYLE_STALE_MS - 60_000;
+  stale.startedAt = new Date(stale.mod).toISOString();
+  stale.extra = [];
   const kept = app.freestyleSession();
   kept.date = "1999-01-01";
   kept.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 40, r: 5 }] }];
@@ -176,23 +185,47 @@ test("an empty freestyle session is discarded on launch and does not reopen", ()
     id: "old-push-empty", date: "1999-01-01", workoutId: "push", name: "Push",
     finishedAt: null, entries: [], startedAt: "1999-01-01T10:00:00",
   };
-  app.state.sessions.push(empty, kept, routine);
+  app.state.sessions.push(live, withExtra, oldEmpty, stale, kept, routine);
   app.ui.workoutOpen = false;
   try {
     app.closeStaleSessions();
-    assert.equal(app.state.sessions.some((s) => s.id === empty.id), false);
-    assert.ok(app.state.deleted.includes(empty.id));
+    assert.ok(app.state.sessions.some((s) => s.id === live.id));
+    assert.ok(app.state.sessions.some((s) => s.id === withExtra.id));
+    assert.equal(app.state.sessions.some((s) => s.id === oldEmpty.id), false);
+    assert.equal(app.state.sessions.some((s) => s.id === stale.id), false);
+    assert.equal(app.state.deleted.some((m) => app.deletedId(m) === oldEmpty.id), false);
+    assert.equal(app.state.deleted.some((m) => app.deletedId(m) === stale.id), false);
     assert.equal(kept.finishedAt, null);
     assert.ok(routine.finishedAt);
     app.ui.workoutOpen = false;
     app.resumeOpenWorkout();
     assert.equal(app.ui.workoutOpen, true);
-    assert.equal(app.activeSession().id, kept.id);
+    assert.equal(app.activeSession().id, live.id);
     app.resumeOpenWorkout();
-    assert.equal(app.state.deleted.filter((id) => id === empty.id).length, 1);
+    assert.equal(app.state.deleted.some((m) => app.deletedId(m) === oldEmpty.id), false);
+    assert.equal(app.state.sessions.filter((s) => s.id === live.id).length, 1);
   } finally {
     app.replaceState(prev);
   }
+});
+
+test("the deleted list expires old markers and stays under a cap", () => {
+  const now = 1_800_000_000_000;
+  const many = [
+    { id: "old", at: now - app.DELETED_TTL_MS - 1000 },
+    "legacy",
+    { id: "fresh", at: now },
+  ];
+  for (let i = 0; i < app.DELETED_CAP + 10; i++) many.push({ id: "k" + i, at: now - 10_000 - i });
+  const pruned = app.pruneDeleted(many, now);
+  assert.equal(pruned.some((m) => app.deletedId(m) === "old"), false);
+  assert.equal(pruned.some((m) => app.deletedId(m) === "legacy"), false);
+  assert.equal(pruned.some((m) => app.deletedId(m) === "fresh"), true);
+  assert.equal(pruned.length, app.DELETED_CAP);
+  assert.equal(app.deletedAt(pruned[0]) >= app.deletedAt(pruned[pruned.length - 1]), true);
+  const strings = app.pruneDeleted(["a", "b", "a"], now);
+  assert.deepEqual(strings, ["a", "b"]);
+  assert.deepEqual(app.pruneDeleted(["a", { id: "a", at: 5 }, { id: "a", at: 9 }], 100), [{ id: "a", at: 9 }]);
 });
 
 test("removing an exercise during a routine workout does not change the routine", () => {

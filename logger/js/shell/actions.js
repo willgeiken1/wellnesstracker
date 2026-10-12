@@ -69,7 +69,7 @@ app.openWorkout = openWorkout;
 function finishSession(s, quiet) {
   if (!app.setCount(s)) {
     app.state.sessions = app.state.sessions.filter((x) => x !== s);
-    app.state.deleted = [...(app.state.deleted || []), s.id];
+    app.noteDeleted(s.id);
     if (!quiet) app.toast("Workout discarded. No sets were logged.");
   } else {
     if (s.plain) delete s.plain;
@@ -480,7 +480,7 @@ document.addEventListener("click", async (ev) => {
       const ok = await app.ask({ title: `Cancel ${s.name}?`, body: n ? `The ${app.pl(n, "set")} you logged in this workout will be deleted. This can't be undone.` : "Nothing has been logged yet.", ok: "Cancel workout", cancel: "Keep going", danger: true });
       if (!ok) break;
       app.state.sessions = app.state.sessions.filter((x) => x !== s);
-      app.state.deleted = [...(app.state.deleted || []), s.id];
+      app.noteDeleted(s.id);
       app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.drafts = {};
       app.save(); app.render(); app.toast("Workout cancelled. Nothing was saved."); break;
     }
@@ -750,7 +750,7 @@ document.addEventListener("click", async (ev) => {
       t.e.sets.splice(app.ui.sd.j, 1);
       if (!t.e.sets.length) t.s.entries = t.s.entries.filter((x) => x !== t.e);
       app.recomputePRs(t.e.exercise);
-      if (!t.s.entries.length && t.s.finishedAt) { app.state.sessions = app.state.sessions.filter((x) => x !== t.s); app.state.deleted = [...(app.state.deleted || []), t.s.id]; }
+      if (!t.s.entries.length && t.s.finishedAt) { app.state.sessions = app.state.sessions.filter((x) => x !== t.s); app.noteDeleted(t.s.id); }
       else t.s.mod = Date.now();
       delete app.ui.drafts[t.e.exercise];
       app.save(); app.ui.sheet = null; app.render(); app.toast("Set deleted."); break;
@@ -1120,7 +1120,7 @@ document.addEventListener("click", async (ev) => {
       const s = app.state.sessions.find((x) => x.id === b.dataset.id);
       if (!s || !(await app.ask({ title: `Delete this ${s.name} workout?`, body: `${app.fmtDate(s.date)}, ${app.pl(app.setCount(s), "set")}. This can't be undone.`, ok: "Delete", danger: true }))) break;
       app.state.sessions = app.state.sessions.filter((x) => x !== s);
-      app.state.deleted = [...(app.state.deleted || []), s.id];
+      app.noteDeleted(s.id);
       app.save(); app.render(); break;
     }
     case "rest": app.state.restSeconds = +b.dataset.s; app.save(); app.render(); break;

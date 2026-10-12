@@ -149,6 +149,47 @@ function withFreestyleMeta(winner, other) {
 }
 app.withFreestyleMeta = withFreestyleMeta;
 
+function markId(mark) {
+  if (typeof app.deletedId === "function") return app.deletedId(mark);
+  if (typeof mark === "string") return mark;
+  if (mark && typeof mark === "object" && typeof mark.id === "string") return mark.id;
+  return "";
+}
+
+function markAt(mark) {
+  if (typeof app.deletedAt === "function") return app.deletedAt(mark);
+  if (mark && typeof mark === "object" && typeof mark.at === "number" && Number.isFinite(mark.at) && mark.at > 0) return mark.at;
+  return 0;
+}
+
+function pruneMarks(list) {
+  if (typeof app.pruneDeleted === "function") return app.pruneDeleted(list);
+  return Array.isArray(list) ? list : [];
+}
+
+function loggedSets(s) {
+  if (!s || !Array.isArray(s.entries)) return 0;
+  return s.entries.reduce((n, e) => n + ((e && Array.isArray(e.sets) && e.sets.length) || 0), 0);
+}
+
+/* An untimed marker is what an empty discard used to sync. It must not erase an
+   unfinished freestyle that now has sets. A timed delete still wins when the
+   session has not been edited since that delete. */
+function markerDrops(s, marks) {
+  const id = s && s.id;
+  if (!id) return false;
+  const hits = [];
+  for (const m of marks || []) if (markId(m) === id) hits.push(m);
+  if (!hits.length) return false;
+  const live = !s.finishedAt && s.origin === "freestyle" && loggedSets(s) > 0;
+  if (!live) return true;
+  const mod = s.mod || 0;
+  return hits.some((m) => {
+    const at = markAt(m);
+    return at > 0 && mod <= at;
+  });
+}
+
 /* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
 function mergeRemote(r) {
   r = r || {};
@@ -160,13 +201,14 @@ function mergeRemote(r) {
   }
   // A synced credentialId (from an older build) is ignored. This phone's own credential is never touched here.
   if (r.appLock && (r.appLock.updatedAt || 0) > ((app.state.appLock && app.state.appLock.updatedAt) || 0)) app.state.appLock = syncedAppLock(r.appLock);
-  const deleted = new Set([...(app.state.deleted || []), ...(r.deleted || [])]);
+  const marks = [...(app.state.deleted || []), ...(r.deleted || [])];
   const byId = new Map();
   // This phone's copy goes first so it wins ties (e.g. right after converting units).
   // An older app drops origin, order, extra, removed, and swaps. Those come back from the
   // other copy when the logged sets are the same, and origin comes back even after a new set.
+  // A deletion marker for an empty freestyle loses to a copy that has sets.
   [...app.state.sessions, ...(r.sessions || [])].forEach((s) => {
-    if (!s || deleted.has(s.id)) return;
+    if (!s || markerDrops(s, marks)) return;
     const cur = byId.get(s.id);
     const better = (a, b) => (a.mod || 0) !== (b.mod || 0) ? (a.mod || 0) > (b.mod || 0)
       : app.setCount(a) > app.setCount(b) || (a.finishedAt && !b.finishedAt && app.setCount(a) >= app.setCount(b));
@@ -175,6 +217,10 @@ function mergeRemote(r) {
     else byId.set(s.id, withFreestyleMeta(cur, s));
   });
   app.state.sessions = [...byId.values()];
+  const beatMarker = new Set();
+  for (const s of byId.values()) {
+    if (!s.finishedAt && s.origin === "freestyle" && loggedSets(s) > 0 && marks.some((m) => markId(m) === s.id)) beatMarker.add(s.id);
+  }
   if (r.goals && (!app.state.goals || (r.goals.updatedAt || 0) > (app.state.goals.updatedAt || 0))) app.state.goals = r.goals;
   if (r.brief && (r.brief.updatedAt || 0) > ((app.state.brief && app.state.brief.updatedAt) || 0)) app.state.brief = r.brief;
   if (app.mergeWeeklyReports) app.state.weeklyReports = app.mergeWeeklyReports(app.state.weeklyReports, r.weeklyReports);
@@ -206,8 +252,9 @@ function mergeRemote(r) {
     if (r.restSeconds) app.state.restSeconds = r.restSeconds;
     if (r.theme) { app.state.theme = r.theme; app.applyTheme(); }
   }
-  app.state.deleted = [...deleted];
+  app.state.deleted = pruneMarks(marks.filter((m) => !beatMarker.has(markId(m))));
   if (app.applyPurges) app.applyPurges(app.state);
+  if (Array.isArray(app.state.deleted)) app.state.deleted = pruneMarks(app.state.deleted);
   if (app.state.oura && app.state.oura.days && app.datePurged) {
     Object.keys(app.state.oura.days).forEach((d) => { if (app.datePurged(d)) delete app.state.oura.days[d]; });
   }

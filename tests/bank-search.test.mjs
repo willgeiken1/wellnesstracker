@@ -46,6 +46,20 @@ test("search matches names and muscle groups, not equipment", () => {
   }
 });
 
+test("movement words that sit near equipment names still find the exercise", () => {
+  assert.equal(app.equipmentToken("bend"), false);
+  assert.equal(app.equipmentToken("banded"), false);
+  assert.equal(app.equipmentToken("band"), true);
+  assert.equal(app.equipmentToken("barbell"), true);
+  assert.equal(app.equipmentToken("dumbell"), true);
+  const bend = app.bankListHTML({ q: "bend", action: "pick" });
+  assert.match(bend, /data-name="Dumbbell Side Bend"/);
+  assert.doesNotMatch(bend, /Search for the movement/);
+  const banded = app.bankListHTML({ q: "banded", action: "pick" });
+  assert.match(banded, /data-name="Banded Hip March"/);
+  assert.doesNotMatch(banded, /Search for the movement/);
+});
+
 test("a misspelled equipment word is dropped before the movement is matched", () => {
   assert.deepEqual(app.bankTokens("dumbell bensh"), ["bensh"]);
   assert.deepEqual(app.bankTokens("kettelbell curl"), ["curl"]);

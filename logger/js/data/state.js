@@ -179,6 +179,59 @@ function mergeMachineNotes(local, remote) {
 }
 app.mergeMachineNotes = mergeMachineNotes;
 
+/* Session ids removed on purpose. A string is a legacy marker with no time.
+   A real delete is { id, at }. The list is capped, and timed markers expire. */
+const DELETED_CAP = 200;
+const DELETED_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const EMPTY_FREESTYLE_STALE_MS = 12 * 60 * 60 * 1000;
+app.DELETED_CAP = DELETED_CAP;
+app.DELETED_TTL_MS = DELETED_TTL_MS;
+app.EMPTY_FREESTYLE_STALE_MS = EMPTY_FREESTYLE_STALE_MS;
+
+function deletedId(mark) {
+  if (typeof mark === "string") return mark;
+  if (mark && typeof mark === "object" && typeof mark.id === "string") return mark.id;
+  return "";
+}
+app.deletedId = deletedId;
+
+function deletedAt(mark) {
+  if (mark && typeof mark === "object" && typeof mark.at === "number" && Number.isFinite(mark.at) && mark.at > 0) return mark.at;
+  return 0;
+}
+app.deletedAt = deletedAt;
+
+/* Untimed strings stay untimed, so they are the first to go when the cap is hit.
+   A later timed copy of the same id replaces the string. */
+function pruneDeleted(list, now) {
+  const t = typeof now === "number" && Number.isFinite(now) ? now : Date.now();
+  const byId = new Map();
+  for (const mark of Array.isArray(list) ? list : []) {
+    const id = deletedId(mark);
+    if (!id) continue;
+    const at = deletedAt(mark);
+    if (at && t - at > DELETED_TTL_MS) continue;
+    const prev = byId.get(id);
+    if (prev && deletedAt(prev) >= at) continue;
+    byId.set(id, at ? { id, at } : id);
+  }
+  let items = [...byId.values()];
+  if (items.length > DELETED_CAP) {
+    items.sort((a, b) => deletedAt(b) - deletedAt(a));
+    items = items.slice(0, DELETED_CAP);
+  }
+  return items;
+}
+app.pruneDeleted = pruneDeleted;
+
+function noteDeleted(id) {
+  if (!id) return;
+  const list = (app.state.deleted || []).filter((m) => deletedId(m) !== id);
+  list.push({ id, at: Date.now() });
+  app.state.deleted = pruneDeleted(list);
+}
+app.noteDeleted = noteDeleted;
+
 /* Accepts the original v1 format and the current one */
 function migrate(d) {
   if (!d || !Array.isArray(d.sessions)) return null;
@@ -208,7 +261,7 @@ function migrate(d) {
   if (profile) stripProfileClockFields(profile);
   return { version: 2, workouts, sessions, plan: d.plan || {}, planAt: d.planAt && typeof d.planAt === "object" && !Array.isArray(d.planAt) ? d.planAt : {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
     oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo,
-    deleted: d.deleted || [], updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
+    deleted: pruneDeleted(d.deleted || []), updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
     profile, ownerId: d.ownerId || null,
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
@@ -263,6 +316,7 @@ app.wipeLogs = wipeLogs;
 /* Bumps correlationRev before writing. Replacing app.state or wiping logs without
    replaceState or wipeLogs serves the previous rows. */
 function save() {
+  if (app.state && Array.isArray(app.state.deleted)) app.state.deleted = pruneDeleted(app.state.deleted);
   app.state.updatedAt = Date.now();
   bumpCorrelationRev();
   try { app.schedulePush(); } catch (e) { /* cloud not ready yet */ }
@@ -274,26 +328,44 @@ app.save = save;
 let state = app.load();
 app.replaceState(state);
 
-/* A freestyle session with no logged sets was never a workout. Drop it, and remember the id
-   so a copy still sitting on another phone does not come back on the next sync. */
+function freestyleSetCount(s) {
+  if (!s || !Array.isArray(s.entries)) return 0;
+  return s.entries.reduce((c, e) => c + ((e && e.sets && e.sets.length) || 0), 0);
+}
+
+function sessionClock(s) {
+  const times = [];
+  if (s && typeof s.mod === "number" && Number.isFinite(s.mod) && s.mod > 0) times.push(s.mod);
+  const started = Date.parse(s && s.startedAt);
+  if (Number.isFinite(started) && started > 0) times.push(started);
+  return times.length ? Math.max(...times) : 0;
+}
+
+/* Only a freestyle that was clearly left behind: nothing logged, nothing queued,
+   and either a previous day or a clock that has not moved for hours.
+   The drop stays on this phone. A synced deletion marker would erase sets the
+   other phone logged after the empty copy was synced. */
+function abandonedEmptyFreestyle(s, now) {
+  if (!s || s.finishedAt || s.origin !== "freestyle") return false;
+  if (freestyleSetCount(s) > 0) return false;
+  if ((Array.isArray(s.order) && s.order.length) || (Array.isArray(s.extra) && s.extra.length)) return false;
+  if (s.date && s.date < app.today()) return true;
+  const clock = sessionClock(s);
+  const t = typeof now === "number" && Number.isFinite(now) ? now : Date.now();
+  return !clock || t - clock >= EMPTY_FREESTYLE_STALE_MS;
+}
+app.abandonedEmptyFreestyle = abandonedEmptyFreestyle;
+
 function discardEmptyFreestyle() {
-  const ids = [];
-  app.state.sessions = (app.state.sessions || []).filter((s) => {
-    if (!s || s.finishedAt || s.origin !== "freestyle") return true;
-    const n = Array.isArray(s.entries) ? s.entries.reduce((c, e) => c + ((e && e.sets && e.sets.length) || 0), 0) : 0;
-    if (n > 0) return true;
-    if (s.id) ids.push(s.id);
-    return false;
-  });
-  if (!ids.length) return false;
-  app.state.deleted = [...new Set([...(app.state.deleted || []), ...ids])];
-  return true;
+  const before = (app.state.sessions || []).length;
+  app.state.sessions = (app.state.sessions || []).filter((s) => !abandonedEmptyFreestyle(s));
+  return app.state.sessions.length !== before;
 }
 app.discardEmptyFreestyle = discardEmptyFreestyle;
 
 /* A workout left open from a previous day gets closed automatically.
    A freestyle workout with logged sets stays in progress so reopening the app can resume it.
-   One with no sets is discarded instead of reopening on every launch. */
+   An abandoned empty one is dropped on this phone instead of reopening on every launch. */
 function closeStaleSessions() {
   discardEmptyFreestyle();
   app.state.sessions.forEach((s) => {

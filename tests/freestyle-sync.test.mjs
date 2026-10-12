@@ -116,18 +116,24 @@ test("a seeded freestyle sync round-trips across two devices and an old client",
     const ghost = app.freestyleSession();
     ghost.id = "ghost-empty";
     ghost.workoutId = "fs:ghost-empty";
+    ghost.date = "1999-01-02";
+    ghost.startedAt = "1999-01-02T08:00:00";
     ghost.entries = [];
-    ghost.extra = [{ name: "Bench Press", muscles: ["chest"] }];
+    ghost.extra = [];
     tombA.sessions = [ghost];
     app.state = tombA;
     assert.equal(app.discardEmptyFreestyle(), true);
     assert.equal(sessionById(tombA, ghost.id), undefined);
-    assert.ok(tombA.deleted.includes(ghost.id));
+    assert.equal(tombA.deleted.some((m) => app.deletedId(m) === ghost.id), false);
     const tombB = fresh();
-    tombB.sessions = [clone(ghost)];
+    const logged = clone(ghost);
+    logged.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 60, r: 5 }] }];
+    logged.mod = Date.now();
+    tombB.sessions = [logged];
     pull(tombB, blobOf(tombA));
-    assert.equal(sessionById(tombB, ghost.id), undefined, "empty freestyle came back from the other phone");
-    assert.ok(tombB.deleted.includes(ghost.id));
+    const survived = sessionById(tombB, ghost.id);
+    assert.ok(survived, "sets were lost because the other phone discarded an empty copy");
+    assert.equal(survived.entries[0].sets[0].w, 60);
 
     for (let trial = 0; trial < 32; trial++) {
       const where = `FREESTYLE_SYNC_SEED=${SEED} trial ${trial}`;
@@ -214,6 +220,101 @@ test("a seeded freestyle sync round-trips across two devices and an old client",
       assert.equal(routineA.name, routine.name, where);
       assert.deepEqual(onA.entries[0].sets.slice(0, -1), s.entries[0].sets, where);
     }
+  } finally {
+    app.state = prev;
+  }
+});
+
+/* Phone A starts a freestyle and syncs it while it is still empty. Phone B opens
+   and may discard that copy. Phone A then logs sets and pulls. The sets must remain,
+   even if B still publishes the old string deletion marker. */
+test("a seeded two-device race keeps sets logged after an empty discard", () => {
+  console.log(`FREESTYLE_SYNC_SEED=${SEED}`);
+  const rnd = mulberry32(SEED);
+  const prev = app.state;
+  try {
+    for (let trial = 0; trial < 24; trial++) {
+      const where = `FREESTYLE_SYNC_SEED=${SEED} race ${trial}`;
+      const kind = Math.floor(rnd() * 4);
+      const id = `race-${trial}`;
+      const session = app.freestyleSession();
+      session.id = id;
+      session.workoutId = "fs:" + id;
+      session.entries = [];
+      session.extra = [];
+      session.order = [];
+      if (kind === 1) {
+        session.date = "1999-01-01";
+        session.startedAt = "1999-01-01T08:00:00";
+      } else if (kind === 2) {
+        session.extra = [{ name: "Bench Press", muscles: ["chest"] }];
+      } else if (kind === 3) {
+        session.mod = Date.now() - app.EMPTY_FREESTYLE_STALE_MS - 60_000;
+        session.startedAt = new Date(session.mod).toISOString();
+      }
+      const phoneB = fresh();
+      phoneB.sessions = [clone(session)];
+      app.state = phoneB;
+      const dropped = app.discardEmptyFreestyle();
+      const stillThere = !!sessionById(phoneB, id);
+      if (kind === 0 || kind === 2) {
+        assert.equal(dropped, false, where);
+        assert.equal(stillThere, true, where);
+      } else {
+        assert.equal(dropped, true, where);
+        assert.equal(stillThere, false, where);
+      }
+      assert.equal(phoneB.deleted.some((m) => app.deletedId(m) === id), false, where + " wrote a synced deletion marker");
+
+      const weight = 40 + trial;
+      const phoneA = fresh();
+      const logged = clone(session);
+      logged.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: weight, r: 5 }] }];
+      logged.mod = Date.now() + 10_000;
+      phoneA.sessions = [logged];
+      const buggy = blobOf(phoneB);
+      buggy.deleted = [...(buggy.deleted || []), id];
+      pull(phoneA, buggy);
+      const kept = sessionById(phoneA, id);
+      assert.ok(kept, where + " lost the session");
+      assert.equal(kept.entries[0].sets[0].w, weight, where + " lost the sets");
+      assert.equal(phoneA.deleted.some((m) => app.deletedId(m) === id), false, where + " kept the empty-session marker");
+    }
+
+    const cancelled = fresh();
+    const live = app.freestyleSession();
+    live.id = "cancel-live";
+    live.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 100, r: 5 }] }];
+    live.mod = Date.now() - 10_000;
+    cancelled.sessions = [live];
+    const cancelBlob = fresh();
+    cancelBlob.deleted = [{ id: live.id, at: Date.now() }];
+    pull(cancelled, blobOf(cancelBlob));
+    assert.equal(sessionById(cancelled, live.id), undefined, "a newer delete lost to sets");
+    assert.equal(cancelled.deleted.some((m) => app.deletedId(m) === live.id), true);
+
+    const later = fresh();
+    const grew = app.freestyleSession();
+    grew.id = "grew";
+    grew.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 80, r: 5 }] }];
+    grew.mod = Date.now();
+    later.sessions = [grew];
+    const earlyDelete = fresh();
+    earlyDelete.deleted = [{ id: grew.id, at: Date.now() - 60_000 }];
+    pull(later, blobOf(earlyDelete));
+    assert.equal(sessionById(later, grew.id).entries[0].sets[0].w, 80, "sets logged after a delete were dropped");
+    assert.equal(later.deleted.some((m) => app.deletedId(m) === grew.id), false);
+
+    const finished = fresh();
+    finished.sessions = [{
+      id: "done-1", date: "2020-01-01", workoutId: "push", name: "Push", origin: "freestyle",
+      finishedAt: "2020-01-01T12:00:00", mod: 50,
+      entries: [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 100, r: 5 }] }],
+    }];
+    const doneBlob = fresh();
+    doneBlob.deleted = ["done-1"];
+    pull(finished, blobOf(doneBlob));
+    assert.equal(sessionById(finished, "done-1"), undefined, "a finished workout came back");
   } finally {
     app.state = prev;
   }

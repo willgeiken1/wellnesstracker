@@ -208,11 +208,28 @@ function tokenHit(q, word) {
 }
 app.tokenHit = tokenHit;
 
-/* Same edit budget as tokenHit, without the substring shortcut, so "bar" does not swallow "barbell". */
+/* Words that already name a movement ("bend", "banded") are not equipment,
+   even when they sit one or two edits from "band". */
+let bankNameTokens = null;
+function movementTokens() {
+  if (bankNameTokens) return bankNameTokens;
+  const bank = app.ASSETS && app.ASSETS.bank;
+  if (!Array.isArray(bank) || !bank.length) return new Set();
+  bankNameTokens = new Set();
+  for (const b of bank) {
+    String((b && b.n) || "").toLowerCase().split(/[^a-z0-9]+/).forEach((tok) => {
+      if (tok) bankNameTokens.add(tok);
+    });
+  }
+  return bankNameTokens;
+}
+
+/* Same edit budget as tokenHit, without the substring shortcut, so "bar" does not swallow "barbell".
+   Fuzzy matches need 5 letters. An exact equipment word still matches at any length. */
 function equipmentToken(w) {
   if (!w) return false;
   if (EQUIPMENT_WORDS.has(w)) return true;
-  if (w.length < 4) return false;
+  if (w.length < 5 || movementTokens().has(w)) return false;
   const limit = w.length <= 5 ? 1 : 2;
   for (const eq of EQUIPMENT_WORDS) {
     if (eq.length < 4 || Math.abs(w.length - eq.length) > limit) continue;
