@@ -112,41 +112,45 @@ test("listFindings and splitFindings hold their caps over 3000 random row sets",
     const { top, more } = splitFindings(rows, { days }, today);
     const listed = listFindings(rows, { days }, today);
 
+    assert.equal(STORY_CAP, 1, msg("story cap"));
     assert.ok(top.length <= DISPLAY_LIMIT, msg("top too long"));
     counts(top, (r) => r.outcome).forEach((n) => assert.ok(n <= OUTCOME_CAP, msg("OUTCOME_CAP broken in top")));
     counts(top, factorFamily).forEach((n) => assert.ok(n <= FAMILY_CAP, msg("FAMILY_CAP broken in top")));
-    counts(top, storyKey).forEach((n) => assert.equal(n, 1, msg("story repeated in top")));
-    const storySeen = {};
-    let overflowAt = listed.length;
-    listed.forEach((r, index) => {
-      const story = storyKey(r);
-      storySeen[story] = (storySeen[story] || 0) + 1;
-      if (storySeen[story] > STORY_CAP && overflowAt === listed.length) overflowAt = index;
-    });
-    const capped = {};
-    listed.slice(0, overflowAt).forEach((r) => {
-      const story = storyKey(r);
-      capped[story] = (capped[story] || 0) + 1;
-      assert.ok(capped[story] <= STORY_CAP, msg("STORY_CAP broken before the overflow tail"));
-    });
+    counts(listed, storyKey).forEach((n) => assert.equal(n, 1, msg("story repeated after the fold")));
     assert.equal(new Set(listed).size, listed.length, msg("row appears twice"));
     assert.equal(new Set(listed.map(keyOf)).size, listed.length, msg("key appears twice"));
-    listed.forEach((r) => assert.ok(r.confidence === "high" || r.confidence === "medium", msg("low confidence row returned")));
-    const eligible = rows.filter((r) => r.confidence === "high" || r.confidence === "medium");
-    assert.equal(listed.length, eligible.length, msg("a high or medium finding was dropped"));
-    rows.filter((r) => r.confidence === "high").forEach((r) => {
-      assert.ok(listed.some((x) => keyOf(x) === keyOf(r)), msg("high finding missing from listFindings"));
+    const covered = [];
+    listed.forEach((r) => {
+      assert.ok(r.confidence === "high" || r.confidence === "medium", msg("low confidence row returned"));
+      covered.push(r);
+      (r.folded || []).forEach((f) => {
+        assert.equal(storyKey(f), storyKey(r), msg("folded row is a different story"));
+        assert.ok(f.confidence === "high" || f.confidence === "medium", msg("low confidence row folded in"));
+        covered.push(f);
+      });
     });
-    const picked = pickForToday(rows, { days }, today) || pickForToday(rows, { days: {} }, null);
+    const eligible = rows.filter((r) => r.confidence === "high" || r.confidence === "medium");
+    assert.equal(covered.length, eligible.length, msg("a high or medium finding was dropped"));
+    assert.equal(new Set(covered.map(keyOf)).size, covered.length, msg("folded key appears twice"));
+    const picked = pickForToday(rows, { days }, today);
     if (picked) {
-      assert.ok(listed.some((r) => keyOf(r) === keyOf(picked)), msg("brief pick missing from listFindings"));
+      const lead = listed.find((r) => storyKey(r) === storyKey(picked));
+      assert.equal(lead && keyOf(lead), keyOf(picked), msg("brief pick is not the card for its story"));
       assert.ok(top.some((r) => keyOf(r) === keyOf(picked)), msg("brief pick missing from the first screen"));
+    } else {
+      const any = pickForToday(rows, { days: {} }, null);
+      if (any) {
+        const lead = listed.find((r) => storyKey(r) === storyKey(any));
+        const keys = lead ? [keyOf(lead)].concat((lead.folded || []).map(keyOf)) : [];
+        assert.ok(keys.includes(keyOf(any)), msg("a qualifying finding is missing from its story"));
+      }
     }
     assert.deepEqual(listed, top.concat(more), msg("listFindings is not top.concat(more)"));
     assert.deepEqual(listed.slice(0, top.length), top, msg("top is not a prefix of listFindings"));
 
-    const again = listFindings(shuffled(rand, rows), { days }, today).map(keyOf);
-    assert.deepEqual(again, listed.map(keyOf), msg("output depends on input order"));
+    const pack = (list) => list.map((r) => keyOf(r) + ">" + (r.folded || []).map(keyOf).join("+"));
+    const again = listFindings(shuffled(rand, rows), { days }, today);
+    assert.deepEqual(pack(again), pack(listed), msg("output depends on input order"));
     const split = splitFindings(shuffled(rand, rows), { days }, today);
     assert.deepEqual(split.top.map(keyOf), top.map(keyOf), msg("top depends on input order"));
   }
