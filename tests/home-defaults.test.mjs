@@ -107,6 +107,28 @@ function restoreApp() {
 const hits = (html, re) => (html.match(re) || []).length;
 const tileIdsIn = (html) => [...html.matchAll(/class="hw-slot[^"]*" data-hw="([a-z-]+)"/g)].map((m) => m[1]);
 
+/* The element whose opening tag carries data-hw, including its children.
+   A page-wide search for the score also hits a weigh-in that shares those digits. */
+function elementWithDataHw(html, id) {
+  const marker = `data-hw="${id}"`;
+  const at = html.indexOf(marker);
+  if (at < 0) return "";
+  const open = html.lastIndexOf("<", at);
+  const tagMatch = /^<([a-zA-Z0-9]+)/.exec(html.slice(open));
+  if (open < 0 || !tagMatch) return "";
+  const tag = tagMatch[1];
+  const re = new RegExp(`</?${tag}\\b[^>]*>`, "g");
+  re.lastIndex = open;
+  let depth = 0;
+  let m;
+  while ((m = re.exec(html))) {
+    if (m[0].startsWith("</")) depth -= 1;
+    else if (!m[0].endsWith("/>")) depth += 1;
+    if (depth === 0) return html.slice(open, m.index + m[0].length);
+  }
+  return "";
+}
+
 /* Everything Home paints for a legacy (not user-edited) account. */
 function legacyView(state) {
   stubApp(state);
@@ -327,7 +349,10 @@ test("randomized account states hold every Home defaults invariant", () => {
         if (ring === "none" || ring === "lapsed") assert.equal(painted.some((id) => HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura), false, where);
         if (!days[TODAY] && ring !== "demo") assert.equal(painted.some((id) => HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura), false, `no Oura tile without a day. ${where}`);
         assert.doesNotMatch(html, /Connect a ring|No Oura yet|hw-miss/, where);
-        if (ring === "lapsed" && days[TODAY]) assert.doesNotMatch(html, new RegExp(`>${days[TODAY].readiness}<`), `stored readiness stays off an edited Home. ${where}`);
+        if (ring === "lapsed" && days[TODAY]) {
+          const tile = elementWithDataHw(html, "readiness");
+          assert.doesNotMatch(tile, new RegExp(`>${days[TODAY].readiness}<`), `stored readiness stays off an edited Home. ${where}`);
+        }
         continue;
       }
       const ids = tileIdsIn(v.strip);

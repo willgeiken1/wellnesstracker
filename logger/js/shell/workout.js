@@ -59,6 +59,7 @@ function exerciseHTML(s, e, i) {
     <div class="ex-ms">${machineChipHTML(e.name)}</div>`;
   if (open) {
     const d = app.draftFor(s, e.name);
+    const hint = app.setFieldHints(s, e.name);
     const worked = done.filter(app.isWork).length;
     const sg = worked ? null : app.suggestion(e.name, s.id);
     let wi = 0;
@@ -72,7 +73,7 @@ function exerciseHTML(s, e, i) {
       }).join("")}</ol>` : ""}
       <div class="uni-row"><span id="uni-l-${i}">Unilateral</span>
         <button class="switch" role="switch" aria-checked="${app.isUni(e.name)}" aria-labelledby="uni-l-${i}" data-action="uni" data-i="${i}"><i></i></button></div>
-      ${app.isUni(e.name) ? `<div class="side-l">Left</div>${app.stepPair(i, d, "w", "r", app.canBW(e.name))}<div class="side-l">Right</div>${app.stepPair(i, d, "wR", "rR", app.canBW(e.name))}` : app.stepPair(i, d, "w", "r", app.canBW(e.name))}
+      ${app.isUni(e.name) ? `<div class="side-l">Left</div>${app.stepPair(i, d, "w", "r", app.canBW(e.name), hint)}<div class="side-l">Right</div>${app.stepPair(i, d, "wR", "rR", app.canBW(e.name), hint)}` : app.stepPair(i, d, "w", "r", app.canBW(e.name), hint)}
       <input class="note" data-field="note" data-i="${i}" autocomplete="off" placeholder="Note (optional)" value="${app.esc(d.note)}">
       <div class="tags" role="group" aria-label="Set type">
         <button data-action="tag" data-t="warmup" data-i="${i}" aria-pressed="${d.tag === "warmup"}">Warm-up</button>

@@ -329,18 +329,32 @@ function lastSets(name, excludeId) {
 }
 app.lastSets = lastSets;
 
+/* A new set starts blank. The last logged value is only a placeholder. */
 function draftFor(s, name) {
   if (app.ui.drafts[name]) return app.ui.drafts[name];
-  const done = app.setsFor(s, name);
-  let src = done.filter((x) => x.tag !== "warmup").pop();
-  if (!src) {
-    const sg = app.suggestion(name, s.id);
-    if (sg) src = { w: sg.w, r: sg.r };
-    else { const prev = (app.lastSets(name, s.id) || []).filter((x) => x.tag !== "warmup"); src = prev[0]; }
-  }
-  const fw = (v) => v != null ? app.fmtNum(v) : "";
-  const L = src && src.uni ? src.uni.l : src, Rt = src && src.uni ? src.uni.r : src;
-  app.ui.drafts[name] = { w: L ? fw(L.w) : "", r: L ? String(L.r) : "", wR: Rt ? fw(Rt.w) : "", rR: Rt ? String(Rt.r) : "", note: "", tag: null };
+  app.ui.drafts[name] = { w: "", r: "", wR: "", rR: "", note: "", tag: null };
   return app.ui.drafts[name];
 }
 app.draftFor = draftFor;
+
+function hintSide(side) {
+  if (!side) return { w: "", r: "" };
+  return { w: side.w != null ? app.fmtNum(side.w) : "", r: side.r != null ? String(side.r) : "" };
+}
+
+/* Most recent working set in this session, else the most recent one from history.
+   Warm-ups are skipped when a working set exists. Does not read the suggestion. */
+function setFieldHints(s, name) {
+  const pick = (sets) => {
+    if (!sets || !sets.length) return null;
+    const work = sets.filter((x) => x.tag !== "warmup");
+    const list = work.length ? work : sets;
+    return list[list.length - 1];
+  };
+  const src = pick(app.setsFor(s, name)) || pick(app.lastSets(name, s.id));
+  if (!src) return null;
+  const L = hintSide(src.uni ? src.uni.l : src);
+  const R = hintSide(src.uni ? src.uni.r : src);
+  return { w: L.w, r: L.r, wR: R.w, rR: R.r };
+}
+app.setFieldHints = setFieldHints;
