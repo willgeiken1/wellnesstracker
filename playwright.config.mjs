@@ -96,8 +96,8 @@ export default defineConfig({
         },
       },
     },
-    // live: PR B adds this project (deployed site, real test account,
-    // launchAllowlistBrowser). It is not part of PR smoke.
+    // Deployed-site checks live in playwright.live.config.mjs (npm run pw:live).
+    // They are not part of PR smoke.
   ],
   webServer: {
     command: "node logger/tests/e2e/fixtures/static-server.mjs",

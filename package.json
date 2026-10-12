@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Playwright is installed for the browser harnesses and the PR smoke suite under logger/tests. The app itself has no package dependencies.",
   "scripts": {
-    "pw:smoke": "node logger/tests/e2e/run-smoke.mjs"
+    "pw:smoke": "node logger/tests/e2e/run-smoke.mjs",
+    "pw:live": "node logger/tests/live/run-live.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

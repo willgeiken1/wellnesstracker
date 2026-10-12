@@ -1,0 +1,76 @@
+name: Live checks
+
+# Deployed GitHub Pages and the throwaway account only.
+# Manual from the Actions tab runs the page check and the account delete.
+# The Monday 16:00 UTC schedule runs the page check only.
+# This file has no pull_request or push trigger, so a missing secret cannot fail PR CI.
+# The job also skips with a green result when the email or password secret is absent.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 16 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: insight-live-checks
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Deployed app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Decide whether secrets are present
+        id: gate
+        env:
+          HAS_EMAIL: ${{ secrets.INSIGHT_TEST_EMAIL != '' }}
+          HAS_PASSWORD: ${{ secrets.INSIGHT_TEST_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_EMAIL" = "true" ] && [ "$HAS_PASSWORD" = "true" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "INSIGHT_TEST_EMAIL or INSIGHT_TEST_PASSWORD is absent. Skipping live checks."
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "Live checks skipped because INSIGHT_TEST_EMAIL or INSIGHT_TEST_PASSWORD is not set." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+      - name: Install Node
+        if: steps.gate.outputs.present == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.present == 'true'
+        run: npm ci
+
+      - name: Install Chromium
+        if: steps.gate.outputs.present == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run live page check
+        if: steps.gate.outputs.present == 'true'
+        env:
+          INSIGHT_TEST_EMAIL: ${{ secrets.INSIGHT_TEST_EMAIL }}
+          INSIGHT_TEST_PASSWORD: ${{ secrets.INSIGHT_TEST_PASSWORD }}
+        run: npm run pw:live -- --project=live-boot
+
+      - name: Run live account purge
+        if: steps.gate.outputs.present == 'true' && github.event_name == 'workflow_dispatch'
+        env:
+          INSIGHT_TEST_EMAIL: ${{ secrets.INSIGHT_TEST_EMAIL }}
+          INSIGHT_TEST_PASSWORD: ${{ secrets.INSIGHT_TEST_PASSWORD }}
+          INSIGHT_TEST_SERVICE_ROLE_KEY: ${{ secrets.INSIGHT_TEST_SERVICE_ROLE_KEY }}
+        run: npm run pw:live -- --project=live-purge
