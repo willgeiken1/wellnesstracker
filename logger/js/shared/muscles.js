@@ -163,7 +163,8 @@ function exObjFrom(name) {
 }
 app.exObjFrom = exObjFrom;
 
-/* Equipment words are how an exercise is loaded, not what it is. Search ignores them. */
+/* Equipment words are how an exercise is loaded, not what it is. Search ignores them.
+   A near miss such as "dumbell" is still equipment, so it is dropped before the movement is matched. */
 const EQUIPMENT_WORDS = new Set([
   "barbell", "dumbbell", "dumbbells", "cable", "cables", "machine", "machines", "smith",
   "kettlebell", "kettlebells", "ez", "band", "bands", "plate", "plates", "landmine",
@@ -173,11 +174,6 @@ app.EQUIPMENT_WORDS = EQUIPMENT_WORDS;
 
 const BANK_FILTER_MS = 250;
 app.BANK_FILTER_MS = BANK_FILTER_MS;
-
-function bankTokens(s) {
-  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !EQUIPMENT_WORDS.has(w));
-}
-app.bankTokens = bankTokens;
 
 /* Adjacent swaps count as one edit, so "bensh" and "sqaut" are one step away. */
 function damerau(a, b) {
@@ -212,6 +208,36 @@ function tokenHit(q, word) {
 }
 app.tokenHit = tokenHit;
 
+/* Same edit budget as tokenHit, without the substring shortcut, so "bar" does not swallow "barbell". */
+function equipmentToken(w) {
+  if (!w) return false;
+  if (EQUIPMENT_WORDS.has(w)) return true;
+  if (w.length < 4) return false;
+  const limit = w.length <= 5 ? 1 : 2;
+  for (const eq of EQUIPMENT_WORDS) {
+    if (eq.length < 4 || Math.abs(w.length - eq.length) > limit) continue;
+    if (damerau(w, eq) <= limit) return true;
+  }
+  return false;
+}
+app.equipmentToken = equipmentToken;
+
+function bankTokens(s) {
+  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !equipmentToken(w));
+}
+app.bankTokens = bankTokens;
+
+function rawTokens(s) {
+  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/* "barbell" and "dumbell" have nothing left to match once equipment words are gone. */
+function equipmentOnlyQuery(query) {
+  const raw = rawTokens(query);
+  return raw.length > 0 && raw.every((w) => equipmentToken(w));
+}
+app.equipmentOnlyQuery = equipmentOnlyQuery;
+
 /* Names and muscle groups only. A query that is just "barbell" or "machine" matches nothing. */
 function bankHit(query, row) {
   const qTokens = bankTokens(query);
@@ -236,6 +262,9 @@ function bankListHTML(o) {
   const custom = app.customExercises().filter((e) => !(o.exclude || new Set()).has(e.name.toLowerCase()));
   const bank = app.ASSETS.bank.filter((b) => !(o.exclude || new Set()).has(b.n.toLowerCase()));
   if (q) {
+    if (equipmentOnlyQuery(o.q)) {
+      return `<div class="pk-empty pk-equip"><p>Search for the movement</p><p>Equipment words like barbell, dumbbell, and machine are left out. Try bench, curl, or chest.</p></div>`;
+    }
     const hits = [...custom.map((e) => [e.name, e, "custom"]), ...bank.map((b) => [b.n, bankE(b), "bank"])]
       .filter(([, e]) => bankHit(o.q, e))
       .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }));

@@ -144,16 +144,52 @@ test("live order, removal, and a linked routine survive a reload", () => {
 
     const stale = app.freestyleSession();
     stale.date = "1999-01-01";
+    stale.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 20, r: 5 }] }];
     const oldPush = { id: "old-push-resume", date: "1999-01-01", workoutId: "push", name: "Push", finishedAt: null, entries: [], startedAt: "1999-01-01T10:00:00" };
     app.state.sessions.push(stale, oldPush);
     app.closeStaleSessions();
     assert.equal(stale.finishedAt, null);
+    assert.ok(app.state.sessions.some((x) => x.id === stale.id));
     assert.ok(oldPush.finishedAt);
     app.ui.workoutOpen = false;
     app.resumeOpenWorkout();
     assert.equal(app.ui.workoutOpen, true);
     assert.equal(app.logsStartRest({ origin: "freestyle" }), false);
     assert.equal(app.logsStartRest({ origin: undefined, name: "Push" }), true);
+  } finally {
+    app.replaceState(prev);
+  }
+});
+
+test("an empty freestyle session is discarded on launch and does not reopen", () => {
+  const prev = app.state;
+  const base = JSON.parse(JSON.stringify(prev));
+  base.sessions = (base.sessions || []).filter((s) => s.finishedAt);
+  base.deleted = [...(base.deleted || [])];
+  app.replaceState(base);
+  const empty = app.freestyleSession();
+  empty.extra = [{ name: "Bench Press", muscles: ["chest"] }];
+  const kept = app.freestyleSession();
+  kept.date = "1999-01-01";
+  kept.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 40, r: 5 }] }];
+  const routine = {
+    id: "old-push-empty", date: "1999-01-01", workoutId: "push", name: "Push",
+    finishedAt: null, entries: [], startedAt: "1999-01-01T10:00:00",
+  };
+  app.state.sessions.push(empty, kept, routine);
+  app.ui.workoutOpen = false;
+  try {
+    app.closeStaleSessions();
+    assert.equal(app.state.sessions.some((s) => s.id === empty.id), false);
+    assert.ok(app.state.deleted.includes(empty.id));
+    assert.equal(kept.finishedAt, null);
+    assert.ok(routine.finishedAt);
+    app.ui.workoutOpen = false;
+    app.resumeOpenWorkout();
+    assert.equal(app.ui.workoutOpen, true);
+    assert.equal(app.activeSession().id, kept.id);
+    app.resumeOpenWorkout();
+    assert.equal(app.state.deleted.filter((id) => id === empty.id).length, 1);
   } finally {
     app.replaceState(prev);
   }

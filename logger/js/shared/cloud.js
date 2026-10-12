@@ -127,6 +127,28 @@ async function cloudPush() {
 app.cloudPush = cloudPush;
 app.mergeRpcMissing = mergeRpcMissing;
 
+function hasOwn(obj, key) {
+  return !!obj && Object.prototype.hasOwnProperty.call(obj, key) && obj[key] != null;
+}
+
+/* The winner keeps its sets. Fields an older app never stored are copied from the other
+   phone when that phone still has them. Order and removals only move when the sets match,
+   so a later log is not hidden by a stale removal. */
+function withFreestyleMeta(winner, other) {
+  if (!winner || !other) return winner;
+  const patch = {};
+  if (!hasOwn(winner, "origin") && other.origin) patch.origin = other.origin;
+  const sameEntries = JSON.stringify(winner.entries || []) === JSON.stringify(other.entries || []);
+  if (sameEntries) {
+    if (!hasOwn(winner, "order") && Array.isArray(other.order)) patch.order = other.order;
+    if (!hasOwn(winner, "extra") && Array.isArray(other.extra)) patch.extra = other.extra;
+    if (!hasOwn(winner, "removed") && Array.isArray(other.removed)) patch.removed = other.removed;
+    if (!hasOwn(winner, "swaps") && other.swaps && typeof other.swaps === "object") patch.swaps = other.swaps;
+  }
+  return Object.keys(patch).length ? { ...winner, ...patch } : winner;
+}
+app.withFreestyleMeta = withFreestyleMeta;
+
 /* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
 function mergeRemote(r) {
   r = r || {};
@@ -141,12 +163,16 @@ function mergeRemote(r) {
   const deleted = new Set([...(app.state.deleted || []), ...(r.deleted || [])]);
   const byId = new Map();
   // This phone's copy goes first so it wins ties (e.g. right after converting units).
+  // An older app drops origin, order, extra, removed, and swaps. Those come back from the
+  // other copy when the logged sets are the same, and origin comes back even after a new set.
   [...app.state.sessions, ...(r.sessions || [])].forEach((s) => {
     if (!s || deleted.has(s.id)) return;
     const cur = byId.get(s.id);
     const better = (a, b) => (a.mod || 0) !== (b.mod || 0) ? (a.mod || 0) > (b.mod || 0)
       : app.setCount(a) > app.setCount(b) || (a.finishedAt && !b.finishedAt && app.setCount(a) >= app.setCount(b));
-    if (!cur || better(s, cur)) byId.set(s.id, s);
+    if (!cur) byId.set(s.id, s);
+    else if (better(s, cur)) byId.set(s.id, withFreestyleMeta(s, cur));
+    else byId.set(s.id, withFreestyleMeta(cur, s));
   });
   app.state.sessions = [...byId.values()];
   if (r.goals && (!app.state.goals || (r.goals.updatedAt || 0) > (app.state.goals.updatedAt || 0))) app.state.goals = r.goals;

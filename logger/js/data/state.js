@@ -274,9 +274,28 @@ app.save = save;
 let state = app.load();
 app.replaceState(state);
 
+/* A freestyle session with no logged sets was never a workout. Drop it, and remember the id
+   so a copy still sitting on another phone does not come back on the next sync. */
+function discardEmptyFreestyle() {
+  const ids = [];
+  app.state.sessions = (app.state.sessions || []).filter((s) => {
+    if (!s || s.finishedAt || s.origin !== "freestyle") return true;
+    const n = Array.isArray(s.entries) ? s.entries.reduce((c, e) => c + ((e && e.sets && e.sets.length) || 0), 0) : 0;
+    if (n > 0) return true;
+    if (s.id) ids.push(s.id);
+    return false;
+  });
+  if (!ids.length) return false;
+  app.state.deleted = [...new Set([...(app.state.deleted || []), ...ids])];
+  return true;
+}
+app.discardEmptyFreestyle = discardEmptyFreestyle;
+
 /* A workout left open from a previous day gets closed automatically.
-   A freestyle workout stays in progress so reopening the app can resume it. */
+   A freestyle workout with logged sets stays in progress so reopening the app can resume it.
+   One with no sets is discarded instead of reopening on every launch. */
 function closeStaleSessions() {
+  discardEmptyFreestyle();
   app.state.sessions.forEach((s) => {
     if (!s.finishedAt && s.date < app.today() && s.origin !== "freestyle") s.finishedAt = s.date + "T23:59:00";
   });
@@ -295,10 +314,12 @@ app.workoutById = workoutById;
 const activeSession = () => app.state.sessions.find((s) => !s.finishedAt);
 app.activeSession = activeSession;
 
-/* An unfinished freestyle workout opens itself. Exercises, sets, order, and the linked routine are already in local storage. */
+/* An unfinished freestyle workout with logged sets opens itself. An empty one is dropped first. */
 function resumeOpenWorkout() {
+  const dropped = discardEmptyFreestyle();
   const s = app.activeSession();
   if (s && s.origin === "freestyle") app.ui.workoutOpen = true;
+  if (dropped) app.save();
 }
 app.resumeOpenWorkout = resumeOpenWorkout;
 resumeOpenWorkout();

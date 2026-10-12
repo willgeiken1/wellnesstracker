@@ -144,8 +144,9 @@ test("exercise search stays put while typing and then filters in place", async (
   expect(Math.abs(stable.height - tall)).toBeLessThan(2);
 
   await input.fill("barbell");
-  await expect(page.locator("#pk-body")).toContainText("No matches");
-  await expect(page.locator('#pk-body [data-action="bank-create"]')).toHaveAttribute("data-name", "barbell");
+  await expect(page.locator("#pk-body")).toContainText("Search for the movement");
+  await expect(page.locator("#pk-body")).toContainText("left out");
+  await expect(page.locator('#pk-body [data-action="bank-create"]')).toHaveCount(0);
   const short = await card.evaluate((el) => el.getBoundingClientRect().height);
   expect(Math.abs(short - tall)).toBeLessThan(2);
   const afterEquipment = await page.evaluate(() => window.__sheetRenders);

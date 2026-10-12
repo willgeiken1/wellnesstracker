@@ -36,13 +36,24 @@ test("search matches names and muscle groups, not equipment", () => {
   const latHtml = app.bankListHTML({ q: "lats", action: "pick" });
   assert.match(latHtml, new RegExp(`data-name="${lats.n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
 
-  for (const q of ["barbell", "machine", "smith"]) {
+  for (const q of ["barbell", "machine", "smith", "dumbell"]) {
     const html = app.bankListHTML({ q, action: "pick" });
-    assert.match(html, /No matches/);
-    assert.doesNotMatch(html, /Barbell Curl|Smith Machine Bench Press/);
-    assert.match(html, new RegExp(`data-action="bank-create" data-name="${q}"`));
-    assert.match(html, new RegExp(`Create ${q}`));
+    assert.match(html, /Search for the movement/);
+    assert.match(html, /left out/);
+    assert.doesNotMatch(html, /No matches/);
+    assert.doesNotMatch(html, /bank-create/);
+    assert.doesNotMatch(html, /Barbell Curl|Smith Machine Bench Press|Bench Press/);
   }
+});
+
+test("a misspelled equipment word is dropped before the movement is matched", () => {
+  assert.deepEqual(app.bankTokens("dumbell bensh"), ["bensh"]);
+  assert.deepEqual(app.bankTokens("kettelbell curl"), ["curl"]);
+  assert.deepEqual(app.bankTokens("barbell"), []);
+  const html = app.bankListHTML({ q: "dumbell bensh", action: "pick" });
+  assert.match(html, /data-src="bank" data-name="Bench Press"/);
+  assert.doesNotMatch(html, /No matches/);
+  assert.doesNotMatch(html, /bank-create/);
 });
 
 test("an empty search result offers to create the typed name", () => {
