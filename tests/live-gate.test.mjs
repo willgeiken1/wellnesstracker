@@ -95,6 +95,19 @@ test("redaction removes the email, the password, and their encoded forms", () =>
   assert.match(cleaned, /\[redacted\]/);
 });
 
+test("an error that echoes the throwaway email is redacted", () => {
+  const err = new Error(`Could not finish for ${EMAIL}`);
+  err.stack = `Error: Could not finish for ${EMAIL}\n    at signIn (${encodeURIComponent(EMAIL)})`;
+  const secrets = [EMAIL, PASSWORD];
+  const wrapped = new Error(redactText(err.message, secrets));
+  wrapped.stack = redactText(err.stack, secrets);
+  assert.equal(wrapped.message.includes(EMAIL), false);
+  assert.equal(wrapped.stack.includes(EMAIL), false);
+  assert.equal(wrapped.stack.includes(encodeURIComponent(EMAIL)), false);
+  assert.match(wrapped.message, /\[redacted\]/);
+  assert.match(wrapped.stack, /\[redacted\]/);
+});
+
 test("the service role must not be the publishable key", () => {
   assert.equal(serviceRoleOk("short", "publishable-key-value"), false);
   assert.equal(serviceRoleOk("publishable-key-value-xxxx", "publishable-key-value-xxxx"), false);
@@ -633,7 +646,7 @@ test("delete refusals and probe rows hold on seeded random inputs", () => {
     { data: { profile: { name: "live probe", weighIns: [{ kg: 80 }] } } },
     { data: { profile: { name: PROBE_NAME, weighIns: "80" } } },
   );
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 200; i++) {
     const email = goodEmail(rng);
     const userId = goodUuid(rng);
     allowed.push({ email, userId, loadedEmail: recaseEmail(rng, email) });

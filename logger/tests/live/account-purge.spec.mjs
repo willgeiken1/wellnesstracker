@@ -200,10 +200,12 @@ test.describe("throwaway account purge", () => {
           const message = redactText(err && err.message ? err.message : "Account purge failed.", secrets);
           const wrapped = new Error(`${message} ${detail}`);
           wrapped.stack = redactText(err && err.stack ? err.stack : "", secrets);
-          throw wrapped;
+          const cleanupStack = redactText(cleanupErr && cleanupErr.stack ? cleanupErr.stack : "", secrets);
+          if (cleanupStack) wrapped.stack = `${wrapped.stack}\n${cleanupStack}`;
+          rethrowRedacted(wrapped, "Account purge failed.");
         }
       }
-      throw err;
+      rethrowRedacted(err, "Account purge failed.");
     }
   });
 });
