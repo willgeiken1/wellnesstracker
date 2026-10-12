@@ -13,6 +13,7 @@ import {
   PROBE_NAME,
   purgeSkippedOnSchedule,
   PURGE_TABLES,
+  redactError,
   redactText,
   serviceRoleOk,
   throwawayEmailOk,
@@ -99,13 +100,48 @@ test("an error that echoes the throwaway email is redacted", () => {
   const err = new Error(`Could not finish for ${EMAIL}`);
   err.stack = `Error: Could not finish for ${EMAIL}\n    at signIn (${encodeURIComponent(EMAIL)})`;
   const secrets = [EMAIL, PASSWORD];
-  const wrapped = new Error(redactText(err.message, secrets));
-  wrapped.stack = redactText(err.stack, secrets);
+  const wrapped = redactError(err, secrets, "Could not finish.");
   assert.equal(wrapped.message.includes(EMAIL), false);
   assert.equal(wrapped.stack.includes(EMAIL), false);
   assert.equal(wrapped.stack.includes(encodeURIComponent(EMAIL)), false);
   assert.match(wrapped.message, /\[redacted\]/);
   assert.match(wrapped.stack, /\[redacted\]/);
+  const blank = new Error("");
+  blank.stack = `Error\n    at signIn (${EMAIL})`;
+  const fromFallback = redactError(blank, secrets, `Could not finish for ${EMAIL}`);
+  assert.equal(fromFallback.message.includes(EMAIL), false);
+  assert.equal(fromFallback.stack.includes(EMAIL), false);
+  assert.match(fromFallback.message, /\[redacted\]/);
+});
+
+function purgeCatchBlock(src) {
+  const marker = "\n    } catch (err) {";
+  const at = src.indexOf(marker);
+  assert.notEqual(at, -1, "purge catch block");
+  const open = at + marker.length - 1;
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return src.slice(at + 1, i + 1);
+    }
+  }
+  assert.fail("purge catch block did not close");
+}
+
+function hasBareThrowErr(block) {
+  return block.split("\n").some((line) => /^\s*throw\s+err\s*;?\s*$/.test(line));
+}
+
+test("the purge catch redacts failures instead of rethrowing the raw error", () => {
+  const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
+  const block = purgeCatchBlock(spec);
+  assert.match(block, /deleteThrowawayAccount/);
+  assert.match(block, /redactError\(err, secrets, "Account purge failed\."\)/);
+  assert.match(block, /redactError\(cleanupErr, secrets, "Could not delete the throwaway account\."\)/);
+  assert.equal(hasBareThrowErr(block), false, "purge catch rethrows the raw error");
 });
 
 test("the service role must not be the publishable key", () => {
@@ -239,8 +275,7 @@ test("count and storage errors fail closed", () => {
   const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
   assert.match(spec, /cloudPush/);
   assert.match(spec, /The page did not expose cloudPush/);
-  assert.match(spec, /redactText\(err && err\.message/);
-  assert.match(spec, /redactText\(err && err\.stack/);
+  assert.match(spec, /throw redactError\(err, secrets,/);
   assert.match(spec, /deleteThrowawayAccount/);
   assert.equal(spec.includes("waitForFunction(async"), false);
 });

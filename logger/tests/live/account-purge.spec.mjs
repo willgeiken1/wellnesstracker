@@ -1,15 +1,9 @@
 import { assertAccountPurged, deleteThrowawayAccount, ensureThrowawayUser, seedPurgeTargets } from "./account.mjs";
-import { assertConfigured, liveGate, PROBE_NAME, purgeSkippedOnSchedule, redactText } from "./gate.mjs";
+import { assertConfigured, liveGate, PROBE_NAME, purgeSkippedOnSchedule, redactError, redactText } from "./gate.mjs";
 import { expect, test } from "./fixtures.mjs";
 
 const gate = liveGate(process.env);
 const secrets = [gate.email, gate.password, gate.serviceRole];
-
-function rethrowRedacted(err, fallback) {
-  const wrapped = new Error(redactText(err && err.message ? err.message : fallback, secrets));
-  if (err && err.stack) wrapped.stack = redactText(err.stack, secrets);
-  throw wrapped;
-}
 
 async function signInThrowaway(page) {
   await page.getByRole("button", { name: "Settings" }).click();
@@ -125,7 +119,7 @@ test.describe("throwaway account purge", () => {
           serviceRole: gate.serviceRole,
         }));
       } catch (err) {
-        rethrowRedacted(err, "Could not prepare the throwaway account. Not deleting.");
+        throw redactError(err, secrets, "Could not prepare the throwaway account. Not deleting.");
       }
 
       await page.goto("index.html");
@@ -145,7 +139,7 @@ test.describe("throwaway account purge", () => {
       try {
         await seedPurgeTargets({ userId, serviceRole: gate.serviceRole });
       } catch (err) {
-        rethrowRedacted(err, "Could not seed the throwaway rows. Not deleting.");
+        throw redactError(err, secrets, "Could not seed the throwaway rows. Not deleting.");
       }
 
       const capturedId = await page.evaluate(() => (window.app.session && window.app.session.user && window.app.session.user.id) || "");
@@ -189,23 +183,25 @@ test.describe("throwaway account purge", () => {
           serviceRole: gate.serviceRole,
         });
       } catch (err) {
-        rethrowRedacted(err, "Account purge check failed.");
+        throw redactError(err, secrets, "Account purge check failed.");
       }
     } catch (err) {
       if (userId) {
         try {
           await deleteThrowawayAccount({ userId, email: gate.email, serviceRole: gate.serviceRole });
         } catch (cleanupErr) {
-          const detail = redactText(cleanupErr && cleanupErr.message ? cleanupErr.message : "Could not delete the throwaway account.", secrets);
-          const message = redactText(err && err.message ? err.message : "Account purge failed.", secrets);
-          const wrapped = new Error(`${message} ${detail}`);
-          wrapped.stack = redactText(err && err.stack ? err.stack : "", secrets);
-          const cleanupStack = redactText(cleanupErr && cleanupErr.stack ? cleanupErr.stack : "", secrets);
-          if (cleanupStack) wrapped.stack = `${wrapped.stack}\n${cleanupStack}`;
-          rethrowRedacted(wrapped, "Account purge failed.");
+          const failed = redactError(err, secrets, "Account purge failed.");
+          const cleanup = redactError(cleanupErr, secrets, "Could not delete the throwaway account.");
+          const wrapped = new Error(`${failed.message} ${cleanup.message}`);
+          const failedStack = err && err.stack ? failed.stack : "";
+          const cleanupStack = cleanupErr && cleanupErr.stack ? cleanup.stack : "";
+          if (failedStack || cleanupStack) {
+            wrapped.stack = cleanupStack ? `${failedStack}\n${cleanupStack}` : failedStack;
+          }
+          throw redactError(wrapped, secrets, "Account purge failed.");
         }
       }
-      rethrowRedacted(err, "Account purge failed.");
+      throw redactError(err, secrets, "Account purge failed.");
     }
   });
 });

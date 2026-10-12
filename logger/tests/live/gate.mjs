@@ -107,3 +107,9 @@ export function redactText(text, secrets) {
   for (const secret of secretVariants(secrets)) out = out.split(secret).join("[redacted]");
   return out;
 }
+
+export function redactError(err, secrets, fallback) {
+  const wrapped = new Error(redactText(err && err.message ? err.message : fallback, secrets));
+  if (err && err.stack) wrapped.stack = redactText(err.stack, secrets);
+  return wrapped;
+}
