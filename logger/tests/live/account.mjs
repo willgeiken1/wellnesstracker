@@ -4,9 +4,9 @@
 // Nothing in the returned errors includes row contents, tokens, or the key.
 
 import { createClient } from "@supabase/supabase-js";
-import { assertConfigured, PURGE_TABLES, serviceRoleOk, throwawayEmailOk } from "./gate.mjs";
+import { assertConfigured, PROBE_NAME, PURGE_TABLES, serviceRoleOk, throwawayEmailOk } from "./gate.mjs";
 import { SB_PUBLISHABLE_KEY, SB_URL } from "./project.mjs";
-import { requireCount, requireStorageList } from "./purge-check.mjs";
+import { pollUntil, requireCount, requireStorageList } from "./purge-check.mjs";
 
 export { PURGE_TABLES };
 
@@ -174,11 +174,61 @@ async function mustWrite(table, write) {
   if (error) throw new Error(`Could not seed ${table} (status ${statusOf(error)}).`);
 }
 
+function probeLanded(row) {
+  const profile = row && row.data && row.data.profile;
+  const weighIns = profile && profile.weighIns;
+  return !!(profile && profile.name === PROBE_NAME && Array.isArray(weighIns) && weighIns.length > 0);
+}
+
+async function deleteRows(admin, userId) {
+  for (const table of PURGE_TABLES) {
+    const { error } = await admin.from(table).delete().eq("user_id", userId);
+    if (error) throw new Error(`Could not delete ${table} during cleanup (status ${statusOf(error)}).`);
+  }
+}
+
+async function removeProgress(admin, userId) {
+  const listed = await admin.storage.from(PROGRESS_BUCKET).list(userId, { limit: 100 });
+  const names = requireStorageList(listed.error, listed.data);
+  if (!names.length) return;
+  const removed = await admin.storage.from(PROGRESS_BUCKET).remove(names.map((name) => `${userId}/${name}`));
+  if (removed.error) throw new Error(`Could not remove progress storage during cleanup (status ${statusOf(removed.error)}).`);
+}
+
+export async function deleteThrowawayAccount({ userId, email, serviceRole }) {
+  if (!throwawayEmailOk(email)) throw new Error("Refusing to delete an account that is not the throwaway address.");
+  assertUuid(userId);
+  const admin = adminClient(serviceRole);
+  const loaded = await admin.auth.admin.getUserById(userId);
+  const user = loaded.data && loaded.data.user;
+  if (user) assertSameEmail(user.email, email);
+  else if (loaded.error && !userMissing(loaded.error)) {
+    throw new Error(`Could not load the throwaway account during cleanup (status ${statusOf(loaded.error)}).`);
+  }
+  await removeProgress(admin, userId);
+  await deleteRows(admin, userId);
+  if (user) {
+    const deleted = await admin.auth.admin.deleteUser(userId);
+    if (deleted.error && !userMissing(deleted.error)) {
+      throw new Error(`Could not delete the throwaway account (status ${statusOf(deleted.error)}).`);
+    }
+  }
+  await removeProgress(admin, userId);
+  await deleteRows(admin, userId);
+}
+
 export async function seedPurgeTargets({ userId, serviceRole }) {
   assertUuid(userId);
   const admin = adminClient(serviceRole);
-  const existing = await countRowsForUser(admin, "user_data", userId);
-  if (existing < 1) throw new Error("user_data was not written before the purge check.");
+  await pollUntil(async () => {
+    const { data, error } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
+    if (error) throw new Error(`Could not read user_data before the purge check (status ${statusOf(error)}).`);
+    return probeLanded(data);
+  }, {
+    timeoutMs: 20_000,
+    intervalMs: 400,
+    missing: "user_data was not written before the purge check.",
+  });
   const soon = new Date(Date.now() + 3_600_000).toISOString();
   const photoPath = `${userId}/${PROBE_FILE}`;
   await mustWrite("oura_days", admin.from("oura_days").upsert(

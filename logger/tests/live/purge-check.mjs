@@ -25,3 +25,12 @@ export function requireStorageList(error, data) {
   if (error) throw new Error(`Could not list progress storage (status ${statusOf(error)}).`);
   return storageObjectNames(data);
 }
+
+export async function pollUntil(read, { timeoutMs, intervalMs, missing }) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await read()) return;
+    if (Date.now() >= deadline) throw new Error(missing);
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
