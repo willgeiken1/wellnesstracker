@@ -2,18 +2,52 @@
 // Body: { "confirm": "DELETE" }
 // Removes storage files, every public table row with their user_id
 // (user_data, oura_days, oura_connections, oura_tokens, oura_oauth_states,
-// progress_photos, ai_usage, and any later table that has user_id), then
-// the auth user. Safe to retry: deleting something that is already gone succeeds.
-// Deploy with JWT verification OFF. No extra secrets; uses the service key.
+// progress_photos, ai_usage), and every social row (social_settings,
+// friendships, friend_invites, shared_items, comments, reactions, reports,
+// blocks), then the auth user. Friendships, invites, shares, comments,
+// reports, and blocks are keyed by the columns in OWNED_BY. Comments,
+// reactions, and reports on the person's shares are removed by foreign keys
+// and by delete_user_rows. Safe to retry: deleting something that is already
+// gone succeeds. Deploy with JWT verification OFF. No extra secrets; uses
+// the service key.
 import { admin, cors, json, requireUser, userStillExists, wipeStoragePrefix } from "../_shared/http.ts";
 
-const KNOWN = ["user_data", "oura_days", "oura_connections", "oura_tokens", "oura_oauth_states", "progress_photos", "ai_usage"];
+const KNOWN = [
+  "user_data",
+  "oura_days",
+  "oura_connections",
+  "oura_tokens",
+  "oura_oauth_states",
+  "progress_photos",
+  "ai_usage",
+  "reports",
+  "reactions",
+  "comments",
+  "shared_items",
+  "friend_invites",
+  "friendships",
+  "blocks",
+  "social_settings",
+];
+
+// Party columns. Tables omitted here are deleted by user_id.
+const OWNED_BY: Record<string, string[]> = {
+  friendships: ["requester_id", "addressee_id"],
+  friend_invites: ["owner_id"],
+  shared_items: ["owner_id"],
+  comments: ["author_id"],
+  reports: ["reporter_id"],
+  blocks: ["blocker_id", "blocked_id"],
+};
 
 async function deleteKnown(userId: string) {
   for (const table of KNOWN) {
-    const { error } = await admin.from(table).delete().eq("user_id", userId);
-    if (error && !/does not exist|schema cache|could not find the table/i.test(error.message || "")) {
-      console.error("delete", table, error.message);
+    const columns = OWNED_BY[table] ?? ["user_id"];
+    for (const column of columns) {
+      const { error } = await admin.from(table).delete().eq(column, userId);
+      if (error && !/does not exist|schema cache|could not find the table/i.test(error.message || "")) {
+        console.error("delete", table, column, error.message);
+      }
     }
   }
 }
