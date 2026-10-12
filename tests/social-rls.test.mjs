@@ -86,6 +86,8 @@ test("social schema keeps health data out and purges with the account", () => {
   for (const table of SOCIAL_TABLES) assert.match(migration, new RegExp(`public\\.${table}\\b`));
   assert.match(migration, /comment rate limit/);
   assert.match(migration, /with check/i);
+  assert.match(migration, /recipient_social_on\(addressee_id\)/);
+  assert.match(migration, /function public\.set_username\(text\)/);
 
   const known = edge.match(/const KNOWN = \[([\s\S]*?)\];/);
   assert.ok(known, "KNOWN table list");
@@ -256,6 +258,8 @@ test("two accounts cannot read, forge, or bypass a block on the social feed", { 
     `), "0");
     assert.equal(scalar(`select has_function_privilege('anon', 'private.is_friend(uuid,uuid)', 'execute')`), "f");
     assert.equal(scalar(`select has_function_privilege('anon', 'public.request_friend(text)', 'execute')`), "f");
+    assert.equal(scalar(`select has_function_privilege('anon', 'public.set_username(text)', 'execute')`), "f");
+    assert.equal(scalar(`select has_function_privilege('authenticated', 'public.set_username(text)', 'execute')`), "t");
     assert.equal(scalar(`select has_function_privilege('authenticated', 'private.is_friend(uuid,uuid)', 'execute')`), "t");
     assert.equal(scalar(`select has_table_privilege('anon', 'public.shared_items', 'SELECT')`), "f");
 
@@ -415,6 +419,10 @@ test("two accounts cannot read, forge, or bypass a block on the social feed", { 
       delete from public.friendships where requester_id = '${C}' and addressee_id = '${F}';
     `);
     assert.equal(asCount(C, "public.shared_items"), "0");
+    expectDenied(C, `
+      insert into public.friendships (requester_id, addressee_id, status)
+      values ('${C}', '${E}', 'pending');
+    `, /row-level security policy/);
 
     expectOk(B, `
       update public.comments set body = 'edited' where id = '${COMMENT}';
@@ -558,6 +566,24 @@ test("two accounts cannot read, forge, or bypass a block on the social feed", { 
     expectDenied(D, `select public.request_friend('alice')`, /unknown username/);
     expectDenied(C, `select public.request_friend('nobody_here')`, /unknown username/);
     expectOk(A, `delete from public.friendships where id = '${requested}';`);
+
+    const takenName = asUser(A, `select public.set_username('blake');`);
+    assert.notEqual(takenName.status, 0, takenName.stdout);
+    assert.match(takenName.stderr, /unavailable/);
+    assert.doesNotMatch(takenName.stderr, /unique|duplicate key/i);
+    expectDenied(A, `
+      update public.social_settings set username = 'brandnew' where user_id = '${A}';
+    `, /unavailable/);
+    assert.equal(scalar(`select username from public.social_settings where user_id = '${A}'`), "alice");
+    expectOk(A, `select public.set_username('ally');`);
+    assert.equal(scalar(`select username from public.social_settings where user_id = '${A}'`), "ally");
+    expectDenied(A, `select public.set_username('no');`, /unavailable/);
+    assert.equal(scalar(`select username from public.social_settings where user_id = '${A}'`), "ally");
+    expectOk(A, `select public.set_username('alice');`);
+    assert.equal(scalar(`select username from public.social_settings where user_id = '${A}'`), "alice");
+    const anonName = sql(`set role anon; select public.set_username('alice');`);
+    assert.notEqual(anonName.status, 0);
+    assert.match(anonName.stderr, /permission denied/);
 
     expectOk(A, `
       insert into public.friend_invites (token, owner_id, expires_at)

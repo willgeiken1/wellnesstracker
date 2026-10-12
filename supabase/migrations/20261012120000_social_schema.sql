@@ -265,6 +265,23 @@ as $$
   );
 $$;
 
+-- Raw switch for the friendship insert policy. social_enabled hides this from
+-- strangers, which would also reject a first request. Callers who already know
+-- a user id still only learn the bit by attempting the insert.
+create or replace function private.recipient_social_on(p_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select (select auth.uid()) is not null
+    and exists (
+      select 1 from public.social_settings s
+      where s.user_id = p_user and s.enabled
+    );
+$$;
+
 create or replace function private.can_view_share(p_viewer uuid, p_item uuid)
 returns boolean
 language sql
@@ -426,6 +443,17 @@ as $$
 begin
   if tg_op = 'UPDATE' and new.user_id is distinct from old.user_id then
     raise exception 'social settings owner is fixed' using errcode = '42501';
+  end if;
+  -- Username changes go through set_username so a taken name and a bad name
+  -- raise the same error. A direct update would surface the unique index.
+  if (select auth.uid()) is not null
+     and coalesce(current_setting('social.setting_username', true), '') is distinct from '1'
+     and (
+       (tg_op = 'INSERT' and new.username is not null)
+       or (tg_op = 'UPDATE' and new.username is distinct from old.username)
+     )
+  then
+    raise exception 'unavailable' using errcode = '42501';
   end if;
   new.updated_at := clock_timestamp();
   return new;
@@ -700,6 +728,33 @@ exception
 end;
 $$;
 
+create or replace function private.set_username(p_username text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  if me is null then
+    raise exception 'sign in required' using errcode = '42501';
+  end if;
+  if p_username is not null and p_username !~ '^[a-z0-9_]{3,20}$' then
+    raise exception 'unavailable' using errcode = '42501';
+  end if;
+  perform set_config('social.setting_username', '1', true);
+  insert into public.social_settings as s (user_id, username)
+  values (me, p_username)
+  on conflict (user_id) do update
+    set username = excluded.username
+    where s.user_id = me;
+exception
+  when unique_violation then
+    raise exception 'unavailable' using errcode = '42501';
+end;
+$$;
+
 create or replace function public.request_friend(p_username text)
 returns uuid
 language sql
@@ -716,6 +771,15 @@ security invoker
 set search_path = ''
 as $$
   select private.redeem_friend_invite(p_token);
+$$;
+
+create or replace function public.set_username(p_username text)
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.set_username(p_username);
 $$;
 
 drop trigger if exists social_settings_guard on public.social_settings;
@@ -808,6 +872,7 @@ create policy "friendships: insert" on public.friendships
     and requester_id <> addressee_id
     and status = 'pending'
     and (select private.social_enabled((select auth.uid())))
+    and (select private.recipient_social_on(addressee_id))
     and not (select private.is_blocked(requester_id, addressee_id))
   );
 create policy "friendships: update" on public.friendships
@@ -957,8 +1022,10 @@ grant execute on all functions in schema private to authenticated;
 
 revoke all on function public.request_friend(text) from public, anon;
 revoke all on function public.redeem_friend_invite(text) from public, anon;
+revoke all on function public.set_username(text) from public, anon;
 grant execute on function public.request_friend(text) to authenticated;
 grant execute on function public.redeem_friend_invite(text) to authenticated;
+grant execute on function public.set_username(text) to authenticated;
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
 
@@ -966,6 +1033,8 @@ comment on function public.request_friend(text) is
   'Start a pending friend request by exact username. Social must be on. Does not accept the request.';
 comment on function public.redeem_friend_invite(text) is
   'Turn an invite link into a pending friend request. Does not accept it.';
+comment on function public.set_username(text) is
+  'Set or clear the exact username. A taken name and a rejected name both raise unavailable.';
 
 -- Account deletion removes social rows that are not keyed only by user_id.
 -- Date-range purge does not. A shared snapshot is a copy, not a health row,
