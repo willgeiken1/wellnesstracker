@@ -1123,6 +1123,11 @@ document.addEventListener("click", async (ev) => {
       app.noteDeleted(s.id);
       app.save(); app.render(); break;
     }
+    case "progression-suggestions":
+      app.toggleProgressionSuggestions();
+      app.save();
+      app.render();
+      break;
     case "rest": app.state.restSeconds = +b.dataset.s; app.save(); app.render(); break;
     case "priv-summary": app.ui.sheet = "priv-summary"; app.ui.sd = {}; app.renderSheet(); break;
     case "priv-export": await app.exportAllData(); break;

@@ -228,6 +228,107 @@ test("the deleted list expires old markers and stays under a cap", () => {
   assert.deepEqual(app.pruneDeleted(["a", { id: "a", at: 5 }, { id: "a", at: 9 }], 100), [{ id: "a", at: 9 }]);
 });
 
+test("stored targets still show add weight and step back until the setting is off", () => {
+  const prev = app.state;
+  const prevUnits = app.units;
+  const prevW = app.wUnit;
+  app.units = () => "imperial";
+  app.wUnit = () => "lb";
+  const base = JSON.parse(JSON.stringify(prev));
+  const routine = {
+    id: "prog-upper", name: "Upper",
+    exercises: [
+      { name: "Bench Press", muscles: ["chest"], sets: [{ w: 90, r: 5 }, { w: 90, r: 5 }, { w: 90, r: 5 }] },
+      { name: "Row", muscles: ["lats"], sets: [{ w: 80, r: 8 }] },
+    ],
+  };
+  base.workouts = [...(base.workouts || []), routine];
+  const hit = {
+    id: "prog-hit", date: "2026-01-01", workoutId: routine.id, name: "Upper",
+    startedAt: "2026-01-01T11:00:00", finishedAt: "2026-01-01T12:00:00",
+    entries: [{ exercise: "Bench Press", sets: [{ w: 100, r: 8 }, { w: 100, r: 8 }] }],
+  };
+  const live = {
+    id: "prog-live", date: app.today(), workoutId: routine.id, name: "Upper",
+    startedAt: new Date().toISOString(), finishedAt: null, entries: [],
+  };
+  base.sessions = [hit, live];
+  delete base.showProgression;
+  app.replaceState(base);
+  try {
+    assert.match(app.progressionSettingHTML(), /Show progression suggestions/);
+    assert.match(app.progressionSettingHTML(), /aria-checked="true"/);
+    const up = app.suggestion("Bench Press", live.id);
+    assert.equal(up.kind, "up");
+    assert.equal(up.w, 105);
+    assert.equal(up.sets, 2);
+    const upHtml = app.liveSuggestionHTML("Bench Press", live.id, 0, 0);
+    assert.match(upHtml, /Add weight/);
+    assert.doesNotMatch(upHtml, /Target from this routine/);
+    const row = app.suggestion("Row", live.id);
+    assert.match(row.why, /Target from this routine/);
+    assert.match(app.liveSuggestionHTML("Row", live.id, 1, 0), /Repeat/);
+
+    base.sessions.push(
+      {
+        id: "prog-miss-a", date: "2026-01-08", workoutId: routine.id, name: "Upper",
+        startedAt: "2026-01-08T11:00:00", finishedAt: "2026-01-08T12:00:00",
+        entries: [{ exercise: "Bench Press", sets: [{ w: 100, r: 4 }, { w: 100, r: 4 }] }],
+      },
+      {
+        id: "prog-miss-b", date: "2026-01-15", workoutId: routine.id, name: "Upper",
+        startedAt: "2026-01-15T11:00:00", finishedAt: "2026-01-15T12:00:00",
+        entries: [{ exercise: "Bench Press", sets: [{ w: 100, r: 5 }, { w: 100, r: 5 }] }],
+      },
+    );
+    const down = app.suggestion("Bench Press", live.id);
+    assert.equal(down.kind, "down");
+    assert.match(app.liveSuggestionHTML("Bench Press", live.id, 0, 0), /Step back/);
+    assert.doesNotMatch(app.liveSuggestionHTML("Bench Press", live.id, 0, 0), /Target from this routine/);
+
+    const before = app.state.settingsAt || 0;
+    app.toggleProgressionSuggestions();
+    assert.equal(app.state.showProgression, false);
+    assert.ok(app.state.settingsAt > before);
+    assert.equal(app.suggestion("Bench Press", live.id), null);
+    assert.equal(app.suggestion("Row", live.id), null);
+    assert.equal(app.liveSuggestionHTML("Bench Press", live.id, 0, 0), "");
+    assert.equal(app.liveSuggestionHTML("Row", live.id, 1, 0), "");
+    assert.equal(app.liveSuggestionHTML("Bench Press", live.id, 0, 1), "");
+    assert.deepEqual(app.setFieldHints(live, "Bench Press"), { w: "90", r: "5", wR: "90", rR: "5" });
+    assert.match(app.progressionSettingHTML(), /aria-checked="false"/);
+    app.save();
+    const raw = JSON.parse(localStorage.getItem(app.KEY));
+    assert.equal(raw.showProgression, false);
+    assert.equal(app.userDataBlob().showProgression, false);
+
+    app.mergeRemote({ settingsAt: app.state.settingsAt + 10, showProgression: true, sessions: [] });
+    assert.equal(app.state.showProgression, true);
+    assert.equal(app.suggestion("Bench Press", live.id).kind, "down");
+    app.mergeRemote({ settingsAt: 1, showProgression: false, sessions: [] });
+    assert.equal(app.state.showProgression, true);
+    const keptAt = app.state.settingsAt;
+    app.mergeRemote({ settingsAt: keptAt + 5, sessions: [] });
+    assert.equal(app.state.showProgression, true);
+    app.state.showProgression = false;
+    app.mergeRemote({ settingsAt: app.state.settingsAt + 5, showProgression: false, sessions: [] });
+    assert.equal(app.state.showProgression, false);
+
+    app.toggleProgressionSuggestions();
+    assert.equal(app.state.showProgression, true);
+    assert.match(app.liveSuggestionHTML("Bench Press", live.id, 0, 0), /Step back/);
+
+    const migratedOff = app.migrate({ version: 2, sessions: [], workouts: [], showProgression: false });
+    assert.equal(migratedOff.showProgression, false);
+    const migratedOn = app.migrate({ version: 2, sessions: [], workouts: [] });
+    assert.equal(migratedOn.showProgression, true);
+  } finally {
+    app.units = prevUnits;
+    app.wUnit = prevW;
+    app.replaceState(prev);
+  }
+});
+
 test("removing an exercise during a routine workout does not change the routine", () => {
   const template = app.workoutById("push").exercises.map((e) => e.name);
   const s = {

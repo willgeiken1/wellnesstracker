@@ -175,6 +175,8 @@ function settingsHTML() {
       <button class="set-row" data-action="goal-open-insights"><span>Lift goals</span><span class="sub">${Object.keys(app.goals().lifts).length || "None yet"}</span></button>
     </div>
     ${app.appearanceHTML()}
+    <div class="group-label">Workout</div>
+    <div class="group">${app.progressionSettingHTML()}</div>
     <div class="group-label">Rest timer</div>
     <div class="group"><div class="seg">${[60, 90, 120, 180].map((s) =>
       `<button data-action="rest" data-s="${s}" aria-pressed="${app.state.restSeconds === s}">${app.fmtTime(s)}</button>`).join("")}</div></div>

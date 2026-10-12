@@ -67,10 +67,9 @@ function exerciseHTML(s, e, i) {
     const d = app.draftFor(s, e.name);
     const hint = app.setFieldHints(s, e.name);
     const worked = done.filter(app.isWork).length;
-    const sg = worked ? null : app.suggestion(e.name, s.id);
     let wi = 0;
     html += `<div class="panel"><div class="panel-top"><button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
-      ${sg ? app.suggestionHTML(sg, i) : (worked ? "" : app.readinessQuietHTML())}
+      ${app.liveSuggestionHTML(e.name, s.id, i, worked)}
       ${done.length ? `<ol class="sets">${done.map((x, j) => {
         const badges = `${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}${x.rpe ? `<span class="badge rpe">RPE ${x.rpe}</span>` : ""}`;
         return `<li><span class="set-n${x.tag === "warmup" ? " wu" : ""}">${x.tag === "warmup" ? "W" : ++wi}</span><button class="set-v set-edit" data-action="set-edit" data-i="${i}" data-s="${j}" aria-label="Edit set ${j + 1}">${app.fmtSet(x)}${badges ? `<span class="set-badges">${badges}</span>` : ""}</button>

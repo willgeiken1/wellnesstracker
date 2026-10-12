@@ -266,7 +266,7 @@ function migrate(d) {
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },
-    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: app.normalizeMachineNotes(d.machineNotes), measurements: d.measurements || {},
+    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", showProgression: d.showProgression !== false, settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: app.normalizeMachineNotes(d.machineNotes), measurements: d.measurements || {},
     cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 },
     brief: d.brief && typeof d.brief === "object" && !Array.isArray(d.brief) ? d.brief : null,
     weeklyReports: d.weeklyReports && typeof d.weeklyReports === "object" && !Array.isArray(d.weeklyReports) ? d.weeklyReports : null,

@@ -44,7 +44,7 @@ function syncedAppLock(lock) {
 app.syncedAppLock = syncedAppLock;
 
 function userDataBlob() {
-  return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
+  return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, showProgression: app.state.showProgression !== false, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
            deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(), planAt: app.state.planAt || {},
            appLock: syncedAppLock(app.state.appLock), purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
 }
@@ -233,6 +233,7 @@ function mergeRemote(r) {
   rememberPulledHome(remoteLayout);
   if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) {
     if (r.muscleMode) app.state.muscleMode = r.muscleMode;
+    if (typeof r.showProgression === "boolean") app.state.showProgression = r.showProgression;
     if (remoteLayout) app.state.layout = remoteLayout;
     if (r.uniEx) app.state.uniEx = r.uniEx;
     app.state.settingsAt = r.settingsAt;

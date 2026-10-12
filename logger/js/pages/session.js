@@ -207,13 +207,41 @@ function readinessRows(sessions, name) {
   return rows;
 }
 
+/* Missing means on, so a routine that already has target sets still shows Add weight and Step back. */
+function progressionSuggestionsOn() {
+  return !app.state || app.state.showProgression !== false;
+}
+app.progressionSuggestionsOn = progressionSuggestionsOn;
+
+function toggleProgressionSuggestions() {
+  app.state.showProgression = app.state.showProgression === false;
+  app.state.settingsAt = Date.now();
+}
+app.toggleProgressionSuggestions = toggleProgressionSuggestions;
+
+function progressionSettingHTML() {
+  const on = progressionSuggestionsOn();
+  return `<div class="set-row usage-row">
+      <span class="usage-copy"><b>Show progression suggestions</b><span class="sub">Add weight, repeat, or step back from your last sessions.</span></span>
+      <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" data-action="progression-suggestions" aria-label="Show progression suggestions"><i></i></button>
+    </div>`;
+}
+app.progressionSettingHTML = progressionSettingHTML;
+
 /* "Same reps, add weight each time":
    hit the target reps on every working set at the top weight -> add weight; missed -> repeat; missed twice running -> step back ~10%.
-   Then nudge from last session's RPE, then from today's readiness. */
+   Then nudge from last session's RPE, then from today's readiness.
+   A routine's stored targets fill the empty fields. They do not replace this plan when there is history. */
 function suggestion(name, sessionId) {
+  if (!progressionSuggestionsOn()) return null;
   const cur = app.state.sessions.find((s) => s.id === sessionId);
-  const stored = cur && app.templateSets(cur, name);
-  if (stored) {
+  const histS = app.finished().filter((s) => s.id !== sessionId);
+  const hist = histS
+    .map((s) => ({ s, e: s.entries.find((e) => e.exercise === name) }))
+    .filter((x) => x.e && x.e.sets.some(app.isWork));
+  if (!hist.length) {
+    const stored = cur && app.templateSets(cur, name);
+    if (!stored) return null;
     const done = app.setsFor(cur, name).filter(app.isWork).length;
     const next = stored[Math.min(done, stored.length - 1)];
     return {
@@ -223,11 +251,6 @@ function suggestion(name, sessionId) {
       base: { w: next.w, r: next.r, sets: stored.length },
     };
   }
-  const histS = app.finished().filter((s) => s.id !== sessionId);
-  const hist = histS
-    .map((s) => ({ s, e: s.entries.find((e) => e.exercise === name) }))
-    .filter((x) => x.e && x.e.sets.some(app.isWork));
-  if (!hist.length) return null;
   const work = (e) => e.sets.filter(app.isWork);
   const last = work(hist[0].e);
   const dismissed = !!(cur && Array.isArray(cur.plain) && cur.plain.includes(name));
@@ -288,6 +311,14 @@ function readinessQuietHTML() {
   const text = quietReadinessNote(todayReadinessScore());
   return text ? `<p class="sugg-quiet">${app.esc(text)}</p>` : "";
 }
+
+/* The open exercise shows one suggestion. The setting hides that card on every workout. */
+function liveSuggestionHTML(name, sessionId, i, worked) {
+  if (!progressionSuggestionsOn() || worked) return "";
+  const sg = suggestion(name, sessionId);
+  return sg ? suggestionHTML(sg, i) : readinessQuietHTML();
+}
+app.liveSuggestionHTML = liveSuggestionHTML;
 app.readinessQuietHTML = readinessQuietHTML;
 
 function rpeChipsHTML(action, pressed, i) {
