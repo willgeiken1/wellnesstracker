@@ -1,6 +1,6 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, addDays, claimSupported, findingsForView, loggedDays, pickForToday, todayLine, weightTrend } from "./correlate.js";
-import { hasOura } from "./oura-gate.js";
+import { hasOura, ouraMembershipInactive } from "./oura-gate.js";
 import { homeCardShowing, readinessCardShowing } from "./home-defaults.js";
 
 /* Morning brief: one Home card, chosen metrics, a local headline.
@@ -109,6 +109,7 @@ function scheduledFocus() {
 }
 
 function freshReadiness() {
+  if (ouraMembershipInactive(app.state)) return null;
   return readinessForAdvice(app.latestOura(app.src().oura), app.today());
 }
 
@@ -126,7 +127,7 @@ function proteinLowDays() {
 }
 
 export function ouraMetric() {
-  if (!hasOura(app.state) || homeCardShowing(app.state, "readiness")) return null;
+  if (!hasOura(app.state) || ouraMembershipInactive(app.state) || homeCardShowing(app.state, "readiness")) return null;
   const o = app.latestOura(app.src().oura);
   if (!o || o.readiness == null) return null;
   const lv = app.readinessLevel(o.readiness);
@@ -159,7 +160,7 @@ function trainMetric() {
   const st = app.weekGoalStatus();
   /* Same score and same function as the Readiness card, so the two agree.
      A ring that has not synced today or yesterday does not get a vote. */
-  const score = readinessForAdvice(app.latestOura(app.src().oura), t);
+  const score = ouraMembershipInactive(app.state) ? null : readinessForAdvice(app.latestOura(app.src().oura), t);
   const advice = planned !== "rest" && score != null ? app.readinessAdvice(score) : null;
   if (advice) {
     /* The Readiness card already gives this advice, so the brief does not repeat it. */
@@ -371,7 +372,7 @@ function briefPaintEmpty(state) {
   if (!enabled.length) return false;
   const covered = {
     pattern: tiles.has("pattern"),
-    oura: tiles.has("readiness") || !hasOura(state),
+    oura: tiles.has("readiness") || !hasOura(state) || ouraMembershipInactive(state),
     train: tiles.has("today"),
     food: tiles.has("food-yesterday"),
     week: tiles.has("weekly-goal"),

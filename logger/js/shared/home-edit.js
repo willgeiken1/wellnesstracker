@@ -1,5 +1,5 @@
 import { HOME_WIDGETS } from "./home-widgets.js";
-import { hasOura } from "./oura-gate.js";
+import { hasOura, ouraMembershipInactive } from "./oura-gate.js";
 
 /* Pure logic for Home edit mode: reorder, remove, add from the gallery.
    A draft is { items, hidden, sizes }, the same shape homeEditorDraft returns and
@@ -111,7 +111,7 @@ function norm(s) {
    without a ring or sample data. The query matches title or subtitle, any case. */
 export function galleryEntries(draft, state, query) {
   const have = new Set(cleanDraft(draft).items);
-  const oura = hasOura(state);
+  const oura = hasOura(state) && !ouraMembershipInactive(state);
   const q = norm(query);
   const out = [];
   Object.keys(HOME_WIDGETS).forEach((id) => {
