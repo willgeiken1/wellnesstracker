@@ -201,9 +201,13 @@ function heroModel(sessions, today) {
 }
 
 /* Same empty copy as the brief. "Possible patterns" only when a finding exists. */
+function emptyPatternLine(days) {
+  return (days || 0) < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet";
+}
+
 function patternQuiet(days, rows) {
   const seeInsights = findingsForView(rows || []).length > 0;
-  const line = seeInsights ? "Possible patterns, see Insights" : ((days || 0) < DAYS_FOR_A_PATTERN ? "A couple more weeks" : "Nothing clear yet");
+  const line = seeInsights ? "Possible patterns, see Insights" : emptyPatternLine(days);
   return { empty: true, label: "Today's pattern", line };
 }
 
@@ -265,6 +269,7 @@ function snapshotFromDemo(bundle) {
     weight: weightModel(bundle && bundle.weighIns, today),
     cardio: bundle && bundle.cardio || { minutes: 0, goal: 150 },
     pattern: patternFrom(bundle, today),
+    loggedDays: loggedDays(bundle || {}),
     headline: oura ? headlineFromScore(oura.readiness) : "Here's where today stands",
     muscleMode: bundle && bundle.muscleMode === "advanced" ? "advanced" : "basic",
     hero: heroModel(bundle && bundle.sessions, today),
@@ -321,6 +326,11 @@ function snapshotFromApp() {
     headline = typeof app.briefTodayHeadline === "function" ? app.briefTodayHeadline() : headlineFromScore(oura && oura.readiness);
   } catch (e) { headline = headlineFromScore(oura && oura.readiness); }
   const mode = typeof app.muscleMode === "function" && app.muscleMode() === "advanced" ? "advanced" : "basic";
+  let patternDays = 0;
+  try {
+    const srcForDays = typeof app.correlationSource === "function" ? app.correlationSource() : src;
+    patternDays = loggedDays(srcForDays);
+  } catch (e) { patternDays = 0; }
   return {
     kind: "snapshot",
     live: true,
@@ -336,6 +346,7 @@ function snapshotFromApp() {
     weight: weightModel(weigh, today),
     cardio,
     pattern: patternNow(),
+    loggedDays: patternDays,
     headline,
     muscleMode: mode,
     hero: null,
@@ -492,7 +503,8 @@ function renderThisWeek(data) {
 function renderPattern(data) {
   const pattern = data && data.kind === "snapshot" ? data.pattern : (data && data.live ? patternNow() : data && data.pattern);
   if (!pattern || !pattern.line || pattern.empty) {
-    const line = pattern && pattern.line ? pattern.line : "A couple more weeks";
+    const days = data && typeof data.loggedDays === "number" ? data.loggedDays : 0;
+    const line = pattern && pattern.line ? pattern.line : emptyPatternLine(days);
     return `<button class="hw hw-m hw-hit hw-quiet" data-hw="pattern" data-action="open-affects"><span class="hw-k">Today's pattern</span><span class="hw-line">${esc(line)}</span></button>`;
   }
   const tone = pattern.tone === "up" ? " tone-up" : pattern.tone === "down" ? " tone-down" : "";

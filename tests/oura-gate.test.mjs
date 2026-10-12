@@ -8,6 +8,7 @@ import {
   gatedOuraStripHTML,
   hasOura,
   homeOuraReconnect,
+  homeOuraReconnectHTML,
   homeOuraWaiting,
   needsSleepRecovery,
   noteOuraConnected,
@@ -244,8 +245,8 @@ test("a score colors the readiness tile and a missing items list does not throw"
 test("the offline shell caches the gate and the widget stub", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v47/);
-  assert.match(sentry, /insight-shell-v47/);
+  assert.match(sw, /insight-shell-v48/);
+  assert.match(sentry, /insight-shell-v48/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
 });
@@ -550,6 +551,108 @@ test("lapsed Oura needs the sleep card, and a reconnect label, while demo stays 
   assert.match(sleepRecoveryCopy(fresh), /first sync/);
   assert.doesNotMatch(sleepRecoveryCopy(fresh), /lapsed|Reconnect/);
   assert.match(sleepRecoveryCopy(lapsed), /lapsed/);
+});
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("reconnect copy covers an expired login and a lapsed membership", () => {
+  const day = { date: "2026-10-04", readiness: 80, sleepScore: 70 };
+  const home = layout(["readiness", "today"]);
+  const errors = [
+    "Oura login expired. Reconnect Oura in the app. (401)",
+    "Oura daily_sleep request failed (403)",
+    "membership_inactive",
+  ];
+  for (const err of errors) {
+    const s = state({
+      oura: { connected: true, lastError: err, days: { "2026-10-04": day } },
+      layout: { homeV2: home },
+    });
+    const html = homeOuraReconnectHTML(s);
+    assert.match(html, /Reconnect Oura/, err);
+    assert.match(html, /expired login/, err);
+    assert.match(html, /lapsed membership/, err);
+    assert.match(sleepRecoveryCopy(s), /expired login/, err);
+    assert.match(sleepRecoveryCopy(s), /lapsed membership/, err);
+    assert.equal(homeOuraReconnect(s), true, err);
+  }
+});
+
+test("only a parenthesized 403, or expired, lapsed, or inactive wording, gates Home", () => {
+  const seed = 0x403a11;
+  const rand = mulberry32(seed);
+  const paths = [
+    "daily_sleep", "daily_readiness", "daily_activity", "heartrate", "workout",
+    "session", "v2/usercollection/sleep", "sleep403", "note403x", "403daily", "user/403",
+  ];
+  const wordings = ["", "expired", "lapsed", "inactive", "Expired", "token lapsed", "membership_inactive", "login expired"];
+  const shapes = ["suffix", "prefix", "login"];
+  const prev = { state: app.state, src: app.src, snap: app.snapshotFromApp };
+  app.snapshotFromApp = () => ({
+    kind: "snapshot",
+    today: "2026-10-04",
+    demo: false,
+    oura: null,
+    weekGoal: null,
+    cardio: { minutes: 0, goal: 150 },
+    headline: "Train",
+    muscleMode: "basic",
+    pattern: { empty: true, line: "A couple more weeks" },
+    loggedDays: 0,
+  });
+  const items = ["readiness", "sleep-score", "today", "cardio"];
+  const pick = (list) => list[Math.floor(rand() * list.length)];
+  const expectsGate = (status, wording, shape) => shape === "login" || status === 403 || /lapsed|inactive|expired/i.test(wording);
+  const build = (path, status, wording, shape) => {
+    if (shape === "login") return `Oura login expired. Reconnect Oura in the app. (${status})`;
+    if (shape === "prefix") return `Oura ${wording || "sync"} ${path} request failed (${status})`;
+    return `Oura ${path} request failed (${status})${wording ? " " + wording : ""}`;
+  };
+  try {
+    for (let status = 400; status <= 599; status++) {
+      for (let draw = 0; draw < 2; draw++) {
+        const path = pick(paths);
+        const wording = pick(wordings);
+        const shape = pick(shapes);
+        const err = build(path, status, wording, shape);
+        const gate = expectsGate(status, wording, shape);
+        app.state = state({
+          oura: { connected: true, lastError: err, days: {} },
+          layout: { homeV2: layout(items) },
+          workouts: [],
+          plan: {},
+        });
+        app.src = () => ({ oura: {} });
+        const html = app.homeHTML();
+        assert.equal(ouraMembershipInactive(app.state), gate, err);
+        if (gate) {
+          assert.doesNotMatch(html, /Waiting for first sync/, err);
+          assert.match(html, /Reconnect Oura/, err);
+          assert.match(html, /expired login/, err);
+          assert.match(html, /lapsed membership/, err);
+          assert.equal(visibleHomeIds(app.state).includes("readiness"), false, err);
+          assert.equal(homeOuraWaiting(app.state), false, err);
+        } else {
+          assert.match(html, /Waiting for first sync/, err);
+          assert.doesNotMatch(html, /Reconnect Oura/, err);
+          assert.equal(homeOuraWaiting(app.state), true, err);
+        }
+      }
+    }
+  } finally {
+    app.state = prev.state;
+    app.src = prev.src;
+    app.snapshotFromApp = prev.snap;
+  }
 });
 
 test("the OAuth dialog sends people to Settings", () => {
