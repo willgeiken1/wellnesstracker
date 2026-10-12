@@ -10,13 +10,15 @@ import {
   assertConfigured,
   liveGate,
   passwordOk,
+  PROBE_NAME,
   purgeSkippedOnSchedule,
   PURGE_TABLES,
+  redactError,
   redactText,
   serviceRoleOk,
   throwawayEmailOk,
 } from "../logger/tests/live/gate.mjs";
-import { pollUntil, requireCount, requireStorageList } from "../logger/tests/live/purge-check.mjs";
+import { deleteRefusal, pollUntil, probeLanded, requireCount, requireStorageList } from "../logger/tests/live/purge-check.mjs";
 import { EXPECTED_SUPABASE_HOST, LIVE_BASE_URL, PAGES_HOST, SB_URL, SUPABASE_HOST } from "../logger/tests/live/project.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -92,6 +94,54 @@ test("redaction removes the email, the password, and their encoded forms", () =>
   assert.equal(cleaned.includes(PASSWORD), false);
   assert.equal(cleaned.includes(encodeURIComponent(EMAIL)), false);
   assert.match(cleaned, /\[redacted\]/);
+});
+
+test("an error that echoes the throwaway email is redacted", () => {
+  const err = new Error(`Could not finish for ${EMAIL}`);
+  err.stack = `Error: Could not finish for ${EMAIL}\n    at signIn (${encodeURIComponent(EMAIL)})`;
+  const secrets = [EMAIL, PASSWORD];
+  const wrapped = redactError(err, secrets, "Could not finish.");
+  assert.equal(wrapped.message.includes(EMAIL), false);
+  assert.equal(wrapped.stack.includes(EMAIL), false);
+  assert.equal(wrapped.stack.includes(encodeURIComponent(EMAIL)), false);
+  assert.match(wrapped.message, /\[redacted\]/);
+  assert.match(wrapped.stack, /\[redacted\]/);
+  const blank = new Error("");
+  blank.stack = `Error\n    at signIn (${EMAIL})`;
+  const fromFallback = redactError(blank, secrets, `Could not finish for ${EMAIL}`);
+  assert.equal(fromFallback.message.includes(EMAIL), false);
+  assert.equal(fromFallback.stack.includes(EMAIL), false);
+  assert.match(fromFallback.message, /\[redacted\]/);
+});
+
+function purgeCatchBlock(src) {
+  const marker = "\n    } catch (err) {";
+  const at = src.indexOf(marker);
+  assert.notEqual(at, -1, "purge catch block");
+  const open = at + marker.length - 1;
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return src.slice(at + 1, i + 1);
+    }
+  }
+  assert.fail("purge catch block did not close");
+}
+
+function hasBareThrowErr(block) {
+  return block.split("\n").some((line) => /^\s*throw\s+err\s*;?\s*$/.test(line));
+}
+
+test("the purge catch redacts failures instead of rethrowing the raw error", () => {
+  const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
+  const block = purgeCatchBlock(spec);
+  assert.match(block, /deleteThrowawayAccount/);
+  assert.match(block, /redactError\(err, secrets, "Account purge failed\."\)/);
+  assert.match(block, /redactError\(cleanupErr, secrets, "Could not delete the throwaway account\."\)/);
+  assert.equal(hasBareThrowErr(block), false, "purge catch rethrows the raw error");
 });
 
 test("the service role must not be the publishable key", () => {
@@ -219,8 +269,13 @@ test("count and storage errors fail closed", () => {
   assert.match(account, /pollUntil/);
   assert.match(account, /alreadyExists\(created\.error\)/);
   assert.match(account, /deleteThrowawayAccount/);
+  assert.match(account, /deleteRefusal\(\{ email, userId \}\)/);
+  assert.match(account, /deleteRefusal\(\{ email, userId, loadedEmail: user\.email \}\)/);
+  assert.match(account, /probeLanded\(data\)/);
   const spec = readFileSync(join(root, "logger/tests/live/account-purge.spec.mjs"), "utf8");
   assert.match(spec, /cloudPush/);
+  assert.match(spec, /The page did not expose cloudPush/);
+  assert.match(spec, /throw redactError\(err, secrets,/);
   assert.match(spec, /deleteThrowawayAccount/);
   assert.equal(spec.includes("waitForFunction(async"), false);
 });
@@ -555,6 +610,105 @@ test("liveRequestAllowed holds on seeded random urls", () => {
   for (const url of rejected) {
     assert.equal(liveRequestAllowed(url), false, `seed ${GATE_SEED} reject ${show(url)}`);
     assert.equal(referenceRequestAllowed(url), liveRequestAllowed(url), `seed ${GATE_SEED} url reference ${show(url)}`);
+  }
+});
+
+function hexDigits(rng, n) {
+  let out = "";
+  for (let i = 0; i < n; i++) out += "0123456789abcdef"[randInt(rng, 16)];
+  return out;
+}
+
+function goodUuid(rng) {
+  return `${hexDigits(rng, 8)}-${hexDigits(rng, 4)}-${hexDigits(rng, 4)}-${hexDigits(rng, 4)}-${hexDigits(rng, 12)}`;
+}
+
+function badUuid(rng) {
+  const valid = goodUuid(rng);
+  return pick(rng, [
+    "",
+    "not-a-uuid",
+    valid.slice(1),
+    valid.replace("-", ""),
+    `${valid} `,
+    `${valid}x`,
+    "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+    null,
+    12,
+  ]);
+}
+
+function recaseEmail(rng, email) {
+  return [...email].map((ch) => (rng() < 0.5 ? ch.toUpperCase() : ch.toLowerCase())).join("");
+}
+
+function differentEmail(rng, expected) {
+  for (let i = 0; i < 8; i++) {
+    const candidate = pick(rng, [
+      "person@example.com",
+      goodEmail(rng),
+      `not-${expected}`,
+      expected.slice(0, -1),
+    ]);
+    if (String(candidate).toLowerCase() !== expected.toLowerCase()) return candidate;
+  }
+  return `not-${expected}`;
+}
+
+function probeRow(weighIns, name = PROBE_NAME) {
+  return { data: { profile: { name, weighIns, units: "metric" } }, updated_at: "2026-10-12T00:00:00Z" };
+}
+
+test("delete refusals and probe rows hold on seeded random inputs", () => {
+  const rng = mulberry32(GATE_SEED);
+  const allowed = [];
+  const refused = [];
+  const landed = [];
+  const missed = [];
+  allowed.push({ email: "owner+insight-live@example.com", userId: "11111111-1111-1111-1111-111111111111", loadedEmail: "OWNER+INSIGHT-LIVE@example.com" });
+  refused.push(
+    { email: "person@example.com", userId: "11111111-1111-1111-1111-111111111111", reason: "email" },
+    { email: "xinsight-live@example.com", userId: "11111111-1111-1111-1111-111111111111", reason: "email" },
+    { email: "owner+insight-live@example.com", userId: "not-a-uuid", reason: "uuid" },
+    { email: "owner+insight-live@example.com", userId: "11111111-1111-1111-1111-111111111111", loadedEmail: "person@example.com", reason: "mismatch" },
+  );
+  landed.push(probeRow([{ date: "2026-10-12", kg: 80 }]));
+  missed.push(
+    null,
+    {},
+    { data: {} },
+    { data: { profile: { name: PROBE_NAME, weighIns: [] } } },
+    { data: { profile: { name: "live probe", weighIns: [{ kg: 80 }] } } },
+    { data: { profile: { name: PROBE_NAME, weighIns: "80" } } },
+  );
+  for (let i = 0; i < 200; i++) {
+    const email = goodEmail(rng);
+    const userId = goodUuid(rng);
+    allowed.push({ email, userId, loadedEmail: recaseEmail(rng, email) });
+    allowed.push({ email, userId });
+    refused.push({ email: rejectEmail(rng, pick(rng, ["glued", "two-at", "space", "unicode", "domain", "long"])), userId, reason: "email" });
+    refused.push({ email, userId: badUuid(rng), reason: "uuid" });
+    refused.push({ email, userId, loadedEmail: differentEmail(rng, email), reason: "mismatch" });
+    landed.push(probeRow(
+      Array.from({ length: 1 + randInt(rng, 3) }, () => ({ date: "2026-10-12", kg: 40 + randInt(rng, 80), note: chunk(rng, 4) })),
+      PROBE_NAME
+    ));
+    const badName = pick(rng, ["live probe", "LIVE PROBE", `${PROBE_NAME} `, ` ${PROBE_NAME}`, `x${PROBE_NAME}`, chunk(rng, 8)]);
+    missed.push(probeRow([{ kg: 80 }], badName));
+    missed.push(probeRow(pick(rng, [[], null, "80", { length: 1 }, 1])));
+    missed.push({ data: { profile: null } });
+  }
+  for (const input of allowed) {
+    assert.equal(deleteRefusal(input), "", `seed ${GATE_SEED} allow delete ${show(input)}`);
+  }
+  for (const input of refused) {
+    assert.equal(deleteRefusal(input), input.reason, `seed ${GATE_SEED} refuse ${input.reason} ${show(input)}`);
+  }
+  for (const row of landed) {
+    assert.equal(probeLanded(row), true, `seed ${GATE_SEED} probe landed ${show(row)}`);
+  }
+  for (const row of missed) {
+    assert.equal(probeLanded(row), false, `seed ${GATE_SEED} probe missed ${show(row)}`);
   }
 });
 

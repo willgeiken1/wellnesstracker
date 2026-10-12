@@ -5,13 +5,12 @@
 
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { assertConfigured, EMAIL_MARKER, PROBE_NAME, PURGE_TABLES, serviceRoleOk, throwawayEmailOk } from "./gate.mjs";
+import { assertConfigured, EMAIL_MARKER, PURGE_TABLES, serviceRoleOk, throwawayEmailOk } from "./gate.mjs";
 import { SB_PUBLISHABLE_KEY, SB_URL } from "./project.mjs";
-import { pollUntil, requireCount, requireStorageList } from "./purge-check.mjs";
+import { deleteRefusal, pollUntil, probeLanded, requireCount, requireStorageList, throwawayUserIdOk } from "./purge-check.mjs";
 
 export { PURGE_TABLES };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROGRESS_BUCKET = "progress";
 const PROBE_DAY = "2020-01-15";
 const PROBE_FILE = "live-probe.jpg";
@@ -67,7 +66,7 @@ export function adminClient(serviceRole) {
 }
 
 function assertUuid(userId) {
-  if (typeof userId !== "string" || !UUID.test(userId)) {
+  if (!throwawayUserIdOk(userId)) {
     throw new Error("Refusing to query without the throwaway user id.");
   }
 }
@@ -307,12 +306,6 @@ async function mustWrite(table, write) {
   if (error) throw new Error(`Could not seed ${table} (status ${statusOf(error)}).`);
 }
 
-function probeLanded(row) {
-  const profile = row && row.data && row.data.profile;
-  const weighIns = profile && profile.weighIns;
-  return !!(profile && profile.name === PROBE_NAME && Array.isArray(weighIns) && weighIns.length > 0);
-}
-
 async function deleteRows(admin, userId) {
   for (const table of PURGE_TABLES) {
     const { error } = await filterByUser(admin.from(table).delete(), table, userId);
@@ -329,12 +322,17 @@ async function removeProgress(admin, userId) {
 }
 
 export async function deleteThrowawayAccount({ userId, email, serviceRole }) {
-  if (!throwawayEmailOk(email)) throw new Error("Refusing to delete an account that is not the throwaway address.");
-  assertUuid(userId);
+  const refusal = deleteRefusal({ email, userId });
+  if (refusal === "email") throw new Error("Refusing to delete an account that is not the throwaway address.");
+  if (refusal === "uuid") throw new Error("Refusing to query without the throwaway user id.");
   const admin = adminClient(serviceRole);
   const loaded = await admin.auth.admin.getUserById(userId);
   const user = loaded.data && loaded.data.user;
-  if (user) assertSameEmail(user.email, email);
+  if (user) {
+    if (deleteRefusal({ email, userId, loadedEmail: user.email }) === "mismatch") {
+      throw new Error("Refusing to continue: the account email did not match the throwaway address.");
+    }
+  }
   else if (loaded.error && !userMissing(loaded.error)) {
     throw new Error(`Could not load the throwaway account during cleanup (status ${statusOf(loaded.error)}).`);
   }
