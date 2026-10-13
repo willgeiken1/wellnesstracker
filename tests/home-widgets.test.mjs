@@ -92,6 +92,13 @@ test("small cards render their numbers, and steps and last night stay blank with
   const quiet = HOME_WIDGETS.pattern.render({ kind: "snapshot", pattern: null });
   assert.match(quiet, /A couple more weeks/);
   assert.doesNotMatch(quiet, /Possible patterns, see Insights/);
+  const veteran = HOME_WIDGETS.pattern.render({ kind: "snapshot", pattern: null, loggedDays: 21 });
+  assert.match(veteran, /Nothing clear yet/);
+  assert.doesNotMatch(veteran, /A couple more weeks/);
+  const atThreshold = HOME_WIDGETS.pattern.render({ kind: "snapshot", pattern: null, loggedDays: 14 });
+  assert.match(atThreshold, /Nothing clear yet/);
+  const earlySnap = HOME_WIDGETS.pattern.render({ kind: "snapshot", pattern: null, loggedDays: 13 });
+  assert.match(earlySnap, /A couple more weeks/);
   assert.match(quiet, /data-action="open-affects"/);
   assert.match(quiet, /hw-quiet/);
   assert.doesNotMatch(quiet, /Nothing stands out/);
@@ -130,6 +137,12 @@ test("a pattern with no findings uses the empty copy, and findings still point a
     app.correlations = () => [{ confidence: "medium", valence: "good", q: 0.04, strength: 1, factor: "fat:median", source: "fat", outcome: "hrv", lag: 1 }];
     const see = HOME_WIDGETS.pattern.render({ live: true });
     assert.match(see, /Possible patterns, see Insights/);
+    const stamped = app.snapshotFromApp();
+    assert.equal(stamped.loggedDays, 16);
+    stamped.pattern = null;
+    const fromSnap = HOME_WIDGETS.pattern.render(stamped);
+    assert.match(fromSnap, /Nothing clear yet/);
+    assert.doesNotMatch(fromSnap, /A couple more weeks/);
   } finally {
     app.correlations = prev.correlations;
     app.correlationSource = prev.correlationSource;
@@ -429,8 +442,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v47/);
-  assert.match(sentry, /insight-shell-v47/);
+  assert.match(sw, /insight-shell-v48/);
+  assert.match(sentry, /insight-shell-v48/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);

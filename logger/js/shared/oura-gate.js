@@ -57,9 +57,11 @@ function dayBag(days) {
 }
 
 /* oura-sync stores `Oura <path> request failed (403)`, and a refresh failure
-   as `Oura login expired...`. The literal membership_inactive string is not
-   what the connection row gets. Same match as ouraMembershipLapsed. The
-   connection row stays, and so do old days. Those days are not a live ring. */
+   as `Oura login expired...`. The status has to be the parenthesized `(403)`.
+   A 403 that only appears in the path is a different error. The literal
+   membership_inactive string is not what the connection row gets. Same match
+   as ouraMembershipLapsed. The connection row stays, and so do old days.
+   Those days are not a live ring. */
 export function ouraMembershipInactive(state) {
   return ouraMembershipLapsed(state);
 }
@@ -82,7 +84,7 @@ export function ouraReady(state) {
 
 /* Ids Home should paint. hidden is the person's list.
    needsOura drops out with no ring, no demo, a ring that has not synced a day,
-   or a lapsed membership (403, lapsed, inactive, expired) even when old days are stored.
+   or a lapsed membership (a parenthesized 403, or lapsed, inactive, expired) even when old days are stored.
    items and hidden are guarded because a v2 layout can omit them. */
 export function visibleHomeIds(state, widgets = HOME_WIDGETS) {
   const layout = getHomeLayout(state);
@@ -115,7 +117,7 @@ export function homeOuraReconnect(state) {
 
 export function homeOuraReconnectHTML(state) {
   if (!homeOuraReconnect(state)) return "";
-  return `<div class="card oura-nudge"><div><h4>Reconnect Oura</h4><p class="sub">Sleep and readiness stay off Home until the membership is active again.</p></div><button class="btn small" data-action="oura-connect">Reconnect</button></div>`;
+  return `<div class="card oura-nudge"><div><h4>Reconnect Oura</h4><p class="sub">An expired login or a lapsed membership keeps sleep and readiness off Home until you reconnect.</p></div><button class="btn small" data-action="oura-connect">Reconnect</button></div>`;
 }
 
 /* One line on Home when the layout wants Oura cards and the ring has no days yet. */
@@ -188,12 +190,13 @@ export function needsSleepRecovery(state, nights) {
   return !nights;
 }
 
-/* 403, an expired membership, or an inactive token. A ring that just connected
-   and has not synced yet is not one of these. */
+/* A parenthesized (403), or expired, lapsed, or inactive wording. A ring that
+   just connected and has not synced yet is not one of these. A 403 inside the
+   path, or a status like (500), is not one either. */
 export function ouraMembershipLapsed(state) {
   const err = state && state.oura && state.oura.lastError;
   if (typeof err !== "string" || !err) return false;
-  return /403|lapsed|inactive|expired/i.test(err);
+  return /\(403\)|lapsed|inactive|expired/i.test(err);
 }
 
 export function sleepRecoveryLabel(state, signedIn) {
@@ -204,7 +207,7 @@ export function sleepRecoveryLabel(state, signedIn) {
 }
 
 export function sleepRecoveryCopy(state) {
-  if (ouraMembershipLapsed(state)) return "Reconnect Oura to bring sleep and readiness back. This stays empty when the membership has lapsed.";
+  if (ouraMembershipLapsed(state)) return "Reconnect Oura to bring sleep and readiness back. An expired login or a lapsed membership leaves this empty.";
   if (state && state.oura && state.oura.connected) return "Oura is connected. Sleep and readiness show up after the first sync.";
   return "Connect an Oura Ring to see how sleep and readiness affect your lifts.";
 }

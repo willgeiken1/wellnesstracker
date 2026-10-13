@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { app } from "../logger/js/runtime.js";
 import {
   DISPLAY_LIMIT,
   FAMILY_CAP,
@@ -11,6 +12,7 @@ import {
   splitFindings,
   storyKey,
 } from "../logger/js/shared/correlate.js";
+import "../logger/js/pages/insights.js";
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -94,6 +96,19 @@ function counts(rows, keyFn) {
 }
 
 test("listFindings and splitFindings hold their caps over 3000 random row sets", () => {
+  const prev = {
+    correlations: app.correlations,
+    correlationSource: app.correlationSource,
+    today: app.today,
+    ui: app.ui,
+    esc: app.esc,
+    pl: app.pl,
+  };
+  app.esc = (s) => String(s == null ? "" : s);
+  app.pl = (n, w) => `${n} ${w}`;
+  app.ui = { affectsAll: true };
+  const factorsIn = (html) => [...html.matchAll(/data-factors="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/).filter(Boolean));
+  try {
   for (let i = 0; i < 3000; i++) {
     const seed = 0x5eed + i * 7919;
     const rand = mulberry32(seed);
@@ -153,5 +168,20 @@ test("listFindings and splitFindings hold their caps over 3000 random row sets",
     assert.deepEqual(pack(again), pack(listed), msg("output depends on input order"));
     const split = splitFindings(shuffled(rand, rows), { days }, today);
     assert.deepEqual(split.top.map(keyOf), top.map(keyOf), msg("top depends on input order"));
+
+    app.today = () => today;
+    app.correlationSource = () => ({ days });
+    app.correlations = () => rows;
+    const html = app.affectsHTML();
+    const shown = new Set(factorsIn(html));
+    eligible.forEach((r) => assert.ok(shown.has(String(r.factor)), msg("factor missing from data-factors: " + r.factor)));
+  }
+  } finally {
+    app.correlations = prev.correlations;
+    app.correlationSource = prev.correlationSource;
+    app.today = prev.today;
+    app.ui = prev.ui;
+    app.esc = prev.esc;
+    app.pl = prev.pl;
   }
 });

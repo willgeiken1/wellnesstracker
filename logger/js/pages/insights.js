@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DAYS_FOR_A_PATTERN, DISPLAY_LIMIT, SEE_ALL_LIMIT, UNFAVORABLE_MARK, foldedAlso, listFindings, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
+import { DAYS_FOR_A_PATTERN, UNFAVORABLE_MARK, foldedAlso, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
 import { needsSleepRecovery, ouraMembershipInactive, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import { readinessForAdvice } from "../shared/brief.js";
 import "./insight-widgets.js";
@@ -132,16 +132,12 @@ function affectsHTML() {
   }
   const open = !!app.ui.affectsAll;
   // listFindings(rows) is top.concat(more). One story is one card. The brief's pick is that card when the story is the one on the brief.
+  // See all renders every story. A cap would leave an eligible factor off data-factors.
   let all = top.concat(more);
   const want = findingKey(picked);
   if (want && !all.some((r) => findingKey(r) === want)) all = all.concat(picked);
-  let visible = all.slice(0, SEE_ALL_LIMIT);
-  if (want && !visible.some((r) => findingKey(r) === want)) {
-    const hit = all.find((r) => findingKey(r) === want);
-    if (hit) visible = visible.slice(0, Math.max(0, SEE_ALL_LIMIT - 1)).concat(hit);
-  }
-  const shown = open ? visible : top;
-  const toggle = more.length ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + top.length : "See all " + visible.length}</button>` : "";
+  const shown = open ? all : top;
+  const toggle = more.length ? `<button class="btn block aff-more" data-action="affects-more" aria-expanded="${open}">${open ? "Show the top " + top.length : "See all " + all.length}</button>` : "";
   return head + shown.map(affectsCard).join("") + toggle;
 }
 app.affectsHTML = affectsHTML;
