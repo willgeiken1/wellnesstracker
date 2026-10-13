@@ -331,10 +331,10 @@ test("the pattern wording is neutral", () => {
   assert.doesNotMatch(brief + widgets + insights + weekly, /Working against you|Worth watching/);
 });
 
-test("the shell caches the defaults module on the v45 release", () => {
+test("the shell caches the defaults module on the v47 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /const CACHE = "insight-shell-v45"/);
+  assert.match(sw, /const CACHE = "insight-shell-v47"/);
   assert.match(sw, /const STAGE = CACHE \+ "-next"/);
   assert.doesNotMatch(sw, /insight-shell-v30"/);
 });

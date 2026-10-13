@@ -179,6 +179,59 @@ function mergeMachineNotes(local, remote) {
 }
 app.mergeMachineNotes = mergeMachineNotes;
 
+/* Session ids removed on purpose. A string is a legacy marker with no time.
+   A real delete is { id, at }. The list is capped, and timed markers expire. */
+const DELETED_CAP = 200;
+const DELETED_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const EMPTY_FREESTYLE_STALE_MS = 12 * 60 * 60 * 1000;
+app.DELETED_CAP = DELETED_CAP;
+app.DELETED_TTL_MS = DELETED_TTL_MS;
+app.EMPTY_FREESTYLE_STALE_MS = EMPTY_FREESTYLE_STALE_MS;
+
+function deletedId(mark) {
+  if (typeof mark === "string") return mark;
+  if (mark && typeof mark === "object" && typeof mark.id === "string") return mark.id;
+  return "";
+}
+app.deletedId = deletedId;
+
+function deletedAt(mark) {
+  if (mark && typeof mark === "object" && typeof mark.at === "number" && Number.isFinite(mark.at) && mark.at > 0) return mark.at;
+  return 0;
+}
+app.deletedAt = deletedAt;
+
+/* Untimed strings stay untimed, so they are the first to go when the cap is hit.
+   A later timed copy of the same id replaces the string. */
+function pruneDeleted(list, now) {
+  const t = typeof now === "number" && Number.isFinite(now) ? now : Date.now();
+  const byId = new Map();
+  for (const mark of Array.isArray(list) ? list : []) {
+    const id = deletedId(mark);
+    if (!id) continue;
+    const at = deletedAt(mark);
+    if (at && t - at > DELETED_TTL_MS) continue;
+    const prev = byId.get(id);
+    if (prev && deletedAt(prev) >= at) continue;
+    byId.set(id, at ? { id, at } : id);
+  }
+  let items = [...byId.values()];
+  if (items.length > DELETED_CAP) {
+    items.sort((a, b) => deletedAt(b) - deletedAt(a));
+    items = items.slice(0, DELETED_CAP);
+  }
+  return items;
+}
+app.pruneDeleted = pruneDeleted;
+
+function noteDeleted(id) {
+  if (!id) return;
+  const list = (app.state.deleted || []).filter((m) => deletedId(m) !== id);
+  list.push({ id, at: Date.now() });
+  app.state.deleted = pruneDeleted(list);
+}
+app.noteDeleted = noteDeleted;
+
 /* Accepts the original v1 format and the current one */
 function migrate(d) {
   if (!d || !Array.isArray(d.sessions)) return null;
@@ -208,12 +261,12 @@ function migrate(d) {
   if (profile) stripProfileClockFields(profile);
   return { version: 2, workouts, sessions, plan: d.plan || {}, planAt: d.planAt && typeof d.planAt === "object" && !Array.isArray(d.planAt) ? d.planAt : {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
     oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo,
-    deleted: d.deleted || [], updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
+    deleted: pruneDeleted(d.deleted || []), updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
     profile, ownerId: d.ownerId || null,
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },
     food: d.food || { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 },
-    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: app.normalizeMachineNotes(d.machineNotes), measurements: d.measurements || {},
+    muscleMode: d.muscleMode === "advanced" ? "advanced" : "basic", showProgression: d.showProgression !== false, settingsAt: d.settingsAt || 0, layout: d.layout || {}, uniEx: d.uniEx || {}, machineNotes: app.normalizeMachineNotes(d.machineNotes), measurements: d.measurements || {},
     cardio: d.cardio || { sessions: [], saved: [], goalMin: 150, deleted: [], live: null, updatedAt: 0 },
     brief: d.brief && typeof d.brief === "object" && !Array.isArray(d.brief) ? d.brief : null,
     weeklyReports: d.weeklyReports && typeof d.weeklyReports === "object" && !Array.isArray(d.weeklyReports) ? d.weeklyReports : null,
@@ -263,6 +316,7 @@ app.wipeLogs = wipeLogs;
 /* Bumps correlationRev before writing. Replacing app.state or wiping logs without
    replaceState or wipeLogs serves the previous rows. */
 function save() {
+  if (app.state && Array.isArray(app.state.deleted)) app.state.deleted = pruneDeleted(app.state.deleted);
   app.state.updatedAt = Date.now();
   bumpCorrelationRev();
   try { app.schedulePush(); } catch (e) { /* cloud not ready yet */ }
@@ -274,8 +328,52 @@ app.save = save;
 let state = app.load();
 app.replaceState(state);
 
-// A workout left open from a previous day gets closed automatically
-app.state.sessions.forEach((s) => { if (!s.finishedAt && s.date < app.today()) s.finishedAt = s.date + "T23:59:00"; });
+function freestyleSetCount(s) {
+  if (!s || !Array.isArray(s.entries)) return 0;
+  return s.entries.reduce((c, e) => c + ((e && e.sets && e.sets.length) || 0), 0);
+}
+
+function sessionClock(s) {
+  const times = [];
+  if (s && typeof s.mod === "number" && Number.isFinite(s.mod) && s.mod > 0) times.push(s.mod);
+  const started = Date.parse(s && s.startedAt);
+  if (Number.isFinite(started) && started > 0) times.push(started);
+  return times.length ? Math.max(...times) : 0;
+}
+
+/* Only a freestyle that was clearly left behind: nothing logged, nothing queued,
+   and either a previous day or a clock that has not moved for hours.
+   The drop stays on this phone. A synced deletion marker would erase sets the
+   other phone logged after the empty copy was synced. */
+function abandonedEmptyFreestyle(s, now) {
+  if (!s || s.finishedAt || s.origin !== "freestyle") return false;
+  if (freestyleSetCount(s) > 0) return false;
+  if ((Array.isArray(s.order) && s.order.length) || (Array.isArray(s.extra) && s.extra.length)) return false;
+  if (s.date && s.date < app.today()) return true;
+  const clock = sessionClock(s);
+  const t = typeof now === "number" && Number.isFinite(now) ? now : Date.now();
+  return !clock || t - clock >= EMPTY_FREESTYLE_STALE_MS;
+}
+app.abandonedEmptyFreestyle = abandonedEmptyFreestyle;
+
+function discardEmptyFreestyle() {
+  const before = (app.state.sessions || []).length;
+  app.state.sessions = (app.state.sessions || []).filter((s) => !abandonedEmptyFreestyle(s));
+  return app.state.sessions.length !== before;
+}
+app.discardEmptyFreestyle = discardEmptyFreestyle;
+
+/* A workout left open from a previous day gets closed automatically.
+   A freestyle workout with logged sets stays in progress so reopening the app can resume it.
+   An abandoned empty one is dropped on this phone instead of reopening on every launch. */
+function closeStaleSessions() {
+  discardEmptyFreestyle();
+  app.state.sessions.forEach((s) => {
+    if (!s.finishedAt && s.date < app.today() && s.origin !== "freestyle") s.finishedAt = s.date + "T23:59:00";
+  });
+}
+app.closeStaleSessions = closeStaleSessions;
+closeStaleSessions();
 
 app.save();
 
@@ -287,6 +385,16 @@ app.workoutById = workoutById;
 
 const activeSession = () => app.state.sessions.find((s) => !s.finishedAt);
 app.activeSession = activeSession;
+
+/* An unfinished freestyle workout with logged sets opens itself. An empty one is dropped first. */
+function resumeOpenWorkout() {
+  const dropped = discardEmptyFreestyle();
+  const s = app.activeSession();
+  if (s && s.origin === "freestyle") app.ui.workoutOpen = true;
+  if (dropped) app.save();
+}
+app.resumeOpenWorkout = resumeOpenWorkout;
+resumeOpenWorkout();
 
 const finished = () => app.state.sessions.filter((s) => s.finishedAt)
   .sort((a, b) => (a.date === b.date ? String(b.startedAt).localeCompare(String(a.startedAt)) : a.date < b.date ? 1 : -1));
@@ -305,14 +413,33 @@ function musclesBetween(from, to) {
 }
 app.musclesBetween = musclesBetween;
 
-/* Exercises shown in a live workout: the template, plus anything logged that isn't in it */
+/* Exercises shown in a live workout: the template, plus anything logged that isn't in it.
+   s.removed hides a template exercise for this session. s.order is the live order. */
 function liveExercises(s) {
   const w = app.workoutById(s.workoutId);
   const sw = s.swaps || {};
-  const list = w ? w.exercises.map((e) => sw[e.name] ? { name: sw[e.name].name, muscles: sw[e.name].muscles, adv: sw[e.name].adv, original: e.name } : { name: e.name, muscles: e.muscles, adv: e.adv }) : [];
-  (s.extra || []).forEach((x) => { if (!list.some((y) => y.name === x.name)) list.push({ ...x, extra: true }); });
-  s.entries.forEach((e) => { if (!list.some((x) => x.name === e.exercise)) list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv }); });
-  return list;
+  const removed = new Set(s.removed || []);
+  const list = [];
+  if (w) w.exercises.forEach((e) => {
+    if (removed.has(e.name)) return;
+    if (sw[e.name]) list.push({ name: sw[e.name].name, muscles: sw[e.name].muscles, adv: sw[e.name].adv, original: e.name });
+    else list.push({ name: e.name, muscles: e.muscles, adv: e.adv });
+  });
+  (s.extra || []).forEach((x) => {
+    if (removed.has(x.name) || list.some((y) => y.name === x.name)) return;
+    list.push({ ...x, extra: true });
+  });
+  (s.entries || []).forEach((e) => {
+    if (removed.has(e.exercise) || list.some((x) => x.name === e.exercise)) return;
+    list.push({ name: e.exercise, muscles: e.muscles, adv: e.adv });
+  });
+  const order = Array.isArray(s.order) ? s.order : null;
+  if (!order || !order.length) return list;
+  const rank = new Map(order.map((n, i) => [n, i]));
+  return list
+    .map((e, i) => ({ e, i, r: rank.has(e.name) ? rank.get(e.name) : order.length + i }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.e);
 }
 app.liveExercises = liveExercises;
 
@@ -342,7 +469,16 @@ function hintSide(side) {
   return { w: side.w != null ? app.fmtNum(side.w) : "", r: side.r != null ? String(side.r) : "" };
 }
 
-/* Most recent working set in this session, else the most recent one from history.
+/* Sets stored on the routine are the targets for the next time this exercise comes up. */
+function templateSets(s, name) {
+  const w = s && app.workoutById(s.workoutId);
+  const ex = w && (w.exercises || []).find((e) => e.name === name);
+  if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) return null;
+  return ex.sets;
+}
+app.templateSets = templateSets;
+
+/* A routine target fills the next empty set. Otherwise the last working set in this session, else history.
    Warm-ups are skipped when a working set exists. Does not read the suggestion. */
 function setFieldHints(s, name) {
   const pick = (sets) => {
@@ -351,7 +487,9 @@ function setFieldHints(s, name) {
     const list = work.length ? work : sets;
     return list[list.length - 1];
   };
-  const src = pick(app.setsFor(s, name)) || pick(app.lastSets(name, s.id));
+  const targets = app.templateSets(s, name);
+  const logged = targets ? app.setsFor(s, name).filter((x) => x.tag !== "warmup").length : 0;
+  const src = targets ? targets[Math.min(logged, targets.length - 1)] : (pick(app.setsFor(s, name)) || pick(app.lastSets(name, s.id)));
   if (!src) return null;
   const L = hintSide(src.uni ? src.uni.l : src);
   const R = hintSide(src.uni ? src.uni.r : src);

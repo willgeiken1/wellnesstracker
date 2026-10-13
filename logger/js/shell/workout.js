@@ -12,7 +12,9 @@ function renderWorkout() {
       <button class="icon-btn" data-action="minimize" aria-label="Back to home">${app.I.chevD}</button>
       <div class="wo-title"><h2>${app.esc(s.name)}</h2><span id="elapsed"></span></div>
       <div class="wo-actions"><button class="btn small cancel" data-action="cancel-workout">Cancel</button>
-      <button class="btn small primary" data-action="finish">Finish</button></div></div>
+      <button class="btn small primary" data-action="finish">Finish</button></div>
+      ${s.origin === "freestyle" ? `<button class="btn block free-save" data-action="save-routine">Save as routine</button>
+      <button class="btn block free-rest" data-action="start-rest">Start rest</button>` : ""}</div>
     <ul class="list" id="wo-list">${list.length ? list.map((e, i) => app.exerciseHTML(s, e, i)).join("")
       : `<li class="empty">No exercises yet. Add one below.</li>`}</ul>
     <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>`;
@@ -51,20 +53,23 @@ function exerciseHTML(s, e, i) {
   const prev = app.lastSets(e.name, s.id);
   const open = app.ui.open === i;
   let html = `<li class="ex${open ? " open" : ""}">
+    <div class="ex-bar">
+    <span class="handle" aria-label="Drag to reorder ${app.esc(e.name)}">${app.I.grip}</span>
     <button class="ex-head" data-action="toggle" data-i="${i}" aria-expanded="${open}">
       <span class="ex-name">${app.esc(e.name)}</span>
       <span class="ex-count${done.length ? " has" : ""}">${done.filter(app.isWork).length || (done.length ? "W" : "")}</span>
       <span class="ex-last">${e.original ? `Swapped in for ${app.esc(e.original)} · ` : ""}${app.esc(prev ? "Last: " + prev.filter((x) => x.tag !== "warmup").map(app.fmtSet).join(", ") : "No previous sets")}</span>
     </button>
+    <button class="ex-x" data-action="ex-remove" data-i="${i}" aria-label="Remove ${app.esc(e.name)}">×</button>
+    </div>
     <div class="ex-ms">${machineChipHTML(e.name)}</div>`;
   if (open) {
     const d = app.draftFor(s, e.name);
     const hint = app.setFieldHints(s, e.name);
     const worked = done.filter(app.isWork).length;
-    const sg = worked ? null : app.suggestion(e.name, s.id);
     let wi = 0;
     html += `<div class="panel"><div class="panel-top"><button class="link-inline" data-action="swap-open" data-i="${i}">Swap exercise</button></div>
-      ${sg ? app.suggestionHTML(sg, i) : (worked ? "" : app.readinessQuietHTML())}
+      ${app.liveSuggestionHTML(e.name, s.id, i, worked)}
       ${done.length ? `<ol class="sets">${done.map((x, j) => {
         const badges = `${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}${x.rpe ? `<span class="badge rpe">RPE ${x.rpe}</span>` : ""}`;
         return `<li><span class="set-n${x.tag === "warmup" ? " wu" : ""}">${x.tag === "warmup" ? "W" : ++wi}</span><button class="set-v set-edit" data-action="set-edit" data-i="${i}" data-s="${j}" aria-label="Edit set ${j + 1}">${app.fmtSet(x)}${badges ? `<span class="set-badges">${badges}</span>` : ""}</button>
@@ -94,6 +99,7 @@ function renderSheet() {
   if (app.ui.sheet === "plan") {
     const d = app.ui.sd.date, cur = app.state.plan[d];
     inner = `<h3>${app.fmtDate(d, { weekday: "long", month: "long", day: "numeric" })}</h3>
+      <button class="opt" data-action="start-freestyle"><span>Empty workout</span><span class="sec-sub">Add exercises as you go</span></button>
       ${app.state.workouts.map((w) => `<button class="opt" data-action="set-plan" data-id="${app.esc(w.id)}" aria-pressed="${cur === w.id}"><span>${app.esc(w.name)}</span><span class="sec-sub">${app.pl(w.exercises.length, "exercise")}</span></button>`).join("")}
       <button class="opt" data-action="set-plan" data-id="rest" aria-pressed="${cur === "rest"}"><span>Rest day</span></button>
       ${cur ? `<button class="opt clear" data-action="set-plan" data-id="">Clear plan</button>` : ""}`;
@@ -170,7 +176,8 @@ function renderSheet() {
       <div class="sheet-actions">${editing ? `<button class="btn danger" data-action="ex-delete">Remove</button>` : ""}
         <button class="btn primary" data-action="ex-save">${editing ? "Save" : "Add exercise"}</button></div>`;
   }
-  const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : "sheet-card";
+  const bankSheet = app.ui.sheet === "picker" || app.ui.sheet === "live-add" || app.ui.sheet === "swap";
+  const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : bankSheet ? "sheet-card bank" : "sheet-card";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : "Sheet"}"><div class="grabber"></div>
     ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;

@@ -163,6 +163,110 @@ function exObjFrom(name) {
 }
 app.exObjFrom = exObjFrom;
 
+/* Equipment words are how an exercise is loaded, not what it is. Search ignores them.
+   A near miss such as "dumbell" is still equipment, so it is dropped before the movement is matched. */
+const EQUIPMENT_WORDS = new Set([
+  "barbell", "dumbbell", "dumbbells", "cable", "cables", "machine", "machines", "smith",
+  "kettlebell", "kettlebells", "ez", "band", "bands", "plate", "plates", "landmine",
+  "resistance", "selectorized"
+]);
+app.EQUIPMENT_WORDS = EQUIPMENT_WORDS;
+
+const BANK_FILTER_MS = 250;
+app.BANK_FILTER_MS = BANK_FILTER_MS;
+
+/* Adjacent swaps count as one edit, so "bensh" and "sqaut" are one step away. */
+function damerau(a, b) {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > 2) return 3;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    let rowBest = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, dp[i - 2][j - 2] + 1);
+      dp[i][j] = v;
+      if (v < rowBest) rowBest = v;
+    }
+    if (rowBest > 2) return 3;
+  }
+  return dp[m][n];
+}
+app.damerau = damerau;
+
+function tokenHit(q, word) {
+  if (!q || !word) return false;
+  if (word.includes(q)) return true;
+  if (q.length >= 4 && word.length >= 4 && q.includes(word)) return true;
+  if (q.length < 4) return false;
+  const limit = q.length <= 5 ? 1 : 2;
+  if (Math.abs(q.length - word.length) > limit) return false;
+  return damerau(q, word) <= limit;
+}
+app.tokenHit = tokenHit;
+
+/* Words that already name a movement ("bend", "banded") are not equipment,
+   even when they sit one or two edits from "band". */
+let bankNameTokens = null;
+function movementTokens() {
+  if (bankNameTokens) return bankNameTokens;
+  const bank = app.ASSETS && app.ASSETS.bank;
+  if (!Array.isArray(bank) || !bank.length) return new Set();
+  bankNameTokens = new Set();
+  for (const b of bank) {
+    String((b && b.n) || "").toLowerCase().split(/[^a-z0-9]+/).forEach((tok) => {
+      if (tok) bankNameTokens.add(tok);
+    });
+  }
+  return bankNameTokens;
+}
+
+/* Same edit budget as tokenHit, without the substring shortcut, so "bar" does not swallow "barbell".
+   Fuzzy matches need 5 letters. An exact equipment word still matches at any length. */
+function equipmentToken(w) {
+  if (!w) return false;
+  if (EQUIPMENT_WORDS.has(w)) return true;
+  if (w.length < 5 || movementTokens().has(w)) return false;
+  const limit = w.length <= 5 ? 1 : 2;
+  for (const eq of EQUIPMENT_WORDS) {
+    if (eq.length < 4 || Math.abs(w.length - eq.length) > limit) continue;
+    if (damerau(w, eq) <= limit) return true;
+  }
+  return false;
+}
+app.equipmentToken = equipmentToken;
+
+function bankTokens(s) {
+  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !equipmentToken(w));
+}
+app.bankTokens = bankTokens;
+
+function rawTokens(s) {
+  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/* "barbell" and "dumbell" have nothing left to match once equipment words are gone. */
+function equipmentOnlyQuery(query) {
+  const raw = rawTokens(query);
+  return raw.length > 0 && raw.every((w) => equipmentToken(w));
+}
+app.equipmentOnlyQuery = equipmentOnlyQuery;
+
+/* Names and muscle groups only. A query that is just "barbell" or "machine" matches nothing. */
+function bankHit(query, row) {
+  const qTokens = bankTokens(query);
+  if (!qTokens.length) return false;
+  const nameTokens = bankTokens(row && row.name);
+  const muscleTokens = bankTokens([row && row.group, ...((row && row.muscles) || []), ...((row && row.adv) || [])].join(" "));
+  const words = nameTokens.concat(muscleTokens);
+  const blobs = [nameTokens.join(""), muscleTokens.join("")].filter(Boolean);
+  return qTokens.every((qt) => words.some((w) => tokenHit(qt, w)) || blobs.some((b) => tokenHit(qt, b)));
+}
+app.bankHit = bankHit;
+
 /* One list for every place you choose an exercise: search, "similar muscles", your own, then the bank by group. */
 function bankListHTML(o) {
   const q = (o.q || "").trim().toLowerCase(), have = o.have || new Set();
@@ -171,14 +275,21 @@ function bankListHTML(o) {
     return `<button class="pk-row${on ? " on" : ""}" data-action="${o.action}" data-src="${src}" data-name="${app.esc(name)}" aria-pressed="${on}">
       <span class="pk-t"><b>${app.esc(name)}</b><span>${app.esc(app.musclesLabel(e, 3))}</span></span><span class="pk-ic" aria-hidden="true">${on ? "✓" : "+"}</span></button>`;
   };
-  const bankE = (b) => ({ name: b.n, adv: b.a, muscles: app.basicOf(b.a) });
+  const bankE = (b) => ({ name: b.n, group: b.g, adv: b.a, muscles: app.basicOf(b.a) });
   const custom = app.customExercises().filter((e) => !(o.exclude || new Set()).has(e.name.toLowerCase()));
   const bank = app.ASSETS.bank.filter((b) => !(o.exclude || new Set()).has(b.n.toLowerCase()));
   if (q) {
+    if (equipmentOnlyQuery(o.q)) {
+      return `<div class="pk-empty pk-equip"><p>Search for the movement</p><p>Equipment words like barbell, dumbbell, and machine are left out. Try bench, curl, or chest.</p></div>`;
+    }
     const hits = [...custom.map((e) => [e.name, e, "custom"]), ...bank.map((b) => [b.n, bankE(b), "bank"])]
-      .filter(([n]) => n.toLowerCase().includes(q)).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 80);
-    return hits.length ? `<div class="pk-list">${hits.map(([n, e, src]) => row(n, e, src)).join("")}</div>`
-      : `<p class="sub" style="margin:14px 0">No exercises match "${app.esc(o.q)}".${o.customHint ? " " + o.customHint : ""}</p>`;
+      .filter(([, e]) => bankHit(o.q, e))
+      .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }));
+    if (!hits.length) {
+      const typed = String(o.q || "").trim();
+      return `<div class="pk-empty"><p>No matches</p><button type="button" class="btn block" data-action="bank-create" data-name="${app.esc(typed)}">Create ${app.esc(typed)}</button></div>`;
+    }
+    return `<div class="pk-list" data-filter="1">${hits.map(([n, e, src]) => row(n, e, src)).join("")}</div>`;
   }
   let html = "";
   if (o.similar && o.similar.length) {
@@ -197,12 +308,67 @@ function bankListHTML(o) {
 }
 app.bankListHTML = bankListHTML;
 
+/* The field stays in normal flow and scrolls with the list. Typing only rewrites #pk-body. */
+function bankSearchHTML(opts) {
+  const q = (app.ui.sd && app.ui.sd.q) || "";
+  return `<input class="text-in" id="pick-q" type="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="Search ${app.ASSETS.bank.length} exercises" aria-label="Search exercises" value="${app.esc(q)}">
+    <div id="pk-body">${bankListHTML({ ...opts, q })}</div>`;
+}
+app.bankSearchHTML = bankSearchHTML;
+
+function bankSheetOptions() {
+  const sd = app.ui.sd || {};
+  const q = sd.q, open = sd.open;
+  if (app.ui.sheet === "picker") {
+    const w = app.workoutById(app.ui.detail);
+    if (!w) return null;
+    return { q, open, have: new Set(w.exercises.map((e) => e.name.toLowerCase())), action: "pick-ex" };
+  }
+  if (app.ui.sheet === "live-add") {
+    const s = app.activeSession();
+    if (!s) return null;
+    return { q, open, have: new Set(app.liveExercises(s).map((e) => e.name.toLowerCase())), action: "live-add" };
+  }
+  if (app.ui.sheet === "swap") {
+    const s = app.activeSession();
+    if (!s) return null;
+    const list = app.liveExercises(s);
+    const cur = list[sd.i];
+    if (!cur) return null;
+    return { q, open, action: "swap-pick", similar: app.advOf(cur), exclude: new Set(list.map((e) => e.name.toLowerCase())) };
+  }
+  return null;
+}
+app.bankSheetOptions = bankSheetOptions;
+
+function refreshBankList() {
+  if (typeof document === "undefined" || !document.getElementById) return;
+  const body = document.getElementById("pk-body");
+  if (!body) return;
+  const opts = bankSheetOptions();
+  if (!opts) return;
+  const html = bankListHTML(opts);
+  if (body.innerHTML === html) return;
+  body.innerHTML = html;
+}
+app.refreshBankList = refreshBankList;
+
+function noteBankQuery(value) {
+  if (!app.ui.sd) app.ui.sd = {};
+  app.ui.sd.q = value;
+  clearTimeout(app._bankFilter);
+  app._bankFilter = setTimeout(() => {
+    app._bankFilter = null;
+    refreshBankList();
+  }, app.BANK_FILTER_MS || BANK_FILTER_MS);
+}
+app.noteBankQuery = noteBankQuery;
+
 function pickerSheetHTML() {
   const w = app.workoutById(app.ui.detail); if (!w) return "";
   const have = new Set(w.exercises.map((e) => e.name.toLowerCase()));
   return `<h3>Add exercises</h3><p class="sub" style="margin:-6px 0 12px">to ${app.esc(w.name)} · tap to add, tap again to remove</p>
-    <input class="text-in" id="pick-q" type="search" autocomplete="off" placeholder="Search ${app.ASSETS.bank.length} exercises" value="${app.esc(app.ui.sd.q || "")}">
-    <div id="pk-body">${app.bankListHTML({ q: app.ui.sd.q, have, action: "pick-ex", open: app.ui.sd.open, customHint: "You can create it as a custom exercise below." })}</div>
+    ${bankSearchHTML({ have, action: "pick-ex", open: app.ui.sd.open })}
     <button class="link-btn" data-action="edit-ex" data-i="-1" style="display:block;margin:12px auto 4px">Create a custom exercise</button>
     <button class="btn primary block" data-action="sheet-close" style="margin-top:8px">Done</button>`;
 }
@@ -212,10 +378,10 @@ function liveAddSheetHTML() {
   const s = app.activeSession(); if (!s) return "";
   const w = app.workoutById(s.workoutId);
   const have = new Set(app.liveExercises(s).map((e) => e.name.toLowerCase()));
+  const routineBox = w ? `<label class="swap-keep"><input type="checkbox" id="add-routine" ${app.ui.sd.routine ? "checked" : ""}> Also add it to my ${app.esc(w.name)} routine</label>` : "";
   return `<h3>Add to today's workout</h3>
-    <label class="swap-keep"><input type="checkbox" id="add-routine" ${app.ui.sd.routine ? "checked" : ""}> Also add it to my ${app.esc(w ? w.name : "")} routine</label>
-    <input class="text-in" id="pick-q" type="search" autocomplete="off" placeholder="Search ${app.ASSETS.bank.length} exercises" value="${app.esc(app.ui.sd.q || "")}">
-    <div id="pk-body">${app.bankListHTML({ q: app.ui.sd.q, have, action: "live-add", open: app.ui.sd.open, customHint: "Type it below to add it anyway." })}</div>
+    ${routineBox}
+    ${bankSearchHTML({ have, action: "live-add", open: app.ui.sd.open })}
     <div class="add-row"><input id="live-new" placeholder="Or type a new exercise" autocomplete="off"><button data-action="live-add-new">Add</button></div>
     <button class="btn primary block" data-action="sheet-close" style="margin-top:12px">Done</button>`;
 }
@@ -234,9 +400,16 @@ function liveAdd(name) {
     app.toast(`Removed ${hit.name}.`, () => { s.extra.splice(extra, 0, removed); app.save(); app.renderWorkout(); if (app.ui.sheet === "live-add") app.renderSheet(); });
     return;
   }
+  const before = list.length;
   const ex = app.exObjFrom(name) || { name, muscles: [] };
+  s.removed = (s.removed || []).filter((n) => n !== ex.name);
+  if (Array.isArray(s.order) && !s.order.includes(ex.name)) s.order = [...s.order, ex.name];
   if (app.ui.sd.routine && w) { w.exercises.push(ex); app.toast(`${ex.name} added to today and your ${w.name} routine.`); }
   else { s.extra = [...(s.extra || []), ex]; app.toast(`${ex.name} added to today's workout.`); }
+  if (before === 0) {
+    const idx = app.liveExercises(s).findIndex((e) => e.name === ex.name);
+    if (idx >= 0) app.ui.open = idx;
+  }
   s.mod = Date.now(); app.save(); app.keepSheetScroll(app.renderSheet); app.renderWorkout();
 }
 app.liveAdd = liveAdd;
@@ -257,8 +430,16 @@ function pickExercise(name, src) {
     return;
   }
   let e;
-  if (src === "bank") { const b = app.ASSETS.bank.find((x) => x.n === name); e = { name: b.n, muscles: app.basicOf(b.a), adv: [...b.a] }; }
-  else { const c = app.customExercises().find((x) => x.name === name); e = { name: c.name, muscles: [...(c.muscles || [])], ...(c.adv ? { adv: [...c.adv] } : {}) }; }
+  if (src === "bank") {
+    const b = app.ASSETS.bank.find((x) => x.n === name);
+    if (!b) return;
+    e = { name: b.n, muscles: app.basicOf(b.a), adv: [...b.a] };
+  } else if (src === "create") {
+    e = app.exObjFrom(name) || { name, muscles: [] };
+  } else {
+    const c = app.customExercises().find((x) => x.name === name);
+    e = c ? { name: c.name, muscles: [...(c.muscles || [])], ...(c.adv ? { adv: [...c.adv] } : {}) } : (app.exObjFrom(name) || { name, muscles: [] });
+  }
   w.exercises.push(e);
   app.save(); app.keepSheetScroll(app.renderSheet); app.render();
 }

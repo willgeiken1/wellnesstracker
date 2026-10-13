@@ -18,19 +18,26 @@ app.toast = toast;
 let dlgResolve = null;
 app.dlgResolve = dlgResolve;
 
-function ask({ title, body = "", ok = "OK", cancel = "Cancel", danger = false, input = null }) {
+function ask({ title, body = "", ok = "OK", cancel = "Cancel", danger = false, input = null, stack = false }) {
   const el = app.$("#dialog");
+  const okBtn = `<button class="btn ${danger ? "danger-fill" : "primary"}" data-action="dlg-ok">${app.esc(ok)}</button>`;
+  const cancelBtn = `<button class="btn" data-action="dlg-cancel">${app.esc(cancel)}</button>`;
   el.innerHTML = `<div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t">
     <h3 id="dlg-t">${app.esc(title)}</h3>${body ? `<p>${app.esc(body)}</p>` : ""}
     ${input != null ? `<input class="text-in" id="dlg-in" autocomplete="off" value="${app.esc(input)}">` : ""}
-    <div class="dlg-actions"><button class="btn" data-action="dlg-cancel">${app.esc(cancel)}</button>
-    <button class="btn ${danger ? "danger-fill" : "primary"}" data-action="dlg-ok">${app.esc(ok)}</button></div></div>`;
+    <div class="dlg-actions${stack ? " stack" : ""}">${stack ? okBtn + cancelBtn : cancelBtn + okBtn}</div></div>`;
   el.hidden = false;
   const inp = app.$("#dlg-in");
-  if (inp) setTimeout(() => { inp.focus(); inp.select(); }, 50);
+  if (inp) setTimeout(() => { inp.focus(); if (inp.value) inp.select(); }, 50);
   return new Promise((res) => { app.dlgResolve = res; });
 }
 app.ask = ask;
+
+/* Routine names are typed from scratch. Never pass a suggested or previous name. */
+function askRoutineName({ title, body, cancel = "Cancel" }) {
+  return app.ask({ title, body, ok: "Save", cancel, input: "" });
+}
+app.askRoutineName = askRoutineName;
 
 function closeDialog(ok) {
   const inp = app.$("#dlg-in");
@@ -62,7 +69,7 @@ app.openWorkout = openWorkout;
 function finishSession(s, quiet) {
   if (!app.setCount(s)) {
     app.state.sessions = app.state.sessions.filter((x) => x !== s);
-    app.state.deleted = [...(app.state.deleted || []), s.id];
+    app.noteDeleted(s.id);
     if (!quiet) app.toast("Workout discarded. No sets were logged.");
   } else {
     if (s.plain) delete s.plain;
@@ -165,7 +172,9 @@ function logSet(i) {
   const prs = app.prsFor(e.name, set, s.date);
   if (prs.length) set.pr = prs;
   delete app.ui.drafts[e.name];
-  app.save(); app.startTimer(); app.renderWorkout(); app.tick();
+  app.save();
+  if (app.logsStartRest(s)) app.startTimer();
+  app.renderWorkout(); app.tick();
   if (prs.length) app.celebrate(e.name, set);
 }
 app.logSet = logSet;
@@ -234,9 +243,14 @@ app.drag = drag;
 document.addEventListener("pointerdown", (ev) => {
   const h = ev.target.closest(".handle");
   if (!h) return;
-  const li = h.closest(".erow");
-  const rows = [...document.querySelectorAll("#elist .erow")];
-  app.drag = { li, rows, from: rows.indexOf(li), to: rows.indexOf(li), startY: ev.clientY, step: li.offsetHeight + 8, id: ev.pointerId };
+  const erow = h.closest(".erow");
+  const ex = erow ? null : h.closest("#wo-list .ex");
+  const li = erow || ex;
+  if (!li) return;
+  const rows = erow ? [...document.querySelectorAll("#elist .erow")] : [...document.querySelectorAll("#wo-list .ex")];
+  const from = rows.indexOf(li);
+  if (from < 0) return;
+  app.drag = { kind: erow ? "elist" : "wo", li, rows, from, to: from, startY: ev.clientY, step: li.offsetHeight + (erow ? 8 : 0), id: ev.pointerId };
   li.classList.add("dragging");
   rows.forEach((r) => { if (r !== li) r.classList.add("shifting"); });
   try { h.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -260,13 +274,18 @@ document.addEventListener("pointermove", (ev) => {
 
 function endDrag(ev) {
   if (!app.drag || ev.pointerId !== app.drag.id) return;
-  const { from, to } = app.drag;
+  const { from, to, kind } = app.drag;
   app.drag = null;
   if (from !== to) {
-    const w = app.workoutById(app.ui.detail);
-    const [moved] = w.exercises.splice(from, 1);
-    w.exercises.splice(to, 0, moved);
-    app.save();
+    if (kind === "wo") app.reorderLive(from, to);
+    else {
+      const w = app.workoutById(app.ui.detail);
+      if (w && w.exercises) {
+        const [moved] = w.exercises.splice(from, 1);
+        w.exercises.splice(to, 0, moved);
+        app.save();
+      }
+    }
   }
   app.render();
 }
@@ -275,6 +294,53 @@ app.endDrag = endDrag;
 document.addEventListener("pointerup", app.endDrag);
 
 document.addEventListener("pointercancel", app.endDrag);
+
+/* Horizontal swipe on a live exercise removes it. Vertical movement keeps scrolling. */
+let exSwipe = null;
+app.exSwipe = exSwipe;
+
+document.addEventListener("pointerdown", (ev) => {
+  if (app.drag || ev.button) return;
+  if (ev.target.closest(".handle, input, textarea, .panel, .ex-x, .ex-ms")) return;
+  const li = ev.target.closest("#wo-list .ex");
+  if (!li) return;
+  app.exSwipe = { id: ev.pointerId, li, x: ev.clientX, y: ev.clientY, locked: false };
+}, { passive: true });
+
+document.addEventListener("pointermove", (ev) => {
+  const g = app.exSwipe;
+  if (!g || ev.pointerId !== g.id || app.drag) return;
+  const dx = ev.clientX - g.x, dy = ev.clientY - g.y;
+  if (!g.locked) {
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+    if (Math.abs(dx) <= Math.abs(dy)) { g.li.style.transform = ""; app.exSwipe = null; return; }
+    g.locked = true;
+    try { g.li.setPointerCapture(ev.pointerId); } catch (e) {}
+  }
+  ev.preventDefault();
+  g.li.style.transform = `translateX(${Math.max(-112, Math.min(112, dx))}px)`;
+});
+
+function endExSwipe(ev) {
+  const g = app.exSwipe;
+  if (!g || ev.pointerId !== g.id) return;
+  const dx = ev.clientX - g.x;
+  const li = g.li;
+  const go = g.locked && Math.abs(dx) >= 72;
+  const i = [...document.querySelectorAll("#wo-list .ex")].indexOf(li);
+  app.exSwipe = null;
+  li.style.transform = "";
+  if (go && i >= 0) { app.eatClick = true; app.removeLiveExercise(i); }
+}
+app.endExSwipe = endExSwipe;
+
+document.addEventListener("pointerup", app.endExSwipe);
+document.addEventListener("pointercancel", (ev) => {
+  const g = app.exSwipe;
+  if (!g || ev.pointerId !== g.id) return;
+  g.li.style.transform = "";
+  app.exSwipe = null;
+});
 
 document.addEventListener("keydown", (ev) => {
   if (app.guardSetFieldKey(ev)) return;
@@ -342,7 +408,8 @@ document.addEventListener("input", (ev) => {
   }
   if (el.id === "ms-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#ms-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "home-q" && app.ui.sheet === "home-gallery") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#home-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
-  if (el.id === "pick-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#pick-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  // Replacing the sheet refocuses the field. On an iPhone home-screen app that scrolls the viewport and the list blinks.
+  if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
   if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
@@ -359,6 +426,10 @@ document.addEventListener("input", (ev) => {
 });
 
 document.addEventListener("click", async (ev) => {
+  if (app.eatClick) {
+    app.eatClick = false;
+    if (!ev.target.closest("#dialog, #toast")) { ev.preventDefault(); ev.stopPropagation(); return; }
+  }
   const mus = ev.target.closest(".body .mus");
   if (mus) {
     const k = mus.dataset.m, t = app.today(), mon = app.mondayOf(t);
@@ -384,6 +455,7 @@ document.addEventListener("click", async (ev) => {
       app.save(); app.ui.sheet = null; app.render(); break;
     case "sheet-close": app.ui.sheet = null; app.renderSheet(); break;
     case "start": app.startWorkout(b.dataset.id); break;
+    case "start-freestyle": await app.startFreestyle(); break;
     case "resume": app.openWorkout(); break;
     case "minimize": app.ui.workoutOpen = false; app.render(); break;
     case "finish": {
@@ -392,6 +464,14 @@ document.addEventListener("click", async (ev) => {
         ? await app.ask({ title: `Finish ${s.name}?`, body: `${app.pl(app.setCount(s), "set")} will be saved to your history.`, ok: "Finish" })
         : await app.ask({ title: "No sets logged", body: "There's nothing to save, so this workout will be discarded.", ok: "Discard", danger: true });
       if (!ok) break;
+      if (s.origin === "freestyle" && !app.workoutById(s.workoutId) && app.setCount(s)) {
+        const name = await app.askRoutineName({ title: "Save as routine?", body: "Name it and it shows up with your other routines.", cancel: "Not now" });
+        if (name) {
+          const routine = app.commitFreestyleRoutine(s, name);
+          if (routine) { app.save(); app.toast(`Saved ${routine.name}.`); }
+          else app.toast("Add an exercise before saving a routine.");
+        }
+      }
       app.finishSession(s, false); app.render(); break;
     }
     case "cancel-workout": {
@@ -400,7 +480,7 @@ document.addEventListener("click", async (ev) => {
       const ok = await app.ask({ title: `Cancel ${s.name}?`, body: n ? `The ${app.pl(n, "set")} you logged in this workout will be deleted. This can't be undone.` : "Nothing has been logged yet.", ok: "Cancel workout", cancel: "Keep going", danger: true });
       if (!ok) break;
       app.state.sessions = app.state.sessions.filter((x) => x !== s);
-      app.state.deleted = [...(app.state.deleted || []), s.id];
+      app.noteDeleted(s.id);
       app.stopTimer(); app.ui.workoutOpen = false; app.ui.open = null; app.ui.drafts = {};
       app.save(); app.render(); app.toast("Workout cancelled. Nothing was saved."); break;
     }
@@ -670,7 +750,7 @@ document.addEventListener("click", async (ev) => {
       t.e.sets.splice(app.ui.sd.j, 1);
       if (!t.e.sets.length) t.s.entries = t.s.entries.filter((x) => x !== t.e);
       app.recomputePRs(t.e.exercise);
-      if (!t.s.entries.length && t.s.finishedAt) { app.state.sessions = app.state.sessions.filter((x) => x !== t.s); app.state.deleted = [...(app.state.deleted || []), t.s.id]; }
+      if (!t.s.entries.length && t.s.finishedAt) { app.state.sessions = app.state.sessions.filter((x) => x !== t.s); app.noteDeleted(t.s.id); }
       else t.s.mod = Date.now();
       delete app.ui.drafts[t.e.exercise];
       app.save(); app.ui.sheet = null; app.render(); app.toast("Set deleted."); break;
@@ -716,6 +796,38 @@ document.addEventListener("click", async (ev) => {
     }
     case "swap-open": app.ui.sheet = "swap"; app.ui.sd = { i, q: "", routine: false }; app.renderSheet(); break;
     case "swap-pick": app.applySwap(b.dataset.name); break;
+    case "bank-create": {
+      const name = (b.dataset.name || (app.ui.sd && app.ui.sd.q) || "").trim();
+      if (!name) break;
+      if (app.ui.sheet === "live-add") app.liveAdd(name);
+      else if (app.ui.sheet === "swap") app.applySwap(name);
+      else app.pickExercise(name, "create");
+      break;
+    }
+    case "save-routine": {
+      const s = b.dataset.id ? app.state.sessions.find((x) => x.id === b.dataset.id) : app.activeSession();
+      if (!s) break;
+      const linked = s.origin === "freestyle" ? app.workoutById(s.workoutId) : null;
+      let routine = null;
+      if (linked) {
+        const update = await app.ask({ title: "Save as routine", body: "This workout already has a routine.", ok: `Update ${linked.name}`, cancel: "Save as new copy", stack: true });
+        if (update) routine = app.commitFreestyleRoutine(s, linked.name);
+        else {
+          const name = await app.askRoutineName({ title: "Save as new copy", body: "Name the copy and it shows up with your other routines." });
+          if (!name) break;
+          routine = app.commitFreestyleRoutine(s, name, { copy: true });
+        }
+      } else {
+        const name = await app.askRoutineName({ title: "Save as routine", body: "Name it and it shows up with your other routines." });
+        if (!name) break;
+        routine = app.commitFreestyleRoutine(s, name);
+      }
+      if (!routine) { app.toast("Add an exercise before saving a routine."); break; }
+      app.save();
+      app.toast(linked && routine.id === linked.id ? `Updated ${routine.name}.` : `Saved ${routine.name}.`);
+      app.render();
+      break;
+    }
     case "swap-new": { const n = ((app.$("#swap-new") || {}).value || "").trim(); if (!n) { app.toast("Type an exercise name."); break; } app.applySwap(n); break; }
     case "summary": app.ui.sheet = "summary"; app.ui.sd = { id: b.dataset.id }; app.renderSheet(); break;
     case "goal-week": app.ui.sheet = "goalweek"; app.ui.sd = {}; app.renderSheet(); break;
@@ -808,6 +920,8 @@ document.addEventListener("click", async (ev) => {
       break;
     }
     case "log": app.ensureAudio(); app.logSet(i); break;
+    case "start-rest": app.ensureAudio(); app.startTimer(); break;
+    case "ex-remove": await app.removeLiveExercise(i); break;
     case "uni": {
       const s = app.activeSession(); if (!s) break;
       const e = app.liveExercises(s)[i], d = app.draftFor(s, e.name);
@@ -829,8 +943,7 @@ document.addEventListener("click", async (ev) => {
     case "new-workout": {
       const name = await app.ask({ title: "New workout", body: "Give it a name, like Upper or Arms.", ok: "Create", input: "" });
       if (!name) break;
-      let id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workout";
-      while (app.workoutById(id)) id += "-2";
+      const id = app.slugRoutineId(name);
       app.state.workouts.push({ id, name, exercises: [] });
       app.save(); app.ui.detail = id; app.render(); break;
     }
@@ -1007,9 +1120,14 @@ document.addEventListener("click", async (ev) => {
       const s = app.state.sessions.find((x) => x.id === b.dataset.id);
       if (!s || !(await app.ask({ title: `Delete this ${s.name} workout?`, body: `${app.fmtDate(s.date)}, ${app.pl(app.setCount(s), "set")}. This can't be undone.`, ok: "Delete", danger: true }))) break;
       app.state.sessions = app.state.sessions.filter((x) => x !== s);
-      app.state.deleted = [...(app.state.deleted || []), s.id];
+      app.noteDeleted(s.id);
       app.save(); app.render(); break;
     }
+    case "progression-suggestions":
+      app.toggleProgressionSuggestions();
+      app.save();
+      app.render();
+      break;
     case "rest": app.state.restSeconds = +b.dataset.s; app.save(); app.render(); break;
     case "priv-summary": app.ui.sheet = "priv-summary"; app.ui.sd = {}; app.renderSheet(); break;
     case "priv-export": await app.exportAllData(); break;

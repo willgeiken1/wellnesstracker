@@ -44,10 +44,11 @@ function syncedAppLock(lock) {
 app.syncedAppLock = syncedAppLock;
 
 function userDataBlob() {
-  return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
+  return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, showProgression: app.state.showProgression !== false, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
            deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(), planAt: app.state.planAt || {},
            appLock: syncedAppLock(app.state.appLock), purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [] };
 }
+app.userDataBlob = userDataBlob;
 
 /* PostgREST says this when the migration has not been applied yet. */
 function mergeRpcMissing(error) {
@@ -126,6 +127,69 @@ async function cloudPush() {
 app.cloudPush = cloudPush;
 app.mergeRpcMissing = mergeRpcMissing;
 
+function hasOwn(obj, key) {
+  return !!obj && Object.prototype.hasOwnProperty.call(obj, key) && obj[key] != null;
+}
+
+/* The winner keeps its sets. Fields an older app never stored are copied from the other
+   phone when that phone still has them. Order and removals only move when the sets match,
+   so a later log is not hidden by a stale removal. */
+function withFreestyleMeta(winner, other) {
+  if (!winner || !other) return winner;
+  const patch = {};
+  if (!hasOwn(winner, "origin") && other.origin) patch.origin = other.origin;
+  const sameEntries = JSON.stringify(winner.entries || []) === JSON.stringify(other.entries || []);
+  if (sameEntries) {
+    if (!hasOwn(winner, "order") && Array.isArray(other.order)) patch.order = other.order;
+    if (!hasOwn(winner, "extra") && Array.isArray(other.extra)) patch.extra = other.extra;
+    if (!hasOwn(winner, "removed") && Array.isArray(other.removed)) patch.removed = other.removed;
+    if (!hasOwn(winner, "swaps") && other.swaps && typeof other.swaps === "object") patch.swaps = other.swaps;
+  }
+  return Object.keys(patch).length ? { ...winner, ...patch } : winner;
+}
+app.withFreestyleMeta = withFreestyleMeta;
+
+function markId(mark) {
+  if (typeof app.deletedId === "function") return app.deletedId(mark);
+  if (typeof mark === "string") return mark;
+  if (mark && typeof mark === "object" && typeof mark.id === "string") return mark.id;
+  return "";
+}
+
+function markAt(mark) {
+  if (typeof app.deletedAt === "function") return app.deletedAt(mark);
+  if (mark && typeof mark === "object" && typeof mark.at === "number" && Number.isFinite(mark.at) && mark.at > 0) return mark.at;
+  return 0;
+}
+
+function pruneMarks(list) {
+  if (typeof app.pruneDeleted === "function") return app.pruneDeleted(list);
+  return Array.isArray(list) ? list : [];
+}
+
+function loggedSets(s) {
+  if (!s || !Array.isArray(s.entries)) return 0;
+  return s.entries.reduce((n, e) => n + ((e && Array.isArray(e.sets) && e.sets.length) || 0), 0);
+}
+
+/* An untimed marker is what an empty discard used to sync. It must not erase an
+   unfinished freestyle that now has sets. A timed delete still wins when the
+   session has not been edited since that delete. */
+function markerDrops(s, marks) {
+  const id = s && s.id;
+  if (!id) return false;
+  const hits = [];
+  for (const m of marks || []) if (markId(m) === id) hits.push(m);
+  if (!hits.length) return false;
+  const live = !s.finishedAt && s.origin === "freestyle" && loggedSets(s) > 0;
+  if (!live) return true;
+  const mod = s.mod || 0;
+  return hits.some((m) => {
+    const at = markAt(m);
+    return at > 0 && mod <= at;
+  });
+}
+
 /* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
 function mergeRemote(r) {
   r = r || {};
@@ -137,17 +201,26 @@ function mergeRemote(r) {
   }
   // A synced credentialId (from an older build) is ignored. This phone's own credential is never touched here.
   if (r.appLock && (r.appLock.updatedAt || 0) > ((app.state.appLock && app.state.appLock.updatedAt) || 0)) app.state.appLock = syncedAppLock(r.appLock);
-  const deleted = new Set([...(app.state.deleted || []), ...(r.deleted || [])]);
+  const marks = [...(app.state.deleted || []), ...(r.deleted || [])];
   const byId = new Map();
   // This phone's copy goes first so it wins ties (e.g. right after converting units).
+  // An older app drops origin, order, extra, removed, and swaps. Those come back from the
+  // other copy when the logged sets are the same, and origin comes back even after a new set.
+  // A deletion marker for an empty freestyle loses to a copy that has sets.
   [...app.state.sessions, ...(r.sessions || [])].forEach((s) => {
-    if (!s || deleted.has(s.id)) return;
+    if (!s || markerDrops(s, marks)) return;
     const cur = byId.get(s.id);
     const better = (a, b) => (a.mod || 0) !== (b.mod || 0) ? (a.mod || 0) > (b.mod || 0)
       : app.setCount(a) > app.setCount(b) || (a.finishedAt && !b.finishedAt && app.setCount(a) >= app.setCount(b));
-    if (!cur || better(s, cur)) byId.set(s.id, s);
+    if (!cur) byId.set(s.id, s);
+    else if (better(s, cur)) byId.set(s.id, withFreestyleMeta(s, cur));
+    else byId.set(s.id, withFreestyleMeta(cur, s));
   });
   app.state.sessions = [...byId.values()];
+  const beatMarker = new Set();
+  for (const s of byId.values()) {
+    if (!s.finishedAt && s.origin === "freestyle" && loggedSets(s) > 0 && marks.some((m) => markId(m) === s.id)) beatMarker.add(s.id);
+  }
   if (r.goals && (!app.state.goals || (r.goals.updatedAt || 0) > (app.state.goals.updatedAt || 0))) app.state.goals = r.goals;
   if (r.brief && (r.brief.updatedAt || 0) > ((app.state.brief && app.state.brief.updatedAt) || 0)) app.state.brief = r.brief;
   if (app.mergeWeeklyReports) app.state.weeklyReports = app.mergeWeeklyReports(app.state.weeklyReports, r.weeklyReports);
@@ -160,6 +233,7 @@ function mergeRemote(r) {
   rememberPulledHome(remoteLayout);
   if ((r.settingsAt || 0) > (app.state.settingsAt || 0)) {
     if (r.muscleMode) app.state.muscleMode = r.muscleMode;
+    if (typeof r.showProgression === "boolean") app.state.showProgression = r.showProgression;
     if (remoteLayout) app.state.layout = remoteLayout;
     if (r.uniEx) app.state.uniEx = r.uniEx;
     app.state.settingsAt = r.settingsAt;
@@ -179,8 +253,9 @@ function mergeRemote(r) {
     if (r.restSeconds) app.state.restSeconds = r.restSeconds;
     if (r.theme) { app.state.theme = r.theme; app.applyTheme(); }
   }
-  app.state.deleted = [...deleted];
+  app.state.deleted = pruneMarks(marks.filter((m) => !beatMarker.has(markId(m))));
   if (app.applyPurges) app.applyPurges(app.state);
+  if (Array.isArray(app.state.deleted)) app.state.deleted = pruneMarks(app.state.deleted);
   if (app.state.oura && app.state.oura.days && app.datePurged) {
     Object.keys(app.state.oura.days).forEach((d) => { if (app.datePurged(d)) delete app.state.oura.days[d]; });
   }

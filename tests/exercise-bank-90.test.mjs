@@ -60,8 +60,10 @@ test("each added exercise is in the bank exactly once", () => {
   for (const n of ["JM Press", "Smith Machine JM Press"]) assert.equal(names.filter((x) => x === n.toLowerCase()).length, 1, n);
 });
 
-// Property-style: random added names, random casing and random substrings, are found by picker search.
+// Property-style: random added names, random casing, and pieces of the movement name are found.
+// Equipment words (barbell, machine, cable) are not part of the search.
 test("picker search finds random picks from the added exercises", () => {
+  const EQUIP = new Set(["barbell", "dumbbell", "dumbbells", "cable", "cables", "machine", "machines", "smith", "kettlebell", "kettlebells", "ez", "band", "bands", "plate", "plates", "landmine", "resistance", "selectorized"]);
   const seed = Number(process.env.BANK_SEED) || Date.now() % 2147483647;
   let s = seed;
   const rnd = () => ((s = (s * 48271) % 2147483647) / 2147483647);
@@ -71,11 +73,15 @@ test("picker search finds random picks from the added exercises", () => {
     const cased = [...n].map((c) => (rnd() < 0.5 ? c.toLowerCase() : c.toUpperCase())).join("");
     const html = app.bankListHTML({ q: cased, action: "pick" });
     assert.ok(html.includes(`data-src="bank" data-name="${n}"`), `seed ${seed}: "${cased}" -> ${n}`);
-    // A random substring, grown until it matches no more than the 80 rows search shows.
-    let start = Math.floor(rnd() * Math.max(1, n.length - 4)), len = Math.min(5, n.length - start);
-    let q = n.slice(start, start + len);
-    while (bankNames().filter((x) => x.includes(q.trim().toLowerCase())).length > 80 && start + len < n.length) q = n.slice(start, start + ++len);
-    if (!q.trim() || bankNames().filter((x) => x.includes(q.trim().toLowerCase())).length > 80) continue;
+    const words = n.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !EQUIP.has(w));
+    if (!words.length) continue;
+    const word = pick(words);
+    let q = word;
+    if (word.length > 4 && rnd() < 0.5) {
+      const start = Math.floor(rnd() * (word.length - 2));
+      q = word.slice(start, start + Math.min(word.length - start, 3 + Math.floor(rnd() * 3)));
+    }
+    if (q.length < 3) continue;
     const sub = app.bankListHTML({ q, action: "pick" });
     assert.ok(sub.includes(`data-name="${n}"`), `seed ${seed}: "${q}" -> ${n}`);
   }
