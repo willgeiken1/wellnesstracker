@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { stripRange } from "../logger/js/shared/purge.js";
 
 const store = {};
 globalThis.localStorage = {
@@ -207,6 +208,113 @@ test("an abandoned empty freestyle is discarded locally and a live one stays", (
   } finally {
     app.replaceState(prev);
   }
+});
+
+test("a freestyle session with sets is never discarded", () => {
+  const prev = app.state;
+  const base = JSON.parse(JSON.stringify(prev));
+  base.sessions = (base.sessions || []).filter((s) => s.finishedAt);
+  base.deleted = [];
+  app.replaceState(base);
+  const now = Date.parse("2026-10-13T12:00:00Z");
+  const shapes = [
+    { date: "2026-10-13", mod: now, startedAt: "2026-10-13T11:00:00" },
+    { date: "1999-01-01", startedAt: "1999-01-01T08:00:00", mod: Date.parse("1999-01-01T08:00:00Z") },
+    { date: "2026-10-13", mod: now - app.EMPTY_FREESTYLE_STALE_MS - 60_000 },
+    { date: "1999-01-01", mod: 0, startedAt: null },
+    { date: "2026-10-12", order: [], extra: [] },
+  ];
+  try {
+    for (const shape of shapes) {
+      const s = app.freestyleSession();
+      Object.assign(s, shape);
+      s.finishedAt = null;
+      s.entries = [{ exercise: "Squat", muscles: ["quads"], sets: [{ w: 60, r: 5 }] }];
+      app.state.sessions = [s];
+      assert.equal(app.abandonedEmptyFreestyle(s, now), false, JSON.stringify(shape));
+      assert.equal(app.discardEmptyFreestyle(), false, JSON.stringify(shape));
+      assert.equal(app.state.sessions.some((x) => x.id === s.id), true, JSON.stringify(shape));
+      assert.equal(app.state.deleted.some((m) => app.deletedId(m) === s.id), false, JSON.stringify(shape));
+      app.closeStaleSessions();
+      assert.equal(s.finishedAt, null, JSON.stringify(shape));
+      assert.equal(app.state.sessions.some((x) => x.id === s.id), true, JSON.stringify(shape));
+    }
+    const buried = app.freestyleSession();
+    buried.date = "1999-01-01";
+    buried.startedAt = "1999-01-01T08:00:00";
+    buried.entries = [
+      { exercise: "Row", muscles: ["lats"], sets: [] },
+      { exercise: "Squat", muscles: ["quads"], sets: [{ w: 0, r: 0 }] },
+    ];
+    const empty = app.freestyleSession();
+    empty.date = "1999-01-01";
+    empty.startedAt = "1999-01-01T08:00:00";
+    empty.entries = [];
+    empty.extra = [];
+    empty.order = [];
+    app.state.sessions = [buried, empty];
+    assert.equal(app.discardEmptyFreestyle(), true);
+    assert.equal(app.state.sessions.some((x) => x.id === buried.id), true);
+    assert.equal(app.state.sessions.some((x) => x.id === empty.id), false);
+    assert.equal(buried.finishedAt, null);
+    assert.equal(app.state.deleted.some((m) => app.deletedId(m) === buried.id), false);
+  } finally {
+    app.replaceState(prev);
+  }
+});
+
+test("a purged session marker outlives bare ids at the cap", () => {
+  const now = 1_800_000_000_000;
+  const data = {
+    sessions: [{ id: "purged", date: "2026-09-01", mod: now - 1000 }],
+    deleted: [],
+  };
+  for (let i = 0; i < app.DELETED_CAP; i++) data.deleted.push("bare-" + i);
+  assert.equal(stripRange(data, "2026-09-01", "2026-09-30", { now }), true);
+  assert.deepEqual(data.deleted.find((m) => m && m.id === "purged"), { id: "purged", at: now });
+  assert.equal(data.deleted.includes("purged"), false);
+  const pruned = app.pruneDeleted(data.deleted, now);
+  assert.equal(pruned.some((m) => app.deletedId(m) === "purged"), true);
+  assert.equal(app.deletedAt(pruned.find((m) => app.deletedId(m) === "purged")), now);
+  assert.equal(pruned.length, app.DELETED_CAP);
+});
+
+test("updating from v45 drops a workout that only an object marker had deleted", () => {
+  const at = Date.now() - 60_000;
+  const gone = {
+    id: "gone", date: "2026-01-02", workoutId: "push", name: "Push",
+    finishedAt: "2026-01-02T12:00:00", mod: at - 5000,
+    entries: [{ exercise: "Bench Press", sets: [{ w: 100, r: 5 }] }],
+  };
+  const beat = {
+    id: "beat", date: "2026-10-13", origin: "freestyle", name: "Freestyle",
+    workoutId: "fs:beat", finishedAt: null, mod: at + 60_000,
+    entries: [{ exercise: "Squat", sets: [{ w: 40, r: 5 }] }],
+  };
+  const older = {
+    id: "older", date: "2026-10-13", origin: "freestyle", name: "Freestyle",
+    workoutId: "fs:older", finishedAt: null, mod: at - 1000,
+    entries: [{ exercise: "Row", sets: [{ w: 50, r: 8 }] }],
+  };
+  const legacyLive = {
+    id: "legacy-live", date: "2026-10-13", origin: "freestyle", name: "Freestyle",
+    workoutId: "fs:legacy-live", finishedAt: null, mod: at,
+    entries: [{ exercise: "Curl", sets: [{ w: 20, r: 10 }] }],
+  };
+  const loaded = app.migrate({
+    version: 2,
+    workouts: [],
+    sessions: [gone, beat, older, legacyLive],
+    deleted: [{ id: "gone", at }, { id: "beat", at }, { id: "older", at }, "legacy-live"],
+  });
+  assert.equal(loaded.sessions.some((s) => s.id === "gone"), false);
+  assert.equal(loaded.deleted.some((m) => app.deletedId(m) === "gone" && app.deletedAt(m) === at), true);
+  assert.equal(loaded.sessions.some((s) => s.id === "beat"), true);
+  assert.equal(loaded.deleted.some((m) => app.deletedId(m) === "beat"), false);
+  assert.equal(loaded.sessions.some((s) => s.id === "older"), false);
+  assert.equal(loaded.deleted.some((m) => app.deletedId(m) === "older" && app.deletedAt(m) === at), true);
+  assert.equal(loaded.sessions.some((s) => s.id === "legacy-live"), true);
+  assert.equal(loaded.deleted.some((m) => app.deletedId(m) === "legacy-live"), false);
 });
 
 test("the deleted list expires old markers and stays under a cap", () => {
