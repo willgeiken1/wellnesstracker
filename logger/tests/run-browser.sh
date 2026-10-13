@@ -186,6 +186,7 @@ harnesses=(
   logger/tests/tabs-qa.mjs
   logger/tests/touch-qol.mjs
   logger/tests/home-migrate.mjs
+  logger/tests/sw-update-banner.mjs
   logger/tests/sw-mix.mjs
 )
 
