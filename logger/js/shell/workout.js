@@ -18,6 +18,7 @@ function renderWorkout() {
     <ul class="list" id="wo-list">${list.length ? list.map((e, i) => app.exerciseHTML(s, e, i)).join("")
       : `<li class="empty">No exercises yet. Add one below.</li>`}</ul>
     <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>`;
+  if (app.placeShellUpdate) app.placeShellUpdate(document);
 }
 app.renderWorkout = renderWorkout;
 

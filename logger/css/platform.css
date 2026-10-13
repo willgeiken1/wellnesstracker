@@ -168,3 +168,50 @@ body.editing.timer-on:not(.in-workout):has(.start-bar) #view { padding-bottom: c
 .sw-dots i { width: 18px; height: 18px; border-radius: 9px; border: 2px solid var(--raised); margin-left: -6px; }
 .sw-dots i:first-child { margin-left: 0; }
 .mode-row { padding: 12px 0 4px; }
+
+/* Waiting service worker. Small, and below the workout header so Cancel stays clear. */
+#sw-update:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: fixed;
+  z-index: 18;
+  left: 50%;
+  bottom: calc(var(--tabs-h) + var(--safe-bottom) + 12px);
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .28);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#sw-update:not([hidden])::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex: 0 0 auto;
+}
+body.in-workout #sw-update:not([hidden]),
+body.in-cardio #sw-update:not([hidden]) {
+  bottom: auto;
+  top: var(--shell-update-clear, calc(var(--safe-top) + 76px));
+}
+body.in-workout.shell-update #wo-list { padding-top: 48px; }
+body.in-cardio.shell-update .cl-body { padding-top: 56px; }
+body.timer-on:not(.in-workout):not(.in-cardio) #sw-update:not([hidden]) {
+  bottom: calc(var(--tabs-h) + var(--safe-bottom) + 108px);
+}
+:root[data-mode="light"] #sw-update:not([hidden]) {
+  box-shadow: 0 8px 22px rgba(20, 20, 20, .12);
+}

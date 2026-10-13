@@ -77,13 +77,15 @@ body.locked #workout,
 body.locked #cardio-live,
 body.locked #timer,
 body.locked #onboard,
-body.locked #toast {
+body.locked #toast,
+body.locked #sw-update {
   visibility: hidden !important;
 }
 
 html.lock-first #stage,
 html.lock-first #view,
-html.lock-first #tabs { visibility: hidden; }
+html.lock-first #tabs,
+html.lock-first #sw-update { visibility: hidden; }
 
 #lock { animation: lock-in .28s ease; }
 @keyframes lock-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
