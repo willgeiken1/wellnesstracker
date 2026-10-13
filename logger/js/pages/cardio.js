@@ -148,6 +148,7 @@ function renderCardioLive() {
   const on = !!(app.cardio().live && app.ui.cardioOpen);
   el.hidden = !on; document.body.classList.toggle("in-cardio", on);
   if (on) el.innerHTML = app.cardioLiveHTML();
+  if (app.placeShellUpdate) app.placeShellUpdate(document);
 }
 app.renderCardioLive = renderCardioLive;
 

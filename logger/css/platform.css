@@ -169,7 +169,7 @@ body.editing.timer-on:not(.in-workout):has(.start-bar) #view { padding-bottom: c
 .sw-dots i:first-child { margin-left: 0; }
 .mode-row { padding: 12px 0 4px; }
 
-/* Waiting service worker. Small, and above the workout so a session can keep going. */
+/* Waiting service worker. Small, and below the workout header so Cancel stays clear. */
 #sw-update:not([hidden]) {
   display: flex;
   align-items: center;
@@ -205,8 +205,10 @@ body.editing.timer-on:not(.in-workout):has(.start-bar) #view { padding-bottom: c
 body.in-workout #sw-update:not([hidden]),
 body.in-cardio #sw-update:not([hidden]) {
   bottom: auto;
-  top: calc(8px + var(--safe-top));
+  top: var(--shell-update-clear, calc(var(--safe-top) + 76px));
 }
+body.in-workout.shell-update #wo-list { padding-top: 48px; }
+body.in-cardio.shell-update .cl-body { padding-top: 56px; }
 body.timer-on:not(.in-workout):not(.in-cardio) #sw-update:not([hidden]) {
   bottom: calc(var(--tabs-h) + var(--safe-bottom) + 108px);
 }

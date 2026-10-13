@@ -13,11 +13,135 @@ app.installPrompt = installPrompt;
 
 const SHELL_UPDATE_LABEL = "Update available, tap to refresh";
 const SHELL_RELOAD_KEY = "insight-reloaded";
+const SHELL_WORKOUT_KEY = "insight-workout-reload";
 app.SHELL_UPDATE_LABEL = SHELL_UPDATE_LABEL;
 
 let waitingWorker = null;
 let reloadArmed = false;
 let reloaded = false;
+
+const DRAFT_TEXT = ["w", "r", "wR", "rR", "note"];
+
+function draftNameOk(name) {
+  return typeof name === "string" && name.length > 0 && name.length <= 80
+    && name !== "__proto__" && name !== "constructor" && name !== "prototype";
+}
+
+function cleanDraft(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const key of DRAFT_TEXT) {
+    if (raw[key] == null) continue;
+    const value = String(raw[key]).slice(0, 200);
+    if (value) out[key] = value;
+  }
+  if (raw.tag === "warmup" || raw.tag === "failure") out.tag = raw.tag;
+  if (Number.isInteger(raw.rpe) && raw.rpe >= 6 && raw.rpe <= 10) out.rpe = raw.rpe;
+  return out;
+}
+
+/* The open workout, including a routine and whatever is sitting in the set fields. */
+function workoutReloadRecord(ui, session, fields) {
+  if (!ui || !ui.workoutOpen || !session || session.finishedAt || !session.id) return null;
+  const drafts = {};
+  const src = ui.drafts && typeof ui.drafts === "object" ? ui.drafts : {};
+  for (const name of Object.keys(src)) {
+    if (!draftNameOk(name)) continue;
+    const cleaned = cleanDraft(src[name]);
+    if (Object.keys(cleaned).length) drafts[name] = cleaned;
+  }
+  for (const field of Array.isArray(fields) ? fields : []) {
+    if (!field || !draftNameOk(field.name) || typeof field.field !== "string") continue;
+    const cleaned = cleanDraft({ [field.field]: field.value });
+    const current = { ...(drafts[field.name] || {}) };
+    if (cleaned[field.field] == null) delete current[field.field];
+    else current[field.field] = cleaned[field.field];
+    if (Object.keys(current).length) drafts[field.name] = current;
+    else delete drafts[field.name];
+  }
+  return {
+    sessionId: String(session.id),
+    workoutOpen: true,
+    open: Number.isInteger(ui.open) && ui.open >= 0 ? ui.open : null,
+    drafts,
+  };
+}
+app.workoutReloadRecord = workoutReloadRecord;
+
+function applyWorkoutReload(ui, session, record) {
+  if (!ui || !record || record.workoutOpen !== true || !session || session.finishedAt) return false;
+  if (!record.sessionId || record.sessionId !== session.id) return false;
+  ui.workoutOpen = true;
+  if (Number.isInteger(record.open) && record.open >= 0) ui.open = record.open;
+  const incoming = record.drafts && typeof record.drafts === "object" ? record.drafts : {};
+  ui.drafts = ui.drafts && typeof ui.drafts === "object" ? ui.drafts : {};
+  for (const name of Object.keys(incoming)) {
+    if (!draftNameOk(name)) continue;
+    const cleaned = cleanDraft(incoming[name]);
+    if (Object.keys(cleaned).length) ui.drafts[name] = { ...(ui.drafts[name] || {}), ...cleaned };
+  }
+  return true;
+}
+app.applyWorkoutReload = applyWorkoutReload;
+
+function shellStorage() {
+  try {
+    if (typeof sessionStorage === "undefined" || !sessionStorage) return null;
+    return sessionStorage;
+  } catch (e) {
+    return null;
+  }
+}
+
+function fieldsInWorkout(doc, session) {
+  if (!doc || typeof doc.querySelectorAll !== "function" || !session || typeof app.liveExercises !== "function") return [];
+  let list = [];
+  try { list = app.liveExercises(session) || []; } catch (e) { return []; }
+  const nodes = doc.querySelectorAll("#workout [data-field]");
+  if (!nodes || typeof nodes.forEach !== "function") return [];
+  const out = [];
+  nodes.forEach((el) => {
+    const tag = String((el && el.tagName) || "").toUpperCase();
+    if (tag !== "INPUT" && tag !== "TEXTAREA") return;
+    const i = el && el.dataset ? +el.dataset.i : NaN;
+    const name = list[i] && list[i].name;
+    const field = el && el.dataset && el.dataset.field;
+    if (!name || !field) return;
+    out.push({ name, field, value: el.value == null ? "" : String(el.value) });
+  });
+  return out;
+}
+
+function rememberWorkoutReload(doc) {
+  const session = typeof app.activeSession === "function" ? app.activeSession() : null;
+  const record = workoutReloadRecord(app.ui, session, fieldsInWorkout(doc, session));
+  const store = shellStorage();
+  if (!store) return record;
+  try {
+    if (!record) store.removeItem(SHELL_WORKOUT_KEY);
+    else store.setItem(SHELL_WORKOUT_KEY, JSON.stringify(record));
+  } catch (e) {}
+  return record;
+}
+app.rememberWorkoutReload = rememberWorkoutReload;
+
+function restoreWorkoutReload() {
+  const store = shellStorage();
+  if (!store) return false;
+  let raw = null;
+  try {
+    raw = store.getItem(SHELL_WORKOUT_KEY);
+    store.removeItem(SHELL_WORKOUT_KEY);
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+  let record = null;
+  try { record = JSON.parse(raw); } catch (e) { return false; }
+  const session = typeof app.activeSession === "function" ? app.activeSession() : null;
+  return applyWorkoutReload(app.ui, session, record);
+}
+app.restoreWorkoutReload = restoreWorkoutReload;
 
 function sessionInProgress(state) {
   const sessions = state && state.sessions;
@@ -81,11 +205,42 @@ function shellUpdateBanner(doc) {
   return el;
 }
 
+function markShellUpdate(doc, on) {
+  const body = doc && doc.body;
+  if (!body || !body.classList || typeof body.classList.toggle !== "function") return;
+  body.classList.toggle("shell-update", !!on);
+}
+
+/* Keeps the chip below the sticky workout header, where Cancel and Finish sit. */
+function placeShellUpdate(doc) {
+  const root = doc || (typeof document !== "undefined" ? document : null);
+  const style = root && root.documentElement && root.documentElement.style;
+  if (!style || typeof style.setProperty !== "function" || typeof root.querySelector !== "function") return false;
+  const body = root.body;
+  const inWorkout = !!(body && body.classList && body.classList.contains("in-workout"));
+  const inCardio = !!(body && body.classList && body.classList.contains("in-cardio"));
+  const workout = root.querySelector("#workout");
+  const cardio = root.querySelector("#cardio-live");
+  let bar = null;
+  if (inWorkout && workout && !workout.hidden) bar = root.querySelector("#workout .wo-top");
+  else if (inCardio && cardio && !cardio.hidden) bar = root.querySelector("#cardio-live .wo-top");
+  if (!bar || typeof bar.getBoundingClientRect !== "function") {
+    if (typeof style.removeProperty === "function") style.removeProperty("--shell-update-clear");
+    return false;
+  }
+  const bottom = bar.getBoundingClientRect().bottom;
+  if (!(bottom > 0)) return false;
+  style.setProperty("--shell-update-clear", `${Math.round(bottom + 8)}px`);
+  return true;
+}
+app.placeShellUpdate = placeShellUpdate;
+
 function presentShellUpdate(worker, controller, doc) {
   const banner = shellUpdateBanner(doc);
   if (!worker || !controller || worker === controller) {
     waitingWorker = null;
     if (banner) banner.hidden = true;
+    markShellUpdate(doc, false);
     return false;
   }
   waitingWorker = worker;
@@ -93,6 +248,8 @@ function presentShellUpdate(worker, controller, doc) {
     banner.hidden = false;
     banner.textContent = SHELL_UPDATE_LABEL;
   }
+  markShellUpdate(doc, !!banner);
+  placeShellUpdate(doc);
   return true;
 }
 app.presentShellUpdate = presentShellUpdate;
@@ -113,6 +270,7 @@ function onShellControllerChange() {
     if (typeof sessionStorage !== "undefined") sessionStorage.setItem(SHELL_RELOAD_KEY, "1");
   } catch (e) {}
   reloaded = true;
+  try { rememberWorkoutReload(typeof document !== "undefined" ? document : null); } catch (e) {}
   location.reload();
   return true;
 }
@@ -152,6 +310,8 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
     navigator.serviceWorker.register("sw.js").then(watch).catch(() => {});
   });
 }
+
+restoreWorkoutReload();
 
 function cameraBlockedText() {
   return app.IS_ANDROID
