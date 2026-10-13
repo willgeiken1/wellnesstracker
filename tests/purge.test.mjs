@@ -34,9 +34,10 @@ function sample() {
 
 test("stripRange removes only the dates inside the range and can run twice", () => {
   const data = sample();
-  assert.equal(stripRange(data, "2026-09-01", "2026-09-30"), true);
+  const now = Date.parse("2026-10-04T18:00:00Z");
+  assert.equal(stripRange(data, "2026-09-01", "2026-09-30", { now }), true);
   assert.deepEqual(data.sessions.map((s) => s.id), ["s2"]);
-  assert.deepEqual(data.deleted, ["s1"]);
+  assert.deepEqual(data.deleted, [{ id: "s1", at: now }]);
   assert.equal(data.food.days["2026-09-01"], undefined);
   assert.deepEqual(data.food.deleted, ["f1"]);
   assert.equal(data.food.saved.length, 1);
@@ -51,6 +52,62 @@ test("stripRange removes only the dates inside the range and can run twice", () 
   assert.deepEqual(data.checkins.map((c) => c.id), ["k2"]);
   assert.deepEqual(data.checkinDeleted, ["k1"]);
   assert.equal(stripRange(data, "2026-09-01", "2026-09-30"), false);
+});
+
+test("a range delete stores { id, at } and the edge strip matches", () => {
+  const now = Date.parse("2026-10-04T18:00:00Z");
+  const before = Date.parse("2026-10-04T12:00:00Z");
+  const blob = {
+    sessions: [
+      { id: "s1", date: "2026-09-01" },
+      { id: "old", date: "2026-09-15", mod: before - 1000 },
+      { id: "fresh", date: "2026-09-15", mod: before + 1000, startedAt: new Date(before + 1000).toISOString() },
+      { id: "s2", date: "2026-10-02" },
+    ],
+    deleted: ["s1", { id: "other", at: before + 5000 }, "keep"],
+  };
+  assert.equal(stripRange(blob, "2026-09-01", "2026-09-30", { before, now }), true);
+  assert.deepEqual(blob.sessions.map((s) => s.id), ["fresh", "s2"]);
+  assert.equal(blob.deleted.includes("s1"), false);
+  assert.equal(blob.deleted.includes("old"), false);
+  assert.equal(blob.deleted.includes("keep"), true);
+  assert.deepEqual(blob.deleted.find((m) => m && m.id === "s1"), { id: "s1", at: before });
+  assert.deepEqual(blob.deleted.find((m) => m && m.id === "old"), { id: "old", at: before });
+  assert.deepEqual(blob.deleted.find((m) => m && m.id === "other"), { id: "other", at: before + 5000 });
+  stripRange(blob, "2026-09-01", "2026-09-30", { before, now: now + 10_000, quiet: true });
+  assert.equal(blob.deleted.find((m) => m && m.id === "s1").at, before);
+
+  const later = {
+    sessions: [{ id: "s1", date: "2026-09-01" }],
+    deleted: [{ id: "s1", at: before + 5000 }],
+  };
+  stripRange(later, "2026-09-01", "2026-09-30", { before, now });
+  assert.deepEqual(later.deleted, [{ id: "s1", at: before + 5000 }]);
+
+  const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+  const script = `
+    import { stripRange } from ${JSON.stringify(stripUrl)};
+    const before = ${before};
+    const now = ${now};
+    const data = stripRange(${JSON.stringify({
+      sessions: [
+        { id: "s1", date: "2026-09-01" },
+        { id: "old", date: "2026-09-15", mod: before - 1000 },
+        { id: "fresh", date: "2026-09-15", mod: before + 1000, startedAt: new Date(before + 1000).toISOString() },
+        { id: "s2", date: "2026-10-02" },
+      ],
+      deleted: ["s1", { id: "other", at: before + 5000 }, "keep"],
+    })}, "2026-09-01", "2026-09-30", before, now);
+    console.log(JSON.stringify({ sessions: data.sessions.map((s) => s.id), deleted: data.deleted }));
+  `;
+  const r = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const got = JSON.parse(r.stdout.trim().split("\n").pop());
+  assert.deepEqual(got.sessions, ["fresh", "s2"]);
+  assert.deepEqual(got.deleted, blob.deleted);
 });
 
 test("applyPurges strips merged copies without dropping the purge record", () => {

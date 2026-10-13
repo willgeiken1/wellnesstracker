@@ -182,19 +182,63 @@ export function photoDue(takenAt: unknown, cutoff: number, now = Date.now()): bo
 
 const CLOCK_SKEW_MS = 60_000;
 
+function deletedMarkId(mark: unknown): string {
+  if (typeof mark === "string") return mark;
+  if (mark && typeof mark === "object" && typeof (mark as Bag).id === "string") return (mark as Bag).id;
+  return "";
+}
+
+function deletedMarkAt(mark: unknown): number {
+  if (mark && typeof mark === "object") {
+    const at = (mark as Bag).at;
+    if (typeof at === "number" && Number.isFinite(at) && at > 0) return at;
+  }
+  return 0;
+}
+
+/* A cutoff is the delete time. A wipe with no cutoff happened at `now`.
+   An untimed id is what the client cap drops first, so this must be a time. */
+function purgeDeletedStamp(before: number | null | undefined, now: number): number {
+  if (typeof before === "number" && Number.isFinite(before) && before > 0) return before;
+  if (typeof now === "number" && Number.isFinite(now) && now > 0) return now;
+  return Date.now();
+}
+
+/* Keep one { id, at } for this session. A later marker already stored wins.
+   A bare id is replaced, not left beside the timed copy. */
+function withPurgedSession(list: unknown, id: string, stamp: number): unknown[] {
+  const next: unknown[] = [];
+  let best = 0;
+  for (const mark of Array.isArray(list) ? list : []) {
+    if (deletedMarkId(mark) === id) {
+      const prev = deletedMarkAt(mark);
+      if (prev > best) best = prev;
+      continue;
+    }
+    next.push(mark);
+  }
+  next.push({ id, at: Math.max(best, stamp) });
+  return next;
+}
+
 export function stripRange(data: Bag, from: string, to: string, before?: number | null, now = Date.now()): Bag {
   if (!data || typeof data !== "object") data = {};
   if (!validDay(from) || !validDay(to) || from > to) return data;
 
-  const deleted = new Set<string>(data.deleted || []);
+  const stamp = purgeDeletedStamp(before, now);
+  let deleted: unknown[] = Array.isArray(data.deleted) ? data.deleted : [];
+  let deletedChanged = false;
   data.sessions = (data.sessions || []).filter((s: Bag) => {
     if (s && inRange(s.date, from, to) && dropBefore(sessionTime(s), before, now)) {
-      if (s.id) deleted.add(s.id);
+      if (typeof s.id === "string" && s.id) {
+        deleted = withPurgedSession(deleted, s.id, stamp);
+        deletedChanged = true;
+      }
       return false;
     }
     return true;
   });
-  data.deleted = [...deleted];
+  if (deletedChanged) data.deleted = deleted;
 
   if (data.food && typeof data.food === "object") {
     const fd = new Set<string>(data.food.deleted || []);

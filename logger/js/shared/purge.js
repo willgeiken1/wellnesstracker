@@ -328,24 +328,66 @@ function stripCheckins(data, from, to, before, now) {
   return changed;
 }
 
+function deletedMarkId(mark) {
+  if (typeof mark === "string") return mark;
+  if (mark && typeof mark === "object" && typeof mark.id === "string") return mark.id;
+  return "";
+}
+
+function deletedMarkAt(mark) {
+  if (mark && typeof mark === "object" && typeof mark.at === "number" && Number.isFinite(mark.at) && mark.at > 0) return mark.at;
+  return 0;
+}
+
+/* A cutoff is the delete time. A wipe with no cutoff happened at `now`.
+   An untimed id is what the 200-marker cap drops first, so this must be a time. */
+function purgeDeletedStamp(before, now) {
+  if (typeof before === "number" && Number.isFinite(before) && before > 0) return before;
+  if (typeof now === "number" && Number.isFinite(now) && now > 0) return now;
+  return Date.now();
+}
+
+/* Keep one { id, at } for this session. A later marker already stored wins.
+   A bare id is replaced, not left beside the timed copy. */
+function withPurgedSession(list, id, stamp) {
+  const next = [];
+  let best = 0;
+  for (const mark of Array.isArray(list) ? list : []) {
+    if (deletedMarkId(mark) === id) {
+      const prev = deletedMarkAt(mark);
+      if (prev > best) best = prev;
+      continue;
+    }
+    next.push(mark);
+  }
+  next.push({ id, at: Math.max(best, stamp) });
+  return next;
+}
+
 /* Remove logs that fall on from..to (inclusive). Does not record the purge itself.
-   opts.quiet skips timestamp bumps so a merge can strip without winning every sync. */
+   opts.quiet skips timestamp bumps so a merge can strip without winning every sync.
+   A removed session is stored as { id, at }, the same shape noteDeleted writes. */
 export function stripRange(data, from, to, opts = {}) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   let changed = false;
 
   const before = opts.before;
   const now = opts.now ?? Date.now();
-  const deleted = new Set(data.deleted || []);
+  const stamp = purgeDeletedStamp(before, now);
+  let deleted = Array.isArray(data.deleted) ? data.deleted : [];
+  let deletedChanged = false;
   data.sessions = (data.sessions || []).filter((s) => {
     if (s && inRange(s.date, from, to) && dropBefore(sessionTime(s), before, now)) {
       changed = true;
-      if (s.id) deleted.add(s.id);
+      if (typeof s.id === "string" && s.id) {
+        deleted = withPurgedSession(deleted, s.id, stamp);
+        deletedChanged = true;
+      }
       return false;
     }
     return true;
   });
-  data.deleted = [...deleted];
+  if (deletedChanged) data.deleted = deleted;
 
   if (data.food && typeof data.food === "object") {
     const fd = new Set(data.food.deleted || []);

@@ -180,7 +180,18 @@ function mergeMachineNotes(local, remote) {
 app.mergeMachineNotes = mergeMachineNotes;
 
 /* Session ids removed on purpose. A string is a legacy marker with no time.
-   A real delete is { id, at }. The list is capped, and timed markers expire. */
+   A real delete is { id, at }. The list is capped, and timed markers expire.
+   Untimed strings are dropped first at the cap, so a purge stores { id, at }.
+
+   Phones on insight-shell-v45 read this list as a Set of id strings. An
+   { id, at } entry does not match, so a workout deleted by a newer phone or
+   by a range purge stays visible there until that phone updates. A string
+   copy beside the timed entry would be the first thing the cap removes, and
+   the time the newer client needs would go with it. migrate applies markers
+   already stored on the phone, so the update removes that workout without
+   waiting for another sync. A live freestyle that has sets still ignores an
+   untimed string. A timed delete wins only when it is at least as new as
+   the session. */
 const DELETED_CAP = 200;
 const DELETED_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const EMPTY_FREESTYLE_STALE_MS = 12 * 60 * 60 * 1000;
@@ -232,6 +243,45 @@ function noteDeleted(id) {
 }
 app.noteDeleted = noteDeleted;
 
+/* Same rule as a sync merge. An untimed string does not drop a live freestyle
+   that has sets. A timed marker does, when the session has not moved since. */
+function sessionDroppedByDeleted(s, marks) {
+  const id = s && s.id;
+  if (!id) return false;
+  const hits = [];
+  for (const m of Array.isArray(marks) ? marks : []) if (deletedId(m) === id) hits.push(m);
+  if (!hits.length) return false;
+  const live = !s.finishedAt && s.origin === "freestyle" && freestyleSetCount(s) > 0;
+  if (!live) return true;
+  const mod = s.mod || 0;
+  return hits.some((m) => {
+    const at = deletedAt(m);
+    return at > 0 && mod <= at;
+  });
+}
+app.sessionDroppedByDeleted = sessionDroppedByDeleted;
+
+/* The session outlived the marker, so the marker must not delete it later. */
+function freestyleBeatsDeleted(s, marks) {
+  if (!s || s.finishedAt || s.origin !== "freestyle" || freestyleSetCount(s) === 0) return false;
+  if (!(Array.isArray(marks) ? marks : []).some((m) => deletedId(m) === s.id)) return false;
+  return !sessionDroppedByDeleted(s, marks);
+}
+app.freestyleBeatsDeleted = freestyleBeatsDeleted;
+
+function settleDeleted(sessions, marks) {
+  const deleted = Array.isArray(marks) ? marks : [];
+  const beat = new Set();
+  const kept = [];
+  for (const s of Array.isArray(sessions) ? sessions : []) {
+    if (!s || sessionDroppedByDeleted(s, deleted)) continue;
+    kept.push(s);
+    if (freestyleBeatsDeleted(s, deleted)) beat.add(s.id);
+  }
+  return { sessions: kept, deleted: beat.size ? deleted.filter((m) => !beat.has(deletedId(m))) : deleted };
+}
+app.settleDeleted = settleDeleted;
+
 /* Accepts the original v1 format and the current one */
 function migrate(d) {
   if (!d || !Array.isArray(d.sessions)) return null;
@@ -259,9 +309,10 @@ function migrate(d) {
   });
   const profile = d.profile && typeof d.profile === "object" ? d.profile : null;
   if (profile) stripProfileClockFields(profile);
-  return { version: 2, workouts, sessions, plan: d.plan || {}, planAt: d.planAt && typeof d.planAt === "object" && !Array.isArray(d.planAt) ? d.planAt : {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
+  const settled = settleDeleted(sessions, pruneDeleted(d.deleted || []));
+  return { version: 2, workouts, sessions: settled.sessions, plan: d.plan || {}, planAt: d.planAt && typeof d.planAt === "object" && !Array.isArray(d.planAt) ? d.planAt : {}, restSeconds: d.restSeconds || 120, lastExport: d.lastExport || null,
     oura: d.oura || { connected: false, lastSync: null, days: {} }, demo: !!d.demo,
-    deleted: pruneDeleted(d.deleted || []), updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
+    deleted: settled.deleted, updatedAt: d.updatedAt || 0, lastCloud: d.lastCloud || null,
     profile, ownerId: d.ownerId || null,
     theme: d.theme || { mode: "dark", accent: "citrus" },
     goals: d.goals || { sessionsPerWeek: null, lifts: {}, weightDir: null, updatedAt: 0 },

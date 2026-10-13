@@ -174,8 +174,10 @@ function loggedSets(s) {
 
 /* An untimed marker is what an empty discard used to sync. It must not erase an
    unfinished freestyle that now has sets. A timed delete still wins when the
-   session has not been edited since that delete. */
+   session has not been edited since that delete. state.js owns the rule so a
+   reload applies the same markers a sync merge does. */
 function markerDrops(s, marks) {
+  if (typeof app.sessionDroppedByDeleted === "function") return app.sessionDroppedByDeleted(s, marks);
   const id = s && s.id;
   if (!id) return false;
   const hits = [];
@@ -188,6 +190,11 @@ function markerDrops(s, marks) {
     const at = markAt(m);
     return at > 0 && mod <= at;
   });
+}
+
+function freestyleBeatsMark(s, marks) {
+  if (typeof app.freestyleBeatsDeleted === "function") return app.freestyleBeatsDeleted(s, marks);
+  return !!(s && !s.finishedAt && s.origin === "freestyle" && loggedSets(s) > 0 && (marks || []).some((m) => markId(m) === s.id));
 }
 
 /* Combines the cloud copy with this phone's copy so nothing logged on either side is lost. */
@@ -219,7 +226,7 @@ function mergeRemote(r) {
   app.state.sessions = [...byId.values()];
   const beatMarker = new Set();
   for (const s of byId.values()) {
-    if (!s.finishedAt && s.origin === "freestyle" && loggedSets(s) > 0 && marks.some((m) => markId(m) === s.id)) beatMarker.add(s.id);
+    if (freestyleBeatsMark(s, marks)) beatMarker.add(s.id);
   }
   if (r.goals && (!app.state.goals || (r.goals.updatedAt || 0) > (app.state.goals.updatedAt || 0))) app.state.goals = r.goals;
   if (r.brief && (r.brief.updatedAt || 0) > ((app.state.brief && app.state.brief.updatedAt) || 0)) app.state.brief = r.brief;

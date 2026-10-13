@@ -125,7 +125,7 @@ test("the shell names the update banner and does not track it", () => {
   assert.match(PLATFORM_SRC, /SKIP_WAITING/);
   assert.doesNotMatch(PLATFORM_SRC, /\bcapture\s*\(/);
   assert.doesNotMatch(PLATFORM_SRC, /posthog/i);
-  assert.match(SW_SRC, /const CACHE = "insight-shell-v49"/);
+  assert.match(SW_SRC, /const CACHE = "insight-shell-v50"/);
   assert.match(SW_SRC, /SKIP_WAITING/);
   assert.match(SW_SRC, /self\.registration\.active/);
   assert.doesNotMatch(SW_SRC, /\bcapture\s*\(/);
