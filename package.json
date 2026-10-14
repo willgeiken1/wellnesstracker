@@ -2,7 +2,7 @@
   "name": "wellnesstracker",
   "private": true,
   "type": "module",
-  "description": "Playwright is installed for the browser harnesses and the PR smoke suite under logger/tests. The app itself has no package dependencies.",
+  "description": "Playwright is installed for the browser harnesses and the PR smoke suite under logger/tests. zod checks food-estimate replies. The browser app has no package dependencies.",
   "scripts": {
     "pw:smoke": "node logger/tests/e2e/run-smoke.mjs",
     "pw:live": "node logger/tests/live/run-live.mjs"
@@ -11,5 +11,8 @@
     "@playwright/test": "1.63.0",
     "@supabase/supabase-js": "2.117.2",
     "playwright": "1.63.0"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
   }
 }

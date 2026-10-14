@@ -442,8 +442,8 @@ test("a v2 stack skips hidden ids and blank widgets", () => {
 test("the shell cache names the registry", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v50/);
-  assert.match(sentry, /insight-shell-v50/);
+  assert.match(sw, /insight-shell-v51/);
+  assert.match(sentry, /insight-shell-v51/);
   assert.match(sw, /js\/shared\/oura-gate\.js/);
   assert.match(sw, /js\/shared\/home-migrate\.js/);
   assert.match(sw, /js\/shared\/home-widgets\.js/);
