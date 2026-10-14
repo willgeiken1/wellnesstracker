@@ -401,7 +401,9 @@ document.addEventListener("input", (ev) => {
   if (el.id === "authEmail") { app.ui.sd.email = el.value; return; }
   if (el.dataset.fi != null && app.ui.sd.items) {
     const it = app.ui.sd.items[+el.dataset.fi], k = el.dataset.k;
-    if (k === "name") it.name = el.value; else it.base[k] = (parseFloat(el.value) || 0) / (it.mult || 1);
+    if (k === "name") it.name = el.value;
+    else if (k === "portion") it.portion = el.value;
+    else it.base[k] = (parseFloat(el.value) || 0) / (it.mult || 1);
     const t = app.reviewTotals(), tot = document.querySelector(".fr-total");
     if (tot) tot.innerHTML = `<b>${app.r0(t.kcal)} cal</b><span>P ${app.r0(t.p)} · C ${app.r0(t.c)} · F ${app.r0(t.f)}</span>`;
     return;
@@ -413,6 +415,7 @@ document.addEventListener("input", (ev) => {
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
   if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
+  if (el.id === "checkin-note") { app.ui.sd.note = el.value; if (app.syncCheckinCard) app.syncCheckinCard(); return; }
   if (el.dataset.cf && app.ui.sheet === "cardio-log") { app.updateLogTotals(); return; }
   if (el.id === "food-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#food-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "bc-amt") { app.ui.sd.amt = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#bc-amt"); if (n) { n.focus(); if (n.tagName === "INPUT") n.setSelectionRange(pos, pos); } return; }
@@ -623,6 +626,19 @@ document.addEventListener("click", async (ev) => {
     case "fi-del": app.ui.sd.items.splice(i, 1); app.renderSheet(); break;
     case "fi-mult": app.ui.sd.items[i].mult = +b.dataset.m; app.renderSheet(); break;
     case "fi-add": app.ui.sd.items.push({ name: "Food", portion: "", mult: 1, base: { kcal: 0, p: 0, c: 0, f: 0 } }); app.renderSheet(); break;
+    case "checkin": app.openCheckin(); break;
+    case "checkin-pick": {
+      const key = b.dataset.k, value = Number(b.dataset.v);
+      if (!app.ui.sd) app.ui.sd = {};
+      if (key === "mood" || key === "energy" || key === "stress") app.ui.sd[key] = value;
+      const note = app.$("#checkin-note");
+      if (note) app.ui.sd.note = note.value;
+      app.renderSheet();
+      const again = app.$(`[data-action="checkin-pick"][data-k="${key}"][data-v="${value}"]`);
+      if (again) again.focus();
+      break;
+    }
+    case "checkin-save": app.saveCheckin(); break;
     case "food-review-save": {
       const items = app.ui.sd.items.filter((it) => it.name.trim());
       if (!items.length) { app.toast("Add at least one food."); break; }

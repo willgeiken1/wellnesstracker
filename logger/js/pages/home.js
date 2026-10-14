@@ -275,8 +275,10 @@ function homeHTML() {
   if (app.ui && app.ui.homeEdit) return homeEditorHTML();
   const t = app.today();
   const registry = typeof app.homeRegistryActive === "function" && app.homeRegistryActive(app.state);
+  const checkin = app.checkinStripHTML ? app.checkinStripHTML() : "";
   const head = `
     ${app.pageHead(app.firstName() ? `Hi, ${app.esc(app.firstName())}` : app.fmtDate(t, { weekday: "long" }), `${app.firstName() ? `${app.greeting()} · ` : ""}${app.fmtDate(t, { weekday: "long", month: "long", day: "numeric" })}`, { left: homeEditButton() })}
+    ${checkin}
     ${app.weekCardHTML ? app.weekCardHTML() : ""}`;
   const reconnect = homeOuraReconnectHTML(app.state);
   if (registry) {

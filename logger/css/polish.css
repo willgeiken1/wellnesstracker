@@ -449,3 +449,50 @@ body.timer-on:not(.in-workout) #view {
   background: var(--green-soft);
   color: var(--accent-text);
 }
+
+.checkin-open {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  text-align: left;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 12px 16px;
+  margin: 0 0 14px;
+}
+.checkin-open b { display: block; font-size: 16px; font-weight: 700; }
+.checkin-open span span { color: var(--muted); font-size: 13px; font-weight: 500; }
+.checkin-title { padding-right: 40px; }
+.checkin-advice { margin: -6px 0 14px; }
+.checkin-field { border: 0; margin: 0 0 12px; padding: 0; }
+.checkin-field legend { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+.checkin-scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.checkin-scale button {
+  min-height: 44px;
+  padding: 6px 2px;
+  border-radius: 14px;
+  border: 1.5px solid var(--pill-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.checkin-scale button[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: var(--ink); }
+textarea.text-in.checkin-note { height: auto; min-height: 88px; padding: 12px 14px; line-height: 1.4; resize: vertical; }
+.checkin-card { background: var(--raised); border-radius: 18px; padding: 14px; margin: 0 0 14px; }
+.checkin-card p { margin: 0 0 8px; font-size: 15px; line-height: 1.4; }
+.checkin-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
+.sheet-card .checkin-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  background: var(--green);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}

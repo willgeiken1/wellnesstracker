@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { echoMeal } from "../shared/heard.js";
 
 /* Food log, targets, barcode, and photo estimate. */
 /* ================= Food ================= */
@@ -320,12 +321,17 @@ function quotaLeftLine() {
   return "";
 }
 
-function itemRow(it, i) {
+function itemRow(it, i, echoFlag) {
   const m = it.mult || 1, v = (k) => app.r0(it.base[k] * m);
-  return `<div class="fi" data-i="${i}">
+  const flag = echoFlag === "guessed" ? `<span class="echo-flag">Guessed</span>` : echoFlag === "portion" ? `<span class="echo-flag">Portion guessed</span>` : "";
+  const portion = echoFlag
+    ? `<label class="fi-por-edit"><span>Portion</span><input class="text-in" data-fi="${i}" data-k="portion" value="${app.esc(it.portion || "")}" aria-label="Portion for ${app.esc(it.name || "food")}"></label>`
+    : (it.portion ? `<span class="fi-por">${app.esc(it.portion)}</span>` : "");
+  return `<div class="fi" data-i="${i}"${echoFlag ? ` data-echo="${echoFlag === "guessed" ? "guessed" : "heard"}"` : ""}>
+    ${flag}
     <div class="fi-top"><input class="text-in fi-name" data-fi="${i}" data-k="name" value="${app.esc(it.name)}" aria-label="Food name">
       <button class="set-x" data-action="fi-del" data-i="${i}" aria-label="Remove ${app.esc(it.name)}">×</button></div>
-    ${it.portion ? `<span class="fi-por">${app.esc(it.portion)}</span>` : ""}
+    ${portion}
     <div class="fi-mult">${[0.5, 1, 1.5, 2].map((x) => `<button data-action="fi-mult" data-i="${i}" data-m="${x}" aria-pressed="${m === x}">${x === 0.5 ? "½" : x === 1.5 ? "1½" : x}×</button>`).join("")}</div>
     <div class="fi-grid">${[["kcal", "Cal"], ["p", "Protein"], ["c", "Carbs"], ["f", "Fat"]].map(([k, l]) =>
       `<label><span>${l}</span><input inputmode="decimal" data-fi="${i}" data-k="${k}" value="${v(k)}"></label>`).join("")}</div></div>`;
@@ -337,6 +343,17 @@ function reviewTotals() {
 }
 app.reviewTotals = reviewTotals;
 
+function describeEchoHTML(items) {
+  const heard = [];
+  const guessed = [];
+  items.forEach((it, i) => (it.echo === "guessed" ? guessed : heard).push(app.itemRow(it, i, it.echo === "guessed" ? "guessed" : it.echo === "portion" ? "portion" : "heard")));
+  const said = app.esc((app.ui.sd && app.ui.sd.text) || "");
+  const heardBody = heard.length ? heard.join("") : `<p class="sub">None of these foods use the words you wrote.</p>`;
+  const guessedBody = guessed.length ? guessed.join("") : `<p class="sub">Nothing extra. These foods use words from what you wrote.</p>`;
+  return `<section class="echo" aria-label="What I heard"><h4>What I heard</h4><p class="echo-said">${said || "No description"}</p>${heardBody}</section>
+    <section class="echo" aria-label="What I guessed"><h4>What I guessed</h4><p class="sub">Guessed foods were not in what you wrote. Change or remove them before you save.</p>${guessedBody}</section>`;
+}
+
 function foodReviewSheetHTML() {
   const label = app.MEALS.find((m) => m[0] === app.ui.sd.meal)[1];
   const described = app.ui.sd.source === "describe";
@@ -344,11 +361,13 @@ function foodReviewSheetHTML() {
   if (app.ui.sd.error) return `<h3>Couldn't analyze that</h3><p class="sub">${app.esc(app.ui.sd.error)}</p>
     <button class="btn primary block" data-action="${described ? "food-describe" : "food-photo"}">${described ? "Edit the description" : "Try another photo"}</button><button class="btn block" data-action="food-manual" style="margin-top:8px">Enter manually</button>`;
   const t = app.reviewTotals(), items = app.ui.sd.items || [];
+  const echo = described ? describeEchoHTML(items) : "";
   return `<h3>Review your meal</h3>
     <div class="seg2 meal-seg">${app.MEALS.map(([k, l]) => `<button data-action="review-meal" data-m="${k}" aria-pressed="${app.ui.sd.meal === k}">${l}</button>`).join("")}</div>
     ${app.ui.sd.notes ? `<p class="sub" style="margin:-6px 0 12px">${app.esc(app.ui.sd.notes)}</p>` : ""}
     ${quotaLeftLine()}
-    ${items.length ? items.map(app.itemRow).join("") : `<p class="sub">No foods found. Add one below or ${described ? "describe it again" : "try another photo"}.</p>`}
+    ${described ? `<p class="sub echo-lead">Nothing is saved until you confirm what was heard and what was guessed.</p>` : ""}
+    ${echo || (items.length ? items.map(app.itemRow).join("") : `<p class="sub">No foods found. Add one below or ${described ? "describe it again" : "try another photo"}.</p>`)}
     <button class="link-btn" data-action="fi-add">Add a food</button>
     ${app.ui.sd.image ? `<details class="reanalyze"${app.ui.sd.hint ? " open" : ""}><summary>Something off? Add a note and re-analyze</summary>
       <input class="text-in" id="food-hint" autocomplete="off" placeholder="Cooked in butter, 2 scoops of rice" value="${app.esc(app.ui.sd.hint || "")}">
@@ -518,7 +537,8 @@ async function analyzeFoodText() {
       try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
       throw new Error(msg);
     }
-    app.ui.sd.items = (data.items || []).map((it) => ({ name: it.name, portion: it.portion, mult: 1, base: { kcal: it.calories, p: it.protein, c: it.carbs, f: it.fat } }));
+    const parsed = (data.items || []).map((it) => ({ name: it.name, portion: it.portion, mult: 1, base: { kcal: it.calories, p: it.protein, c: it.carbs, f: it.fat } }));
+    app.ui.sd.items = echoMeal(text, parsed).rows;
     app.ui.sd.notes = data.notes || "";
     app.ui.sd.describesLeft = typeof data.remaining === "number" ? data.remaining : null;
     app.ui.sd.photosLeft = null;

@@ -130,7 +130,8 @@ const LOCKED = [
 
 const OURA_STAGES = { total: "sleepHours", deep: "deepHours", rem: "remHours", light: "lightHours" };
 const OURA_NAMED = ["readiness", "sleepScore", "hrv", "rhr", "temp", "steps"];
-const MOOD_KEY = /mood|feel|emotion/i;
+/* Mood and stress stay on the check-in. They are not pattern inputs. */
+const MOOD_KEY = /mood|feel|emotion|stress/i;
 
 export function addDays(iso, n) {
   const [y, m, d] = iso.split("-").map(Number);
