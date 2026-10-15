@@ -8,20 +8,35 @@ app.esc = (s) => String(s == null ? "" : s);
 app.customExercises = () => [];
 app.musclesLabel = () => "";
 
-function names(html) {
-  return [...html.matchAll(/data-name="([^"]+)"/g)].map((m) => m[1]);
+function rows(html) {
+  return [...html.matchAll(/<button class="pk-row[^"]*"([^>]*)>/g)].map((m) => {
+    const attrs = m[1];
+    const tier = Number((attrs.match(/data-tier="(\d+)"/) || [])[1]);
+    const name = (attrs.match(/data-name="([^"]+)"/) || [])[1];
+    return { tier, name };
+  }).filter((row) => row.name);
 }
 
-test("fuzzy search finds bench from a small typo and sorts names", () => {
+function assertTierOrder(list) {
+  assert.ok(list.length > 1);
+  const tiers = list.map((row) => row.tier);
+  const sortedTiers = [...tiers].sort((a, b) => a - b);
+  assert.deepEqual(tiers, sortedTiers);
+  for (const tier of new Set(tiers)) {
+    const names = list.filter((row) => row.tier === tier).map((row) => row.name);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+    assert.deepEqual(names, sorted, `tier ${tier} should be alphabetical`);
+  }
+}
+
+test("fuzzy search finds bench from a small typo and sorts within each tier", () => {
   const html = app.bankListHTML({ q: "bensh", action: "pick" });
-  assert.match(html, /data-src="bank" data-name="Bench Press"/);
-  const found = names(html).filter((n) => n !== "bensh");
-  const sorted = [...found].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  assert.deepEqual(found, sorted);
-  assert.ok(found.length > 1);
+  const found = rows(html).filter((row) => row.name !== "bensh");
+  assert.ok(found.some((row) => row.name === "Bench Press"));
+  assertTierOrder(found);
 });
 
-test("search matches names and muscle groups, not equipment", () => {
+test("search matches names, muscles, and equipment words", () => {
   const curl = app.bankListHTML({ q: "curl", action: "pick" });
   assert.match(curl, /data-name="Barbell Curl"/);
 
@@ -36,22 +51,58 @@ test("search matches names and muscle groups, not equipment", () => {
   const latHtml = app.bankListHTML({ q: "lats", action: "pick" });
   assert.match(latHtml, new RegExp(`data-name="${lats.n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
 
-  for (const q of ["barbell", "machine", "smith", "dumbell"]) {
-    const html = app.bankListHTML({ q, action: "pick" });
-    assert.match(html, /Search for the movement/);
-    assert.match(html, /left out/);
-    assert.doesNotMatch(html, /No matches/);
-    assert.doesNotMatch(html, /bank-create/);
-    assert.doesNotMatch(html, /Barbell Curl|Smith Machine Bench Press|Bench Press/);
-  }
+  const barbell = rows(app.bankListHTML({ q: "barbell", action: "pick" }));
+  assert.ok(barbell.some((row) => row.name === "Barbell Curl" && row.tier === 0));
+  assert.doesNotMatch(app.bankListHTML({ q: "machine", action: "pick" }), /Search for the movement/);
+});
+
+test("cable and smith rank name prefix ahead of a later word, alphabetically inside the tier", () => {
+  assert.equal(app.bankMatchTier("cable", { name: "Seated Cable Row" }), 1);
+  assert.equal(app.bankMatchTier("smith", { name: "Smith Machine Squat" }), 0);
+  assert.equal(app.foldSearch("  CaBle!! "), "cable");
+  assert.equal(app.foldSearch("smith-machine"), "smith machine");
+
+  const cable = rows(app.bankListHTML({ q: "  CaBle!! ", action: "pick" }));
+  assert.ok(cable.some((row) => row.name === "Cable Crunch" && row.tier === 0));
+  assert.ok(cable.some((row) => row.name === "One-Handed Cable Row" && row.tier === 1));
+  assert.ok(cable.findIndex((row) => row.name === "Cable Crunch") < cable.findIndex((row) => row.name === "One-Handed Cable Row"));
+  assertTierOrder(cable);
+  const cableTier0 = cable.filter((row) => row.tier === 0).map((row) => row.name);
+  assert.deepEqual(cableTier0, [...cableTier0].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })));
+
+  const smith = rows(app.bankListHTML({ q: "SMITH", action: "pick" }));
+  assert.ok(smith.some((row) => row.name === "Smith Machine Squat" && row.tier === 0));
+  assert.ok(smith.some((row) => row.name === "Seated Smith Machine Shoulder Press" && row.tier === 1));
+  assert.ok(smith.findIndex((row) => row.name === "Smith Machine Squat") < smith.findIndex((row) => row.name === "Seated Smith Machine Shoulder Press"));
+  assertTierOrder(smith);
+
+  const phrase = rows(app.bankListHTML({ q: "smith-machine", action: "pick" }));
+  assert.ok(phrase.some((row) => row.name === "Smith Machine Squat" && row.tier === 0));
+  const spaced = rows(app.bankListHTML({ q: "  cable   row  ", action: "pick" }));
+  assert.ok(spaced.some((row) => row.name === "One-Handed Cable Row" && row.tier === 1));
+});
+
+test("a typo such as cabel still lists cable exercises in the fuzzy tier", () => {
+  assert.equal(app.bankMatchTier("cabel", { name: "Seated Cable Row" }), 3);
+  const html = app.bankListHTML({ q: "cabel", action: "pick" });
+  const found = rows(html);
+  assert.ok(found.some((row) => row.name === "Cable Crunch" && row.tier === 3));
+  assert.ok(found.some((row) => row.name === "One-Handed Cable Row" && row.tier === 3));
+  assert.ok(found.every((row) => row.tier === 3));
+  assertTierOrder(found);
+  assert.match(html, /data-filter="1"/);
+  assert.doesNotMatch(html, /No exercises match/);
+  assert.doesNotMatch(html, /Search for the movement/);
+});
+
+test("aliases, equipment, and muscles match when the row has them", () => {
+  assert.equal(app.bankMatchTier("face pull", { name: "Rear Delt Pull", aliases: ["Face Pull"] }), 0);
+  assert.equal(app.bankMatchTier("cable", { name: "Seated Row", equipment: "Cable" }), 2);
+  assert.equal(app.bankMatchTier("lats", { name: "Straight-Arm Pulldown", muscles: ["lats"] }), 2);
+  assert.equal(app.bankMatchTier("upper chest", { name: "Press", muscles: ["pecs"], adv: ["pecUpper"] }), 2);
 });
 
 test("movement words that sit near equipment names still find the exercise", () => {
-  assert.equal(app.equipmentToken("bend"), false);
-  assert.equal(app.equipmentToken("banded"), false);
-  assert.equal(app.equipmentToken("band"), true);
-  assert.equal(app.equipmentToken("barbell"), true);
-  assert.equal(app.equipmentToken("dumbell"), true);
   const bend = app.bankListHTML({ q: "bend", action: "pick" });
   assert.match(bend, /data-name="Dumbbell Side Bend"/);
   assert.doesNotMatch(bend, /Search for the movement/);
@@ -60,22 +111,22 @@ test("movement words that sit near equipment names still find the exercise", () 
   assert.doesNotMatch(banded, /Search for the movement/);
 });
 
-test("a misspelled equipment word is dropped before the movement is matched", () => {
-  assert.deepEqual(app.bankTokens("dumbell bensh"), ["bensh"]);
-  assert.deepEqual(app.bankTokens("kettelbell curl"), ["curl"]);
-  assert.deepEqual(app.bankTokens("barbell"), []);
+test("a misspelled equipment word still finds the exercise", () => {
   const html = app.bankListHTML({ q: "dumbell bensh", action: "pick" });
-  assert.match(html, /data-src="bank" data-name="Bench Press"/);
-  assert.doesNotMatch(html, /No matches/);
+  assert.match(html, /data-name="Close-Grip Dumbbell Bench Press"/);
+  assert.doesNotMatch(html, /No exercises match/);
   assert.doesNotMatch(html, /bank-create/);
+  const kettle = app.bankListHTML({ q: "kettelbell curl", action: "pick" });
+  assert.match(kettle, /data-name="Kettlebell Curl"/);
 });
 
 test("an empty search result offers to create the typed name", () => {
   const html = app.bankListHTML({ q: "zzzznot", action: "pick" });
-  assert.match(html, /No matches/);
+  assert.match(html, /No exercises match/);
   assert.match(html, /data-action="bank-create" data-name="zzzznot"/);
   assert.match(html, /Create zzzznot/);
   assert.doesNotMatch(html, /data-src="bank"/);
+  assert.doesNotMatch(html, /pk-list/);
 });
 
 test("typing waits 250ms and rewrites only the results list", () => {
