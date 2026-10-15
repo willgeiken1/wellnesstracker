@@ -120,6 +120,28 @@ test("a misspelled equipment word still finds the exercise", () => {
   assert.match(kettle, /data-name="Kettlebell Curl"/);
 });
 
+test("added common exercises show up under the names people type", () => {
+  const smith = rows(app.bankListHTML({ q: "smith incline", action: "pick" }));
+  assert.ok(smith.some((row) => row.name === "Smith Machine Incline Bench Press"), smith.map((row) => row.name).join(", "));
+  const tricep = rows(app.bankListHTML({ q: "tricep", action: "pick" }));
+  assert.ok(tricep.some((row) => row.name === "Cable Tricep Extension"));
+  const pushdown = rows(app.bankListHTML({ q: "cable triceps pushdown", action: "pick" }));
+  assert.equal(pushdown[0] && pushdown[0].name, "Cable Tricep Extension");
+  assert.equal(pushdown.filter((row) => row.name === "Cable Tricep Extension").length, 1);
+  const fly = app.bankListHTML({ q: "high to low cable fly", action: "pick" });
+  assert.match(fly, /data-name="High to Low Cable Chest Fly"/);
+  assert.match(app.bankListHTML({ q: "bird dog", action: "pick" }), /data-name="Bird Dog"/);
+  assert.match(app.bankListHTML({ q: "russian twist", action: "pick" }), /data-name="Russian Twist"/);
+  const names = app.ASSETS.bank.map((b) => b.n.toLowerCase());
+  assert.equal(names.filter((n) => n === "smith machine incline bench press").length, 1);
+  assert.equal(names.filter((n) => n === "cable tricep extension").length, 1);
+  for (const b of app.ASSETS.bank) {
+    for (const alias of b.aliases || []) {
+      assert.equal(names.includes(alias.toLowerCase()), false, alias);
+    }
+  }
+});
+
 test("an empty search result offers to create the typed name", () => {
   const html = app.bankListHTML({ q: "zzzznot", action: "pick" });
   assert.match(html, /No exercises match/);

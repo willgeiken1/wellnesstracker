@@ -38,10 +38,10 @@ const GROUPS = ["Abs", "Back", "Biceps", "Calves", "Chest", "Forearms", "Glutes"
 const KEYS = new Set(app.ASSETS.advGroups.flatMap(([, items]) => items.map(([k]) => k)));
 const bankNames = () => app.ASSETS.bank.map((b) => b.n.toLowerCase());
 
-test("the bank has 478 exercises with no duplicate names", () => {
+test("the bank has 482 exercises with no duplicate names", () => {
   assert.equal(ADDED.length, 90);
   assert.equal(new Set(ADDED.map((n) => n.toLowerCase())).size, 90);
-  assert.equal(app.ASSETS.bank.length, 478);
+  assert.equal(app.ASSETS.bank.length, 482);
   const names = bankNames();
   assert.equal(new Set(names).size, names.length);
 });

@@ -159,6 +159,15 @@ test("exercise search stays put while typing and then filters in place", async (
   await expect(page.locator('#pk-body [data-name="Smith Machine Squat"]')).toBeVisible();
   await expect(page.locator('#pk-body [data-name="Seated Smith Machine Shoulder Press"]')).toBeVisible();
 
+  await input.fill("smith incline");
+  await expect(page.locator('#pk-body [data-name="Smith Machine Incline Bench Press"]')).toBeVisible();
+
+  await input.fill("tricep");
+  await expect(page.locator('#pk-body [data-name="Cable Tricep Extension"]')).toBeVisible();
+
+  await input.fill("cable triceps pushdown");
+  await expect(page.locator('#pk-body [data-name="Cable Tricep Extension"]')).toBeVisible();
+
   await input.fill("cabel");
   await expect(page.locator('#pk-body [data-name="Cable Crunch"]')).toBeVisible();
   await expect(page.locator("#pk-body")).not.toContainText("No exercises match");

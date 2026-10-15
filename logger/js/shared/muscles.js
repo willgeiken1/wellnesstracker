@@ -347,6 +347,10 @@ function preparedBankRows() {
   if (bankSearchCache && bankSearchCache.source === bank) return bankSearchCache.rows;
   const rows = (Array.isArray(bank) ? bank : []).map((b) => {
     const e = { name: b.n, group: b.g, adv: b.a, muscles: app.basicOf(b.a) };
+    if (b.aliases != null) e.aliases = b.aliases;
+    else if (b.alias != null) e.alias = b.alias;
+    if (b.equipment != null) e.equipment = b.equipment;
+    else if (b.equip != null) e.equip = b.equip;
     return { name: b.n, e, src: "bank", fields: searchFields(e) };
   });
   bankSearchCache = { source: bank, rows };
