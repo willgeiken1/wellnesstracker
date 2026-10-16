@@ -243,7 +243,12 @@ async function main() {
     check("an open workout does not reload until the tap", held === baseline, held);
 
     const capturesBefore = await page.evaluate(() => sessionStorage.getItem("insight-banner-captures"));
-    await page.click("#sw-update");
+    // The tap reloads the page. Reading before that navigation settles races it and can throw
+    // "Execution context was destroyed". sessionStorage survives the reload, so read after it.
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "load", timeout: 15000 }),
+      page.click("#sw-update"),
+    ]);
     const capturesAfter = await page.evaluate(() => sessionStorage.getItem("insight-banner-captures"));
     check("tap sends no tracking", capturesBefore === capturesAfter, String(capturesAfter));
 
