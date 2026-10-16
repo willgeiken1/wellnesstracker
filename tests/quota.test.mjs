@@ -113,7 +113,10 @@ test("one user hitting the cap does not block another user", async () => {
 test("anon and authenticated cannot call the quota functions or touch ai_usage", async () => {
   const user = "11111111-1111-4111-8111-111111111111";
   const day = "2026-10-04";
-  const asRole = (role, sql) => psql(sql, { role });
+  const asRole = async (role, sql) => {
+    assert.equal(await psql("select current_user", { role }), role);
+    return psql(sql, { role });
+  };
 
   const okStatus = await asRole("service_role", `select public.ai_quota_status('${user}', '${day}', 'photo')`);
   assert.equal(JSON.parse(okStatus).limit, 10);
@@ -129,8 +132,9 @@ test("anon and authenticated cannot call the quota functions or touch ai_usage",
     for (const sql of [
       "select * from public.ai_usage",
       `insert into public.ai_usage (user_id, day, kind, count) values ('${user}', '2026-10-07', 'photo', 0)`,
-      `update public.ai_usage set count = 0 where user_id = '${user}'`,
-      `delete from public.ai_usage where user_id = '${user}'`,
+      // No column references in WHERE, so a denial means no UPDATE/DELETE privilege, not no SELECT.
+      "update public.ai_usage set count = 0 where false",
+      "delete from public.ai_usage where false",
     ]) {
       await assert.rejects(asRole(role, sql), /permission denied for table ai_usage/, `${role}: ${sql}`);
     }
