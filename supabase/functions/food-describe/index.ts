@@ -5,9 +5,10 @@
 // Secrets: ANTHROPIC_API_KEY (required), FOOD_MODEL (optional, default claude-haiku-4-5-20251001)
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { cors, json, requireUser } from "../_shared/http.ts";
-import { parseFoodEstimate } from "../_shared/food-estimate.js";
+import { readDescribeEstimate } from "../_shared/food-output.js";
 import { FOOD_MODEL_ID } from "../_shared/food-model.js";
 import { consumeQuota, DESCRIBE_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
+import { callFoodModel } from "../_shared/strip.ts";
 
 const MODEL = (Deno.env.get("FOOD_MODEL") ?? "").trim() || FOOD_MODEL_ID;
 
@@ -50,22 +51,23 @@ Deno.serve(async (req) => {
     }
     counted = true;
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const wire = JSON.stringify({
+      model: MODEL,
+      max_tokens: 1500,
+      messages: [{ role: "user", content: [{ type: "text", text: PROMPT + "\nThe meal: " + text }] }],
+    });
+    const res = await callFoodModel(JSON.parse(wire), (body) => fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1500,
-        messages: [{ role: "user", content: [{ type: "text", text: PROMPT + "\nThe meal: " + text }] }],
-      }),
-    });
+      body: JSON.stringify(body),
+    }));
     if (!res.ok) {
       console.error("Claude API error", res.status, await res.text());
       throw new Error("The food analysis service didn't respond. Try again in a moment.");
     }
     const data = await res.json();
     const reply = (data.content ?? []).filter((b: { type?: string }) => b.type === "text").map((b: { text?: string }) => b.text || "").join("");
-    const parsed = parseFoodEstimate(reply);
+    const parsed = readDescribeEstimate(reply);
     if (!parsed) throw new Error("Couldn't read the estimate. Try describing the meal again.");
     return json({ items: parsed.items, notes: parsed.notes, remaining: quota.remaining, limit: quota.limit });
   } catch (e) {

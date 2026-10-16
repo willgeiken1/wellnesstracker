@@ -1,7 +1,11 @@
 name: Deploy Supabase
 
 # Deploys project pvodxxmfgflvgvbdotlv when supabase/ changes on main.
-# Matches the manual deploy: link, db push --yes, functions deploy --no-verify-jwt --use-api.
+# Matches the manual deploy: link, db push --yes,
+# functions deploy --no-verify-jwt --use-api --import-map supabase/functions/deno.json.
+# CLI 2.119.0 reads <function>/deno.json, then functions/import_map.json.
+# It does not read supabase/functions/deno.json unless --import-map points at it.
+# That file is the zod pin the API bundler records as import_map_path.
 
 on:
   push:
@@ -187,7 +191,7 @@ jobs:
           FUNCTION_NAMES: ${{ steps.plan.outputs.functions }}
         run: |
           set -euo pipefail
-          args=(functions deploy --no-verify-jwt --use-api --project-ref "$SUPABASE_PROJECT_REF")
+          args=(functions deploy --no-verify-jwt --use-api --import-map supabase/functions/deno.json --project-ref "$SUPABASE_PROJECT_REF")
 
           if [ "${DEPLOY_ALL}" = "true" ]; then
             echo "Deploying every function."

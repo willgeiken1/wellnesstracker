@@ -7,6 +7,7 @@
 import { cors, json, requireUser } from "../_shared/http.ts";
 import { FOOD_MODEL_ID } from "../_shared/food-model.js";
 import { consumeQuota, PHOTO_KIND, releaseQuota, resolveQuotaDay } from "../_shared/quota.ts";
+import { callFoodModel } from "../_shared/strip.ts";
 
 const MODEL = (Deno.env.get("FOOD_MODEL") ?? "").trim() || FOOD_MODEL_ID;
 
@@ -51,21 +52,22 @@ Deno.serve(async (req) => {
     }
     counted = true;
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const wire = JSON.stringify({
+      model: MODEL,
+      max_tokens: 1500,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: image } },
+          { type: "text", text: PROMPT + (hint ? `\nThe user adds: ${hint}` : "") },
+        ],
+      }],
+    });
+    const res = await callFoodModel(JSON.parse(wire), (body) => fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1500,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: image } },
-            { type: "text", text: PROMPT + (hint ? `\nThe user adds: ${hint}` : "") },
-          ],
-        }],
-      }),
-    });
+      body: JSON.stringify(body),
+    }));
     if (!res.ok) {
       console.error("Claude API error", res.status, await res.text());
       throw new Error("The food analysis service didn't respond. Try again in a moment.");

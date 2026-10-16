@@ -395,3 +395,108 @@ export function addPurge(data: Bag, from: string, to: string, deletedAt?: number
   data.purges = purges;
   return data;
 }
+
+// Fail-closed allowlist for food-describe and food-photo.
+// The only outbound body is the fixed prompt plus the meal text, or that prompt
+// plus the meal photo. Any other key, including a nested health or wearable key,
+// throws before the model client runs. Image bytes are the photo itself and are
+// not scanned as text. Allowed keys:
+// model, max_tokens — which model and the fixed reply cap
+// messages, role, content, type, text — the prompt and the meal text
+// source, media_type, data — the meal photo
+export const FOOD_AI_ALLOWED_KEYS = Object.freeze([
+  "model", "max_tokens", "messages", "role", "content", "type", "text", "source", "media_type", "data",
+]);
+
+const FOOD_AI_ALLOWED = new Set<string>(FOOD_AI_ALLOWED_KEYS);
+
+const FOOD_AI_FORBIDDEN = new Set([
+  "oura", "readiness", "sleep", "hrv", "weight", "mood", "stress", "rhr", "steps",
+  "sleepscore", "averagehrv", "totalsleepduration", "lowestheartrate", "temperaturedeviation",
+  "userdata", "restinghr", "bodyweight",
+]);
+
+export class FoodAiPayloadError extends Error {
+  constructor() {
+    super("Couldn't send that meal to the estimate.");
+    this.name = "FoodAiPayloadError";
+  }
+}
+
+function foodAiTokens(value: string): string[] {
+  return String(value)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function foodAiForbidden(value: string): boolean {
+  const tokens = foodAiTokens(value);
+  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
+  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
+  return false;
+}
+
+function rejectFoodAi(): never {
+  throw new FoodAiPayloadError();
+}
+
+function plainFoodAi(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function allowedFoodAiKeys(value: Record<string, unknown>, expected: string[]) {
+  const keys = Object.keys(value);
+  if (keys.length !== expected.length) rejectFoodAi();
+  for (const key of expected) if (!Object.prototype.hasOwnProperty.call(value, key)) rejectFoodAi();
+  for (const key of keys) {
+    if (!FOOD_AI_ALLOWED.has(key) || foodAiForbidden(key)) rejectFoodAi();
+  }
+}
+
+export function assertFoodAiPayload(payload: unknown): void {
+  if (!plainFoodAi(payload)) rejectFoodAi();
+  allowedFoodAiKeys(payload, ["model", "max_tokens", "messages"]);
+  const model = payload.model;
+  if (typeof model !== "string" || model.length < 1 || model.length > 80 || foodAiForbidden(model)) rejectFoodAi();
+  if (payload.max_tokens !== 1500) rejectFoodAi();
+  const messages = payload.messages;
+  if (!Array.isArray(messages) || messages.length !== 1) rejectFoodAi();
+  const message = messages[0];
+  if (!plainFoodAi(message)) rejectFoodAi();
+  allowedFoodAiKeys(message, ["role", "content"]);
+  if (message.role !== "user") rejectFoodAi();
+  const content = message.content;
+  if (!Array.isArray(content) || (content.length !== 1 && content.length !== 2)) rejectFoodAi();
+  let images = 0;
+  let texts = 0;
+  for (const block of content) {
+    if (!plainFoodAi(block)) rejectFoodAi();
+    if (block.type === "text") {
+      texts += 1;
+      allowedFoodAiKeys(block, ["type", "text"]);
+      if (typeof block.text !== "string" || block.text.length < 1 || block.text.length > 8000) rejectFoodAi();
+      if (foodAiForbidden(block.text)) rejectFoodAi();
+    } else if (block.type === "image") {
+      images += 1;
+      allowedFoodAiKeys(block, ["type", "source"]);
+      const source = block.source;
+      if (!plainFoodAi(source)) rejectFoodAi();
+      allowedFoodAiKeys(source, ["type", "media_type", "data"]);
+      if (source.type !== "base64" || source.media_type !== "image/jpeg") rejectFoodAi();
+      if (typeof source.data !== "string" || source.data.length < 1 || source.data.length > 2_000_000) rejectFoodAi();
+    } else rejectFoodAi();
+  }
+  if (texts !== 1 || images > 1) rejectFoodAi();
+  if (images === 0 && content[0].type !== "text") rejectFoodAi();
+  if (images === 1 && (content[0].type !== "image" || content[1].type !== "text")) rejectFoodAi();
+}
+
+export async function callFoodModel<T>(payload: unknown, client: (body: unknown) => Promise<T> | T): Promise<T> {
+  assertFoodAiPayload(payload);
+  if (typeof client !== "function") rejectFoodAi();
+  return await client(payload);
+}

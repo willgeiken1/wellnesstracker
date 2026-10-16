@@ -23,6 +23,10 @@ jobs:
       - name: Require Node 22.6 or newer
         run: node -e "const [M,m]=process.versions.node.split('.').map(Number); if(M<22||(M===22&&m<6)){console.error(process.version); process.exit(1)}"
 
+      # Food-estimate schema tests import zod. Skip dependency scripts; this job does not run Playwright.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
       - name: Install PostgreSQL
         run: sudo apt-get update && sudo apt-get install -y postgresql
 
