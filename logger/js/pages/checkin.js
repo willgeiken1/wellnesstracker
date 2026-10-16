@@ -29,7 +29,9 @@ function draft() {
 function checkinStripHTML() {
   const saved = todayRow();
   const title = saved ? "Checked in" : "Check in";
-  const sub = saved ? "Update today's check-in" : "Mood, energy, and stress stay on this phone";
+  const sub = saved
+    ? "Update today's check-in"
+    : (app.session ? "Syncs to your account, including the note" : "Stays on this phone until you sign in");
   return `<button type="button" class="checkin-open" data-action="checkin"><span><b>${title}</b><span>${sub}</span></span></button>`;
 }
 app.checkinStripHTML = checkinStripHTML;

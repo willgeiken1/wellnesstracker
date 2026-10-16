@@ -1,6 +1,6 @@
 # Insight Privacy Policy
 
-_Last updated: October 6, 2026_
+_Last updated: October 16, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. This page explains, in plain language, what information Insight handles, where it goes, and the choices you have.
 
@@ -13,6 +13,8 @@ Insight is a personal fitness app built and run by an individual developer as a 
 **Your training.** Workouts, sets, reps, weights, notes, routines, goals, cardio sessions, and app settings such as your color theme.
 
 **Your food.** Meals you log, their calories and macros, your favorites, and your daily targets.
+
+**Check-ins.** Mood, energy, stress, and an optional note. They stay on your device. When you are signed in, they also sync to your account, and the note is included. They are not sent to Sentry, PostHog, or for a nutrition estimate.
 
 **Progress photos.** Only if you add them. They are saved on your device and, when you are signed in, in a private storage area tied to your account.
 
@@ -41,7 +43,7 @@ Sentry and PostHog have separate switches in Settings → Privacy. **Send crash 
 
 ## Where your data lives
 
-A copy of your data is kept in your browser on your device so Insight works offline. If you sign in, it is also backed up to your account in Supabase. The person who runs Insight's database has technical access to stored data and will only use it to keep the app running or to fix problems.
+A copy of your data is kept in your browser on your device so Insight works offline. If you sign in, it is also backed up to your account in Supabase, including check-ins and their notes. The person who runs Insight's database has technical access to stored data and will only use it to keep the app running or to fix problems.
 
 ## Your choices
 
@@ -52,7 +54,7 @@ A copy of your data is kept in your browser on your device so Insight works offl
 - **Export your data** in Settings → Privacy. Insight downloads a zip of CSV files (workouts, sets, food, measurements, weigh-ins, cardio, Oura days, goals, and a list of progress photos). The photo image files are not in the zip.
 - **App lock** in Settings → Privacy. Optional. When it is on, this phone asks for Face ID, Touch ID, or the device passcode before showing Insight. If the device can't do that, Insight asks for a 6-digit code instead. Insight never receives your face, fingerprint, or device passcode. If that unlock isn't available, sign in again with your email and password to open the app. That does not delete anything.
 - **Disconnect Oura** in Settings. This removes the Oura login tokens and the Oura data Insight stored. You can also remove Insight's access from your Oura account.
-- **Delete your account** in Settings → Privacy. You confirm by typing DELETE. This permanently removes your sign-in and everything stored with the account, including workouts, food, cardio, measurements, Oura data, and photos, and it erases the copy on that phone. You can also email the address below.
+- **Delete your account** in Settings → Privacy. You confirm by typing DELETE. This permanently removes your sign-in and everything stored with the account, including workouts, food, check-ins, cardio, measurements, Oura data, and photos, and it erases the copy on that phone. You can also email the address below.
 - **Sign out** at any time in Settings. Signing out does not erase the copy kept in your browser; clear your browser's site data, or use Erase this phone in Privacy when you are signed out, to remove it.
 
 ## How long data is kept

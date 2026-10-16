@@ -136,10 +136,16 @@ test("the check-in sheet uses calm copy and no diagnosis wording", () => {
   app.ui.sd = { mood: 4, energy: 4, stress: 2, note: "solid day" };
   const calm = app.checkinSheetHTML();
   assert.match(calm, / hidden/);
+  app.session = null;
   const strip = app.checkinStripHTML();
   assert.match(strip, /data-action="checkin"/);
-  assert.match(strip, /Mood, energy, and stress stay on this phone/);
-  assert.doesNotMatch(strip, /24680|13570|987654/);
+  assert.match(strip, /Stays on this phone until you sign in/);
+  assert.doesNotMatch(strip, /stay on this phone/);
+  app.session = { user: { id: "local" } };
+  const signed = app.checkinStripHTML();
+  assert.match(signed, /Syncs to your account, including the note/);
+  assert.doesNotMatch(signed, /24680|13570|987654/);
+  app.session = null;
   app.state = { checkins: [{ id: "c1", date: "2026-10-14", mood: 1, stress: 5, note: "sentinel note" }], checkinDeleted: [] };
   const saved = app.checkinStripHTML();
   assert.match(saved, /Checked in/);

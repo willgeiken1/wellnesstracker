@@ -1,10 +1,17 @@
-import { expect, openApp, test } from "./fixtures/app.mjs";
+import { expect, openApp, signIn, test } from "./fixtures/app.mjs";
 
-test("check-in sheet stays on the phone and shows 988 without a diagnosis", async ({ page }) => {
+test("check-in sheet shows 988 without a diagnosis, and the strip says where a check-in is saved", async ({ page }) => {
   const assertQuiet = await openApp(page);
   const strip = page.locator(".checkin-open");
   await expect(strip).toContainText("Check in");
-  await expect(strip).toContainText("Mood, energy, and stress stay on this phone");
+  await expect(strip).toContainText("Stays on this phone until you sign in");
+  await signIn(page);
+  await page.getByRole("button", { name: "Home", exact: true }).click();
+  await expect(strip).toBeVisible();
+  await expect(strip).toContainText("Syncs to your account, including the note");
+  if (process.env.TEAM_SHOTS) {
+    await strip.screenshot({ path: `${process.env.TEAM_SHOTS}/checkin-strip.png` });
+  }
   await strip.click();
   await expect(page.locator(".checkin-advice")).toHaveText("This check-in is not medical advice and it is not a diagnosis.");
   await expect(page.locator("#checkin-card")).toBeHidden();
