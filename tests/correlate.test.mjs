@@ -334,7 +334,7 @@ test("user data becomes daily factors, including late meals and targets", () => 
     profile: { weighIns: [{ date: "2026-03-01", kg: 81.2 }] },
     cardio: { sessions: [{ date: "2026-03-02", kcal: 240, segments: [{ min: 20 }, { min: 5 }] }] },
     measurements: { "2026-03-01": { vals: { waist: 84, arms: 35 }, at: 1 } },
-    checkins: [{ date: "2026-03-01", mood: 2, energy: 7, note: "tired" }],
+    checkins: [{ date: "2026-03-01", mood: 2, energy: 7, stress: 4, note: "tired" }],
   });
 
   const rest = days["2026-03-01"];
@@ -354,6 +354,8 @@ test("user data becomes daily factors, including late meals and targets", () => 
   assert.equal(rest.checkin_energy, 7);
   assert.equal(rest.checkin_mood, undefined);
   assert.equal(rest.mood, undefined);
+  assert.equal(rest.checkin_stress, undefined);
+  assert.equal(rest.stress, undefined);
   assert.equal(train.workedOut, true);
   assert.equal(train.workoutVolume, 1400);
   assert.equal(train["workout:push"], true);
@@ -929,8 +931,8 @@ test("the Insights screen still calls effect(), and the engine does not phone ho
   assert.match(analyze, /app\.correlations/);
   assert.match(analyze, /weightDir/);
   assert.doesNotMatch(engine, /posthog|sentry|sendBeacon|fetch\(/i);
-  assert.match(sw, /insight-shell-v51/);
-  assert.match(sentry, /insight-shell-v51/);
+  assert.match(sw, /insight-shell-v52/);
+  assert.match(sentry, /insight-shell-v52/);
   assert.match(insights, /listFindings/);
   assert.match(insights, /open \? all : top/);
   assert.match(engine, /mergeMirrors/);

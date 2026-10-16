@@ -29,6 +29,21 @@ function emptyState() {
   return { hits: [], aborted: [], continued: [] };
 }
 
+// A spec may permit one canned food-describe response on the guard state.
+// The Supabase stub fulfills that call locally and records the body here.
+// Every other edge function, and food-describe when this was not set, still
+// aborts and counts as a guard hit. Specs must not register their own route.
+export function permitFoodDescribe(state, items) {
+  state.foodDescribe = { items, bodies: [] };
+}
+
+export function takeFoodDescribe(state, body) {
+  const canned = state && state.foodDescribe;
+  if (!canned) return null;
+  canned.bodies.push(body && typeof body === "object" ? body : {});
+  return { items: canned.items, notes: "", remaining: 19 };
+}
+
 export function assertClean(state) {
   if (!state || !state.hits.length) return;
   throw new Error("Network guard blocked requests that must not leave the runner:\n" + state.hits.map((hit) => "- " + hit).join("\n"));

@@ -2,12 +2,15 @@
 // from fixtures/app.mjs. Helper re-exports are followed. guard.spec.mjs is the
 // exception: it is the file allowed to call newContext() to prove the wrapper.
 // A newContext( call anywhere else outside fixtures/ fails this check.
+// .route( outside fixtures/ fails too. A page or context route is checked
+// before the network guard, so an ad-hoc fake can fulfill a call the guard owns.
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const FROM_RE = /\b(?:import|export)\s+([\s\S]*?)\sfrom\s*["']([^"']+)["']/g;
 const NEW_CONTEXT_RE = /\bnewContext\s*\(/;
+const ROUTE_RE = /\.route\s*\(/;
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/.*$/gm, "$1");
@@ -110,6 +113,9 @@ export function auditImports(root, read = (path) => readFileSync(path, "utf8"), 
     if (!isGuardSpec(path) && !underFixtures(root, path) && NEW_CONTEXT_RE.test(text)) {
       violations.push(`${rel}: newContext( is only allowed in fixtures/ and guard.spec.mjs. Use the app fixture's browser so the service-worker check and network guard always apply.`);
     }
+    if (!underFixtures(root, path) && ROUTE_RE.test(text)) {
+      violations.push(`${rel}: .route( is only allowed in fixtures/. An ad-hoc route fake skips the network guard. Permit a canned response on the guard state instead.`);
+    }
     if (isAppFixture(path) || isGuardSpec(path)) continue;
     const source = testSource(path, read, new Set());
     const spec = path.endsWith(".spec.mjs");
@@ -138,6 +144,7 @@ export function selfTestImportAudit() {
     write("nested/deep.spec.mjs", 'import { test } from "../helper.mjs";\n');
     write("guard.spec.mjs", 'import { test } from "@playwright/test";\nawait browser.newContext();\n');
     write("expect-only.mjs", 'import { expect } from "@playwright/test";\n');
+    write("fixtures/routes.mjs", 'export async function arm(context) { await context.route("**/*", () => {}); }\n');
     const clean = auditImports(root);
     if (clean.length) throw new Error("import audit self-test flagged a good tree:\n" + clean.join("\n"));
 
@@ -146,12 +153,13 @@ export function selfTestImportAudit() {
     write("reexport.mjs", 'export { test } from "@playwright/test";\n');
     write("uses-reexport.spec.mjs", 'import { test } from "./reexport.mjs";\n');
     write("expect-only.spec.mjs", 'import { expect } from "@playwright/test";\n');
+    write("route.spec.mjs", 'import { test } from "./fixtures/app.mjs";\nawait page.route("**/food-describe", () => {});\n');
     const bad = auditImports(root).join("\n");
     const flagged = (name) => bad.split("\n").some((line) => line.startsWith(name + ":"));
-    for (const needle of ["bad.spec.mjs", "nested/raw.spec.mjs", "reexport.mjs", "uses-reexport.spec.mjs", "expect-only.spec.mjs"]) {
+    for (const needle of ["bad.spec.mjs", "nested/raw.spec.mjs", "reexport.mjs", "uses-reexport.spec.mjs", "expect-only.spec.mjs", "route.spec.mjs"]) {
       if (!flagged(needle)) throw new Error(`import audit self-test missed ${needle}:\n${bad}`);
     }
-    for (const good of ["good.spec.mjs", "nested/deep.spec.mjs", "guard.spec.mjs", "helper.mjs", "expect-only.mjs", "fixtures/app.mjs"]) {
+    for (const good of ["good.spec.mjs", "nested/deep.spec.mjs", "guard.spec.mjs", "helper.mjs", "expect-only.mjs", "fixtures/app.mjs", "fixtures/routes.mjs"]) {
       if (flagged(good)) throw new Error("import audit self-test flagged a good file:\n" + bad);
     }
   } finally {

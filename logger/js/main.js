@@ -22,6 +22,7 @@ import "./pages/settings.js";
 import "./shared/brief.js";
 import "./shared/home-widgets.js";
 import "./shared/weekly.js";
+import "./pages/checkin.js";
 import "./pages/home.js";
 import "./shell/workout.js";
 import "./shell/timer.js";

@@ -37,7 +37,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 html, body { touch-action: manipulation; }
 body { -webkit-tap-highlight-color: transparent; }
 .home-v2, .hw, .hw-slot, .hero, #pane-home .card, #pane-home .sec,
-#tabs, .page-head, .home-editor-top, .home-edit, .sheet-back, .sheet-x {
+#tabs, .page-head, .home-editor-top, .home-edit, .sheet-back, .sheet-x,
+.checkin-open, .checkin-scale button, .checkin-links a, [data-action="checkin-save"] {
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
 /* Fields and copyable prose stay selectable, even inside the surfaces above. */

@@ -114,6 +114,7 @@ function renderSheet() {
   } else if (app.ui.sheet === "food-barcode") { inner = app.foodBarcodeSheetHTML();
   } else if (app.ui.sheet === "food-targets") { inner = app.targetsSheetHTML();
   } else if (app.ui.sheet === "food-cal") { inner = app.foodCalSheetHTML();
+  } else if (app.ui.sheet === "checkin") { inner = app.checkinSheetHTML();
   } else if (app.ui.sheet === "cardio-new") { inner = app.cardioNewSheetHTML();
   } else if (app.ui.sheet === "cardio-change") { inner = app.cardioChangeSheetHTML();
   } else if (app.ui.sheet === "cardio-log") { inner = app.cardioLogSheetHTML();
@@ -180,7 +181,7 @@ function renderSheet() {
   const bankSheet = app.ui.sheet === "picker" || app.ui.sheet === "live-add" || app.ui.sheet === "swap";
   const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : bankSheet ? "sheet-card bank" : "sheet-card";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
-    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : "Sheet"}"><div class="grabber"></div>
+    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : app.ui.sheet === "checkin" ? "Check-in" : "Sheet"}"><div class="grabber"></div>
     ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;
 }
 app.renderSheet = renderSheet;

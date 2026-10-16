@@ -1,9 +1,11 @@
 // Fulfills the app's Supabase traffic from a pinned supabase-js build and an
 // in-memory synthetic account. Registered after guardNetwork so these URLs are
-// served locally. /functions/v1/* is never fulfilled.
+// served locally. Edge functions are aborted on the guard state. food-describe
+// is the exception, and only when the test called permitFoodDescribe.
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { takeFoodDescribe } from "./network-guard.mjs";
 import { E2E_EMAIL, E2E_PASSWORD, syntheticBlob, syntheticSession, syntheticUser, utcDay } from "./seed.mjs";
 
 const require = createRequire(import.meta.url);
@@ -61,6 +63,13 @@ async function handleSupabase(route, state) {
   const fn = url.pathname.indexOf("/functions/v1/");
   if (fn >= 0) {
     const name = decodeURIComponent(url.pathname.slice(fn + "/functions/v1/".length).split("/")[0] || "");
+    if (name === "food-describe") {
+      const canned = takeFoodDescribe(state, await readBody(route));
+      if (canned) {
+        await send(route, 200, canned);
+        return;
+      }
+    }
     const why = /^food-/i.test(name)
       ? `Network guard: AI food function blocked (never sent): ${name}`
       : /^oura-/i.test(name)
