@@ -9,6 +9,21 @@ jobs:
   test:
     name: Node tests
     runs-on: ubuntu-latest
+    # Throwaway database for tests/quota.test.mjs. Not a real secret.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: quota_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d quota_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,6 +51,43 @@ jobs:
           export PG_BIN="$(echo /usr/lib/postgresql/*/bin)"
           mapfile -t files < <(find tests -maxdepth 1 -name '*.test.mjs' ! -name 'quota.test.mjs' | sort)
           node --experimental-strip-types --test "${files[@]}"
+
+      # The quota test calls psql against $QUOTA_DB. Supabase provides auth.users and the
+      # API roles; stub them, apply the two ai_usage migrations, and seed the test user.
+      - name: Load quota schema
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: quota_test
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -q <<'SQL'
+          do $roles$
+          begin
+            if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
+          end
+          $roles$;
+          create schema if not exists auth;
+          create table if not exists auth.users (id uuid primary key);
+          SQL
+          psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20261002000000_food_ai_usage.sql
+          psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20261004120000_ai_quota.sql
+          psql -v ON_ERROR_STOP=1 -q -c "insert into auth.users (id) values ('11111111-1111-4111-8111-111111111111') on conflict do nothing"
+          # Fail here, not as a confusing test error, if the schema did not load.
+          test "$(psql -t -A -c "select to_regprocedure('public.consume_ai_quota(uuid,date,text)') is not null")" = "t"
+
+      - name: Run quota tests
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          QUOTA_DB: quota_test
+        run: node --test tests/quota.test.mjs
 
   browser:
     name: Browser harnesses
