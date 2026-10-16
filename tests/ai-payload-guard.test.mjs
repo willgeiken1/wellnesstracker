@@ -98,6 +98,66 @@ test("a health word inside the meal text throws and the client is not called", a
   }
 });
 
+test("food names with health-ish words reach the describe model", async () => {
+  for (const text of [
+    "weight gainer shake",
+    "Weight Gainer shake, 2 scoops",
+    "protein shake",
+    "keto bar",
+    "diet soda",
+    "heart of palm salad",
+    "low sugar yogurt",
+    "glucose syrup on pancakes",
+    "rice, weighed 200 g",
+    "steak weight 8oz",
+  ]) {
+    let calls = 0;
+    await callFoodModel(describePayload(text), async () => { calls += 1; return { ok: true }; });
+    assert.equal(calls, 1, text);
+  }
+});
+
+test("vitals, labs, Oura metrics, diagnoses, and medications stay blocked in meal text", async () => {
+  for (const text of [
+    "eggs, weight 82 kg",
+    "weighed in at 180 lbs then toast",
+    "protein shake, heart rate 62",
+    "oats at 70 bpm",
+    "blood pressure 120/80 and rice",
+    "toast bp 130 85",
+    "glucose 140 after pasta",
+    "blood sugar spiked after cake",
+    "rice 140 mg/dL",
+    "pasta then 7.8mmol",
+    "A1c 6.1 and salad",
+    "HRV 45 and eggs",
+    "sleep score 82 with coffee",
+    "Oura readiness 80, bagel",
+    "keto bar, diagnosed with diabetes",
+    "type 2 diabetic, diet soda",
+    "took metformin with breakfast",
+    "insulin before the low sugar yogurt",
+    "eggs and my meds",
+  ]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("an assistant message is rejected, not scanned like user meal text", async () => {
+  const clean = describePayload("Two eggs and toast");
+  let calls = 0;
+  await callFoodModel(clean, async () => { calls += 1; return { ok: true }; });
+  assert.equal(calls, 1);
+  for (const role of ["assistant", "system", "User"]) {
+    const plain = describePayload("Two eggs and toast");
+    plain.messages[0].role = role;
+    await expectBlocked(plain);
+    const photo = photoPayload("Plate of rice");
+    photo.messages[0].role = role;
+    await expectBlocked(photo);
+  }
+});
+
 test("the real food prompts are allowed with a plain meal", async () => {
   const describeSrc = read("../supabase/functions/food-describe/index.ts");
   const photoSrc = read("../supabase/functions/food-photo/index.ts");

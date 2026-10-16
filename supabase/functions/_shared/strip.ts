@@ -438,6 +438,27 @@ function foodAiForbidden(value: string): boolean {
   return false;
 }
 
+/* Meal text may name foods like "weight gainer shake". A weight word next to
+   a number is still a body weight unless the number is a food unit. */
+const FOOD_TEXT_FOOD_WORDS = new Set(["weight"]);
+
+const FOOD_TEXT_HEALTH = [
+  /\b(?:weight|weigh|weighs|weighed|weighing)(?: (?:is|was|of|at|in|about|around|now|today))* \d+(?!\d)(?! ?(?:g|grams?|oz|ounces?|ml)\b)/,
+  /\bheart ?rate\b|\bbpm\b|\bpulse \d/,
+  /\bblood ?pressure\b|\bmmhg\b|\bbp \d/,
+  /\bblood ?(?:sugar|glucose)\b|\bglucose(?: (?:is|was|at|of|level|levels|reading))* \d|(?:\b|\d)mg ?d ?l\b|(?:\b|\d)mmol\b|\b(?:hb)?a1c\b|\bcgm\b|\b[lh]dl\b|\btriglycerides?\b/,
+  /\bdiagnos\w*|\b(?:pre)?diabet\w*|\bhypertensi\w*|\bhypothyroid\w*|\bpcos\b/,
+  /\b(?:medications?|meds|prescri\w*|metformin|insulin|ozempic|wegovy|mounjaro|zepbound|semaglutide|tirzepatide|statins?|atorvastatin|lisinopril|levothyroxine)\b/,
+];
+
+function foodAiTextForbidden(value: string): boolean {
+  const tokens = foodAiTokens(value);
+  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
+  for (const token of tokens) if (!FOOD_TEXT_FOOD_WORDS.has(token) && FOOD_AI_FORBIDDEN.has(token)) return true;
+  const words = tokens.join(" ");
+  return FOOD_TEXT_HEALTH.some((re) => re.test(words));
+}
+
 function rejectFoodAi(): never {
   throw new FoodAiPayloadError();
 }
@@ -479,7 +500,7 @@ export function assertFoodAiPayload(payload: unknown): void {
       texts += 1;
       allowedFoodAiKeys(block, ["type", "text"]);
       if (typeof block.text !== "string" || block.text.length < 1 || block.text.length > 8000) rejectFoodAi();
-      if (foodAiForbidden(block.text)) rejectFoodAi();
+      if (foodAiTextForbidden(block.text)) rejectFoodAi();
     } else if (block.type === "image") {
       images += 1;
       allowedFoodAiKeys(block, ["type", "source"]);
