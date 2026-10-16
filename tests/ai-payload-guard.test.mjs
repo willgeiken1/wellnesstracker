@@ -166,4 +166,137 @@ test("the zod pin matches the edge import map and the AI SDK is not installed", 
   const output = read("../supabase/functions/_shared/food-output.js");
   assert.match(output, /from "zod"/);
   assert.doesNotMatch(output, /generateObject|@ai-sdk/);
+  const workflow = read("../.github/workflows/supabase-deploy.yml");
+  assert.match(workflow, /--import-map supabase\/functions\/deno\.json/);
+  assert.equal(exists("../supabase/functions/food-describe/deno.json"), false);
+  assert.equal(exists("../supabase/functions/import_map.json"), false);
+});
+
+function exists(path) {
+  try {
+    read(path);
+    return true;
+  } catch (err) {
+    if (err && err.code === "ENOENT") return false;
+    throw err;
+  }
+}
+
+function item(overrides = {}) {
+  return {
+    name: "Eggs",
+    portion: "2",
+    grams: 1,
+    calories: 1,
+    protein: 1,
+    carbs: 1,
+    fat: 1,
+    ...overrides,
+  };
+}
+
+test("blocklist spelling catches lowest heart rate, joined phrases, and camelCase", async () => {
+  const strip = read("../supabase/functions/_shared/strip.ts");
+  assert.match(strip, /"lowestheartrate"/);
+  assert.doesNotMatch(strip, /lowesthheartrate/);
+  for (const text of [
+    "lowest heart rate",
+    "lowestHeartRate",
+    "Lowest_Heart_Rate",
+    "temperature deviation",
+    "resting hr",
+    "eggs poorSleep",
+  ]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("model, meal text, and photo bytes keep their length bounds", async () => {
+  const one = describePayload("a");
+  one.model = "m";
+  await callFoodModel(one, async () => ({ ok: true }));
+  const eighty = describePayload("a".repeat(8000));
+  eighty.model = "m".repeat(80);
+  await callFoodModel(eighty, async () => ({ ok: true }));
+  await callFoodModel(photoPayload("a", "a"), async () => ({ ok: true }));
+  await callFoodModel(photoPayload("a", "a".repeat(2_000_000)), async () => ({ ok: true }));
+
+  const emptyModel = describePayload("eggs");
+  emptyModel.model = "";
+  await expectBlocked(emptyModel);
+  const longModel = describePayload("eggs");
+  longModel.model = "m".repeat(81);
+  await expectBlocked(longModel);
+  const numericModel = describePayload("eggs");
+  numericModel.model = 1;
+  await expectBlocked(numericModel);
+  await expectBlocked(describePayload(""));
+  await expectBlocked(describePayload("a".repeat(8001)));
+  const emptyPhoto = photoPayload("eggs", "");
+  await expectBlocked(emptyPhoto);
+  await expectBlocked(photoPayload("eggs", "a".repeat(2_000_001)));
+});
+
+test("token cap, role, order, media type, and extra allowed keys stay closed", async () => {
+  for (const max of [1499, 1501]) {
+    const payload = describePayload("eggs");
+    payload.max_tokens = max;
+    await expectBlocked(payload);
+  }
+  const swapped = photoPayload("eggs");
+  swapped.messages[0].content.reverse();
+  await expectBlocked(swapped);
+  const png = photoPayload("eggs");
+  png.messages[0].content[0].source.media_type = "image/png";
+  await expectBlocked(png);
+  const url = photoPayload("eggs");
+  url.messages[0].content[0].source.type = "url";
+  await expectBlocked(url);
+  const twoTexts = describePayload("eggs");
+  twoTexts.messages[0].content.push({ type: "text", text: "toast" });
+  await expectBlocked(twoTexts);
+  const extra = describePayload("eggs");
+  extra.messages[0].content[0].data = "abcd";
+  await expectBlocked(extra);
+
+  const bare = Object.assign(Object.create(null), describePayload("eggs"));
+  let calls = 0;
+  await callFoodModel(bare, async () => { calls += 1; return { ok: true }; });
+  assert.equal(calls, 1);
+  await assert.rejects(
+    () => callFoodModel(describePayload("eggs"), null),
+    (err) => err instanceof FoodAiPayloadError,
+  );
+});
+
+test("zod bounds, extra fields, and a rounded negative macro", () => {
+  const ok = (overrides, notes = "ok") => readDescribeEstimate(JSON.stringify({
+    items: [item(overrides)],
+    notes,
+  }));
+  assert.equal(ok({ grams: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }).items[0].grams, 0);
+  assert.equal(ok({ calories: 5000 }).items[0].calories, 5000);
+  assert.equal(ok({ name: "a".repeat(80) }).items[0].name.length, 80);
+  assert.equal(ok({ portion: "p".repeat(60) }).items[0].portion.length, 60);
+  assert.equal(ok({}, "n".repeat(300)).notes.length, 300);
+  assert.equal(ok({ name: "  Eggs  " }).items[0].name, "Eggs");
+
+  const dozen = {
+    items: Array.from({ length: 12 }, () => item()),
+    notes: "twelve",
+  };
+  assert.equal(readDescribeEstimate(JSON.stringify(dozen)).items.length, 12);
+
+  assert.equal(ok({ calories: 5000.4 }), null);
+  assert.equal(ok({ calories: 5001 }), null);
+  assert.equal(ok({ fat: -0.4 }), null);
+  assert.equal(ok({ name: "a".repeat(81) }), null);
+  assert.equal(ok({ portion: "p".repeat(61) }), null);
+  assert.equal(ok({}, "n".repeat(301)), null);
+  assert.equal(ok({ extra: true }), null);
+  assert.equal(readDescribeEstimate(JSON.stringify({
+    items: [item()],
+    notes: "ok",
+    extra: true,
+  })), null);
 });

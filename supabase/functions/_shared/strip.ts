@@ -412,7 +412,7 @@ const FOOD_AI_ALLOWED = new Set<string>(FOOD_AI_ALLOWED_KEYS);
 
 const FOOD_AI_FORBIDDEN = new Set([
   "oura", "readiness", "sleep", "hrv", "weight", "mood", "stress", "rhr", "steps",
-  "sleepscore", "averagehrv", "totalsleepduration", "lowesthheartrate", "temperaturedeviation",
+  "sleepscore", "averagehrv", "totalsleepduration", "lowestheartrate", "temperaturedeviation",
   "userdata", "restinghr", "bodyweight",
 ]);
 
