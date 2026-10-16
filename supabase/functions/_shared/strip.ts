@@ -426,13 +426,16 @@ export class FoodAiPayloadError extends Error {
 const FOOD_AI_IGNORABLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
 
 /* Line and paragraph separators are word breaks, never stripped. The second
-   strip covers anything NFKC might map to an ignorable. */
+   strip covers anything NFKC might map to an ignorable. Combining marks are
+   dropped after NFD, so "weíght" and "we\u0300ight" read as weight. */
 function foodAiNormalize(value: string): string {
   return String(value)
     .replace(/[\u2028\u2029]/g, " ")
     .replace(FOOD_AI_IGNORABLE, "")
     .normalize("NFKC")
     .replace(FOOD_AI_IGNORABLE, "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase();
 }
@@ -467,34 +470,35 @@ const BODY_UNIT = "(?:lbs?|pounds?|kgs?|kilos?|kilograms?|st|stones?)";
 /* "weight" passes only inside these food names. Anywhere else it still blocks. */
 const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
 /* A body unit after a food name reads as a body weight, attached (82kg, 13st)
-   or not. Up to three words may sit between them, but not across punctuation
-   or a joining word, so "weight gainer tub, brisket 20 lb" is two foods. */
+   or not. Up to three words may sit between them, but not across a list
+   separator or a joining word, so "weight gainer tub, brisket 20 lb" and
+   "weight gainer tub, 2 st louis ribs" are two foods. */
 const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(
   "\\bweight[^a-z0-9]+(?:gainers?|watchers)" +
-  "(?:[^a-z0-9]*|(?: +(?!(?:and|with|plus|then|or)\\b)[a-z]+\\b){1,3} *)" +
+  "(?:[^a-z0-9,;.]*|(?: +(?!(?:and|with|plus|then|or)\\b)[a-z]+\\b){1,3} *)" +
   "(?:\\d+(?:[^a-z0-9]{1,2}\\d+)*)?[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?" + BODY_UNIT + "\\b",
 );
 /* A tub, bag, jar, or scoop of up to 12 lb or 5 kg is a package size, not a
-   body weight. This runs before tokens are split so a typed decimal point is
-   still there: "5 180 lb" is not 5.18, and 0.180 is not a size. */
-const FOOD_TEXT_PACKAGE = /\bweight[^a-z0-9]+(gainers?|watchers)[^a-z0-9]+(\d+(?:\.\d{1,2})?)[^a-z0-9]{0,2}(lbs?|pounds?|kgs?|kilos?|kilograms?)[^a-z0-9]+(?:tubs?|bags?|jars?|scoops?)\b/g;
+   body weight. This runs before tokens are split so a typed decimal point or
+   comma is still there: "5 180 lb" is not 5.18, and 0.180 is not a size. */
+const FOOD_TEXT_PACKAGE = /\bweight[^a-z0-9]+(gainers?|watchers)[^a-z0-9]+(\d+(?:[.,]\d{1,2})?)[^a-z0-9]{0,2}(lbs?|pounds?|kgs?|kilos?|kilograms?)[^a-z0-9]+(?:tubs?|bags?|jars?|scoops?)\b/g;
 
 function dropPackageSizes(normalized: string): string {
   return normalized.replace(FOOD_TEXT_PACKAGE, (all, name, size, unit) => {
     const cap = unit.startsWith("k") ? 5 : 12;
-    return Number(size) <= cap ? `weight ${name}` : all;
+    return Number(size.replace(",", ".")) <= cap ? `weight ${name}` : all;
   });
 }
 
 /* A body-sized mass anywhere (30 kg, 60 lb, 5 stone and up) is a body weight.
-   An attached st is an ordinal (21st), so st needs a space. */
-const FOOD_TEXT_BODY_MASS = /(?<![\d.])(\d+(?:\.\d+)?)([^a-z0-9]{0,3})(?:ish[^a-z0-9]{0,3})?(kgs?|kilos?|kilograms?|lbs?|pounds?|stones?|st)\b/g;
+   A comma can be the decimal point (82,5 kg). A bare st is a street or
+   St. Louis here, so only stone counts. */
+const FOOD_TEXT_BODY_MASS = /(\d+(?:[.,]\d+)?)[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?(kgs?|kilos?|kilograms?|lbs?|pounds?|stones?)\b/g;
 
 function bodyMass(normalized: string): boolean {
-  for (const [, size, gap, unit] of normalized.matchAll(FOOD_TEXT_BODY_MASS)) {
-    if (unit === "st" && !gap) continue;
+  for (const [, size, unit] of normalized.matchAll(FOOD_TEXT_BODY_MASS)) {
     const cap = unit.startsWith("k") ? 30 : unit.startsWith("st") ? 5 : 60;
-    if (Number(size) >= cap) return true;
+    if (Number(size.replace(",", ".")) >= cap) return true;
   }
   return false;
 }
