@@ -425,6 +425,7 @@ export class FoodAiPayloadError extends Error {
 
 function foodAiTokens(value: string): string[] {
   return String(value)
+    .replace(/[\u00AD\u180E\u200B-\u200F\u2060-\u2064\uFEFF]/g, "")
     .normalize("NFKC")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
@@ -441,6 +442,8 @@ function foodAiForbidden(value: string): boolean {
 
 /* "weight" passes only inside these food names. Anywhere else it still blocks. */
 const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
+/* A body unit right after a food name reads as a body weight. */
+const FOOD_TEXT_WEIGHT_FOOD_UNIT = /\bweight (?:gainers?|watchers) ?\d*(?: \d+)? ?(?:lbs?|kgs?|pounds?|stone)\b/;
 
 const FOOD_TEXT_HEALTH = [
   /\b(?:weight|weigh|weighs|weighed|weighing)(?: (?:is|was|of|at|in|about|around|now|today))* \d+(?!\d)(?! ?(?:g|grams?|oz|ounces?|ml)\b)/,
@@ -453,10 +456,12 @@ const FOOD_TEXT_HEALTH = [
 
 function foodAiTextForbidden(value: string): boolean {
   const words = foodAiTokens(value).join(" ");
+  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(words)) return true;
   const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
   if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
   for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
-  return FOOD_TEXT_HEALTH.some((re) => re.test(words));
+  const stripped = tokens.join(" ");
+  return FOOD_TEXT_HEALTH.some((re) => re.test(stripped));
 }
 
 function rejectFoodAi(): never {

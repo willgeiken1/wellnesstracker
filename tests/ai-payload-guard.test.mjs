@@ -110,6 +110,7 @@ test("food names with health-ish words reach the describe model", async () => {
     "glucose syrup on pancakes",
     "rice, weighed 200 g",
     "Weight Watchers frozen lasagna",
+    "weight gainers shake",
     "WeightGainer 2 scoops",
   ]) {
     let calls = 0;
@@ -156,9 +157,27 @@ test("weight outside a known food name still blocks, including full-width input"
     "ｗｅｉｇｈｔ gainer shake, ｗｅｉｇｈｔ 182",
     "ｈｅａｒｔ ｒａｔｅ ６２ and toast",
     "ＨＲＶ ４５",
+    "weighed weight gainer 180",
+    "I weigh weight watchers 82 kg",
+    "weighing at weight gainers 180",
   ]) {
     await expectBlocked(describePayload(text));
   }
+});
+
+test("a body unit right after an allowed food name blocks", async () => {
+  for (const text of ["weight gainer 180 lbs", "weight watchers 82kg", "weight gainers lb", "Weight Gainer 1.5 kg"]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("zero-width characters cannot split a blocked word", async () => {
+  for (const text of ["wei\u200Bght 182", "H\u200CRV 45 and eggs", "o\u2060ura day, toast", "sle\uFEFFep score 80"]) {
+    await expectBlocked(describePayload(text));
+  }
+  let calls = 0;
+  await callFoodModel(describePayload("weight\u200B gainer shake"), async () => { calls += 1; });
+  assert.equal(calls, 1);
 });
 
 test("an assistant message is rejected, not scanned like user meal text", async () => {
