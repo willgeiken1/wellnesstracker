@@ -5,6 +5,9 @@ on:
   pull_request:
   push:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Node tests
@@ -12,7 +15,8 @@ jobs:
     # Throwaway database for tests/quota.test.mjs. Not a real secret.
     services:
       postgres:
-        image: postgres:16
+        # postgres:16
+        image: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -52,8 +56,9 @@ jobs:
           mapfile -t files < <(find tests -maxdepth 1 -name '*.test.mjs' ! -name 'quota.test.mjs' | sort)
           node --experimental-strip-types --test "${files[@]}"
 
-      # The quota test calls psql against $QUOTA_DB. Supabase provides auth.users and the
-      # API roles; stub them, apply the two ai_usage migrations, and seed the test user.
+      # The quota test calls psql against $QUOTA_DB. Supabase provides the API roles, auth.users,
+      # auth.uid() and the storage tables; stub them, apply every migration in filename order,
+      # and seed the test user.
       - name: Load quota schema
         env:
           PGHOST: localhost
@@ -61,6 +66,7 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGDATABASE: quota_test
+          PGOPTIONS: "-c client_min_messages=warning"
         run: |
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 -q <<'SQL'
@@ -73,9 +79,26 @@ jobs:
           $roles$;
           create schema if not exists auth;
           create table if not exists auth.users (id uuid primary key);
+          create or replace function auth.uid() returns uuid language sql stable
+            as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          create schema if not exists storage;
+          create table if not exists storage.buckets (
+            id text primary key, name text not null, public boolean default false,
+            file_size_limit bigint, allowed_mime_types text[]
+          );
+          create table if not exists storage.objects (
+            id uuid primary key default gen_random_uuid(),
+            bucket_id text references storage.buckets (id), name text, owner uuid
+          );
+          create or replace function storage.foldername(name text) returns text[] language sql immutable
+            as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
           SQL
-          psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20261002000000_food_ai_usage.sql
-          psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20261004120000_ai_quota.sql
+          mapfile -t migrations < <(find supabase/migrations -maxdepth 1 -name '*.sql' | LC_ALL=C sort)
+          test "${#migrations[@]}" -gt 0
+          for f in "${migrations[@]}"; do
+            echo "Applying $f"
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
           psql -v ON_ERROR_STOP=1 -q -c "insert into auth.users (id) values ('11111111-1111-4111-8111-111111111111') on conflict do nothing"
           # Fail here, not as a confusing test error, if the schema did not load.
           test "$(psql -t -A -c "select to_regprocedure('public.consume_ai_quota(uuid,date,text)') is not null")" = "t"
