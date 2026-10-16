@@ -31,10 +31,11 @@ test("bad dates and time zones are rejected", () => {
   assert.equal(dayDistance("2026-10-04", "2026-10-03"), 1);
 });
 
-function psql(sql) {
+function psql(sql, { role } = {}) {
   const db = process.env.QUOTA_DB || "quota_test";
+  const env = role ? { ...process.env, PGOPTIONS: `${process.env.PGOPTIONS || ""} -c role=${role}` } : process.env;
   return new Promise((resolve, reject) => {
-    execFile("psql", ["-d", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", sql], (err, stdout, stderr) => {
+    execFile("psql", ["-d", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", sql], { env }, (err, stdout, stderr) => {
       if (err) reject(new Error((stderr || err.message).trim()));
       else resolve(stdout.trim());
     });
@@ -85,6 +86,55 @@ test("parallel consumes stop at 10 photos and 20 descriptions", async () => {
   assert.equal(status.limit, 20);
 
   await assert.rejects(psql(`select public.consume_ai_quota('${user}', '${day}', 'other')`), /bad quota kind/);
+});
+
+test("one user hitting the cap does not block another user", async () => {
+  const userA = "11111111-1111-4111-8111-111111111111";
+  const userB = "22222222-2222-4222-8222-222222222222";
+  const day = "2026-10-06";
+  await psql(`delete from public.ai_usage where user_id in ('${userA}', '${userB}') and day = '${day}'`);
+
+  for (let i = 0; i < 10; i++) {
+    assert.equal((await q(`select public.consume_ai_quota('${userA}', '${day}', 'photo')`)).allowed, true);
+  }
+  const blocked = await q(`select public.consume_ai_quota('${userA}', '${day}', 'photo')`);
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.used, 10);
+
+  const other = await q(`select public.consume_ai_quota('${userB}', '${day}', 'photo')`);
+  assert.equal(other.allowed, true);
+  assert.equal(other.used, 1);
+  assert.equal(other.remaining, 9);
+
+  const rows = await psql(`select user_id || ':' || count from public.ai_usage where day = '${day}' and kind = 'photo' order by user_id`);
+  assert.equal(rows, `${userA}:10\n${userB}:1`);
+});
+
+test("anon and authenticated cannot call the quota functions or touch ai_usage", async () => {
+  const user = "11111111-1111-4111-8111-111111111111";
+  const day = "2026-10-04";
+  const asRole = (role, sql) => psql(sql, { role });
+
+  const okStatus = await asRole("service_role", `select public.ai_quota_status('${user}', '${day}', 'photo')`);
+  assert.equal(JSON.parse(okStatus).limit, 10);
+
+  for (const role of ["anon", "authenticated"]) {
+    for (const fn of ["consume_ai_quota", "release_ai_quota", "ai_quota_status"]) {
+      await assert.rejects(
+        asRole(role, `select public.${fn}('${user}', '${day}', 'photo')`),
+        new RegExp(`permission denied for function ${fn}`),
+        `${role} must not execute ${fn}`
+      );
+    }
+    for (const sql of [
+      "select * from public.ai_usage",
+      `insert into public.ai_usage (user_id, day, kind, count) values ('${user}', '2026-10-07', 'photo', 0)`,
+      `update public.ai_usage set count = 0 where user_id = '${user}'`,
+      `delete from public.ai_usage where user_id = '${user}'`,
+    ]) {
+      await assert.rejects(asRole(role, sql), /permission denied for table ai_usage/, `${role}: ${sql}`);
+    }
+  }
 });
 
 test("the photo function no longer counts by UTC", () => {
