@@ -427,16 +427,22 @@ const FOOD_AI_IGNORABLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
 
 /* Line and paragraph separators are word breaks, never stripped. The second
    strip covers anything NFKC might map to an ignorable. */
-function foodAiTokens(value: string): string[] {
+function foodAiNormalize(value: string): string {
   return String(value)
     .replace(/[\u2028\u2029]/g, " ")
     .replace(FOOD_AI_IGNORABLE, "")
     .normalize("NFKC")
     .replace(FOOD_AI_IGNORABLE, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+    .toLowerCase();
+}
+
+function foodAiSplit(normalized: string): string[] {
+  return normalized.split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function foodAiTokens(value: string): string[] {
+  return foodAiSplit(foodAiNormalize(value));
 }
 
 /* Joined terms such as "temperature deviation" are 2-3 words long and can sit
@@ -460,17 +466,37 @@ const BODY_UNIT = "(?:lbs?|pounds?|kgs?|kilos?|kilograms?|st|stones?)";
 
 /* "weight" passes only inside these food names. Anywhere else it still blocks. */
 const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
-/* A body unit after a food name reads as a body weight, attached (82kg, 13st) or not. */
-const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(`\\bweight (?:gainers?|watchers)${FILLER}(?: ?\\d+(?!\\d))* ?${BODY_UNIT}\\b`);
-/* A tub, bag, jar, or scoop of up to 12 lb or 5 kg is a package size, not a body weight. */
-const FOOD_TEXT_PACKAGE = /\b(weight (?:gainers?|watchers)) (\d+)(?: (\d+))? ?(lbs?|pounds?|kgs?|kilos?|kilograms?) (?:tubs?|bags?|jars?|scoops?)\b/g;
+/* A body unit after a food name reads as a body weight, attached (82kg, 13st)
+   or not. Up to three words may sit between them, but not across punctuation
+   or a joining word, so "weight gainer tub, brisket 20 lb" is two foods. */
+const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(
+  "\\bweight[^a-z0-9]+(?:gainers?|watchers)" +
+  "(?:[^a-z0-9]*|(?: +(?!(?:and|with|plus|then|or)\\b)[a-z]+\\b){1,3} *)" +
+  "(?:\\d+(?:[^a-z0-9]{1,2}\\d+)*)?[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?" + BODY_UNIT + "\\b",
+);
+/* A tub, bag, jar, or scoop of up to 12 lb or 5 kg is a package size, not a
+   body weight. This runs before tokens are split so a typed decimal point is
+   still there: "5 180 lb" is not 5.18, and 0.180 is not a size. */
+const FOOD_TEXT_PACKAGE = /\bweight[^a-z0-9]+(gainers?|watchers)[^a-z0-9]+(\d+(?:\.\d{1,2})?)[^a-z0-9]{0,2}(lbs?|pounds?|kgs?|kilos?|kilograms?)[^a-z0-9]+(?:tubs?|bags?|jars?|scoops?)\b/g;
 
-function dropPackageSizes(words: string): string {
-  return words.replace(FOOD_TEXT_PACKAGE, (all, name, whole, frac, unit) => {
-    const size = Number(frac ? `${whole}.${frac}` : whole);
+function dropPackageSizes(normalized: string): string {
+  return normalized.replace(FOOD_TEXT_PACKAGE, (all, name, size, unit) => {
     const cap = unit.startsWith("k") ? 5 : 12;
-    return size <= cap ? name : all;
+    return Number(size) <= cap ? `weight ${name}` : all;
   });
+}
+
+/* A body-sized mass anywhere (30 kg, 60 lb, 5 stone and up) is a body weight.
+   An attached st is an ordinal (21st), so st needs a space. */
+const FOOD_TEXT_BODY_MASS = /(?<![\d.])(\d+(?:\.\d+)?)([^a-z0-9]{0,3})(?:ish[^a-z0-9]{0,3})?(kgs?|kilos?|kilograms?|lbs?|pounds?|stones?|st)\b/g;
+
+function bodyMass(normalized: string): boolean {
+  for (const [, size, gap, unit] of normalized.matchAll(FOOD_TEXT_BODY_MASS)) {
+    if (unit === "st" && !gap) continue;
+    const cap = unit.startsWith("k") ? 30 : unit.startsWith("st") ? 5 : 60;
+    if (Number(size) >= cap) return true;
+  }
+  return false;
 }
 
 const FOOD_TEXT_HEALTH = [
@@ -484,10 +510,12 @@ const FOOD_TEXT_HEALTH = [
 ];
 
 function foodAiTextForbidden(value: string): boolean {
-  const raw = foodAiTokens(value);
-  if (foodAiForbiddenTokens(raw, false)) return true;
-  const words = dropPackageSizes(raw.join(" "));
-  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(words)) return true;
+  const normalized = foodAiNormalize(value);
+  if (foodAiForbiddenTokens(foodAiSplit(normalized), false)) return true;
+  const packed = dropPackageSizes(normalized);
+  if (bodyMass(packed)) return true;
+  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(packed)) return true;
+  const words = foodAiSplit(packed).join(" ");
   const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
   if (FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens)) return true;
   const stripped = tokens.join(" ");
