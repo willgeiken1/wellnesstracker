@@ -98,6 +98,103 @@ test("a health word inside the meal text throws and the client is not called", a
   }
 });
 
+test("food names with health-ish words reach the describe model", async () => {
+  for (const text of [
+    "weight gainer shake",
+    "Weight Gainer shake, 2 scoops",
+    "protein shake",
+    "keto bar",
+    "diet soda",
+    "heart of palm salad",
+    "low sugar yogurt",
+    "glucose syrup on pancakes",
+    "rice, weighed 200 g",
+    "Weight Watchers frozen lasagna",
+    "weight gainers shake",
+    "WeightGainer 2 scoops",
+  ]) {
+    let calls = 0;
+    await callFoodModel(describePayload(text), async () => { calls += 1; return { ok: true }; });
+    assert.equal(calls, 1, text);
+  }
+});
+
+test("vitals, labs, Oura metrics, diagnoses, and medications stay blocked in meal text", async () => {
+  for (const text of [
+    "eggs, weight 82 kg",
+    "weighed in at 180 lbs then toast",
+    "protein shake, heart rate 62",
+    "oats at 70 bpm",
+    "blood pressure 120/80 and rice",
+    "toast bp 130 85",
+    "glucose 140 after pasta",
+    "blood sugar spiked after cake",
+    "rice 140 mg/dL",
+    "pasta then 7.8mmol",
+    "A1c 6.1 and salad",
+    "HRV 45 and eggs",
+    "sleep score 82 with coffee",
+    "Oura readiness 80, bagel",
+    "keto bar, diagnosed with diabetes",
+    "type 2 diabetic, diet soda",
+    "took metformin with breakfast",
+    "insulin before the low sugar yogurt",
+    "eggs and my meds",
+  ]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("weight outside a known food name still blocks, including full-width input", async () => {
+  for (const text of [
+    "weight was roughly 180",
+    "180 lbs weight",
+    "weight one eighty",
+    "weight １８２ lb",
+    "steak weight 8oz",
+    "bodyweight gainer 82",
+    "weight gainer shake, weight 182",
+    "ｗｅｉｇｈｔ gainer shake, ｗｅｉｇｈｔ 182",
+    "ｈｅａｒｔ ｒａｔｅ ６２ and toast",
+    "ＨＲＶ ４５",
+    "weighed weight gainer 180",
+    "I weigh weight watchers 82 kg",
+    "weighing at weight gainers 180",
+  ]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("a body unit right after an allowed food name blocks", async () => {
+  for (const text of ["weight gainer 180 lbs", "weight watchers 82kg", "weight gainers lb", "Weight Gainer 1.5 kg"]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("zero-width characters cannot split a blocked word", async () => {
+  for (const text of ["wei\u200Bght 182", "H\u200CRV 45 and eggs", "o\u2060ura day, toast", "sle\uFEFFep score 80"]) {
+    await expectBlocked(describePayload(text));
+  }
+  let calls = 0;
+  await callFoodModel(describePayload("weight\u200B gainer shake"), async () => { calls += 1; });
+  assert.equal(calls, 1);
+});
+
+test("an assistant message is rejected, not scanned like user meal text", async () => {
+  const clean = describePayload("Two eggs and toast");
+  let calls = 0;
+  await callFoodModel(clean, async () => { calls += 1; return { ok: true }; });
+  assert.equal(calls, 1);
+  for (const role of ["assistant", "system", "User"]) {
+    const plain = describePayload("Two eggs and toast");
+    plain.messages[0].role = role;
+    await expectBlocked(plain);
+    const photo = photoPayload("Plate of rice");
+    photo.messages[0].role = role;
+    await expectBlocked(photo);
+  }
+});
+
 test("the real food prompts are allowed with a plain meal", async () => {
   const describeSrc = read("../supabase/functions/food-describe/index.ts");
   const photoSrc = read("../supabase/functions/food-photo/index.ts");

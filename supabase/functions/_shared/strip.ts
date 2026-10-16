@@ -425,6 +425,8 @@ export class FoodAiPayloadError extends Error {
 
 function foodAiTokens(value: string): string[] {
   return String(value)
+    .replace(/[\u00AD\u180E\u200B-\u200F\u2060-\u2064\uFEFF]/g, "")
+    .normalize("NFKC")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -436,6 +438,30 @@ function foodAiForbidden(value: string): boolean {
   if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
   for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
   return false;
+}
+
+/* "weight" passes only inside these food names. Anywhere else it still blocks. */
+const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
+/* A body unit right after a food name reads as a body weight. */
+const FOOD_TEXT_WEIGHT_FOOD_UNIT = /\bweight (?:gainers?|watchers) ?\d*(?: \d+)? ?(?:lbs?|kgs?|pounds?|stone)\b/;
+
+const FOOD_TEXT_HEALTH = [
+  /\b(?:weight|weigh|weighs|weighed|weighing)(?: (?:is|was|of|at|in|about|around|now|today))* \d+(?!\d)(?! ?(?:g|grams?|oz|ounces?|ml)\b)/,
+  /\bheart ?rate\b|\bbpm\b|\bpulse \d/,
+  /\bblood ?pressure\b|\bmmhg\b|\bbp \d/,
+  /\bblood ?(?:sugar|glucose)\b|\bglucose(?: (?:is|was|at|of|level|levels|reading))* \d|(?:\b|\d)mg ?d ?l\b|(?:\b|\d)mmol\b|\b(?:hb)?a1c\b|\bcgm\b|\b[lh]dl\b|\btriglycerides?\b/,
+  /\bdiagnos\w*|\b(?:pre)?diabet\w*|\bhypertensi\w*|\bhypothyroid\w*|\bpcos\b/,
+  /\b(?:medications?|meds|prescri\w*|metformin|insulin|ozempic|wegovy|mounjaro|zepbound|semaglutide|tirzepatide|statins?|atorvastatin|lisinopril|levothyroxine)\b/,
+];
+
+function foodAiTextForbidden(value: string): boolean {
+  const words = foodAiTokens(value).join(" ");
+  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(words)) return true;
+  const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
+  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
+  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
+  const stripped = tokens.join(" ");
+  return FOOD_TEXT_HEALTH.some((re) => re.test(stripped));
 }
 
 function rejectFoodAi(): never {
@@ -479,7 +505,7 @@ export function assertFoodAiPayload(payload: unknown): void {
       texts += 1;
       allowedFoodAiKeys(block, ["type", "text"]);
       if (typeof block.text !== "string" || block.text.length < 1 || block.text.length > 8000) rejectFoodAi();
-      if (foodAiForbidden(block.text)) rejectFoodAi();
+      if (foodAiTextForbidden(block.text)) rejectFoodAi();
     } else if (block.type === "image") {
       images += 1;
       allowedFoodAiKeys(block, ["type", "source"]);
