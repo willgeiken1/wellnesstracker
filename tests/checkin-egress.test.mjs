@@ -50,10 +50,32 @@ function walkKeys(value, found = []) {
   return found;
 }
 
+const CRISIS_HITS = [
+  ["kill myself", "kill myself"],
+  ["kms", "kms"],
+  ["suicid", "thinking about suicide"],
+  ["want to die", "I want to die"],
+  ["wanna die", "I wanna die"],
+  ["end my life", "I will end my life"],
+  ["end it all", "I might end it all"],
+  ["self-harm", "self-harm"],
+  ["hurt myself", "I want to hurt myself"],
+  ["harm myself", "I want to harm myself"],
+  ["can't go on", "I can't go on"],
+  ["cannot go on", "I cannot go on"],
+  ["better off dead", "I would be better off dead"],
+  ["no reason to live", "no reason to live"],
+  ["overdose", "overdose"],
+  ["take my own life", "I might take my own life"],
+];
+
+for (const [pattern, phrase] of CRISIS_HITS) {
+  test(`crisis pattern ${pattern} matches`, () => {
+    assert.equal(crisisLanguage(phrase), true, phrase);
+  });
+}
+
 test("crisis wording is detected locally and ordinary food or workout talk is not", () => {
-  assert.equal(crisisLanguage("I want to die"), true);
-  assert.equal(crisisLanguage("I can't go on"), true);
-  assert.equal(crisisLanguage("thinking about suicide"), true);
   assert.equal(crisisLanguage("this workout killed me"), false);
   assert.equal(crisisLanguage("I'm dying of hunger, pass the eggs"), false);
   assert.equal(crisisLanguage("low mood after a hard day"), false);

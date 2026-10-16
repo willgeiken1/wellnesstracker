@@ -41,6 +41,25 @@ test("number words and butter the person named stay in what was heard", () => {
   assert.equal(half.rows[0].echo, "heard");
 });
 
+test("a shorter meal name is heard when the estimate adds a preparation or a cut", () => {
+  const echo = echoMeal("chicken and rice", [
+    item("Grilled chicken breast", "6 oz"),
+    item("White rice", "1 cup"),
+    item("Chicken broth", "1 cup"),
+  ]);
+  assert.deepEqual(echo.rows.map((row) => [row.name, row.echo]), [
+    ["Grilled chicken breast", "portion"],
+    ["White rice", "portion"],
+    ["Chicken broth", "guessed"],
+  ]);
+  assert.deepEqual(echo.guessed.map((row) => row.name), ["Chicken broth"]);
+  const named = echoMeal("6 oz chicken and 1 cup rice", [
+    item("Grilled chicken breast", "6 oz"),
+    item("White rice", "1 cup"),
+  ]);
+  assert.deepEqual(named.rows.map((row) => row.echo), ["heard", "heard"]);
+});
+
 test("an empty description marks every food as guessed", () => {
   const echo = echoMeal("  ", [item("Eggs", "2 large")]);
   assert.equal(echo.heardText, "");

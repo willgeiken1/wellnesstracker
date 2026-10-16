@@ -4,6 +4,18 @@
 
 const STOP = new Set(["a", "an", "the", "with", "and", "of", "in", "on", "plus", "some", "my", "to", "for"]);
 
+/* A describe-it name often adds a preparation, a color, or a cut the person
+   did not type ("chicken and rice" comes back as grilled chicken breast and
+   white rice). Those words are not required. A different food that only
+   shares one of them, such as chicken broth, still has to be named. */
+const EXTRA = new Set([
+  "grilled", "baked", "fried", "roasted", "roast", "steamed", "boiled", "sauteed", "saute",
+  "poached", "scrambled", "broiled", "toasted", "smoked", "raw", "cooked", "fresh", "plain",
+  "white", "brown", "black", "green", "red", "yellow",
+  "breast", "thigh", "fillet", "filet", "wing", "drumstick", "chop",
+  "large", "small", "extra", "whole", "sliced", "chopped", "diced", "boneless", "skinless",
+]);
+
 const NUM_WORDS = {
   one: "1",
   two: "2",
@@ -42,8 +54,14 @@ function nameTokens(name) {
   return tokens(name).filter((word) => word && !STOP.has(word));
 }
 
+function coreTokens(name) {
+  const all = nameTokens(name);
+  const core = all.filter((word) => !EXTRA.has(word));
+  return core.length ? core : all;
+}
+
 function nameHeard(text, name) {
-  const need = nameTokens(name);
+  const need = coreTokens(name);
   if (!need.length) return false;
   const have = new Set(tokens(text));
   return need.every((word) => have.has(word));
