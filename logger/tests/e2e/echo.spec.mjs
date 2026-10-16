@@ -1,4 +1,5 @@
 import { expect, openApp, signIn, test } from "./fixtures/app.mjs";
+import { permitFoodDescribe } from "./fixtures/network-guard.mjs";
 
 const ITEMS = [
   { name: "Grilled chicken breast", portion: "6 oz", calories: 280, protein: 52, carbs: 0, fat: 6 },
@@ -8,25 +9,8 @@ const ITEMS = [
 
 test("describe-it echo keeps chicken and rice heard and marks added butter as guessed", async ({ page }) => {
   const assertQuiet = await openApp(page);
-  const bodies = [];
-  await page.route("**/functions/v1/food-describe", async (route) => {
-    const headers = {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "*",
-      "access-control-allow-methods": "POST, OPTIONS",
-      "content-type": "application/json",
-    };
-    if (route.request().method() === "OPTIONS") {
-      await route.fulfill({ status: 204, headers, body: "" });
-      return;
-    }
-    bodies.push(route.request().postDataJSON());
-    await route.fulfill({
-      status: 200,
-      headers,
-      body: JSON.stringify({ items: ITEMS, notes: "", remaining: 19 }),
-    });
-  });
+  const guard = page.context().__insightGuard;
+  permitFoodDescribe(guard, ITEMS);
   await signIn(page);
   await page.getByRole("button", { name: "Food", exact: true }).click();
   await page.locator('[data-action="food-add"][data-meal="breakfast"]').click();
@@ -47,6 +31,7 @@ test("describe-it echo keeps chicken and rice heard and marks added butter as gu
   await expect(guessed).not.toContainText("chicken breast");
   await expect(guessed).not.toContainText("White rice");
   await expect(page.locator("#sheet")).toContainText("Nothing is saved until you confirm");
+  const bodies = guard.foodDescribe.bodies;
   expect(bodies).toHaveLength(1);
   expect(Object.keys(bodies[0]).sort()).toEqual(["localDate", "text", "timeZone"]);
   expect(bodies[0].text).toBe("chicken and rice");

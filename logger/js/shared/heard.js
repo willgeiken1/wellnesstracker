@@ -4,16 +4,18 @@
 
 const STOP = new Set(["a", "an", "the", "with", "and", "of", "in", "on", "plus", "some", "my", "to", "for"]);
 
-/* A describe-it name often adds a preparation, a color, or a cut the person
-   did not type ("chicken and rice" comes back as grilled chicken breast and
-   white rice). Those words are not required. A different food that only
-   shares one of them, such as chicken broth, still has to be named. */
+/* A describe-it name often adds a preparation, a color, a cut, or a grain
+   the person did not type ("chicken and rice" comes back as grilled chicken
+   breast and white rice; "toast and berries" comes back as whole wheat toast
+   and mixed berries). Those words are not required. A different food that
+   only shares one of them, such as chicken broth, still has to be named. */
 const EXTRA = new Set([
   "grilled", "baked", "fried", "roasted", "roast", "steamed", "boiled", "sauteed", "saute",
   "poached", "scrambled", "broiled", "toasted", "smoked", "raw", "cooked", "fresh", "plain",
   "white", "brown", "black", "green", "red", "yellow",
   "breast", "thigh", "fillet", "filet", "wing", "drumstick", "chop",
   "large", "small", "extra", "whole", "sliced", "chopped", "diced", "boneless", "skinless",
+  "wheat", "grain", "mixed",
 ]);
 
 const NUM_WORDS = {
@@ -46,8 +48,21 @@ function stem(word) {
   return word;
 }
 
+/* "berries" drops the s and becomes "berrie", so it would miss "berry".
+   Keep the y spelling and the ie spelling for the same word. "cookies" still
+   lines up with "cookie", because that plural only drops the s. */
+function formKeys(word) {
+  const base = stem(word);
+  const keys = [base];
+  if (base.length > 4 && base.endsWith("ie")) keys.push(base.slice(0, -2) + "y");
+  if (base.length > 3 && base.endsWith("y")) keys.push(base.slice(0, -1) + "ie");
+  return keys;
+}
+
 function tokens(value) {
-  return norm(value).split(" ").filter(Boolean).map(stem);
+  const out = [];
+  for (const word of norm(value).split(" ").filter(Boolean)) out.push(...formKeys(word));
+  return out;
 }
 
 function nameTokens(name) {
