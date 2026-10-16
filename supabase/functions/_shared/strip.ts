@@ -423,30 +423,59 @@ export class FoodAiPayloadError extends Error {
   }
 }
 
+const FOOD_AI_IGNORABLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
+
+/* Line and paragraph separators are word breaks, never stripped. The second
+   strip covers anything NFKC might map to an ignorable. */
 function foodAiTokens(value: string): string[] {
   return String(value)
-    .replace(/[\u00AD\u180E\u200B-\u200F\u2060-\u2064\uFEFF]/g, "")
+    .replace(/[\u2028\u2029]/g, " ")
+    .replace(FOOD_AI_IGNORABLE, "")
     .normalize("NFKC")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(FOOD_AI_IGNORABLE, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
 }
 
-function foodAiForbidden(value: string): boolean {
-  const tokens = foodAiTokens(value);
-  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
-  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
+/* Joined terms such as "temperature deviation" are 2-3 words long and can sit
+   anywhere in the text, including after the prompt. */
+function foodAiForbiddenTokens(tokens: string[], singles = true): boolean {
+  for (let i = 0; i < tokens.length; i++) {
+    if (singles && FOOD_AI_FORBIDDEN.has(tokens[i])) return true;
+    if (i + 1 < tokens.length && FOOD_AI_FORBIDDEN.has(tokens[i] + tokens[i + 1])) return true;
+    if (i + 2 < tokens.length && FOOD_AI_FORBIDDEN.has(tokens[i] + tokens[i + 1] + tokens[i + 2])) return true;
+  }
   return false;
 }
 
+function foodAiForbidden(value: string): boolean {
+  const tokens = foodAiTokens(value);
+  return FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens);
+}
+
+const FILLER = "(?: (?:is|was|of|at|in|about|around|roughly|approx|approximately|like|maybe|now|today))*";
+const BODY_UNIT = "(?:lbs?|pounds?|kgs?|kilos?|kilograms?|st|stones?)";
+
 /* "weight" passes only inside these food names. Anywhere else it still blocks. */
 const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
-/* A body unit right after a food name reads as a body weight. */
-const FOOD_TEXT_WEIGHT_FOOD_UNIT = /\bweight (?:gainers?|watchers) ?\d*(?: \d+)? ?(?:lbs?|kgs?|pounds?|stone)\b/;
+/* A body unit after a food name reads as a body weight, attached (82kg, 13st) or not. */
+const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(`\\bweight (?:gainers?|watchers)${FILLER}(?: ?\\d+(?!\\d))* ?${BODY_UNIT}\\b`);
+/* A tub, bag, jar, or scoop of up to 12 lb or 5 kg is a package size, not a body weight. */
+const FOOD_TEXT_PACKAGE = /\b(weight (?:gainers?|watchers)) (\d+)(?: (\d+))? ?(lbs?|pounds?|kgs?|kilos?|kilograms?) (?:tubs?|bags?|jars?|scoops?)\b/g;
+
+function dropPackageSizes(words: string): string {
+  return words.replace(FOOD_TEXT_PACKAGE, (all, name, whole, frac, unit) => {
+    const size = Number(frac ? `${whole}.${frac}` : whole);
+    const cap = unit.startsWith("k") ? 5 : 12;
+    return size <= cap ? name : all;
+  });
+}
 
 const FOOD_TEXT_HEALTH = [
-  /\b(?:weight|weigh|weighs|weighed|weighing)(?: (?:is|was|of|at|in|about|around|now|today))* \d+(?!\d)(?! ?(?:g|grams?|oz|ounces?|ml)\b)/,
+  new RegExp(`\\b(?:weight|weigh|weighs|weighed|weighing)${FILLER} \\d+(?!\\d)(?! ?(?:g|grams?|oz|ounces?|ml)\\b)`),
+  new RegExp(`\\bbw${FILLER} ?\\d|(?<!\\d )\\b(?:resting )?hr${FILLER} ?\\d`),
   /\bheart ?rate\b|\bbpm\b|\bpulse \d/,
   /\bblood ?pressure\b|\bmmhg\b|\bbp \d/,
   /\bblood ?(?:sugar|glucose)\b|\bglucose(?: (?:is|was|at|of|level|levels|reading))* \d|(?:\b|\d)mg ?d ?l\b|(?:\b|\d)mmol\b|\b(?:hb)?a1c\b|\bcgm\b|\b[lh]dl\b|\btriglycerides?\b/,
@@ -455,11 +484,12 @@ const FOOD_TEXT_HEALTH = [
 ];
 
 function foodAiTextForbidden(value: string): boolean {
-  const words = foodAiTokens(value).join(" ");
+  const raw = foodAiTokens(value);
+  if (foodAiForbiddenTokens(raw, false)) return true;
+  const words = dropPackageSizes(raw.join(" "));
   if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(words)) return true;
   const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
-  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
-  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
+  if (FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens)) return true;
   const stripped = tokens.join(" ");
   return FOOD_TEXT_HEALTH.some((re) => re.test(stripped));
 }
