@@ -144,9 +144,33 @@ test("exercise search stays put while typing and then filters in place", async (
   expect(Math.abs(stable.height - tall)).toBeLessThan(2);
 
   await input.fill("barbell");
-  await expect(page.locator("#pk-body")).toContainText("Search for the movement");
-  await expect(page.locator("#pk-body")).toContainText("left out");
+  await expect(page.locator('#pk-body [data-name="Barbell Curl"]')).toBeVisible();
+  await expect(page.locator("#pk-body")).not.toContainText("Search for the movement");
   await expect(page.locator('#pk-body [data-action="bank-create"]')).toHaveCount(0);
+
+  await input.fill("cable");
+  await expect(page.locator('#pk-body [data-name="Cable Crunch"]')).toBeVisible();
+  await expect(page.locator('#pk-body [data-name="One-Handed Cable Row"]')).toBeVisible();
+  const cableOrder = await page.locator("#pk-body [data-name]").evaluateAll((els) => els.map((el) => el.getAttribute("data-name")));
+  expect(cableOrder.indexOf("Cable Crunch")).toBeGreaterThanOrEqual(0);
+  expect(cableOrder.indexOf("Cable Crunch")).toBeLessThan(cableOrder.indexOf("One-Handed Cable Row"));
+
+  await input.fill("smith");
+  await expect(page.locator('#pk-body [data-name="Smith Machine Squat"]')).toBeVisible();
+  await expect(page.locator('#pk-body [data-name="Seated Smith Machine Shoulder Press"]')).toBeVisible();
+
+  await input.fill("smith incline");
+  await expect(page.locator('#pk-body [data-name="Smith Machine Incline Bench Press"]')).toBeVisible();
+
+  await input.fill("tricep");
+  await expect(page.locator('#pk-body [data-name="Cable Tricep Extension"]')).toBeVisible();
+
+  await input.fill("cable triceps pushdown");
+  await expect(page.locator('#pk-body [data-name="Cable Tricep Extension"]')).toBeVisible();
+
+  await input.fill("cabel");
+  await expect(page.locator('#pk-body [data-name="Cable Crunch"]')).toBeVisible();
+  await expect(page.locator("#pk-body")).not.toContainText("No exercises match");
   const short = await card.evaluate((el) => el.getBoundingClientRect().height);
   expect(Math.abs(short - tall)).toBeLessThan(2);
   const afterEquipment = await page.evaluate(() => window.__sheetRenders);
@@ -156,7 +180,9 @@ test("exercise search stays put while typing and then filters in place", async (
   await expect(page.locator('#pk-body [data-name="Bench Press"]')).toBeVisible();
 
   await input.fill("zzzzqq");
+  await expect(page.locator("#pk-body")).toContainText("No exercises match");
   await expect(page.locator('#pk-body [data-action="bank-create"]')).toContainText("Create zzzzqq");
+  await expect(page.locator("#pk-body [data-src='bank']")).toHaveCount(0);
   await page.locator('[data-action="bank-create"]').click();
   await page.locator('[data-action="sheet-close"]').last().click();
   await expect(page.locator("#elist")).toContainText("zzzzqq");

@@ -334,7 +334,7 @@ test("the pattern wording is neutral", () => {
 test("the shell caches the defaults module on the v50 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   assert.match(sw, /js\/shared\/home-defaults\.js/);
-  assert.match(sw, /const CACHE = "insight-shell-v52"/);
+  assert.match(sw, /const CACHE = "insight-shell-v53"/);
   assert.match(sw, /const STAGE = CACHE \+ "-next"/);
   assert.doesNotMatch(sw, /insight-shell-v30"/);
 });

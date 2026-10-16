@@ -163,17 +163,22 @@ function exObjFrom(name) {
 }
 app.exObjFrom = exObjFrom;
 
-/* Equipment words are how an exercise is loaded, not what it is. Search ignores them.
-   A near miss such as "dumbell" is still equipment, so it is dropped before the movement is matched. */
-const EQUIPMENT_WORDS = new Set([
-  "barbell", "dumbbell", "dumbbells", "cable", "cables", "machine", "machines", "smith",
-  "kettlebell", "kettlebells", "ez", "band", "bands", "plate", "plates", "landmine",
-  "resistance", "selectorized"
-]);
-app.EQUIPMENT_WORDS = EQUIPMENT_WORDS;
+/* Search folds case, punctuation, and extra spaces, then ranks:
+   0 name (or alias) starts with the query,
+   1 a word in the name starts with the query,
+   2 the name contains the query, or equipment / muscle text matches,
+   3 fuzzy: the letters appear in order, or a word is a small typo away.
+   Within a tier, names are alphabetical. */
+const BANK_TIER = { START: 0, WORD: 1, CONTAINS: 2, FUZZY: 3 };
+app.BANK_TIER = BANK_TIER;
 
 const BANK_FILTER_MS = 250;
 app.BANK_FILTER_MS = BANK_FILTER_MS;
+
+function foldSearch(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+app.foldSearch = foldSearch;
 
 /* Adjacent swaps count as one edit, so "bensh" and "sqaut" are one step away. */
 function damerau(a, b) {
@@ -208,88 +213,182 @@ function tokenHit(q, word) {
 }
 app.tokenHit = tokenHit;
 
-/* Words that already name a movement ("bend", "banded") are not equipment,
-   even when they sit one or two edits from "band". */
-let bankNameTokens = null;
-function movementTokens() {
-  if (bankNameTokens) return bankNameTokens;
-  const bank = app.ASSETS && app.ASSETS.bank;
-  if (!Array.isArray(bank) || !bank.length) return new Set();
-  bankNameTokens = new Set();
-  for (const b of bank) {
-    String((b && b.n) || "").toLowerCase().split(/[^a-z0-9]+/).forEach((tok) => {
-      if (tok) bankNameTokens.add(tok);
-    });
-  }
-  return bankNameTokens;
+function searchField(text, nameLike) {
+  const fold = foldSearch(text);
+  if (!fold) return null;
+  return { fold, compact: fold.replace(/ /g, ""), words: fold.split(" "), nameLike: !!nameLike };
 }
 
-/* Same edit budget as tokenHit, without the substring shortcut, so "bar" does not swallow "barbell".
-   Fuzzy matches need 5 letters. An exact equipment word still matches at any length. */
-function equipmentToken(w) {
-  if (!w) return false;
-  if (EQUIPMENT_WORDS.has(w)) return true;
-  if (w.length < 5 || movementTokens().has(w)) return false;
-  const limit = w.length <= 5 ? 1 : 2;
-  for (const eq of EQUIPMENT_WORDS) {
-    if (eq.length < 4 || Math.abs(w.length - eq.length) > limit) continue;
-    if (damerau(w, eq) <= limit) return true;
+function pushField(out, text, nameLike) {
+  const field = searchField(text, nameLike);
+  if (field) out.push(field);
+}
+
+function pushMany(out, value, nameLike) {
+  if (Array.isArray(value)) value.forEach((item) => pushField(out, item, nameLike));
+  else pushField(out, value, nameLike);
+}
+
+/* Name and aliases rank as names. Equipment and muscles can still match. */
+function searchFields(row) {
+  const out = [];
+  if (!row) return out;
+  pushField(out, row.name || row.n, true);
+  pushMany(out, row.aliases != null ? row.aliases : row.alias, true);
+  pushMany(out, row.equipment != null ? row.equipment : row.equip, false);
+  pushField(out, row.group || row.g, false);
+  const muscles = row.muscles || [];
+  muscles.forEach((m) => {
+    pushField(out, m, false);
+    if (app.MUSCLES && app.MUSCLES[m]) pushField(out, app.MUSCLES[m], false);
+  });
+  const adv = row.adv || row.a || [];
+  adv.forEach((k) => {
+    pushField(out, k, false);
+    if (app.ADV && app.ADV[k]) pushField(out, app.ADV[k], false);
+  });
+  return out;
+}
+app.searchFields = searchFields;
+
+/* Letters of the query in order, inside a short window, so a sparse name does not match. */
+function lettersInOrder(query, text) {
+  if (!query || query.length < 3 || !text) return false;
+  const maxSpan = query.length + 2;
+  for (let start = 0; start < text.length; start++) {
+    if (text[start] !== query[0]) continue;
+    let qi = 1;
+    const end = Math.min(text.length, start + maxSpan);
+    for (let j = start + 1; j < end && qi < query.length; j++) {
+      if (text[j] === query[qi]) qi++;
+    }
+    if (qi === query.length) return true;
   }
   return false;
 }
-app.equipmentToken = equipmentToken;
 
-function bankTokens(s) {
-  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !equipmentToken(w));
-}
-app.bankTokens = bankTokens;
-
-function rawTokens(s) {
-  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+function typoLimit(len) {
+  if (len < 4) return 0;
+  return len <= 5 ? 1 : 2;
 }
 
-/* "barbell" and "dumbell" have nothing left to match once equipment words are gone. */
-function equipmentOnlyQuery(query) {
-  const raw = rawTokens(query);
-  return raw.length > 0 && raw.every((w) => equipmentToken(w));
+function fuzzyToken(field, token) {
+  if (lettersInOrder(token, field.compact)) return true;
+  const limit = typoLimit(token.length);
+  if (!limit) return false;
+  if (Math.abs(token.length - field.compact.length) <= limit && damerau(token, field.compact) <= limit) return true;
+  return field.words.some((word) => Math.abs(token.length - word.length) <= limit && damerau(token, word) <= limit);
 }
-app.equipmentOnlyQuery = equipmentOnlyQuery;
 
-/* Names and muscle groups only. A query that is just "barbell" or "machine" matches nothing. */
+/* Whole query against one name-like field. Null when it is not a direct hit. */
+function phraseTier(field, tokens) {
+  const query = tokens.join(" ");
+  if (field.fold.startsWith(query)) return BANK_TIER.START;
+  const last = tokens.length - 1;
+  for (let i = 0; i + last < field.words.length; i++) {
+    let ok = true;
+    for (let j = 0; j < last; j++) {
+      if (field.words[i + j] !== tokens[j]) { ok = false; break; }
+    }
+    if (ok && field.words[i + last].startsWith(tokens[last])) return BANK_TIER.WORD;
+  }
+  if (field.fold.includes(query) || field.compact.includes(tokens.join(""))) return BANK_TIER.CONTAINS;
+  return null;
+}
+
+function tokenTier(field, token) {
+  if (field.fold.startsWith(token) || field.words.some((word) => word.startsWith(token))) {
+    return field.fold.startsWith(token) ? BANK_TIER.START : BANK_TIER.WORD;
+  }
+  if (field.fold.includes(token) || field.compact.includes(token)) return BANK_TIER.CONTAINS;
+  if (fuzzyToken(field, token)) return BANK_TIER.FUZZY;
+  return null;
+}
+
+/* Lower is a better tier. Null means the row does not match. */
+function bankMatchTier(query, row) {
+  const folded = foldSearch(query);
+  if (!folded) return null;
+  const tokens = folded.split(" ");
+  const fields = row && row.fields ? row.fields : searchFields(row);
+  let phrase = null;
+  for (const field of fields) {
+    if (!field.nameLike) continue;
+    const tier = phraseTier(field, tokens);
+    if (tier == null) continue;
+    if (phrase == null || tier < phrase) phrase = tier;
+  }
+  if (phrase != null) return phrase;
+  let worst = -1;
+  for (const token of tokens) {
+    let best = null;
+    for (const field of fields) {
+      let tier = tokenTier(field, token);
+      if (tier == null) continue;
+      if (!field.nameLike && tier < BANK_TIER.CONTAINS) tier = BANK_TIER.CONTAINS;
+      if (best == null || tier < best) best = tier;
+    }
+    if (best == null) return null;
+    if (best > worst) worst = best;
+  }
+  if (worst < BANK_TIER.CONTAINS) worst = BANK_TIER.CONTAINS;
+  return worst;
+}
+app.bankMatchTier = bankMatchTier;
+
 function bankHit(query, row) {
-  const qTokens = bankTokens(query);
-  if (!qTokens.length) return false;
-  const nameTokens = bankTokens(row && row.name);
-  const muscleTokens = bankTokens([row && row.group, ...((row && row.muscles) || []), ...((row && row.adv) || [])].join(" "));
-  const words = nameTokens.concat(muscleTokens);
-  const blobs = [nameTokens.join(""), muscleTokens.join("")].filter(Boolean);
-  return qTokens.every((qt) => words.some((w) => tokenHit(qt, w)) || blobs.some((b) => tokenHit(qt, b)));
+  return bankMatchTier(query, row) != null;
 }
 app.bankHit = bankHit;
 
+let bankSearchCache = null;
+function preparedBankRows() {
+  const bank = app.ASSETS && app.ASSETS.bank;
+  if (bankSearchCache && bankSearchCache.source === bank) return bankSearchCache.rows;
+  const rows = (Array.isArray(bank) ? bank : []).map((b) => {
+    const e = { name: b.n, group: b.g, adv: b.a, muscles: app.basicOf(b.a) };
+    if (b.aliases != null) e.aliases = b.aliases;
+    else if (b.alias != null) e.alias = b.alias;
+    if (b.equipment != null) e.equipment = b.equipment;
+    else if (b.equip != null) e.equip = b.equip;
+    return { name: b.n, e, src: "bank", fields: searchFields(e) };
+  });
+  bankSearchCache = { source: bank, rows };
+  return rows;
+}
+
 /* One list for every place you choose an exercise: search, "similar muscles", your own, then the bank by group. */
 function bankListHTML(o) {
-  const q = (o.q || "").trim().toLowerCase(), have = o.have || new Set();
-  const row = (name, e, src) => {
+  const have = o.have || new Set();
+  const row = (name, e, src, tier) => {
     const on = have.has(name.toLowerCase());
-    return `<button class="pk-row${on ? " on" : ""}" data-action="${o.action}" data-src="${src}" data-name="${app.esc(name)}" aria-pressed="${on}">
+    const tierAttr = tier == null ? "" : ` data-tier="${tier}"`;
+    return `<button class="pk-row${on ? " on" : ""}"${tierAttr} data-action="${o.action}" data-src="${src}" data-name="${app.esc(name)}" aria-pressed="${on}">
       <span class="pk-t"><b>${app.esc(name)}</b><span>${app.esc(app.musclesLabel(e, 3))}</span></span><span class="pk-ic" aria-hidden="true">${on ? "✓" : "+"}</span></button>`;
   };
   const bankE = (b) => ({ name: b.n, group: b.g, adv: b.a, muscles: app.basicOf(b.a) });
   const custom = app.customExercises().filter((e) => !(o.exclude || new Set()).has(e.name.toLowerCase()));
   const bank = app.ASSETS.bank.filter((b) => !(o.exclude || new Set()).has(b.n.toLowerCase()));
-  if (q) {
-    if (equipmentOnlyQuery(o.q)) {
-      return `<div class="pk-empty pk-equip"><p>Search for the movement</p><p>Equipment words like barbell, dumbbell, and machine are left out. Try bench, curl, or chest.</p></div>`;
+  const folded = foldSearch(o.q);
+  if (String(o.q || "").trim()) {
+    if (!folded) {
+      const typed = String(o.q || "").trim();
+      return `<div class="pk-empty"><p>No exercises match</p><button type="button" class="btn block" data-action="bank-create" data-name="${app.esc(typed)}">Create ${app.esc(typed)}</button></div>`;
     }
-    const hits = [...custom.map((e) => [e.name, e, "custom"]), ...bank.map((b) => [b.n, bankE(b), "bank"])]
-      .filter(([, e]) => bankHit(o.q, e))
-      .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }));
+    const customRows = custom.map((e) => ({ name: e.name, e, src: "custom", fields: searchFields(e) }));
+    const bankRows = preparedBankRows().filter((item) => !(o.exclude || new Set()).has(item.name.toLowerCase()));
+    const hits = [];
+    for (const item of customRows.concat(bankRows)) {
+      const tier = bankMatchTier(folded, item);
+      if (tier == null) continue;
+      hits.push({ name: item.name, e: item.e, src: item.src, tier });
+    }
+    hits.sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
     if (!hits.length) {
       const typed = String(o.q || "").trim();
-      return `<div class="pk-empty"><p>No matches</p><button type="button" class="btn block" data-action="bank-create" data-name="${app.esc(typed)}">Create ${app.esc(typed)}</button></div>`;
+      return `<div class="pk-empty"><p>No exercises match</p><button type="button" class="btn block" data-action="bank-create" data-name="${app.esc(typed)}">Create ${app.esc(typed)}</button></div>`;
     }
-    return `<div class="pk-list" data-filter="1">${hits.map(([n, e, src]) => row(n, e, src)).join("")}</div>`;
+    return `<div class="pk-list" data-filter="1">${hits.map((hit) => row(hit.name, hit.e, hit.src, hit.tier)).join("")}</div>`;
   }
   let html = "";
   if (o.similar && o.similar.length) {
