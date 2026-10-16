@@ -423,30 +423,89 @@ export class FoodAiPayloadError extends Error {
   }
 }
 
-function foodAiTokens(value: string): string[] {
+const FOOD_AI_IGNORABLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
+
+/* Line and paragraph separators are word breaks, never stripped. The second
+   strip covers anything NFKC might map to an ignorable. Combining marks are
+   dropped after NFD, so "weíght" and "we\u0300ight" read as weight. */
+function foodAiNormalize(value: string): string {
   return String(value)
-    .replace(/[\u00AD\u180E\u200B-\u200F\u2060-\u2064\uFEFF]/g, "")
+    .replace(/[\u2028\u2029]/g, " ")
+    .replace(FOOD_AI_IGNORABLE, "")
     .normalize("NFKC")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+    .replace(FOOD_AI_IGNORABLE, "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+}
+
+function foodAiSplit(normalized: string): string[] {
+  return normalized.split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function foodAiTokens(value: string): string[] {
+  return foodAiSplit(foodAiNormalize(value));
+}
+
+/* Joined terms such as "temperature deviation" are 2-3 words long and can sit
+   anywhere in the text, including after the prompt. */
+function foodAiForbiddenTokens(tokens: string[], singles = true): boolean {
+  for (let i = 0; i < tokens.length; i++) {
+    if (singles && FOOD_AI_FORBIDDEN.has(tokens[i])) return true;
+    if (i + 1 < tokens.length && FOOD_AI_FORBIDDEN.has(tokens[i] + tokens[i + 1])) return true;
+    if (i + 2 < tokens.length && FOOD_AI_FORBIDDEN.has(tokens[i] + tokens[i + 1] + tokens[i + 2])) return true;
+  }
+  return false;
 }
 
 function foodAiForbidden(value: string): boolean {
   const tokens = foodAiTokens(value);
-  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
-  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
-  return false;
+  return FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens);
 }
+
+const FILLER = "(?: (?:is|was|of|at|in|about|around|roughly|approx|approximately|like|maybe|now|today))*";
+const BODY_UNIT = "(?:lbs?|pounds?|kgs?|kilos?|kilograms?|st|stones?)";
 
 /* "weight" passes only inside these food names. Anywhere else it still blocks. */
 const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
-/* A body unit right after a food name reads as a body weight. */
-const FOOD_TEXT_WEIGHT_FOOD_UNIT = /\bweight (?:gainers?|watchers) ?\d*(?: \d+)? ?(?:lbs?|kgs?|pounds?|stone)\b/;
+/* A body unit after a food name reads as a body weight, attached (82kg, 13st)
+   or not. Up to three words may sit between them, but not across a list
+   separator or a joining word, so "weight gainer tub, brisket 20 lb" and
+   "weight gainer tub, 2 st louis ribs" are two foods. */
+const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(
+  "\\bweight[^a-z0-9]+(?:gainers?|watchers)" +
+  "(?:[^a-z0-9,;.]*|(?: +(?!(?:and|with|plus|then|or)\\b)[a-z]+\\b){1,3} *)" +
+  "(?:\\d+(?:[^a-z0-9]{1,2}\\d+)*)?[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?" + BODY_UNIT + "\\b",
+);
+/* A tub, bag, jar, or scoop of up to 12 lb or 5 kg is a package size, not a
+   body weight. This runs before tokens are split so a typed decimal point or
+   comma is still there: "5 180 lb" is not 5.18, and 0.180 is not a size. */
+const FOOD_TEXT_PACKAGE = /\bweight[^a-z0-9]+(gainers?|watchers)[^a-z0-9]+(\d+(?:[.,]\d{1,2})?)[^a-z0-9]{0,2}(lbs?|pounds?|kgs?|kilos?|kilograms?)[^a-z0-9]+(?:tubs?|bags?|jars?|scoops?)\b/g;
+
+function dropPackageSizes(normalized: string): string {
+  return normalized.replace(FOOD_TEXT_PACKAGE, (all, name, size, unit) => {
+    const cap = unit.startsWith("k") ? 5 : 12;
+    return Number(size.replace(",", ".")) <= cap ? `weight ${name}` : all;
+  });
+}
+
+/* A body-sized mass anywhere (30 kg, 60 lb, 5 stone and up) is a body weight.
+   A comma can be the decimal point (82,5 kg). A bare st is a street or
+   St. Louis here, so only stone counts. */
+const FOOD_TEXT_BODY_MASS = /(\d+(?:[.,]\d+)?)[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?(kgs?|kilos?|kilograms?|lbs?|pounds?|stones?)\b/g;
+
+function bodyMass(normalized: string): boolean {
+  for (const [, size, unit] of normalized.matchAll(FOOD_TEXT_BODY_MASS)) {
+    const cap = unit.startsWith("k") ? 30 : unit.startsWith("st") ? 5 : 60;
+    if (Number(size.replace(",", ".")) >= cap) return true;
+  }
+  return false;
+}
 
 const FOOD_TEXT_HEALTH = [
-  /\b(?:weight|weigh|weighs|weighed|weighing)(?: (?:is|was|of|at|in|about|around|now|today))* \d+(?!\d)(?! ?(?:g|grams?|oz|ounces?|ml)\b)/,
+  new RegExp(`\\b(?:weight|weigh|weighs|weighed|weighing)${FILLER} \\d+(?!\\d)(?! ?(?:g|grams?|oz|ounces?|ml)\\b)`),
+  new RegExp(`\\bbw${FILLER} ?\\d|(?<!\\d )\\b(?:resting )?hr${FILLER} ?\\d`),
   /\bheart ?rate\b|\bbpm\b|\bpulse \d/,
   /\bblood ?pressure\b|\bmmhg\b|\bbp \d/,
   /\bblood ?(?:sugar|glucose)\b|\bglucose(?: (?:is|was|at|of|level|levels|reading))* \d|(?:\b|\d)mg ?d ?l\b|(?:\b|\d)mmol\b|\b(?:hb)?a1c\b|\bcgm\b|\b[lh]dl\b|\btriglycerides?\b/,
@@ -455,11 +514,14 @@ const FOOD_TEXT_HEALTH = [
 ];
 
 function foodAiTextForbidden(value: string): boolean {
-  const words = foodAiTokens(value).join(" ");
-  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(words)) return true;
+  const normalized = foodAiNormalize(value);
+  if (foodAiForbiddenTokens(foodAiSplit(normalized), false)) return true;
+  const packed = dropPackageSizes(normalized);
+  if (bodyMass(packed)) return true;
+  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(packed)) return true;
+  const words = foodAiSplit(packed).join(" ");
   const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
-  if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
-  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
+  if (FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens)) return true;
   const stripped = tokens.join(" ");
   return FOOD_TEXT_HEALTH.some((re) => re.test(stripped));
 }
