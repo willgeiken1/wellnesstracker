@@ -155,7 +155,9 @@ const PINNED = [
   ["weight gainer 13st", false],
 ];
 
-// Tub cap reads a decimal only when a point was typed, with at most 2 digits after it.
+// Tub cap reads a decimal only when a point or comma was typed, with at most 2 digits after it.
+// The anywhere body-mass rule counts stone but not a bare st, and reads 82,5 as 82.5.
+// Combining marks are dropped, so an accent inside a blocked word does not split it.
 // Joined terms split across 3 tokens. Up to 3 words between a food name and a body unit.
 const KILL_ROWS = [
   "weight gainer 5 180 lb tub",
@@ -166,6 +168,14 @@ const KILL_ROWS = [
   "weight gainer me 180 lb",
   "weight gainer currently 25 kg",
   "180-ish lbs",
+  "82,5 kg",
+  "81,9 kg today",
+  "eggs,82 kg",
+  "toast.82kg",
+  "30 kg",
+  "we\u00AD\u0300ight 180",
+  "wei\u034F\u0301ght 180",
+  "weíght 180",
 ];
 const KEEP_SENDING = [
   "weight gainer 2.5 lb tub",
@@ -178,6 +188,14 @@ const KEEP_SENDING = [
   "weight gainer 3 lb tub, brisket 20 lb",
   "weight gainer toast",
   "weight watchers chicken breast",
+  "6 st louis ribs",
+  "12 st. louis ribs",
+  "pizza on 86 st",
+  "bagel from 5 st",
+  "weight gainer 4 lb tub, 2 st louis ribs",
+  "29 kg",
+  "weight gainer 2,5 lb tub",
+  "jalapeño poppers and crème brûlée",
 ];
 
 test("Quinn's repro rows block, and the 1 lb tub is sent", async () => {
@@ -191,7 +209,7 @@ test("pinned extras keep their current behavior", async () => {
   for (const [text, sent] of PINNED) assert.equal(await sends(text), sent, JSON.stringify(text));
 });
 
-test("tub decimals, 3-word joined terms, and words before a body unit", async () => {
+test("tub decimals, joined terms, word gaps, comma decimals, st, and combining marks", async () => {
   for (const text of KILL_ROWS) assert.equal(await sends(text), false, JSON.stringify(text));
   for (const text of KEEP_SENDING) assert.equal(await sends(text), true, text);
 });
@@ -221,6 +239,7 @@ function rng(seed) {
 }
 
 const IGNORABLE = ["\u034F", "\u3164", "\uFFA0", "\u115F", "\u17B4", "\u2066", "\u{1D173}", "\u{E0041}", "\u061C", "\u202E", "\u200B", "\uFEFF", "\u00AD", "\u2060", "\u0600", "\u06DD", "\uFFF9", "\u{110BD}", "\u{13430}"];
+const MARKS = ["\u0300", "\u0301", "\u0308", "\u0327", "\u036F"];
 const FILLERS = ["", " about", " roughly", " at", " around", " approx", " is", " was"];
 const FOODS = [
   "eggs", "toast", "oatmeal", "chicken breast", "rice", "salmon", "greek yogurt", "low sugar yogurt",
@@ -261,7 +280,7 @@ function corpus(seed, n) {
     () => `weight gainer ${int(1, 12)} lb tub, ${name()} ${bodyUnit()}`,
     () => pick([`weight gainer ${int(1, 9)} ${int(13, 300)} lb tub`, `weight gainer 0.${int(100, 999)} lb tub`, `weight gainer ${int(1, 4)}.${int(100, 999)} kg bag`]),
     () => `${name()} ${pick(["currently", "me", "was like", "now maybe", "i think"])} ${bodyUnit()}`,
-    () => pick([`i'm ${int(40, 160)}kg`, `${int(90, 350)}-ish lbs`, `${int(40, 160)} kg after gym`, `${int(6, 30)} stone now`]),
+    () => pick([`i'm ${int(40, 160)}kg`, `${int(90, 350)}-ish lbs`, `${int(40, 160)} kg after gym`, `${int(6, 30)} stone now`, `${int(30, 160)},${int(0, 9)} kg`, `${int(60, 350)},${int(0, 9)} lbs today`]),
   ];
   const foodish = [
     () => `${int(50, 400)}${pick(["", " "])}${pick(["g", "grams", "oz", "ml"])} ${pick(FOODS)}`,
@@ -274,6 +293,9 @@ function corpus(seed, n) {
     () => `weight gainer ${int(1, 11)}.${int(1, 99)} lb tub`,
     () => `${pick(["brisket", "turkey", "ham"])} ${int(2, 20)} lb`,
     () => `${pick(FOODS)} with ${pick(["chicken breast", "toast", "almonds"])}`,
+    () => pick([`${int(1, 20)} st louis ribs`, `${int(1, 20)} st. louis ribs`, `pizza on ${int(1, 120)} st`, `bagel from ${int(1, 120)} st`]),
+    () => pick(["jalapeño poppers", "crème brûlée", "açaí bowl", "café au lait", "piña colada", "jalapeño"]),
+    () => `weight gainer ${int(1, 11)},${int(1, 99)} lb tub`,
     () => pick(FOODS),
   ];
   const hide = (s) => {
@@ -282,7 +304,7 @@ function corpus(seed, n) {
     for (let i = 1; i < chars.length; i++) if (/[a-z0-9]/i.test(chars[i - 1]) && /[a-z0-9]/i.test(chars[i])) spots.push(i);
     for (let k = int(1, 3); k > 0 && spots.length; k--) {
       const at = spots.splice(Math.floor(r() * spots.length), 1)[0];
-      chars[at] = pick(IGNORABLE) + chars[at];
+      chars[at] = (r() < 0.25 ? pick(MARKS) : pick(IGNORABLE)) + chars[at];
     }
     return chars.join("");
   };
