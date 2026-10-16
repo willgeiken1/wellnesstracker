@@ -1,7 +1,8 @@
 // Food-guard regression table and seeded bypass corpus.
 // Every case goes through the real describe prompt prefix, as food-describe sends it.
 // A blocked case must never reach the model stub.
-// Set FOOD_GUARD_SEED to replay a corpus run. The seed is printed every run.
+// Two corpus seeds are pinned and one is random. Set FOOD_GUARD_SEED to replay the
+// random run. Every seed is printed.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -109,6 +110,92 @@ const MUST_BLOCK = [
   "A1C 6.1 with rice",
 ];
 
+// Quinn's repro rows, generated exactly as in the triage script.
+const QUINN_PS = ["weight gainer", "weight gainers", "weight watchers"];
+const QUINN_X = ["\u034F", "\uFE0F", "\u206A"];
+const QUINN_BLOCK = [
+  "weight gainer about 180 lb",
+  "weight gainer roughly 82 kg",
+  ...QUINN_PS.flatMap((p) => ["82 kilos", "82 kilograms", "13 st"].map((u) => `${p} ${u}`)),
+];
+const QUINN_UNICODE_BLOCK = [
+  ["wei", "ght 180 lb"], ["sle", "ep score 82"], ["H", "RV 45"], ["glu", "cose 140"], ["met", "formin with eggs"], ["rest", "ing hr 62"],
+].flatMap(([a, b]) => QUINN_X.map((c) => a + c + b));
+const QUINN_ALIAS_BLOCK = ["bw 180 lb", "bw 82 kg", "resting hr 62", "eggs, resting hr 62", "restingHR 62"];
+const QUINN_SENT = ["weight gainer 1 lb tub"];
+
+// Current behavior, pinned. Every body-data row blocks.
+const PINNED = [
+  ["weight gainer shake", true],
+  ["weight gainer 2 scoops", true],
+  ["Two eggs and toast", true],
+  ["weight 180 lb", false],
+  ["resting hr", false],
+  ["bodyweight 82 kg", false],
+  ["stress-free salad", false],
+  ["mood food bowl", false],
+  ["steak (weight 8 oz)", false],
+  ["weight gainer 1 lb tub, weight 180 lb", false],
+  ["weight gainer 1 lb tub weighing 180", false],
+  ["eggs\u2028weight 180", false],
+  ["we\u00ADight 180", false],
+  ["hr 62", false],
+  ["rhr 62", false],
+  ["heart rate 62", false],
+  // Body fat is pending Will's decision; this records what happens today.
+  ["bf 18%", true],
+  ["body fat 18%", true],
+  ["i'm 82kg", false],
+  ["82 kg after gym", false],
+  ["weighed 82 kilos", false],
+  ["weight\u00a0180", false],
+  ["weight gainer at 180 lbs", false],
+  ["weight gainer, 180 lbs", false],
+  ["weight watchers 13 stone", false],
+  ["weight gainer 13st", false],
+];
+
+// Tub cap reads a decimal only when a point was typed, with at most 2 digits after it.
+// Joined terms split across 3 tokens. Up to 3 words between a food name and a body unit.
+const KILL_ROWS = [
+  "weight gainer 5 180 lb tub",
+  "weight gainer 0.180 lb tub",
+  "rest-ing hr",
+  "my u-ser data",
+  "weight gainer currently 180 lbs",
+  "weight gainer me 180 lb",
+  "weight gainer currently 25 kg",
+  "180-ish lbs",
+];
+const KEEP_SENDING = [
+  "weight gainer 2.5 lb tub",
+  "weight gainer 2.50 lb tub",
+  "weight gainer with chicken breast",
+  "weight watchers lasagna with toast",
+  "my 21st birthday cake",
+  "brisket 10 lb",
+  "weight gainer shake and 1 lb steak",
+  "weight gainer 3 lb tub, brisket 20 lb",
+  "weight gainer toast",
+  "weight watchers chicken breast",
+];
+
+test("Quinn's repro rows block, and the 1 lb tub is sent", async () => {
+  assert.equal(QUINN_BLOCK.length, 11);
+  assert.equal(QUINN_UNICODE_BLOCK.length, 18);
+  for (const text of [...QUINN_BLOCK, ...QUINN_UNICODE_BLOCK, ...QUINN_ALIAS_BLOCK]) assert.equal(await sends(text), false, JSON.stringify(text));
+  for (const text of QUINN_SENT) assert.equal(await sends(text), true, text);
+});
+
+test("pinned extras keep their current behavior", async () => {
+  for (const [text, sent] of PINNED) assert.equal(await sends(text), sent, JSON.stringify(text));
+});
+
+test("tub decimals, 3-word joined terms, and words before a body unit", async () => {
+  for (const text of KILL_ROWS) assert.equal(await sends(text), false, JSON.stringify(text));
+  for (const text of KEEP_SENDING) assert.equal(await sends(text), true, text);
+});
+
 test("regression table: 46 rows block behind the prompt and the stub never runs", async () => {
   assert.equal(REGRESSION.length, 46);
   for (const text of REGRESSION) assert.equal(await sends(text), false, JSON.stringify(text));
@@ -172,6 +259,9 @@ function corpus(seed, n) {
     () => pick([`heart rate ${int(40, 190)}`, `bp ${int(90, 180)} ${int(50, 110)}`, `glucose ${int(60, 300)}`, `a1c ${int(4, 12)}`, `${int(70, 300)} mg/dL`, "took metformin", "diagnosed with diabetes"]),
     () => (r() < 0.5 ? `weight gainer ${int(13, 300)} lb ${pick(["tub", "bag", "jar"])}` : `weight gainer ${int(6, 100)} kg ${pick(["tub", "bag", "scoop"])}`),
     () => `weight gainer ${int(1, 12)} lb tub, ${name()} ${bodyUnit()}`,
+    () => pick([`weight gainer ${int(1, 9)} ${int(13, 300)} lb tub`, `weight gainer 0.${int(100, 999)} lb tub`, `weight gainer ${int(1, 4)}.${int(100, 999)} kg bag`]),
+    () => `${name()} ${pick(["currently", "me", "was like", "now maybe", "i think"])} ${bodyUnit()}`,
+    () => pick([`i'm ${int(40, 160)}kg`, `${int(90, 350)}-ish lbs`, `${int(40, 160)} kg after gym`, `${int(6, 30)} stone now`]),
   ];
   const foodish = [
     () => `${int(50, 400)}${pick(["", " "])}${pick(["g", "grams", "oz", "ml"])} ${pick(FOODS)}`,
@@ -181,6 +271,9 @@ function corpus(seed, n) {
     () => `${pick(["weight gainer shake", "protein shake"])}, ${int(1, 4)} scoops`,
     () => `brisket ${int(2, 14)} hr ${int(5, 55)} min`,
     () => `rice weighed ${int(50, 400)} g`,
+    () => `weight gainer ${int(1, 11)}.${int(1, 99)} lb tub`,
+    () => `${pick(["brisket", "turkey", "ham"])} ${int(2, 20)} lb`,
+    () => `${pick(FOODS)} with ${pick(["chicken breast", "toast", "almonds"])}`,
     () => pick(FOODS),
   ];
   const hide = (s) => {
@@ -206,15 +299,21 @@ function corpus(seed, n) {
   return { bypass, food };
 }
 
-test("seeded corpus: about 2000 bypasses block and the paired foods send", async () => {
-  const seed = Number(process.env.FOOD_GUARD_SEED) || Math.floor(Math.random() * 2 ** 32);
-  const { bypass, food } = corpus(seed, 2000);
-  const leaked = [];
-  for (const text of bypass) if (await sends(text)) leaked.push(text);
-  const falsePositives = [];
-  for (const text of food) if (!(await sends(text))) falsePositives.push(text);
-  const rate = ((falsePositives.length / food.length) * 100).toFixed(2);
-  console.log(`food-guard corpus seed=${seed} bypass=${bypass.length} leaked=${leaked.length} food=${food.length} false_positives=${falsePositives.length} (${rate}%)`);
-  assert.deepEqual(leaked.slice(0, 5), [], `seed ${seed}: ${leaked.length} bypasses reached the model`);
-  assert.deepEqual(falsePositives.slice(0, 5), [], `seed ${seed}: false-positive rate ${rate}%`);
-});
+const PINNED_SEEDS = [42, 31337];
+
+for (const label of ["pinned 42", "pinned 31337", "random"]) {
+  test(`seeded corpus (${label}): 2000 bypasses block and the paired foods send`, async () => {
+    const seed = label === "random"
+      ? Number(process.env.FOOD_GUARD_SEED) || Math.floor(Math.random() * 2 ** 32)
+      : PINNED_SEEDS[label === "pinned 42" ? 0 : 1];
+    const { bypass, food } = corpus(seed, 2000);
+    const leaked = [];
+    for (const text of bypass) if (await sends(text)) leaked.push(text);
+    const falsePositives = [];
+    for (const text of food) if (!(await sends(text))) falsePositives.push(text);
+    const rate = ((falsePositives.length / food.length) * 100).toFixed(2);
+    console.log(`food-guard corpus seed=${seed} bypass=${bypass.length} leaked=${leaked.length} food=${food.length} false_positives=${falsePositives.length} (${rate}%)`);
+    assert.deepEqual(leaked.slice(0, 5), [], `seed ${seed}: ${leaked.length} bypasses reached the model`);
+    assert.deepEqual(falsePositives.slice(0, 5), [], `seed ${seed}: false-positive rate ${rate}%`);
+  });
+}
