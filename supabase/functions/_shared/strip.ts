@@ -425,6 +425,7 @@ export class FoodAiPayloadError extends Error {
 
 function foodAiTokens(value: string): string[] {
   return String(value)
+    .normalize("NFKC")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -438,9 +439,8 @@ function foodAiForbidden(value: string): boolean {
   return false;
 }
 
-/* Meal text may name foods like "weight gainer shake". A weight word next to
-   a number is still a body weight unless the number is a food unit. */
-const FOOD_TEXT_FOOD_WORDS = new Set(["weight"]);
+/* "weight" passes only inside these food names. Anywhere else it still blocks. */
+const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
 
 const FOOD_TEXT_HEALTH = [
   /\b(?:weight|weigh|weighs|weighed|weighing)(?: (?:is|was|of|at|in|about|around|now|today))* \d+(?!\d)(?! ?(?:g|grams?|oz|ounces?|ml)\b)/,
@@ -452,10 +452,10 @@ const FOOD_TEXT_HEALTH = [
 ];
 
 function foodAiTextForbidden(value: string): boolean {
-  const tokens = foodAiTokens(value);
+  const words = foodAiTokens(value).join(" ");
+  const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
   if (FOOD_AI_FORBIDDEN.has(tokens.join(""))) return true;
-  for (const token of tokens) if (!FOOD_TEXT_FOOD_WORDS.has(token) && FOOD_AI_FORBIDDEN.has(token)) return true;
-  const words = tokens.join(" ");
+  for (const token of tokens) if (FOOD_AI_FORBIDDEN.has(token)) return true;
   return FOOD_TEXT_HEALTH.some((re) => re.test(words));
 }
 

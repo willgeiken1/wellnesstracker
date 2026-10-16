@@ -109,7 +109,8 @@ test("food names with health-ish words reach the describe model", async () => {
     "low sugar yogurt",
     "glucose syrup on pancakes",
     "rice, weighed 200 g",
-    "steak weight 8oz",
+    "Weight Watchers frozen lasagna",
+    "WeightGainer 2 scoops",
   ]) {
     let calls = 0;
     await callFoodModel(describePayload(text), async () => { calls += 1; return { ok: true }; });
@@ -138,6 +139,23 @@ test("vitals, labs, Oura metrics, diagnoses, and medications stay blocked in mea
     "took metformin with breakfast",
     "insulin before the low sugar yogurt",
     "eggs and my meds",
+  ]) {
+    await expectBlocked(describePayload(text));
+  }
+});
+
+test("weight outside a known food name still blocks, including full-width input", async () => {
+  for (const text of [
+    "weight was roughly 180",
+    "180 lbs weight",
+    "weight one eighty",
+    "weight １８２ lb",
+    "steak weight 8oz",
+    "bodyweight gainer 82",
+    "weight gainer shake, weight 182",
+    "ｗｅｉｇｈｔ gainer shake, ｗｅｉｇｈｔ 182",
+    "ｈｅａｒｔ ｒａｔｅ ６２ and toast",
+    "ＨＲＶ ４５",
   ]) {
     await expectBlocked(describePayload(text));
   }
