@@ -15,11 +15,22 @@ module.exports = function withStripLocalNetworkingRelease(config) {
       shellPath: '/bin/sh',
       inputPaths: ['"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"'],
       outputPaths: ['"$(DERIVED_FILE_DIR)/insight-strip-local-networking-$(CONFIGURATION).stamp"'],
-      shellScript: `if [ "$CONFIGURATION" = "Release" ]; then
+      // RN/Expo marks debug builds with a DEBUG=1 preprocessor definition, regardless of name.
+      shellScript: `if ! printf '%s\\n' "$GCC_PREPROCESSOR_DEFINITIONS" | grep -Eq '(^|[[:space:]])DEBUG=1([[:space:]]|$)'; then
   PLIST_PATH="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+  if [ ! -f "$PLIST_PATH" ]; then
+    echo "error: Missing processed plist: $PLIST_PATH" >&2
+    exit 1
+  fi
   /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity:NSAllowsLocalNetworking" "$PLIST_PATH" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Delete :NSBonjourServices" "$PLIST_PATH" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Delete :NSLocalNetworkUsageDescription" "$PLIST_PATH" 2>/dev/null || true
+  for KEY in :NSAppTransportSecurity:NSAllowsLocalNetworking :NSBonjourServices :NSLocalNetworkUsageDescription; do
+    if /usr/libexec/PlistBuddy -c "Print $KEY" "$PLIST_PATH" >/dev/null 2>&1; then
+      echo "error: Local-network key remains in processed plist: $KEY" >&2
+      exit 1
+    fi
+  done
 fi
 touch "$DERIVED_FILE_DIR/insight-strip-local-networking-$CONFIGURATION.stamp"
 `,
@@ -35,7 +46,7 @@ touch "$DERIVED_FILE_DIR/insight-strip-local-networking-$CONFIGURATION.stamp"
       ...options,
       shellScript: '"' + options.shellScript.replace(/"/g, '\\"') + '"',
     });
-    // Also keep it after all target phases, including CocoaPods framework embedding.
+    // Keep placement stable; the declared processed-plist input provides ordering, not position.
     phases.push(added);
     return config;
   });

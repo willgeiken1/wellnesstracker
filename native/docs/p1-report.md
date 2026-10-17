@@ -17,7 +17,7 @@ No commits/pushes, device builds, prebuilds, EAS or native project edits. Checks
 
 | Check | P2a result |
 | --- | --- |
-| `node --test plugins/*.test.js` | PASS, 3/3: new and existing phases declare quoted plist input/stamp output paths that survive pbxproj serialization; repeated mod application is unchanged and leaves one app-target strip phase last, after framework embedding. Real PlistBuddy execution on synthetic plists strips all three local-network keys only in Release, preserves Debug/Profile and unrelated ATS settings, writes configuration-specific stamps, and tolerates absent keys/dictionary. |
+| `node --test plugins/*.test.js` | Historical PASS, 3/3; superseded by the five post-#69 hardening tests below. Quoted processed-plist input/stamp output paths survive serialization and repeated mod application is unchanged. The declared input provides ordering; phase position is incidental. |
 | `npx tsc --noEmit` | PASS |
 | `npx expo lint` | PASS |
 | `npx expo-doctor` | PASS, 20/20 |
@@ -29,7 +29,25 @@ No commits/pushes, device builds, prebuilds, EAS or native project edits. Checks
 
 The local-network keys remain in source configuration for Metro; stripping happens in the built Release plist. The coordinator's clean prebuild and Xcode 26.6 Release build (`npx expo run:ios --configuration Release`) found all three keys still present in `Release-iphonesimulator/InsightDaily.app/Info.plist`. The log placed expo-dev-launcher's strip phase, then Insight Daily's strip phase, then `[CP] Embed Pods Frameworks`, before `Preparing InsightDaily » Info.plist`. Both strip phases ran before Xcode wrote the processed plist, which overwrote their changes; both also warned about ambiguous dependencies. Expo-dev-launcher's stripping is therefore ineffective on this clean Xcode 26 build. The P1 "clean" plist result was likely from an incremental build, not reliable clean-build evidence.
 
-The P2a fix declares `$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)` as the phase input so Xcode orders it after plist processing, with a configuration-specific stamp output under `$(DERIVED_FILE_DIR)` to track completion and rerun when the plist changes. The plugin updates its earlier phase in place, remains idempotent, and places it last after framework embedding as an additional ordering measure. Its Release-only script independently deletes `NSAppTransportSecurity.NSAllowsLocalNetworking`, `NSBonjourServices` and `NSLocalNetworkUsageDescription`, ignoring each absent key; Debug keeps all three for Metro/dev-launcher. Synthetic tests verify the script and project declarations; coordinator Release artifact verification passed (below). The root package has no `npm test` script; no web/PWA code changed.
+The P2a fix declares `$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)` as the phase input so Xcode orders it after plist processing, with a configuration-specific stamp output under `$(DERIVED_FILE_DIR)` to track completion and rerun when the plist changes. The plugin updates its earlier phase in place, remains idempotent, and retains its last position only incidentally: the declared input path provides ordering. Its non-debug script independently deletes `NSAppTransportSecurity.NSAllowsLocalNetworking`, `NSBonjourServices` and `NSLocalNetworkUsageDescription`, tolerating each absent key and verifying removal; builds with `DEBUG=1` in `GCC_PREPROCESSOR_DEFINITIONS` keep all three for Metro/dev-launcher. Synthetic tests verify the script and project declarations; coordinator Release artifact verification passed (below). The root package has no `npm test` script; no web/PWA code changed.
+
+## Strip hardening (post-#69)
+
+Small P1/M0 follow-up to #69 (plan §0.1 / §15.2; Q3/Q4/Q5/Q8/Q127). A build is debug only when `GCC_PREPROCESSOR_DEFINITIONS` contains the whitespace-delimited token `DEBUG=1`. Otherwise Release, Profile and custom configuration names all strip the three local-network keys. Missing processed plists and any key still present after deletion now emit a clear error and exit 1 before writing the completion stamp. Absent keys remain safe to delete repeatedly.
+
+Correct ordering comes from `inputPaths: ["$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"]`, which depends on Xcode's processed plist. Placement after `[CP] Embed Pods Frameworks` is incidental. Tests assert the input dependency and serialized paths, retain idempotency coverage, and do not require last position.
+
+Previously Linux explicitly skipped the single real-PlistBuddy test (no fake implementation). Both real-PlistBuddy cases now visibly skip there; `REQUIRE_PLISTBUDDY=1` fails immediately if they cannot run. A separate 10-minute macOS CI job installs dependencies and runs only the plugin tests with that requirement, retaining action SHA pins, read-only permissions and checkout without persisted credentials. The unauthenticated GitHub repository API confirms `willgeiken1/wellnesstracker` is public; [standard public-repository runner minutes are free](https://docs.github.com/en/billing/concepts/product-billing/github-actions). The job is restricted to public repositories to avoid private-repository macOS costs if visibility changes.
+
+Local validation (October 17, 2026), with `EXPO_NO_TELEMETRY=1`, `EXPO_NO_DOTENV=1` and `npm_config_cache=/tmp/insight-npm`:
+
+- `node --test plugins/*.test.js`: PASS, 5/5 with real macOS PlistBuddy, zero skips; also PASS with `REQUIRE_PLISTBUDDY=1`.
+- `npx tsc --noEmit` and `npx expo lint`: PASS (exit 0).
+- `npx expo-doctor`: PASS, 20/20 checks.
+- `npx expo install --check`: PASS, dependencies up to date after redirecting Expo's protected default cache with `__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/insight-expo`.
+- Simulated Linux platform: PASS, 3 tests and 2 visible skips; adding `REQUIRE_PLISTBUDDY=1` produces the expected failure.
+
+Only the four requested files were edited. No git commands, prebuilds, simulators, secrets or paid services were used. GitHub CI has not been run for these edits.
 
 ## P1 status (historical)
 
@@ -68,7 +86,7 @@ Android Release merged manifest permissions: `android.permission.INTERNET`, `and
 
 Re-verified on Mac at P2a head: PASS (Oct 17, 7:32 AM CT). Clean `npx expo prebuild --clean`, then `./gradlew :app:processReleaseMainManifest`: exactly the four permissions above.
 
-iOS Release: the P1 artifact check reported `NSBonjourServices` / `NSLocalNetworkUsageDescription` absent, but expo-dev-launcher does not reliably strip them: the coordinator's clean Xcode 26.6 build retained both plus `NSAppTransportSecurity.NSAllowsLocalNetworking` because both strip phases preceded plist processing. The earlier result was likely incremental-build state. The corrected F1 plugin declares the processed plist dependency and a stamp output, runs last, and strips all three keys only in Release; Debug retains all three for Metro/dev-launcher. A clean Release artifact built with the fix was verified (below).
+iOS Release: the P1 artifact check reported `NSBonjourServices` / `NSLocalNetworkUsageDescription` absent, but expo-dev-launcher does not reliably strip them: the coordinator's clean Xcode 26.6 build retained both plus `NSAppTransportSecurity.NSAllowsLocalNetworking` because both strip phases preceded plist processing. The earlier result was likely incremental-build state. The corrected F1 plugin declares the processed plist input dependency and a stamp output; that input provides ordering after plist processing. It now strips all three keys unless `GCC_PREPROCESSOR_DEFINITIONS` contains the whitespace-delimited definition `DEBUG=1`; debug builds retain them for Metro/dev-launcher regardless of configuration name. A clean Release artifact built with the fix was verified (below).
 
 Release Info.plist re-check at P2a head: PASS (Oct 17, 8:13 AM CT). Clean `npx expo prebuild --clean --platform ios`, then `npx expo run:ios --configuration Release --device "iPhone 17 Pro"` built, installed and launched. The built `Info.plist` has `NSAppTransportSecurity = { NSAllowsArbitraryLoads = false }` only, with no `NSAllowsLocalNetworking`, `NSBonjourServices` or `NSLocalNetworkUsageDescription`. Before the fix, the same clean build kept all three.
 
