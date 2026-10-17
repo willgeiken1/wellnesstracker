@@ -1,8 +1,9 @@
 import { rmSync } from 'node:fs';
 import { localDatabase } from './sqlite';
-import { Repository } from '../../src/data/repository';
+import { syncedTables } from '../../src/data/rows';
+import { Repository, wipeAllOwners } from '../../src/data/repository';
 import { OWNER_A, OWNER_B, DEVICE_A, syntheticRow } from '../../fixtures/sync';
-import { beginSignOut, completeSignOut, recoverSignOut, type SignOutMarker, type SignOutStorage } from '../../src/auth/sign-out';
+import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, type SignOutMarker, type SignOutStorage } from '../../src/auth/sign-out';
 
 function journal() {
  let value:SignOutMarker|null=null;
@@ -71,5 +72,42 @@ test('concurrent boot consumers share recovery and never clear a newly restored 
   const first=recoverSignOut(database,storage,clear),second=recoverSignOut(database,storage,clear);
   await new Promise<void>(resolve=>setImmediate(resolve));expect(clear).toHaveBeenCalledTimes(1);
   finish();expect(await first).toBe(OWNER_A);expect(await second).toBe(OWNER_A);expect(await storage.read()).toBeNull();
+ } finally {local.sqlite.close();}
+});
+
+test('departure closes the engine before wipe; late pull cannot repopulate SQLite',async()=>{
+ const {SyncEngine}=await import('../../src/data/sync/engine');
+ const local=await localDatabase();local.repo.putLocal(syntheticRow());
+ let resolve!: (rows: import('../../src/data/rows').ServerRow[])=>void;
+ const pull=jest.fn(()=>new Promise<import('../../src/data/rows').ServerRow[]>(r=>{resolve=r;}));
+ const engine=new SyncEngine(local.repo,{owner:OWNER_A,push:async()=>{},pull});
+ try {
+  const flight=engine.sync();await new Promise<void>(r=>setImmediate(r));expect(pull).toHaveBeenCalledTimes(1);
+  engine.close();local.repo.wipe();const upsert=jest.spyOn(local.repo,'applyPage');
+  resolve([{row:syntheticRow('profile'),server_seq:'1'}]);await flight;
+  expect(upsert).not.toHaveBeenCalled();expect(local.repo.list('profile',true)).toEqual([]);expect(local.repo.list('sessions',true)).toEqual([]);
+ } finally {engine.close();local.sqlite.close();}
+});
+
+test.each([false,true])('escape all-owner wipe is one transaction (injected failure=%s)',async fail=>{
+ const local=await localDatabase();
+ try {
+  for(const owner of [OWNER_A,OWNER_B,'demo','guest']) {
+   const repo=new Repository(local.db,owner,DEVICE_A,()=>syntheticRow().id);
+   for(const table of syncedTables){repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
+   repo.cacheOura('2026-01-01',{fixture:true});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
+  }
+  if(fail)local.sqlite.exec("CREATE TRIGGER deny_wipe BEFORE DELETE ON photos BEGIN SELECT RAISE(ABORT,'synthetic'); END");
+  let marker=true,session=true;
+  const storage={read:async()=>{throw new Error('synthetic corrupt marker');},write:async()=>{},remove:async()=>{expect(session).toBe(false);marker=false;}};
+  const clear=jest.fn(async()=>{expect(local.sqlite.prepare('SELECT * FROM sessions').all()).toEqual([]);session=false;});
+  const escape=()=>escapeSignOut({wipeAll:()=>wipeAllOwners(local.db)},storage,clear);
+  if(fail){await expect(escape()).rejects.toThrow();expect(marker).toBe(true);expect(session).toBe(true);expect(clear).not.toHaveBeenCalled();}
+  else {await escape();expect(marker).toBe(false);expect(session).toBe(false);await escape();}
+  for(const table of [...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days']) {
+   const rows=local.sqlite.prepare(`SELECT * FROM ${table}`).all();
+   if(fail)expect(rows.length).toBeGreaterThan(0);else expect(rows).toEqual([]);
+  }
+  if(!fail)wipeAllOwners(local.db);
  } finally {local.sqlite.close();}
 });

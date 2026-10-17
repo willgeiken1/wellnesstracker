@@ -99,6 +99,22 @@ test('clamped tombstone RPC acknowledgment reconciles both client timestamps and
  } finally {engine.close();local.sqlite.close();}
 });
 
+test.each(['insert','rpc','update'])('independent deletion bound through %s preserves the five-minute window',async path=>{
+ await asUser(db,OWNER_A,async tx=>{
+  const now=Number((await tx.query<{stamp:string}>("SELECT floor(extract(epoch FROM now())*1000)::bigint::text AS stamp")).rows[0].stamp);
+  for(const [index,deletion] of [8000000000000,now+300000].entries()) {
+   const row={...syntheticRow('photos'),id:`30000000-0000-4000-8000-0000000007${['insert','rpc','update'].indexOf(path)}${index}`,updated_at:now,deleted_at:deletion};
+   if(path==='rpc')await tx.query('SELECT public.sync_push($1::jsonb)',[JSON.stringify([row])]);
+   else {
+    await tx.query('INSERT INTO public.photos(owner_id,id,device_id,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5)',[OWNER_A,row.id,row.device_id,path==='update'?now-1:now,path==='update'?null:deletion]);
+    if(path==='update')await tx.query('UPDATE public.photos SET updated_at=$1,deleted_at=$2 WHERE id=$3',[now,deletion,row.id]);
+   }
+   const stored=(await tx.query<{updated_at:string;deleted_at:string}>('SELECT updated_at,deleted_at FROM public.photos WHERE id=$1',[row.id])).rows[0];
+   expect(Number(stored.updated_at)).toBe(now);expect(Number(stored.deleted_at)).toBe(index===0?now:deletion);
+  }
+ });
+});
+
 test('account deletion cascades all 19 owner FKs and preserves the other owner', async () => {
  for(const table of syncedTables) {
   const row={...syntheticRow(table),id:'30000000-0000-4000-8000-000000000504'};

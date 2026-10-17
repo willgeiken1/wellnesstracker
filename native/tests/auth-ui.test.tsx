@@ -86,3 +86,17 @@ test('sign-out sync times out at 10 seconds and shows loss warning',async()=>{
  expect(alert.mock.calls[0][1]).toContain('3 unsynced changes will be lost');expect(auth.signOut).not.toHaveBeenCalled();
  expect(screen.getByRole('button',{name:'Sign out'}).props.accessibilityState).toMatchObject({disabled:false,busy:false});
 });
+
+test('destructive confirmation double tap starts only one sign-out while in flight',async()=>{
+ let finish!:()=>void;const auth={...state(),pending:1,signOut:jest.fn(()=>new Promise<void>(r=>{finish=r;}))};
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ const confirm=alert.mock.calls[0][2]![1].onPress!;
+ await act(async()=>{confirm();confirm();});
+ expect(auth.signOut).toHaveBeenCalledTimes(1);await act(async()=>{finish();});
+});
+test('failed sign-out explains retry without claiming an erasure',async()=>{
+ const auth={...state(),signOut:jest.fn(async()=>{throw new Error('synthetic');})};await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(screen.getByRole('alert')).toHaveTextContent('Sign-out did not finish. Some local data may already have been erased. Try again now to finish signing out.');
+});

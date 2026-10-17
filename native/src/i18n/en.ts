@@ -9,8 +9,11 @@ export const en = {
   demoMode: 'Demo mode · synthetic examples only', leaveDemo: 'Leave demo', signOut: 'Sign out',
   signOutConfirm: 'Sign out of this account?', signOutBody: 'This account’s data will be erased from this phone.', signOutUnsynced_one: '{count} unsynced change will be lost, including changes that need review.', signOutUnsynced_other: '{count} unsynced changes will be lost, including changes that need review.',
   cancel: 'Cancel', syncConflictStatus: 'Some changes need review', syncConflicts: 'sync conflicts · review needed', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncBusy: 'Syncing…', pending: 'pending',
+  localRecovery: 'Local data recovery', eraseAllLocal: 'Erase all local data and sign out',
+  eraseAllBody: 'Local data on this device for all accounts will be erased and you will be signed out. Synced data stays in your account.',
+  retrySignOut: 'Finish signing out', recoveryFailed: 'Recovery did not finish. The app is still locked. Try again.',
   localError: 'Local data is unavailable. Please restart the app.', preferenceError: 'Preferences could not be saved. Please try again.',
-  signOutFailed: 'Sign-out could not finish. Please try again.', backWelcome: 'Back to Welcome',
+  signOutFailed: 'Sign-out did not finish. Some local data may already have been erased. Try again now to finish signing out.', backWelcome: 'Back to Welcome',
 
   home: 'Home', workouts: 'Workouts', food: 'Food', progress: 'Progress', insights: 'Insights',
   settings: 'Settings', openSettings: 'Open settings', backHome: 'Back to Home', backSettings: 'Back to Settings',

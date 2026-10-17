@@ -3,8 +3,8 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import { randomUUID } from 'expo-crypto';
 import migrations from './migrations';
-import { Repository, deviceId } from './repository';
-let database: Promise<{forOwner: (owner: string) => Repository}> | undefined;
+import { Repository, deviceId, wipeAllOwners } from './repository';
+let database: Promise<{forOwner: (owner: string) => Repository; wipeAll(): void}> | undefined;
 export function openLocalDatabase() {
   return database ??= (async () => {
     try {
@@ -13,7 +13,7 @@ export function openLocalDatabase() {
       const db = drizzle(sqlite);
       await migrate(db,migrations);
       const device = deviceId(db, randomUUID);
-      return {forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
+      return {wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
     } catch { database = undefined; throw new Error('Local data is unavailable.'); }
   })();
 }

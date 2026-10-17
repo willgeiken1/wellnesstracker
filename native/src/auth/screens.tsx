@@ -65,7 +65,7 @@ export function Account() {
     if(submitting.current)return;
     submitting.current=true;setBusy(true);setError(false);
     try {
-      await syncBeforeSignOut(auth.syncNow);
+      await (auth.prepareSignOut?auth.prepareSignOut():syncBeforeSignOut(auth.syncNow));
       const count=auth.repository?.unsyncedCount()??auth.pending;
       if(count===0) {await auth.signOut();return;}
       Alert.alert(t('signOutConfirm'),`${t('signOutBody')} ${signOutUnsynced(count)}`,[
@@ -85,5 +85,25 @@ export function Account() {
       <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
     </>}
     {error&&<ThemedText accessibilityRole="alert">{t('signOutFailed')}</ThemedText>}
+  </Screen>;
+}
+
+/** Available while routes are locked; destructive escape is exclusive to marker-read failure. */
+export function LocalDataRecovery() {
+  const auth=useAuth(),submitting=useRef(false);const [busy,setBusy]=useState(false),[error,setError]=useState(false);
+  if(!auth.recovery)return null;
+  const run=async()=>{
+    if(submitting.current)return;submitting.current=true;setBusy(true);setError(false);
+    try {if(auth.recovery==='corrupt-marker')await auth.recoverLocalData?.();else await auth.signOut(true);}
+    catch {setError(true);}finally{submitting.current=false;setBusy(false);}
+  };
+  const escape=auth.recovery==='corrupt-marker';
+  return <Screen title={t('localRecovery')}>
+    <ThemedText>{t(escape?'eraseAllBody':'signOutFailed')}</ThemedText>
+    <Button label={t(escape?'eraseAllLocal':'retrySignOut')} variant="destructive" busy={busy} disabled={busy} onPress={()=>{
+      if(escape)Alert.alert(t('eraseAllLocal'),t('eraseAllBody'),[{text:t('cancel'),style:'cancel'},{text:t('eraseAllLocal'),style:'destructive',onPress:()=>{void run();}}]);
+      else void run();
+    }}/>
+    {(error||auth.recoveryFailed)&&<ThemedText accessibilityRole="alert">{t('recoveryFailed')}</ThemedText>}
   </Screen>;
 }

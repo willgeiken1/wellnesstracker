@@ -69,3 +69,25 @@ test('account recovery fails closed if configuration cannot identify its stored 
   } finally {unavailable.mockRestore();}
  });
 });
+
+test.each(['demo','account'])('unconfigured %s boot recovery preserves unrelated session storage and handles marker strictly',async kind=>{
+ await jest.isolateModulesAsync(async()=>{
+  const configuration=require('../src/auth/config') as typeof import('../src/auth/config');
+  const unavailable=jest.spyOn(configuration,'authConfig').mockReturnValue(null);
+  const secure=require('expo-secure-store') as typeof import('expo-secure-store');
+  const values=new Map([['sb-synthetic-auth-token.ready','1'],['sb-synthetic-auth-token.part.0','synthetic session']]);
+  jest.mocked(secure.getItemAsync).mockImplementation(async key=>values.get(key)??null);
+  jest.mocked(secure.deleteItemAsync).mockImplementation(async key=>{values.delete(key);});
+  const auth=require('../src/auth/client') as typeof import('../src/auth/client');
+  const {recoverSignOut}=require('../src/auth/sign-out') as typeof import('../src/auth/sign-out');
+  const owner=kind==='demo'?'demo':'10000000-0000-4000-8000-000000000001';
+  let marker:import('../src/auth/sign-out').SignOutMarker|null={owner,startedAt:1,phase:'wiped'};
+  const storage={read:async()=>marker,write:async(next:NonNullable<typeof marker>)=>{marker=next;},remove:jest.fn(async()=>{marker=null;})};
+  try {
+   const flight=recoverSignOut({forOwner:()=>({owner} as import('../src/data/repository').Repository)},storage,id=>auth.clearLocalSession(id!=='demo'));
+   if(kind==='demo'){await flight;expect(marker).toBeNull();expect(storage.remove).toHaveBeenCalledTimes(1);}
+   else {await expect(flight).rejects.toThrow('Session storage unavailable.');expect(marker).not.toBeNull();expect(storage.remove).not.toHaveBeenCalled();}
+   expect(values.get('sb-synthetic-auth-token.ready')).toBe('1');expect(values.get('sb-synthetic-auth-token.part.0')).toBe('synthetic session');
+  } finally {unavailable.mockRestore();}
+ });
+});

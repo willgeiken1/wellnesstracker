@@ -27,12 +27,23 @@ export async function completeSignOut(marker: SignOutMarker, repo: Repository, s
   }
   await storage.remove();
 }
+export class UnreadableSignOutMarker extends Error {
+  constructor(){super('Sign-out recovery unavailable.');}
+}
+/** No checkpoints: a retained corrupt/unreadable marker repeats all steps safely. */
+export async function escapeSignOut(database: {wipeAll():void}, storage: SignOutStorage, clearSession:()=>Promise<void>) {
+  database.wipeAll();
+  await clearSession();
+  await storage.remove();
+}
 // StrictMode/multiple boot consumers must not clear credentials after another consumer starts auth.
 const recoveries=new WeakMap<SignOutStorage,Promise<string|null>>();
 export function recoverSignOut(database: OwnerDatabase, storage: SignOutStorage, clearSession:(owner:string)=>Promise<void>): Promise<string|null> {
   const existing=recoveries.get(storage);if(existing)return existing;
   const flight=(async()=>{
-    const marker=await storage.read();if(!marker)return null;
+    let marker:SignOutMarker|null;
+    try {marker=await storage.read();} catch {throw new UnreadableSignOutMarker();}
+    if(!marker)return null;
     await completeSignOut(marker,database.forOwner(marker.owner),storage,clearSession);
     return marker.owner;
   })().finally(()=>{recoveries.delete(storage);});

@@ -8,12 +8,14 @@ import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
-import { beginSignOut, completeSignOut, recoverSignOut } from './sign-out';
+import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker } from './sign-out';
 import { signOutStorage } from './sign-out-storage';
 import { seedDemo } from '../../fixtures/demo';
 export interface AuthState {
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
+  prepareSignOut?(): Promise<void>;
+  recovery?: 'corrupt-marker' | 'departure'; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
 }
@@ -22,6 +24,11 @@ export function useAuth() { const value=useContext(AuthContext);if(!value)throw 
 export function AuthProvider({children, client: supplied}: PropsWithChildren<{client?: SupabaseClient | null}>) {
   const [clientState,setClientState]=useState<{client:SupabaseClient|null;error:string|null}>({client:null,error:null});
   const [bootReady,setBootReady]=useState(false),[departurePending,setDeparturePending]=useState(false);
+  const [recovery,setRecovery]=useState<AuthState['recovery']>(),[recoveryFailed,setRecoveryFailed]=useState(false);
+  const retryDeparture=useRef<(()=>Promise<void>)|null>(null);
+  const preparedSync=useRef<{engine:SyncEngine|null;flight:Promise<void>}|null>(null);
+  const departureLocked=useRef(false);
+  const escapeInFlight=useRef(false);
   const departingOwner=useRef<string|null>(null);
   const client=clientState.client;
   const [session,setSession]=useState<Session|null>(null), [demo,setDemo]=useState(false), [authReady,setAuthReady]=useState(false);
@@ -39,16 +46,16 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         try {next=supplied===undefined?getAuthClient():supplied;}
         catch {error='Invalid sign-in configuration.';}
         setClientState({client:next,error});setBootReady(true);if(!next)setAuthReady(true);
-      } catch {if(active)setDataError(true);}
+      } catch(error) {if(active){setDataError(true);if(error instanceof UnreadableSignOutMarker)setRecovery('corrupt-marker');}}
     })();
     return ()=>{active=false;};
   },[supplied]);
   useEffect(()=>{
     let active=true, received=false;
     if(!bootReady||!client)return;
-    const {data:{subscription}}=client.auth.onAuthStateChange((_event,next)=>{received=true;if(next?.user.id===departingOwner.current)return;if(active){activeSession.current=next;setSession(next);setAuthReady(true);if(next)setDemo(false);}});
+    const {data:{subscription}}=client.auth.onAuthStateChange((_event,next)=>{received=true;if(next?.user.id===departingOwner.current || (departureLocked.current&&!departingOwner.current))return;if(active){activeSession.current=next;setSession(next);setAuthReady(true);if(next)setDemo(false);}});
     void client.auth.getSession().then(({data,error})=>{if(active&&!received){activeSession.current=error?null:data.session;setSession(activeSession.current);setAuthReady(true);}}).catch(()=>{if(active)setAuthReady(true);});
-    const refresh=(state:string)=>{if(state==='active'&&!departingOwner.current)client.auth.startAutoRefresh();else client.auth.stopAutoRefresh();};
+    const refresh=(state:string)=>{if(state==='active'&&!departingOwner.current&&!departureLocked.current)client.auth.startAutoRefresh();else client.auth.stopAutoRefresh();};
     refresh(AppState.currentState ?? 'background');
     const listener=AppState.addEventListener('change',refresh);
     return ()=>{active=false;subscription.unsubscribe();listener.remove();client.auth.stopAutoRefresh();};
@@ -83,39 +90,62 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     void triggers.foreground();
     return ()=>{app.remove();network.remove();triggers.stop();};
   },[engine]);
-  const value: AuthState={session,demo,ready:bootReady&&authReady&&!!currentRepo&&!departurePending,configured:!!client,configError:clientState.error ?? (dataError?'Local data is unavailable.':null),repository:currentRepo,pending,conflicts,syncStatus,
-    lookAround:()=>{if(bootReady&&!departingOwner.current)setDemo(true);},
+  const value: AuthState={prepareSignOut:()=>{
+      const flight=syncBeforeSignOut(()=>engine?.sync()??Promise.resolve());
+      preparedSync.current={engine,flight};return flight;
+    },recovery,recoveryFailed,recoverLocalData:async()=>{
+      if(recovery!=='corrupt-marker'||escapeInFlight.current)return;
+      escapeInFlight.current=true;setRecoveryFailed(false);
+      try {
+        const database=await openLocalDatabase();
+        await escapeSignOut(database,signOutStorage,()=>clearLocalSession(true));
+        // Boot auth only after erasure and marker removal. Never restore the pre-escape session.
+        setSession(null);activeSession.current=null;setDemo(false);setDataError(false);setRecovery(undefined);
+        let next:SupabaseClient|null=null,error:string|null=null;
+        try {next=supplied===undefined?getAuthClient():supplied;}catch {error='Invalid sign-in configuration.';}
+        setClientState({client:next,error});setBootReady(true);if(!next)setAuthReady(true);
+      } catch {setRecoveryFailed(true);throw new Error('Local recovery did not finish.');}
+      finally {escapeInFlight.current=false;}
+    },session,demo,ready:bootReady&&authReady&&!!currentRepo&&!departurePending,configured:!!client,configError:clientState.error ?? (dataError?'Local data is unavailable.':null),repository:currentRepo,pending,conflicts,syncStatus,
+    lookAround:()=>{if(bootReady&&!departingOwner.current&&!departureLocked.current)setDemo(true);},
     signIn:async(email,password)=>{
-      if(!bootReady||departingOwner.current||!client)return 'authUnavailable';
+      if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
       try{const {error}=await client.auth.signInWithPassword({email,password});return error?'authFailed':null;}catch{return 'authFailed';}
     },
     createAccount:async(email,password)=>{
-      if(!bootReady||departingOwner.current||!client)return 'authUnavailable';
+      if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
       try{const {data,error}=await client.auth.signUp({email,password});return error?'authFailed':data.session?null:'confirmEmail';}catch{return 'authFailed';}
     },
     signOut:async(discardUnsynced=false)=>{
-      await syncBeforeSignOut(()=>engine?.sync()??Promise.resolve());
+      if(departurePending&&retryDeparture.current)return retryDeparture.current();
+      const prepared=preparedSync.current;preparedSync.current=null;
+      if(!departurePending)await (prepared?.engine===engine?prepared.flight:syncBeforeSignOut(()=>engine?.sync()??Promise.resolve()));
       if(currentRepo?.hasUnsynced() && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
       if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');
-      departingOwner.current=currentRepo.owner;setDeparturePending(true);
-      engine?.close();
-      client?.auth.stopAutoRefresh();
-      try {
-        const marker=await beginSignOut(currentRepo.owner,signOutStorage);
-        await completeSignOut(marker,currentRepo,signOutStorage,async()=>{
-          if(client && session && activeSession.current?.user.id===session.user.id) {
-            client.auth.stopAutoRefresh();
-            // Local scope only. A failed network revocation must still erase this device.
-            try { await client.auth.signOut({scope:'local'}); } catch { /* device cleanup below */ }
-            // A newer auth event owns its own credentials; never erase that session.
-            if(!activeSession.current || activeSession.current.user.id===session.user.id)await clearLocalSession(true);
-          } else if(!session && !activeSession.current)await clearLocalSession();
-        });
-      } catch {setDataError(true);throw new Error('Sign-out recovery required.');}
-      departingOwner.current=null;setDeparturePending(false);
-      setDemo(false);
-      if(activeSession.current?.user.id===session?.user.id)activeSession.current=null;
-      setSession(current => current?.user.id === session?.user.id ? null : current);
+      // Retain the original repository/session even if auth emits SIGNED_OUT before cleanup fails.
+      const leave=async()=>{
+        if(departingOwner.current)throw new Error('Sign-out recovery required.');
+        departingOwner.current=currentRepo.owner;departureLocked.current=true;setDeparturePending(true);
+        engine?.close();
+        client?.auth.stopAutoRefresh();
+        try {
+          const marker=await beginSignOut(currentRepo.owner,signOutStorage);
+          await completeSignOut(marker,currentRepo,signOutStorage,async()=>{
+            if(client && session && (!activeSession.current || activeSession.current.user.id===session.user.id)) {
+              client.auth.stopAutoRefresh();
+              // Local scope only. A failed network revocation must still erase this device.
+              try { await client.auth.signOut({scope:'local'}); } catch { /* device cleanup below */ }
+              // A newer auth event owns its own credentials; never erase that session.
+              if(!activeSession.current || activeSession.current.user.id===session.user.id)await clearLocalSession(true);
+            } else if(!session && !activeSession.current)await clearLocalSession();
+          });
+        } catch {retryDeparture.current=leave;departingOwner.current=null;setDataError(true);setRecovery('departure');throw new Error('Sign-out recovery required.');}
+        retryDeparture.current=null;departingOwner.current=null;departureLocked.current=false;setDeparturePending(false);setRecovery(undefined);setDataError(false);
+        setDemo(false);
+        if(activeSession.current?.user.id===session?.user.id)activeSession.current=null;
+        setSession(current => current?.user.id === session?.user.id ? null : current);
+      };
+      await leave();
     },
     syncNow:()=>engine?.sync()??Promise.resolve(),
   };

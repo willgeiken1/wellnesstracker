@@ -5,6 +5,16 @@ import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow
 type Physical = Record<string, Scalar>;
 export interface SyncConflict { table: Table; id: string; reason: 'provenance' }
 export interface Pending { row: Row; revision: string }
+/** Corrupt-marker escape only: erase every namespace in one atomic transaction. */
+export function wipeAllOwners(db: ExpoSQLiteDatabase) {
+  try {
+    db.transaction(() => {
+      for(const table of [...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days']) {
+        db.run(sql`DELETE FROM ${sql.identifier(table)}`);
+      }
+    });
+  } catch {throw new Error('Local data is unavailable.');}
+}
 export class Repository {
   private listeners = new Set<() => void>();
   constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string) {}

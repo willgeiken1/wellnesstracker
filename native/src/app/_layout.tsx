@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '@/design/theme-provider';
 import { ThemedText } from '@/components/themed-text';
 import { AuthProvider, useAuth } from '../auth/provider';
+import { LocalDataRecovery } from '../auth/screens';
 import { t } from '@/i18n/en';
 
 void SplashScreen.preventAutoHideAsync();
@@ -35,6 +36,7 @@ function Application() {
   const auth = useAuth();
   return <ThemeProvider key={auth.session?.user.id ?? (auth.demo ? 'demo' : 'guest')} repository={auth.repository}>
     {auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
+    <LocalDataRecovery />
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo} />}
   </ThemeProvider>;
 }

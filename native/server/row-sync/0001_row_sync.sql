@@ -36,6 +36,11 @@ BEGIN
     NEW.updated_at := write_now;
     IF NEW.deleted_at IS NOT NULL THEN NEW.deleted_at := NEW.updated_at; END IF;
   END IF;
+  -- Bound deletion time independently, after the updated_at clamp above.
+  IF NEW.deleted_at > write_now + 300000 THEN
+    NEW.deleted_at := NEW.updated_at;
+  END IF;
+
   -- D1: all payload is nullable already; source alone is retained for immutable
   -- weigh-in provenance. No value-column NOT NULL relaxation is required.
   IF NEW.deleted_at IS NOT NULL THEN
