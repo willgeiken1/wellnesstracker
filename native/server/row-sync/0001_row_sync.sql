@@ -28,7 +28,14 @@ BEGIN
   -- D2: clamp excessive future timestamps to transaction now, BEFORE LWW.
   -- Choosing now rather than now+5min avoids giving a bad clock a five-minute
   -- priority over later legitimate edits. Exactly +5min remains accepted.
-  IF NEW.updated_at > write_now + 300000 THEN NEW.updated_at := write_now; END IF;
+  -- Known limitation accepted by Will (Oct 17, 2026), as no worse than no clamp:
+  -- a lost clamped ack leaves the original future stamp on the client. Retrying
+  -- may re-clamp to a newer now(), becoming a new version that can overwrite.
+  -- Thus the same incoming tuple is not necessarily an immutable retry.
+  IF NEW.updated_at > write_now + 300000 THEN
+    NEW.updated_at := write_now;
+    IF NEW.deleted_at IS NOT NULL THEN NEW.deleted_at := NEW.updated_at; END IF;
+  END IF;
   -- D1: all payload is nullable already; source alone is retained for immutable
   -- weigh-in provenance. No value-column NOT NULL relaxation is required.
   IF NEW.deleted_at IS NOT NULL THEN

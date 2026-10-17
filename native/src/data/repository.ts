@@ -62,6 +62,10 @@ export class Repository {
     }));
     this.listeners.forEach(listener => listener());
   }
+  /** Includes conflict-flagged rows, which pending() intentionally excludes from upload. */
+  unsyncedCount() {
+    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner}`)?.count ?? 0);
+  }
   hasUnsynced() {
     return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} LIMIT 1`));
   }

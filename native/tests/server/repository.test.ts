@@ -156,3 +156,42 @@ test('authoritative clamped acknowledgment preserves a newer in-flight edit and 
   expect(local.repo.pending()).toHaveLength(1);expect(local.repo.pending()[0].row.updated_at).toBe(newer.updated_at);
  } finally {local.sqlite.close();}
 });
+
+test('clamped tombstone ack restores deletion time and recomputes the owner clock from all retained rows',async()=>{
+ const local=await localDatabase(),row={...syntheticRow(),updated_at:8000000000000,deleted_at:8000000000000};
+ try {
+  local.repo.putLocal({...syntheticRow('goals'),updated_at:500});
+  const other=new Repository(local.db,OWNER_B,DEVICE_A,()=>row.id);
+  other.putLocal({...syntheticRow(),owner_id:OWNER_B,updated_at:9000000000000});
+  local.repo.putLocal(row);
+  const sent=local.repo.pending().filter(item=>item.row.table==='sessions');
+  local.repo.ack(sent,[{...row,updated_at:100,deleted_at:100}]);
+  expect(local.repo.get('sessions',row.id)).toMatchObject({updated_at:100,deleted_at:100});
+  expect(local.repo.save('sessions',{},row.id,10).updated_at).toBe(501);
+ } finally {local.sqlite.close();}
+});
+test('photo tombstone upgrade erases metadata but preserves live photos, versions and outbox',async()=>{
+ const path=`/tmp/insight-photo-upgrade-${process.pid}.db`;
+ const first=await localDatabase(path),row=syntheticRow('photos');
+ first.repo.putLocal({...row,data:{file_name:'synthetic.jpg',captured_at:42,width:10,height:20}});
+ first.repo.putLocal({...row,id:'30000000-0000-4000-8000-000000000699',data:{file_name:'live.jpg'}});
+ first.sqlite.prepare('UPDATE photos SET deleted_at=99 WHERE id=?').run(row.id);
+ first.sqlite.exec('DELETE FROM __drizzle_migrations WHERE created_at=1792238400002');first.sqlite.close();
+ const second=await localDatabase(path);
+ try {
+  expect(second.repo.get('photos',row.id)).toMatchObject({updated_at:row.updated_at,deleted_at:99,data:{file_name:null,captured_at:null,width:null,height:null}});
+  expect(second.repo.list('photos')[0].data.file_name).toBe('live.jpg');expect(second.repo.pending()).toHaveLength(2);
+ } finally {second.sqlite.close();for(const suffix of ['', '-wal', '-shm'])rmSync(path+suffix,{force:true});}
+});
+test('unsynced count includes flagged outbox rows exactly once and isolates owners',async()=>{
+ const local=await localDatabase();
+ try {
+  const other=new Repository(local.db,OWNER_B,DEVICE_A,()=>syntheticRow().id);
+  expect(local.repo.unsyncedCount()).toBe(0);
+  local.repo.putLocal(syntheticRow());local.repo.flagConflict(local.repo.pending()[0]);
+  other.putLocal({...syntheticRow(),owner_id:OWNER_B});
+  expect(local.repo.pending()).toHaveLength(0);expect(local.repo.unsyncedCount()).toBe(1);
+  local.repo.putLocal(syntheticRow('goals'));local.repo.putLocal(syntheticRow('photos'));
+  expect(local.repo.unsyncedCount()).toBe(3);expect(other.unsyncedCount()).toBe(1);
+ } finally {local.sqlite.close();}
+});

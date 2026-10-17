@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../components/screen';
@@ -6,8 +6,9 @@ import { ThemedText } from '../components/themed-text';
 import { Button, touchTarget } from '../components/button';
 import { Badge } from '../components/badge';
 import { useTheme } from '../design/theme-provider';
-import { t, type MessageKey } from '../i18n/en';
+import { signOutUnsynced, t, type MessageKey } from '../i18n/en';
 import { useAuth } from './provider';
+import { syncBeforeSignOut } from './sign-out-sync';
 export function Welcome() {
   const auth=useAuth();
   return <Screen title={t('authWelcome')}>
@@ -51,22 +52,37 @@ export function AuthForm({create=false}: {create?:boolean}) {
   </Screen>;
 }
 export function Account() {
-  const auth=useAuth();const [error,setError]=useState(false);
+  const auth=useAuth();const [error,setError]=useState(false),[busy,setBusy]=useState(false);
+  const submitting=useRef(false);
+  const leave=async(discardUnsynced=false)=>{
+    if(submitting.current)return;
+    submitting.current=true;setBusy(true);
+    try { if(discardUnsynced)await auth.signOut(true);else await auth.signOut(); }
+    catch {setError(true);}
+    finally {submitting.current=false;setBusy(false);}
+  };
   const signOut=async()=>{
-    await auth.syncNow();
-    Alert.alert(t('signOutConfirm'),`${t('signOutBody')} ${t('signOutUnsynced')}`,[
-    {text:t('cancel'),style:'cancel'},
-    {text:t('signOut'),style:'destructive',onPress:()=>{void auth.signOut(true).catch(()=>setError(true));}},
-  ]);
+    if(submitting.current)return;
+    submitting.current=true;setBusy(true);setError(false);
+    try {
+      await syncBeforeSignOut(auth.syncNow);
+      const count=auth.repository?.unsyncedCount()??auth.pending;
+      if(count===0) {await auth.signOut();return;}
+      Alert.alert(t('signOutConfirm'),`${t('signOutBody')} ${signOutUnsynced(count)}`,[
+        {text:t('cancel'),style:'cancel'},
+        {text:t('signOut'),style:'destructive',onPress:()=>{void leave(true);}},
+      ]);
+    } catch {setError(true);}
+    finally {submitting.current=false;setBusy(false);}
   };
   return <Screen title={t('account')}>
     <ThemedText>{auth.demo?t('demoMode'):auth.session?.user.email}</ThemedText>
-    {auth.demo?<Button label={t('leaveDemo')} variant="secondary" onPress={signOut}/>:<>
+    {auth.demo?<Button label={t('leaveDemo')} variant="secondary" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>:<>
       <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.pending>0?'syncPending':auth.conflicts>0?'syncConflictStatus':'syncIdle')}</ThemedText>
       {auth.conflicts>0&&<Badge label={`${auth.conflicts} ${t('syncConflicts')}`}/>}
       {auth.pending>0&&<Badge label={`${auth.pending} ${t('pending')}`}/>}
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
-      <Button label={t('signOut')} variant="destructive" onPress={signOut}/>
+      <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
     </>}
     {error&&<ThemedText accessibilityRole="alert">{t('signOutFailed')}</ThemedText>}
   </Screen>;

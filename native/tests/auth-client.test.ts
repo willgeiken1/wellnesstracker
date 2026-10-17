@@ -33,3 +33,39 @@ test('forced local cleanup removes session chunks even when remote sign-out did 
  await storage.setItem(key+'-code-verifier','synthetic verifier');
  await clearLocalSession();expect(values.size).toBe(0);expect(await storage.getItem(key)).toBeNull();
 });
+
+test('uses the exact existing SDK storage key for SecureStore writes and cleanup',async()=>{
+ getAuthClient();const options=jest.mocked(createClient).mock.calls[0][2]!;
+ expect(options.auth!.storageKey).toBe('sb-127-auth-token');
+ await options.auth!.storage!.setItem('sb-127-auth-token','synthetic session');
+ expect(SecureStore.setItemAsync).toHaveBeenCalledWith('sb-127-auth-token.part.0','synthetic session',{keychainAccessible:6});
+ await clearLocalSession();
+ expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('sb-127-auth-token.ready');
+});
+
+test('boot cleanup clears SecureStore without creating an auto-restoring auth client',async()=>{
+ await jest.isolateModulesAsync(async()=>{
+  const sdk=require('@supabase/supabase-js') as typeof import('@supabase/supabase-js');
+  const secure=require('expo-secure-store') as typeof import('expo-secure-store');
+  jest.mocked(sdk.createClient).mockClear();jest.mocked(secure.deleteItemAsync).mockClear();
+  jest.mocked(secure.getItemAsync).mockResolvedValue(null);
+  const auth=require('../src/auth/client') as typeof import('../src/auth/client');
+  await auth.clearLocalSession();
+  expect(sdk.createClient).not.toHaveBeenCalled();
+  expect(secure.deleteItemAsync).toHaveBeenCalledWith('sb-127-auth-token.ready');
+  expect(secure.deleteItemAsync).toHaveBeenCalledWith('sb-127-auth-token-user.ready');
+  expect(secure.deleteItemAsync).toHaveBeenCalledWith('sb-127-auth-token-code-verifier.ready');
+ });
+});
+
+test('account recovery fails closed if configuration cannot identify its stored session; demo cleanup remains available',async()=>{
+ await jest.isolateModulesAsync(async()=>{
+  const configuration=require('../src/auth/config') as typeof import('../src/auth/config');
+  const unavailable=jest.spyOn(configuration,'authConfig').mockReturnValue(null);
+  try {
+   const auth=require('../src/auth/client') as typeof import('../src/auth/client');
+   await expect(auth.clearLocalSession(true)).rejects.toThrow('Session storage unavailable.');
+   await expect(auth.clearLocalSession()).resolves.toBeUndefined();
+  } finally {unavailable.mockRestore();}
+ });
+});

@@ -4,11 +4,14 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { AuthProvider, useAuth, type AuthState } from '../src/auth/provider';
 import { OWNER_A, OWNER_B, syntheticRow } from '../fixtures/sync';
 import { openLocalDatabase } from '../src/data/database';
+import { clearLocalSession, getAuthClient } from '../src/auth/client';
+import { signOutStorage } from '../src/auth/sign-out-storage';
 import { seedDemo } from '../fixtures/demo';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
 
-jest.mock('../src/auth/client', () => ({ getAuthClient: () => null, clearLocalSession: jest.fn(async()=>{}) }));
+jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), clearLocalSession: jest.fn(async()=>{}) }));
+jest.mock('../src/auth/sign-out-storage',()=>({signOutStorage:{read:jest.fn(async()=>null),write:jest.fn(async()=>{}),remove:jest.fn(async()=>{})}}));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../fixtures/demo', () => ({ seedDemo: jest.fn() }));
 const mockPush = jest.fn<Promise<void>, []>();
@@ -48,7 +51,7 @@ function clientFixture(initial: Session | null = session(OWNER_A)) {
 }
 let observed: AuthState;
 function Probe() { observed = useAuth(); return null; }
-beforeEach(() => { jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({remove:jest.fn()})); mockPush.mockReset(); mockPush.mockResolvedValue(undefined); });
+beforeEach(() => { jest.mocked(signOutStorage.read).mockReset();jest.mocked(signOutStorage.read).mockResolvedValue(null);jest.mocked(signOutStorage.write).mockReset();jest.mocked(signOutStorage.write).mockResolvedValue();jest.mocked(signOutStorage.remove).mockReset();jest.mocked(signOutStorage.remove).mockResolvedValue();jest.mocked(getAuthClient).mockReset();jest.mocked(getAuthClient).mockReturnValue(null);jest.mocked(clearLocalSession).mockReset();jest.mocked(clearLocalSession).mockResolvedValue(); jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({remove:jest.fn()})); mockPush.mockReset(); mockPush.mockResolvedValue(undefined); });
 
 test('restores session, reacts to AppState, switches A to B during upload and isolates pending rows', async () => {
   const a = fixtureRepo(OWNER_A), b = fixtureRepo(OWNER_B), guest = fixtureRepo('guest');
@@ -144,4 +147,154 @@ test('late sign-out completion cannot clear a newer account event',async()=>{
  await act(async()=>{signedOut.resolve({error:null});await leaving;});
  expect(observed.session?.user.id).toBe(OWNER_B);expect(observed.repository?.owner).toBe(OWNER_B);expect(observed.ready).toBe(true);
  await view.unmount();
+});
+
+test('provider independently awaits a fresh sync before wiping and signing out',async()=>{
+ const a=fixtureRepo(OWNER_A),fixture=clientFixture();
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(a.ack).toHaveBeenCalled());
+ const sync=jest.spyOn(require('../src/data/sync/engine').SyncEngine.prototype,'sync');
+ const flight=deferred<void>();sync.mockReturnValueOnce(flight.promise);
+ let leaving!:Promise<void>;await act(async()=>{leaving=observed.signOut();});
+ expect(sync).toHaveBeenCalledTimes(1);expect(a.wipe).not.toHaveBeenCalled();expect(fixture.auth.signOut).not.toHaveBeenCalled();
+ await act(async()=>{flight.resolve();await leaving;});expect(a.wipe).toHaveBeenCalledTimes(1);
+ sync.mockRestore();await view.unmount();
+});
+test('newer session before pre-sync completes prevents old sign-out from invoking auth signOut',async()=>{
+ const fixture=clientFixture(),a=fixtureRepo(OWNER_A);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(a.ack).toHaveBeenCalled());
+ const flight=deferred<void>(),sync=jest.spyOn(require('../src/data/sync/engine').SyncEngine.prototype,'sync').mockReturnValueOnce(flight.promise);
+ let leaving!:Promise<void>;await act(async()=>{leaving=observed.signOut();fixture.emit(session(OWNER_B));});
+ await act(async()=>{flight.resolve();await leaving;});
+ expect(fixture.auth.signOut).not.toHaveBeenCalled();expect(clearLocalSession).not.toHaveBeenCalled();
+ expect(observed.session?.user.id).toBe(OWNER_B);sync.mockRestore();await view.unmount();
+});
+test('newer session during auth signOut prevents old completion from erasing SecureStore',async()=>{
+ const fixture=clientFixture(),flight=deferred<{error:null}>();fixture.auth.signOut.mockReturnValue(flight.promise);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:fixtureRepo});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.repository?.owner).toBe(OWNER_A));
+ let leaving!:Promise<void>;await act(async()=>{leaving=observed.signOut();});
+ await waitFor(()=>expect(fixture.auth.signOut).toHaveBeenCalledTimes(1));
+ await act(async()=>{fixture.emit(session(OWNER_B));flight.resolve({error:null});await leaving;});
+ expect(clearLocalSession).not.toHaveBeenCalled();expect(observed.session?.user.id).toBe(OWNER_B);await view.unmount();
+});
+
+test('provider sync timeout reaches the unsynced guard instead of hanging sign-out',async()=>{
+ const a=fixtureRepo(OWNER_A),fixture=clientFixture();mockPush.mockRejectedValue(new Error('offline fixture'));
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.syncStatus).toBe('offline'));
+ const sync=jest.spyOn(require('../src/data/sync/engine').SyncEngine.prototype,'sync').mockReturnValueOnce(new Promise<void>(()=>{}));
+ jest.useFakeTimers();
+ try {
+  let error:unknown;let finished=false;
+  const leaving=observed.signOut().catch(cause=>{error=cause;}).finally(()=>{finished=true;});
+  await act(async()=>{jest.advanceTimersByTime(9999);});expect(finished).toBe(false);expect(a.wipe).not.toHaveBeenCalled();
+  await act(async()=>{jest.advanceTimersByTime(1);await leaving;});
+  expect(error).toEqual(new Error('Unsynced changes require confirmation.'));
+  expect(fixture.auth.signOut).not.toHaveBeenCalled();
+ } finally {sync.mockRestore();await view.unmount();jest.useRealTimers();}
+});
+
+test.each(['pending','wiped','session-cleared'] as const)('boot recovers %s departure before restoring session or starting sync',async phase=>{
+ const a=fixtureRepo(OWNER_A),guest=fixtureRepo('guest'),fixture=clientFixture();
+ if(phase!=='pending')a.wipe();
+ let marker:Awaited<ReturnType<typeof signOutStorage.read>>={owner:OWNER_A,startedAt:1234,phase};
+ jest.mocked(signOutStorage.read).mockImplementation(async()=>marker);
+ jest.mocked(signOutStorage.write).mockImplementation(async value=>{marker=value;});
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{marker=null;});
+ fixture.auth.getSession.mockImplementation(async()=>({data:{session:null},error:null}));
+ const clear=deferred<void>();jest.mocked(clearLocalSession).mockReturnValue(clear.promise);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:guest});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ if(phase!=='session-cleared') {
+  await waitFor(()=>expect(clearLocalSession).toHaveBeenCalled());
+  expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(fixture.auth.onAuthStateChange).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+  await act(async()=>{clear.resolve();});
+ }
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(observed.session).toBeNull();expect(observed.repository?.owner).toBe('guest');expect(a.pending()).toEqual([]);expect(marker).toBeNull();expect(mockPush).not.toHaveBeenCalled();
+ if(phase==='session-cleared')expect(clearLocalSession).not.toHaveBeenCalled();
+ await view.unmount();
+});
+test('marker read failure blocks even production client creation and demo entry',async()=>{
+ jest.mocked(signOutStorage.read).mockRejectedValue(new Error('synthetic storage locked'));
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:fixtureRepo});
+ const view=await render(<AuthProvider><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.configError).toBeTruthy());
+ expect(getAuthClient).not.toHaveBeenCalled();expect(observed.ready).toBe(false);
+ await act(async()=>{observed.lookAround();});expect(observed.demo).toBe(false);expect(mockPush).not.toHaveBeenCalled();await view.unmount();
+});
+test.each([false,true])('normal sign-out writes its durable marker before wiping (demo=%s)',async demo=>{
+ const owner=demo?'demo':OWNER_A,repo=fixtureRepo(owner),fixture=clientFixture();
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:id=>id===owner?repo:fixtureRepo(id)});
+ const view=await render(<AuthProvider client={demo?null:fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ if(demo){await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.repository?.owner).toBe('demo'));}
+ const order:string[]=[];
+ jest.mocked(signOutStorage.write).mockImplementation(async marker=>{order.push(marker.phase);});
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{order.push('remove');});
+ jest.spyOn(repo,'wipe').mockImplementation(()=>{order.push('wipe');});
+ jest.mocked(clearLocalSession).mockImplementation(async()=>{order.push('session');});
+ await act(async()=>{await observed.signOut();});
+ expect(order).toEqual(['pending','wipe','wiped','session','session-cleared','remove']);
+ if(demo)expect(clearLocalSession).toHaveBeenCalledWith();else expect(clearLocalSession).toHaveBeenCalledWith(true);
+ expect(observed.session).toBeNull();expect(observed.demo).toBe(false);await view.unmount();
+});
+
+test('production client factory runs only after pending recovery removes the marker',async()=>{
+ const fixture=clientFixture(null),clear=deferred<void>(),guest=fixtureRepo('guest');
+ let marker:Awaited<ReturnType<typeof signOutStorage.read>>={owner:OWNER_A,startedAt:1234,phase:'wiped'};
+ jest.mocked(signOutStorage.read).mockImplementation(async()=>marker);
+ jest.mocked(signOutStorage.write).mockImplementation(async next=>{marker=next;});
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{marker=null;});
+ jest.mocked(clearLocalSession).mockReturnValue(clear.promise);
+ jest.mocked(getAuthClient).mockImplementation(()=>{expect(marker).toBeNull();return fixture.client;});
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?fixtureRepo(owner):guest});
+ const view=await render(<AuthProvider><Probe/></AuthProvider>);
+ await waitFor(()=>expect(clearLocalSession).toHaveBeenCalledTimes(1));
+ expect(getAuthClient).not.toHaveBeenCalled();expect(fixture.auth.getSession).not.toHaveBeenCalled();
+ await act(async()=>{clear.resolve();});await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(getAuthClient).toHaveBeenCalledTimes(1);expect(observed.session).toBeNull();await view.unmount();
+});
+test('pending departure blocks old auth events, manual sync and foreground auto-refresh',async()=>{
+ const fixture=clientFixture(),a=fixtureRepo(OWNER_A),clear=deferred<void>();
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(a.ack).toHaveBeenCalled());
+ jest.mocked(clearLocalSession).mockReturnValue(clear.promise);
+ let leaving!:Promise<void>;await act(async()=>{leaving=observed.signOut();});
+ await waitFor(()=>expect(clearLocalSession).toHaveBeenCalledTimes(1));
+ const pushes=mockPush.mock.calls.length;fixture.auth.startAutoRefresh.mockClear();
+ await act(async()=>{
+  fixture.emit(session(OWNER_A));
+  jest.mocked(AppState.addEventListener).mock.calls[0][1]('active');
+  await observed.syncNow();
+ });
+ expect(observed.ready).toBe(false);expect(mockPush).toHaveBeenCalledTimes(pushes);expect(fixture.auth.startAutoRefresh).not.toHaveBeenCalled();
+ await act(async()=>{clear.resolve();await leaving;});expect(observed.session).toBeNull();await view.unmount();
+});
+test('failed recovery wipe keeps the marker and blocks auth restoration',async()=>{
+ const fixture=clientFixture(),a=fixtureRepo(OWNER_A),marker={owner:OWNER_A,startedAt:1234,phase:'pending' as const};
+ jest.mocked(signOutStorage.read).mockResolvedValue(marker);jest.spyOn(a,'wipe').mockImplementation(()=>{throw new Error('synthetic locked database');});
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>a});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.configError).toBeTruthy());
+ expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+ expect(signOutStorage.remove).not.toHaveBeenCalled();expect(clearLocalSession).not.toHaveBeenCalled();await view.unmount();
+});
+
+test('failed durable marker write prevents wipe and keeps auth/sync gated with a recovery error',async()=>{
+ const fixture=clientFixture(),a=fixtureRepo(OWNER_A);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(a.ack).toHaveBeenCalled());
+ jest.mocked(signOutStorage.write).mockRejectedValueOnce(new Error('synthetic locked store'));
+ await act(async()=>{await expect(observed.signOut()).rejects.toThrow();});
+ expect(a.wipe).not.toHaveBeenCalled();expect(observed.ready).toBe(false);expect(observed.configError).toBeTruthy();
+ expect(fixture.auth.signOut).not.toHaveBeenCalled();await view.unmount();
 });

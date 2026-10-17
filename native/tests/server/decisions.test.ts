@@ -73,6 +73,32 @@ test('a clamped stale push reconciles even when its existing server sequence is 
  } finally {engine.close();local.sqlite.close();}
 });
 
+test.each(['rpc','direct'])('future tombstone clamps both timestamps through %s; ordinary tombstone keeps deletion time',async path=>{
+ await asUser(db,OWNER_A,async tx=>{
+  const now=Number((await tx.query<{stamp:string}>("SELECT floor(extract(epoch FROM now())*1000)::bigint::text AS stamp")).rows[0].stamp);
+  const row={...syntheticRow('photos'),id:path==='rpc'?'30000000-0000-4000-8000-000000000601':'30000000-0000-4000-8000-000000000602',updated_at:8000000000000,deleted_at:8000000000000};
+  if(path==='rpc')await tx.query('SELECT public.sync_push($1::jsonb)',[JSON.stringify([row])]);
+  else await tx.query('INSERT INTO public.photos(owner_id,id,device_id,updated_at,deleted_at) VALUES($1,$2,$3,$4,$4)',[OWNER_A,row.id,row.device_id,row.updated_at]);
+  const stored=(await tx.query<{updated_at:string;deleted_at:string}>('SELECT updated_at,deleted_at FROM public.photos WHERE id=$1',[row.id])).rows[0];
+  expect(Number(stored.updated_at)).toBe(now);expect(Number(stored.deleted_at)).toBe(now);
+  await tx.query('UPDATE public.photos SET updated_at=$1,deleted_at=$2 WHERE id=$3',[now+1,77,row.id]);
+  expect(Number((await tx.query<{deleted_at:string}>('SELECT deleted_at FROM public.photos WHERE id=$1',[row.id])).rows[0].deleted_at)).toBe(77);
+ });
+});
+
+test('clamped tombstone RPC acknowledgment reconciles both client timestamps and next local stamp',async()=>{
+ const local=await localDatabase(),row={...syntheticRow('photos'),id:'30000000-0000-4000-8000-000000000603',updated_at:8000000000000,deleted_at:8000000000000};
+ const engine=new SyncEngine(local.repo,testTransport(db,OWNER_A));
+ try {
+  local.repo.putLocal(row);await engine.sync();
+  const stored=local.repo.get(row.table,row.id)!;
+  expect(stored.updated_at).toBeLessThan(Date.now()+300000);expect(stored.deleted_at).toBe(stored.updated_at);
+  expect(local.repo.pending()).toEqual([]);
+  const next=local.repo.save('photos',{},row.id,10).updated_at;
+  expect(next).toBeGreaterThan(stored.updated_at);expect(next).toBeLessThan(Date.now()+300002);
+ } finally {engine.close();local.sqlite.close();}
+});
+
 test('account deletion cascades all 19 owner FKs and preserves the other owner', async () => {
  for(const table of syncedTables) {
   const row={...syntheticRow(table),id:'30000000-0000-4000-8000-000000000504'};

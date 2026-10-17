@@ -7,7 +7,7 @@ export const en = {
   confirmEmail: 'Check your email to confirm your account, then sign in.', working: 'Please wait…',
   onboardingStub: 'Your account is ready. Profile and units setup arrives in M2.',
   demoMode: 'Demo mode · synthetic examples only', leaveDemo: 'Leave demo', signOut: 'Sign out',
-  signOutConfirm: 'Sign out of this account?', signOutBody: 'This account’s data will be erased from this phone.', signOutUnsynced: 'Unsynced changes will be lost, including changes that need review.',
+  signOutConfirm: 'Sign out of this account?', signOutBody: 'This account’s data will be erased from this phone.', signOutUnsynced_one: '{count} unsynced change will be lost, including changes that need review.', signOutUnsynced_other: '{count} unsynced changes will be lost, including changes that need review.',
   cancel: 'Cancel', syncConflictStatus: 'Some changes need review', syncConflicts: 'sync conflicts · review needed', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncBusy: 'Syncing…', pending: 'pending',
   localError: 'Local data is unavailable. Please restart the app.', preferenceError: 'Preferences could not be saved. Please try again.',
   signOutFailed: 'Sign-out could not finish. Please try again.', backWelcome: 'Back to Welcome',
@@ -30,3 +30,7 @@ export const en = {
 } as const;
 export type MessageKey = keyof typeof en;
 export function t(key: MessageKey): string { return en[key]; }
+
+export function signOutUnsynced(count: number): string {
+  return t(count===1?'signOutUnsynced_one':'signOutUnsynced_other').replace('{count}',String(count));
+}
