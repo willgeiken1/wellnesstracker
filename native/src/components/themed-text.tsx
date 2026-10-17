@@ -1,57 +1,12 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
-
-import { Fonts, ThemeColor } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-
-export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
-  themeColor?: ThemeColor;
-};
-
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
-  const theme = useTheme();
-
-  return <Text style={[{ color: theme[themeColor ?? 'text'] }, styles[type], style]} {...rest} />;
+import { Text, type TextProps } from 'react-native';
+import { tokens } from '@/design/tokens';
+import { useTheme } from '@/design/theme-provider';
+export function ThemedText({ variant = 'body', muted = false, numeric = false, style, ...props }:
+  TextProps & { variant?: keyof typeof tokens.type; muted?: boolean; numeric?: boolean }) {
+  const { colors } = useTheme();
+  return <Text {...props} allowFontScaling maxFontSizeMultiplier={0} style={[
+    { color: muted ? colors['text-muted'] : colors.text, fontSize: tokens.type[variant],
+      fontFamily: numeric ? tokens.font.numeral : ['display', 'title', 'headline'].includes(variant) ? tokens.font.heading : undefined,
+      fontVariant: numeric ? ['tabular-nums'] : undefined }, style,
+  ]} />;
 }
-
-const styles = StyleSheet.create({
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
-  },
-  smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
-  },
-  code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
-  },
-});

@@ -42,3 +42,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Public design tokens; the root ignores other files named tokens.json.
+!/src/design/tokens.json

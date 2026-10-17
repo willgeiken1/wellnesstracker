@@ -56,7 +56,9 @@
         {
           "launchMode": "most-recent"
         }
-      ]
+      ],
+      "./plugins/withDevSchemeDebugOnly",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
