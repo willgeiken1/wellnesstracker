@@ -20,7 +20,7 @@ import FoodLog from '../src/app/food/log';
 
 // Exercise real routing with the JS fallback; native tab declarations are covered separately.
 const routes = {
-  _layout: () => <ThemeProvider><NavigationShell /></ThemeProvider>,
+  _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
   '(tabs)/_layout': WebTabs, '(tabs)/index': Home, '(tabs)/workouts': Workouts,
   '(tabs)/food': Food, '(tabs)/progress': Progress, '(tabs)/insights': Insights,
   'settings/_layout': SettingsLayout, 'settings/index': Settings,

@@ -7,6 +7,6 @@ import { settingsSections } from '@/features/settings/sections';
 import { t } from '@/i18n/en';
 export default function Settings() {
   return <Screen><Card>{settingsSections.map(section => <ListRow key={section.route} label={t(section.label)}
-    onPress={() => section.route === 'appearance' ? router.push('/settings/appearance') : router.push({ pathname: '/settings/[section]', params: { section: section.route } })} />)}</Card>
+    onPress={() => section.route === 'appearance' ? router.push('/settings/appearance') : section.route === 'account' ? router.push('/settings/account') : router.push({ pathname: '/settings/[section]', params: { section: section.route } })} />)}</Card>
     <Button label={t('backHome')} variant="secondary" onPress={() => router.navigate('/')} /></Screen>;
 }
