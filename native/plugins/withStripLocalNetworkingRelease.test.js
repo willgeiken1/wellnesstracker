@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
@@ -10,6 +10,11 @@ const { parse } = require('xcode/lib/parser/pbxproj');
 const pluginPath = path.join(__dirname, 'withStripLocalNetworkingRelease.js');
 const appTarget = '111111111111111111111111';
 const widgetTarget = '222222222222222222222222';
+const plistBuddyAvailable = process.platform === 'darwin' && existsSync('/usr/libexec/PlistBuddy');
+assert.ok(process.env.REQUIRE_PLISTBUDDY !== '1' || plistBuddyAvailable,
+  'REQUIRE_PLISTBUDDY=1: real macOS PlistBuddy tests must run, not skip');
+const plistBuddyOptions = { skip: plistBuddyAvailable ? false : 'requires real macOS /usr/libexec/PlistBuddy (unavailable on Linux)' };
+
 const phaseName = '[Insight Daily] Strip Local Networking for Release';
 
 async function getPhase(existingPhase = true) {
@@ -52,8 +57,7 @@ async function getPhase(existingPhase = true) {
   const targets = project.pbxNativeTargetSection();
   assert.equal(targets[appTarget].buildPhases.length, 2);
   assert.equal(targets[widgetTarget].buildPhases.length, 0);
-  assert.equal(targets[appTarget].buildPhases.at(-1).comment, phaseName);
-  const phaseId = targets[appTarget].buildPhases.at(-1).value;
+  const phaseId = targets[appTarget].buildPhases.find((phase) => phase.comment === phaseName).value;
   const phase = project.hash.project.objects.PBXShellScriptBuildPhase[phaseId];
   assert.equal(phase.shellPath, '/bin/sh');
   assert.deepEqual(phase.inputPaths, ['"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"']);
@@ -65,12 +69,10 @@ async function getPhase(existingPhase = true) {
   return phase.shellScript.slice(1, -1).replace(/\\"/g, '"');
 }
 
-test('adds one phase with plist dependencies, last position and idempotency', () => getPhase(false));
-test('upgrades the existing phase with plist dependencies, last position and idempotency', () => getPhase());
+test('adds one phase with processed plist input dependency and idempotency', () => getPhase(false));
+test('upgrades the existing phase with processed plist input dependency and idempotency', () => getPhase());
 
-test('built plist loses all three local-network keys only in Release and writes a stamp', {
-  skip: process.platform !== 'darwin' ? 'requires macOS PlistBuddy' : false,
-}, async () => {
+test('DEBUG=1 preserves keys; Release, Profile and custom configurations strip keys and write stamps', plistBuddyOptions, async () => {
   const script = await getPhase();
   const buildDir = mkdtempSync(path.join(tmpdir(), 'insight-ats-'));
   const plistPath = path.join(buildDir, 'Synthetic App.app', 'Info.plist');
@@ -80,12 +82,17 @@ test('built plist loses all three local-network keys only in Release and writes 
   const buddy = (command) => execFileSync('/usr/libexec/PlistBuddy', ['-c', command, plistPath], {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
-  const run = (configuration) => execFileSync('/bin/sh', ['-c', script], {
-    env: { ...process.env, CONFIGURATION: configuration, TARGET_BUILD_DIR: buildDir,
+  const run = (configuration, definitions = '') => execFileSync('/bin/sh', ['-c', script], {
+    env: { ...process.env, CONFIGURATION: configuration, GCC_PREPROCESSOR_DEFINITIONS: definitions, TARGET_BUILD_DIR: buildDir,
       INFOPLIST_PATH: 'Synthetic App.app/Info.plist', DERIVED_FILE_DIR: derivedDir },
   });
   try {
-    for (const configuration of ['Debug', 'Profile', 'Release']) {
+    for (const [configuration, definitions, debug] of [
+      ['Debug', '$(inherited) DEBUG=1 OTHER=1', true],
+      ['Release', '', false], ['Profile', 'NDEBUG=1', false],
+      ['Internal', 'OTHER_DEBUG=1 DEBUG=10', false],
+      ['Debug', 'DEBUG=0', false], ['CustomDebug', 'DEBUG=1', true],
+    ]) {
       writeFileSync(plistPath, '<?xml version="1.0" encoding="UTF-8"?>\n' +
         '<plist version="1.0"><dict><key>NSAppTransportSecurity</key><dict>' +
         '<key>NSAllowsLocalNetworking</key><true/>' +
@@ -93,14 +100,14 @@ test('built plist loses all three local-network keys only in Release and writes 
         '<key>NSBonjourServices</key><array><string>_synthetic._tcp</string></array>' +
         '<key>NSLocalNetworkUsageDescription</key><string>Synthetic Metro access</string>' +
         '</dict></plist>');
-      run(configuration);
+      run(configuration, definitions);
       assert.ok(existsSync(path.join(derivedDir, `insight-strip-local-networking-${configuration}.stamp`)));
       assert.equal(buddy('Print :NSAppTransportSecurity:NSAllowsArbitraryLoads'), 'false');
-      if (configuration === 'Release') {
+      if (!debug) {
         assert.throws(() => buddy('Print :NSAppTransportSecurity:NSAllowsLocalNetworking'));
         assert.throws(() => buddy('Print :NSBonjourServices'));
         assert.throws(() => buddy('Print :NSLocalNetworkUsageDescription'));
-        run(configuration); // Absent key must succeed too.
+        run(configuration, definitions); // Absent key must succeed too.
       } else {
         assert.equal(buddy('Print :NSAppTransportSecurity:NSAllowsLocalNetworking'), 'true');
         assert.match(buddy('Print :NSBonjourServices'), /_synthetic\._tcp/);
@@ -109,6 +116,53 @@ test('built plist loses all three local-network keys only in Release and writes 
     }
     writeFileSync(plistPath, '<plist version="1.0"><dict/></plist>');
     run('Release'); // An absent ATS dictionary must also succeed.
+  } finally {
+    rmSync(buildDir, { recursive: true, force: true });
+  }
+});
+
+// Missing files must fail even on Linux, before PlistBuddy would be invoked.
+test('non-debug builds fail closed when the processed plist is missing', async () => {
+  const script = await getPhase();
+  const buildDir = mkdtempSync(path.join(tmpdir(), 'insight-ats-missing-'));
+  try {
+    for (const configuration of ['Release', 'Profile', 'Internal']) {
+      const result = spawnSync('/bin/sh', ['-c', script], {
+        encoding: 'utf8',
+        env: { ...process.env, CONFIGURATION: configuration, GCC_PREPROCESSOR_DEFINITIONS: '',
+          TARGET_BUILD_DIR: buildDir, INFOPLIST_PATH: 'Missing.app/Info.plist', DERIVED_FILE_DIR: buildDir },
+      });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /error:.*missing.*plist/i);
+      assert.ok(!existsSync(path.join(buildDir, `insight-strip-local-networking-${configuration}.stamp`)));
+    }
+  } finally {
+    rmSync(buildDir, { recursive: true, force: true });
+  }
+});
+
+test('fails closed if any local-network key survives deletion', plistBuddyOptions, async () => {
+  const script = await getPhase();
+  const buildDir = mkdtempSync(path.join(tmpdir(), 'insight-ats-failure-'));
+  const plistPath = path.join(buildDir, 'Info.plist');
+  const wrapperPath = path.join(buildDir, 'PlistBuddy');
+  try {
+    // Inject a failed Delete at the tool boundary; all Print operations use real PlistBuddy.
+    writeFileSync(wrapperPath, '#!/bin/sh\nif [ "$2" = "Delete $KEEP_KEY" ]; then exit 1; fi\nexec /usr/libexec/PlistBuddy "$@"\n', { mode: 0o755 });
+    for (const key of [':NSAppTransportSecurity:NSAllowsLocalNetworking', ':NSBonjourServices', ':NSLocalNetworkUsageDescription']) {
+      writeFileSync(plistPath, '<plist version="1.0"><dict><key>NSAppTransportSecurity</key><dict>' +
+        '<key>NSAllowsLocalNetworking</key><true/></dict><key>NSBonjourServices</key><array/>' +
+        '<key>NSLocalNetworkUsageDescription</key><string>Synthetic</string></dict></plist>');
+      const result = spawnSync('/bin/sh', ['-c', script.replaceAll('/usr/libexec/PlistBuddy', '"' + wrapperPath + '"')], {
+        encoding: 'utf8',
+        env: { ...process.env, CONFIGURATION: 'Release', GCC_PREPROCESSOR_DEFINITIONS: '', KEEP_KEY: key,
+          TARGET_BUILD_DIR: buildDir, INFOPLIST_PATH: 'Info.plist', DERIVED_FILE_DIR: buildDir },
+      });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /error:.*local.network.*remains/i);
+      assert.ok(result.stderr.includes(key));
+      assert.ok(!existsSync(path.join(buildDir, 'insight-strip-local-networking-Release.stamp')));
+    }
   } finally {
     rmSync(buildDir, { recursive: true, force: true });
   }
