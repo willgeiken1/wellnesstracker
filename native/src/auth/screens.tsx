@@ -52,10 +52,13 @@ export function AuthForm({create=false}: {create?:boolean}) {
 }
 export function Account() {
   const auth=useAuth();const [error,setError]=useState(false);
-  const signOut=()=>Alert.alert(t('signOutConfirm'),t('signOutBody'),[
+  const signOut=async()=>{
+    await auth.syncNow();
+    Alert.alert(t('signOutConfirm'),`${t('signOutBody')} ${t('signOutUnsynced')}`,[
     {text:t('cancel'),style:'cancel'},
-    {text:t('signOut'),style:'destructive',onPress:()=>{void auth.signOut().catch(()=>setError(true));}},
+    {text:t('signOut'),style:'destructive',onPress:()=>{void auth.signOut(true).catch(()=>setError(true));}},
   ]);
+  };
   return <Screen title={t('account')}>
     <ThemedText>{auth.demo?t('demoMode'):auth.session?.user.email}</ThemedText>
     {auth.demo?<Button label={t('leaveDemo')} variant="secondary" onPress={signOut}/>:<>

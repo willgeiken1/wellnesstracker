@@ -43,4 +43,42 @@ CREATE TABLE sync_outbox (owner_id TEXT NOT NULL, table_name TEXT NOT NULL, row_
 --> statement-breakpoint
 CREATE TABLE sync_state (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));`;
 export const conflictSql = `CREATE TABLE sync_conflicts (owner_id TEXT NOT NULL, table_name TEXT NOT NULL, row_id TEXT NOT NULL, reason TEXT NOT NULL CHECK(reason='provenance'), PRIMARY KEY(owner_id,table_name,row_id));`;
-export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql } };
+// D1 upgrade: erase payloads on existing tombstones; preserve versions/outbox and source.
+export const tombstoneSql = `UPDATE profile SET name=NULL, dob=NULL, weight_unit=NULL, height_m=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE weigh_ins SET day=NULL, weight_kg=NULL, entered_value=NULL, entered_unit=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE measurements SET day=NULL, waist_m=NULL, hips_m=NULL, chest_m=NULL, arm_m=NULL, thigh_m=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE routines SET name=NULL, position=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE routine_exercises SET routine_id=NULL, exercise=NULL, position=NULL, target_sets=NULL, target_reps=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE sessions SET day=NULL, routine_id=NULL, name=NULL, origin=NULL, started_at=NULL, finished_at=NULL, duration_ms=NULL, notes=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE entries SET session_id=NULL, exercise=NULL, position=NULL, notes=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE sets SET entry_id=NULL, position=NULL, weight_kg=NULL, entered_value=NULL, entered_unit=NULL, reps=NULL, left_weight_kg=NULL, left_entered_value=NULL, left_entered_unit=NULL, left_reps=NULL, right_weight_kg=NULL, right_entered_value=NULL, right_entered_unit=NULL, right_reps=NULL, rpe=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE cardio_sessions SET day=NULL, kind=NULL, duration_ms=NULL, distance_m=NULL, notes=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE food_entries SET day=NULL, meal_id=NULL, saved_food_id=NULL, name=NULL, amount_g=NULL, energy_kj=NULL, protein_g=NULL, carbs_g=NULL, fat_g=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE saved_foods SET name=NULL, serving_g=NULL, energy_kj=NULL, protein_g=NULL, carbs_g=NULL, fat_g=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE food_targets SET day=NULL, energy_kj=NULL, protein_g=NULL, carbs_g=NULL, fat_g=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE meals SET name=NULL, position=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE goals SET kind=NULL, target_value=NULL, target_unit=NULL, target_day=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE plan_days SET day=NULL, routine_id=NULL, status=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE machine_notes SET exercise=NULL, text=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE home_layout SET widget=NULL, position=NULL, hidden=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE settings SET theme_override=NULL, accent=NULL, rest_seconds=NULL WHERE deleted_at IS NOT NULL;
+--> statement-breakpoint
+UPDATE photos SET file_name=NULL, captured_at=NULL, width=NULL, height=NULL WHERE deleted_at IS NOT NULL;`;
+export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql } };

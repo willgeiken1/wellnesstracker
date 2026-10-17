@@ -1,9 +1,10 @@
+import { canonicalRow, type Row } from '../../src/data/rows';
 import { SupabaseTransport } from '../../src/data/sync/supabase';
 import { OWNER_A, OWNER_B, syntheticRow } from '../../fixtures/sync';
 import type { SupabaseClient } from '@supabase/supabase-js';
 function clientFixture(owner=OWNER_A) {
  const query={eq:jest.fn().mockReturnThis(),gt:jest.fn().mockReturnThis(),order:jest.fn().mockReturnThis(),limit:jest.fn(async()=>({data:[],error:null}))};
- const select=jest.fn((_fields:string)=>query),rpc=jest.fn(async()=>({error:null})),from=jest.fn(()=>({select}));
+ const select=jest.fn((_fields:string)=>query),rpc=jest.fn(async(_name:string,{rows}:{rows:Row[]})=>({data:rows.map(canonicalRow),error:null})),from=jest.fn(()=>({select}));
  const auth={getSession:jest.fn(async()=>({data:{session:{user:{id:owner}}},error:null}))};
  return {client:{auth,rpc,from} as unknown as SupabaseClient,rpc,from,select,query};
 }
@@ -42,4 +43,20 @@ test('only the dedicated provenance SQLSTATE becomes a typed conflict, without b
  await expect(transport.push([syntheticRow('weigh_ins')])).rejects.toBeInstanceOf(ProvenanceConflict);
  fixture.rpc.mockResolvedValueOnce({error:{code:'23514',message:'fixture private detail'}} as never);
  await expect(transport.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
+});
+
+test('push sends only tombstone identity and provenance, even if caller supplies values',async()=>{
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A);
+ const row={...syntheticRow('weigh_ins'),deleted_at:100};
+ await transport.push([row]);
+ expect(fixture.rpc).toHaveBeenCalledWith('sync_push',{rows:[{...row,data:{source:'app'}}]});
+ expect(row.data.weight_kg).toBe(80);
+});
+
+test('push fails closed on missing, mismatched or invalid authoritative acknowledgments',async()=>{
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A),row=syntheticRow();
+ for(const data of [null,[],[{...row,owner_id:OWNER_B}],[{...row,table:'meals'}],[{...row,id:OWNER_B}],[{...row,data:{unknown:'fixture'}}]]) {
+  fixture.rpc.mockResolvedValueOnce({data,error:null} as never);
+  await expect(transport.push([row])).rejects.toThrow();
+ }
 });

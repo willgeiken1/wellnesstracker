@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { OWNER_A, OWNER_B } from '../../fixtures/sync';
-import { syncedTables, fromWire, type Table, type Row } from '../../src/data/rows';
+import { syncedTables, canonicalRow, fromWire, type Table, type Row } from '../../src/data/rows';
 import type { Transport } from '../../src/data/sync/engine';
 export async function serverDatabase() {
   const db = new PGlite();
@@ -26,7 +26,10 @@ export async function asUser<T>(db: PGlite, owner: string, operation: (tx: Param
 export function testTransport(db: PGlite, owner: string): Transport {
   return {
     owner,
-    async push(rows: Row[]) { await asUser(db,owner,tx => tx.query('SELECT public.sync_push($1::jsonb)',[JSON.stringify(rows)])); },
+    async push(rows: Row[]) {
+      const result=await asUser(db,owner,tx => tx.query<{sync_push:Row[]}>('SELECT public.sync_push($1::jsonb)',[JSON.stringify(rows)]));
+      return result.rows[0].sync_push.map(canonicalRow);
+    },
     async pull(table: Table, after: string, limit: number) {
       if (!syncedTables.includes(table)) throw new Error('Invalid table');
       return asUser(db,owner,async tx => {

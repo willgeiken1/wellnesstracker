@@ -3,7 +3,7 @@ import type { Pending, Repository } from '../repository';
 import { syncedTables, type Row, type ServerRow, type Table } from '../rows';
 export interface Transport {
   readonly owner: string;
-  push(rows: Row[]): Promise<void>;
+  push(rows: Row[]): Promise<Row[] | void>;
   pull(table: Table, after: string, limit: number): Promise<ServerRow[]>;
 }
 export type SyncStatus = 'idle' | 'syncing' | 'offline';
@@ -32,8 +32,8 @@ export class SyncEngine {
   private async pushBatch(batch: Pending[]): Promise<void> {
     if (!this.active) return;
     try {
-      await this.transport.push(batch.map(p=>p.row));
-      if (this.active) this.repository.ack(batch);
+      const accepted = await this.transport.push(batch.map(p=>p.row));
+      if (this.active) this.repository.ack(batch,Array.isArray(accepted)?accepted:undefined);
     } catch (error) {
       if (!this.active) return;
       if (!(error instanceof ProvenanceConflict)) throw error;

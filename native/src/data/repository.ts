@@ -40,7 +40,7 @@ export class Repository {
       validateRow(healthLocal ? {...input, data: {...input.data, source:'app'}} : input);
       const previous = this.get(input.table, input.id);
       if (previous && previous.table === 'weigh_ins' && previous.data.source !== input.data.source) throw new Error('Provenance is immutable.');
-      const row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.data[k] ?? null])) } : canonicalRow(input);
+      const row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
       if (previous && compareRows(row, previous) <= 0) return;
       this.db.transaction(() => {
         this.write(row);
@@ -52,6 +52,18 @@ export class Repository {
       });
       this.listeners.forEach(listener => listener());
     });
+  }
+  /** Atomic account departure, including local-only caches and flagged outbox rows. */
+  wipe() {
+    this.safe(() => this.db.transaction(() => {
+      for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days']) {
+        this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
+      }
+    }));
+    this.listeners.forEach(listener => listener());
+  }
+  hasUnsynced() {
+    return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} LIMIT 1`));
   }
   save(table: Table, data: Row['data'], id = this.uuid(), now = Date.now()): Row {
     const stamp = this.safe(() => Math.max(now, Number(this.state('clock') ?? 0) + 1));
@@ -82,11 +94,30 @@ export class Repository {
     });
     this.listeners.forEach(listener => listener());
   }
-  ack(items: Pending[]) {
-    this.safe(() => this.db.transaction(() => { for (const item of items) {
-      if (item.row.owner_id !== this.owner) throw new Error('Owner mismatch.');
-      this.db.run(sql`DELETE FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${item.row.table} AND row_id=${item.row.id} AND revision=${item.revision}`);
-    }}));
+  ack(items: Pending[], accepted?: Row[]) {
+    this.safe(() => this.db.transaction(() => {
+      if (accepted && accepted.length !== items.length) throw new Error('Invalid acknowledgment.');
+      let correctedClock = false;
+      for (const [index,item] of items.entries()) {
+        if (item.row.owner_id !== this.owner) throw new Error('Owner mismatch.');
+        const remote = accepted && canonicalRow(accepted[index]);
+        if (remote && (remote.owner_id !== this.owner || remote.table !== item.row.table || remote.id !== item.row.id
+          || (remote.table === 'weigh_ins' && remote.data.source !== item.row.data.source))) throw new Error('Invalid acknowledgment.');
+        const local = this.get(item.row.table,item.row.id);
+        // Only replace the exact sent revision. Edits committed during upload survive.
+        if (remote && local && revision(local) === item.revision) {
+          this.write(remote);
+          correctedClock ||= remote.updated_at < local.updated_at;
+          this.setState('clock',String(Math.max(Number(this.state('clock') ?? 0),remote.updated_at)));
+        }
+        this.db.run(sql`DELETE FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${item.row.table} AND row_id=${item.row.id} AND revision=${item.revision}`);
+      }
+      if (correctedClock) {
+        // Every other local revision (including unsent edits) still contributes.
+        const clock = Math.max(0, ...syncedTables.map(name => Number(this.db.get<{stamp:number}>(sql`SELECT max(updated_at) AS stamp FROM ${this.table(name)} WHERE owner_id=${this.owner}`)?.stamp ?? 0)));
+        this.setState('clock',String(clock));
+      }
+    }));
     this.listeners.forEach(listener => listener());
   }
   cursor(table: Table) { return this.safe(() => this.state(`cursor:${table}`) ?? '0'); }

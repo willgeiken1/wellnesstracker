@@ -54,7 +54,7 @@ test('SQL provenance error travels through Supabase transport and isolates only 
  try {
   local.repo.putLocal({...bad,updated_at:200});local.repo.putLocal(good);
   const rpc=jest.fn(async(_name:string,{rows}:{rows:unknown})=>{
-   try{await asUser(db,OWNER_A,tx=>tx.query('SELECT public.sync_push($1::jsonb)',[JSON.stringify(rows)]));return {error:null};}
+   try{const result=await asUser(db,OWNER_A,tx=>tx.query<{sync_push:unknown}>('SELECT public.sync_push($1::jsonb)',[JSON.stringify(rows)]));return {data:result.rows[0].sync_push,error:null};}
    catch(error){return {error:{code:(error as {code:string}).code,message:'fixture backend details'}};}
   });
   const client={rpc,auth:{getSession:async()=>({data:{session:{user:{id:OWNER_A}}},error:null})}} as unknown as SupabaseClient;

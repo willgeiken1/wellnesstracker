@@ -26,7 +26,7 @@ export function validateRow(input: unknown): asserts input is Row {
 export function revision(row: Row) { return `${row.updated_at}:${row.device_id}`; }
 export function canonicalRow(row: Row): Row {
   validateRow(row);
-  return { ...row, data: Object.fromEntries(Object.keys(columns[row.table]).map(k => [k, row.data[k] ?? null])) };
+  return { ...row, data: Object.fromEntries(Object.keys(columns[row.table]).map(k => [k, row.deleted_at !== null && !(row.table === 'weigh_ins' && k === 'source') ? null : row.data[k] ?? null])) };
 }
 /** Only allowlisted physical columns cross the transport boundary. */
 export function fromWire(table: Table, wire: Record<string, unknown>): ServerRow {
@@ -35,4 +35,10 @@ export function fromWire(table: Table, wire: Record<string, unknown>): ServerRow
   validateRow(row);
   if (typeof wire.server_seq !== 'string' || !/^\d+$/.test(wire.server_seq)) throw new Error('Invalid sync cursor.');
   return { row, server_seq: wire.server_seq };
+}
+
+/** Tombstones carry identity plus immutable provenance only. Validate before stripping. */
+export function pushRow(row: Row): Row {
+  validateRow(row);
+  return row.deleted_at === null ? row : {...row, data: row.table === 'weigh_ins' ? {source: row.data.source} : {}};
 }

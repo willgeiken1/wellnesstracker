@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 import * as Network from 'expo-network';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { getAuthClient } from './client';
+import { getAuthClient, clearLocalSession } from './client';
 import { openLocalDatabase } from '../data/database';
 import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
@@ -12,7 +12,7 @@ export interface AuthState {
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
-  createAccount(email: string,password: string): Promise<string | null>; signOut(): Promise<void>; syncNow(): Promise<void>;
+  createAccount(email: string,password: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
 }
 export const AuthContext = createContext<AuthState | null>(null);
 export function useAuth() { const value=useContext(AuthContext);if(!value)throw new Error('AuthProvider is required.');return value; }
@@ -24,11 +24,12 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const client=clientState.client;
   const [session,setSession]=useState<Session|null>(null), [demo,setDemo]=useState(false), [authReady,setAuthReady]=useState(!client);
   const [repository,setRepository]=useState<Repository|null>(null),[dataError,setDataError]=useState(false);
+  const activeSession=useRef<Session|null>(null);
   useEffect(()=>{
     let active=true, received=false;
     if(!client)return;
-    const {data:{subscription}}=client.auth.onAuthStateChange((_event,next)=>{received=true;if(active){setSession(next);setAuthReady(true);if(next)setDemo(false);}});
-    void client.auth.getSession().then(({data,error})=>{if(active&&!received){setSession(error?null:data.session);setAuthReady(true);}}).catch(()=>{if(active)setAuthReady(true);});
+    const {data:{subscription}}=client.auth.onAuthStateChange((_event,next)=>{received=true;if(active){activeSession.current=next;setSession(next);setAuthReady(true);if(next)setDemo(false);}});
+    void client.auth.getSession().then(({data,error})=>{if(active&&!received){activeSession.current=error?null:data.session;setSession(activeSession.current);setAuthReady(true);}}).catch(()=>{if(active)setAuthReady(true);});
     const refresh=(state:string)=>{if(state==='active')client.auth.startAutoRefresh();else client.auth.stopAutoRefresh();};
     refresh(AppState.currentState ?? 'background');
     const listener=AppState.addEventListener('change',refresh);
@@ -73,15 +74,20 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       if(!client)return 'authUnavailable';
       try{const {data,error}=await client.auth.signUp({email,password});return error?'authFailed':data.session?null:'confirmEmail';}catch{return 'authFailed';}
     },
-    signOut:async()=>{
-      if(client && session) {
-        try {
-          const {error}=await client.auth.signOut({scope:'local'});
-          if(error)throw new Error('Sign-out unavailable.');
-        } catch { throw new Error('Sign-out unavailable.'); }
+    signOut:async(discardUnsynced=false)=>{
+      await engine?.sync();
+      if(currentRepo?.hasUnsynced() && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
+      engine?.close();
+      currentRepo?.wipe();
+      if(client && session && activeSession.current?.user.id===session.user.id) {
+        client.auth.stopAutoRefresh();
+        // Local scope only. A failed network revocation must still erase this device.
+        try { await client.auth.signOut({scope:'local'}); } catch { /* device cleanup below */ }
+        // A newer auth event owns its own credentials; never erase that session.
+        if(!activeSession.current || activeSession.current.user.id===session.user.id)await clearLocalSession();
       }
-      engine?.close();setDemo(false);
-      // A late completion belongs to the account that initiated it, never a newer auth event.
+      setDemo(false);
+      if(activeSession.current?.user.id===session?.user.id)activeSession.current=null;
       setSession(current => current?.user.id === session?.user.id ? null : current);
     },
     syncNow:()=>engine?.sync()??Promise.resolve(),

@@ -8,7 +8,7 @@ import { seedDemo } from '../fixtures/demo';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
 
-jest.mock('../src/auth/client', () => ({ getAuthClient: () => null }));
+jest.mock('../src/auth/client', () => ({ getAuthClient: () => null, clearLocalSession: jest.fn(async()=>{}) }));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../fixtures/demo', () => ({ seedDemo: jest.fn() }));
 const mockPush = jest.fn<Promise<void>, []>();
@@ -29,6 +29,7 @@ function fixtureRepo(owner: string) {
     owner, pending: () => pending, conflicts: () => [],
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     ack: jest.fn(() => { pending = []; listeners.forEach(l => l()); }),
+    wipe: jest.fn(() => {pending=[];listeners.forEach(l=>l());}), hasUnsynced:()=>pending.length>0,
     cursor: () => '0', applyPage: jest.fn(),
   } as unknown as Repository;
 }
@@ -82,20 +83,33 @@ test('unset config enters isolated demo without a transport and can leave demo',
   expect(seedDemo).toHaveBeenCalledWith(demo); expect(mockPush).not.toHaveBeenCalled();
   await act(async () => { await observed.signOut(); });
   await waitFor(() => expect(observed.repository).toBe(guest));
-  expect(observed.demo).toBe(false); await view.unmount();
+  expect(observed.demo).toBe(false); expect(demo.wipe).toHaveBeenCalledTimes(1); await view.unmount();
 });
-test('sign-out failure is generic and preserves account access; successful local sign-out gates access', async () => {
-  const repos = new Map([[OWNER_A,fixtureRepo(OWNER_A)],['guest',fixtureRepo('guest')]]);
-  jest.mocked(openLocalDatabase).mockResolvedValue({ forOwner: owner => repos.get(owner)! });
-  const fixture = clientFixture(); const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
-  await waitFor(() => expect(observed.ready).toBe(true));
-  fixture.auth.signOut.mockResolvedValueOnce({error: new Error('fixture private backend detail')} as never);
-  await act(async () => { await expect(observed.signOut()).rejects.toThrow('Sign-out unavailable.'); });
-  expect(observed.session?.user.id).toBe(OWNER_A);
-  await act(async () => { await observed.signOut(); });
-  await waitFor(() => expect(observed.repository?.owner).toBe('guest'));
-  expect(observed.session).toBeNull(); expect(fixture.auth.signOut).toHaveBeenLastCalledWith({scope:'local'});
-  await view.unmount();
+test.each(['returned error','rejected network'])('sign-out %s still wipes locally and gates access with local scope', async failure => {
+  const a=fixtureRepo(OWNER_A), b=fixtureRepo(OWNER_B), guest=fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:owner===OWNER_B?b:guest});
+  const fixture=clientFixture();const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+  await waitFor(()=>expect(observed.ready).toBe(true));
+  if(failure==='returned error')fixture.auth.signOut.mockResolvedValueOnce({error:new Error('private fixture')} as never);
+  else fixture.auth.signOut.mockRejectedValueOnce(new Error('private fixture'));
+  await act(async()=>{await observed.signOut();});
+  await waitFor(()=>expect(observed.repository).toBe(guest));
+  expect(a.wipe).toHaveBeenCalledTimes(1);expect(observed.session).toBeNull();
+  expect(fixture.auth.signOut).toHaveBeenCalledWith({scope:'local'});
+  expect(require('../src/auth/client').clearLocalSession).toHaveBeenCalled();
+  await act(async()=>{fixture.emit(session(OWNER_B));});
+  await waitFor(()=>expect(observed.repository).toBe(b));expect(observed.pending).toBe(0);
+  expect(b.wipe).not.toHaveBeenCalled();await view.unmount();
+});
+test('sign-out attempts sync and refuses to discard unsynced rows without warning acknowledgment',async()=>{
+ const a=fixtureRepo(OWNER_A);mockPush.mockRejectedValue(new Error('offline fixture'));
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const fixture=clientFixture(),view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.repository).toBe(a));
+ await act(async()=>{await expect(observed.signOut()).rejects.toThrow('Unsynced changes require confirmation.');});
+ expect(mockPush).toHaveBeenCalled();expect(a.wipe).not.toHaveBeenCalled();expect(fixture.auth.signOut).not.toHaveBeenCalled();
+ await act(async()=>{await observed.signOut(true);});
+ expect(a.wipe).toHaveBeenCalledTimes(1);await view.unmount();
 });
 test('a newer auth event wins over delayed session restoration', async () => {
   const fixture = clientFixture(), restored = deferred<{data:{session:Session|null};error:null}>();
@@ -123,7 +137,9 @@ test('late sign-out completion cannot clear a newer account event',async()=>{
  const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
  await waitFor(()=>expect(observed.repository?.owner).toBe(OWNER_A));
  let leaving!:Promise<void>;
- await act(async()=>{leaving=observed.signOut();fixture.emit(session(OWNER_B));});
+ await act(async()=>{leaving=observed.signOut();});
+ await waitFor(()=>expect(fixture.auth.signOut).toHaveBeenCalled());
+ await act(async()=>{fixture.emit(session(OWNER_B));});
  await waitFor(()=>expect(observed.repository?.owner).toBe(OWNER_B));
  await act(async()=>{signedOut.resolve({error:null});await leaving;});
  expect(observed.session?.user.id).toBe(OWNER_B);expect(observed.repository?.owner).toBe(OWNER_B);expect(observed.ready).toBe(true);

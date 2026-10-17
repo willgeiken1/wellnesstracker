@@ -120,3 +120,39 @@ test('pull provenance collision is durably flagged without stalling the page or 
  const restarted=await localDatabase(path);expect(restarted.repo.conflicts()).toEqual([{table:'weigh_ins',id:row.id,reason:'provenance'}]);restarted.sqlite.close();
  for(const suffix of ['', '-wal', '-shm'])rmSync(path+suffix,{force:true});
 });
+
+test.each(['app','healthkit','health_connect'])('local tombstone wipes values but retains %s provenance',async source=>{
+ const local=await localDatabase(),row=syntheticRow('weigh_ins');
+ try {
+  local.repo.putLocal({...row,data:{...row.data,source}});local.repo.remove(row.table,row.id,200);
+  expect(local.repo.get(row.table,row.id)?.data).toEqual({day:null,weight_kg:null,entered_value:null,entered_unit:null,source});
+ } finally {local.sqlite.close();}
+});
+
+test('upgrade wipes payloads from pre-decision local tombstones without losing provenance or outbox',async()=>{
+ const path=`/tmp/insight-tombstone-upgrade-${process.pid}.db`;
+ const first=await localDatabase(path);
+ first.repo.putLocal(syntheticRow('weigh_ins'));
+ first.sqlite.exec("UPDATE weigh_ins SET deleted_at=100; DELETE FROM __drizzle_migrations WHERE created_at=1792238400002");
+ first.sqlite.close();
+ const second=await localDatabase(path);
+ try {
+  const row=second.repo.list('weigh_ins',true)[0];
+  expect(row.data).toEqual({day:null,weight_kg:null,entered_value:null,entered_unit:null,source:'app'});
+  expect(second.repo.pending()).toHaveLength(1);
+ } finally {
+  second.sqlite.close();for(const suffix of ['', '-wal', '-shm'])rmSync(path+suffix,{force:true});
+ }
+});
+
+test('authoritative clamped acknowledgment preserves a newer in-flight edit and its outbox',async()=>{
+ const local=await localDatabase(),row={...syntheticRow(),updated_at:8000000000000,data:{name:'sent fixture'}};
+ try {
+  local.repo.putLocal(row);const sent=local.repo.pending();
+  const newer={...row,updated_at:row.updated_at+1,data:{name:'newer fixture'}};
+  local.repo.putLocal(newer);
+  local.repo.ack(sent,[{...row,updated_at:100}]);
+  expect(local.repo.get(row.table,row.id)?.data.name).toBe('newer fixture');
+  expect(local.repo.pending()).toHaveLength(1);expect(local.repo.pending()[0].row.updated_at).toBe(newer.updated_at);
+ } finally {local.sqlite.close();}
+});

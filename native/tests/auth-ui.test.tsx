@@ -36,7 +36,7 @@ test('Account displays pending status, manual sync, and requires sign-out confir
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
  expect(screen.getByText('3 pending')).toBeTruthy();await fireEvent.press(screen.getByRole('button',{name:'Sync now'}));expect(auth.syncNow).toHaveBeenCalled();
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));expect(auth.signOut).not.toHaveBeenCalled();
- const buttons=alert.mock.calls[0][2]!;await buttons[1].onPress?.();expect(auth.signOut).toHaveBeenCalled();alert.mockRestore();
+ const buttons=alert.mock.calls[0][2]!;await buttons[1].onPress?.();expect(auth.signOut).toHaveBeenCalledWith(true);expect(alert.mock.calls[0][1]).toContain('Unsynced changes will be lost');alert.mockRestore();
 });
 test('sign-in accepts an existing account password shorter than the new-account minimum',async()=>{
  const auth=state();await wrap(<AuthForm/>,auth);
