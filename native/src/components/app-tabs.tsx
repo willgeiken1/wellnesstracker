@@ -15,7 +15,7 @@ export default function AppTabs() {
     iconColor={{ default: colors['text-muted'], selected: colors.accent }}
     labelStyle={{ default: { color: colors['text-muted'] }, selected: { color: colors.text } }}
     indicatorColor={colors['surface-2']} disableTransparentOnScrollEdge>
-    {tabs.map(tab => <NativeTabs.Trigger key={tab.route} name={tab.route}>
+    {tabs.map(tab => <NativeTabs.Trigger key={tab.route} name={tab.route} accessibilityLabel={t(tab.label)}>
       <NativeTabs.Trigger.Label>{t(tab.label)}</NativeTabs.Trigger.Label>
       <NativeTabs.Trigger.Icon sf={tab.symbol} src={images[tab.label]} renderingMode="template" />
     </NativeTabs.Trigger>)}

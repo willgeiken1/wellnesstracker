@@ -6,6 +6,7 @@ export const en = {
   trends: 'Trends', recovery: 'Recovery', weekly: 'Weekly report',
   account: 'Account', profile: 'Profile & units', appearance: 'Appearance', workoutSettings: 'Workout',
   health: 'Health & devices', notifications: 'Notifications', privacy: 'Privacy', data: 'Data', about: 'About',
+  licenses: 'Licenses', licensesHint: 'Lexend (SIL Open Font License 1.1) and RepDB. Full notices coming soon.',
   theme: 'Theme', system: 'System', light: 'Light', dark: 'Dark', accent: 'Accent',
   citrus: 'Citrus', sea: 'Sea Glass', dusk: 'Dusk', sand: 'Sandstone',
   appearanceHint: 'Changes apply now. Saving your preferences comes in P2c.',

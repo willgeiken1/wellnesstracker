@@ -1,5 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
+import type { TestInstance } from 'test-renderer';
+import Home from '../src/app/(tabs)/index';
+import Workouts from '../src/app/(tabs)/workouts';
+import Food from '../src/app/(tabs)/food';
+import Progress from '../src/app/(tabs)/progress';
+import Insights from '../src/app/(tabs)/insights';
+import Settings from '../src/app/settings/index';
 import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import Appearance from '../src/features/settings/appearance';
 import AppTabs from '../src/components/app-tabs';
@@ -8,7 +15,7 @@ import AppTabs from '../src/components/app-tabs';
 jest.mock('expo-router/native-tabs', () => {
   const { View, Text } = require('react-native');
   const NativeTabs = ({ children }: any) => <View>{children}</View>;
-  const Trigger = ({ children }: any) => <View>{children}</View>;
+  const Trigger = ({ children, accessibilityLabel }: any) => <View accessibilityLabel={accessibilityLabel}>{children}</View>;
   Trigger.Label = ({ children }: any) => <Text>{children}</Text>;
   Trigger.Icon = () => null;
   NativeTabs.Trigger = Trigger;
@@ -20,7 +27,10 @@ function ThemeProbe() {
 }
 test('tab shell renders the five native tab labels', async () => {
   await render(<ThemeProvider><AppTabs /></ThemeProvider>);
-  for (const label of ['Home', 'Workouts', 'Food', 'Progress', 'Insights']) expect(screen.getByText(label)).toBeTruthy();
+  for (const label of ['Home', 'Workouts', 'Food', 'Progress', 'Insights']) {
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByLabelText(label)).toBeTruthy();
+  }
 });
 test('Appearance changes theme, accent, and restores system following', async () => {
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
@@ -32,4 +42,41 @@ test('Appearance changes theme, accent, and restores system following', async ()
   expect(screen.getByRole('button', { name: 'Sea Glass' })).toBeSelected();
   await fireEvent.press(screen.getByRole('tab', { name: 'System' }));
   expect(screen.getByRole('tab', { name: 'System' })).toBeSelected();
+});
+
+function textContent(node: TestInstance): string {
+  return node.children.map(child => typeof child === 'string' ? child : textContent(child)).join(' ');
+}
+
+test.each([
+  ['Home tab', Home], ['Workouts tab', Workouts], ['Food tab', Food],
+  ['Progress tab', Progress], ['Insights tab', Insights], ['Settings list', Settings], ['Appearance', Appearance],
+] as const)('%s pressables are labeled and text can grow at fontScale 2', async (_name, Component) => {
+  const getDimensions = Dimensions.get;
+  const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...getDimensions(key), fontScale: 2 }));
+  const fontScale = jest.spyOn(PixelRatio, 'getFontScale').mockReturnValue(2);
+  try {
+    const result = await render(<ThemeProvider><Component /></ThemeProvider>);
+    // Walk host responders independently of role queries: missing roles must not hide controls.
+    const pressables = result.container.queryAll(node => typeof node.props.onPress === 'function' ||
+      typeof node.props.onResponderRelease === 'function');
+    expect(pressables.length).toBeGreaterThan(0);
+    for (const node of pressables) {
+      expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
+      expect((node.props.accessibilityLabel ?? textContent(node)).trim().length).toBeGreaterThan(0);
+    }
+    const texts = result.container.queryAll(node => node.type === 'Text');
+    expect(texts.length).toBeGreaterThan(0);
+    for (const node of texts) {
+      expect(node.props.allowFontScaling).toBe(true);
+      expect(node.props.maxFontSizeMultiplier).toBe(0);
+      expect(node.props.numberOfLines).toBeUndefined();
+      // Any fixed-height text ancestor could clip large type; decorative swatches aren't ancestors.
+      for (let ancestor: TestInstance | null = node; ancestor; ancestor = ancestor.parent) {
+        const style = StyleSheet.flatten(ancestor.props.style) ?? {};
+        expect(style.height).toBeUndefined();
+        expect(style.maxHeight).toBeUndefined();
+      }
+    }
+  } finally { dimensions.mockRestore(); fontScale.mockRestore(); }
 });

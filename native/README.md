@@ -10,6 +10,8 @@ Use the commands in [AGENTS.md §3](../AGENTS.md#3-commands-run-from-native). In
 
 No Health permissions, auth, sync, analytics, widgets, secrets or hosted services are configured. P2b introduces Jest coverage for tokens, contrast, navigation, linking and Appearance; business logic and golden fixtures arrive in later parts.
 
+Our `plugins/withStripLocalNetworkingRelease.js` strips local-network keys from the built Release Info.plist; see the P1 report for the processed-plist dependency and clean-build evidence.
+
 Release permissions, build evidence, cross-family review and follow-ups: [P1 report](docs/p1-report.md).
 
 The native CI workflow runs dependency compatibility, Expo Doctor, plugin tests, typecheck, lint and Jest, with a 15-minute job timeout. Push runs are limited to `main`; pull requests keep their existing path filters.

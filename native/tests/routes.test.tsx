@@ -1,3 +1,4 @@
+import type { TestInstance } from 'test-renderer';
 import { renderRouter, screen, fireEvent } from 'expo-router/testing-library';
 import { redirectSystemPath } from '../src/app/+native-intent';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -76,4 +77,23 @@ test('Food opens its log stub and returns Home', async () => {
   expect(result.getPathname()).toBe('/food/log');
   await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
   expect(result.getPathname()).toBe('/');
+});
+
+test('About exposes a Licenses placeholder', async () => {
+  const result = await renderRouter(routes, { initialUrl: '/settings/about' });
+  await fireEvent.press(screen.getByRole('button', { name: 'Licenses' }));
+  expect(result.getPathname()).toBe('/settings/licenses');
+  expect(screen.getByText('Lexend (SIL Open Font License 1.1) and RepDB. Full notices coming soon.')).toBeTruthy();
+});
+
+test.each(['/', '/settings', '/settings/appearance'])('rendered shell at %s labels every pressable', async initialUrl => {
+  const result = await renderRouter(routes, { initialUrl });
+  const pressables = result.container.queryAll(node => typeof node.props.onPress === 'function' ||
+    typeof node.props.onResponderRelease === 'function');
+  expect(pressables.length).toBeGreaterThanOrEqual(7);
+  const text = (node: TestInstance): string => node.children.map(child => typeof child === 'string' ? child : text(child)).join(' ');
+  for (const node of pressables) {
+    expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
+    expect((node.props.accessibilityLabel ?? text(node)).trim().length).toBeGreaterThan(0);
+  }
 });

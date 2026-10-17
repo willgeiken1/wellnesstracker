@@ -20,16 +20,16 @@ SDK 58's documented, non-unstable import is [`expo-router/native-tabs`](https://
 
 | Palette | Original swatches | Native dark accent / accent-2 | Native light accent / accent-2 |
 | --- | --- | --- | --- |
-| Citrus | #D5F56B / #C7B5FA / #F5BEDB | #D5F56B / #C7B5FA | #5E7A00 / #665092 |
+| Citrus | #D5F56B / #C7B5FA / #F5BEDB | #D5F56B / #C7B5FA | #587400 / #665092 |
 | Sea Glass | #2D6876 / #67B39F / #CEDFCC | #67B39F / #A9D3C4 | #2D6876 / #276B57 |
 | Dusk | #A9B8FF / #CDBEF3 / #F3CAD6 | #A9B8FF / #CDBEF3 | #4654B8 / #665092 |
 | Sandstone | #F4BE8C / #E7D3BC / #CBDCC4 | #F4BE8C / #E7D3BC | #9A5622 / #735A40 |
 
 Dark surface, raised surface, text and muted text match the PWA. Light background/surfaces/text also match. Light muted text changes from #6E7073 to #696B6E: the original has 4.223:1 against #ECEDE9, while the native value has 4.545:1. Subtracting five from each RGB channel is the smallest uniform integer-channel reduction that clears 4.5:1; subtracting four gives 4.478:1.
 
-The PWA already supplies accessible light accent-text values and the brighter Sea Glass dark accent; native adopts those semantic choices rather than using raw pastel swatches as foregrounds. Light accent-2 is darkened to the values above for readable semantic use. Success, warning and Oura ring roles receive light-theme counterparts (#276B57, #8C501C, #665092); the plan did not prescribe exact colors for these roles. Danger follows the PWA: #FF7B7B with dark ink in dark mode, #B52E2E with white in light mode. Primary buttons use dark ink on dark-theme accents and white on light-theme accents.
+The PWA supplies the starting light accent-text values and the brighter Sea Glass dark accent; native adopts those semantic choices rather than using raw pastel swatches as foregrounds. Light accent-2 is darkened to the values above for readable semantic use. Success, warning and Oura ring roles receive light-theme counterparts (#276B57, #8C501C, #665092); the plan did not prescribe exact colors for these roles. Danger follows the PWA: #FF7B7B with dark ink in dark mode, #B52E2E with white in light mode. Primary buttons use dark ink on dark-theme accents and white on light-theme accents.
 
-The contrast suite checks text and muted text against bg/surface/surface-2 at 4.5:1, accent glyphs against those surfaces at 3:1, and button foregrounds at 4.5:1 for both themes and all four accents.
+The contrast suite checks text, muted text and both accent tokens against bg/surface/surface-2 at 4.5:1; accent, accent-2, success, warning, danger and ring-oura glyphs at 3:1; and button foregrounds against their filled backgrounds at 4.5:1 for both themes and all four accents. Light Citrus is now #587400; see the review fixes below.
 
 ## Placeholders and next part
 
@@ -60,13 +60,43 @@ Commands run with EXPO_NO_TELEMETRY=1 and EXPO_NO_DOTENV=1. npm cache uses `/tmp
 - `npx expo lint`: PASS, no warnings.
 - `npx expo-doctor`: PASS, 20/20 checks.
 - `npx expo install --check`: PASS at kickoff and final validation.
-- `npm test -- --ci`: PASS; 22 tests across five suites. Tests cover source mapping, eight contrast combinations, native tab declarations, theme/accent changes, native intent normalization, routes, modal exit, Settings access, tab segments, food logging stub and Reduce Motion changes.
+- `npm test -- --ci`: PASS; 78 tests across five suites after review fixes. Tests cover source mapping, eight contrast combinations, native tab declarations, theme/accent changes, native intent normalization, routes, modal exit, Settings access, tab segments, food logging stub and Reduce Motion changes.
 - `npx expo export --platform web --output-dir /tmp/insight-p2b-web`: PASS. Temporary output is outside the repository.
 - Root `npm test`: unavailable; the existing root package has no test script. The workflow's non-quota Node test command was attempted separately: 430 passed, six failed because root zod/PostgreSQL prerequisites are absent. Quota integration tests were not run; no local PostgreSQL/Supabase test service was configured in this task. PWA source files are unchanged.
 
 Native tab declarations are rendered with a host mock in Jest; route tests use the real JS fallback navigator. Expo Router's test location bypasses native getInitialURL, so route tests apply the actual native intent hook before rendering, and separate tests cover cold/warm hook behavior. These checks do not prove native-host layout or device accessibility behavior.
 
 Per task instructions, no simulator/emulator build, prebuild, EAS command, screenshots, staging, commit or push was performed. Native launch, large Dynamic Type and VoiceOver/TalkBack checks remain for the coordinator's simulator/emulator validation. The native CI workflow adds Jest after lint and retains pinned action SHAs and read-only permissions.
+
+## Review fixes (Quinn #68)
+
+This edit-only review pass stays within P2b / M1 foundation (plan §4, §6, §7.2, §15.2; Q21/Q84, Q78/Q79/Q81). The full plan remains unavailable in this worktree; no product decision is changed.
+
+| Finding | Change / evidence |
+| --- | --- |
+| B1 | `+native-intent.ts` parses every input using a deliberately non-Insight base for bare paths. Only case-insensitive `insight:` passes; host + pathname becomes a lowercase route without trailing slashes, query or fragment. The explicit allowlist is `/food/log` and `/workout/start`; everything else returns `/`, including bare paths, other app schemes, HTTPS and malformed input. Credentials/ports are rejected. All 23 inputs are tested with both initial values. |
+| B1b / #69 minor 5 | New `withDevSchemeDebugOnly.js`, registered after `expo-dev-client`. Android removes only `exp+insight-daily` data from main-manifest intent filters and adds it to `app/src/debug/AndroidManifest.xml`, preserving existing debug content and app schemes. Scheme-only filters are removed entirely from main to avoid broad data-free VIEW handlers. iOS adds an idempotent app-target script phase gated on configuration != Debug, with processed Info.plist input and configuration-specific stamp output. It removes dev-only URL entries (only the matching scheme within mixed entries), keeps `insight` / `com.insightwellness.app`, verifies removal and exits 1 on failures. Native generated folders were not created in this worktree. |
+| M2 | Expanded both-theme / four-accent / three-surface checks to all six glyph roles at 3:1. Text-color source audit: `ThemedText` and native tabs use text/text-muted; JS tabs use accent/text-muted; Button uses on-accent/on-danger/text; SegmentedControl uses on-accent/text; navigation headers use text. The suite enforces 4.5:1 on their actual backgrounds, plus accent-2 for future text safety. Light Citrus changes #5E7A00 → #587400: 4.861:1 on bg, 5.367:1 on surface, 4.563:1 on surface-2. This is the smallest equal reduction of its nonzero RGB channels clearing all three surfaces: #597500 still gives 4.499:1 on surface-2. Original picker swatches are unchanged. |
+| M3 | Known-value contrast anchors: black/white = 21.00, #777777/white = 4.48 (both rounded to two decimals), identical colors = 1. |
+| M4 | Copied the installed Lexend package's complete `LICENSE_FONT` (OFL 1.1, including copyright and reserved font name) to `assets/fonts/licenses/Lexend-OFL.txt`; this package has no OFL.txt. Added translated Licenses row under About, linked to a clearly marked placeholder naming Lexend and RepDB; route test verifies it. TODO: About › Licenses must include the full Lexend (OFL 1.1) and RepDB notices before release. |
+| M5 | README explicitly attributes Release local-network stripping to our `withStripLocalNetworkingRelease.js` and links the P1 report. The plugin and its test were not edited. |
+| M6 | Simulator results — coordinator: PENDING. |
+| M7 prep | Host-tree responder walks audit every pressable in the rendered JS tab shell, Settings list and Appearance independently of role queries. Separate walks cover all five tab screens, Settings and Appearance with fontScale 2, requiring roles and nonempty labels/text; text must enable uncapped scaling, have no line cap, and have no fixed-height/max-height ancestor. The JS tab fallback now explicitly supplies accessibilityRole through Expo's PlatformPressable and enables tab-label scaling. Native tab triggers have explicit accessibilityLabel; native roles remain provided by the OS tab host. These are structural tests, not a layout engine. Native large-type, VoiceOver/TalkBack and simulator results — coordinator: PENDING. |
+
+SDK 58 investigation (installed source, no version assumptions): `expo-dev-client` 58.0.14's `plugin/src/withDevClient.ts` registers `withGeneratedIosScheme` / `withGeneratedAndroidScheme`; these append the generated `exp+insight-daily` scheme to iOS CFBundleURLTypes and Android main-manifest data. Expo's `@expo/config-plugins/build/plugins/withMod.js` executes mods as a stack. The Android plugin therefore uses `withBaseMod` and awaits `nextMod` before moving the generated data. Its tests compose the **actual installed** generated Android scheme mod with ours, catching a simple callback that would run too early.
+
+Launcher handling precedes the application router: iOS `expo-dev-launcher/ios/ReactDelegateHandler/ExpoDevLauncherAppDelegateSubscriber.swift` passes open URLs to `EXDevLauncherController.m`'s `onDeepLink`, which recognizes launcher URLs and calls `loadApp` (cold startup also processes launch options). Android `android/src/debug/java/expo/modules/devlauncher/DevLauncherPackageDelegate.kt` handles warm `onNewIntent` through `DevLauncherController.tryToHandleIntent` and installs its activity delegate for cold startup. Router 58.0.23's `build/getLinkingConfig.js` invokes `redirectSystemPath` for app initial URLs; `build/link/linking.js` invokes it for URL events. Returning `/` for a launcher URL reaching this hook does not prevent native dev-launcher consumption. Debug retains its registered scheme. A native launch smoke check remains the coordinator's job.
+
+Review validation uses EXPO_NO_TELEMETRY=1, EXPO_NO_DOTENV=1, npm_config_cache=/tmp/insight-npm and `__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/insight-expo` (the supported SDK 58 shell override; EXPO_HOME does not redirect this cache). No environment files or credentials were read. Requested checks:
+
+- `npx tsc --noEmit`: PASS.
+- `npx expo lint`: PASS.
+- `npx expo-doctor`: PASS, 20/20.
+- `npx expo install --check`: PASS, dependencies up to date.
+- `node --test plugins/*.test.js`: PASS, 7/7; includes real PlistBuddy on synthetic XML/binary plists for Debug/Release/Profile, unrelated/app scheme preservation, repeated execution, missing/malformed plist and failed-deletion rejection, idempotent serialized Xcode mods, and Android fresh/existing debug overlays with upstream mod composition.
+- `npm test -- --ci`: PASS, 78 tests / 5 suites.
+
+No git commands, prebuild, simulator/emulator, EAS or paid services were used. Native release artifacts and M6/M7 simulator results remain coordinator: PENDING.
 
 ## Complete file manifest
 
@@ -86,8 +116,11 @@ Paths are relative to the repository root. No file was staged. The native ignore
 - `native/src/components/themed-text.tsx`
 - `native/tsconfig.json`
 
-### Added (46)
+### Added (49)
 
+- `native/assets/fonts/licenses/Lexend-OFL.txt`
+- `native/plugins/withDevSchemeDebugOnly.js`
+- `native/plugins/withDevSchemeDebugOnly.test.js`
 - `native/assets/images/navigation/food.png`
 - `native/assets/images/navigation/home.png`
 - `native/assets/images/navigation/insights.png`
