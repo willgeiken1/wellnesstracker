@@ -74,3 +74,107 @@ test('SQL provenance error travels through Supabase transport and isolates only 
   await db.exec("ALTER TABLE public.weigh_ins ENABLE TRIGGER weigh_ins_guard; ALTER TABLE public.weigh_ins ADD CONSTRAINT weigh_ins_source_check CHECK(source='app')");
  }
 });
+
+
+const ownerSwitches = [[OWNER_A, OWNER_B], [OWNER_B, OWNER_A]] as const;
+
+test.each(ownerSwitches)('a conflict for %s does not suppress %s pending pushes across account switches', async (flaggedOwner, otherOwner) => {
+ const local = await localDatabase();
+ const row = syntheticRow('weigh_ins');
+ const repository = (owner: string) => new Repository(local.db, owner, local.repo.device, () => row.id);
+ const flagged = repository(flaggedOwner), other = repository(otherOwner);
+ let engine: SyncEngine | undefined;
+ try {
+  flagged.putLocal({...row, owner_id: flaggedOwner});
+  const retained = flagged.pending();
+  flagged.flagConflict(retained[0]);
+  other.putLocal({...row, owner_id: otherOwner});
+  expect(flagged.pending()).toEqual([]);
+  expect(other.conflicts()).toEqual([]);
+  const pending = other.pending();
+  expect(pending).toHaveLength(1);
+  expect(pending[0].row).toMatchObject({id: row.id, owner_id: otherOwner});
+  // Recreate the active repository on the same device/database, as on account departure/return.
+  const switched = repository(otherOwner), push = jest.fn(async () => {});
+  engine = new SyncEngine(switched, {owner: otherOwner, push, pull: async () => []});
+  await engine.sync();
+  expect(engine.status).toBe('idle');
+  expect(push).toHaveBeenCalledTimes(1);
+  expect(push).toHaveBeenCalledWith([pending[0].row]);
+  expect(switched.pending()).toEqual([]);
+  const returned = repository(flaggedOwner);
+  expect(returned.conflicts()).toEqual([{table: row.table, id: row.id, reason: 'provenance'}]);
+  expect(returned.pending()).toEqual([]);
+  expect(returned.get(row.table, row.id)).toEqual(retained[0].row);
+  expect(local.sqlite.prepare('SELECT owner_id FROM sync_outbox').all()).toEqual([{owner_id: flaggedOwner}]);
+ } finally { engine?.close(); local.sqlite.close(); }
+});
+
+test.each(ownerSwitches)('a conflict for %s does not skip %s pulls on the same device', async (flaggedOwner, otherOwner) => {
+ const local = await localDatabase();
+ const row = syntheticRow('weigh_ins');
+ const repository = (owner: string) => new Repository(local.db, owner, local.repo.device, () => row.id);
+ const flagged = repository(flaggedOwner);
+ let engine: SyncEngine | undefined;
+ try {
+  flagged.putLocal({...row, owner_id: flaggedOwner});
+  flagged.flagConflict(flagged.pending()[0]);
+  const before = flagged.get(row.table, row.id);
+  const other = repository(otherOwner);
+  other.putLocal({...row, owner_id: otherOwner});
+  other.ack(other.pending());
+  const remote = {...row, owner_id: otherOwner, updated_at: 200, data: {...row.data, weight_kg: 81}};
+  const pull = jest.fn(async (table: string, after: string) => table === row.table && after === '0'
+   ? [{row: remote, server_seq: '7'}] : []);
+  engine = new SyncEngine(other, {owner: otherOwner, push: async () => {}, pull});
+  await engine.sync();
+  expect(engine.status).toBe('idle');
+  expect(pull).toHaveBeenCalledWith(row.table, '0', 100);
+  expect(other.get(row.table, row.id)).toMatchObject(remote);
+  expect(other.cursor(row.table)).toBe('7');
+  expect(other.conflicts()).toEqual([]);
+  engine.close();
+  const returned = repository(flaggedOwner);
+  expect(returned.get(row.table, row.id)).toEqual(before);
+  expect(returned.cursor(row.table)).toBe('0');
+  expect(returned.conflicts()).toEqual([{table: row.table, id: row.id, reason: 'provenance'}]);
+  // Switching back again retains the other owner's pulled row and cursor.
+  expect(repository(otherOwner).get(row.table, row.id)).toMatchObject(remote);
+  expect(repository(otherOwner).cursor(row.table)).toBe('7');
+ } finally { engine?.close(); local.sqlite.close(); }
+});
+
+test.each([false, true])('subsequent pulls skip a flagged id (tombstone=%s), consume its cursor and apply page peers', async tombstone => {
+ const local = await localDatabase();
+ const row = syntheticRow('weigh_ins');
+ let engine: SyncEngine | undefined;
+ try {
+  // Same-source rows ensure the durable flag itself causes the skip, rather than source mismatch detection.
+  local.repo.putLocal(row);
+  local.repo.flagConflict(local.repo.pending()[0]);
+  const before = local.repo.get(row.table, row.id);
+  local.sqlite.exec(`CREATE TEMP TABLE flagged_writes(id TEXT);
+   CREATE TEMP TRIGGER audit_flagged_update AFTER UPDATE ON weigh_ins
+   BEGIN INSERT INTO flagged_writes VALUES(NEW.id); END;`);
+  const peer = {...row, id: '30000000-0000-4000-8000-000000000171', updated_at: 300};
+  const incoming = {...row, updated_at: 400, deleted_at: tombstone ? 400 : null, data: {...row.data, weight_kg: 99}};
+  const pull = jest.fn(async (table: string, after: string) => table === row.table && after === '0'
+   ? [{row: peer, server_seq: '8'}, {row: incoming, server_seq: '9'}] : []);
+  const push = jest.fn(async () => {});
+  engine = new SyncEngine(local.repo, {owner: OWNER_A, push, pull}, 2);
+  await engine.sync();
+  expect(engine.status).toBe('idle');
+  expect(local.repo.get(row.table, row.id)).toEqual(before);
+  expect(local.sqlite.prepare('SELECT * FROM flagged_writes').all()).toEqual([]);
+  expect(local.repo.get(peer.table, peer.id)).toMatchObject(peer);
+  expect(local.repo.cursor(row.table)).toBe('9');
+  expect(pull).toHaveBeenCalledWith(row.table, '9', 2);
+  expect(local.repo.conflicts()).toEqual([{table: row.table, id: row.id, reason: 'provenance'}]);
+  expect(local.repo.pending()).toEqual([]);
+  await engine.sync();
+  expect(push).not.toHaveBeenCalled();
+  expect(local.repo.get(row.table, row.id)).toEqual(before);
+  expect(local.repo.cursor(row.table)).toBe('9');
+  expect(local.sqlite.prepare('SELECT * FROM flagged_writes').all()).toEqual([]);
+ } finally { engine?.close(); local.sqlite.close(); }
+});

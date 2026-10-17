@@ -132,3 +132,106 @@ test('draft SQL explicitly declares both functions SECURITY INVOKER',()=>{
  for(const declaration of declarations){expect(declaration).toMatch(/SECURITY INVOKER/);expect(declaration).toMatch(/SET search_path = ''/);}
  expect(migration).not.toMatch(/SECURITY DEFINER/i);
 });
+
+
+// Raw SQL/RPC calls deliberately bypass client validation and use the existing
+// authenticated-role harness, including its permissive Supabase default grants.
+test.each(syncedTables)('%s isolates B tombstones and rejects forged ownership without changing A rows', async table => {
+ const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000201'};
+ await testTransport(db, OWNER_A).push([row]);
+ const before = (await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows;
+ await expect(testTransport(db, OWNER_B).push([{...row, updated_at: 200, deleted_at: 200}]))
+  .rejects.toThrow('Row owner mismatch');
+ expect((await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(before);
+ expect((await asUser(db, OWNER_B, tx => tx.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id]))).rows).toEqual([]);
+ // With a truthful B envelope, the composite owner/id key permits only B's own tombstone.
+ await testTransport(db, OWNER_B).push([{...row, owner_id: OWNER_B, updated_at: 200, deleted_at: 200}]);
+ expect((await db.query(`SELECT * FROM public.${table} WHERE owner_id=$1 AND id=$2`, [OWNER_A, row.id])).rows).toEqual(before);
+ const own = (await asUser(db, OWNER_B, tx => tx.query<{owner_id: string; deleted_at: number}>(
+  `SELECT owner_id,deleted_at FROM public.${table} WHERE id=$1`, [row.id]))).rows;
+ expect(own).toHaveLength(1);
+ expect(own[0].owner_id).toBe(OWNER_B);
+ expect(Number(own[0].deleted_at)).toBe(200);
+});
+
+test.each(syncedTables)('%s rolls back a valid first batch row when a later row forges owner_id', async table => {
+ const valid = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000202'};
+ const forged = {...valid, id: '30000000-0000-4000-8000-000000000203', owner_id: OWNER_B};
+ // The legitimate row must run first to distinguish atomic rollback from early rejection.
+ await expect(asUser(db, OWNER_A, tx => tx.query('SELECT public.sync_push($1::jsonb)', [JSON.stringify([valid, forged])])))
+  .rejects.toThrow('Row owner mismatch');
+ expect((await db.query(`SELECT * FROM public.${table} WHERE id IN ($1,$2)`, [valid.id, forged.id])).rows).toEqual([]);
+});
+
+test.each(syncedTables)('%s RPC rejects a missing owner_id and rolls back the preceding valid row', async table => {
+ const valid = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000204'};
+ const missing = Object.fromEntries(Object.entries({...valid, id: '30000000-0000-4000-8000-000000000205'})
+  .filter(([key]) => key !== 'owner_id'));
+ // Table defaults do not apply here: sync_push explicitly requires the envelope owner.
+ await expect(asUser(db, OWNER_A, tx => tx.query('SELECT public.sync_push($1::jsonb)', [JSON.stringify([valid, missing])])))
+  .rejects.toThrow('Row owner mismatch');
+ // Superuser inspection covers every owner namespace, not just the caller's visible rows.
+ expect((await db.query(`SELECT * FROM public.${table} WHERE id IN ($1,$2)`, [valid.id, missing.id])).rows).toEqual([]);
+});
+
+test.each(syncedTables)('%s RPC rejects server_seq in either envelope or data; accepted writes get a server sequence', async table => {
+ const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000206'};
+ const transport = testTransport(db, OWNER_A);
+ await transport.push([row]);
+ const before = (await db.query<{server_seq: string}>(`SELECT *,server_seq::text AS server_seq FROM public.${table} WHERE id=$1`, [row.id])).rows;
+ const updated = {...row, updated_at: 200};
+ for (const forged of [{...updated, server_seq: '42'}, {...updated, data: {...updated.data, server_seq: '42'}}]) {
+  await expect(asUser(db, OWNER_A, tx => tx.query('SELECT public.sync_push($1::jsonb)', [JSON.stringify([forged])])))
+   .rejects.toThrow('Invalid row fields');
+  expect((await db.query(`SELECT *,server_seq::text AS server_seq FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(before);
+ }
+ await transport.push([updated]);
+ const stored = (await db.query<{server_seq: string; updated_at: number}>(`SELECT server_seq::text,updated_at FROM public.${table} WHERE id=$1`, [row.id])).rows[0];
+ expect(BigInt(stored.server_seq)).toBeGreaterThan(BigInt(before[0].server_seq));
+ expect(stored.server_seq).not.toBe('42');
+ expect(Number(stored.updated_at)).toBe(200);
+});
+
+test.each(syncedTables)('%s direct authenticated INSERT overwrites a forged server_seq', async table => {
+ const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000207'};
+ const result = await asUser(db, OWNER_A, tx => tx.query<{owner_id: string; server_seq: string}>(
+  `INSERT INTO public.${table}(owner_id,id,updated_at,device_id,server_seq${table === 'weigh_ins' ? ',source' : ''})
+   VALUES($1,$2,100,$3,42${table === 'weigh_ins' ? ",'app'" : ''}) RETURNING owner_id,server_seq::text`,
+  [OWNER_A, row.id, row.device_id]));
+ expect(result.rows).toHaveLength(1);
+ expect(result.rows[0].owner_id).toBe(OWNER_A);
+ expect(BigInt(result.rows[0].server_seq)).toBeGreaterThan(0n);
+ expect(result.rows[0].server_seq).not.toBe('42');
+ expect((await db.query(`SELECT owner_id,server_seq::text FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(result.rows);
+});
+
+test.each(syncedTables)('%s guard skips direct stale UPDATE and preserves the entire stored row and sequence', async table => {
+ const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000208', updated_at: 300};
+ await testTransport(db, OWNER_A).push([row]);
+ const before = (await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows;
+ const result = await asUser(db, OWNER_A, tx => tx.query(
+  `UPDATE public.${table} SET updated_at=299,deleted_at=299,device_id='ffffffff-ffff-4fff-afff-ffffffffffff',server_seq=42
+   WHERE id=$1 RETURNING *`, [row.id]));
+ expect(result.rows).toEqual([]);
+ expect(result.affectedRows).toBe(0);
+ expect((await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(before);
+});
+
+test.each(syncedTables)('%s guard rejects owner changes, including reassignment to the calling owner', async table => {
+ const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000209'};
+ await testTransport(db, OWNER_A).push([row]);
+ const before = (await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows;
+ await expect(asUser(db, OWNER_A, tx => tx.query(
+  `UPDATE public.${table} SET owner_id=$1,updated_at=200 WHERE id=$2`, [OWNER_B, row.id])))
+  .rejects.toThrow('Row owner mismatch');
+ // A test-only permissive policy exposes the alternate path independently of RLS:
+ // B can see A's row, and NEW.owner_id equals auth.uid(), so OLD identity must protect it.
+ await db.exec(`CREATE POLICY test_owner_change_path ON public.${table} FOR ALL TO authenticated USING (true) WITH CHECK (true)`);
+ try {
+  expect((await asUser(db, OWNER_B, tx => tx.query(`SELECT id FROM public.${table} WHERE id=$1`, [row.id]))).rows).toHaveLength(1);
+  await expect(asUser(db, OWNER_B, tx => tx.query(
+   `UPDATE public.${table} SET owner_id=$1,updated_at=200 WHERE id=$2`, [OWNER_B, row.id])))
+   .rejects.toThrow('Row identity is immutable');
+ } finally { await db.exec(`DROP POLICY test_owner_change_path ON public.${table}`); }
+ expect((await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(before);
+});
