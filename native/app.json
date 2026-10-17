@@ -34,6 +34,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withStripLocalNetworkingRelease",
       [
         "expo-splash-screen",
         {
