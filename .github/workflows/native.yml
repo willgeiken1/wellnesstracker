@@ -41,6 +41,7 @@ jobs:
       - run: npx expo-doctor
       - run: npx tsc --noEmit
       - run: npx expo lint
+      - run: npm test -- --ci
 
   plistbuddy:
     name: Native real PlistBuddy tests
