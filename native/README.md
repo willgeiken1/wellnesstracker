@@ -10,4 +10,8 @@ Use the commands in [AGENTS.md §3](../AGENTS.md#3-commands-run-from-native). In
 
 No Health permissions, auth, sync, analytics, widgets, secrets or hosted services are configured. No native business logic or Jest/golden-fixture suite is introduced in P1.
 
-The native CI workflow runs dependency compatibility, typecheck and lint on changes to native/. GitHub CI execution is pending the later push.
+Commits were made and pushed outside the sandbox; draft PR #67 is open and CI ran on GitHub. Quinn (Claude cross-family review) returned **PASS-WITH-MINORS, RISK LOW**. Both local dev builds reached the Home screen on October 17, 2026: iPhone simulator with iOS 26.5 at about 3:39 AM CT, and Medium_Phone_API_37.0 at about 4:12 AM CT after a couple of emulator restarts. Screenshots are on the Mac at `~/Code/p1-ios.png` and `~/Code/p1-android.png`, not committed. Earlier CoreSimulator and Qt/neon failures were sandbox-only and are resolved.
+
+The native CI workflow runs dependency compatibility, Expo Doctor, typecheck and lint, with a 15-minute job timeout. Push runs are limited to `main`; pull requests keep their existing path filters.
+
+Nearby-devices/local-network access is dev-only: RN 0.88 declares `ACCESS_LOCAL_NETWORK` only in debug manifests, and dev-launcher multicast permission is debug-only. Quinn's review found no local-network/nearby/multicast permission or dev-launcher components in the merged Android release manifest. On iOS, dev-launcher's “Strip Local Network Keys for Release” phase removes `NSBonjourServices` and `NSLocalNetworkUsageDescription` in Release. Local release checks confirmed this on October 17 (Android release permissions: INTERNET, VIBRATE, ACCESS_NETWORK_STATE only; iOS Release Info.plist has neither key); details are in the [P1 report](docs/p1-report.md), which also tracks M1–M6 and the dependency advisory follow-up.

@@ -1,83 +1,72 @@
 # Insight Daily P1 scaffold report
 
-Date: October 16, 2026. Branch: `native/p1-expo-scaffold`, starting HEAD `79db13d`.
-Status: scaffold implemented; P1 exit criteria NOT met. Neither native build launched, and no commits could be made because of the managed sandbox. Nothing pushed or merged.
+Updated: October 17, 2026. Branch: `native/p1-expo-scaffold`. Draft PR: #67.
 
-## Scope and sources
+## Current status
 
-Read repository AGENTS.md and ../insight-native-prep/native-rebuild-plan.md (§0 takes precedence), native-rebuild-answers.md, native-release-sequence.md, native-prep/skills/expo-dev-builds.md and reference notes. Release sequence records FREEZE LIFTED. Implements P1 / M0 scaffold subset of §0.1, §0.2 and §15.2, Q3/Q4/Q5/Q8/Q127. Remaining M0 work (local Supabase, golden fixtures/Jest) is outside this scaffold.
+Commits were made and pushed outside the sandbox; draft PR #67 is open and CI ran on GitHub. Quinn (Claude cross-family review) returned **PASS-WITH-MINORS, RISK LOW**. This update addresses M1–M6 below; the coordinator owns committing and pushing these edits. The release checks below were run on the Mac for this update.
 
-## Built
+Both development builds launched to the Home screen on October 17, 2026 (launch evidence supplied by the coordinator):
 
-- Created native/ with `create-expo-app --template default@sdk-58`: Expo ~58.0.14, React Native 0.88.0, React 19.3.0, strict TypeScript, Hermes, New Architecture.
-- Insight Daily name, insight-daily slug, com.insightwellness.app for both platforms, insight scheme, iOS 17.0 deployment target, phone only, Android minSdk 29 via expo-build-properties. Generated projects confirm those values.
-- Added SDK-matched expo-dev-client and expo-build-properties. Native scripts build locally and start with --dev-client. No accounts/services configured.
-- Kept template Home/Explore UI and temporary Expo artwork. Home heading says Insight Daily. Product navigation and icon design remain later work.
-- Repaired template typecheck issues: explicitly include Expo CSS declarations and type the web tab ref for RN 0.88's host element. Replaced the template's effect-based hydration flag with useSyncExternalStore so Expo lint passes without disabling rules.
-- Added native CI workflow for npm ci, dependency compatibility, typecheck and lint. Reused action SHA pins already present in repo. Remote CI has NOT run.
-- Added native and native/ to Pages exclusions. AGENTS.md matches the prep source exactly, and the complete prep PR template is copied verbatim.
-- Generated native/ios and native/android are ignored, never hand-edited. Node modules and env files are ignored. logger/ and all web behavior are unchanged. No health, sync, widgets, auth, secrets, telemetry SDKs or paid services added.
+| Platform | Home screen reached | Screenshot on the Mac (not committed) |
+| --- | --- | --- |
+| iPhone simulator, iOS 26.5 runtime | About 3:39 AM CT | `~/Code/p1-ios.png` |
+| Android emulator, Medium_Phone_API_37.0 | About 4:12 AM CT, after a couple of emulator restarts | `~/Code/p1-android.png` |
 
-## Commands and results
+## Scope and implementation
 
-Commands in native/ unless noted. For npm operations the writable cache was `npm_config_cache=/private/tmp/insight-p1-npm`; Expo used `EXPO_NO_TELEMETRY=1`, and later `EXPO_NO_CACHE=1`. Build attempts also used `__UNSAFE_EXPO_HOME_DIRECTORY=/private/tmp/insight-p1-expo`, an Expo CLI-supported shell override for an empty temporary state directory; no credentials copied.
+P1 / M0 scaffold subset of native-rebuild-plan §0.1, §0.2 and §15.2; Q3/Q4/Q5/Q8/Q127. Root AGENTS.md and plan §0 take precedence. The supplied plan/answers/release sequence live in `../insight-native-prep/`; the release sequence records FREEZE LIFTED. Remaining M0 work (local Supabase, golden fixtures/Jest) is outside this scaffold.
+
+- Scaffolded with `create-expo-app --template default@sdk-58`: Expo ~58.0.14, React Native 0.88.0, React 19.3.0, Hermes, New Architecture, strict TypeScript.
+- Insight Daily identity, `com.insightwellness.app` on both platforms, `insight` scheme, iOS 17+ phone only, Android minSdk 29 via config plugin; SDK-matched dev client. Generated `native/ios` and `native/android` stay ignored and are never hand-edited.
+- Temporary Home/Explore screens and Expo artwork remain; Home identifies Insight Daily. Template CSS/web-ref typing and hydration lint issues were repaired.
+- Native CI and Pages exclusions (`native` and `native/`) are in place. No Health, auth, sync, widgets, telemetry SDKs, secrets or paid services configured. No native business logic or Jest/golden-fixture suite added.
+
+## Review minors (Quinn)
+
+| Finding | Handling |
+| --- | --- |
+| M1 | Added `expo.android.blockedPermissions` for `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, using full `android.permission.*` names. Verified array format against [Expo SDK 58 app config docs](https://docs.expo.dev/versions/v58.0.0/config/app/#blockedpermissions) and installed config types. |
+| M2 | Scoped CI push trigger to `branches: [main]`, retained both path filters and pull-request behavior, added a 15-minute job timeout and `npx expo-doctor` immediately after compatibility check. Existing action SHA pins retained. |
+| M3 | Replaced stock `native/AGENTS.md` with a short addendum deferring to root rules: local SDK 58 dev builds, CNG/config plugins, SDK-matched installs, versioned docs, checks, draft-only workflow and secrets/main restrictions. EAS commands require plan and Will's explicit authorization. |
+| M4 | Updated this report and README with pushed commits, open draft PR, GitHub CI execution, successful Home launches, screenshot locations and review/release-permission findings. Coordinator release-check placeholders retained below. |
+| M5 | Deleted `native/.claude/` (template Expo plugin toggle) and `native/.vscode/` (editor preferences/recommendations); neither is used by this repo's Codex/Claude workflow. |
+| M6 | Tracked the 27 dependency advisories below for a later PR; no force upgrades or SDK substitutions. Ran full and `--omit=dev` audits and recorded counts. |
+
+## Development-only permissions and release checks
+
+Quinn's review evidence: nearby-devices/local-network permission is dev-only. `ACCESS_LOCAL_NETWORK` appears only in RN 0.88 debug manifests; dev-launcher multicast permission is debug-only. The Android release manifest merge has no local-network/nearby/multicast permission and no dev-launcher components. On iOS, dev-launcher's “Strip Local Network Keys for Release” phase removes `NSBonjourServices` and `NSLocalNetworkUsageDescription` in Release. Coordinator artifact checks:
+
+iOS Release Info.plist check: PASS (Oct 17, about 4:42 AM CT). `npx expo run:ios --configuration Release --device "iPhone 17 Pro" --no-bundler` built (0 errors), installed and launched to the Home screen from the embedded bundle; the build log shows the "[Expo Dev Launcher] Strip Local Network Keys for Release" phase ran. The built `Release-iphonesimulator/InsightDaily.app/Info.plist` has no `NSBonjourServices` and no `NSLocalNetworkUsageDescription` (the generated source Info.plist does contain `NSBonjourServices`, so the strip is what removes it). Note: the Expo template's ATS exception `NSAppTransportSecurity.NSAllowsLocalNetworking = true` remains in Release; it is not a permission prompt and is left for a later hardening pass.
+
+Android release permissions: PASS (Oct 17). After `npx expo prebuild --platform android --clean`, `./gradlew :app:processReleaseMainManifest` merged the release manifest with only `INTERNET`, `VIBRATE` and `ACCESS_NETWORK_STATE`, plus AndroidX's app-scoped signature permission `com.insightwellness.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (not user-facing). No `SYSTEM_ALERT_WINDOW`, storage, local-network, nearby or multicast permission and no dev-launcher components.
+
+## Validation for review edits
+
+Commands run from `native/`, with `EXPO_NO_TELEMETRY=1`, `EXPO_NO_DOTENV=1`, temporary npm/Expo caches and no device builds. All requested checks passed on October 17, 2026:
 
 | Command | Result |
 | --- | --- |
-| root: git status --short --branch / git worktree list | Already on requested native/p1-expo-scaffold branch; only preexisting untracked AGENTS.md |
-| root: git worktree add ../wt-native-p1-expo-scaffold native/p1-expo-scaffold | Failed: branch already checked out here; no other worktree created |
-| node --version / npm --version / xcodebuild -version | v24.21.0 / 11.19.0 / Xcode 26.6 (17F113) |
-| xcrun simctl list devices available | Failed: CoreSimulatorService connection invalid/refused; sandbox log write denied; iOS 26.5 device could not be selected/verified |
-| emulator -list-avds | Pass: Medium_Phone_API_37.0 available |
-| npx ctx7@latest library Expo ... / docs /expo/expo ... | Pass after temporary npm cache; current config plugin docs retrieved |
-| root: npx create-expo-app native --template default@sdk-58 | Initial attempts failed on ~/.npm and ~/.expo permissions; succeeded with temporary npm cache and EXPO_NO_TELEMETRY=1 |
-| npx expo install expo-dev-client expo-build-properties | Initial Expo cache write failed; passed with EXPO_NO_CACHE=1 |
-| npx expo install --check | Pass: dependencies up to date |
-| npx tsc --noEmit | Initially failed on template CSS declarations/web ref; passed after fixes |
-| npx expo lint | Installed ESLint/config automatically; first invocation had stale module detection, next found template hydration rule error; passed after fix |
-| npx expo-doctor | Pass: 20/20 checks |
-| npx expo run:ios --device 'iPhone 17 Pro' | Failed after successful prebuild: React Native shared cache inaccessible, CocoaPods trunk setup failed under ~/.cocoapods, and CLI could not determine Simulator app ID. No compilation/install/launch confirmed |
-| npx expo run:android --device Medium_Phone_API_37.0 | Failed after successful prebuild: emulator quit before opening. No compilation/install/launch confirmed |
-| emulator @Medium_Phone_API_37.0 -no-snapshot-save | Failed (exit 134): Qt requires neon processor feature. Emulator version 37.2.12.0, android-37.0 arm64-v8a image |
-| npx expo export --platform ios --platform android --output-dir /private/tmp/insight-p1-bundle | Pass: both Hermes bundles generated (iOS 1545 modules, Android 1640). This is bundling only, not native launch evidence |
-| root: npm test | Failed: repository has no test script; left package.json unchanged |
-| root: npm ci --ignore-scripts | Pass; installed existing test dependency zod, no root lockfile changes |
-| root: node --experimental-strip-types --test tests/*.test.mjs | First run also lacked zod. After npm ci: 459 tests, 451 passed, 8 failed because PostgreSQL binaries/psql are missing. See failures below |
-| git diff --check; manifest/lock/config assertions; cmp prep rules/template | Pass; identity, OS floors, lockfile and Pages exclusions verified |
-| git check-ignore native/ios native/android native/node_modules | Pass: all ignored |
-| git add AGENTS.md .github/pull_request_template.md _config.yml; git commit ... | Both failed: .git/index.lock Operation not permitted. No commits created |
+| `npx tsc --noEmit` | PASS (exit 0) |
+| `npx expo lint` | PASS (exit 0) |
+| `npx expo-doctor` | PASS (exit 0), 20/20 checks |
+| `npx expo install --check` | PASS (exit 0), dependencies up to date |
 
-Android build environment: ANDROID_HOME=/Users/willgeiken/Library/Android/sdk and JAVA_HOME=/opt/homebrew/opt/openjdk@17 as requested.
+`git diff --check` also passed. Verified the permission list, preserved action SHA pins/path filters/pull-request trigger, job timeout/Doctor ordering and removal of template settings. Package manifests and lockfiles were not changed.
 
-The eight existing database-test failures after installing root dependencies:
-1. home_v2_pick and merge_user_data keep the copy with more distinct ids
-2. delete and range SQL functions run with the storage delete trigger
-3. progress photo paths stay inside the owner's folder
-4. parallel consumes stop at 10 photos and 20 descriptions
-5. one user hitting the cap does not block another user
-6. anon and authenticated cannot call the quota functions or touch ai_usage
-7. seeded accounts match the social visibility oracle
-8. two accounts cannot read, forge, or bypass a block on the social feed
+## Tracked follow-up: dependency advisories
 
-The raw synthetic test log is /private/tmp/insight-p1-tests.log. AI payload guard tests pass after zod installation; no native egress feature exists to exercise yet. No native Jest suite was introduced. Browser harnesses were not run; no web app code changed.
+Owner: coordinator / later dependency-triage PR. Open; not fixed in P1. `npm install` reported **27 advisories (8 moderate, 19 high)** in native dependencies, attributed to build tooling/development dependencies rather than app runtime. Fresh audits on October 17 confirm:
 
-## Sandbox/tool blockers and remaining work
+| Command | Moderate | High | Total |
+| --- | --- | --- | --- |
+| `npm audit --omit=dev` | 8 | 19 | 27 |
+| `npm audit` | 8 | 19 | 27 |
 
-- .git is read-only in this managed session. Could not stage or create the requested small commits. Suggested grouping: (1) rules, template and Pages exclusions; (2) native scaffold and CI. All changes remain in the working tree on the requested branch.
-- CoreSimulator XPC access is unavailable. Cannot boot, install, inspect the Home screen or capture iOS screenshots here. The requested iOS 26.5 runtime remains unverified from this sandbox.
-- CocoaPods/React Native global caches are unwritable. No native generated files were altered to work around this.
-- Android's Qt neon failure prevents AVD boot. Actual launch requires resolution outside this session; no unsupported emulator replacement attempted.
-- Default npm cache is unwritable; temporary cache works. Expo telemetry disabled and network response cache disabled avoids global writes. No secrets inspected.
-- npm install reported 27 native dependency advisories (8 moderate, 19 high). No force upgrade or unapproved SDK substitution applied. Review dependency advisories before promoting this scaffold.
-- GitHub authentication/push, draft PR, remote CI and Quinn's Claude review are pending by design. Never merge. No screenshot claims: neither Home screen was observed.
+Both audits report zero low/critical findings; advisories remain. The affected paths originate in tooling packages such as Metro, config plugins/Xcode, `node-forge`, `braces` and `uuid`, and propagate to Expo/RN packages. `--omit=dev` retains these transitive tools through production-declared Expo/RN dependencies, so it is not a clean production audit or proof that the shipped app is unaffected. The follow-up must confirm runtime reachability and SDK-compatible fixes. No force upgrades, lockfile changes or SDK substitutions in P1.
 
-## Open questions / next checks
+## History
 
-1. Re-run the two local builds in a session with normal Git/toolchain access and verify the requested iOS 26.5 iPhone and Medium_Phone Home screens, then capture screenshots.
-2. Resolve the emulator Qt/neon failure and provide PostgreSQL test binaries/throwaway test database before claiming all checks green.
-3. Plan AGENTS.md references library/work/native-rebuild-plan.md, but this Mac's supplied source lives in ../insight-native-prep/. Keep the locked source intact; decide its durable repo location separately.
-4. SDK 58's default template includes web demonstrations; P1 preserves them with minimal typing/lint repairs. Later product navigation should replace starter UI and artwork.
+Initial October 16 sandbox attempts failed on global caches, CoreSimulator access and Android Qt/neon startup; those sandbox-only build blockers are resolved by the successful October 17 launches outside the sandbox. Git writes also required execution outside the sandbox; commits/push/PR/CI are now recorded above.
 
-P1 is not ready to mark complete until actual simulator launches, local commits, later remote CI and Quinn review are finished.
-
-Report delivery: requested ../codex-p1-report.md was denied by the sandbox. This copy is inside the writable native/ directory.
+Earlier checks passed typecheck, lint, compatibility, Expo Doctor (20/20), and both Hermes exports. The root has no `npm test` script. The earlier fallback `node --experimental-strip-types --test tests/*.test.mjs` ran 459 tests: 451 passed, 8 failed because PostgreSQL binaries/psql were missing; AI payload guard tests passed. That historical result is not a fresh regression run for these edits. No web application code changed.
