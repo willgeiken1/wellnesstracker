@@ -5,6 +5,8 @@
 # Still published on purpose: privacy.md (the app links to ../privacy.md),
 # terms.md, support.md, and README.md (jekyll-readme-index serves it at /).
 exclude:
+  - native
+  - native/
   - tests
   - logger/tests
   - scripts
