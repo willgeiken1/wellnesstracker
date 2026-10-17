@@ -1,4 +1,5 @@
-import type { Repository } from '../repository';
+import { ProvenanceConflict } from './conflict';
+import type { Pending, Repository } from '../repository';
 import { syncedTables, type Row, type ServerRow, type Table } from '../rows';
 export interface Transport {
   readonly owner: string;
@@ -28,6 +29,20 @@ export class SyncEngine {
     })().finally(() => { this.flight = undefined; });
     return this.flight;
   }
+  private async pushBatch(batch: Pending[]): Promise<void> {
+    if (!this.active) return;
+    try {
+      await this.transport.push(batch.map(p=>p.row));
+      if (this.active) this.repository.ack(batch);
+    } catch (error) {
+      if (!this.active) return;
+      if (!(error instanceof ProvenanceConflict)) throw error;
+      // The RPC batch is atomic. Isolate only a dedicated provenance failure;
+      // ordinary outages leave the entire batch pending for a later sync.
+      if (batch.length === 1) this.repository.flagConflict(batch[0]);
+      else for (const item of batch) await this.pushBatch([item]);
+    }
+  }
   private async run() {
     this.setStatus('syncing');
     try {
@@ -36,9 +51,7 @@ export class SyncEngine {
       for (let i=0;i<pending.length;i+=100) {
         if (!this.active) return;
         const batch=pending.slice(i,i+100);
-        await this.transport.push(batch.map(p=>p.row));
-        if (!this.active) return;
-        this.repository.ack(batch);
+        await this.pushBatch(batch);
       }
       for (const table of syncedTables) {
         let more=true;

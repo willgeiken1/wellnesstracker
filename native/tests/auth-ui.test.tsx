@@ -6,7 +6,7 @@ import { Alert } from 'react-native';
 jest.mock('expo-router',()=>({router:{push:jest.fn(),replace:jest.fn()}}));
 jest.mock('../src/auth/client',()=>({getAuthClient:()=>null}));
 jest.mock('../src/data/database',()=>({openLocalDatabase:jest.fn()}));
-const state=(): AuthState=>({session:null,demo:false,ready:true,configured:true,configError:null,repository:null,pending:0,syncStatus:'idle',lookAround:jest.fn(),signIn:jest.fn(async()=>null),createAccount:jest.fn(async()=>null),signOut:jest.fn(async()=>{}),syncNow:jest.fn(async()=>{})});
+const state=(): AuthState=>({session:null,demo:false,ready:true,configured:true,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',lookAround:jest.fn(),signIn:jest.fn(async()=>null),createAccount:jest.fn(async()=>null),signOut:jest.fn(async()=>{}),syncNow:jest.fn(async()=>{})});
 function wrap(ui: React.ReactNode,auth=state()){return render(<AuthContext.Provider value={auth}><ThemeProvider>{ui}</ThemeProvider></AuthContext.Provider>);}
 test('unset config offers demo and explains disabled authentication',async()=>{
  const auth={...state(),configured:false};await wrap(<Welcome/>,auth);
@@ -42,4 +42,11 @@ test('sign-in accepts an existing account password shorter than the new-account 
  const auth=state();await wrap(<AuthForm/>,auth);
  await fireEvent.changeText(screen.getByLabelText('Email'),'fixture@example.test');await fireEvent.changeText(screen.getByLabelText('Password'),'short');
  await fireEvent.press(screen.getByRole('button',{name:'Sign in'}));expect(auth.signIn).toHaveBeenCalledWith('fixture@example.test','short');
+});
+
+test('Account shows flagged sync conflicts separately from pending uploads',async()=>{
+ await wrap(<Account/>,{...state(),conflicts:2});
+ expect(screen.getByText('2 sync conflicts · review needed')).toBeTruthy();
+ expect(screen.queryByText('2 pending')).toBeNull();
+ expect(screen.queryByText('Up to date')).toBeNull();
 });

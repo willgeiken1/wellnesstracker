@@ -22,6 +22,7 @@ test('transport checks current account, uses text bigint cursor, and sanitizes b
  const fixture=clientFixture(),current=new SupabaseTransport(fixture.client,OWNER_A);
  await current.pull('sets','90071992547409930',100);
  expect(fixture.select.mock.calls[0][0]).toContain('server_seq::text');
+ expect(fixture.query.eq).toHaveBeenCalledWith('owner_id',OWNER_A);
  expect(fixture.query.gt).toHaveBeenCalledWith('server_seq','90071992547409930');
  fixture.rpc.mockResolvedValueOnce({error:{message:'fixture sensitive detail'}} as never);
  await expect(current.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
@@ -32,4 +33,13 @@ test('rejected network promises cannot expose backend payload details in transpo
  await expect(transport.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
  fixture.query.limit.mockRejectedValueOnce(new Error('fixture private payload detail'));
  await expect(transport.pull('sets','0',100)).rejects.toThrow('Sync unavailable.');
+});
+
+test('only the dedicated provenance SQLSTATE becomes a typed conflict, without backend details',async()=>{
+ const {ProvenanceConflict}=require('../../src/data/sync/conflict') as typeof import('../../src/data/sync/conflict');
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A);
+ fixture.rpc.mockResolvedValueOnce({error:{code:'P2001',message:'fixture private detail'}} as never);
+ await expect(transport.push([syntheticRow('weigh_ins')])).rejects.toBeInstanceOf(ProvenanceConflict);
+ fixture.rpc.mockResolvedValueOnce({error:{code:'23514',message:'fixture private detail'}} as never);
+ await expect(transport.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
 });

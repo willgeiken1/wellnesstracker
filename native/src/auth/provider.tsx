@@ -10,7 +10,7 @@ import { SupabaseTransport } from '../data/sync/supabase';
 import { seedDemo } from '../../fixtures/demo';
 export interface AuthState {
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
-  repository: Repository | null; pending: number; syncStatus: SyncStatus;
+  repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string): Promise<string | null>; signOut(): Promise<void>; syncNow(): Promise<void>;
 }
@@ -50,6 +50,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const userId=session?.user.id;
   const engine=useMemo(()=>currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[currentRepo,client,userId]);
   const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
+  const conflicts=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.conflicts().length??0);
   const syncStatus=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.status??'idle');
   useEffect(()=>{
     if(!engine)return;
@@ -62,7 +63,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     void triggers.foreground();
     return ()=>{app.remove();network.remove();triggers.stop();};
   },[engine]);
-  const value: AuthState={session,demo,ready:authReady&&!!currentRepo,configured:!!client,configError:clientState.error ?? (dataError?'Local data is unavailable.':null),repository:currentRepo,pending,syncStatus,
+  const value: AuthState={session,demo,ready:authReady&&!!currentRepo,configured:!!client,configError:clientState.error ?? (dataError?'Local data is unavailable.':null),repository:currentRepo,pending,conflicts,syncStatus,
     lookAround:()=>{setDemo(true);},
     signIn:async(email,password)=>{
       if(!client)return 'authUnavailable';

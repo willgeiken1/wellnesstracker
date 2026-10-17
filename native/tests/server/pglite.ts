@@ -9,6 +9,9 @@ export async function serverDatabase() {
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     CREATE ROLE anon; CREATE ROLE authenticated; GRANT USAGE ON SCHEMA auth, public TO authenticated,anon;
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated;
     INSERT INTO auth.users VALUES ('${OWNER_A}'), ('${OWNER_B}');`);
   await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0001_row_sync.sql'),'utf8'));
   return db;

@@ -42,4 +42,5 @@ CREATE TABLE oura_days (owner_id TEXT NOT NULL, day TEXT NOT NULL, cache TEXT NO
 CREATE TABLE sync_outbox (owner_id TEXT NOT NULL, table_name TEXT NOT NULL, row_id TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY(owner_id,table_name,row_id));
 --> statement-breakpoint
 CREATE TABLE sync_state (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));`;
-export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }] }, migrations: { m0000: initialSql } };
+export const conflictSql = `CREATE TABLE sync_conflicts (owner_id TEXT NOT NULL, table_name TEXT NOT NULL, row_id TEXT NOT NULL, reason TEXT NOT NULL CHECK(reason='provenance'), PRIMARY KEY(owner_id,table_name,row_id));`;
+export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql } };

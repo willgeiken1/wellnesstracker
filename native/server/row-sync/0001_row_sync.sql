@@ -10,6 +10,12 @@ BEGIN
   IF NEW.owner_id IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Row owner mismatch'; END IF;
   -- Held until commit, across tables. A reader cannot advance past an uncommitted earlier sequence.
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text, 0));
+  -- Provenance is immutable even when the incoming LWW tuple is stale.
+  IF TG_TABLE_NAME = 'weigh_ins' THEN
+    IF EXISTS (SELECT 1 FROM public.weigh_ins w WHERE w.owner_id=NEW.owner_id AND w.id=NEW.id AND w.source IS DISTINCT FROM NEW.source) THEN
+      RAISE EXCEPTION USING ERRCODE = 'P2001', MESSAGE = 'Sync provenance conflict';
+    END IF;
+  END IF;
   IF TG_OP = 'UPDATE' THEN
     IF NEW.owner_id <> OLD.owner_id OR NEW.id <> OLD.id THEN RAISE EXCEPTION 'Row identity is immutable'; END IF;
     IF (NEW.updated_at, NEW.device_id COLLATE "C") <= (OLD.updated_at, OLD.device_id COLLATE "C") THEN RETURN NULL; END IF;
@@ -32,10 +38,12 @@ CREATE TABLE public.profile (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCE
 CREATE INDEX profile_owner_sequence ON public.profile(owner_id,server_seq);
 
 ALTER TABLE public.profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profile FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.profile FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.profile TO authenticated;
+REVOKE ALL ON TABLE public.profile FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.profile TO authenticated;
 
 CREATE TRIGGER profile_guard BEFORE INSERT OR UPDATE OR DELETE ON public.profile FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -54,10 +62,12 @@ CREATE TABLE public.weigh_ins (owner_id uuid NOT NULL DEFAULT auth.uid() REFEREN
 CREATE INDEX weigh_ins_owner_sequence ON public.weigh_ins(owner_id,server_seq);
 
 ALTER TABLE public.weigh_ins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weigh_ins FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.weigh_ins FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.weigh_ins TO authenticated;
+REVOKE ALL ON TABLE public.weigh_ins FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.weigh_ins TO authenticated;
 
 CREATE TRIGGER weigh_ins_guard BEFORE INSERT OR UPDATE OR DELETE ON public.weigh_ins FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -77,10 +87,12 @@ CREATE TABLE public.measurements (owner_id uuid NOT NULL DEFAULT auth.uid() REFE
 CREATE INDEX measurements_owner_sequence ON public.measurements(owner_id,server_seq);
 
 ALTER TABLE public.measurements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.measurements FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.measurements FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.measurements TO authenticated;
+REVOKE ALL ON TABLE public.measurements FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.measurements TO authenticated;
 
 CREATE TRIGGER measurements_guard BEFORE INSERT OR UPDATE OR DELETE ON public.measurements FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -96,10 +108,12 @@ CREATE TABLE public.routines (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENC
 CREATE INDEX routines_owner_sequence ON public.routines(owner_id,server_seq);
 
 ALTER TABLE public.routines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.routines FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.routines FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.routines TO authenticated;
+REVOKE ALL ON TABLE public.routines FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.routines TO authenticated;
 
 CREATE TRIGGER routines_guard BEFORE INSERT OR UPDATE OR DELETE ON public.routines FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -118,10 +132,12 @@ CREATE TABLE public.routine_exercises (owner_id uuid NOT NULL DEFAULT auth.uid()
 CREATE INDEX routine_exercises_owner_sequence ON public.routine_exercises(owner_id,server_seq);
 
 ALTER TABLE public.routine_exercises ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.routine_exercises FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.routine_exercises FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.routine_exercises TO authenticated;
+REVOKE ALL ON TABLE public.routine_exercises FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.routine_exercises TO authenticated;
 
 CREATE TRIGGER routine_exercises_guard BEFORE INSERT OR UPDATE OR DELETE ON public.routine_exercises FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -143,10 +159,12 @@ CREATE TABLE public.sessions (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENC
 CREATE INDEX sessions_owner_sequence ON public.sessions(owner_id,server_seq);
 
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.sessions FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.sessions TO authenticated;
+REVOKE ALL ON TABLE public.sessions FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.sessions TO authenticated;
 
 CREATE TRIGGER sessions_guard BEFORE INSERT OR UPDATE OR DELETE ON public.sessions FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -164,10 +182,12 @@ CREATE TABLE public.entries (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCE
 CREATE INDEX entries_owner_sequence ON public.entries(owner_id,server_seq);
 
 ALTER TABLE public.entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.entries FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.entries FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.entries TO authenticated;
+REVOKE ALL ON TABLE public.entries FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.entries TO authenticated;
 
 CREATE TRIGGER entries_guard BEFORE INSERT OR UPDATE OR DELETE ON public.entries FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -196,10 +216,12 @@ CREATE TABLE public.sets (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES a
 CREATE INDEX sets_owner_sequence ON public.sets(owner_id,server_seq);
 
 ALTER TABLE public.sets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sets FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.sets FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.sets TO authenticated;
+REVOKE ALL ON TABLE public.sets FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.sets TO authenticated;
 
 CREATE TRIGGER sets_guard BEFORE INSERT OR UPDATE OR DELETE ON public.sets FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -218,10 +240,12 @@ CREATE TABLE public.cardio_sessions (owner_id uuid NOT NULL DEFAULT auth.uid() R
 CREATE INDEX cardio_sessions_owner_sequence ON public.cardio_sessions(owner_id,server_seq);
 
 ALTER TABLE public.cardio_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cardio_sessions FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.cardio_sessions FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.cardio_sessions TO authenticated;
+REVOKE ALL ON TABLE public.cardio_sessions FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.cardio_sessions TO authenticated;
 
 CREATE TRIGGER cardio_sessions_guard BEFORE INSERT OR UPDATE OR DELETE ON public.cardio_sessions FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -244,10 +268,12 @@ CREATE TABLE public.food_entries (owner_id uuid NOT NULL DEFAULT auth.uid() REFE
 CREATE INDEX food_entries_owner_sequence ON public.food_entries(owner_id,server_seq);
 
 ALTER TABLE public.food_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.food_entries FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.food_entries FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.food_entries TO authenticated;
+REVOKE ALL ON TABLE public.food_entries FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.food_entries TO authenticated;
 
 CREATE TRIGGER food_entries_guard BEFORE INSERT OR UPDATE OR DELETE ON public.food_entries FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -267,10 +293,12 @@ CREATE TABLE public.saved_foods (owner_id uuid NOT NULL DEFAULT auth.uid() REFER
 CREATE INDEX saved_foods_owner_sequence ON public.saved_foods(owner_id,server_seq);
 
 ALTER TABLE public.saved_foods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_foods FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.saved_foods FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.saved_foods TO authenticated;
+REVOKE ALL ON TABLE public.saved_foods FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.saved_foods TO authenticated;
 
 CREATE TRIGGER saved_foods_guard BEFORE INSERT OR UPDATE OR DELETE ON public.saved_foods FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -289,10 +317,12 @@ CREATE TABLE public.food_targets (owner_id uuid NOT NULL DEFAULT auth.uid() REFE
 CREATE INDEX food_targets_owner_sequence ON public.food_targets(owner_id,server_seq);
 
 ALTER TABLE public.food_targets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.food_targets FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.food_targets FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.food_targets TO authenticated;
+REVOKE ALL ON TABLE public.food_targets FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.food_targets TO authenticated;
 
 CREATE TRIGGER food_targets_guard BEFORE INSERT OR UPDATE OR DELETE ON public.food_targets FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -308,10 +338,12 @@ CREATE TABLE public.meals (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES 
 CREATE INDEX meals_owner_sequence ON public.meals(owner_id,server_seq);
 
 ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meals FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.meals FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.meals TO authenticated;
+REVOKE ALL ON TABLE public.meals FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.meals TO authenticated;
 
 CREATE TRIGGER meals_guard BEFORE INSERT OR UPDATE OR DELETE ON public.meals FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -329,10 +361,12 @@ CREATE TABLE public.goals (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES 
 CREATE INDEX goals_owner_sequence ON public.goals(owner_id,server_seq);
 
 ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.goals FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.goals FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.goals TO authenticated;
+REVOKE ALL ON TABLE public.goals FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.goals TO authenticated;
 
 CREATE TRIGGER goals_guard BEFORE INSERT OR UPDATE OR DELETE ON public.goals FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -349,10 +383,12 @@ CREATE TABLE public.plan_days (owner_id uuid NOT NULL DEFAULT auth.uid() REFEREN
 CREATE INDEX plan_days_owner_sequence ON public.plan_days(owner_id,server_seq);
 
 ALTER TABLE public.plan_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plan_days FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.plan_days FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.plan_days TO authenticated;
+REVOKE ALL ON TABLE public.plan_days FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.plan_days TO authenticated;
 
 CREATE TRIGGER plan_days_guard BEFORE INSERT OR UPDATE OR DELETE ON public.plan_days FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -368,10 +404,12 @@ CREATE TABLE public.machine_notes (owner_id uuid NOT NULL DEFAULT auth.uid() REF
 CREATE INDEX machine_notes_owner_sequence ON public.machine_notes(owner_id,server_seq);
 
 ALTER TABLE public.machine_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.machine_notes FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.machine_notes FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.machine_notes TO authenticated;
+REVOKE ALL ON TABLE public.machine_notes FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.machine_notes TO authenticated;
 
 CREATE TRIGGER machine_notes_guard BEFORE INSERT OR UPDATE OR DELETE ON public.machine_notes FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -388,10 +426,12 @@ CREATE TABLE public.home_layout (owner_id uuid NOT NULL DEFAULT auth.uid() REFER
 CREATE INDEX home_layout_owner_sequence ON public.home_layout(owner_id,server_seq);
 
 ALTER TABLE public.home_layout ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.home_layout FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.home_layout FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.home_layout TO authenticated;
+REVOKE ALL ON TABLE public.home_layout FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.home_layout TO authenticated;
 
 CREATE TRIGGER home_layout_guard BEFORE INSERT OR UPDATE OR DELETE ON public.home_layout FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -408,10 +448,12 @@ CREATE TABLE public.settings (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENC
 CREATE INDEX settings_owner_sequence ON public.settings(owner_id,server_seq);
 
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.settings FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.settings TO authenticated;
+REVOKE ALL ON TABLE public.settings FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.settings TO authenticated;
 
 CREATE TRIGGER settings_guard BEFORE INSERT OR UPDATE OR DELETE ON public.settings FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -429,10 +471,12 @@ CREATE TABLE public.photos (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES
 CREATE INDEX photos_owner_sequence ON public.photos(owner_id,server_seq);
 
 ALTER TABLE public.photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.photos FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY owner_access ON public.photos FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.photos TO authenticated;
+REVOKE ALL ON TABLE public.photos FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.photos TO authenticated;
 
 CREATE TRIGGER photos_guard BEFORE INSERT OR UPDATE OR DELETE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -549,14 +593,16 @@ ELSE RAISE EXCEPTION 'Unsupported sync table';
   END LOOP;
 END $$;
 
-REVOKE ALL ON FUNCTION public.sync_push(jsonb) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.sync_push(jsonb) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.sync_push(jsonb) TO authenticated;
 
-REVOKE ALL ON FUNCTION public.row_sync_guard() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.row_sync_guard() FROM PUBLIC, anon, authenticated;
 
-GRANT EXECUTE ON FUNCTION public.row_sync_guard() TO authenticated;
+-- Trigger execution does not require client EXECUTE; only trigger creation does.
 
+-- USAGE permits invoker nextval; SELECT and UPDATE (setval) are not needed.
+REVOKE ALL ON SEQUENCE public.row_sync_seq FROM PUBLIC, anon, authenticated;
 GRANT USAGE ON SEQUENCE public.row_sync_seq TO authenticated;
 
 COMMIT;

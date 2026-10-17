@@ -59,7 +59,8 @@ export function Account() {
   return <Screen title={t('account')}>
     <ThemedText>{auth.demo?t('demoMode'):auth.session?.user.email}</ThemedText>
     {auth.demo?<Button label={t('leaveDemo')} variant="secondary" onPress={signOut}/>:<>
-      <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.pending>0?'syncPending':'syncIdle')}</ThemedText>
+      <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.pending>0?'syncPending':auth.conflicts>0?'syncConflictStatus':'syncIdle')}</ThemedText>
+      {auth.conflicts>0&&<Badge label={`${auth.conflicts} ${t('syncConflicts')}`}/>}
       {auth.pending>0&&<Badge label={`${auth.pending} ${t('pending')}`}/>}
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
       <Button label={t('signOut')} variant="destructive" onPress={signOut}/>

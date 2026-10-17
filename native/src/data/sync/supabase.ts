@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { columns, fromWire, validateRow, type Row, type Table } from '../rows';
+import { ProvenanceConflict } from './conflict';
 import type { Transport } from './engine';
 
 export class SupabaseTransport implements Transport {
@@ -22,6 +23,7 @@ export class SupabaseTransport implements Transport {
       if (row.owner_id !== this.owner) throw new Error('Sync account changed.');
     }
     const { error } = await this.request(() => this.client.rpc('sync_push', { rows }));
+    if (error?.code === 'P2001') throw new ProvenanceConflict();
     if (error) throw new Error('Sync unavailable.');
   }
 

@@ -45,3 +45,21 @@ test('a debounced edit during a failed slow upload still receives its own sync a
  expect(push).toHaveBeenCalledTimes(2);expect(local.repo.pending()).toHaveLength(0);
  triggers.stop();local.sqlite.close();jest.useRealTimers();
 });
+
+test('a pushed provenance collision is flagged once while other rows drain and never hot-retries',async()=>{
+ const {ProvenanceConflict}=require('../../src/data/sync/conflict') as typeof import('../../src/data/sync/conflict');
+ const local=await localDatabase(),bad=syntheticRow('weigh_ins'),good=syntheticRow('sessions');
+ local.repo.putLocal(bad);local.repo.putLocal(good);
+ const pushed:string[]=[];
+ const transport:Transport={owner:OWNER_A,pull:async()=>[],push:jest.fn(async rows=>{
+  if(rows.some(r=>r.id===bad.id&&r.table===bad.table))throw new ProvenanceConflict();
+  pushed.push(...rows.map(r=>r.id));
+ })};
+ const engine=new SyncEngine(local.repo,transport);await engine.sync();
+ expect(engine.status).toBe('idle');expect(pushed).toEqual([good.id]);
+ expect(local.repo.pending()).toEqual([]);expect(local.repo.conflicts()).toEqual([{table:bad.table,id:bad.id,reason:'provenance'}]);
+ const calls=(transport.push as jest.Mock).mock.calls.length;
+ local.repo.putLocal({...bad,updated_at:300});await engine.sync();
+ expect(transport.push).toHaveBeenCalledTimes(calls);expect(local.repo.get(bad.table,bad.id)?.updated_at).toBe(300);
+ engine.close();local.sqlite.close();
+});

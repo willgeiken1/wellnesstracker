@@ -8,7 +8,7 @@ export const en = {
   onboardingStub: 'Your account is ready. Profile and units setup arrives in M2.',
   demoMode: 'Demo mode · synthetic examples only', leaveDemo: 'Leave demo', signOut: 'Sign out',
   signOutConfirm: 'Sign out of this account?', signOutBody: 'Pending changes stay on this phone under this account. Sign in to the same account to sync them.',
-  cancel: 'Cancel', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncBusy: 'Syncing…', pending: 'pending',
+  cancel: 'Cancel', syncConflictStatus: 'Some changes need review', syncConflicts: 'sync conflicts · review needed', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncBusy: 'Syncing…', pending: 'pending',
   localError: 'Local data is unavailable. Please restart the app.', preferenceError: 'Preferences could not be saved. Please try again.',
   signOutFailed: 'Sign-out could not finish. Please try again.', backWelcome: 'Back to Welcome',
 

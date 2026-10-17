@@ -64,11 +64,13 @@ Supabase v2 is pinned exactly. The React Native URL polyfill follows the officia
 
 ## Local validation
 
+For an Android emulator reaching Metro on the Mac, run `adb reverse tcp:8081 tcp:8081`. If the separately approved local Supabase runs on Mac loopback, reverse its API port too (default: `adb reverse tcp:54321 tcp:54321`) and use the loopback URL from the emulator. Reapply these mappings after restarting the emulator. These are validation instructions only; no emulator or service was started for this review.
+
 Use Node 24+ (tested on 24.21.0). From `native/`, `npm test -- --ci` runs the Expo and data-server Jest projects, including PGlite and fast-check. No Docker, Supabase service or network is needed for those tests. Jest enables VM modules for PGlite, disables Watchman, and runs one worker to bound WASM memory. Parallel workers intermittently exceeded Jest's teardown grace period; the standard serial run exits cleanly. The server setup gives cold WASM initialization 60 seconds; regular tests have a 30-second limit. fast-check runs 25 random histories of 1–30 operations across 2–3 devices, including create/edit/delete, random sync order, timestamp ties, duplicated pushes and retries, then checks all devices against server state. Separate tests cover restart, account isolation, paging, high cursors, tombstones, failed-flight follow-ups, late request cleanup, storage faults and auth/component behavior.
 
 All CLI checks use EXPO_NO_TELEMETRY=1, EXPO_NO_DOTENV=1 and npm_config_cache=/tmp/insight-npm. Expo cache uses __UNSAFE_EXPO_HOME_DIRECTORY=/tmp/insight-expo because the default home cache is outside the writable roots. No real environment values are required. `.env.example` contains empty placeholders only.
 
-Final checks (2026-10-17):
+Original P2c checks (2026-10-17, before Quinn #70):
 
 | Check | Result |
 | --- | --- |
@@ -85,6 +87,56 @@ Final checks (2026-10-17):
 The final standard Jest run exited cleanly with serial execution. An earlier two-worker run passed but reported forced worker teardown. Open-handle diagnostic runs stalled without producing a report and were interrupted; no claim is made that those diagnostics proved the absence of handles. The isolated Node project and final serial full suite exited normally. Initial Expo cache permission failures were resolved by redirecting its cache to `/tmp`.
 
 Regression tests were observed failing before fixes for pulled future clocks, edits queued behind failed uploads, delayed sign-out completion after a newer account event, and raw rejected-network errors. All now pass. No Git mutations, native builds, service application or production operation was used for validation.
+
+## Review fixes (Quinn #70)
+
+HIGH-risk draft review fixes only, 2026-10-17. Server SQL remains **DRAFT / NOT APPLIED** outside synthetic in-process PGlite tests. No Git operations, prebuild, simulator/emulator, Docker, hosted Supabase, root `supabase/` edits, secrets or paid services were used.
+
+| Finding | Changes and regression evidence |
+| --- | --- |
+| B1 — privileges | All 19 tables revoke ALL from PUBLIC/anon/authenticated, then grant authenticated SELECT/INSERT/UPDATE only, with ENABLE and FORCE RLS. The sequence revokes ALL first, then grants authenticated USAGE only. USAGE is sufficient for invoker `nextval`; SELECT and UPDATE are unnecessary, and UPDATE would permit `setval`. Trigger EXECUTE is revoked from all three roles; PostgreSQL checks EXECUTE when creating the trigger, not when it fires. Only authenticated may execute `sync_push(jsonb)`. Both functions explicitly remain SECURITY INVOKER with an empty pinned search_path. |
+| B1 + item 6 — server tests | `tests/server/pglite.ts` installs permissive Supabase-style default grants before applying the unmodified draft. `rls.test.ts` checks every table privilege for anon/authenticated, the sequence/function matrix, both RLS flags, all public functions' `prosecdef=false`/search_path, and explicit SECURITY INVOKER declarations. Attack cases cover cross-owner SELECT/INSERT/UPDATE/DELETE, owner spoofing/reassignment, anon operations, owner DELETE, direct guard calls, anon nextval/setval, authenticated setval, TRUNCATE, and direct server_seq assignment. A direct server_seq write cannot select the resulting sequence: the trigger replaces it with nextval. |
+| Item 6 — client regressions | `repository.test.ts` checks owner-scoped get/cursors and newer pending local revisions surviving pull and subsequently pushing. `conflicts.test.ts` switches A → B → A through real PGlite pulls and checks the exact cursor used, including B's sequence below A's. `transport.test.ts` asserts the explicit owner_id query filter. `auth-client.test.ts` checks createClient storage/persistSession/autoRefreshToken/detectSessionInUrl options and exercises chunking, readback, delete and keychain accessibility through the actual configured adapter. These owner/storage paths were already implemented; the tests make the guarantees explicit. |
+| Item 7 — Android loopback | Local validation above and `native/README.md` document `adb reverse tcp:8081 tcp:8081` for Metro and reversal of the approved loopback Supabase API port (normally 54321). No adb command was run. |
+| Item 8 — provenance collisions | A second bundled SQLite migration adds owner/table/id conflict records with a fixed reason and no row payload. Pulls preserve immutable local provenance, flag the id, continue the page and atomically advance its cursor. Flagged ids are excluded from pending uploads and subsequent pull replacement. The SQL guard emits dedicated SQLSTATE P2001 on an existing weigh-in source mismatch, before stale-write handling; the production transport maps only that code to a fixed typed error. The engine isolates a failed atomic batch into at most one singleton push per row, flags only colliding ids, and continues valid rows. Ordinary network/validation errors still leave rows pending. Local rows/outbox remain retained, including edits made after flagging. Account shows the conflict count separately from pending and does not claim Up to date while conflicts exist. |
+
+Conflict tests cover same-page and paged pull continuation, conflict deduplication, owner isolation, persistence after SQLite restart, valid rows draining after a pushed collision, SQLSTATE mapping through the production transport, and repeated syncs/edits without retrying a flagged id. Server-side source collision fixtures temporarily remove the source CHECK and seed a synthetic legacy/corrupt row, then restore the constraint; the production schema continues to accept app-source weigh-ins only. The push-only corruption test does not claim that invalid remote Health-source payloads are valid pull data. Conflict resolution UI/actions are not added; records remain available for later review without automatic identity/source rewriting.
+
+Red-before-green was observed for the permissive-default privilege matrix, pull-page stalling, pushed collision/offline behavior, dedicated SQLSTATE mapping, SQL source immutability and Account conflict display. Existing owner/filter/storage behavior passed its new regressions without implementation changes.
+
+### Will-pending decisions — unchanged
+
+- Tombstone payloads.
+- LWW clock caps.
+- Sign-out data wipe/retention behavior.
+- `auth.users` FK ON DELETE rule.
+
+### Review validation (2026-10-17)
+
+All commands ran from `native/` with EXPO_NO_TELEMETRY=1, EXPO_NO_DOTENV=1, npm_config_cache=/tmp/insight-npm and Expo home redirected to `/tmp/insight-expo` where applicable.
+
+| Required command | Final result |
+| --- | --- |
+| `npx tsc --noEmit` | PASS |
+| `npx expo lint` | PASS, no warnings |
+| `npx expo-doctor` | PASS, 20/20 checks |
+| `npx expo install --check` | PASS at kickoff and final; dependencies up to date |
+| `node --test plugins/*.test.js` | PASS, 7/7 tests |
+| `npm test -- --ci` | PASS, 200/200 tests across 18/18 suites, including 25 fast-check histories; exited cleanly |
+
+The first full run passed 197 tests across 17 suites; the final run includes the three additional integration tests. Jest still emits Node's VM Modules experimental warning; no test failures, forced worker teardown or lint warnings were reported in the final checks. Prohibited build/service/live REST validation was not run.
+
+### Review file manifest
+
+21 files changed in this review pass (paths relative to `native/`):
+
+- Server: `server/row-sync/0001_row_sync.sql`.
+- Data: `src/data/migrations.ts`, `src/data/schema.ts`, `src/data/repository.ts`, `src/data/sync/conflict.ts` (new), `src/data/sync/engine.ts`, `src/data/sync/supabase.ts`.
+- Account display: `src/auth/provider.tsx`, `src/auth/screens.tsx`, `src/i18n/en.ts`.
+- Tests: `tests/server/pglite.ts`, `tests/server/rls.test.ts`, `tests/server/repository.test.ts`, `tests/server/triggers.test.ts`, `tests/server/transport.test.ts`, `tests/server/conflicts.test.ts` (new), `tests/auth-client.test.ts` (new), `tests/auth-provider.test.tsx`, `tests/auth-ui.test.tsx`.
+- Docs: `docs/p2-sync.md`, `README.md`.
+
+Quinn should re-review the exact effective grants under Supabase defaults, trigger execution after EXECUTE revocation, P2001 provenance detection under invoker RLS, bounded batch isolation, and durable flagged-row exclusion/counting. Validate the grant/RPC contract in a separately approved local PostgREST environment before any application. No cross-family PASS or Will approval is claimed.
 
 ## Not done / Quinn review
 
@@ -111,7 +163,7 @@ Documentation checked: [Expo SDK 58 SQLite](https://docs.expo.dev/versions/v58.0
 
 App additions used `npx expo install`; pure JS test tooling used `npm i -D`. Existing runtime dependencies were not upgraded. The install audit reports 56 dependency findings (26 moderate, 30 high); no broad automatic upgrades were attempted in this scoped change.
 
-## Complete file manifest
+## Original P2c file manifest
 
 Paths below are relative to `native/`. 15 modified and 43 added (58 total); no files removed. No Git operation is needed to reproduce this manifest.
 

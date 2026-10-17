@@ -78,3 +78,45 @@ test('every local physical table has explicit fields matching the row catalog',a
  }
  sqlite.close();
 });
+
+test('owner cursors and get stay isolated through account switches with the same row id',async()=>{
+ const {repo,db,sqlite}=await localDatabase();
+ const other=new Repository(db,OWNER_B,DEVICE_A,()=>syntheticRow().id);
+ const a=syntheticRow();repo.putLocal(a);
+ expect(other.get('sessions',a.id)).toBeUndefined();
+ other.putLocal({...a,owner_id:OWNER_B,data:{name:'B fixture'}});
+ repo.applyPage('sessions',[],'100');expect(other.cursor('sessions')).toBe('0');
+ other.applyPage('sessions',[],'3');
+ expect(new Repository(db,OWNER_A,DEVICE_A,()=>a.id).cursor('sessions')).toBe('100');
+ expect(new Repository(db,OWNER_B,DEVICE_A,()=>a.id).cursor('sessions')).toBe('3');
+ expect(repo.get('sessions',a.id)?.data.name).not.toBe('B fixture');
+ expect(other.get('sessions',a.id)?.data.name).toBe('B fixture');sqlite.close();
+});
+test('pull preserves a newer pending local edit and its push revision',async()=>{
+ const {repo,sqlite}=await localDatabase();
+ const row={...syntheticRow(),updated_at:200,data:{name:'new local fixture'}};repo.putLocal(row);
+ const pending=repo.pending();
+ repo.applyPage('sessions',[{row:{...row,updated_at:100,data:{name:'old remote fixture'}},server_seq:'1'}],'1');
+ expect(repo.get('sessions',row.id)?.data.name).toBe('new local fixture');
+ expect(repo.pending()).toEqual(pending);
+ const push=jest.fn(async()=>{});
+ const {SyncEngine}=require('../../src/data/sync/engine') as typeof import('../../src/data/sync/engine');
+ const engine=new SyncEngine(repo,{owner:OWNER_A,push,pull:async()=>[]});await engine.sync();
+ expect(push).toHaveBeenCalledWith([pending[0].row]);expect(repo.pending()).toEqual([]);engine.close();sqlite.close();
+});
+test('pull provenance collision is durably flagged without stalling the page or future pages',async()=>{
+ const path=`/tmp/insight-conflicts-${process.pid}.db`;
+ const {repo,db,sqlite}=await localDatabase(path);
+ const row=syntheticRow('weigh_ins');repo.putLocal({...row,data:{...row.data,source:'healthkit'}});
+ const next={...row,id:'30000000-0000-4000-8000-000000000066'};
+ expect(()=>repo.applyPage('weigh_ins',[{row,server_seq:'1'},{row:next,server_seq:'2'}],'2')).not.toThrow();
+ expect(repo.cursor('weigh_ins')).toBe('2');expect(repo.get('weigh_ins',row.id)?.data.source).toBe('healthkit');
+ expect(repo.get('weigh_ins',next.id)?.data.source).toBe('app');
+ expect(repo.conflicts()).toEqual([{table:'weigh_ins',id:row.id,reason:'provenance'}]);
+ expect(new Repository(db,OWNER_A,DEVICE_A,()=>row.id).conflicts()).toEqual(repo.conflicts());
+ expect(new Repository(db,OWNER_B,DEVICE_A,()=>row.id).conflicts()).toEqual([]);
+ repo.applyPage('weigh_ins',[{row:{...row,updated_at:200},server_seq:'3'}],'3');
+ expect(repo.conflicts()).toHaveLength(1);expect(repo.pending()).toEqual([]);sqlite.close();
+ const restarted=await localDatabase(path);expect(restarted.repo.conflicts()).toEqual([{table:'weigh_ins',id:row.id,reason:'provenance'}]);restarted.sqlite.close();
+ for(const suffix of ['', '-wal', '-shm'])rmSync(path+suffix,{force:true});
+});

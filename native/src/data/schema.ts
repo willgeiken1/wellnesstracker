@@ -154,3 +154,5 @@ export const photos = sqliteTable('photos', {
 export const oura_days = sqliteTable('oura_days', { owner_id: text('owner_id').notNull(), day: text('day').notNull(), cache: text('cache').notNull() }, t => [primaryKey({columns:[t.owner_id,t.day]})]);
 export const sync_outbox = sqliteTable('sync_outbox', { owner_id: text('owner_id').notNull(), table_name: text('table_name').notNull(), row_id: text('row_id').notNull(), revision: text('revision').notNull() }, t => [primaryKey({columns:[t.owner_id,t.table_name,t.row_id]})]);
 export const sync_state = sqliteTable('sync_state', { owner_id: text('owner_id').notNull(), key: text('key').notNull(), value: text('value').notNull() }, t => [primaryKey({columns:[t.owner_id,t.key]})]);
+
+export const sync_conflicts = sqliteTable('sync_conflicts', { owner_id: text('owner_id').notNull(), table_name: text('table_name').notNull(), row_id: text('row_id').notNull(), reason: text('reason').notNull() }, t => [primaryKey({columns:[t.owner_id,t.table_name,t.row_id]})]);

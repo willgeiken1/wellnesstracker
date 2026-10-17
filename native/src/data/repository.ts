@@ -3,6 +3,7 @@ import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 type Physical = Record<string, Scalar>;
+export interface SyncConflict { table: Table; id: string; reason: 'provenance' }
 export interface Pending { row: Row; revision: string }
 export class Repository {
   private listeners = new Set<() => void>();
@@ -63,9 +64,23 @@ export class Repository {
     this.putLocal({...row,device_id:this.device,updated_at:stamp,deleted_at:stamp});
   }
   pending(): Pending[] {
-    return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} ORDER BY table_name,row_id`).map(item => {
+    return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).map(item => {
       const row = this.get(item.table_name,item.row_id); if (!row) throw new Error('Invalid outbox.'); validateRow(row); return {row,revision:item.revision};
     }));
+  }
+  conflicts(): SyncConflict[] {
+    return this.safe(() => this.db.all<SyncConflict>(sql`SELECT table_name AS "table",row_id AS id,reason FROM sync_conflicts WHERE owner_id=${this.owner} ORDER BY table_name,row_id`));
+  }
+  private recordConflict(table: Table, id: string) {
+    this.table(table);
+    this.db.run(sql`INSERT INTO sync_conflicts(owner_id,table_name,row_id,reason) VALUES(${this.owner},${table},${id},'provenance') ON CONFLICT(owner_id,table_name,row_id) DO NOTHING`);
+  }
+  flagConflict(item: Pending) {
+    this.safe(() => {
+      if (item.row.owner_id !== this.owner) throw new Error('Owner mismatch.');
+      this.recordConflict(item.row.table,item.row.id);
+    });
+    this.listeners.forEach(listener => listener());
   }
   ack(items: Pending[]) {
     this.safe(() => this.db.transaction(() => { for (const item of items) {
@@ -84,9 +99,12 @@ export class Repository {
         const row = canonicalRow(remote.row);
         if (row.owner_id !== this.owner || row.table !== table || !/^\d+$/.test(remote.server_seq) || BigInt(remote.server_seq) > BigInt(cursor)) throw new Error('Invalid page.');
         const local = this.get(table,row.id);
-        if (local?.table === 'weigh_ins' && local.data.source !== 'app') throw new Error('Provenance conflict.');
-        if (!local || compareRows(row,local) > 0) this.write(row);
         clock = Math.max(clock, row.updated_at);
+        if (local?.table === 'weigh_ins' && local.data.source !== row.data.source) {
+          this.recordConflict(table,row.id); continue;
+        }
+        if (this.db.get(sql`SELECT 1 FROM sync_conflicts WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)) continue;
+        if (!local || compareRows(row,local) > 0) this.write(row);
       }
       this.setState('clock', String(clock));
       this.setState(`cursor:${table}`,cursor);
