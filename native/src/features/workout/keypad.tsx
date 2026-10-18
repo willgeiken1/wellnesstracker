@@ -45,7 +45,7 @@ export function Keypad({
   };
   const nextLabel = field === 'weight' ? t('nextReps') : t('nextSet');
   const keys = ['1', '2', '3', 'minus', '4', '5', '6', 'plus', '7', '8', '9', 'wheel', field === 'weight' ? '.' : '', '0', 'backspace', 'next'];
-  return <Sheet label={label} onClose={onClose}><ScrollView contentContainerStyle={layout.stack} keyboardShouldPersistTaps="handled">
+  return <Sheet testID="keypad-sheet" closeTestID="keypad-close" label={label} onClose={onClose}><ScrollView contentContainerStyle={layout.stack} keyboardShouldPersistTaps="handled">
     <View style={[layout.row, {
         justifyContent: 'space-between'
       }]}><ThemedText numeric variant="display">{value || '—'} <ThemedText muted>{field === 'weight' ? unit : t('reps')}</ThemedText></ThemedText><View><ThemedText muted variant="caption">{t('lastTime')}</ThemedText><ThemedText numeric>{previous || '—'}</ThemedText></View></View>
@@ -77,7 +77,7 @@ export function Keypad({
           const action = () => {
             if (key === 'minus') adjust(-increment);else if (key === 'plus') adjust(increment);else if (key === 'wheel') openWheel();else if (key === 'next') onNext();else onChange(keypad(value, key, field === 'weight'));
           };
-          return <Pressable key={`${key}${i}`} accessibilityRole="button" accessibilityLabel={label} disabled={unavailable} onLongPress={key === 'wheel' ? openWheel : undefined} onPress={action} style={[layout.cell, {
+          return <Pressable testID={key === 'next' ? 'keypad-next' : `keypad-key-${key}`} key={`${key}${i}`} accessibilityRole="button" accessibilityLabel={label} disabled={unavailable} onLongPress={key === 'wheel' ? openWheel : undefined} onPress={action} style={[layout.cell, {
             width: '22%',
             flexGrow: 1,
             minHeight: 56,

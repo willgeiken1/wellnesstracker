@@ -12,9 +12,10 @@ export const WEEKLY_TARGET = {
 } as const;
 export const toKg = (value: number, unit: Unit) => unit === 'lb' ? value * 0.45359237 : value;
 export const fromKg = (value: number, unit: Unit) => unit === 'lb' ? value / 0.45359237 : value;
-export const rounded = (n: number) => Math.round(n * 100) / 100;
+export const rounded = (n: number) => Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 /** Display-only rounding per plan §9; never write this back on a unit switch. */
 export function displayWeight(kg: number, unit: Unit) {
+  if (!Number.isFinite(kg)) return 0;
   const quantum = unit === 'lb' ? .5 : .25;
   return Math.round(fromKg(kg, unit) / quantum) * quantum;
 }
@@ -125,4 +126,4 @@ export function nextField(field: 'weight' | 'reps', index: number, count: number
     index: index + 1
   } : null;
 }
-export const remainingSeconds = (endAt: number, now = Date.now()) => Math.max(0, Math.ceil((endAt - now) / 1000));
+export const remainingSeconds = (endAt: number, now = Date.now()) => Number.isFinite(endAt - now) ? Math.max(0, Math.ceil((endAt - now) / 1000)) : 0;

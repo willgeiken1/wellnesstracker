@@ -48,12 +48,12 @@ export function ActiveWorkout() {
     };
   }, [store, routine]);
   const session = store?.active();
-  return store && session ? <Logger store={store} session={session} pending={auth.pending} status={auth.syncStatus} /> : <SafeAreaView style={{
+  return store && session ? <Logger store={store} session={session} pending={auth.pending} status={auth.syncStatus} /> : <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{
     flex: 1
   }}><ThemedText>{error ? t('workoutSaveError') : t('workout')}</ThemedText><Button label={t('closeWorkout')} onPress={closeWorkout} /></SafeAreaView>;
 }
 function closeWorkout() {
-  if (router.canDismiss()) router.dismiss();else router.replace('/');
+  router.replace('/');
 }
 function Logger({
   store,
@@ -175,7 +175,7 @@ function Logger({
     }]);else save();
   }
   const current = cursor ? entries.find(e => e.id === cursor.entryId) : undefined;
-  return <SafeAreaView style={{
+  return <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{
     flex: 1,
     backgroundColor: colors.bg
   }}>
@@ -185,7 +185,7 @@ function Logger({
       <View style={layout.row}><IconButton name="down" label={t('closeWorkout')} onPress={closeWorkout} /><View style={{
           flex: 1,
           alignItems: 'center'
-        }}><ThemedText muted variant="caption">{session.data.origin === 'template' ? t('template') : t('workoutName')}</ThemedText><ThemedText variant="headline">{String(session.data.name ?? t('workoutName'))}</ThemedText></View><Button label={t('finish')} onPress={() => {
+        }}><ThemedText muted variant="caption">{session.data.origin === 'template' ? t('template') : t('workoutName')}</ThemedText><ThemedText variant="headline">{String(session.data.name ?? t('workoutName'))}</ThemedText></View><Button testID="finish-button" label={t('finish')} onPress={() => {
           store.updateTimer({
             minimized: true
           });
@@ -212,7 +212,7 @@ function Logger({
       {error && <ThemedText accessibilityRole="alert" variant="caption">{error}</ThemedText>}
     </View>
     <ScrollView contentContainerStyle={layout.content}>
-      {entries.map(e => {
+      {entries.map((e, exerciseIndex) => {
         const ds = store.drafts(e.id),
           complete = ds.length > 0 && ds.every(d => d.setId),
           collapsed = complete && !open.includes(e.id),
@@ -260,7 +260,7 @@ function Logger({
               }}>{t('repsHeader')}</ThemedText><View style={{
                 width: 44
               }}><Line name="check" color={colors['text-muted']} /></View></View>
-            {ds.map((d, i) => <SetRow key={d.setId ?? i} exercise={String(e.data.exercise)} index={i} draft={d} previous={previous.find(s => Number(s.data.position) === i) ? `${displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find(s => Number(s.data.position) === i)!.data.reps}` : ''} hint={sg.jump && sg.weight !== null ? String(sg.weight) : previous.find(s => Number(s.data.position) === i) ? String(displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())) : sg.weight === null ? '' : String(sg.weight)} onEdit={field => edit(e.id, i, field)} onDone={() => mark(e, i)} onRemove={() => Alert.alert(t('removeSet'), undefined, [{
+            {ds.map((d, i) => <SetRow key={d.setId ?? i} exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} draft={d} previous={previous.find(s => Number(s.data.position) === i) ? `${displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find(s => Number(s.data.position) === i)!.data.reps}` : ''} hint={sg.jump && sg.weight !== null ? String(sg.weight) : previous.find(s => Number(s.data.position) === i) ? String(displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())) : sg.weight === null ? '' : String(sg.weight)} onEdit={field => edit(e.id, i, field)} onDone={() => mark(e, i)} onRemove={() => Alert.alert(t('removeSet'), undefined, [{
               text: t('cancel'),
               style: 'cancel'
             }, {
@@ -284,7 +284,7 @@ function Logger({
       store.addExercise(session.id, name);
       setPicker(false);
     })} />}
-    {cursor && current && <Keypad key={`${cursor.entryId}:${cursor.index}:${cursor.field}`} label={`${current.data.exercise} · ${t('set')} ${cursor.index + 1} · ${t(cursor.field)}`} field={cursor.field} unit={store.unit()} equipment={exerciseFor(String(current.data.exercise)).equipment} value={value} previous={store.previous(current)[cursor.index] ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}` : ''} onChange={input} onNext={next} onClose={() => setCursor(null)} />}
+    {cursor && current && <Keypad label={`${current.data.exercise} · ${t('set')} ${cursor.index + 1} · ${t(cursor.field)}`} field={cursor.field} unit={store.unit()} equipment={exerciseFor(String(current.data.exercise)).equipment} value={value} previous={store.previous(current)[cursor.index] ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}` : ''} onChange={input} onNext={next} onClose={() => setCursor(null)} />}
     {finish && <FinishSheet store={store} session={session} onClose={() => setFinish(false)} />}
   </SafeAreaView>;
 }
@@ -303,7 +303,7 @@ function JumpCard({
   useEffect(() => {
     if (visible) {
       const current = store.repo.get('entries', entryId);
-      if (current) store.markCard(current);
+      if (current && store.showCard(current)) store.markCard(current);
     }
   }, [store, entryId, visible]);
   const sg = store.suggestion(entry);

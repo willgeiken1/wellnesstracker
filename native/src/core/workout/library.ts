@@ -7,8 +7,8 @@ export interface Exercise {
 }
 /** Bundled PWA DEFAULT_WORKOUTS + exercise bank, names/muscles only (Q27).
  * The first listed basic muscle is main; remaining distinct muscles are helpers.
- * Equipment was assigned once at bundling time; custom names never infer metadata. */
-export const exerciseLibrary: Exercise[] = [{
+ * Equipment inference applies only to bundled names; custom names never infer metadata. */
+const bundledExercises: Exercise[] = [{
   "name": "Pec Fly Machine",
   "main": "chest",
   "helpers": [],
@@ -2524,6 +2524,36 @@ export const exerciseLibrary: Exercise[] = [{
   "helpers": ["abs", "quads"],
   "equipment": "other"
 }];
+// Exceptions take precedence over broad words such as squat, row and deadlift.
+const equipmentOverrides: Record<string, Equipment> = {
+  'Goblet Squat': 'dumbbell', 'Inverted Row': 'bodyweight',
+  'Inverted Row with Underhand Grip': 'bodyweight', 'Ring Row': 'bodyweight',
+  'Towel Row': 'bodyweight', 'Resistance Band Row': 'other',
+  'Resistance Band Romanian Deadlift': 'other', 'Landmine Hack Squat': 'barbell',
+  'Air Squat': 'bodyweight', 'Half Air Squat': 'bodyweight',
+  'Jump Squat': 'bodyweight', 'Chair Squat': 'bodyweight', 'Pistol Squat': 'bodyweight',
+  'Cossack Squat': 'bodyweight', 'Sissy Squat': 'bodyweight',
+  'Belt Squat': 'machine', 'Pendulum Squat': 'machine',
+  'Plate Loaded Low Row': 'machine', 'Assisted Dip': 'machine',
+  'EZ Curl': 'barbell', 'Kroc Row': 'dumbbell', 'Renegade Row': 'dumbbell',
+  'Gorilla Row': 'dumbbell', 'Monkey Row': 'dumbbell',
+  'Bayesian Curl': 'cable', 'Face Pull': 'cable',
+};
+function bundledEquipment(exercise: Exercise): Equipment {
+  const name = exercise.name;
+  if (equipmentOverrides[name]) return equipmentOverrides[name];
+  // Bands, kettlebells and plates have no suitable equipment step in this model.
+  if (/kettlebell|resistance band/i.test(name)) return 'other';
+  if (/machine|smith|leg press|pec deck|hack/i.test(name)) return 'machine';
+  if (/dumbbell|\bDB\b/i.test(name)) return 'dumbbell';
+  if (/cable|pulldown|pushdown/i.test(name)) return 'cable';
+  if (/pull[ -]?up|chin[ -]?up|push[ -]?up|\bdip\b|plank|body[ -]?weight/i.test(name)) return 'bodyweight';
+  if (/barbell|bench press|squat|deadlift|\brow\b|overhead press|close[ -]grip|EZ[ -]bar/i.test(name)) return 'barbell';
+  return exercise.equipment;
+}
+export const exerciseLibrary: Exercise[] = bundledExercises.map(exercise => ({
+  ...exercise, equipment: bundledEquipment(exercise),
+}));
 export function exerciseFor(name: string): Exercise {
   return exerciseLibrary.find(e => e.name.toLowerCase() === name.trim().toLowerCase()) ?? {
     name: name.trim(),

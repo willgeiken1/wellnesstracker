@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
 import { clock, layout, Sheet } from './primitives';
 import { restBuzz } from './haptics';
+import { useWorkoutStore } from './use-workout';
 function contour(radius: number, fraction = 1) {
   const points = Array.from({
     length: Math.ceil(120 * fraction) + 1
@@ -47,12 +48,13 @@ export function RestContours({
   </Svg>;
 }
 export function RestTimer({
-  store,
+  store: source,
   hidden = false
 }: {
   store: WorkoutStore;
   hidden?: boolean;
 }) {
+  const store = useWorkoutStore(source.repo);
   const {
       reduceMotion,
       colors
@@ -92,7 +94,7 @@ export function RestTimer({
   const entry = store.repo.get('entries', timer.entryId),
     drafts = store.drafts(timer.entryId),
     next = drafts.findIndex(d => !d.setId);
-  if (timer.minimized) return <View style={[layout.row, {
+  if (timer.minimized) return <View testID="rest-mini-bar" style={[layout.row, {
     padding: 8,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
@@ -105,7 +107,7 @@ export function RestTimer({
     }]}><ThemedText numeric>{timer.ended ? t('restReady') : `${t('rest')} · ${clock(seconds)}`}</ThemedText></Pressable>
     <Button label={t('plus15')} variant="secondary" onPress={() => store.adjustTimer(15)} /><Button label={t('skip')} variant="secondary" onPress={() => store.skipTimer()} />
   </View>;
-  return <Sheet label={t('rest')} onClose={() => store.updateTimer({
+  return <Sheet testID="rest-sheet" label={t('rest')} onClose={() => store.updateTimer({
     minimized: true
   })}>
     <TimerDrag onMinimize={() => store.updateTimer({

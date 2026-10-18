@@ -9,7 +9,7 @@ import { useTheme } from '@/design/theme-provider';
 import { displayWeight, fromKg } from '@/core/workout/rules';
 import type { WorkoutStore } from '@/data/workout/store';
 import { t } from '@/i18n/en';
-import { useWorkout } from './use-workout';
+import { useWorkout, useWorkoutStore } from './use-workout';
 import { Line, Panel, clock, layout } from './primitives';
 import { signatureBuzz } from './haptics';
 export function SummitToken({
@@ -34,28 +34,30 @@ export function Summary() {
     } = useLocalSearchParams<{
       id: string;
     }>();
-  return store && id && store.repo.get('sessions', id) ? <WorkoutSummary store={store} id={id} /> : <Screen><Button label={t('done')} onPress={() => router.replace('/')} /></Screen>;
+  return store && id && store.repo.get('sessions', id) ? <WorkoutSummary store={store} id={id} /> : <Screen topInset><Button testID="summary-done" label={t('done')} onPress={() => router.replace('/')} /></Screen>;
 }
 export function WorkoutSummary({
-  store,
+  store: source,
   id
 }: {
   store: WorkoutStore;
   id: string;
 }) {
+  const store = useWorkoutStore(source.repo);
   const {
     colors,
     reduceMotion,
     reduceMotionReady
   } = useTheme();
+  const repo = store.repo;
   const data = store.summary(id),
     s = data.session;
   useEffect(() => {
-    if (!reduceMotionReady || !data.prs.length || store.repo.localGet(`buzz:${id}`)) return;
-    store.repo.localSave(`buzz:${id}`, true);
-    if (!reduceMotion) return signatureBuzz(store.repo);
-  }, [store, id, data.prs.length, reduceMotion, reduceMotionReady]);
-  return <Screen>
+    if (!reduceMotionReady || !data.prs.length || repo.localGet(`buzz:${id}`)) return;
+    repo.localSave(`buzz:${id}`, true);
+    if (!reduceMotion) return signatureBuzz(repo);
+  }, [repo, id, data.prs.length, reduceMotion, reduceMotionReady]);
+  return <Screen topInset>
     <ThemedText muted style={{
       textAlign: 'center'
     }}>{t('savedHistory')}</ThemedText>
@@ -91,6 +93,6 @@ export function WorkoutSummary({
         flexWrap: 'wrap'
       }]}>{store.milestones().map(token => <View key={`${token.sessionId}:${token.exercise}`} accessible accessibilityLabel={`${token.exercise}, ${t('summitToken')}`}><SummitToken fresh={token.sessionId === id} /></View>)}</View>{data.prs.length > 0 && <ThemedText muted variant="caption">{t('added')}: {data.prs.map(p => p.exercise).join(', ')}</ThemedText>}</Panel>
     {!!s.data.notes && <Panel><ThemedText>{String(s.data.notes)}</ThemedText></Panel>}
-    <Button label={t('done')} onPress={() => router.canDismiss() ? router.dismissAll() : router.replace('/')} />
+    <Button testID="summary-done" label={t('done')} onPress={() => router.canDismiss() ? router.dismissAll() : router.replace('/')} />
   </Screen>;
 }

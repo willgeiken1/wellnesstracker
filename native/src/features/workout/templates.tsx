@@ -90,7 +90,7 @@ export function TemplateEditor() {
     } = useLocalSearchParams<{
       id?: string;
     }>();
-  return store ? <Editor key={id ?? 'new'} store={store} id={id} /> : <Screen><ThemedText>{t('localError')}</ThemedText></Screen>;
+  return store ? <Editor key={id ?? 'new'} store={store} id={id} /> : <Screen topInset><ThemedText>{t('localError')}</ThemedText></Screen>;
 }
 function Editor({
   store,
@@ -121,7 +121,7 @@ function Editor({
     [next[i], next[i + by]] = [next[i + by], next[i]];
     setExercises(next);
   }
-  return <Screen title={id ? t('editTemplate') : t('newTemplate')}>
+  return <Screen topInset title={id ? t('editTemplate') : t('newTemplate')}>
     <Button label={t('cancel')} variant="secondary" onPress={() => {
       if (router.canGoBack()) router.back();else router.replace('/workouts');
     }} />

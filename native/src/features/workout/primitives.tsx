@@ -1,7 +1,7 @@
 import { Modal, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import type { PropsWithChildren } from 'react';
 import Svg, { Path } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/card';
@@ -93,29 +93,36 @@ export function IconButton({
 export function Sheet({
   children,
   onClose,
-  label
+  label,
+  testID,
+  closeTestID
 }: PropsWithChildren<{
   onClose: () => void;
   label: string;
+  testID?: string;
+  closeTestID?: string;
 }>) {
   const {
     colors,
     reduceMotion
   } = useTheme();
   return <Modal transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onClose}>
-    <View style={{
+    <SafeAreaProvider><SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{
       flex: 1,
       backgroundColor: '#00000077',
       justifyContent: 'flex-end'
     }}><Pressable style={{
         flex: 1
-      }} accessibilityRole="button" accessibilityLabel={t('dismissSheet')} onPress={onClose} /><SafeAreaView edges={['bottom']} style={[layout.sheet, {
+      }} accessible={false} importantForAccessibility="no" onPress={onClose} /><View collapsable={false} accessible={false} accessibilityViewIsModal testID={testID} style={[layout.sheet, {
         backgroundColor: colors.surface
       }]}>
       <View style={layout.row}><ThemedText variant="headline" accessibilityRole="header" style={{
             flex: 1
-          }}>{label}</ThemedText><Button label={t('close')} variant="secondary" onPress={onClose} /></View>{children}
-    </SafeAreaView></View>
+          }}>{label}</ThemedText><Button testID={closeTestID} label={t('close')} variant="secondary" onPress={onClose} /></View>{children}
+    </View></SafeAreaView></SafeAreaProvider>
   </Modal>;
 }
-export const clock = (seconds: number) => `${Math.floor(Math.max(0, seconds) / 60)}:${String(Math.floor(Math.max(0, seconds)) % 60).padStart(2, '0')}`;
+export const clock = (input: number) => {
+  const seconds = Number.isFinite(input) ? input : 0;
+  return `${Math.floor(Math.max(0, seconds) / 60)}:${String(Math.floor(Math.max(0, seconds)) % 60).padStart(2, '0')}`;
+};

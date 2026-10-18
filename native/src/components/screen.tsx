@@ -8,9 +8,9 @@ import { t } from '@/i18n/en';
 import { ThemedText } from './themed-text';
 import { Icon } from './icon';
 import { touchTarget } from './button';
-export function Screen({ children, title, tabHeader = false }: PropsWithChildren<{ title?: string; tabHeader?: boolean }>) {
+export function Screen({ children, title, tabHeader = false, topInset = false }: PropsWithChildren<{ title?: string; tabHeader?: boolean; topInset?: boolean }>) {
   const { colors } = useTheme();
-  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg as ColorValue }} edges={tabHeader ? ['top', 'left', 'right'] : ['left', 'right', 'bottom']}>
+  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg as ColorValue }} edges={tabHeader ? ['top', 'left', 'right'] : topInset ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
     <ScrollView contentContainerStyle={styles.content}>
       {title && <View style={styles.header}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1 }}>{title}</ThemedText>

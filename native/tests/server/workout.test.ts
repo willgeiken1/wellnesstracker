@@ -293,3 +293,41 @@ test('all-owner wipe clears each local table and a rolled-back operation notifie
   for (const table of ['workout_local', 'workout_weekly', 'workout_milestones']) expect(sqlite.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n).toBe(0);
   sqlite.close();
 });
+
+test('active progress excludes tombstoned exercises/sets and other sessions after restart', async () => {
+  const { store, repo, sqlite, db } = await setup();
+  const prior = store.start(undefined, Date.now() - 60000);
+  store.addExercise(prior.id, 'Squat', 4);
+  store.finish(prior.id, { startedAt: Number(prior.data.started_at), finishedAt: Date.now() - 1000, notes: '' });
+  const session = store.start(), removed = store.addExercise(session.id, 'Bench Press'), live = store.addExercise(session.id, 'Squat');
+  store.editDraft(removed.id, 0, { weight: '100', reps: '8' });
+  store.toggleDone(removed.id, 0);
+  store.removeExercise(removed.id);
+  store.editDraft(live.id, 0, { weight: '100', reps: '8' });
+  store.toggleDone(live.id, 0);
+  store.removeSet(live.id, 0);
+  const again = new WorkoutStore(new Repository(db, OWNER_A, DEVICE_A, randomUUID));
+  expect(again.entries(session.id).map(e => e.id)).toEqual([live.id]);
+  expect(again.entries(session.id).flatMap(e => again.drafts(e.id))).toHaveLength(2);
+  expect(again.entries(session.id).flatMap(e => again.sets(e.id))).toHaveLength(0);
+  expect(repo.list('entries', true).filter(e => e.deleted_at !== null)).toHaveLength(1);
+  expect(repo.list('sets', true).filter(s => s.deleted_at !== null)).toHaveLength(2);
+  sqlite.close();
+});
+
+test('UI revision advances after commit, remains stable for reads and failed transactions', async () => {
+  const { repo, sqlite } = await setup();
+  const before = repo.getRevision(), observations: number[] = [];
+  const unsubscribe = repo.subscribe(() => observations.push(repo.getRevision()));
+  repo.atomic(() => { repo.localSave('fixture:a', 1); repo.localSave('fixture:b', 2); });
+  expect(observations).toEqual([before + 1]);
+  repo.localGet('fixture:a');
+  expect(repo.getRevision()).toBe(before + 1);
+  expect(() => repo.atomic(() => { repo.localSave('fixture:a', 3); throw Error('Rollback'); })).toThrow();
+  expect(repo.localGet('fixture:a')).toBe(1);
+  expect(repo.getRevision()).toBe(before + 1);
+  unsubscribe();
+  repo.localSave('fixture:a', 4);
+  expect(observations).toHaveLength(1);
+  sqlite.close();
+});

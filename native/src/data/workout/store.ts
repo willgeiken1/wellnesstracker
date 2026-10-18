@@ -27,7 +27,7 @@ export interface TemplateExercise {
 }
 const order = (rows: Row[]) => rows.sort((a, b) => Number(a.data.position) - Number(b.data.position) || a.id.localeCompare(b.id));
 export class WorkoutStore {
-  constructor(readonly repo: Repository) {}
+  constructor(readonly repo: Repository, readonly viewRevision = 0) {}
   unit(): Unit {
     return this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
   }
@@ -387,7 +387,10 @@ export class WorkoutStore {
     return {
       session: s,
       count: sets.length,
-      volume: sets.reduce((n, s) => n + fromKg(Number(s.data.weight_kg), this.unit()) * Number(s.data.reps), 0),
+      volume: sets.reduce((n, s) => {
+        const volume = fromKg(Number(s.data.weight_kg), this.unit()) * Number(s.data.reps);
+        return n + (Number.isFinite(volume) ? volume : 0);
+      }, 0),
       prs
     };
   }

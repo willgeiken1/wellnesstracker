@@ -16,6 +16,9 @@ export function wipeAllOwners(db: ExpoSQLiteDatabase) {
   } catch {throw new Error('Local data is unavailable.');}
 }
 export class Repository {
+  private viewRevision = 0;
+  /** Monotonic UI snapshot; no persisted or synced state. */
+  getRevision = () => this.viewRevision;
   private listeners = new Set<() => void>();
   /** Owner-scoped logger state. This table is deliberately absent from the wire catalog. */
   private localTable(key:string) {return sql.identifier(key==='milestones'?'workout_milestones':key==='weekly'?'workout_weekly':'workout_local');}
@@ -28,7 +31,7 @@ export class Repository {
   }
   /** Multi-row logger operations commit atomically; no asynchronous work belongs here. */
   private batchDepth = 0;
-  private notify() { if (!this.batchDepth) this.listeners.forEach(listener => listener()); }
+  private notify() { if (!this.batchDepth) { this.viewRevision++; this.listeners.forEach(listener => listener()); } }
   atomic<T>(operation:()=>T):T {
     if (this.batchDepth) return operation();
     const result=this.safe(()=>this.db.transaction(()=>{this.batchDepth++;try{return operation();}finally{this.batchDepth--;}}));

@@ -1,3 +1,4 @@
+import { exerciseLibrary, exerciseFor } from '../src/core/workout/library';
 import { displayWeight, suggestion, step, plates, detectPR, attribute, localDay, weekOf, validateSet, validateDate, cardKey, shouldShowCard, keypad } from '../src/core/workout/rules';
 const done = (weight: number, reps = 8) => ({
   weight,
@@ -110,4 +111,20 @@ test('display rounds half lb/quarter kg without changing canonical weight', () =
   expect(displayWeight(80, 'lb')).toBe(176.5);
   expect(displayWeight(80.12, 'kg')).toBe(80);
   expect(displayWeight(80.13, 'kg')).toBe(80.25);
+});
+
+test.each([
+  ['Close-Grip Bench Press', 'barbell'], ['Bench Press', 'barbell'],
+  ['Overhead Press', 'barbell'], ['Cable Fly', 'cable'],
+  ['Incline Dumbbell Press', 'dumbbell'], ['Smith Machine Squat', 'machine'],
+  ['EZ Bar Preacher Curl', 'barbell'], ['Bodyweight Curl', 'bodyweight'],
+  ['Cable Close Grip Seated Row', 'cable'], ['Dumbbell Row', 'dumbbell'],
+  ['Goblet Squat', 'dumbbell'], ['Inverted Row', 'bodyweight'],
+])('bundled %s resolves to %s', (name, equipment) => {
+  expect(exerciseFor(name).equipment).toBe(equipment);
+});
+test('bundled equipment coverage stays below 40 percent other; custom names stay other', () => {
+  const other = exerciseLibrary.filter(e => e.equipment === 'other');
+  expect(other.length / exerciseLibrary.length).toBeLessThan(.4);
+  expect(exerciseFor('Custom Bench Press from fixture').equipment).toBe('other');
 });

@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { useWorkout } from '../src/features/workout/use-workout';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react-native';
 import { AppState, AccessibilityInfo, Text } from 'react-native';
 import { restBuzz, signatureBuzz } from '../src/features/workout/haptics';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { SyncBadge } from '../src/features/workout/badge';
 import { Keypad } from '../src/features/workout/keypad';
@@ -12,7 +13,12 @@ import { WorkoutStore } from '../src/data/workout/store';
 import { parseLocalDateTime } from '../src/features/workout/finish';
 import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
-import { nextField } from '../src/core/workout/rules';
+import { ActiveWorkout } from '../src/features/workout/active';
+import { useAuth } from '../src/auth/provider';
+import { clock } from '../src/features/workout/primitives';
+import { displayWeight, rounded, nextField } from '../src/core/workout/rules';
+jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), router: { canDismiss: () => false, replace: jest.fn() } }));
 jest.mock('../src/features/workout/haptics', () => ({
   tick: jest.fn(),
   restBuzz: jest.fn(),
@@ -24,14 +30,18 @@ jest.mock('expo-keep-awake', () => ({
 function memoryRepository() {
   const rows: Row[] = [],
     local = new Map<string, unknown>();
-  let sequence = 0;
+  let sequence = 0, revision = 0;
+  const listeners = new Set<() => void>();
+  const notify = () => { revision++; listeners.forEach(f => f()); };
   return {
     owner: 'demo',
+    getRevision: () => revision,
+    subscribe: (f: () => void) => { listeners.add(f); return () => { listeners.delete(f); }; },
     list: (table: string) => rows.filter(r => r.table === table && r.deleted_at === null),
     get: (table: string, id: string) => rows.find(r => r.table === table && r.id === id),
     atomic: (f: () => unknown) => f(),
     localGet: (key: string) => local.get(key),
-    localSave: (key: string, value: unknown) => local.set(key, value),
+    localSave: (key: string, value: unknown) => { local.set(key, value); notify(); },
     save: (table: Row['table'], data: Row['data'], id = String(++sequence)) => {
       let row = rows.find(r => r.table === table && r.id === id);
       if (row) {
@@ -49,11 +59,13 @@ function memoryRepository() {
         };
         rows.push(row);
       }
+      notify();
       return row;
     },
     remove: (table: string, id: string) => {
       const row = rows.find(r => r.table === table && r.id === id);
       if (row) row.deleted_at = Date.now();
+      notify();
     }
   } as unknown as Repository;
 }
@@ -64,6 +76,7 @@ function wrapper({
 }) {
   return <ThemeProvider>{children}</ThemeProvider>;
 }
+beforeEach(() => { jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false); });
 afterEach(() => jest.useRealTimers());
 test('badge pending/offline → Synced → hidden at 1.5 s, guest saved locally', async () => {
   jest.useFakeTimers();
@@ -246,4 +259,92 @@ test('summary waits for motion preference and runs the PR signature only once ac
   });
   expect(signatureBuzz).toHaveBeenCalledTimes(1);
   preference.mockRestore();
+});
+
+function activeRepository(repo: Repository) {
+  jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>);
+}
+test('compiled logger opens immediately after start', async () => {
+  activeRepository(memoryRepository());
+  await render(<ActiveWorkout />, { wrapper });
+  expect(screen.getByText('Add exercise')).toBeTruthy();
+});
+test('compiled logger updates keypad values and rows live', async () => {
+  const repo = memoryRepository();
+  const store = new WorkoutStore(repo);
+  const start = Date.now() - 120000, prior = store.start(undefined, start);
+  const previous = store.addExercise(prior.id, 'Close-Grip Bench Press', 1);
+  store.editDraft(previous.id, 0, { weight: '100', reps: '8' });
+  store.toggleDone(previous.id, 0);
+  store.finish(prior.id, { startedAt: start, finishedAt: Date.now() - 60000, notes: '' });
+  store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, blank' }));
+  for (const digit of ['1', '3', '5']) await fireEvent.press(screen.getByRole('button', { name: digit }));
+  expect(screen.getByText('135 lb')).toBeTruthy();
+  expect(within(screen.getByTestId('keypad-sheet')).getByText('100 × 8')).toBeTruthy();
+  await act(() => { store.editDraft(previous.id, 0, { weight: '105' }); });
+  expect(within(screen.getByTestId('keypad-sheet')).getByText('105 × 8')).toBeTruthy();
+  const numberKey = screen.getByTestId('keypad-key-8');
+  await fireEvent.press(screen.getByRole('button', { name: 'Next: Reps' }));
+  expect(screen.getByTestId('keypad-key-8')).toBe(numberKey);
+  await fireEvent.press(screen.getByRole('button', { name: '8' }));
+  expect(screen.getByText('8 Reps')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, 135' })).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('set-0-0-done'));
+  expect(screen.getByTestId('rest-sheet')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+  expect(screen.getByText(/Set 2 of 3/)).toBeTruthy();
+});
+test('compiled logger counts only live entries and sets after removals', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start();
+  const first = store.addExercise(session.id, 'Bench Press'), second = store.addExercise(session.id, 'Squat');
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  expect(screen.getByText(/Set 1 of 6/)).toBeTruthy();
+  await act(() => { store.removeExercise(first.id); });
+  expect(screen.getByText(/Set 1 of 3/)).toBeTruthy();
+  await act(() => { store.removeSet(second.id, 0); });
+  expect(screen.getByText(/Set 1 of 2/)).toBeTruthy();
+});
+test('empty logger and nonfinite display inputs never render NaN', async () => {
+  activeRepository(memoryRepository());
+  await render(<ActiveWorkout />, { wrapper });
+  expect(screen.queryByText(/NaN/)).toBeNull();
+  expect(clock(NaN)).toBe('0:00');
+  expect(clock(Infinity)).toBe('0:00');
+  expect(displayWeight(NaN, 'lb')).toBe(0);
+  expect(rounded(Infinity)).toBe(0);
+});
+
+test('subscription exposes draft edits to memoized readers without a local state update', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Bench Press');
+  activeRepository(repo);
+  const { result } = await renderHook(() => {
+    const { store: view } = useWorkout();
+    return useMemo(() => view!.drafts(entry.id)[0], [view]);
+  });
+  for (const weight of ['1', '13', '135']) {
+    await act(() => { store.editDraft(entry.id, 0, { weight }); });
+    expect(result.current.weight).toBe(weight);
+  }
+  await act(() => { store.editDraft(entry.id, 0, { reps: '8' }); });
+  expect(result.current.reps).toBe('8');
+});
+
+test('summary refreshes volume and notes after a repository edit without remounting', async () => {
+  const store = new WorkoutStore(memoryRepository()), start = Date.now() - 60000;
+  const session = store.start(undefined, start), entry = store.addExercise(session.id, 'Bench Press', 1);
+  store.editDraft(entry.id, 0, { weight: '100', reps: '8' });
+  store.toggleDone(entry.id, 0);
+  store.finish(session.id, { startedAt: start, finishedAt: Date.now(), notes: 'Synthetic first note' });
+  await render(<WorkoutSummary store={store} id={session.id} />, { wrapper });
+  expect(screen.getByText('800')).toBeTruthy();
+  await act(() => { store.editDraft(entry.id, 0, { weight: '105' }); });
+  expect(screen.getByText('840')).toBeTruthy();
+  await act(() => { store.finish(session.id, { startedAt: start, finishedAt: Date.now(), notes: 'Synthetic revised note' }); });
+  expect(screen.getByText('Synthetic revised note')).toBeTruthy();
 });

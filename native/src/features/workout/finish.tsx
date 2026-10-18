@@ -54,7 +54,7 @@ export function FinishSheet({
       }]} />
     {session.data.origin === 'empty' && <Button label={t('saveAsTemplate')} selected={saveTemplate} variant="secondary" onPress={() => setSaveTemplate(v => !v)} />}
     {error && <ThemedText accessibilityRole="alert">{t('invalidFinish')}</ThemedText>}
-    <View><Button label={t('saveWorkout')} disabled={saving} onPress={() => {
+    <View><Button testID="save-workout" label={t('saveWorkout')} disabled={saving} onPress={() => {
           if (saving) return;
           setSaving(true);
           try {

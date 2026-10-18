@@ -5,6 +5,7 @@ import type { Draft } from '@/data/workout/store';
 import { t } from '@/i18n/en';
 import { Line, layout } from './primitives';
 export function SetRow({
+  exerciseIndex = 0,
   exercise,
   index,
   draft,
@@ -14,6 +15,7 @@ export function SetRow({
   onDone,
   onRemove
 }: {
+  exerciseIndex?: number;
   exercise: string;
   index: number;
   draft: Draft;
@@ -49,11 +51,11 @@ export function SetRow({
     <ThemedText muted numeric variant="caption" style={{
       flex: 1
     }}>{previous || '—'}</ThemedText>
-    {(['weight', 'reps'] as const).map(field => <Pressable key={field} accessibilityRole="button" accessibilityLabel={`${label}, ${t(field)}, ${draft[field] || t('blank')}`} onPress={() => onEdit(field)} style={[layout.cell, {
+    {(['weight', 'reps'] as const).map(field => <Pressable testID={`set-${exerciseIndex}-${index}-${field}`} key={field} accessibilityRole="button" accessibilityLabel={`${label}, ${t(field)}, ${draft[field] || t('blank')}`} onPress={() => onEdit(field)} style={[layout.cell, {
       flex: 1,
       backgroundColor: draft.setId ? undefined : colors['surface-2']
     }]}><ThemedText numeric muted={!draft[field]}>{draft[field] || (field === 'weight' ? hint : '—')}</ThemedText></Pressable>)}
-    <Pressable accessibilityRole="checkbox" accessibilityLabel={`${label}, ${t('done')}`} accessibilityState={{
+    <Pressable testID={`set-${exerciseIndex}-${index}-done`} accessibilityRole="checkbox" accessibilityLabel={`${label}, ${t('done')}`} accessibilityState={{
       checked: !!draft.setId
     }} onPress={onDone} style={[layout.cell, {
       width: 44,
