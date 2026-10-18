@@ -9,7 +9,7 @@ export interface Pending { row: Row; revision: string }
 export function wipeAllOwners(db: ExpoSQLiteDatabase) {
   try {
     db.transaction(() => {
-      for(const table of [...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days']) {
+      for(const table of [...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days','workout_local','workout_milestones','workout_weekly']) {
         db.run(sql`DELETE FROM ${sql.identifier(table)}`);
       }
     });
@@ -17,6 +17,24 @@ export function wipeAllOwners(db: ExpoSQLiteDatabase) {
 }
 export class Repository {
   private listeners = new Set<() => void>();
+  /** Owner-scoped logger state. This table is deliberately absent from the wire catalog. */
+  private localTable(key:string) {return sql.identifier(key==='milestones'?'workout_milestones':key==='weekly'?'workout_weekly':'workout_local');}
+  localGet<T>(key: string): T | undefined {
+    return this.safe(() => { const row=this.db.get<{value:string}>(sql`SELECT value FROM ${this.localTable(key)} WHERE owner_id=${this.owner} AND key=${key}`); return row ? JSON.parse(row.value) as T : undefined; });
+  }
+  localSave(key:string,value:unknown) {
+    this.safe(()=>this.db.run(sql`INSERT INTO ${this.localTable(key)}(owner_id,key,value) VALUES(${this.owner},${key},${JSON.stringify(value)}) ON CONFLICT(owner_id,key) DO UPDATE SET value=excluded.value`));
+    this.notify();
+  }
+  /** Multi-row logger operations commit atomically; no asynchronous work belongs here. */
+  private batchDepth = 0;
+  private notify() { if (!this.batchDepth) this.listeners.forEach(listener => listener()); }
+  atomic<T>(operation:()=>T):T {
+    if (this.batchDepth) return operation();
+    const result=this.safe(()=>this.db.transaction(()=>{this.batchDepth++;try{return operation();}finally{this.batchDepth--;}}));
+    this.notify();return result;
+  }
+
   constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string) {}
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private safe<T>(operation: () => T): T { try { return operation(); } catch { throw new Error('Local data is unavailable.'); } }
@@ -52,7 +70,7 @@ export class Repository {
       if (previous && previous.table === 'weigh_ins' && previous.data.source !== input.data.source) throw new Error('Provenance is immutable.');
       const row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
       if (previous && compareRows(row, previous) <= 0) return;
-      this.db.transaction(() => {
+      this.atomic(() => {
         this.write(row);
         const clock = Math.max(Number(this.state('clock') ?? 0), row.updated_at);
         this.setState('clock', String(clock));
@@ -60,17 +78,16 @@ export class Repository {
           this.db.run(sql`INSERT INTO sync_outbox(owner_id,table_name,row_id,revision) VALUES(${this.owner},${row.table},${row.id},${revision(row)}) ON CONFLICT(owner_id,table_name,row_id) DO UPDATE SET revision=excluded.revision`);
         }
       });
-      this.listeners.forEach(listener => listener());
     });
   }
   /** Atomic account departure, including local-only caches and flagged outbox rows. */
   wipe() {
     this.safe(() => this.db.transaction(() => {
-      for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days']) {
+      for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
         this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
       }
     }));
-    this.listeners.forEach(listener => listener());
+    this.notify();
   }
   /** Includes conflict-flagged rows, which pending() intentionally excludes from upload. */
   unsyncedCount() {
@@ -106,7 +123,7 @@ export class Repository {
       if (item.row.owner_id !== this.owner) throw new Error('Owner mismatch.');
       this.recordConflict(item.row.table,item.row.id);
     });
-    this.listeners.forEach(listener => listener());
+    this.notify();
   }
   ack(items: Pending[], accepted?: Row[]) {
     this.safe(() => this.db.transaction(() => {
@@ -132,7 +149,7 @@ export class Repository {
         this.setState('clock',String(clock));
       }
     }));
-    this.listeners.forEach(listener => listener());
+    this.notify();
   }
   cursor(table: Table) { return this.safe(() => this.state(`cursor:${table}`) ?? '0'); }
   applyPage(table: Table, page: ServerRow[], cursor: string) {
@@ -154,7 +171,7 @@ export class Repository {
       this.setState('clock', String(clock));
       this.setState(`cursor:${table}`,cursor);
     }));
-    this.listeners.forEach(listener => listener());
+    this.notify();
   }
   cacheOura(day: string, cache: Record<string,unknown>) {
     this.safe(() => this.db.run(sql`INSERT INTO oura_days(owner_id,day,cache) VALUES(${this.owner},${day},${JSON.stringify(cache)}) ON CONFLICT(owner_id,day) DO UPDATE SET cache=excluded.cache`));
