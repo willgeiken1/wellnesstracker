@@ -1,6 +1,2 @@
-module.exports = {
-  preset: 'jest-expo',
-  watchman: false,
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
-  testMatch: ['<rootDir>/tests/**/*.test.ts?(x)'],
-};
+// Run both projects serially to bound WASM memory; parallel workers intermittently exceeded Jest teardown grace.
+module.exports = { projects: ['<rootDir>/jest.app.config.js', '<rootDir>/jest.server.config.js'], maxWorkers: 1, testTimeout: 30000, watchman: false };
