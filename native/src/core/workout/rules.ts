@@ -89,6 +89,8 @@ export function weekOf(d: Date) {
 export function plates(weight: number, unit: Unit) {
   const bar = unit === 'lb' ? 45 : 20,
     sizes = unit === 'lb' ? [45, 35, 25, 10, 5, 2.5] : [25, 20, 15, 10, 5, 2.5, 1.25];
+  // Reject legacy/invalid drafts before constructing a plate list.
+  if (!Number.isFinite(weight) || weight < 0 || toKg(weight, unit) > 1000) return { bar, plates: [], remainder: 0 };
   let remainder = (weight - bar) / 2;
   const result: number[] = [];
   for (const plate of sizes) while (remainder + 1e-8 >= plate && result.length < 1000) {
@@ -101,10 +103,18 @@ export function plates(weight: number, unit: Unit) {
     remainder: rounded(remainder)
   };
 }
-export function keypad(value: string, key: string, decimal: boolean) {
+/** Allows an unfinished decimal while keeping keypad edits inside the entry limits. */
+export function validKeypadValue(value: string, decimal: boolean, unit: Unit) {
+  if (value === '') return true;
+  const pattern = decimal ? unit === 'lb' ? /^\d+(?:\.\d{0,1})?$/ : /^\d+(?:\.\d{0,2})?$/ : /^\d+$/;
+  return pattern.test(value) && Number.isFinite(Number(value)) && (decimal ? toKg(Number(value), unit) <= 1000 : Number(value) <= 100);
+}
+export function keypad(value: string, key: string, decimal: boolean, unit: Unit = 'lb') {
   if (key === 'backspace') return value.slice(0, -1);
-  if (key === '.') return decimal && !value.includes('.') ? value ? `${value}.` : '0.' : value;
-  return /^\d$/.test(key) && value.length < 8 ? value === '0' ? key : value + key : value;
+  let next = value;
+  if (key === '.' && decimal && !value.includes('.')) next = value ? `${value}.` : '0.';
+  else if (/^\d$/.test(key)) next = value === '0' ? key : value + key;
+  return validKeypadValue(next, decimal, unit) ? next : value;
 }
 export function validateSet(weight: string, reps: string, unit: Unit, previousKg?: number) {
   const w = Number(weight),

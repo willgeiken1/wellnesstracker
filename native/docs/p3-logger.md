@@ -108,3 +108,10 @@ Changed files this round (relative to `native/`):
 - Tests/docs: `jest.app.config.js`, `tests/workout-ui.test.tsx`, `tests/workout-rules.test.ts`, `tests/server/workout.test.ts`, this document. No dependencies added.
 
 Validation: typecheck and lint pass without warnings; Expo Doctor 20/20; Expo dependency check up to date; Jest **515 tests / 26 suites** (21 added this round). Root `npm test` still has no script. Telemetry/dotenv disabled, npm cache and Expo home redirected to `/tmp`; no secrets read. No simulator/emulator, prebuild, git staging/commit/push, or backend changes were performed. Quinn/coordinator: recheck Dynamic Island clearance, sheet accessibility after Next, cold/warm starts and collapse on the simulator; no native-host validation is claimed here.
+
+
+## Device fix round 2 — Oct 18
+
+Keypad digits now replace the existing value on first entry after opening or moving to a field; later digits append. Untouched Next preserves the value, while backspace and ± steps use it directly. Inputs reject values above 1,000 kg (2,204.6 lb at entry precision) / 100 reps and excess decimals (lb: 1; kg: 2), showing a muted limit hint. Steps and the numeric wheel share these limits. Oversized legacy drafts never produce a plate line; valid plate lines group repeats (for example, `45 × 3 + 10 + 2.5`) on one line. Only template sessions show the TEMPLATE eyebrow; empty sessions show the workout title alone. Scope: plan §5.5 / §9, M2; Q5 keypad behavior.
+
+Regression coverage includes replace/append/reopen/Next, untouched backspace and steps, range and precision boundaries, wheel limits, compact/hidden plates, and both header origins. Validation: typecheck and lint PASS; Expo Doctor PASS 20/20; dependency check PASS; Jest PASS 539 tests across 26 suites. No dependencies, sync/auth/schema changes, git writes or simulator runs.

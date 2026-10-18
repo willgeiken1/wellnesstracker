@@ -348,3 +348,100 @@ test('summary refreshes volume and notes after a repository edit without remount
   await act(() => { store.finish(session.id, { startedAt: start, finishedAt: Date.now(), notes: 'Synthetic revised note' }); });
   expect(screen.getByText('Synthetic revised note')).toBeTruthy();
 });
+
+
+function ExistingValueKeypad({ field = 'weight', unit = 'lb', initial = '135', label = 'Synthetic set' }: {
+  field?: 'weight' | 'reps'; unit?: 'lb' | 'kg'; initial?: string; label?: string;
+}) {
+  const [value, setValue] = useState(initial);
+  return <Keypad label={label} equipment="barbell" unit={unit} field={field} value={value} previous="" onChange={setValue} onClose={() => {}} onNext={() => {}} />;
+}
+test('first digit replaces existing weight; later digits append; reopening selects again', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  store.editDraft(entry.id, 1, { weight: '185', reps: '10' });
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  const open = () => fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, 135' }));
+  await open();
+  for (const digit of ['1', '3', '5']) await fireEvent.press(screen.getByTestId(`keypad-key-${digit}`));
+  expect(store.drafts(entry.id)[0].weight).toBe('135');
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  await fireEvent.press(screen.getByTestId('keypad-key-6'));
+  expect(store.drafts(entry.id)[0].reps).toBe('6');
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  await fireEvent.press(screen.getByTestId('keypad-key-9'));
+  expect(store.drafts(entry.id)[1].weight).toBe('9');
+  await fireEvent.press(screen.getByTestId('keypad-close'));
+  await open();
+  await fireEvent.press(screen.getByTestId('keypad-key-2'));
+  expect(store.drafts(entry.id)[0].weight).toBe('2');
+});
+test('untouched backspace and steps operate on the existing value', async () => {
+  await render(<ExistingValueKeypad />, { wrapper });
+  await fireEvent.press(screen.getByTestId('keypad-key-backspace'));
+  expect(screen.getByText('13 lb')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('keypad-key-5'));
+  expect(screen.getByText('135 lb')).toBeTruthy();
+});
+test.each([
+  ['weight', 'kg', '1000', '0'], ['weight', 'lb', '2204.6', '3'],
+  ['reps', 'lb', '100', '0'], ['weight', 'lb', '1.2', '3'], ['weight', 'kg', '1.25', '3'],
+] as const)('keypad rejects excess input with a muted cue: %s %s %s', async (field, unit, initial, digit) => {
+  // Backspace then restore the final character to consume initial replacement.
+  await render(<ExistingValueKeypad field={field} unit={unit} initial={initial} />, { wrapper });
+  await fireEvent.press(screen.getByTestId('keypad-key-backspace'));
+  await fireEvent.press(screen.getByTestId(`keypad-key-${initial.at(-1)}`));
+  await fireEvent.press(screen.getByTestId(`keypad-key-${digit}`));
+  expect(screen.getByText(`${initial} ${field === 'weight' ? unit : 'Reps'}`)).toBeTruthy();
+  expect(screen.getByTestId('keypad-limit-hint')).toBeTruthy();
+});
+test('plate line groups duplicates on one line and hides oversized drafts', async () => {
+  const props = { label: 'Synthetic', equipment: 'barbell' as const, unit: 'lb' as const, field: 'weight' as const, previous: '', onChange: jest.fn(), onClose: () => {}, onNext: () => {} };
+  const view = await render(<Keypad {...props} value="340" />, { wrapper });
+  expect(screen.getByText(/Plates per side/)).toHaveTextContent(/45 × 3 \+ 10 \+ 2.5/);
+  expect(screen.getByText(/Plates per side/)).toHaveProp('numberOfLines', 1);
+  await view.rerender(<Keypad {...props} value="135135" />);
+  expect(screen.queryByText(/Plates per side/)).toBeNull();
+});
+test.each([false, true])('workout header only shows an eyebrow for templates: %s', async template => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const routine = template ? store.saveTemplate('Synthetic Push', []) : undefined;
+  store.start(routine?.id);
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  if (template) expect(screen.getByText('TEMPLATE')).toBeTruthy();
+  else expect(screen.getAllByText('Workout')).toHaveLength(1);
+});
+
+
+test.each([['plus', '140 lb'], ['minus', '130 lb']] as const)('untouched %s steps the existing weight', async (key, expected) => {
+  await render(<ExistingValueKeypad />, { wrapper });
+  await fireEvent.press(screen.getByTestId(`keypad-key-${key}`));
+  expect(screen.getByText(expected)).toBeTruthy();
+});
+test('Next keeps untouched weight and reps; first digit after moving still replaces', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  store.editDraft(entry.id, 1, { weight: '185', reps: '10' });
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, 135' }));
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  expect(screen.getByText('8 Reps')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  expect(store.drafts(entry.id)[0]).toMatchObject({ weight: '135', reps: '8' });
+  await fireEvent.press(screen.getByTestId('keypad-key-1'));
+  expect(store.drafts(entry.id)[1].weight).toBe('1');
+});
+test('step and wheel cannot exceed the weight limit', async () => {
+  await render(<ExistingValueKeypad unit="kg" initial="1000" />, { wrapper });
+  await fireEvent.press(screen.getByTestId('keypad-key-plus'));
+  expect(screen.getByText('1000 kg')).toBeTruthy();
+  expect(screen.getByTestId('keypad-limit-hint')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('keypad-key-wheel'));
+  await fireEvent.press(screen.getByRole('button', { name: '1002.5' }));
+  expect(screen.getByText('1000 kg')).toBeTruthy();
+});

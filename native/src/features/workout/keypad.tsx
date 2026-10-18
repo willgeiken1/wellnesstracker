@@ -1,7 +1,7 @@
 import { View, Pressable, ScrollView } from 'react-native';
 import { useState } from 'react';
 import { equipmentLabel, t } from '@/i18n/en';
-import { keypad, plates, rounded, step, type Equipment, type Unit } from '@/core/workout/rules';
+import { keypad, plates, rounded, step, toKg, validKeypadValue, type Equipment, type Unit } from '@/core/workout/rules';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { Line, Sheet, layout } from './primitives';
@@ -12,6 +12,7 @@ export interface Cursor {
 }
 export function Keypad({
   label,
+  inputId = label,
   field,
   unit,
   equipment,
@@ -22,6 +23,7 @@ export function Keypad({
   onClose
 }: {
   label: string;
+  inputId?: string;
   field: 'weight' | 'reps';
   unit: Unit;
   equipment: Equipment;
@@ -34,11 +36,34 @@ export function Keypad({
   const {
     colors
   } = useTheme();
-  const [wheel, setWheel] = useState(false),
-    [wheelBase, setWheelBase] = useState(0);
+  const focus = `${inputId}:${field}:${unit}`;
+  const [selectedInput, setSelectedInput] = useState(focus),
+    [wheel, setWheel] = useState(false),
+    [wheelBase, setWheelBase] = useState(0),
+    [fresh, setFresh] = useState(true),
+    [limitHint, setLimitHint] = useState(false);
+  // Reset selection when moving fields without remounting the numeric keys.
+  if (selectedInput !== focus) {
+    setSelectedInput(focus);
+    setFresh(true);
+    setLimitHint(false);
+    setWheel(false);
+  }
   const increment = field === 'reps' ? 1 : step(equipment, unit),
     p = plates(Number(value), unit);
-  const adjust = (n: number) => onChange(String(rounded(Math.max(0, Number(value || 0) + n))));
+  const change = (next: string) => {
+    if (!validKeypadValue(next, field === 'weight', unit)) {
+      setLimitHint(true);
+      return;
+    }
+    setFresh(false);
+    setLimitHint(false);
+    onChange(next);
+  };
+  const adjust = (n: number) => change(String(rounded(Math.max(0, Number(value || 0) + n))));
+  const grouped = new Map<number, number>();
+  for (const plate of p.plates) grouped.set(plate, (grouped.get(plate) ?? 0) + 1);
+  const plateLine = [...grouped].map(([plate, count]) => count > 1 ? `${plate} × ${count}` : String(plate)).join(' + ');
   const openWheel = () => {
     setWheelBase(Number(value || 0));
     setWheel(w => !w);
@@ -49,20 +74,22 @@ export function Keypad({
     <View style={[layout.row, {
         justifyContent: 'space-between'
       }]}><ThemedText numeric variant="display">{value || '—'} <ThemedText muted>{field === 'weight' ? unit : t('reps')}</ThemedText></ThemedText><View><ThemedText muted variant="caption">{t('lastTime')}</ThemedText><ThemedText numeric>{previous || '—'}</ThemedText></View></View>
-    {equipment === 'barbell' && field === 'weight' && value !== '' && <View style={[layout.input, {
+    {equipment === 'barbell' && field === 'weight' && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 && toKg(Number(value), unit) <= 1000 && <View style={[layout.input, {
         backgroundColor: colors['surface-2']
-      }]}><ThemedText muted variant="caption">{t('platesPerSide')}: {p.plates.join(' + ') || '—'} · {p.bar} {unit} {t('bar')}{p.remainder !== 0 ? ` · ${t('plateRemainder')}` : ''}</ThemedText></View>}
+      }]}><ThemedText muted variant="caption" numberOfLines={1} adjustsFontSizeToFit>{t('platesPerSide')}: {plateLine || '—'}</ThemedText>
+      {p.remainder !== 0 && <ThemedText muted variant="caption">{t('plateRemainder')}</ThemedText>}</View>}
+    {limitHint && <ThemedText testID="keypad-limit-hint" muted variant="caption" accessibilityLiveRegion="polite">{t(field === 'reps' ? 'keypadRepsLimit' : unit === 'lb' ? 'keypadLbLimit' : 'keypadKgLimit')}</ThemedText>}
     {wheel && <ScrollView horizontal snapToInterval={64} decelerationRate="fast" accessibilityLabel={`${equipmentLabel(equipment)}, ${t('weightWheel')}`} contentOffset={{
         x: 640,
         y: 0
       }} onMomentumScrollEnd={event => {
         const index = Math.round(event.nativeEvent.contentOffset.x / 64);
-        onChange(String(rounded(Math.max(0, wheelBase + (index - 10) * (increment || 1)))));
+        change(String(rounded(Math.max(0, wheelBase + (index - 10) * (increment || 1)))));
       }}>{Array.from({
           length: 21
         }, (_, i) => {
           const n = rounded(Math.max(0, wheelBase + (i - 10) * (increment || 1)));
-          return <Pressable key={i} accessibilityRole="button" accessibilityLabel={String(n)} onPress={() => onChange(String(n))} style={[layout.cell, {
+          return <Pressable key={i} accessibilityRole="button" accessibilityLabel={String(n)} onPress={() => change(String(n))} style={[layout.cell, {
             width: 64
           }]}><ThemedText numeric>{n}</ThemedText></Pressable>;
         })}</ScrollView>}
@@ -75,7 +102,16 @@ export function Keypad({
           const text = key === 'minus' ? `−${increment}` : key === 'plus' ? `+${increment}` : key === 'wheel' ? t('holdWheel') : key === 'next' ? nextLabel : key;
           const label = key === 'backspace' ? t('backspace') : unavailable ? t('blankKey') : text;
           const action = () => {
-            if (key === 'minus') adjust(-increment);else if (key === 'plus') adjust(increment);else if (key === 'wheel') openWheel();else if (key === 'next') onNext();else onChange(keypad(value, key, field === 'weight'));
+            if (key === 'minus') adjust(-increment);else if (key === 'plus') adjust(increment);else if (key === 'wheel') openWheel();else if (key === 'next') onNext();else {
+              const base = fresh && key !== 'backspace' ? '' : value;
+              const next = keypad(base, key, field === 'weight', unit);
+              if (key !== 'backspace' && next === base && !(key === '0' && base === '0')) setLimitHint(true);
+              else {
+                setFresh(false);
+                setLimitHint(false);
+                onChange(next);
+              }
+            }
           };
           return <Pressable testID={key === 'next' ? 'keypad-next' : `keypad-key-${key}`} key={`${key}${i}`} accessibilityRole="button" accessibilityLabel={label} disabled={unavailable} onLongPress={key === 'wheel' ? openWheel : undefined} onPress={action} style={[layout.cell, {
             width: '22%',

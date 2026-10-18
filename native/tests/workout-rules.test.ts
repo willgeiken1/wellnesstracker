@@ -128,3 +128,21 @@ test('bundled equipment coverage stays below 40 percent other; custom names stay
   expect(other.length / exerciseLibrary.length).toBeLessThan(.4);
   expect(exerciseFor('Custom Bench Press from fixture').equipment).toBe('other');
 });
+
+
+test.each([
+  ['1000', '1', true, 'kg'], ['2204.6', '3', true, 'lb'],
+  ['100', '1', false, 'lb'], ['1.2', '3', true, 'lb'],
+  ['1.25', '3', true, 'kg'],
+] as const)('keypad rejects range/precision overflow: %s + %s (%s, %s)', (value, key, decimal, unit) => {
+  expect(keypad(value, key, decimal, unit)).toBe(value);
+});
+test('keypad accepts boundary values and kg quarter plates', () => {
+  expect(keypad('100', '0', true, 'kg')).toBe('1000');
+  expect(keypad('2204.', '6', true, 'lb')).toBe('2204.6');
+  expect(keypad('10', '0', false, 'lb')).toBe('100');
+  expect(keypad('1.2', '5', true, 'kg')).toBe('1.25');
+});
+test.each([['lb', 2204.7], ['kg', 1000.01], ['lb', 135135], ['kg', Infinity]] as const)('no plate calculation above maximum in %s', (unit, weight) => {
+  expect(plates(weight, unit).plates).toEqual([]);
+});

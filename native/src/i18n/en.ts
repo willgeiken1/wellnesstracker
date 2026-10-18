@@ -1,4 +1,7 @@
 export const en = {
+  keypadRepsLimit: "Up to 100 whole reps.",
+  keypadLbLimit: "Up to 2,204.6 lb · 1 decimal place.",
+  keypadKgLimit: "Up to 1,000 kg · 2 decimal places.",
   weightWheel:'Numeric wheel',
   dismissSheet: "Dismiss sheet",
   close: "Close",

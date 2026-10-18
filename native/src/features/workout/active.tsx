@@ -185,7 +185,7 @@ function Logger({
       <View style={layout.row}><IconButton name="down" label={t('closeWorkout')} onPress={closeWorkout} /><View style={{
           flex: 1,
           alignItems: 'center'
-        }}><ThemedText muted variant="caption">{session.data.origin === 'template' ? t('template') : t('workoutName')}</ThemedText><ThemedText variant="headline">{String(session.data.name ?? t('workoutName'))}</ThemedText></View><Button testID="finish-button" label={t('finish')} onPress={() => {
+        }}>{session.data.origin === 'template' && <ThemedText muted variant="caption">{t('template')}</ThemedText>}<ThemedText variant="headline">{String(session.data.name ?? t('workoutName'))}</ThemedText></View><Button testID="finish-button" label={t('finish')} onPress={() => {
           store.updateTimer({
             minimized: true
           });
@@ -284,7 +284,7 @@ function Logger({
       store.addExercise(session.id, name);
       setPicker(false);
     })} />}
-    {cursor && current && <Keypad label={`${current.data.exercise} · ${t('set')} ${cursor.index + 1} · ${t(cursor.field)}`} field={cursor.field} unit={store.unit()} equipment={exerciseFor(String(current.data.exercise)).equipment} value={value} previous={store.previous(current)[cursor.index] ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}` : ''} onChange={input} onNext={next} onClose={() => setCursor(null)} />}
+    {cursor && current && <Keypad inputId={`${cursor.entryId}:${cursor.index}:${cursor.field}`} label={`${current.data.exercise} · ${t('set')} ${cursor.index + 1} · ${t(cursor.field)}`} field={cursor.field} unit={store.unit()} equipment={exerciseFor(String(current.data.exercise)).equipment} value={value} previous={store.previous(current)[cursor.index] ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}` : ''} onChange={input} onNext={next} onClose={() => setCursor(null)} />}
     {finish && <FinishSheet store={store} session={session} onClose={() => setFinish(false)} />}
   </SafeAreaView>;
 }
