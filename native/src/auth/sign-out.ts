@@ -27,6 +27,8 @@ export async function completeSignOut(marker: SignOutMarker, repo: Repository, s
   }
   await storage.remove();
 }
+export class DepartureFailure extends Error { constructor(){super('Sign-out recovery required.');} }
+export class CorruptSignOutMarker extends Error { constructor(){super('Sign-out recovery unavailable.');} }
 export class UnreadableSignOutMarker extends Error {
   constructor(){super('Sign-out recovery unavailable.');}
 }
@@ -42,7 +44,7 @@ export function recoverSignOut(database: OwnerDatabase, storage: SignOutStorage,
   const existing=recoveries.get(storage);if(existing)return existing;
   const flight=(async()=>{
     let marker:SignOutMarker|null;
-    try {marker=await storage.read();} catch {throw new UnreadableSignOutMarker();}
+    try {marker=await storage.read();} catch(error) {if(error instanceof CorruptSignOutMarker)throw error;throw new UnreadableSignOutMarker();}
     if(!marker)return null;
     await completeSignOut(marker,database.forOwner(marker.owner),storage,clearSession);
     return marker.owner;

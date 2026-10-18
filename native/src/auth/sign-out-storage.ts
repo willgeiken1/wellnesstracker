@@ -1,11 +1,13 @@
 import * as SecureStore from 'expo-secure-store';
-import type { SignOutMarker, SignOutStorage } from './sign-out';
+import { CorruptSignOutMarker, UnreadableSignOutMarker, type SignOutMarker, type SignOutStorage } from './sign-out';
 const key='insight.sign-out-pending.v1';
 /** One small native SecureStore item; deliberately separate from auth session chunks and SQLite. */
 export const signOutStorage: SignOutStorage = {
   async read() {
+    let raw:string|null;
+    try {raw=await SecureStore.getItemAsync(key);}catch {throw new UnreadableSignOutMarker();}
+    if(raw===null)return null;
     try {
-      const raw=await SecureStore.getItemAsync(key);if(raw===null)return null;
       const value:unknown=JSON.parse(raw);
       if(!value || typeof value!=='object')throw new Error();
       const marker=value as SignOutMarker;
@@ -13,7 +15,7 @@ export const signOutStorage: SignOutStorage = {
         || !Number.isSafeInteger(marker.startedAt) || marker.startedAt<0
         || !['pending','wiped','session-cleared'].includes(marker.phase))throw new Error();
       return {owner:marker.owner,startedAt:marker.startedAt,phase:marker.phase};
-    } catch {throw new Error('Sign-out recovery unavailable.');}
+    } catch {throw new CorruptSignOutMarker();}
   },
   async write(marker) {
     try {await SecureStore.setItemAsync(key,JSON.stringify(marker),{keychainAccessible:SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY});}

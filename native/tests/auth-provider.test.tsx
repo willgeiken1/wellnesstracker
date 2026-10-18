@@ -8,6 +8,7 @@ import { AuthProvider, useAuth, type AuthState } from '../src/auth/provider';
 import { OWNER_A, OWNER_B, syntheticRow } from '../fixtures/sync';
 import { openLocalDatabase } from '../src/data/database';
 import { clearLocalSession, getAuthClient } from '../src/auth/client';
+import { CorruptSignOutMarker } from '../src/auth/sign-out';
 import { signOutStorage } from '../src/auth/sign-out-storage';
 import { seedDemo } from '../fixtures/demo';
 import type { Repository } from '../src/data/repository';
@@ -321,8 +322,9 @@ test.each(['wipe','marker','session','remove'])('failed %s departure releases it
  if(failure==='session')jest.mocked(clearLocalSession).mockRejectedValueOnce(new Error('synthetic'));
  if(failure==='remove')jest.mocked(signOutStorage.remove).mockRejectedValueOnce(new Error('synthetic'));
  await act(async()=>{await expect(observed.signOut()).rejects.toThrow();});
- const pushes=mockPush.mock.calls.length;
- await act(async()=>{await observed.syncNow();});expect(mockPush).toHaveBeenCalledTimes(pushes);expect(observed.ready).toBe(false);
+ const pushes=mockPush.mock.calls.length,lockedSession=observed.session;
+ await act(async()=>{expect(await observed.signIn('fixture@example.test','synthetic')).toBe('authUnavailable');fixture.emit(session(OWNER_B));fixture.emit(null);await observed.syncNow();});
+ expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();expect(observed.session).toBe(lockedSession);expect(observed.recovery).toBe('departure');expect(mockPush).toHaveBeenCalledTimes(pushes);expect(observed.ready).toBe(false);
  await act(async()=>{await observed.signOut(true);});
  expect(marker).toBeNull();expect(observed.session).toBeNull();expect(observed.ready).toBe(true);await view.unmount();
 });
@@ -341,6 +343,7 @@ test.each(['corrupt','unreadable'])('%s marker offers confirmed escape and lands
  jest.mocked(signOutStorage.remove).mockImplementation(async()=>{expect(storedSession).toBe(false);order.push('remove');marker=false;});
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
  const view=await render(<AuthProvider client={fixture.client}><RecoveryProbe/></AuthProvider>);
+ if(kind==='unreadable'){for(let i=0;i<2;i++){await waitFor(()=>expect(view.getByRole('button',{name:'Try again'})).toBeTruthy());await fireEvent.press(view.getByRole('button',{name:'Try again'}));}}
  await waitFor(()=>expect(view.getByRole('button',{name:'Erase all local data and sign out'})).toBeTruthy());
  expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
  await fireEvent.press(view.getByRole('button',{name:'Erase all local data and sign out'}));
@@ -354,7 +357,7 @@ test.each(['corrupt','unreadable'])('%s marker offers confirmed escape and lands
 
 test.each(['wipe','session','remove'])('escape %s failure keeps marker, stays locked and allows retry',async failure=>{
  const fixture=clientFixture();let marker=true,storedSession=true;
- jest.mocked(signOutStorage.read).mockRejectedValue(new Error('synthetic unreadable marker'));
+ jest.mocked(signOutStorage.read).mockRejectedValue(new CorruptSignOutMarker());
  const wipeAll=jest.fn();if(failure==='wipe')wipeAll.mockImplementationOnce(()=>{throw new Error('synthetic');});
  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:fixtureRepo,wipeAll});
  jest.mocked(clearLocalSession).mockImplementation(async()=>{storedSession=false;});
@@ -395,4 +398,58 @@ test('screen and provider share one pre-sync: warning and confirmed departure fi
   expect(a.wipe).toHaveBeenCalledTimes(1);expect(observed.session).toBeNull();
   expect(sync).toHaveBeenCalledTimes(1);expect(Date.now()-started).toBeLessThanOrEqual(10000);
  } finally {sync.mockRestore();alert.mockRestore();await view.unmount();jest.useRealTimers();}
+});
+
+
+test.each([OWNER_A,'demo'])('boot recovery clears %s session with the exact strictness argument',async owner=>{
+ jest.mocked(signOutStorage.read).mockResolvedValue({owner,startedAt:1234,phase:'wiped'});
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:fixtureRepo});
+ const view=await render(<AuthProvider client={null}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(jest.mocked(clearLocalSession).mock.calls).toEqual(owner==='demo'?[[]]:[[true]]);
+ await view.unmount();
+});
+test('transient read failure offers only retry; successful reread resumes normal owner recovery',async()=>{
+ const fixture=clientFixture(null),repo=fixtureRepo(OWNER_A);
+ jest.mocked(signOutStorage.read).mockRejectedValueOnce(new Error('synthetic')).mockResolvedValue({owner:OWNER_A,startedAt:1234,phase:'pending'});
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?repo:fixtureRepo(owner)});
+ const view=await render(<AuthProvider client={fixture.client}><RecoveryProbe/></AuthProvider>);
+ await waitFor(()=>expect(view.getByRole('button',{name:'Try again'})).toBeTruthy());
+ expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();
+ expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+ await fireEvent.press(view.getByRole('button',{name:'Try again'}));
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(signOutStorage.read).toHaveBeenCalledTimes(2);expect(repo.wipe).toHaveBeenCalledTimes(1);expect(clearLocalSession).toHaveBeenCalledWith(true);
+ await view.unmount();
+});
+test.each([false,true])('three consecutive read failures offer escape; reread resumes normal recovery (wipe failure=%s)',async wipeFails=>{
+ const fixture=clientFixture();jest.mocked(signOutStorage.read).mockRejectedValue(new Error('synthetic'));
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:fixtureRepo});
+ const view=await render(<AuthProvider client={fixture.client}><RecoveryProbe/></AuthProvider>);
+ for(let failures=1;failures<=3;failures++){
+  await waitFor(()=>expect(signOutStorage.read).toHaveBeenCalledTimes(failures));
+  expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+  if(failures<3){expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();await fireEvent.press(view.getByRole('button',{name:'Try again'}));}
+ }
+ await waitFor(()=>expect(view.getByRole('button',{name:'Erase all local data and sign out'})).toBeTruthy());
+ jest.mocked(signOutStorage.read).mockResolvedValue(wipeFails?{owner:OWNER_A,startedAt:1234,phase:'pending'}:null);fixture.auth.getSession.mockResolvedValue({data:{session:null},error:null});
+ if(wipeFails){const repo=fixtureRepo(OWNER_A);jest.spyOn(repo,'wipe').mockImplementation(()=>{throw new Error('synthetic');});jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:()=>repo});}
+ await fireEvent.press(view.getByRole('button',{name:'Try again'}));
+ if(wipeFails){await waitFor(()=>expect(observed.recovery).toBeUndefined());expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();}
+ else await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(clearLocalSession).not.toHaveBeenCalled();await view.unmount();
+});
+test.each([false,true])('escape warning counts all-owner pending changes, gracefully handles count failure=%s',async fail=>{
+ jest.mocked(signOutStorage.read).mockRejectedValue(new CorruptSignOutMarker());
+ const countAllUnsynced=jest.fn(()=>{if(fail)throw new Error('synthetic');return 7;});
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:fixtureRepo,countAllUnsynced});
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const view=await render(<AuthProvider client={null}><RecoveryProbe/></AuthProvider>);
+ await waitFor(()=>expect(observed.recovery).toBe('corrupt-marker'));
+ await fireEvent.press(view.getByRole('button',{name:'Erase all local data and sign out'}));
+ await waitFor(()=>expect(alert).toHaveBeenCalled());
+ expect(countAllUnsynced).toHaveBeenCalledTimes(1);
+ expect(alert.mock.calls[0][1]).toContain(fail?'Unsynced changes on this phone will be lost.':'7 unsynced changes will be lost');
+ if(fail)expect(alert.mock.calls[0][1]).not.toMatch(/\d/);
+ alert.mockRestore();await view.unmount();
 });

@@ -1,3 +1,4 @@
+import { DepartureFailure } from './sign-out';
 import { useRef, useState } from 'react';
 import { TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
@@ -52,18 +53,18 @@ export function AuthForm({create=false}: {create?:boolean}) {
   </Screen>;
 }
 export function Account() {
-  const auth=useAuth();const [error,setError]=useState(false),[busy,setBusy]=useState(false);
+  const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|null>(null),[busy,setBusy]=useState(false);
   const submitting=useRef(false);
   const leave=async(discardUnsynced=false)=>{
     if(submitting.current)return;
     submitting.current=true;setBusy(true);
     try { if(discardUnsynced)await auth.signOut(true);else await auth.signOut(); }
-    catch {setError(true);}
+    catch(cause) {setError(cause instanceof DepartureFailure?'signOutFailed':'signOutNotStarted');}
     finally {submitting.current=false;setBusy(false);}
   };
   const signOut=async()=>{
     if(submitting.current)return;
-    submitting.current=true;setBusy(true);setError(false);
+    submitting.current=true;setBusy(true);setError(null);
     try {
       await (auth.prepareSignOut?auth.prepareSignOut():syncBeforeSignOut(auth.syncNow));
       const count=auth.repository?.unsyncedCount()??auth.pending;
@@ -72,7 +73,7 @@ export function Account() {
         {text:t('cancel'),style:'cancel'},
         {text:t('signOut'),style:'destructive',onPress:()=>{void leave(true);}},
       ]);
-    } catch {setError(true);}
+    } catch(cause) {setError(cause instanceof DepartureFailure?'signOutFailed':'signOutNotStarted');}
     finally {submitting.current=false;setBusy(false);}
   };
   return <Screen title={t('account')}>
@@ -84,26 +85,31 @@ export function Account() {
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
       <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
     </>}
-    {error&&<ThemedText accessibilityRole="alert">{t('signOutFailed')}</ThemedText>}
+    {error&&<ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
   </Screen>;
 }
 
-/** Available while routes are locked; destructive escape is exclusive to marker-read failure. */
+/** Recovery actions remain outside the locked navigation routes. */
 export function LocalDataRecovery() {
   const auth=useAuth(),submitting=useRef(false);const [busy,setBusy]=useState(false),[error,setError]=useState(false);
   if(!auth.recovery)return null;
   const run=async()=>{
     if(submitting.current)return;submitting.current=true;setBusy(true);setError(false);
-    try {if(auth.recovery==='corrupt-marker')await auth.recoverLocalData?.();else await auth.signOut(true);}
+    try {if(auth.recovery==='corrupt-marker'||auth.recovery==='unreadable-marker')await auth.recoverLocalData?.();else await auth.signOut(true);}
     catch {setError(true);}finally{submitting.current=false;setBusy(false);}
   };
-  const escape=auth.recovery==='corrupt-marker';
+  const escape=auth.recovery==='corrupt-marker'||auth.recovery==='unreadable-marker';
   return <Screen title={t('localRecovery')}>
-    <ThemedText>{t(escape?'eraseAllBody':'signOutFailed')}</ThemedText>
+    <ThemedText>{t(escape?'eraseAllBody':auth.recovery==='read-error'?'markerReadFailed':'signOutFailed')}</ThemedText>
+    {(auth.recovery==='read-error'||auth.recovery==='unreadable-marker')&&<Button label={t('tryAgain')} onPress={()=>auth.retryMarkerRead?.()}/>}
+    {auth.recovery!=='read-error'&&<>
     <Button label={t(escape?'eraseAllLocal':'retrySignOut')} variant="destructive" busy={busy} disabled={busy} onPress={()=>{
-      if(escape)Alert.alert(t('eraseAllLocal'),t('eraseAllBody'),[{text:t('cancel'),style:'cancel'},{text:t('eraseAllLocal'),style:'destructive',onPress:()=>{void run();}}]);
+      if(escape){void (async()=>{
+        let count:number|undefined;try{count=await auth.countRecoveryUnsynced?.();}catch{ /* Warning still required when count is unavailable. */ }
+        Alert.alert(t('eraseAllLocal'),`${t('eraseAllBody')} ${count===undefined?t('eraseAllUnsynced'):signOutUnsynced(count)}`,[{text:t('cancel'),style:'cancel'},{text:t('eraseAllLocal'),style:'destructive',onPress:()=>{void run();}}]);
+      })();}
       else void run();
-    }}/>
+    }}/></>}
     {(error||auth.recoveryFailed)&&<ThemedText accessibilityRole="alert">{t('recoveryFailed')}</ThemedText>}
   </Screen>;
 }

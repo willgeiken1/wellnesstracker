@@ -3,6 +3,7 @@ import { AuthContext, type AuthState } from '../src/auth/provider';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { AuthForm, Welcome, Account } from '../src/auth/screens';
 import { Alert } from 'react-native';
+import { DepartureFailure } from '../src/auth/sign-out';
 import { SIGN_OUT_SYNC_TIMEOUT_MS } from '../src/auth/sign-out-sync';
 jest.mock('expo-router',()=>({router:{push:jest.fn(),replace:jest.fn()}}));
 jest.mock('../src/auth/client',()=>({getAuthClient:()=>null}));
@@ -95,8 +96,16 @@ test('destructive confirmation double tap starts only one sign-out while in flig
  await act(async()=>{confirm();confirm();});
  expect(auth.signOut).toHaveBeenCalledTimes(1);await act(async()=>{finish();});
 });
-test('failed sign-out explains retry without claiming an erasure',async()=>{
- const auth={...state(),signOut:jest.fn(async()=>{throw new Error('synthetic');})};await wrap(<Account/>,auth);
+test('failed departure warns that erasure may have started',async()=>{
+ const auth={...state(),signOut:jest.fn(async()=>{throw new DepartureFailure();})};await wrap(<Account/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
  expect(screen.getByRole('alert')).toHaveTextContent('Sign-out did not finish. Some local data may already have been erased. Try again now to finish signing out.');
+});
+
+test.each(['guard','count','pre-sync'])('failure before wipe (%s) says nothing was erased',async kind=>{
+ const auth:AuthState={...state(),signOut:jest.fn(async()=>{throw new Error('synthetic guard');})};
+ if(kind==='count')auth.repository={unsyncedCount:()=>{throw new Error('synthetic count');}} as unknown as AuthState['repository'];
+ if(kind==='pre-sync')auth.prepareSignOut=async()=>{throw new Error('synthetic pre-sync');};
+ await wrap(<Account/>,auth);await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(screen.getByRole('alert')).toHaveTextContent('Sign-out did not finish. Nothing was erased. Try again.');
 });
