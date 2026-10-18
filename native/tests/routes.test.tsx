@@ -1,3 +1,4 @@
+jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import type { TestInstance } from 'test-renderer';
 import { renderRouter, screen, fireEvent } from 'expo-router/testing-library';
 import { redirectSystemPath } from '../src/app/+native-intent';

@@ -15,5 +15,5 @@ test('theme and accent persist through provider restart and reset across owner r
  await view.unmount();view=await render(<ThemeProvider repository={a}><Appearance/></ThemeProvider>);
  expect(screen.getByRole('tab',{name:'Light'})).toBeSelected();expect(screen.getByRole('button',{name:'Dusk'})).toBeSelected();
  await view.rerender(<ThemeProvider repository={b}><Appearance/></ThemeProvider>);
- expect(screen.getByRole('tab',{name:'System'})).toBeSelected();expect(screen.getByRole('button',{name:'Citrus'})).toBeSelected();
+ expect(screen.getByRole('tab',{name:'System'})).toBeSelected();expect(screen.getByRole('button',{name:'Sea Glass'})).toBeSelected();
 });

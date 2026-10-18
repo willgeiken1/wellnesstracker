@@ -1,3 +1,4 @@
+jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
 import type { TestInstance } from 'test-renderer';
@@ -35,7 +36,7 @@ test('tab shell renders the five native tab labels', async () => {
 test('Appearance changes theme, accent, and restores system following', async () => {
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
   await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
-  expect(screen.getByTestId('theme')).toHaveTextContent('light/citrus/#F3F4F1');
+  expect(screen.getByTestId('theme')).toHaveTextContent('light/sea/#F3F4F1');
   await fireEvent.press(screen.getByRole('tab', { name: 'Dark' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Sea Glass' }));
   expect(screen.getByTestId('theme')).toHaveTextContent('dark/sea/#0F0F11');

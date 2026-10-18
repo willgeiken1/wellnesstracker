@@ -133,7 +133,7 @@ test('upgrade wipes payloads from pre-decision local tombstones without losing p
  const path=`/tmp/insight-tombstone-upgrade-${process.pid}.db`;
  const first=await localDatabase(path);
  first.repo.putLocal(syntheticRow('weigh_ins'));
- first.sqlite.exec("UPDATE weigh_ins SET deleted_at=100; DELETE FROM __drizzle_migrations WHERE created_at=1792238400002");
+ first.sqlite.exec("UPDATE weigh_ins SET deleted_at=100; DELETE FROM __drizzle_migrations WHERE created_at>=1792238400002; DROP TABLE workout_local; DROP TABLE workout_milestones; DROP TABLE workout_weekly");
  first.sqlite.close();
  const second=await localDatabase(path);
  try {
@@ -176,7 +176,7 @@ test('photo tombstone upgrade erases metadata but preserves live photos, version
  first.repo.putLocal({...row,data:{file_name:'synthetic.jpg',captured_at:42,width:10,height:20}});
  first.repo.putLocal({...row,id:'30000000-0000-4000-8000-000000000699',data:{file_name:'live.jpg'}});
  first.sqlite.prepare('UPDATE photos SET deleted_at=99 WHERE id=?').run(row.id);
- first.sqlite.exec('DELETE FROM __drizzle_migrations WHERE created_at=1792238400002');first.sqlite.close();
+ first.sqlite.exec('DELETE FROM __drizzle_migrations WHERE created_at>=1792238400002; DROP TABLE workout_local; DROP TABLE workout_milestones; DROP TABLE workout_weekly');first.sqlite.close();
  const second=await localDatabase(path);
  try {
   expect(second.repo.get('photos',row.id)).toMatchObject({updated_at:row.updated_at,deleted_at:99,data:{file_name:null,captured_at:null,width:null,height:null}});

@@ -26,3 +26,9 @@ describe.each([true, false])('native intent initial=%s', initial => {
     expect(redirectSystemPath({ path, initial })).toBe(expected);
   });
 });
+
+test.each([true,false])('template deep link preserves only a valid routine id, initial=%s',initial=>{
+  const id='40000000-0000-4000-8000-000000000001';
+  expect(redirectSystemPath({path:`insight://workout/start?routine=${id}&other=discard`,initial})).toBe(`/workout/start?routine=${id}`);
+  expect(redirectSystemPath({path:'insight://workout/start?routine=bad',initial})).toBe('/workout/start');
+});

@@ -33,6 +33,8 @@ The contrast suite checks text, muted text and both accent tokens against bg/sur
 
 ## Placeholders and next part
 
+P3 now replaces the workout placeholders with the M2 offline logger, template editor, rest timer and finish summary; see [p3-logger.md](p3-logger.md). Sea Glass is the new fallback accent, following Will’s Oct 17 decision. Food, Body Atlas, platform live displays and the remaining M2 surfaces stay in their own follow-ups.
+
 Every feature screen other than Appearance is explicitly marked **M2/M3 placeholder**, uses EmptyState, and has an action leading to another route or Home. Segments select their corresponding placeholder; they contain no synthetic health values. Appearance controls are the working M1 feature.
 
 P2c now supplies SQLite settings persistence and the separately scoped data/auth/sync foundation; see [p2-sync.md](p2-sync.md). Theme/accent preferences survive process restart under the active owner namespace. P2b itself introduced no SQLite, Supabase, authentication, sync, AI, telemetry, Health, notification or paid-service integration. The next milestone adds M2 product behavior and the separately scoped blob-to-row importer; the P2c server SQL remains draft-only and unapplied.

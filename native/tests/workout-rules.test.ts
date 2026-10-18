@@ -1,0 +1,113 @@
+import { displayWeight, suggestion, step, plates, detectPR, attribute, localDay, weekOf, validateSet, validateDate, cardKey, shouldShowCard, keypad } from '../src/core/workout/rules';
+const done = (weight: number, reps = 8) => ({
+  weight,
+  reps,
+  done: true
+});
+describe('equipment progression and keypad', () => {
+  test.each(['barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'other'] as const)('%s, both units and one miss', equipment => {
+    for (const unit of ['lb', 'kg'] as const) {
+      const jump = equipment === 'bodyweight' || equipment === 'other' ? 0 : equipment === 'machine' || equipment === 'cable' ? unit === 'lb' ? 10 : 5 : unit === 'lb' ? 5 : 2.5;
+      expect(step(equipment, unit)).toBe(jump);
+      expect(suggestion([done(100), done(100)], equipment, unit, 8).weight).toBe(100 + jump);
+      expect(suggestion([done(100), done(100, 7)], equipment, unit, 8).weight).toBe(100);
+    }
+  });
+  test('no history, excludes warmups and undone; uses each last rep target', () => {
+    expect(suggestion([], 'barbell', 'lb').weight).toBeNull();
+    expect(suggestion([done(100), {
+      ...done(200, 1),
+      warmup: true
+    }, {
+      ...done(300, 1),
+      done: false
+    }], 'barbell', 'lb', 8).weight).toBe(105);
+    expect(suggestion([done(100, 6), done(100, 8)], 'barbell', 'lb').weight).toBe(105);
+  });
+  test('jump card key persists across sessions; unchanged weight never explains', () => {
+    const s = suggestion([done(185), done(185)], 'barbell', 'lb', 8);
+    expect(shouldShowCard('Bench', s, 'lb', [])).toBe(true);
+    expect(shouldShowCard('Bench', s, 'lb', [cardKey('Bench', 190, 'lb')])).toBe(false);
+    expect(shouldShowCard('Bench', {
+      ...s,
+      jump: false
+    }, 'lb', [])).toBe(false);
+  });
+  test('keypad blank stays blank, one decimal, rep decimal rejected', () => {
+    expect(keypad('', 'backspace', false)).toBe('');
+    expect(keypad('', '.', true)).toBe('0.');
+    expect(keypad('1.2', '.', true)).toBe('1.2');
+    expect(keypad('8', '.', false)).toBe('8');
+  });
+  test('standard bars, per-side plates and impossible residual', () => {
+    expect(plates(190, 'lb')).toEqual({
+      bar: 45,
+      plates: [45, 25, 2.5],
+      remainder: 0
+    });
+    expect(plates(100, 'kg')).toEqual({
+      bar: 20,
+      plates: [25, 15],
+      remainder: 0
+    });
+    expect(plates(21, 'kg').remainder).toBe(.5);
+    expect(plates(10, 'kg').remainder).toBeLessThan(0);
+  });
+});
+describe('records, attribution and validation', () => {
+  test('weight and Epley records, ties and first ever excluded', () => {
+    expect(detectPR([done(190)], [done(185)])).toEqual({
+      weight: true,
+      e1rm: true,
+      bestWeight: 190,
+      bestE1rm: 190 * (1 + 8 / 30)
+    });
+    expect(detectPR([done(185, 10)], [done(190, 5)]).e1rm).toBe(true);
+    expect(detectPR([done(185)], [done(185)]).weight).toBe(false);
+    expect(detectPR([done(190)], []).weight).toBe(false);
+    expect(detectPR([{
+      ...done(200),
+      done: false
+    }, {
+      ...done(300),
+      warmup: true
+    }], [done(185)]).weight).toBe(false);
+  });
+  test('main 1, helper .5, excludes undone and warmup', () => {
+    expect(attribute([{
+      main: 'chest',
+      helpers: ['triceps'],
+      sets: [done(100), done(100), {
+        ...done(100),
+        done: false
+      }, {
+        ...done(100),
+        warmup: true
+      }]
+    }])).toEqual({
+      chest: 2,
+      triceps: 1
+    });
+  });
+  test('local Monday week across year boundary', () => {
+    expect(weekOf(new Date(2027, 0, 3, 23, 59))).toBe('2026-12-28');
+    expect(weekOf(new Date(2027, 0, 4))).toBe('2027-01-04');
+    expect(localDay(new Date(2026, 9, 18))).toBe('2026-10-18');
+  });
+  test('hard bounds and soft warnings', () => {
+    expect(validateSet('', '8', 'kg').valid).toBe(false);
+    expect(validateSet('0', '0', 'kg').valid).toBe(true);
+    expect(validateSet('1000', '100', 'kg').valid).toBe(true);
+    expect(validateSet('1001', '8', 'kg').valid).toBe(false);
+    expect(validateSet('50', '101', 'kg').valid).toBe(false);
+    expect(validateSet('50', '8.5', 'kg').valid).toBe(false);
+    expect(validateSet('50', '51', 'kg').warning).toBe('highReps');
+    expect(validateSet('100', '8', 'kg', 40).warning).toBe('weightJump');
+    expect(validateDate(Date.now() + 10000)).toBe(false);
+  });
+});
+test('display rounds half lb/quarter kg without changing canonical weight', () => {
+  expect(displayWeight(80, 'lb')).toBe(176.5);
+  expect(displayWeight(80.12, 'kg')).toBe(80);
+  expect(displayWeight(80.13, 'kg')).toBe(80.25);
+});
