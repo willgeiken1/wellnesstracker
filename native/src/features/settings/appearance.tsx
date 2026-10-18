@@ -8,7 +8,7 @@ import { useTheme } from '@/design/theme-provider';
 import { accents, tokens, type ThemeOverride } from '@/design/tokens';
 import { t } from '@/i18n/en';
 export default function Appearance() {
-  const { override, setOverride, accent, setAccent } = useTheme();
+  const { override, setOverride, accent, setAccent, persistenceError } = useTheme();
   return <Screen><Card>
     <ThemedText variant="headline" accessibilityRole="header">{t('theme')}</ThemedText>
     <SegmentedControl label={t('theme')} value={override} onChange={setOverride}
@@ -21,5 +21,6 @@ export default function Appearance() {
       <Chip label={t(value)} selected={accent === value} onPress={() => setAccent(value)} />
     </View>)}
     <ThemedText muted variant="caption">{t('appearanceHint')}</ThemedText>
+    {persistenceError && <ThemedText accessibilityRole="alert">{t('preferenceError')}</ThemedText>}
   </Card></Screen>;
 }

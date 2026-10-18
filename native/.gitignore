@@ -45,3 +45,6 @@ example
 
 # Public design tokens; the root ignores other files named tokens.json.
 !/src/design/tokens.json
+
+# Empty public configuration template, never real values.
+!.env.example

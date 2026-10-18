@@ -8,6 +8,8 @@ The app uses `com.insightwellness.app`, the `insight` scheme, iOS 17+ (phone onl
 
 Use the commands in [AGENTS.md §3](../AGENTS.md#3-commands-run-from-native). Install dependencies with `npm ci` in this directory. `npm start` starts the development client server; `npm run ios` and `npm run android` build locally. For Android, set ANDROID_HOME to ~/Library/Android/sdk and JAVA_HOME to /opt/homebrew/opt/openjdk@17; start Medium_Phone_API_37.0 first. For iOS, select an iPhone simulator using the iOS 26.5 runtime. No developer account is needed for these simulator builds.
 
+For an Android emulator reaching Metro on the Mac, run `adb reverse tcp:8081 tcp:8081`. If the separately approved local Supabase runs on Mac loopback, reverse its API port too (default: `adb reverse tcp:54321 tcp:54321`) and use the loopback URL from the emulator. Reapply these mappings after restarting the emulator. These are validation instructions only; no emulator or service was started for this review.
+
 No Health permissions, auth, sync, analytics, widgets, secrets or hosted services are configured. P2b introduces Jest coverage for tokens, contrast, navigation, linking and Appearance; business logic and golden fixtures arrive in later parts.
 
 Our `plugins/withStripLocalNetworkingRelease.js` strips local-network keys from the built Release Info.plist; see the P1 report for the processed-plist dependency and clean-build evidence.
