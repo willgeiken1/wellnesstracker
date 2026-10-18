@@ -29,12 +29,32 @@ export class Repository {
     this.safe(()=>this.db.run(sql`INSERT INTO ${this.localTable(key)}(owner_id,key,value) VALUES(${this.owner},${key},${JSON.stringify(value)}) ON CONFLICT(owner_id,key) DO UPDATE SET value=excluded.value`));
     this.notify();
   }
-  /** Multi-row logger operations commit atomically; no asynchronous work belongs here. */
+  /** Multi-row logger operations are synchronous. No sync work (including
+   * flagConflict), ack, applyPage or wipe is allowed inside atomic().
+   * A failed nested atomic marks the entire outer transaction rollback-only. */
   private batchDepth = 0;
+  private rollbackOnly = false;
   private notify() { if (!this.batchDepth) { this.viewRevision++; this.listeners.forEach(listener => listener()); } }
+  private outsideAtomic() {
+    if (this.batchDepth) {
+      this.rollbackOnly = true;
+      throw new Error('Operation is forbidden inside atomic().');
+    }
+  }
   atomic<T>(operation:()=>T):T {
-    if (this.batchDepth) return operation();
-    const result=this.safe(()=>this.db.transaction(()=>{this.batchDepth++;try{return operation();}finally{this.batchDepth--;}}));
+    if (this.batchDepth) {
+      try { return operation(); }
+      catch (error) { this.rollbackOnly = true; throw error; }
+    }
+    this.rollbackOnly = false;
+    const result = this.safe(() => this.db.transaction(() => {
+      this.batchDepth++;
+      try {
+        const value = operation();
+        if (this.rollbackOnly) throw new Error('Transaction requires rollback.');
+        return value;
+      } finally { this.batchDepth--; this.rollbackOnly = false; }
+    }));
     this.notify();return result;
   }
 
@@ -85,6 +105,7 @@ export class Repository {
   }
   /** Atomic account departure, including local-only caches and flagged outbox rows. */
   wipe() {
+    this.outsideAtomic();
     this.safe(() => this.db.transaction(() => {
       for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
         this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
@@ -122,6 +143,7 @@ export class Repository {
     this.db.run(sql`INSERT INTO sync_conflicts(owner_id,table_name,row_id,reason) VALUES(${this.owner},${table},${id},'provenance') ON CONFLICT(owner_id,table_name,row_id) DO NOTHING`);
   }
   flagConflict(item: Pending) {
+    this.outsideAtomic();
     this.safe(() => {
       if (item.row.owner_id !== this.owner) throw new Error('Owner mismatch.');
       this.recordConflict(item.row.table,item.row.id);
@@ -129,6 +151,7 @@ export class Repository {
     this.notify();
   }
   ack(items: Pending[], accepted?: Row[]) {
+    this.outsideAtomic();
     this.safe(() => this.db.transaction(() => {
       if (accepted && accepted.length !== items.length) throw new Error('Invalid acknowledgment.');
       let correctedClock = false;
@@ -156,6 +179,7 @@ export class Repository {
   }
   cursor(table: Table) { return this.safe(() => this.state(`cursor:${table}`) ?? '0'); }
   applyPage(table: Table, page: ServerRow[], cursor: string) {
+    this.outsideAtomic();
     this.safe(() => this.db.transaction(() => {
       this.table(table);
       if (!/^\d+$/.test(cursor) || BigInt(cursor) < BigInt(this.cursor(table))) throw new Error('Invalid cursor.');

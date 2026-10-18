@@ -198,16 +198,16 @@ export function WorkoutSummary({
   id: string;
 }) {
   const store = useWorkoutStore(source.repo);
-  const { colors, reduceMotion, reduceMotionReady } = useTheme();
+  const { colors } = useTheme();
   const repo = store.repo;
   const data = store.summary(id),
     s = data.session;
   useEffect(() => {
-    if (!reduceMotionReady || !data.prs.length || repo.localGet(`buzz:${id}`))
+    if (!data.prs.length || repo.localGet(`buzz:${id}`))
       return;
     repo.localSave(`buzz:${id}`, true);
-    if (!reduceMotion) return signatureBuzz(repo);
-  }, [repo, id, data.prs.length, reduceMotion, reduceMotionReady]);
+    if (repo.localGet<boolean>("haptics") !== false) return signatureBuzz(repo);
+  }, [repo, id, data.prs.length]);
   const close = () =>
     router.canDismiss() ? router.dismissAll() : router.replace("/");
   const milestones = store.milestones(),

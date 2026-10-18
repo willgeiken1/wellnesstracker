@@ -10,6 +10,7 @@ import { WorkoutStore } from "../src/data/workout/store";
 import { memoryRepository } from "./workout-repository";
 import { createLoggerFixture } from "../src/features/workout/devFixture";
 import { WorkoutSummary } from "../src/features/workout/summary";
+import { RestContours } from "../src/features/workout/timer";
 import { Pill } from "../src/features/workout/primitives";
 
 test.each(["dark", "light"] as const)(
@@ -127,4 +128,16 @@ test.each(['dark','light'] as const)('older shelf tokens are desaturated in %s w
   const newest=screen.getByTestId('summit-token-new').queryAll(n=>n.type==='RNSVGRadialGradient'||n.type==='RNSVGLinearGradient').flatMap(n=>n.props.gradient);
   expect(newest).toContain((ReactNative.processColor(createTheme(mode,'sea').accent) as number) | 0);
  } finally {scheme.mockRestore();}
+});
+
+
+test.each(['dark', 'light'] as const)('rest ring track uses the %s semantic token', async mode => {
+  const scheme = jest.spyOn(ReactNative, 'useColorScheme').mockReturnValue(mode);
+  try {
+    await render(<ThemeProvider><RestContours seconds={60} duration={90} style="unwind" /></ThemeProvider>);
+    const track = screen.getByTestId('rest-contours').queryAll(n => n.type === 'RNSVGPath')[0];
+    const colors = createTheme(mode, 'sea');
+    expect(track.props.stroke).toEqual({ type: 0, payload: ReactNative.processColor(colors[mode === 'dark' ? 'text-muted' : 'surface-2']) });
+    expect(track.props.opacity ?? 1).toBe(mode === 'dark' ? 0.4 : 1);
+  } finally { scheme.mockRestore(); }
 });

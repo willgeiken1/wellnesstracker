@@ -146,3 +146,8 @@ test('keypad accepts boundary values and kg quarter plates', () => {
 test.each([['lb', 2204.7], ['kg', 1000.01], ['lb', 135135], ['kg', Infinity]] as const)('no plate calculation above maximum in %s', (unit, weight) => {
   expect(plates(weight, unit).plates).toEqual([]);
 });
+
+
+test('a main muscle repeated in helpers counts only one set', () => {
+  expect(attribute([{ main: 'chest', helpers: ['chest'], sets: [done(100)] }])).toEqual({ chest: 1 });
+});

@@ -140,7 +140,15 @@ test('owner scoped local state erased by both existing wipe paths', async () => 
   other.localSave('timer', {
     endAt: 456
   });
+  for (const key of ['weekly', 'milestones']) {
+    repo.localSave(key, { synthetic: true });
+    other.localSave(key, { synthetic: 'demo' });
+  }
   repo.wipe();
+  for (const key of ['weekly', 'milestones']) {
+    expect(repo.localGet(key)).toBeUndefined();
+    expect(other.localGet(key)).toEqual({ synthetic: 'demo' });
+  }
   expect(repo.localGet('timer')).toBeUndefined();
   expect(other.localGet('timer')).toEqual({
     endAt: 456
@@ -158,6 +166,7 @@ test('atomic template start rolls back on a failed child write', async () => {
     target_sets: 2,
     target_reps: 8
   }]);
+  repo.ack(repo.pending()); // Only the attempted start should contribute pending rows.
   const save = repo.save.bind(repo);
   jest.spyOn(repo, 'save').mockImplementation((table, ...args) => {
     if (table === 'entries') throw Error('injected');
@@ -165,6 +174,8 @@ test('atomic template start rolls back on a failed child write', async () => {
   });
   expect(() => store.start(r.id)).toThrow();
   expect(repo.list('sessions')).toHaveLength(0);
+  expect(repo.pending()).toEqual([]);
+  expect(sqlite.prepare('SELECT count(*) AS n FROM sync_outbox').get()?.n).toBe(0);
   sqlite.close();
 });
 test('kg canonical and entered unit survive conversion without history rewrite', async () => {
@@ -329,5 +340,54 @@ test('UI revision advances after commit, remains stable for reads and failed tra
   unsubscribe();
   repo.localSave('fixture:a', 4);
   expect(observations).toHaveLength(1);
+  sqlite.close();
+});
+
+
+test('a caught nested atomic failure forces outer rollback without outbox or notifications', async () => {
+  const { repo, sqlite } = await setup();
+  const listener = jest.fn(), revision = repo.getRevision();
+  repo.subscribe(listener);
+  expect(() => repo.atomic(() => {
+    repo.save('routines', { name: 'Before' });
+    try {
+      repo.atomic(() => {
+        repo.localSave('nested', true);
+        repo.save('routines', { name: 'Inside' });
+        throw Error('injected');
+      });
+    } catch { /* Caller cannot recover a partially failed batch. */ }
+    repo.save('routines', { name: 'After' });
+  })).toThrow();
+  expect(repo.list('routines')).toEqual([]);
+  expect(repo.localGet('nested')).toBeUndefined();
+  expect(repo.pending()).toEqual([]);
+  expect(sqlite.prepare('SELECT count(*) AS n FROM sync_outbox').get()?.n).toBe(0);
+  expect(listener).not.toHaveBeenCalled();
+  expect(repo.getRevision()).toBe(revision);
+  repo.atomic(() => repo.localSave('recovered', true));
+  expect(repo.localGet('recovered')).toBe(true);
+  expect(listener).toHaveBeenCalledTimes(1);
+  sqlite.close();
+});
+
+test.each(['ack', 'applyPage', 'wipe', 'flagConflict'] as const)('%s is forbidden inside atomic', async method => {
+  const { repo, sqlite } = await setup();
+  const row = repo.save('routines', { name: 'Existing' });
+  const existing = repo.get('routines', row.id);
+  const pending = repo.pending();
+  const listener = jest.fn();
+  repo.subscribe(listener);
+  expect(() => repo.atomic(() => {
+    repo.localSave('attempt', true);
+    if (method === 'ack') repo.ack(pending);
+    else if (method === 'applyPage') repo.applyPage('routines', [], '0');
+    else if (method === 'flagConflict') repo.flagConflict(pending[0]);
+    else repo.wipe();
+  })).toThrow();
+  expect(repo.get('routines', row.id)).toEqual(existing);
+  expect(repo.pending()).toEqual(pending);
+  expect(repo.localGet('attempt')).toBeUndefined();
+  expect(listener).not.toHaveBeenCalled();
   sqlite.close();
 });

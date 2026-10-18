@@ -42,14 +42,14 @@ export function RestContours({
   duration: number;
   style: "unwind" | "converge";
 }) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const remaining = Math.max(0, Math.min(seconds, duration)) / 15;
   const full = Math.floor(remaining), fraction = remaining - full;
   const visible = Math.ceil(remaining);
   const count = Math.min(visible, 40);
   return (
     <Svg testID="rest-contours" accessible={false} width="100%" height="100%" viewBox="0 0 300 300">
-      <Path d={outline} fill="none" stroke={colors["surface-2"]} strokeWidth={2} />
+      <Path d={outline} fill="none" stroke={colors[mode === "dark" ? "text-muted" : "surface-2"]} opacity={mode === "dark" ? 0.4 : 1} strokeWidth={2} />
       {Array.from({length: count}, (_, i) => {
         const outer = i === visible - 1;
         const partial = outer && fraction > 0 && style === "unwind";

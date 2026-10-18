@@ -3,7 +3,7 @@ import { memoryRepository } from './workout-repository';
 import { createLoggerFixture } from '../src/features/workout/devFixture';
 import { useWorkout } from '../src/features/workout/use-workout';
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react-native';
-import { AppState, AccessibilityInfo, Text, DeviceEventEmitter, Alert } from 'react-native';
+import { AppState, AccessibilityInfo, Text, DeviceEventEmitter, Alert, FlatList } from 'react-native';
 import { restBuzz, signatureBuzz } from '../src/features/workout/haptics';
 import { useState, useMemo } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -187,8 +187,8 @@ test('absolute timer expiry buzzes once, persists ended state and shows the next
   expect(restBuzz).toHaveBeenCalledTimes(1);
   AppState.currentState = previousState;
 });
-test('summary waits for motion preference and runs the PR signature only once across remount', async () => {
-  const preference = jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+test.each([false, true])('PR signature runs once across remount with Reduce Motion %s', async reduceMotion => {
+  const preference = jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduceMotion);
   jest.mocked(signatureBuzz).mockClear();
   const store = new WorkoutStore(memoryRepository());
   for (const weight of ['100', '105']) {
@@ -661,4 +661,29 @@ test.each([65,60,15,5,0])('unwind at %s seconds closes full rings and winds only
   expect(dash[0]/dash[1]).toBeCloseTo((seconds%15)/15,4);
   expect(outer!.props.d).toBe(rings[0].props.d);
  } else expect(outer).toBeUndefined();
+});
+
+
+test('picker scrolls results to the top without animation when search changes', async () => {
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+  try {
+    activeRepository(memoryRepository());
+    await render(<ActiveWorkout />, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+    await fireEvent.scroll(screen.getByTestId('exercise-picker-results'), { nativeEvent: { contentOffset: { x: 0, y: 300 } } });
+    scroll.mockClear();
+    await fireEvent.changeText(screen.getByTestId('exercise-picker-search'), 'Bench');
+    expect(scroll).toHaveBeenCalledWith({ offset: 0, animated: false });
+    expect(screen.getByTestId('exercise-picker-result-0')).toBeTruthy();
+  } finally { scroll.mockRestore(); }
+});
+
+test.each([false, true])('PR buzz respects haptics disabled with Reduce Motion %s', async reduceMotion => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduceMotion);
+  jest.mocked(signatureBuzz).mockClear();
+  const store = new WorkoutStore(memoryRepository());
+  const fixture = createLoggerFixture(store, { isDev: true, demo: true, signedIn: false }, 'summary')!;
+  store.repo.localSave('haptics', false);
+  await render(<WorkoutSummary store={store} id={fixture.sessionId} />, { wrapper });
+  expect(signatureBuzz).not.toHaveBeenCalled();
 });
