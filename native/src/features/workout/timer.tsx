@@ -49,10 +49,12 @@ export function RestContours({
 }
 export function RestTimer({
   store: source,
-  hidden = false
+  hidden = false,
+  presentation = 'all'
 }: {
   store: WorkoutStore;
   hidden?: boolean;
+  presentation?: 'all' | 'mini' | 'sheet';
 }) {
   const store = useWorkoutStore(source.repo);
   const {
@@ -62,9 +64,10 @@ export function RestTimer({
     [now, setNow] = useState(() => Date.now()),
     timer = store.timer();
   const endAt = timer?.endAt,
-    ended = timer?.ended;
+    ended = timer?.ended,
+    minimized = timer?.minimized;
   useEffect(() => {
-    if (endAt === undefined || ended) return;
+    if (endAt === undefined || ended || presentation === 'mini' && !minimized || presentation === 'sheet' && minimized) return;
     const update = () => {
       if (AppState.currentState !== 'active') return;
       const stamp = Date.now();
@@ -87,13 +90,14 @@ export function RestTimer({
       clearInterval(interval);
       subscription.remove();
     };
-  }, [store, endAt, ended, reduceMotion]);
+  }, [store, endAt, ended, reduceMotion, minimized, presentation]);
   if (!timer || hidden) return null;
   const seconds = Math.min(timer.duration, remainingSeconds(timer.endAt, now)),
     style = store.repo.localGet<'unwind' | 'converge'>('restStyle') ?? 'unwind';
   const entry = store.repo.get('entries', timer.entryId),
     drafts = store.drafts(timer.entryId),
     next = drafts.findIndex(d => !d.setId);
+  if (presentation === 'mini' && !timer.minimized || presentation === 'sheet' && timer.minimized) return null;
   if (timer.minimized) return <View testID="rest-mini-bar" style={[layout.row, {
     padding: 8,
     backgroundColor: colors.surface,

@@ -13,7 +13,7 @@ import type { WorkoutStore } from '@/data/workout/store';
 import { equipmentLabel, t } from '@/i18n/en';
 import { useWorkout } from './use-workout';
 import { SyncBadge } from './badge';
-import { clock, IconButton, layout, Line, Panel } from './primitives';
+import { clock, IconButton, layout, Line, Panel, SheetHost } from './primitives';
 import { Keypad, type Cursor } from './keypad';
 import { ExercisePicker } from './picker';
 import { SetRow } from './set-row';
@@ -48,7 +48,7 @@ export function ActiveWorkout() {
     };
   }, [store, routine]);
   const session = store?.active();
-  return store && session ? <Logger store={store} session={session} pending={auth.pending} status={auth.syncStatus} /> : <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{
+  return store && session ? <Logger key={session.id} store={store} session={session} pending={auth.pending} status={auth.syncStatus} /> : <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{
     flex: 1
   }}><ThemedText>{error ? t('workoutSaveError') : t('workout')}</ThemedText><Button label={t('closeWorkout')} onPress={closeWorkout} /></SafeAreaView>;
 }
@@ -95,6 +95,15 @@ function Logger({
       setError(t('workoutSaveError'));
     }
   }
+  function weightHint(entry: Row, index: number) {
+    const sg = store.suggestion(entry),
+      previous = store.previous(entry).find(s => Number(s.data.position) === index);
+    if (sg.jump && sg.weight !== null) return String(sg.weight);
+    if (previous) return String(displayWeight(Number(previous.data.weight_kg), store.unit()));
+    // A session without a matching history hint carries the preceding set's weight only.
+    const preceding = store.drafts(entry.id).slice(0, index).reverse().find(d => d.weight !== '');
+    return preceding?.weight ?? (sg.weight === null ? '' : String(sg.weight));
+  }
   function edit(entryId: string, index: number, field: 'weight' | 'reps') {
     const d = store.drafts(entryId)[index];
     setCursor({
@@ -102,7 +111,7 @@ function Logger({
       index,
       field
     });
-    setValue(store.repo.localGet<string | null>(`input:${entryId}:${index}:${field}`) ?? d[field]);
+    setValue(store.repo.localGet<string | null>(`input:${entryId}:${index}:${field}`) ?? (d[field] || (field === 'weight' ? weightHint(entries.find(e => e.id === entryId)!, index) : '')));
   }
   function input(text: string) {
     if (!cursor) return;
@@ -124,7 +133,7 @@ function Logger({
     }
     const commit = () => {
       try {
-        if (value !== d[cursor.field]) store.editDraft(cursor.entryId, cursor.index, {
+        if (value !== d[cursor.field] && !(cursor.field === 'weight' && !d.weight && value === weightHint(entries.find(e => e.id === cursor.entryId)!, cursor.index))) store.editDraft(cursor.entryId, cursor.index, {
           [cursor.field]: value
         });
         store.repo.localSave(`input:${cursor.entryId}:${cursor.index}:${cursor.field}`, null);
@@ -149,11 +158,10 @@ function Logger({
     }]);else commit();
   }
   function mark(entry: Row, index: number) {
-    const d = store.drafts(entry.id)[index],
-      sg = store.suggestion(entry);
+    const d = store.drafts(entry.id)[index];
     const effective = {
       ...d,
-      weight: d.weight || String(sg.weight ?? '')
+      weight: d.weight || weightHint(entry, index)
     };
     const check = validateSet(effective.weight, effective.reps, store.unit(), store.previous(entry)[index] ? Number(store.previous(entry)[index].data.weight_kg) : undefined);
     if (!d.setId && !check.valid) {
@@ -195,10 +203,10 @@ function Logger({
         justifyContent: 'space-between',
         flexWrap: 'wrap'
       }]}><ThemedText muted numeric variant="caption">{clock((now - Number(session.data.started_at)) / 1000)} · {t('set')} {Math.min(done + 1, total)} {t('of')} {total}</ThemedText><SyncBadge local={['demo', 'guest'].includes(store.repo.owner)} pending={pending} status={status} /></View>
-      <View accessibilityRole="progressbar" accessibilityValue={{
+      <View accessible accessibilityRole="progressbar" accessibilityValue={{
         min: 0,
-        max: total,
-        now: done
+        max: 100,
+        now: total > 0 ? done / total * 100 : 0
       }} style={{
         height: 4,
         borderRadius: 4,
@@ -216,7 +224,6 @@ function Logger({
         const ds = store.drafts(e.id),
           complete = ds.length > 0 && ds.every(d => d.setId),
           collapsed = complete && !open.includes(e.id),
-          sg = store.suggestion(e),
           previous = store.previous(e);
         return <Panel key={e.id}>
           <View style={layout.row}>{complete && <Line name="check" color={colors.accent} />}<View style={{
@@ -260,7 +267,7 @@ function Logger({
               }}>{t('repsHeader')}</ThemedText><View style={{
                 width: 44
               }}><Line name="check" color={colors['text-muted']} /></View></View>
-            {ds.map((d, i) => <SetRow key={d.setId ?? i} exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} draft={d} previous={previous.find(s => Number(s.data.position) === i) ? `${displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find(s => Number(s.data.position) === i)!.data.reps}` : ''} hint={sg.jump && sg.weight !== null ? String(sg.weight) : previous.find(s => Number(s.data.position) === i) ? String(displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())) : sg.weight === null ? '' : String(sg.weight)} onEdit={field => edit(e.id, i, field)} onDone={() => mark(e, i)} onRemove={() => Alert.alert(t('removeSet'), undefined, [{
+            {ds.map((d, i) => <SetRow key={d.setId ?? i} exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} draft={d} previous={previous.find(s => Number(s.data.position) === i) ? `${displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find(s => Number(s.data.position) === i)!.data.reps}` : ''} hint={weightHint(e, i)} onEdit={field => edit(e.id, i, field)} onDone={() => mark(e, i)} onRemove={() => Alert.alert(t('removeSet'), undefined, [{
               text: t('cancel'),
               style: 'cancel'
             }, {
@@ -279,13 +286,21 @@ function Logger({
         setPicker(true);
       }} />
     </ScrollView>
-    <RestTimer store={store} hidden={!!cursor || finish || picker} />
+    <RestTimer store={store} presentation="mini" hidden={!!cursor || finish || picker} />
+    <SheetHost visible={picker || !!cursor || finish || !!store.timer() && !store.timer()!.minimized} onClose={() => {
+      if (picker) setPicker(false);
+      else if (cursor) setCursor(null);
+      else if (finish) setFinish(false);
+      else store.updateTimer({ minimized: true });
+    }}>
+    <RestTimer store={store} presentation="sheet" hidden={!!cursor || finish || picker} />
     {picker && <ExercisePicker onClose={() => setPicker(false)} onPick={name => run(() => {
       store.addExercise(session.id, name);
       setPicker(false);
     })} />}
     {cursor && current && <Keypad inputId={`${cursor.entryId}:${cursor.index}:${cursor.field}`} label={`${current.data.exercise} · ${t('set')} ${cursor.index + 1} · ${t(cursor.field)}`} field={cursor.field} unit={store.unit()} equipment={exerciseFor(String(current.data.exercise)).equipment} value={value} previous={store.previous(current)[cursor.index] ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}` : ''} onChange={input} onNext={next} onClose={() => setCursor(null)} />}
     {finish && <FinishSheet store={store} session={session} onClose={() => setFinish(false)} />}
+    </SheetHost>
   </SafeAreaView>;
 }
 function JumpCard({
@@ -308,7 +323,7 @@ function JumpCard({
   }, [store, entryId, visible]);
   const sg = store.suggestion(entry);
   if (!visible || !sg.jump) return null;
-  return <View style={[layout.card, {
+  return <View testID="suggestion-card" style={[layout.card, {
     backgroundColor: `${colors.accent}22`
   }]}><View style={layout.row}><Line name="trend" color={colors.accent} /><ThemedText style={{
         flex: 1

@@ -1,5 +1,5 @@
-import { Modal, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
-import type { PropsWithChildren } from 'react';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { createContext, useContext, type PropsWithChildren } from 'react';
 import Svg, { Path } from 'react-native-svg';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
@@ -90,37 +90,52 @@ export function IconButton({
 }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={layout.cell}><Line name={name} /></Pressable>;
 }
+// The logger owns one native presenter: switching sheets never races two iOS modals.
+const HostedSheet = createContext(false);
+export function SheetHost({ children, visible, onClose }: PropsWithChildren<{
+  visible: boolean;
+  onClose: () => void;
+}>) {
+  const { reduceMotion } = useTheme();
+  return <Modal testID="workout-sheet-host" transparent visible={visible} animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => {
+    Keyboard.dismiss();
+    onClose();
+  }}><HostedSheet.Provider value={true}>{children}</HostedSheet.Provider></Modal>;
+}
 export function Sheet({
   children,
   onClose,
   label,
   testID,
-  closeTestID
+  closeTestID,
+  expanded = false
 }: PropsWithChildren<{
   onClose: () => void;
   label: string;
   testID?: string;
   closeTestID?: string;
+  expanded?: boolean;
 }>) {
-  const {
-    colors,
-    reduceMotion
-  } = useTheme();
-  return <Modal transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onClose}>
-    <SafeAreaProvider><SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{
-      flex: 1,
-      backgroundColor: '#00000077',
-      justifyContent: 'flex-end'
-    }}><Pressable style={{
-        flex: 1
-      }} accessible={false} importantForAccessibility="no" onPress={onClose} /><View collapsable={false} accessible={false} accessibilityViewIsModal testID={testID} style={[layout.sheet, {
-        backgroundColor: colors.surface
-      }]}>
-      <View style={layout.row}><ThemedText variant="headline" accessibilityRole="header" style={{
-            flex: 1
-          }}>{label}</ThemedText><Button testID={closeTestID} label={t('close')} variant="secondary" onPress={onClose} /></View>{children}
-    </View></SafeAreaView></SafeAreaProvider>
-  </Modal>;
+  const { colors } = useTheme();
+  const hosted = useContext(HostedSheet);
+  const close = () => {
+    Keyboard.dismiss();
+    onClose();
+  };
+  const content = <SafeAreaProvider style={{ flex: 1 }}><SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{
+    flex: 1,
+    backgroundColor: '#00000077'
+  }}><KeyboardAvoidingView testID="sheet-keyboard-container" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+    <Pressable testID="sheet-backdrop" style={StyleSheet.absoluteFill} accessible={false} importantForAccessibility="no" onPress={close} />
+    <View collapsable={false} accessible={false} accessibilityViewIsModal testID={testID} style={[layout.sheet, {
+      backgroundColor: colors.surface,
+      flexShrink: 1,
+      ...(expanded ? { flex: 1 } : {})
+    }]}>
+      <View style={layout.row}><ThemedText variant="headline" accessibilityRole="header" style={{ flex: 1 }}>{label}</ThemedText><Button testID={closeTestID} label={t('close')} variant="secondary" onPress={close} /></View>{children}
+    </View>
+  </KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
+  return hosted ? content : <SheetHost visible onClose={onClose}>{content}</SheetHost>;
 }
 export const clock = (input: number) => {
   const seconds = Number.isFinite(input) ? input : 0;

@@ -1,4 +1,4 @@
-import { FlatList, TextInput } from 'react-native';
+import { FlatList, Keyboard, TextInput } from 'react-native';
 import { useState } from 'react';
 import { exerciseLibrary } from '@/core/workout/library';
 import { useTheme } from '@/design/theme-provider';
@@ -16,16 +16,17 @@ export function ExercisePicker({
   const {
     colors
   } = useTheme();
+  const pick = (name: string) => { Keyboard.dismiss(); onPick(name); };
   const matches = exerciseLibrary.filter(e => e.name.toLowerCase().includes(query.trim().toLowerCase()));
-  return <Sheet label={t('addExercise')} onClose={onClose}>
-    <TextInput accessibilityLabel={t('searchExercise')} placeholder={t('searchExercise')} placeholderTextColor={colors['text-muted']} value={query} onChangeText={setQuery} style={[layout.input, {
+  return <Sheet expanded label={t('addExercise')} onClose={onClose}>
+    <TextInput testID="exercise-picker-search" accessibilityLabel={t('searchExercise')} placeholder={t('searchExercise')} placeholderTextColor={colors['text-muted']} value={query} onChangeText={setQuery} style={[layout.input, {
       color: colors.text,
       backgroundColor: colors['surface-2']
     }]} />
-    <FlatList data={matches} style={{
-      flexGrow: 0
+    <FlatList testID="exercise-picker-results" data={matches} style={{
+      flex: 1
     }} keyboardShouldPersistTaps="handled" contentContainerStyle={layout.stack} keyExtractor={e => e.name} initialNumToRender={12} renderItem={({
-      item
-    }) => <Button label={item.name} variant="secondary" onPress={() => onPick(item.name)} />} ListHeaderComponent={query.trim() && !exerciseLibrary.some(e => e.name.toLowerCase() === query.trim().toLowerCase()) ? <Button label={t('createCustom').replace('{name}', query.trim())} onPress={() => onPick(query.trim())} /> : undefined} />
+      item, index
+    }) => <Button testID={`exercise-picker-result-${index}`} label={item.name} variant="secondary" onPress={() => pick(item.name)} />} ListHeaderComponent={query.trim() && !exerciseLibrary.some(e => e.name.toLowerCase() === query.trim().toLowerCase()) ? <Button label={t('createCustom').replace('{name}', query.trim())} onPress={() => pick(query.trim())} /> : undefined} />
   </Sheet>;
 }

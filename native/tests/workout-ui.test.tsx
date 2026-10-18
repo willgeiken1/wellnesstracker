@@ -1,6 +1,6 @@
 import { useWorkout } from '../src/features/workout/use-workout';
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react-native';
-import { AppState, AccessibilityInfo, Text } from 'react-native';
+import { AppState, AccessibilityInfo, Text, DeviceEventEmitter, Alert } from 'react-native';
 import { restBuzz, signatureBuzz } from '../src/features/workout/haptics';
 import { useState, useMemo } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -444,4 +444,128 @@ test('step and wheel cannot exceed the weight limit', async () => {
   await fireEvent.press(screen.getByTestId('keypad-key-wheel'));
   await fireEvent.press(screen.getByRole('button', { name: '1002.5' }));
   expect(screen.getByText('1000 kg')).toBeTruthy();
+});
+
+test('empty workout exposes a finite zero percent progress range', async () => {
+  activeRepository(memoryRepository());
+  await render(<ActiveWorkout />, { wrapper });
+  expect(screen.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 100, now: 0 });
+});
+
+test('session weight hints stay uncommitted, carry forward, and Done accepts them without copying reps', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  await fireEvent.press(screen.getByTestId('set-0-0-done'));
+  await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+  expect(screen.getByTestId('set-0-1-weight')).toHaveTextContent('135');
+  expect(store.drafts(entry.id)[1]).toMatchObject({ weight: '', reps: '' });
+  await fireEvent.press(screen.getByTestId('set-0-1-reps'));
+  await fireEvent.press(screen.getByTestId('keypad-key-8'));
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  expect(screen.getByText('135 lb')).toBeTruthy();
+  expect(store.drafts(entry.id)[2]).toMatchObject({ weight: '', reps: '' });
+  await fireEvent.press(screen.getByTestId('keypad-close'));
+  await fireEvent.press(screen.getByTestId('set-0-1-done'));
+  expect(store.drafts(entry.id)[1]).toMatchObject({ weight: '135', reps: '8', setId: expect.any(String) });
+  await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+  await fireEvent.press(screen.getByTestId('set-0-2-weight'));
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  expect(screen.getByText('— Reps')).toBeTruthy();
+  expect(store.drafts(entry.id)[2].weight).toBe('');
+  await fireEvent.press(screen.getByTestId('keypad-key-6'));
+  await fireEvent.press(screen.getByTestId('keypad-close'));
+  await fireEvent.press(screen.getByTestId('set-0-2-done'));
+  expect(store.drafts(entry.id)[2]).toMatchObject({ weight: '135', reps: '6', setId: expect.any(String) });
+});
+
+test('picker keeps search and tappable results in a keyboard avoiding container', async () => {
+  activeRepository(memoryRepository());
+  await render(<ActiveWorkout />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+  const search = screen.getByTestId('exercise-picker-search');
+  await fireEvent.changeText(search, 'Close-Grip Bench');
+  const container = screen.getByTestId('sheet-keyboard-container');
+  await fireEvent(container, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } }, persist: () => {} });
+  await act(() => DeviceEventEmitter.emit('keyboardWillShow', { endCoordinates: { screenY: 500, height: 300 }, duration: 0 }));
+  expect(container).toHaveStyle({ paddingBottom: 300 });
+  expect(screen.getByTestId('exercise-picker-results')).toHaveProp('keyboardShouldPersistTaps', 'handled');
+  await fireEvent.press(screen.getByTestId('exercise-picker-result-0'));
+  expect(screen.getByText('Close-Grip Bench Press')).toBeTruthy();
+});
+
+test('logger reuses one native modal across picker, keypad, rest and finish; dismissals can reopen', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  activeRepository(repo);
+  const view = await render(<ActiveWorkout />, { wrapper });
+  const modal = () => screen.getByTestId('workout-sheet-host');
+  const dismiss = async () => { await fireEvent(modal(), 'requestClose'); };
+  for (let i = 0; i < 2; i++) {
+    await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+    await fireEvent.changeText(screen.getByTestId('exercise-picker-search'), 'Bench');
+    await dismiss();
+    await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+    expect(screen.getByTestId('exercise-picker-search')).toHaveProp('value', '');
+    await act(() => DeviceEventEmitter.emit('keyboardWillHide', { duration: 0 }));
+    expect(screen.getByTestId('exercise-picker-search')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true }));
+  }
+  await fireEvent.press(screen.getByTestId('set-0-0-done'));
+  const host = modal();
+  // Changing from rest to picker retains the same native presenter.
+  await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+  expect(modal()).toBe(host);
+  await dismiss();
+  await fireEvent.press(screen.getByRole('button', { name: 'Expand rest timer' }));
+  expect(screen.getByTestId('rest-sheet')).toBeTruthy();
+  await dismiss();
+  for (let i = 0; i < 2; i++) {
+    await fireEvent.press(screen.getByTestId('set-0-1-weight'));
+    await dismiss();
+    await fireEvent.press(screen.getByTestId('finish-button'));
+    await dismiss();
+  }
+  // A fresh session must not inherit an open picker or its search query.
+  await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+  await fireEvent.changeText(screen.getByTestId('exercise-picker-search'), 'Synthetic old query');
+  await act(() => {
+    store.finish(store.active()!.id, { startedAt: Date.now() - 60000, finishedAt: Date.now(), notes: '' });
+    store.start();
+  });
+  await view.rerender(<ActiveWorkout />);
+  expect(screen.queryByTestId('exercise-picker-search')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Add exercise' }));
+  expect(screen.getByTestId('exercise-picker-search')).toHaveProp('value', '');
+});
+
+test('suggestion card exposes a stable automation target', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), start = Date.now() - 120000;
+  const prior = store.start(undefined, start), entry = store.addExercise(prior.id, 'Close-Grip Bench Press', 1);
+  store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  store.toggleDone(entry.id, 0);
+  store.finish(prior.id, { startedAt: start, finishedAt: Date.now() - 60000, notes: '' });
+  store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  expect(screen.getByTestId('suggestion-card')).toHaveTextContent(/140 lb/);
+});
+
+
+test('exercise options can cancel and reopen, then add a set', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
+  activeRepository(repo);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await render(<ActiveWorkout />, { wrapper });
+  const open = () => fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Exercise options' }));
+  await open();
+  await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.style === 'cancel')?.onPress?.(); });
+  await open();
+  await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.text === 'Add set')!.onPress!(); });
+  expect(store.drafts(entry.id)).toHaveLength(4);
+  alert.mockRestore();
 });
