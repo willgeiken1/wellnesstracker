@@ -3,6 +3,8 @@ import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 type Physical = Record<string, Scalar>;
+// Repositories sharing a database handle must share transaction guards.
+const batches = new WeakMap<ExpoSQLiteDatabase, { depth: number; rollbackOnly: boolean }>();
 export interface SyncConflict { table: Table; id: string; reason: 'provenance' }
 export interface Pending { row: Row; revision: string }
 /** Corrupt-marker escape only: erase every namespace in one atomic transaction. */
@@ -31,34 +33,46 @@ export class Repository {
   }
   /** Multi-row logger operations are synchronous. No sync work (including
    * flagConflict), ack, applyPage or wipe is allowed inside atomic().
+   * Promise/thenable returns are rejected; callbacks must never schedule async writes.
    * A failed nested atomic marks the entire outer transaction rollback-only. */
-  private batchDepth = 0;
-  private rollbackOnly = false;
-  private notify() { if (!this.batchDepth) { this.viewRevision++; this.listeners.forEach(listener => listener()); } }
+  private batch: { depth: number; rollbackOnly: boolean };
+  private notify() { if (!this.batch.depth) { this.viewRevision++; this.listeners.forEach(listener => listener()); } }
   private outsideAtomic() {
-    if (this.batchDepth) {
-      this.rollbackOnly = true;
+    if (this.batch.depth) {
+      this.batch.rollbackOnly = true;
       throw new Error('Operation is forbidden inside atomic().');
     }
   }
   atomic<T>(operation:()=>T):T {
-    if (this.batchDepth) {
-      try { return operation(); }
-      catch (error) { this.rollbackOnly = true; throw error; }
+    const run = () => {
+      const value = operation();
+      if (value !== null && (typeof value === 'object' || typeof value === 'function') &&
+          typeof (value as { then?: unknown }).then === 'function') {
+        throw new Error('atomic() callbacks must be synchronous.');
+      }
+      return value;
+    };
+    if (this.batch.depth) {
+      try { return run(); }
+      catch (error) { this.batch.rollbackOnly = true; throw error; }
     }
-    this.rollbackOnly = false;
+    this.batch.rollbackOnly = false;
     const result = this.safe(() => this.db.transaction(() => {
-      this.batchDepth++;
+      this.batch.depth++;
       try {
-        const value = operation();
-        if (this.rollbackOnly) throw new Error('Transaction requires rollback.');
+        const value = run();
+        if (this.batch.rollbackOnly) throw new Error('Transaction requires rollback.');
         return value;
-      } finally { this.batchDepth--; this.rollbackOnly = false; }
+      } finally { this.batch.depth--; this.batch.rollbackOnly = false; }
     }));
     this.notify();return result;
   }
 
-  constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string) {}
+  constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string) {
+    let batch = batches.get(db);
+    if (!batch) { batch = { depth: 0, rollbackOnly: false }; batches.set(db, batch); }
+    this.batch = batch;
+  }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private safe<T>(operation: () => T): T { try { return operation(); } catch { throw new Error('Local data is unavailable.'); } }
   private table(table: Table) { if (!syncedTables.includes(table)) throw new Error('Unsupported local table.'); return sql.identifier(table); }

@@ -391,3 +391,64 @@ test.each(['ack', 'applyPage', 'wipe', 'flagConflict'] as const)('%s is forbidde
   expect(listener).not.toHaveBeenCalled();
   sqlite.close();
 });
+
+
+test.each(['wipe', 'ack', 'applyPage', 'flagConflict'] as const)('caught %s inside atomic still rolls back rows and outbox', async method => {
+  const { repo, sqlite } = await setup();
+  repo.save('routines', { name: 'Existing' });
+  const routines = repo.list('routines'), pending = repo.pending();
+  const outboxCount = sqlite.prepare('SELECT count(*) AS n FROM sync_outbox').get()?.n;
+  expect(() => repo.atomic(() => {
+    repo.save('routines', { name: 'Must roll back' });
+    try {
+      if (method === 'ack') repo.ack(pending);
+      else if (method === 'applyPage') repo.applyPage('routines', [], '0');
+      else if (method === 'flagConflict') repo.flagConflict(pending[0]);
+      else repo.wipe();
+    } catch { /* Swallowing the forbidden call must not permit commit. */ }
+  })).toThrow();
+  expect(repo.list('routines')).toEqual(routines);
+  expect(repo.pending()).toEqual(pending);
+  expect(sqlite.prepare('SELECT count(*) AS n FROM sync_outbox').get()?.n).toBe(outboxCount);
+  sqlite.close();
+});
+
+test.each([
+  { kind: 'Promise', result: () => Promise.resolve(), nested: false },
+  { kind: 'thenable', result: () => ({ then: () => undefined }), nested: false },
+  { kind: 'Promise', result: () => Promise.resolve(), nested: true },
+  { kind: 'thenable', result: () => ({ then: () => undefined }), nested: true },
+])('atomic rejects $kind returns (nested: $nested) and rolls back', async ({ result, nested }) => {
+  const { repo, sqlite } = await setup();
+  const revision = repo.getRevision();
+  expect(() => repo.atomic(() => {
+    repo.save('routines', { name: 'Must roll back' });
+    if (nested) {
+      try { repo.atomic(() => result()); } catch { /* Still rollback-only. */ }
+    } else return result();
+  })).toThrow();
+  expect(repo.list('routines')).toEqual([]);
+  expect(sqlite.prepare('SELECT count(*) AS n FROM sync_outbox').get()?.n).toBe(0);
+  expect(repo.getRevision()).toBe(revision);
+  repo.atomic(() => repo.save('routines', { name: 'Recovered' }));
+  expect(repo.list('routines')).toHaveLength(1);
+  sqlite.close();
+});
+
+test('repositories sharing a connection share rollback-only and forbidden-operation guards', async () => {
+  const { repo, db, sqlite } = await setup();
+  const other = new Repository(db, OWNER_A, DEVICE_A, randomUUID);
+  const revision = other.getRevision();
+  let forbiddenCaught = false;
+  expect(() => repo.atomic(() => {
+    other.save('routines', { name: 'Must roll back' });
+    expect(other.getRevision()).toBe(revision);
+    try { other.wipe(); } catch { forbiddenCaught = true; }
+  })).toThrow();
+  expect(repo.list('routines')).toEqual([]);
+  expect(sqlite.prepare('SELECT count(*) AS n FROM sync_outbox').get()?.n).toBe(0);
+  expect(forbiddenCaught).toBe(true);
+  other.atomic(() => other.save('routines', { name: 'Recovered' }));
+  expect(repo.list('routines')).toHaveLength(1);
+  sqlite.close();
+});

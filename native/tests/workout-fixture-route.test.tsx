@@ -27,9 +27,9 @@ test.each([
   { label: 'non-demo', isDev: true, demo: false, session: null, owner: 'demo', ready: true },
   { label: 'signed-in', isDev: true, demo: true, session: { user: { id: OWNER_A } }, owner: 'demo', ready: true },
   { label: 'account repository', isDev: true, demo: true, session: null, owner: OWNER_A, ready: true },
-  { label: 'development alone allowed', isDev: true, demo: false, session: { user: { id: OWNER_A } }, owner: 'demo', ready: true },
-  { label: 'demo alone allowed', isDev: false, demo: true, session: { user: { id: OWNER_A } }, owner: 'demo', ready: true },
-  { label: 'signed-out alone allowed', isDev: false, demo: false, session: null, owner: 'demo', ready: true },
+  { label: 'development alone is insufficient', isDev: true, demo: false, session: { user: { id: OWNER_A } }, owner: 'demo', ready: true },
+  { label: 'demo alone is insufficient', isDev: false, demo: true, session: { user: { id: OWNER_A } }, owner: 'demo', ready: true },
+  { label: 'signed-out alone is insufficient', isDev: false, demo: false, session: null, owner: 'demo', ready: true },
   { label: 'auth pending', isDev: true, demo: true, session: null, owner: 'demo', ready: false },
 ])('route cannot seed: $label', async ({ isDev, demo, session, owner, ready }) => {
   const { db, sqlite } = await localDatabase();
