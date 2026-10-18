@@ -1,9 +1,10 @@
 import { act, render, screen, fireEvent } from '@testing-library/react-native';
 import { AuthContext, type AuthState } from '../src/auth/provider';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { AuthForm, Welcome, Account } from '../src/auth/screens';
+import { AuthForm, Welcome, Account, LocalDataRecovery } from '../src/auth/screens';
 import { Alert } from 'react-native';
 import { DepartureFailure } from '../src/auth/sign-out';
+import { t, signOutUnsynced } from '../src/i18n/en';
 import { SIGN_OUT_SYNC_TIMEOUT_MS } from '../src/auth/sign-out-sync';
 jest.mock('expo-router',()=>({router:{push:jest.fn(),replace:jest.fn()}}));
 jest.mock('../src/auth/client',()=>({getAuthClient:()=>null}));
@@ -108,4 +109,34 @@ test.each(['guard','count','pre-sync'])('failure before wipe (%s) says nothing w
  if(kind==='pre-sync')auth.prepareSignOut=async()=>{throw new Error('synthetic pre-sync');};
  await wrap(<Account/>,auth);await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
  expect(screen.getByRole('alert')).toHaveTextContent('Sign-out did not finish. Nothing was erased. Try again.');
+});
+
+test('read-error recovery offers retry without an erase-all action',async()=>{
+ const auth:AuthState={...state(),ready:false,recovery:'read-error',retryMarkerRead:jest.fn(),recoverLocalData:jest.fn()};
+ await wrap(<LocalDataRecovery/>,auth);
+ expect(screen.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();
+ expect(screen.getByText("The app couldn't check whether sign-out finished. It's still locked. Try again.")).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Try again'}));
+ expect(auth.retryMarkerRead).toHaveBeenCalledTimes(1);
+ expect(auth.recoverLocalData).not.toHaveBeenCalled();
+});
+
+
+test.each([false,true])('Account selects failure copy by error type after confirmed sign-out (departure=%s)',async departure=>{
+ const auth={...state(),pending:1,signOut:jest.fn(async()=>{throw departure?new DepartureFailure():new Error('synthetic');})};
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
+ expect(auth.signOut).toHaveBeenCalledWith(true);
+ expect(screen.getByRole('alert')).toHaveTextContent(t(departure?'signOutFailed':'signOutNotStarted'));
+ expect(screen.queryByText(t(departure?'signOutNotStarted':'signOutFailed'))).toBeNull();
+});
+
+test.each([0,3,undefined])('erase confirmation uses the exact warning for unsynced count %s',async count=>{
+ const auth:AuthState={...state(),ready:false,recovery:'corrupt-marker',countRecoveryUnsynced:jest.fn(async()=>count),recoverLocalData:jest.fn(async()=>{})};
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<LocalDataRecovery/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Erase all local data and sign out'}));
+ expect(auth.countRecoveryUnsynced).toHaveBeenCalledTimes(1);
+ expect(alert.mock.calls[0][1]).toBe(count===0?t('eraseAllBody'):`${t('eraseAllBody')} ${count===undefined?t('eraseAllUnsynced'):signOutUnsynced(count)}`);
+ expect(auth.recoverLocalData).not.toHaveBeenCalled();
 });

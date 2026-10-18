@@ -106,7 +106,7 @@ export function LocalDataRecovery() {
     <Button label={t(escape?'eraseAllLocal':'retrySignOut')} variant="destructive" busy={busy} disabled={busy} onPress={()=>{
       if(escape){void (async()=>{
         let count:number|undefined;try{count=await auth.countRecoveryUnsynced?.();}catch{ /* Warning still required when count is unavailable. */ }
-        Alert.alert(t('eraseAllLocal'),`${t('eraseAllBody')} ${count===undefined?t('eraseAllUnsynced'):signOutUnsynced(count)}`,[{text:t('cancel'),style:'cancel'},{text:t('eraseAllLocal'),style:'destructive',onPress:()=>{void run();}}]);
+        Alert.alert(t('eraseAllLocal'),count===0?t('eraseAllBody'):`${t('eraseAllBody')} ${count===undefined?t('eraseAllUnsynced'):signOutUnsynced(count)}`,[{text:t('cancel'),style:'cancel'},{text:t('eraseAllLocal'),style:'destructive',onPress:()=>{void run();}}]);
       })();}
       else void run();
     }}/></>}

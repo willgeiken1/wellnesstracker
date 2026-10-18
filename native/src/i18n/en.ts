@@ -11,7 +11,7 @@ export const en = {
   cancel: 'Cancel', syncConflictStatus: 'Some changes need review', syncConflicts: 'sync conflicts · review needed', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncBusy: 'Syncing…', pending: 'pending',
   localRecovery: 'Local data recovery', eraseAllLocal: 'Erase all local data and sign out',
   eraseAllBody: 'Local data on this device for all accounts will be erased and you will be signed out. Synced data stays in your account.',
-  tryAgain: 'Try again', markerReadFailed: 'The sign-out marker could not be read. The app is still locked. Try again.',
+  tryAgain: 'Try again', markerReadFailed: "The app couldn't check whether sign-out finished. It's still locked. Try again.",
   eraseAllUnsynced: 'Unsynced changes on this phone will be lost.',
   signOutNotStarted: 'Sign-out did not finish. Nothing was erased. Try again.',
   retrySignOut: 'Finish signing out', recoveryFailed: 'Recovery did not finish. The app is still locked. Try again.',

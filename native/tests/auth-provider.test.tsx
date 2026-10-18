@@ -453,3 +453,57 @@ test.each([false,true])('escape warning counts all-owner pending changes, gracef
  if(fail)expect(alert.mock.calls[0][1]).not.toMatch(/\d/);
  alert.mockRestore();await view.unmount();
 });
+
+test.each([1,2])('provider safely ignores erase-all after only %s consecutive marker read failures without relying on the UI',async failures=>{
+ const fixture=clientFixture(),wipeAll=jest.fn();let marker=true;
+ jest.mocked(signOutStorage.read).mockRejectedValue(new Error('synthetic read failure'));
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{marker=false;});
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll,forOwner:fixtureRepo});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ try {
+  for(let count=1;count<=failures;count++){
+   await waitFor(()=>expect(signOutStorage.read).toHaveBeenCalledTimes(count));
+   await waitFor(()=>expect(observed.recovery).toBe('read-error'));
+   if(count<failures)await act(async()=>{observed.retryMarkerRead!();});
+  }
+  await act(async()=>{
+   await expect(observed.recoverLocalData!()).resolves.toBeUndefined();
+   expect(wipeAll).not.toHaveBeenCalled();expect(clearLocalSession).not.toHaveBeenCalled();
+   expect(signOutStorage.remove).not.toHaveBeenCalled();expect(marker).toBe(true);
+   expect(observed.ready).toBe(false);expect(observed.recovery).toBe('read-error');
+   expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+   expect(observed.session).toBeNull();expect(observed.repository).toBeNull();
+  });
+ } finally {await view.unmount();}
+});
+
+
+test('a different boot error resets consecutive marker read failures before escape is offered',async()=>{
+ const fixture=clientFixture(),wipeAll=jest.fn();let marker=true;
+ jest.mocked(signOutStorage.read).mockRejectedValue(new Error('synthetic read failure'));
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{marker=false;});
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll,forOwner:fixtureRepo});
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ try {
+  await waitFor(()=>expect(observed.recovery).toBe('read-error'));
+  await act(async()=>{observed.retryMarkerRead!();});
+  await waitFor(()=>expect(signOutStorage.read).toHaveBeenCalledTimes(2));
+  expect(observed.recovery).toBe('read-error');
+  jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic database boot failure'));
+  await act(async()=>{observed.retryMarkerRead!();});
+  await waitFor(()=>expect(observed.configError).toBe('Local data is unavailable.'));
+  expect(observed.recovery).toBeUndefined();expect(signOutStorage.read).toHaveBeenCalledTimes(2);
+  for(let count=3;count<=4;count++){
+   await act(async()=>{observed.retryMarkerRead!();});
+   await waitFor(()=>expect(signOutStorage.read).toHaveBeenCalledTimes(count));
+   expect(observed.recovery).toBe('read-error');expect(observed.ready).toBe(false);
+   await act(async()=>{await expect(observed.recoverLocalData!()).resolves.toBeUndefined();});
+   expect(wipeAll).not.toHaveBeenCalled();expect(clearLocalSession).not.toHaveBeenCalled();
+   expect(signOutStorage.remove).not.toHaveBeenCalled();expect(marker).toBe(true);
+  }
+  await act(async()=>{observed.retryMarkerRead!();});
+  await waitFor(()=>expect(observed.recovery).toBe('unreadable-marker'));
+  expect(signOutStorage.read).toHaveBeenCalledTimes(5);expect(observed.ready).toBe(false);
+  expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+ } finally {await view.unmount();}
+});

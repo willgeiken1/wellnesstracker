@@ -176,6 +176,12 @@ Final validation on Node 24.21.0, from `native/`: `npx tsc --noEmit` PASS; `npx 
 
 Checks retained `EXPO_NO_TELEMETRY=1`, `EXPO_NO_DOTENV=1`, `npm_config_cache=/tmp/insight-npm`, and `__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/insight-expo`. No Git operations, prebuild, simulator, emulator, Docker, Supabase connections of any kind, root `supabase/`, `.github/`, package/lockfile edits, secrets, paid services, or PII logging were used. Earlier fixes and the accepted limitations remain intact; item 6 is unchanged.
 
+### 516f1de follow-ups
+
+Tests independently verify that read-error recovery hides erase-all and the provider safely resolves recovery without wiping, clearing the session or removing the marker after one or two consecutive read failures. A different boot error resets that counter; escape remains unavailable until three fresh consecutive read failures. Account tests cover DepartureFailure → signOutFailed and plain Error → signOutNotStarted, including confirmed departure. Marker-read copy now says “The app couldn't check whether sign-out finished. It's still locked. Try again.” Erase confirmation uses only eraseAllBody for zero unsynced changes, the counted warning for positive counts, and eraseAllUnsynced for unknown counts; all three have exact-text tests. Provider logic and server SQL are unchanged.
+
+Validation on Node 24.21.0 from `native/`: `npx tsc --noEmit` PASS; `npx expo lint` PASS without warnings; `npm test -- --ci` PASS **460 tests / 23 suites**. Dependency check reports up to date; Expo Doctor passes 20/20. Tests first exposed only the two requested copy differences before those copy edits. This continuation used one read-only `git status` while loading the saved prompt, before its no-Git restriction was read; no further Git calls or Git mutations occurred.
+
 ### Decision validation (2026-10-17)
 
 Final checks ran from `native/` with EXPO_NO_TELEMETRY=1, EXPO_NO_DOTENV=1, npm_config_cache=/tmp/insight-npm and Expo home `/tmp/insight-expo`.
