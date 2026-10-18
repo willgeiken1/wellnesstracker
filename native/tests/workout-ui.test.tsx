@@ -1,3 +1,6 @@
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { memoryRepository } from './workout-repository';
+import { createLoggerFixture } from '../src/features/workout/devFixture';
 import { useWorkout } from '../src/features/workout/use-workout';
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react-native';
 import { AppState, AccessibilityInfo, Text, DeviceEventEmitter, Alert } from 'react-native';
@@ -7,18 +10,17 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { SyncBadge } from '../src/features/workout/badge';
 import { Keypad } from '../src/features/workout/keypad';
 import { SetRow } from '../src/features/workout/set-row';
-import { RestTimer } from '../src/features/workout/timer';
+import { RestContours, RestTimer } from '../src/features/workout/timer';
 import { WorkoutSummary } from '../src/features/workout/summary';
 import { WorkoutStore } from '../src/data/workout/store';
 import { parseLocalDateTime } from '../src/features/workout/finish';
 import type { Repository } from '../src/data/repository';
-import type { Row } from '../src/data/rows';
 import { ActiveWorkout } from '../src/features/workout/active';
 import { useAuth } from '../src/auth/provider';
 import { clock } from '../src/features/workout/primitives';
 import { displayWeight, rounded, nextField } from '../src/core/workout/rules';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), router: { canDismiss: () => false, replace: jest.fn() } }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), useIsFocused: () => true, router: { canDismiss: () => false, replace: jest.fn() } }));
 jest.mock('../src/features/workout/haptics', () => ({
   tick: jest.fn(),
   restBuzz: jest.fn(),
@@ -27,48 +29,6 @@ jest.mock('../src/features/workout/haptics', () => ({
 jest.mock('expo-keep-awake', () => ({
   useKeepAwake: jest.fn()
 }));
-function memoryRepository() {
-  const rows: Row[] = [],
-    local = new Map<string, unknown>();
-  let sequence = 0, revision = 0;
-  const listeners = new Set<() => void>();
-  const notify = () => { revision++; listeners.forEach(f => f()); };
-  return {
-    owner: 'demo',
-    getRevision: () => revision,
-    subscribe: (f: () => void) => { listeners.add(f); return () => { listeners.delete(f); }; },
-    list: (table: string) => rows.filter(r => r.table === table && r.deleted_at === null),
-    get: (table: string, id: string) => rows.find(r => r.table === table && r.id === id),
-    atomic: (f: () => unknown) => f(),
-    localGet: (key: string) => local.get(key),
-    localSave: (key: string, value: unknown) => { local.set(key, value); notify(); },
-    save: (table: Row['table'], data: Row['data'], id = String(++sequence)) => {
-      let row = rows.find(r => r.table === table && r.id === id);
-      if (row) {
-        row.data = data;
-        row.deleted_at = null;
-      } else {
-        row = {
-          id,
-          table,
-          data,
-          deleted_at: null,
-          updated_at: Date.now(),
-          owner_id: 'demo',
-          device_id: 'synthetic'
-        };
-        rows.push(row);
-      }
-      notify();
-      return row;
-    },
-    remove: (table: string, id: string) => {
-      const row = rows.find(r => r.table === table && r.id === id);
-      if (row) row.deleted_at = Date.now();
-      notify();
-    }
-  } as unknown as Repository;
-}
 function wrapper({
   children
 }: {
@@ -129,7 +89,7 @@ test('plate line only for barbell and correct equipment steps', async () => {
   const view = await render(<Keypad label="Synthetic" equipment="barbell" unit="lb" field="weight" value="190" previous="" onChange={change} onClose={() => {}} onNext={() => {}} />, {
     wrapper
   });
-  expect(screen.getByText(/Plates per side/)).toHaveTextContent(/45 \+ 25 \+ 2.5/);
+  expect(screen.getByTestId('plate-line')).toHaveTextContent(/45 \+ 25 \+ 2.5/);
   await fireEvent.press(screen.getByRole('button', {
     name: '+5'
   }));
@@ -160,9 +120,7 @@ test('set check saves and starts timer sheet, minimize and expand', async () => 
   }));
   expect(store.sets(e.id)).toHaveLength(1);
   expect(screen.getByText('1:30')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', {
-    name: 'Minimize rest timer'
-  }));
+  await act(() => screen.getByTestId('rest-sheet-handle').props.onAccessibilityAction({nativeEvent:{actionName:'minimize'}}));
   await view.rerender(<Flow />);
   expect(store.timer()?.minimized).toBe(true);
   await fireEvent.press(screen.getByRole('button', {
@@ -400,8 +358,8 @@ test.each([
 test('plate line groups duplicates on one line and hides oversized drafts', async () => {
   const props = { label: 'Synthetic', equipment: 'barbell' as const, unit: 'lb' as const, field: 'weight' as const, previous: '', onChange: jest.fn(), onClose: () => {}, onNext: () => {} };
   const view = await render(<Keypad {...props} value="340" />, { wrapper });
-  expect(screen.getByText(/Plates per side/)).toHaveTextContent(/45 × 3 \+ 10 \+ 2.5/);
-  expect(screen.getByText(/Plates per side/)).toHaveProp('numberOfLines', 1);
+  expect(screen.getByTestId('plate-line')).toHaveTextContent(/45 × 3 \+ 10 \+ 2.5/);
+  expect(screen.getByTestId('plate-line')).toHaveProp('numberOfLines', 1);
   await view.rerender(<Keypad {...props} value="135135" />);
   expect(screen.queryByText(/Plates per side/)).toBeNull();
 });
@@ -568,4 +526,139 @@ test('exercise options can cancel and reopen, then add a set', async () => {
   await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.text === 'Add set')!.onPress!(); });
   expect(store.drafts(entry.id)).toHaveLength(4);
   alert.mockRestore();
+});
+
+test('offline badge is a themed chip even in a forced-offline demo', async () => {
+  await render(<SyncBadge local pending={0} status="offline" />, { wrapper });
+  expect(screen.getByText('Offline · saved on phone')).toBeTruthy();
+  expect(screen.getByTestId('sync-chip')).toHaveStyle({ borderRadius: 99 });
+});
+test('completed rows fill the card width and pending inputs remain borderless', async () => {
+  const props = { exercise: 'Bench Press', index: 0, previous: '185 × 8', hint: '190', onEdit: jest.fn(), onDone: jest.fn(), onRemove: jest.fn() };
+  const view = await render(<SetRow {...props} draft={{weight:'185',reps:'8',setId:'synthetic'}} />, {wrapper});
+  expect(screen.getByTestId('set-row-0-0')).toHaveStyle({marginHorizontal:-14,borderRadius:0});
+  await view.rerender(<SetRow {...props} draft={{weight:'',reps:''}} />);
+  expect(screen.getByTestId('set-0-0-weight')).toHaveStyle({borderWidth:0});
+});
+test('completed exercises collapse with volume and expand on tap', async () => {
+  const repo=memoryRepository(), store=new WorkoutStore(repo), s=store.start();
+  const e=store.addExercise(s.id,'Overhead Press',1);
+  store.editDraft(e.id,0,{weight:'105',reps:'10'}); store.toggleDone(e.id,0); store.skipTimer();
+  activeRepository(repo); await render(<ActiveWorkout/>,{wrapper});
+  expect(screen.getByText('1 set · 1,050 lb')).toBeTruthy();
+  expect(screen.queryByTestId('set-0-0-weight')).toBeNull();
+  await fireEvent.press(screen.getByRole('button',{name:'Expand exercise'}));
+  expect(screen.getByTestId('set-0-0-weight')).toBeTruthy();
+});
+
+test('fixture is inert outside development demo mode', () => {
+  const store=new WorkoutStore(memoryRepository());
+  for (const context of [{isDev:false,demo:true,signedIn:false},{isDev:true,demo:false,signedIn:false},{isDev:true,demo:true,signedIn:true}]) {
+    expect(createLoggerFixture(store,context,'logger')).toBeNull();
+    expect(store.repo.list('sessions')).toHaveLength(0);
+  }
+});
+test('fixture seeds repository data and repeatable logger/keypad/rest/summary states', () => {
+  const store=new WorkoutStore(memoryRepository()),context={isDev:true,demo:true,signedIn:false};
+  const fixture=createLoggerFixture(store,context,'logger')!;
+  expect(store.active()?.data.name).toBe('Push Day A');
+  expect(store.entries(fixture.sessionId).map(e=>store.drafts(e.id).length)).toEqual([3,3,4,3]);
+  expect(store.drafts(fixture.benchId).filter(d=>d.setId)).toHaveLength(2);
+  expect(store.previous(store.repo.get('entries',fixture.benchId)!)[2].data.reps).toBe(7);
+  expect(store.repo.localGet('loggerFixtureOffline')).toBe(true);
+  const rest=createLoggerFixture(store,context,'rest')!;
+  expect(store.timer()).toMatchObject({entryId:rest.benchId,duration:90,minimized:false});
+  expect(store.timer()!.endAt-Date.now()).toBeLessThanOrEqual(65000);
+  expect(store.drafts(rest.benchId)[2].setId).toBeTruthy();
+  const summary=createLoggerFixture(store,context,'summary')!;
+  expect(store.summary(summary.sessionId).prs).toHaveLength(1);
+  expect(store.milestones()).toHaveLength(7);
+  expect(store.summary(summary.sessionId).count).toBe(13);
+});
+
+test('rest keeps two visible controls and supports VoiceOver timer actions', async () => {
+  const store=new WorkoutStore(memoryRepository());
+  createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},'rest');
+  await render(<RestTimer store={store}/>,{wrapper});
+  expect(screen.getByRole('button',{name:'+15 s'})).toBeTruthy();
+  expect(screen.getByRole('button',{name:'Skip'})).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'−15 s'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Minimize rest timer'})).toBeNull();
+  const handle=screen.getByTestId('rest-sheet-handle');
+  expect(handle.props.accessibilityActions.map((a:{name:string})=>a.name)).toEqual(['escape','decrement','skip','minimize']);
+  const before=store.timer()!.duration;
+  await act(()=>handle.props.onAccessibilityAction({nativeEvent:{actionName:'decrement'}}));
+  expect(store.timer()!.duration).toBe(before-15);
+  await act(()=>screen.getByTestId('rest-sheet-handle').props.onAccessibilityAction({nativeEvent:{actionName:'escape'}}));
+  expect(store.timer()!.minimized).toBe(true);
+});
+test('picker close removes descendants and immediately reopens with fresh results',async()=>{
+ activeRepository(memoryRepository());await render(<ActiveWorkout/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Add exercise'}));
+ expect(screen.getByTestId('workout-sheet-host')).toHaveProp('animationType','none');
+ await fireEvent.changeText(screen.getByTestId('exercise-picker-search'),'Synthetic custom');
+ await fireEvent.scroll(screen.getByTestId('exercise-picker-results'),{nativeEvent:{contentOffset:{x:0,y:300}}});
+ await fireEvent.press(screen.getByRole('button',{name:'Close'}));
+ expect(screen.queryByRole('button',{name:'Close',includeHiddenElements:true})).toBeNull();
+ expect(screen.queryByTestId('exercise-picker-results',{includeHiddenElements:true})).toBeNull();
+ await fireEvent.press(screen.getByRole('button',{name:'Add exercise'}));
+ expect(screen.getByTestId('exercise-picker-search')).toHaveProp('value','');
+ expect(screen.getByTestId('exercise-picker-result-0')).toBeTruthy();
+});
+
+test('release fixture is inert even if called with a forged development context',()=>{
+ const store=new WorkoutStore(memoryRepository());
+ const original=__DEV__;
+ try {
+  Object.defineProperty(globalThis,'__DEV__',{value:false,configurable:true,writable:true});
+  expect(createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},'summary')).toBeNull();
+  expect(store.repo.list('sessions')).toHaveLength(0);
+ } finally {Object.defineProperty(globalThis,'__DEV__',{value:original,configurable:true,writable:true});}
+});
+
+test('seven-token shelf includes and highlights this session rather than dropping the newest token',async()=>{
+ const store=new WorkoutStore(memoryRepository());
+ const fixture=createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},'summary')!;
+ await render(<WorkoutSummary store={store} id={fixture.sessionId}/>,{wrapper});
+ expect(screen.getByText('7 tokens ›')).toBeTruthy();
+ expect(screen.getByTestId('summit-token-new')).toBeTruthy();
+});
+
+test('keypad uses the singular rep unit for one rep',async()=>{
+ await render(<ExistingValueKeypad field="reps" initial="1"/>,{wrapper});
+ expect(screen.getByText('1 Rep')).toBeTruthy();
+});
+
+
+test('logger pins its chrome below the safe area while only exercises scroll', async () => {
+ const repo=memoryRepository();
+ createLoggerFixture(new WorkoutStore(repo),{isDev:true,demo:true,signedIn:false},'logger');
+ activeRepository(repo);
+ await render(<SafeAreaInsetsContext.Provider value={{top:62,bottom:34,left:0,right:0}}><ActiveWorkout/></SafeAreaInsetsContext.Provider>,{wrapper});
+ expect(screen.getByTestId('logger-safe-area')).toHaveStyle({paddingTop:62});
+ const header=screen.getByTestId('logger-header');
+ expect(header).toHaveStyle({flexShrink:0});
+ expect(within(header).getByText('Push Day A')).toBeTruthy();
+ expect(within(header).getByRole('progressbar')).toBeTruthy();
+ const list=screen.getByTestId('logger-exercises');
+ expect(list).toHaveStyle({flex:1});
+ expect(list.props.contentInsetAdjustmentBehavior).toBe('never');
+ expect(within(list).queryByText('Push Day A')).toBeNull();
+ await fireEvent.scroll(list,{nativeEvent:{contentOffset:{x:0,y:200}}});
+ expect(header).toHaveStyle({flexShrink:0});
+});
+
+test.each([65,60,15,5,0])('unwind at %s seconds closes full rings and winds only the outer track',async(seconds)=>{
+ await render(<RestContours seconds={seconds} duration={90} style="unwind"/>,{wrapper});
+ const rings=screen.getByTestId('rest-contours').queryAll(n=>n.type==='RNSVGPath');
+ const full=rings.slice(1).filter(n=>!n.props.strokeDasharray);
+ expect(full).toHaveLength(Math.floor(seconds/15));
+ for(const ring of full) expect(ring.props.d).toMatch(/Z$/);
+ const outer=rings.find(n=>n.props.strokeWidth===2.6);
+ if(seconds%15){
+  expect(outer).toBeTruthy();
+  const dash=outer!.props.strokeDasharray.map(Number);
+  expect(dash[0]/dash[1]).toBeCloseTo((seconds%15)/15,4);
+  expect(outer!.props.d).toBe(rings[0].props.d);
+ } else expect(outer).toBeUndefined();
 });

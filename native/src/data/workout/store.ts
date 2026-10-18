@@ -379,6 +379,7 @@ export class WorkoutStore {
         best = current.filter(s => s.done && !s.warmup && s.reps >= 1).sort((a, b) => b.weight * (1 + b.reps / 30) - a.weight * (1 + a.reps / 30))[0];
       return {
         exercise: name,
+        previousE1rm: Math.max(0, ...prior.filter(s => s.done && !s.warmup && s.reps >= 1).map(s => s.weight * (1 + s.reps / 30))),
         bestReps: best?.reps ?? 0,
         displayWeight: best?.weight ?? 0,
         ...record

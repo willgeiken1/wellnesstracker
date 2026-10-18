@@ -6,7 +6,7 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedControl } from '@/components/segmented-control';
 import { useTheme } from '@/design/theme-provider';
-import { t } from '@/i18n/en';
+import { pluralize, t } from '@/i18n/en';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
 import { layout, Panel } from './primitives';
@@ -42,7 +42,7 @@ export function Workouts() {
       {store?.templates().map(r => {
         const last = store.history().find(s => s.data.routine_id === r.id);
         return <Panel key={r.id}>
-        <ThemedText variant="headline">{String(r.data.name)}</ThemedText><ThemedText muted variant="caption">{store.templateExercises(r.id).length} {t('exercises')} · {last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}</ThemedText>
+        <ThemedText variant="headline">{String(r.data.name)}</ThemedText><ThemedText muted variant="caption">{pluralize(store.templateExercises(r.id).length,'exercise')} · {last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}</ThemedText>
         <View style={layout.row}><View style={{
               flex: 1
             }}><Button label={t('startTemplate').replace('{name}', String(r.data.name))} onPress={() => run(() => {

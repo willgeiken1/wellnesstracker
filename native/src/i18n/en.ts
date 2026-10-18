@@ -32,7 +32,7 @@ export const en = {
   next: "Next",
   set: "Set",
   of: "of",
-  restExplanation: "Each ring is 15 seconds. A silent buzz plays at zero.",
+  restExplanation: "Each ring is 15 seconds and the outer one winds away. A silent buzz plays at zero.",
   minimizeRest: "Minimize rest timer",
   workoutSaveError: "Could not save this change. Please try again.",
   resumeWorkout: "Resume workout",
@@ -76,6 +76,7 @@ export const en = {
   workoutName: "Workout",
   finish: "Finish",
   sets: "sets",
+  setsLabel: "Sets",
   exerciseOptions: "Exercise options",
   addSet: "Add set",
   removeExercise: "Remove exercise",
@@ -86,7 +87,8 @@ export const en = {
   previous: "PREVIOUS",
   repsHeader: "REPS",
   emptyWorkout: "Add an exercise to begin. Every completed set is saved on this phone.",
-  jumpExplanation: "Try {weight} {unit}. You hit {reps} reps at {previous} on all {count} working sets. Weight is suggested; reps stay blank until you type them.",
+  jumpLead: "Try {weight} {unit}.",
+  jumpExplanation: "Try {weight} {unit}. You hit {reps} at {previous} {workingSets}. The weight is filled in. Reps stay blank until you type them.",
   dismissSuggestion: "Dismiss weight suggestion",
   finishWorkout: "Finish workout",
   duration: "Duration",
@@ -105,6 +107,11 @@ export const en = {
   est1RM: "Est. 1RM",
   milestonesShelf: "Milestones shelf",
   tokens: "tokens",
+  upNext: "Up next",
+  onBar: "on a {weight} {unit} bar",
+  previousBest: "up {weight} {unit} from your last best",
+  summit: "summit",
+  to: "to",
   summitToken: "Summit token",
   added: "Added",
   equipment_barbell: "Barbell",
@@ -157,3 +164,11 @@ export function signOutUnsynced(count: number): string {
 }
 
 export function equipmentLabel(equipment: import('../core/workout/rules').Equipment) {return t(`equipment_${equipment}`);}
+
+/** Counted logger copy lives here so singular forms cannot drift between screens. */
+export function pluralize(count: number, noun: 'set' | 'rep' | 'exercise' | 'token' | 'left') {
+  return `${count} ${noun}${count === 1 || noun === 'left' ? '' : 's'}`;
+}
+export function workingSetsPhrase(count: number) {
+  return count === 1 ? 'on your 1 working set' : count === 2 ? 'on both sets' : `on all ${count} working sets`;
+}

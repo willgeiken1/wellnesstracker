@@ -1,33 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useKeepAwake } from 'expo-keep-awake';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Button } from '@/components/button';
-import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/design/theme-provider';
-import { exerciseFor } from '@/core/workout/library';
-import { displayWeight, nextField, validateSet } from '@/core/workout/rules';
-import type { Row } from '@/data/rows';
-import type { WorkoutStore } from '@/data/workout/store';
-import { equipmentLabel, t } from '@/i18n/en';
-import { useWorkout } from './use-workout';
-import { SyncBadge } from './badge';
-import { clock, IconButton, layout, Line, Panel, SheetHost } from './primitives';
-import { Keypad, type Cursor } from './keypad';
-import { ExercisePicker } from './picker';
-import { SetRow } from './set-row';
-import { RestTimer } from './timer';
-import { FinishSheet } from './finish';
-import { tick } from './haptics';
-export function ActiveWorkout() {
-  const {
-      store,
-      auth
-    } = useWorkout(),
-    {
-      routine
-    } = useLocalSearchParams<{
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Alert, AppState, Pressable, ScrollView, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from "react-native-safe-area-context";
+import { useKeepAwake } from "expo-keep-awake";
+import { router, useIsFocused, useLocalSearchParams } from "expo-router";
+import { Button } from "@/components/button";
+import { ThemedText } from "@/components/themed-text";
+import { tokens } from "@/design/tokens";
+import { useTheme } from "@/design/theme-provider";
+import { exerciseFor } from "@/core/workout/library";
+import { displayWeight, nextField, validateSet } from "@/core/workout/rules";
+import type { Row } from "@/data/rows";
+import type { WorkoutStore } from "@/data/workout/store";
+import { equipmentLabel, pluralize, workingSetsPhrase, t } from "@/i18n/en";
+import { useWorkout } from "./use-workout";
+import { SyncBadge } from "./badge";
+import {
+  clock,
+  Eyebrow,
+  Pill,
+  IconButton,
+  layout,
+  Line,
+  Panel,
+  SheetHost,
+} from "./primitives";
+import { Keypad, type Cursor } from "./keypad";
+import { ExercisePicker } from "./picker";
+import { SetRow } from "./set-row";
+import { RestTimer } from "./timer";
+import { FinishSheet } from "./finish";
+import { tick } from "./haptics";
+export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
+  const { store, auth } = useWorkout(),
+    { routine } = useLocalSearchParams<{
       routine?: string;
     }>(),
     [error, setError] = useState(false),
@@ -48,284 +53,754 @@ export function ActiveWorkout() {
     };
   }, [store, routine]);
   const session = store?.active();
-  return store && session ? <Logger key={session.id} store={store} session={session} pending={auth.pending} status={auth.syncStatus} /> : <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{
-    flex: 1
-  }}><ThemedText>{error ? t('workoutSaveError') : t('workout')}</ThemedText><Button label={t('closeWorkout')} onPress={closeWorkout} /></SafeAreaView>;
+  return store && session ? (
+    <Logger
+      key={session.id}
+      fixtureState={fixtureState}
+      store={store}
+      session={session}
+      pending={auth.pending}
+      status={auth.syncStatus}
+    />
+  ) : (
+    <SafeAreaView
+      edges={["top", "left", "right", "bottom"]}
+      style={{
+        flex: 1,
+      }}
+    >
+      <ThemedText>{error ? t("workoutSaveError") : t("workout")}</ThemedText>
+      <Button label={t("closeWorkout")} onPress={closeWorkout} />
+    </SafeAreaView>
+  );
 }
 function closeWorkout() {
-  router.replace('/');
+  router.replace("/");
 }
 function Logger({
   store,
   session,
   pending,
-  status
+  status,
+  fixtureState,
 }: {
   store: WorkoutStore;
+  fixtureState?: string;
   session: Row;
   pending: number;
-  status: 'idle' | 'syncing' | 'offline';
+  status: "idle" | "syncing" | "offline";
 }) {
-  useKeepAwake('workout');
-  const {
-    colors
-  } = useTheme();
+  useKeepAwake("workout");
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const params = useLocalSearchParams<{ fixtureState?: string }>();
+  const selectedFixture = fixtureState ?? params.fixtureState;
+  const focused = useIsFocused();
   const [now, setNow] = useState(() => Date.now()),
-    [cursor, setCursor] = useState<Cursor | null>(null),
-    [value, setValue] = useState(''),
+    [cursor, setCursor] = useState<Cursor | null>(() => {
+      const fixture =
+        __DEV__ && store.repo.owner === "demo"
+          ? store.repo.localGet<{ benchId: string; sessionId: string }>(
+              "loggerFixture",
+            )
+          : null;
+      return fixture?.sessionId === session.id &&
+        selectedFixture === "keypad"
+        ? { entryId: fixture.benchId, index: 2, field: "weight" }
+        : null;
+    }),
+    [value, setValue] = useState(() =>
+      __DEV__ && store.repo.owner === "demo" && selectedFixture === "keypad"
+        ? "190"
+        : "",
+    ),
     [picker, setPicker] = useState(false),
     [finish, setFinish] = useState(false),
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState<string[]>([]);
   useEffect(() => {
     const timer = setInterval(() => {
-      if (AppState.currentState === 'active') setNow(Date.now());
+      if (AppState.currentState === "active") setNow(Date.now());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
   const entries = store.entries(session.id),
-    drafts = entries.flatMap(e => store.drafts(e.id)),
-    done = drafts.filter(d => d.setId).length,
+    drafts = entries.flatMap((e) => store.drafts(e.id)),
+    done = drafts.filter((d) => d.setId).length,
     total = drafts.length;
   function run(action: () => void) {
     try {
       action();
       setError(null);
     } catch {
-      setError(t('workoutSaveError'));
+      setError(t("workoutSaveError"));
     }
   }
   function weightHint(entry: Row, index: number) {
+    const fixture =
+      __DEV__ && store.repo.owner === "demo"
+        ? store.repo.localGet<{ entryId: string; weight: number }>(
+            "loggerFixtureHint",
+          )
+        : null;
+    if (fixture?.entryId === entry.id) return String(fixture.weight);
     const sg = store.suggestion(entry),
-      previous = store.previous(entry).find(s => Number(s.data.position) === index);
+      previous = store
+        .previous(entry)
+        .find((s) => Number(s.data.position) === index);
     if (sg.jump && sg.weight !== null) return String(sg.weight);
-    if (previous) return String(displayWeight(Number(previous.data.weight_kg), store.unit()));
+    if (previous)
+      return String(
+        displayWeight(Number(previous.data.weight_kg), store.unit()),
+      );
     // A session without a matching history hint carries the preceding set's weight only.
-    const preceding = store.drafts(entry.id).slice(0, index).reverse().find(d => d.weight !== '');
-    return preceding?.weight ?? (sg.weight === null ? '' : String(sg.weight));
+    const preceding = store
+      .drafts(entry.id)
+      .slice(0, index)
+      .reverse()
+      .find((d) => d.weight !== "");
+    return preceding?.weight ?? (sg.weight === null ? "" : String(sg.weight));
   }
-  function edit(entryId: string, index: number, field: 'weight' | 'reps') {
+  function edit(entryId: string, index: number, field: "weight" | "reps") {
     const d = store.drafts(entryId)[index];
     setCursor({
       entryId,
       index,
-      field
+      field,
     });
-    setValue(store.repo.localGet<string | null>(`input:${entryId}:${index}:${field}`) ?? (d[field] || (field === 'weight' ? weightHint(entries.find(e => e.id === entryId)!, index) : '')));
+    setValue(
+      store.repo.localGet<string | null>(
+        `input:${entryId}:${index}:${field}`,
+      ) ??
+        (d[field] ||
+          (field === "weight"
+            ? weightHint(
+                entries.find((e) => e.id === entryId)!,
+                index,
+              )
+            : "")),
+    );
   }
   function input(text: string) {
     if (!cursor) return;
     setValue(text);
     run(() => {
-      store.repo.localSave(`input:${cursor.entryId}:${cursor.index}:${cursor.field}`, text);
+      store.repo.localSave(
+        `input:${cursor.entryId}:${cursor.index}:${cursor.field}`,
+        text,
+      );
       const d = store.drafts(cursor.entryId)[cursor.index];
-      if (!d.setId) store.editDraft(cursor.entryId, cursor.index, {
-        [cursor.field]: text
-      });
+      if (!d.setId)
+        store.editDraft(cursor.entryId, cursor.index, {
+          [cursor.field]: text,
+        });
     });
   }
   function next() {
     if (!cursor) return;
     const d = store.drafts(cursor.entryId)[cursor.index];
-    if (d.setId && !validateSet(cursor.field === 'weight' ? value : d.weight, cursor.field === 'reps' ? value : d.reps, store.unit()).valid) {
-      setError(t('invalidSet'));
+    if (
+      d.setId &&
+      !validateSet(
+        cursor.field === "weight" ? value : d.weight,
+        cursor.field === "reps" ? value : d.reps,
+        store.unit(),
+      ).valid
+    ) {
+      setError(t("invalidSet"));
       return;
     }
     const commit = () => {
       try {
-        if (value !== d[cursor.field] && !(cursor.field === 'weight' && !d.weight && value === weightHint(entries.find(e => e.id === cursor.entryId)!, cursor.index))) store.editDraft(cursor.entryId, cursor.index, {
-          [cursor.field]: value
-        });
-        store.repo.localSave(`input:${cursor.entryId}:${cursor.index}:${cursor.field}`, null);
-        const next = nextField(cursor.field, cursor.index, store.drafts(cursor.entryId).length);
-        if (next) edit(cursor.entryId, next.index, next.field);else {
-          const i = entries.findIndex(e => e.id === cursor.entryId);
-          if (i + 1 < entries.length) edit(entries[i + 1].id, 0, 'weight');else setCursor(null);
+        if (
+          value !== d[cursor.field] &&
+          !(
+            cursor.field === "weight" &&
+            !d.weight &&
+            value ===
+              weightHint(
+                entries.find((e) => e.id === cursor.entryId)!,
+                cursor.index,
+              )
+          )
+        )
+          store.editDraft(cursor.entryId, cursor.index, {
+            [cursor.field]: value,
+          });
+        store.repo.localSave(
+          `input:${cursor.entryId}:${cursor.index}:${cursor.field}`,
+          null,
+        );
+        const next = nextField(
+          cursor.field,
+          cursor.index,
+          store.drafts(cursor.entryId).length,
+        );
+        if (next) edit(cursor.entryId, next.index, next.field);
+        else {
+          const i = entries.findIndex((e) => e.id === cursor.entryId);
+          if (i + 1 < entries.length) edit(entries[i + 1].id, 0, "weight");
+          else setCursor(null);
         }
         setError(null);
       } catch {
-        setError(t('workoutSaveError'));
+        setError(t("workoutSaveError"));
       }
     };
-    const baseline = store.sets(cursor.entryId).find(s => s.id === d.setId);
-    const check = validateSet(cursor.field === 'weight' ? value : d.weight, cursor.field === 'reps' ? value : d.reps, store.unit(), baseline ? Number(baseline.data.weight_kg) : undefined);
-    if (d.setId && value !== d[cursor.field] && check.warning) Alert.alert(t('checkSet'), t(check.warning), [{
-      text: t('cancel'),
-      style: 'cancel'
-    }, {
-      text: t('saveSet'),
-      onPress: commit
-    }]);else commit();
+    const baseline = store.sets(cursor.entryId).find((s) => s.id === d.setId);
+    const check = validateSet(
+      cursor.field === "weight" ? value : d.weight,
+      cursor.field === "reps" ? value : d.reps,
+      store.unit(),
+      baseline ? Number(baseline.data.weight_kg) : undefined,
+    );
+    if (d.setId && value !== d[cursor.field] && check.warning)
+      Alert.alert(t("checkSet"), t(check.warning), [
+        {
+          text: t("cancel"),
+          style: "cancel",
+        },
+        {
+          text: t("saveSet"),
+          onPress: commit,
+        },
+      ]);
+    else commit();
   }
   function mark(entry: Row, index: number) {
     const d = store.drafts(entry.id)[index];
     const effective = {
       ...d,
-      weight: d.weight || weightHint(entry, index)
+      weight: d.weight || weightHint(entry, index),
     };
-    const check = validateSet(effective.weight, effective.reps, store.unit(), store.previous(entry)[index] ? Number(store.previous(entry)[index].data.weight_kg) : undefined);
+    const check = validateSet(
+      effective.weight,
+      effective.reps,
+      store.unit(),
+      store.previous(entry)[index]
+        ? Number(store.previous(entry)[index].data.weight_kg)
+        : undefined,
+    );
     if (!d.setId && !check.valid) {
-      setError(t('invalidSet'));
+      setError(t("invalidSet"));
       return;
     }
-    const save = () => run(() => {
-      if (!d.setId && !d.weight) store.editDraft(entry.id, index, {
-        weight: effective.weight
-      });
-      if (store.toggleDone(entry.id, index)) tick(store.repo);
-    });
-    if (!d.setId && check.warning) Alert.alert(t('checkSet'), t(check.warning), [{
-      text: t('cancel'),
-      style: 'cancel'
-    }, {
-      text: t('saveSet'),
-      onPress: save
-    }]);else save();
-  }
-  const current = cursor ? entries.find(e => e.id === cursor.entryId) : undefined;
-  return <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{
-    flex: 1,
-    backgroundColor: colors.bg
-  }}>
-    <View style={[layout.content, {
-      paddingBottom: 8
-    }]}>
-      <View style={layout.row}><IconButton name="down" label={t('closeWorkout')} onPress={closeWorkout} /><View style={{
-          flex: 1,
-          alignItems: 'center'
-        }}>{session.data.origin === 'template' && <ThemedText muted variant="caption">{t('template')}</ThemedText>}<ThemedText variant="headline">{String(session.data.name ?? t('workoutName'))}</ThemedText></View><Button testID="finish-button" label={t('finish')} onPress={() => {
-          store.updateTimer({
-            minimized: true
+    const save = () =>
+      run(() => {
+        if (!d.setId && !d.weight)
+          store.editDraft(entry.id, index, {
+            weight: effective.weight,
           });
-          setFinish(true);
-        }} /></View>
-      <View style={[layout.row, {
-        justifyContent: 'space-between',
-        flexWrap: 'wrap'
-      }]}><ThemedText muted numeric variant="caption">{clock((now - Number(session.data.started_at)) / 1000)} · {t('set')} {Math.min(done + 1, total)} {t('of')} {total}</ThemedText><SyncBadge local={['demo', 'guest'].includes(store.repo.owner)} pending={pending} status={status} /></View>
-      <View accessible accessibilityRole="progressbar" accessibilityValue={{
-        min: 0,
-        max: 100,
-        now: total > 0 ? done / total * 100 : 0
-      }} style={{
-        height: 4,
-        borderRadius: 4,
-        backgroundColor: colors['surface-2']
-      }}><View style={{
-          height: 4,
-          borderRadius: 4,
-          backgroundColor: colors.accent,
-          width: `${total ? done / total * 100 : 0}%`
-        }} /></View>
-      {error && <ThemedText accessibilityRole="alert" variant="caption">{error}</ThemedText>}
-    </View>
-    <ScrollView contentContainerStyle={layout.content}>
-      {entries.map((e, exerciseIndex) => {
-        const ds = store.drafts(e.id),
-          complete = ds.length > 0 && ds.every(d => d.setId),
-          collapsed = complete && !open.includes(e.id),
-          previous = store.previous(e);
-        return <Panel key={e.id}>
-          <View style={layout.row}>{complete && <Line name="check" color={colors.accent} />}<View style={{
-              flex: 1
-            }}><ThemedText variant="headline">{String(e.data.exercise)}</ThemedText><ThemedText muted variant="caption">{equipmentLabel(exerciseFor(String(e.data.exercise)).equipment)} · {ds.length} {t('sets')}</ThemedText></View>
-            {complete && <IconButton name="down" label={t(collapsed ? 'expandExercise' : 'collapseExercise')} onPress={() => setOpen(ids => ids.includes(e.id) ? ids.filter(id => id !== e.id) : [...ids, e.id])} />}
-            <IconButton name="more" label={`${e.data.exercise}, ${t('exerciseOptions')}`} onPress={() => Alert.alert(String(e.data.exercise), undefined, [{
-              text: t('addSet'),
-              onPress: () => run(() => store.addSet(e.id))
-            }, {
-              text: t('moveUp'),
-              onPress: () => run(() => store.moveEntry(e.id, -1))
-            }, {
-              text: t('moveDown'),
-              onPress: () => run(() => store.moveEntry(e.id, 1))
-            }, {
-              text: t('removeExercise'),
-              onPress: () => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{
-                text: t('cancel'),
-                style: 'cancel'
-              }, {
-                text: t('remove'),
-                onPress: () => run(() => store.removeExercise(e.id))
-              }])
-            }, {
-              text: t('cancel'),
-              style: 'cancel'
-            }])} />
+        if (store.toggleDone(entry.id, index)) tick(store.repo);
+      });
+    if (!d.setId && check.warning)
+      Alert.alert(t("checkSet"), t(check.warning), [
+        {
+          text: t("cancel"),
+          style: "cancel",
+        },
+        {
+          text: t("saveSet"),
+          onPress: save,
+        },
+      ]);
+    else save();
+  }
+  const current = cursor
+    ? entries.find((e) => e.id === cursor.entryId)
+    : undefined;
+  return (
+    <SafeAreaView
+      testID="logger-safe-area"
+      edges={["left", "right", "bottom"]}
+      style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        // A full-screen presentation can initially report a zero top inset.
+        paddingTop: insets.top || initialWindowMetrics?.insets.top || 0,
+      }}
+    >
+      <View
+        testID="logger-header"
+        style={[
+          layout.content,
+          {
+            paddingTop: 0,
+            paddingBottom: 0,
+            flexShrink: 0,
+            gap: 8,
+          },
+        ]}
+      >
+        <View style={[layout.row, { justifyContent: "space-between" }]}>
+          <IconButton
+            name="down"
+            label={t("closeWorkout")}
+            onPress={closeWorkout}
+          />
+          <View
+            style={{
+              position: "absolute",
+              left: 80,
+              right: 80,
+              alignItems: "center",
+            }}
+          >
+            {session.data.origin === "template" && (
+              <Eyebrow>{t("template")}</Eyebrow>
+            )}
+            <ThemedText
+              style={{ fontSize: tokens.logger.title, fontWeight: "600" }}
+            >
+              {String(session.data.name ?? t("workoutName"))}
+            </ThemedText>
           </View>
-          {!collapsed && <>
-            <View style={layout.row}><ThemedText muted variant="caption" style={{
-                width: 36
-              }}>{t('setHeader')}</ThemedText><ThemedText muted variant="caption" style={{
-                flex: 1
-              }}>{t('previous')}</ThemedText><ThemedText muted variant="caption" style={{
-                flex: 1,
-                textAlign: 'center'
-              }}>{store.unit().toUpperCase()}</ThemedText><ThemedText muted variant="caption" style={{
-                flex: 1,
-                textAlign: 'center'
-              }}>{t('repsHeader')}</ThemedText><View style={{
-                width: 44
-              }}><Line name="check" color={colors['text-muted']} /></View></View>
-            {ds.map((d, i) => <SetRow key={d.setId ?? i} exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} draft={d} previous={previous.find(s => Number(s.data.position) === i) ? `${displayWeight(Number(previous.find(s => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find(s => Number(s.data.position) === i)!.data.reps}` : ''} hint={weightHint(e, i)} onEdit={field => edit(e.id, i, field)} onDone={() => mark(e, i)} onRemove={() => Alert.alert(t('removeSet'), undefined, [{
-              text: t('cancel'),
-              style: 'cancel'
-            }, {
-              text: t('remove'),
-              onPress: () => run(() => store.removeSet(e.id, i))
-            }])} />)}
-            <JumpCard store={store} entry={e} />
-          </>}
-        </Panel>;
-      })}
-      {!entries.length && <ThemedText muted>{t('emptyWorkout')}</ThemedText>}
-      <Button label={t('addExercise')} variant="secondary" onPress={() => {
-        store.updateTimer({
-          minimized: true
-        });
-        setPicker(true);
-      }} />
-    </ScrollView>
-    <RestTimer store={store} presentation="mini" hidden={!!cursor || finish || picker} />
-    <SheetHost visible={picker || !!cursor || finish || !!store.timer() && !store.timer()!.minimized} onClose={() => {
-      if (picker) setPicker(false);
-      else if (cursor) setCursor(null);
-      else if (finish) setFinish(false);
-      else store.updateTimer({ minimized: true });
-    }}>
-    <RestTimer store={store} presentation="sheet" hidden={!!cursor || finish || picker} />
-    {picker && <ExercisePicker onClose={() => setPicker(false)} onPick={name => run(() => {
-      store.addExercise(session.id, name);
-      setPicker(false);
-    })} />}
-    {cursor && current && <Keypad inputId={`${cursor.entryId}:${cursor.index}:${cursor.field}`} label={`${current.data.exercise} · ${t('set')} ${cursor.index + 1} · ${t(cursor.field)}`} field={cursor.field} unit={store.unit()} equipment={exerciseFor(String(current.data.exercise)).equipment} value={value} previous={store.previous(current)[cursor.index] ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}` : ''} onChange={input} onNext={next} onClose={() => setCursor(null)} />}
-    {finish && <FinishSheet store={store} session={session} onClose={() => setFinish(false)} />}
-    </SheetHost>
-  </SafeAreaView>;
+          <Pill
+            compact
+            testID="finish-button"
+            label={t("finish")}
+            onPress={() => {
+              store.updateTimer({
+                minimized: true,
+              });
+              setFinish(true);
+            }}
+          />
+        </View>
+        <View
+          style={[
+            layout.row,
+            {
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 6,
+              paddingVertical: 0,
+            },
+          ]}
+        >
+          <View style={[layout.row, { gap: 6 }]}>
+            <Line name="clock" size={16} color={colors["text-muted"]} />
+            <ThemedText muted style={{ fontSize: 13 }}>
+              <ThemedText muted style={{ fontWeight: "700", fontSize: 13 }}>
+                {clock((now - Number(session.data.started_at)) / 1000)}
+              </ThemedText>{" "}
+              · {t("set")} {Math.min(done + 1, total)} {t("of")} {total}
+            </ThemedText>
+          </View>
+          <SyncBadge
+            local={["demo", "guest"].includes(store.repo.owner)}
+            pending={pending}
+            status={
+              __DEV__ &&
+              store.repo.owner === "demo" &&
+              store.repo.localGet("loggerFixtureOffline")
+                ? "offline"
+                : status
+            }
+          />
+        </View>
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityValue={{
+            min: 0,
+            max: 100,
+            now: total > 0 ? (done / total) * 100 : 0,
+          }}
+          style={{
+            height: 4,
+            borderRadius: 4,
+            backgroundColor: colors["surface-2"],
+          }}
+        >
+          <View
+            style={{
+              height: 4,
+              borderRadius: 4,
+              backgroundColor: colors.accent,
+              width: `${total ? (done / total) * 100 : 0}%`,
+            }}
+          />
+        </View>
+        {error && (
+          <ThemedText accessibilityRole="alert" variant="caption">
+            {error}
+          </ThemedText>
+        )}
+      </View>
+      <ScrollView
+        testID="logger-exercises"
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        contentContainerStyle={[layout.content, { paddingTop: 12 }]}
+      >
+        {entries.map((e, exerciseIndex) => {
+          const ds = store.drafts(e.id),
+            complete = ds.length > 0 && ds.every((d) => d.setId),
+            completed = ds.filter((d) => d.setId).length,
+            firstPending = entries.findIndex((entry) =>
+              store.drafts(entry.id).some((d) => !d.setId),
+            ),
+            compact =
+              complete ||
+              (completed > 0 &&
+                exerciseIndex < firstPending + 1 &&
+                entries
+                  .slice(exerciseIndex + 1)
+                  .some((entry) =>
+                    store.drafts(entry.id).some((d) => d.setId),
+                  )),
+            collapsed = compact && !open.includes(e.id),
+            previous = store.previous(e);
+          return (
+            <Panel key={e.id} style={collapsed ? { paddingVertical: 8 } : {}}>
+              <View style={layout.row}>
+                {compact && (
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 99,
+                      backgroundColor: colors.accent,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Line name="check" size={18} color={colors["on-accent"]} />
+                  </View>
+                )}
+                <Pressable
+                  disabled={!compact}
+                  accessible={false}
+                  importantForAccessibility="no"
+                  accessibilityLabel={
+                    compact
+                      ? t(collapsed ? "expandExercise" : "collapseExercise")
+                      : undefined
+                  }
+                  onPress={() =>
+                    setOpen((ids) =>
+                      ids.includes(e.id)
+                        ? ids.filter((id) => id !== e.id)
+                        : [...ids, e.id],
+                    )
+                  }
+                  style={{ flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
+                >
+                  <ThemedText
+                    style={{
+                      fontSize: collapsed ? 17 : tokens.logger.exercise,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {String(e.data.exercise)}
+                  </ThemedText>
+                  <ThemedText muted style={{ fontSize: 13, lineHeight: 16 }}>
+                    {collapsed
+                      ? `${pluralize(completed, "set")} · ${Math.round(store.sets(e.id).reduce((sum, set) => sum + displayWeight(Number(set.data.weight_kg), store.unit()) * Number(set.data.reps), 0)).toLocaleString()} ${store.unit()}${complete ? "" : ` · ${pluralize(ds.length - completed, "left")}`}`
+                      : `${exerciseIndex > firstPending && !completed ? t("upNext") : equipmentLabel(exerciseFor(String(e.data.exercise)).equipment)} · ${pluralize(ds.length, "set")}`}
+                  </ThemedText>
+                </Pressable>
+                {compact && (
+                  <IconButton
+                    name="down"
+                    label={t(collapsed ? "expandExercise" : "collapseExercise")}
+                    onPress={() =>
+                      setOpen((ids) =>
+                        ids.includes(e.id)
+                          ? ids.filter((id) => id !== e.id)
+                          : [...ids, e.id],
+                      )
+                    }
+                  />
+                )}
+                {!collapsed && (
+                  <IconButton
+                    name="more"
+                    label={`${e.data.exercise}, ${t("exerciseOptions")}`}
+                    onPress={() =>
+                      Alert.alert(String(e.data.exercise), undefined, [
+                        {
+                          text: t("addSet"),
+                          onPress: () => run(() => store.addSet(e.id)),
+                        },
+                        {
+                          text: t("moveUp"),
+                          onPress: () => run(() => store.moveEntry(e.id, -1)),
+                        },
+                        {
+                          text: t("moveDown"),
+                          onPress: () => run(() => store.moveEntry(e.id, 1)),
+                        },
+                        {
+                          text: t("removeExercise"),
+                          onPress: () =>
+                            Alert.alert(
+                              t("removeExercise"),
+                              t("removeExerciseBody"),
+                              [
+                                {
+                                  text: t("cancel"),
+                                  style: "cancel",
+                                },
+                                {
+                                  text: t("remove"),
+                                  onPress: () =>
+                                    run(() => store.removeExercise(e.id)),
+                                },
+                              ],
+                            ),
+                        },
+                        {
+                          text: t("cancel"),
+                          style: "cancel",
+                        },
+                      ])
+                    }
+                  />
+                )}
+              </View>
+              {!collapsed && (
+                <>
+                  <View style={layout.row}>
+                    <ThemedText
+                      muted
+                      variant="caption"
+                      style={{
+                        width: 26,
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                      }}
+                    >
+                      {t("setHeader")}
+                    </ThemedText>
+                    <ThemedText
+                      muted
+                      variant="caption"
+                      style={{
+                        flex: 1,
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                      }}
+                    >
+                      {t("previous")}
+                    </ThemedText>
+                    <ThemedText
+                      muted
+                      variant="caption"
+                      style={{
+                        flex: 1,
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                        textAlign: "center",
+                      }}
+                    >
+                      {store.unit().toUpperCase()}
+                    </ThemedText>
+                    <ThemedText
+                      muted
+                      variant="caption"
+                      style={{
+                        flex: 1,
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                        textAlign: "center",
+                      }}
+                    >
+                      {t("repsHeader")}
+                    </ThemedText>
+                    <View
+                      style={{
+                        width: 38,
+                      }}
+                    >
+                      <Line name="check" color={colors["text-muted"]} />
+                    </View>
+                  </View>
+                  <View>
+                    {ds.map((d, i) => (
+                      <Fragment key={i}>
+                        <SetRow
+                          key={d.setId ?? i}
+                          exerciseIndex={exerciseIndex}
+                          exercise={String(e.data.exercise)}
+                          index={i}
+                          draft={d}
+                          previous={
+                            previous.find((s) => Number(s.data.position) === i)
+                              ? `${displayWeight(Number(previous.find((s) => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find((s) => Number(s.data.position) === i)!.data.reps}`
+                              : ""
+                          }
+                          hint={weightHint(e, i)}
+                          repsHint={String(store.repo.localGet<number>(`target:${e.id}`) ?? previous.find((s) => Number(s.data.position) === i)?.data.reps ?? "")}
+                          onEdit={(field) => edit(e.id, i, field)}
+                          onDone={() => mark(e, i)}
+                          onRemove={() =>
+                            Alert.alert(t("removeSet"), undefined, [
+                              {
+                                text: t("cancel"),
+                                style: "cancel",
+                              },
+                              {
+                                text: t("remove"),
+                                onPress: () =>
+                                  run(() => store.removeSet(e.id, i)),
+                              },
+                            ])
+                          }
+                        />
+                        {i ===
+                          Math.max(
+                            0,
+                            ds.findIndex((draft) => !draft.setId),
+                          ) && <JumpCard store={store} entry={e} />}
+                      </Fragment>
+                    ))}
+                  </View>
+                </>
+              )}
+            </Panel>
+          );
+        })}
+        {!entries.length && <ThemedText muted>{t("emptyWorkout")}</ThemedText>}
+        <Button
+          label={t("addExercise")}
+          variant="secondary"
+          onPress={() => {
+            store.updateTimer({
+              minimized: true,
+            });
+            setPicker(true);
+          }}
+        />
+      </ScrollView>
+      <RestTimer
+        store={store}
+        presentation="mini"
+        hidden={!focused || !!cursor || finish || picker}
+      />
+      <SheetHost
+        visible={
+          focused && (picker ||
+          !!cursor ||
+          finish ||
+          (!!store.timer() && !store.timer()!.minimized))
+        }
+        onClose={() => {
+          if (picker) setPicker(false);
+          else if (cursor) setCursor(null);
+          else if (finish) setFinish(false);
+          else store.updateTimer({ minimized: true });
+        }}
+      >
+        <RestTimer
+          store={store}
+          presentation="sheet"
+          hidden={!focused || !!cursor || finish || picker}
+        />
+        {picker && (
+          <ExercisePicker
+            onClose={() => setPicker(false)}
+            onPick={(name) =>
+              run(() => {
+                store.addExercise(session.id, name);
+                setPicker(false);
+              })
+            }
+          />
+        )}
+        {cursor && current && (
+          <Keypad
+            inputId={`${cursor.entryId}:${cursor.index}:${cursor.field}`}
+            label={`${current.data.exercise} · ${t("set")} ${cursor.index + 1} · ${t(cursor.field)}`}
+            field={cursor.field}
+            unit={store.unit()}
+            equipment={exerciseFor(String(current.data.exercise)).equipment}
+            value={value}
+            previous={
+              store.previous(current)[cursor.index]
+                ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}`
+                : ""
+            }
+            onChange={input}
+            onNext={next}
+            onClose={() => setCursor(null)}
+          />
+        )}
+        {finish && (
+          <FinishSheet
+            store={store}
+            session={session}
+            onClose={() => setFinish(false)}
+          />
+        )}
+      </SheetHost>
+    </SafeAreaView>
+  );
 }
-function JumpCard({
-  store,
-  entry
-}: {
-  store: WorkoutStore;
-  entry: Row;
-}) {
-  const [visible, setVisible] = useState(() => store.showCard(entry));
-  const {
-    colors
-  } = useTheme();
+function JumpCard({ store, entry }: { store: WorkoutStore; entry: Row }) {
+  const fixture =
+    __DEV__ && store.repo.owner === "demo"
+      ? store.repo.localGet<{
+          entryId: string;
+          weight: number;
+          target: number;
+          previous: number;
+          count: number;
+          jump: boolean;
+        }>("loggerFixtureHint")
+      : null;
+  const fixtureHint = fixture?.entryId === entry.id ? fixture : null;
+  const [visible, setVisible] = useState(
+    () => !!fixtureHint || store.showCard(entry),
+  );
+  const { colors } = useTheme();
   const entryId = entry.id;
   useEffect(() => {
     if (visible) {
-      const current = store.repo.get('entries', entryId);
+      const current = store.repo.get("entries", entryId);
       if (current && store.showCard(current)) store.markCard(current);
     }
   }, [store, entryId, visible]);
-  const sg = store.suggestion(entry);
+  const sg = fixtureHint ?? store.suggestion(entry);
   if (!visible || !sg.jump) return null;
-  return <View testID="suggestion-card" style={[layout.card, {
-    backgroundColor: `${colors.accent}22`
-  }]}><View style={layout.row}><Line name="trend" color={colors.accent} /><ThemedText style={{
-        flex: 1
-      }}>{t('jumpExplanation').replace('{weight}', String(sg.weight)).replace('{unit}', store.unit()).replace('{reps}', String(sg.target)).replace('{previous}', String(sg.previous)).replace('{count}', String(sg.count))}</ThemedText><IconButton name="close" label={t('dismissSuggestion')} onPress={() => setVisible(false)} /></View></View>;
+  const lead = t("jumpLead")
+    .replace("{weight}", String(sg.weight))
+    .replace("{unit}", store.unit());
+  const explanation = t("jumpExplanation")
+    .replace("Try {weight} {unit}. ", "")
+    .replace("{reps}", pluralize(sg.target ?? 0, "rep"))
+    .replace("{previous}", String(sg.previous))
+    .replace("{workingSets}", workingSetsPhrase(sg.count));
+  return (
+    <Pressable
+      testID="suggestion-card"
+      accessibilityLabel={`${lead} ${explanation}`}
+      accessibilityRole="button"
+      accessibilityHint={t("dismissSuggestion")}
+      onLongPress={() => setVisible(false)}
+      accessibilityActions={[
+        { name: "dismiss", label: t("dismissSuggestion") },
+      ]}
+      onAccessibilityAction={() => setVisible(false)}
+      style={{
+        backgroundColor: colors["accent-tint"],
+        padding: 12,
+        borderRadius: 9,
+        minHeight: 44,
+        marginVertical: 2,
+      }}
+    >
+      <View style={[layout.row, { alignItems: "flex-start" }]}>
+        <Line name="trend" size={16} color={colors.accent} />
+        <ThemedText style={{ flex: 1, fontSize: 14, lineHeight: 18 }}>
+          <ThemedText style={{ fontWeight: "700", fontSize: 14 }}>
+            {lead}
+          </ThemedText>{" "}
+          {explanation}
+        </ThemedText>
+      </View>
+    </Pressable>
+  );
 }
