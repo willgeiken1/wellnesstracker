@@ -1,0 +1,438 @@
+import { t } from '../../i18n/en';
+import { Repository } from '../repository';
+import type { Row } from '../rows';
+import { compareRows } from '../rows';
+import { exerciseFor } from '../../core/workout/library';
+import { attribute, cardKey, detectPR, displayWeight, fromKg, localDay, shouldShowCard, suggestion, toKg, validateDate, validateSet, weekOf, type Unit, type WorkingSet } from '../../core/workout/rules';
+export interface Draft {
+  weight: string;
+  reps: string;
+  setId?: string;
+  warmup?: boolean;
+}
+export interface TimerState {
+  sessionId: string;
+  setId: string;
+  entryId: string;
+  endAt: number;
+  duration: number;
+  minimized: boolean;
+  ended: boolean;
+}
+export interface TemplateExercise {
+  id?: string;
+  exercise: string;
+  target_sets: number;
+  target_reps: number;
+}
+const order = (rows: Row[]) => rows.sort((a, b) => Number(a.data.position) - Number(b.data.position) || a.id.localeCompare(b.id));
+export class WorkoutStore {
+  constructor(readonly repo: Repository, readonly viewRevision = 0) {}
+  unit(): Unit {
+    return this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
+  }
+  templates() {
+    return order(this.repo.list('routines'));
+  }
+  templateExercises(id: string) {
+    return order(this.repo.list('routine_exercises').filter(e => e.data.routine_id === id));
+  }
+  saveTemplate(name: string, exercises: TemplateExercise[], id?: string) {
+    if (!name.trim() || exercises.some(e => !e.exercise.trim() || !Number.isInteger(e.target_sets) || e.target_sets < 1 || e.target_sets > 100 || !Number.isInteger(e.target_reps) || e.target_reps < 0 || e.target_reps > 100)) throw Error('Invalid template.');
+    return this.repo.atomic(() => {
+      const current = id ? this.repo.get('routines', id) : undefined;
+      const routine = this.repo.save('routines', {
+        name: name.trim(),
+        position: current?.data.position ?? this.templates().length
+      }, id);
+      const prior = this.templateExercises(routine.id);
+      for (const e of prior) if (!exercises.some(x => x.id === e.id)) this.repo.remove('routine_exercises', e.id);
+      exercises.forEach((e, position) => this.repo.save('routine_exercises', {
+        routine_id: routine.id,
+        exercise: e.exercise.trim(),
+        target_sets: e.target_sets,
+        target_reps: e.target_reps,
+        position
+      }, e.id));
+      return routine;
+    });
+  }
+  deleteTemplate(id: string) {
+    const rows = [this.repo.get('routines', id), ...this.templateExercises(id)].filter((r): r is Row => !!r);
+    this.repo.atomic(() => rows.forEach(r => this.repo.remove(r.table, r.id)));
+    return () => this.repo.atomic(() => rows.forEach(r => this.repo.save(r.table, r.data, r.id)));
+  }
+  moveTemplate(id: string, direction: number) {
+    this.reorder('routines', this.templates(), id, direction);
+  }
+  private reorder(table: 'routines' | 'entries', rows: Row[], id: string, direction: number) {
+    const index = rows.findIndex(r => r.id === id),
+      next = index + direction;
+    if (index < 0 || next < 0 || next >= rows.length) return;
+    [rows[index], rows[next]] = [rows[next], rows[index]];
+    this.repo.atomic(() => rows.forEach((r, position) => this.repo.save(table, {
+      ...r.data,
+      position
+    }, r.id)));
+  }
+  active() {
+    return this.repo.list('sessions').filter(s => s.data.finished_at === null).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at))[0];
+  }
+  history() {
+    return this.repo.list('sessions').filter(s => s.data.finished_at !== null).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at));
+  }
+  start(routineId?: string, now = Date.now()) {
+    const active = this.active();
+    if (active) return active;
+    if (!validateDate(now)) throw Error('Invalid date.');
+    const routine = routineId ? this.repo.get('routines', routineId) : undefined;
+    if (routineId && (!routine || routine.deleted_at !== null)) throw Error('Template unavailable.');
+    return this.repo.atomic(() => {
+      const s = this.repo.save('sessions', {
+        origin: routine ? 'template' : 'empty',
+        routine_id: routine?.id ?? null,
+        name: routine?.data.name ?? null,
+        day: localDay(new Date(now)),
+        started_at: now,
+        finished_at: null,
+        duration_ms: null,
+        notes: null
+      });
+      this.repo.localSave(`sessionMeta:${s.id}`, {
+        timezoneOffset: new Date(now).getTimezoneOffset()
+      });
+      for (const e of routine ? this.templateExercises(routine.id) : []) {
+        const entry = this.addExercise(s.id, String(e.data.exercise), Number(e.data.target_sets) || 3);
+        this.repo.localSave(`target:${entry.id}`, Number(e.data.target_reps));
+      }
+      return s;
+    });
+  }
+  entries(sessionId: string) {
+    return order(this.repo.list('entries').filter(e => e.data.session_id === sessionId));
+  }
+  sets(entryId: string) {
+    return order(this.repo.list('sets').filter(s => s.data.entry_id === entryId));
+  }
+  addExercise(sessionId: string, name: string, count = 3) {
+    if (!name.trim()) throw Error('Invalid exercise.');
+    return this.repo.atomic(() => {
+      const e = this.repo.save('entries', {
+        session_id: sessionId,
+        exercise: name.trim(),
+        position: this.entries(sessionId).length,
+        notes: null
+      });
+      this.repo.localSave(`draft:${e.id}`, Array.from({
+        length: Math.min(100, Math.max(1, count))
+      }, () => ({
+        weight: '',
+        reps: ''
+      })));
+      return e;
+    });
+  }
+  moveEntry(id: string, direction: number) {
+    const entry = this.repo.get('entries', id);
+    if (entry) this.reorder('entries', this.entries(String(entry.data.session_id)), id, direction);
+  }
+  removeExercise(id: string) {
+    this.repo.atomic(() => {
+      for (const s of this.sets(id)) this.repo.remove('sets', s.id);
+      this.repo.remove('entries', id);
+      this.repo.localSave(`draft:${id}`, []);
+      const t = this.timer();
+      if (t?.entryId === id) this.repo.localSave('timer', null);
+      this.recompute();
+    });
+  }
+  drafts(entryId: string): Draft[] {
+    const saved = this.repo.localGet<Draft[]>(`draft:${entryId}`),
+      sets = this.sets(entryId);
+    // Match synced done rows by identity/position; local typed blanks never become done rows.
+    const result = saved ? saved.map(d => ({
+      ...d
+    })) : Array.from({
+      length: Math.max(3, ...sets.map(s => Number(s.data.position) + 1))
+    }, () => ({
+      weight: '',
+      reps: ''
+    }) as Draft);
+    sets.forEach(s => {
+      const i = Number(s.data.position);
+      if (i < 0 || i >= 100) return;
+      while (result.length <= i) result.push({
+        weight: '',
+        reps: ''
+      });
+      result[i] = {
+        ...result[i],
+        setId: s.id,
+        weight: String(displayWeight(Number(s.data.weight_kg), this.unit())),
+        reps: String(s.data.reps)
+      };
+    });
+    return result.map(d => d.setId && !sets.some(s => s.id === d.setId) ? {
+      ...d,
+      setId: undefined
+    } : d);
+  }
+  editDraft(entryId: string, index: number, patch: Partial<Pick<Draft, 'weight' | 'reps' | 'warmup'>>) {
+    const drafts = this.drafts(entryId),
+      d = drafts[index];
+    if (!d) return;
+    drafts[index] = {
+      ...d,
+      ...patch
+    };
+    this.repo.atomic(() => {
+      if (d.setId) {
+        const v = validateSet(drafts[index].weight, drafts[index].reps, this.unit());
+        if (!v.valid) throw Error('Invalid set.');
+        const previous = this.repo.get('sets', d.setId)!;
+        this.repo.save('sets', {
+          ...previous.data,
+          reps: Number(drafts[index].reps),
+          ...(patch.weight !== undefined ? {
+            weight_kg: toKg(Number(patch.weight), this.unit()),
+            entered_value: Number(patch.weight),
+            entered_unit: this.unit()
+          } : {})
+        }, d.setId);
+      }
+      this.repo.localSave(`draft:${entryId}`, drafts);
+    });
+    const session = this.repo.get('entries', entryId)?.data.session_id;
+    if (session && this.repo.get('sessions', String(session))?.data.finished_at !== null) this.recompute();
+  }
+  addSet(entryId: string) {
+    const drafts = this.drafts(entryId);
+    if (drafts.length >= 100) return;
+    this.repo.localSave(`draft:${entryId}`, [...drafts, {
+      weight: '',
+      reps: ''
+    }]);
+  }
+  removeSet(entryId: string, index: number) {
+    this.repo.atomic(() => {
+      const drafts = this.drafts(entryId),
+        [removed] = drafts.splice(index, 1);
+      if (removed?.setId) this.repo.remove('sets', removed.setId);
+      drafts.forEach((d, i) => {
+        if (d.setId) {
+          const s = this.repo.get('sets', d.setId);
+          if (s) this.repo.save('sets', {
+            ...s.data,
+            position: i
+          }, s.id);
+        }
+      });
+      this.repo.localSave(`draft:${entryId}`, drafts);
+    });
+    this.recompute();
+  }
+  private writeSet(entryId: string, index: number, d: Draft, id?: string) {
+    return this.repo.save('sets', {
+      entry_id: entryId,
+      position: index,
+      weight_kg: toKg(Number(d.weight), this.unit()),
+      entered_value: Number(d.weight),
+      entered_unit: this.unit(),
+      reps: Number(d.reps)
+    }, id);
+  }
+  toggleDone(entryId: string, index: number, now = Date.now()) {
+    return this.repo.atomic(() => {
+      const drafts = this.drafts(entryId),
+        d = drafts[index];
+      if (!d) throw Error('Missing set.');
+      if (d.setId) {
+        if (this.timer()?.setId === d.setId) this.skipTimer();
+        this.repo.remove('sets', d.setId);
+        d.setId = undefined;
+      } else {
+        if (!validateSet(d.weight, d.reps, this.unit()).valid) throw Error('Invalid set.');
+        d.setId = this.writeSet(entryId, index, d).id;
+        const entry = this.repo.get('entries', entryId)!;
+        const seconds = this.repo.localGet<number>(`rest:${String(entry.data.exercise).toLowerCase()}`) ?? Number(this.repo.list('settings').sort(compareRows).at(-1)?.data.rest_seconds ?? 90);
+        this.repo.localSave('timer', {
+          sessionId: String(entry.data.session_id),
+          setId: d.setId,
+          entryId,
+          endAt: now + Math.max(15, seconds) * 1000,
+          duration: Math.max(15, seconds),
+          minimized: false,
+          ended: false
+        } satisfies TimerState);
+      }
+      this.repo.localSave(`draft:${entryId}`, drafts);
+      const sessionId = this.repo.get('entries', entryId)?.data.session_id;
+      if (sessionId && this.repo.get('sessions', String(sessionId))?.data.finished_at !== null) {
+        this.skipTimer();
+        this.recompute();
+      }
+      return !!d.setId;
+    });
+  }
+  previous(entry: Row) {
+    const session = this.repo.get('sessions', String(entry.data.session_id));
+    const prior = this.history().filter(s => s.id !== session?.id && Number(s.data.started_at) < Number(session?.data.started_at));
+    for (const s of prior) {
+      const matches = this.entries(s.id).filter(e => e.data.exercise === entry.data.exercise);
+      const sets = matches.flatMap(e => this.sets(e.id));
+      if (sets.length) return order(sets);
+    }
+    return [];
+  }
+  working(entry: Row): WorkingSet[] {
+    return this.sets(entry.id).map(s => ({
+      weight: Number(s.data.weight_kg),
+      reps: Number(s.data.reps),
+      done: true,
+      warmup: this.drafts(entry.id)[Number(s.data.position)]?.warmup
+    }));
+  }
+  suggestion(entry: Row) {
+    const unit = this.unit(),
+      equipment = exerciseFor(String(entry.data.exercise)).equipment;
+    const previous = this.previous(entry).map(s => ({
+      weight: displayWeight(Number(s.data.weight_kg), unit),
+      reps: Number(s.data.reps),
+      done: true,
+      warmup: this.repo.localGet<Draft[]>(`draft:${String(s.data.entry_id)}`)?.[Number(s.data.position)]?.warmup
+    }));
+    return suggestion(previous, equipment, unit, this.repo.localGet<number>(`target:${entry.id}`));
+  }
+  showCard(entry: Row) {
+    return shouldShowCard(String(entry.data.exercise), this.suggestion(entry), this.unit(), this.repo.localGet<string[]>('suggestions') ?? []);
+  }
+  markCard(entry: Row) {
+    const s = this.suggestion(entry);
+    if (s.weight !== null) this.repo.localSave('suggestions', [...new Set([...(this.repo.localGet<string[]>('suggestions') ?? []), cardKey(String(entry.data.exercise), s.weight, this.unit())])]);
+  }
+  timer() {
+    return this.repo.localGet<TimerState | null>('timer');
+  }
+  updateTimer(patch: Partial<TimerState>) {
+    const t = this.timer();
+    if (t) this.repo.localSave('timer', {
+      ...t,
+      ...patch
+    });
+  }
+  adjustTimer(delta: number) {
+    const t = this.timer();
+    if (!t) return;
+    const now = Date.now(),
+      duration = Math.max(15, t.duration + delta);
+    this.updateTimer({
+      endAt: Math.max(now, Math.max(now, t.endAt) + delta * 1000),
+      duration,
+      ended: false
+    });
+    const e = this.repo.get('entries', t.entryId);
+    if (e) this.repo.localSave(`rest:${String(e.data.exercise).toLowerCase()}`, duration);
+  }
+  skipTimer() {
+    this.repo.localSave('timer', null);
+  }
+  finish(id: string, input: {
+    startedAt: number;
+    finishedAt: number;
+    notes: string;
+    name?: string;
+    saveTemplate?: boolean;
+  }, now = Date.now()) {
+    const s = this.repo.get('sessions', id);
+    if (!s || s.deleted_at !== null || !validateDate(input.startedAt, now) || !validateDate(input.finishedAt, now) || input.finishedAt < input.startedAt) throw Error('Invalid date.');
+    this.repo.atomic(() => {
+      this.repo.save('sessions', {
+        ...s.data,
+        name: input.name?.trim() || s.data.name || t('workoutName'),
+        started_at: input.startedAt,
+        finished_at: input.finishedAt,
+        day: localDay(new Date(input.startedAt)),
+        duration_ms: input.finishedAt - input.startedAt,
+        notes: input.notes.trim().slice(0, 2000) || null
+      }, id);
+      if (input.saveTemplate && s.data.origin === 'empty') this.saveTemplate(input.name?.trim() || t('workoutName'), this.entries(id).map(e => ({
+        exercise: String(e.data.exercise),
+        target_sets: this.drafts(e.id).length || 1,
+        target_reps: Number(this.drafts(e.id).find(d => d.setId)?.reps) || 8
+      })));
+      this.repo.localSave(`sessionMeta:${id}`, {
+        timezoneOffset: new Date(input.startedAt).getTimezoneOffset()
+      });
+      this.skipTimer();
+      this.recompute();
+    });
+  }
+  summary(id: string) {
+    const s = this.repo.get('sessions', id)!,
+      entries = this.entries(id),
+      sets = entries.flatMap(e => this.sets(e.id));
+    const prs = [...new Set(entries.map(e => String(e.data.exercise)))].map(name => {
+      const matches = entries.filter(e => e.data.exercise === name);
+      const prior = this.history().filter(p => p.id !== id && Number(p.data.started_at) < Number(s.data.started_at)).flatMap(p => this.entries(p.id).filter(x => x.data.exercise === name).flatMap(x => this.working(x)));
+      const current = matches.flatMap(e => this.working(e)),
+        record = detectPR(current, prior),
+        best = current.filter(s => s.done && !s.warmup && s.reps >= 1).sort((a, b) => b.weight * (1 + b.reps / 30) - a.weight * (1 + a.reps / 30))[0];
+      return {
+        exercise: name,
+        previousE1rm: Math.max(0, ...prior.filter(s => s.done && !s.warmup && s.reps >= 1).map(s => s.weight * (1 + s.reps / 30))),
+        bestReps: best?.reps ?? 0,
+        displayWeight: best?.weight ?? 0,
+        ...record
+      };
+    }).filter(p => p.weight || p.e1rm);
+    return {
+      session: s,
+      count: sets.length,
+      volume: sets.reduce((n, s) => {
+        const volume = fromKg(Number(s.data.weight_kg), this.unit()) * Number(s.data.reps);
+        return n + (Number.isFinite(volume) ? volume : 0);
+      }, 0),
+      prs
+    };
+  }
+  recompute() {
+    const weeks: Record<string, Record<string, number>> = {},
+      milestones: {
+        sessionId: string;
+        exercise: string;
+        weight: number;
+        e1rm: number;
+      }[] = [];
+    for (const s of this.history()) {
+      const week = weekOf(new Date(`${String(s.data.day)}T12:00:00`)),
+        totals = attribute(this.entries(s.id).map(e => {
+          const ex = exerciseFor(String(e.data.exercise));
+          return {
+            ...ex,
+            sets: this.working(e)
+          };
+        }));
+      weeks[week] ??= {};
+      for (const [muscle, count] of Object.entries(totals)) weeks[week][muscle] = (weeks[week][muscle] ?? 0) + count;
+      for (const pr of this.summary(s.id).prs) milestones.push({
+        sessionId: s.id,
+        exercise: pr.exercise,
+        weight: pr.bestWeight,
+        e1rm: pr.bestE1rm
+      });
+    }
+    this.repo.localSave('weekly', weeks);
+    this.repo.localSave('milestones', milestones);
+  }
+  weekly(now = new Date()) {
+    return this.repo.localGet<Record<string, Record<string, number>>>('weekly')?.[weekOf(now)] ?? {};
+  }
+  milestones() {
+    return this.repo.localGet<{
+      sessionId: string;
+      exercise: string;
+      weight: number;
+      e1rm: number;
+    }[]>('milestones') ?? [];
+  }
+}

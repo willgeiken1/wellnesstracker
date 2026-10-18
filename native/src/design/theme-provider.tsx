@@ -6,7 +6,7 @@ import { createTheme, tokens, type Accent, type ThemeOverride } from './tokens';
 
 function useThemeState(repository?: Repository | null) {
   const [override, updateOverride] = useState<ThemeOverride>('system');
-  const [accent, updateAccent] = useState<Accent>('citrus');
+  const [accent, updateAccent] = useState<Accent>('sea');
   const [persistenceError, setPersistenceError] = useState(false);
   useEffect(() => {
     const hydrate = () => {
@@ -14,7 +14,7 @@ function useThemeState(repository?: Repository | null) {
         const row = repository?.list('settings').sort(compareRows).at(-1);
         const theme = row?.data.theme_override, color = row?.data.accent;
         updateOverride(theme === 'light' || theme === 'dark' ? theme : 'system');
-        updateAccent(color === 'sea' || color === 'dusk' || color === 'sand' ? color : 'citrus');
+        updateAccent(color === 'citrus' || color === 'dusk' || color === 'sand' ? color : 'sea');
         setPersistenceError(false);
       } catch { setPersistenceError(true); }
     };
@@ -38,20 +38,21 @@ function useThemeState(repository?: Repository | null) {
   const mode = override === 'system' ? (system ?? 'dark') : override;
   // Fail closed until the OS preference arrives; no initial animation flash.
   const [reduceMotion, setReduceMotion] = useState(true);
+  const [reduceMotionReady,setReduceMotionReady] = useState(false);
   useEffect(() => {
     let active = true;
     let receivedEvent = false;
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', value => {
       receivedEvent = true;
-      setReduceMotion(value);
+      setReduceMotion(value); setReduceMotionReady(true);
     });
     AccessibilityInfo.isReduceMotionEnabled().then(value => {
-      if (active && !receivedEvent) setReduceMotion(value);
-    }).catch(() => {});
+      if (active && !receivedEvent) {setReduceMotion(value);setReduceMotionReady(true);}
+    }).catch(() => {if(active)setReduceMotionReady(true);});
     return () => { active = false; subscription.remove(); };
   }, []);
   return { persistenceError, override, setOverride, accent, setAccent, mode, colors: createTheme(mode, accent),
-    reduceMotion, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
+    reduceMotion, reduceMotionReady, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
 }
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);
 export function ThemeProvider({ children, repository }: PropsWithChildren<{repository?: Repository | null}>) {

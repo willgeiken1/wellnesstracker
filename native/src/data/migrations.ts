@@ -81,4 +81,9 @@ UPDATE home_layout SET widget=NULL, position=NULL, hidden=NULL WHERE deleted_at 
 UPDATE settings SET theme_override=NULL, accent=NULL, rest_seconds=NULL WHERE deleted_at IS NOT NULL;
 --> statement-breakpoint
 UPDATE photos SET file_name=NULL, captured_at=NULL, width=NULL, height=NULL WHERE deleted_at IS NOT NULL;`;
-export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql } };
+export const workoutLocalSql = `CREATE TABLE workout_local (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));
+--> statement-breakpoint
+CREATE TABLE workout_milestones (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));
+--> statement-breakpoint
+CREATE TABLE workout_weekly (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));`;
+export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql } };

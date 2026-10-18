@@ -26,3 +26,26 @@ describe.each([true, false])('native intent initial=%s', initial => {
     expect(redirectSystemPath({ path, initial })).toBe(expected);
   });
 });
+
+test.each([true,false])('template deep link preserves only a valid routine id, initial=%s',initial=>{
+  const id='40000000-0000-4000-8000-000000000001';
+  expect(redirectSystemPath({path:`insight://workout/start?routine=${id}&other=discard`,initial})).toBe(`/workout/start?routine=${id}`);
+  expect(redirectSystemPath({path:'insight://workout/start?routine=bad',initial})).toBe('/workout/start');
+});
+
+test.each(['logger','keypad','rest','summary'])('development fixture intent preserves only allowed state %s',state=>{
+ expect(redirectSystemPath({path:`insight://dev/logger-fixture?state=${state}&offline=0&other=discard`,initial:true})).toMatch(new RegExp(`^/dev/logger-fixture\\?state=${state}&offline=0&request=\\d+$`));
+});
+test('fixture intent rejects malformed states and all release links',()=>{
+ expect(redirectSystemPath({path:'insight://dev/logger-fixture?state=invalid',initial:true})).toBe('/');
+ const original=__DEV__;
+ try {Object.defineProperty(globalThis,'__DEV__',{value:false,configurable:true,writable:true});
+ expect(redirectSystemPath({path:'insight://dev/logger-fixture?state=logger',initial:true})).toBe('/');
+ } finally {Object.defineProperty(globalThis,'__DEV__',{value:original,configurable:true,writable:true});}
+});
+
+
+test('identical development fixture links receive distinct presentation requests', () => {
+ const input={path:'insight://dev/logger-fixture?state=logger',initial:false};
+ expect(redirectSystemPath(input)).not.toBe(redirectSystemPath(input));
+});
