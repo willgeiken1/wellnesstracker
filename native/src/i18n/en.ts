@@ -136,7 +136,7 @@ export const en = {
   bootRetry: 'Retry', bootExport: 'Export local data', bootSupport: 'Contact support',
   bootDetails: 'Show details', bootHideDetails: 'Hide details',
   bootRetryWipeWarning: 'Retry will finish the sign-out you requested. Remaining local data for that account, including unsynced changes, will be erased. Synced data stays in your account.',
-  bootExportHint: "Saves a copy of your data on this phone for your signed-in account. Oura data isn't included.",
+  bootExportHint: "Saves a copy of your data on this phone for your signed-in account. It may contain private health data and isn't sent anywhere automatically. Oura data isn't included.",
   bootExportFailed: 'A local copy couldn’t be shared. Your original data is still on this device. You can try again.',
   bootSupportFailed: 'Your mail app couldn’t open. You can email insight.wellnessos@gmail.com for help.',
   localRecovery: 'Local data recovery', eraseAllLocal: 'Erase all local data and sign out',
