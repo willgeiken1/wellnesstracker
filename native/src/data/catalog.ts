@@ -30,7 +30,10 @@ export const columns = {
     "exercise": "text",
     "position": "integer",
     "target_sets": "integer",
-    "target_reps": "integer"
+    "target_reps": "integer",
+    "rep_min": "integer",
+    "rep_max": "integer",
+    "superset_group": "text"
   },
   "sessions": {
     "day": "text",
@@ -46,7 +49,8 @@ export const columns = {
     "session_id": "text",
     "exercise": "text",
     "position": "integer",
-    "notes": "text"
+    "notes": "text",
+    "superset_group": "text"
   },
   "sets": {
     "entry_id": "text",
@@ -63,7 +67,8 @@ export const columns = {
     "right_entered_value": "real",
     "right_entered_unit": "text",
     "right_reps": "integer",
-    "rpe": "real"
+    "rpe": "real",
+    "tag": "text"
   },
   "cardio_sessions": {
     "day": "text",
@@ -81,7 +86,10 @@ export const columns = {
     "energy_kj": "real",
     "protein_g": "real",
     "carbs_g": "real",
-    "fat_g": "real"
+    "fat_g": "real",
+    "fiber_g": "real",
+    "sugar_g": "real",
+    "sodium_mg": "real"
   },
   "saved_foods": {
     "name": "text",
@@ -89,7 +97,10 @@ export const columns = {
     "energy_kj": "real",
     "protein_g": "real",
     "carbs_g": "real",
-    "fat_g": "real"
+    "fat_g": "real",
+    "fiber_g": "real",
+    "sugar_g": "real",
+    "sodium_mg": "real"
   },
   "food_targets": {
     "day": "text",
@@ -115,7 +126,10 @@ export const columns = {
   },
   "machine_notes": {
     "exercise": "text",
-    "text": "text"
+    "text": "text",
+    "step": "real",
+    "bar_weight": "real",
+    "unit_override": "text"
   },
   "home_layout": {
     "widget": "text",
@@ -125,13 +139,36 @@ export const columns = {
   "settings": {
     "theme_override": "text",
     "accent": "text",
-    "rest_seconds": "integer"
+    "rest_seconds": "integer",
+    "plate_set": "text",
+    "rest_per_exercise": "text",
+    "rest_style": "text"
   },
   "photos": {
     "file_name": "text",
     "captured_at": "integer",
     "width": "integer",
     "height": "integer"
+  },
+  "custom_exercises": {
+    "name": "text",
+    "main_muscle": "text",
+    "helpers": "text",
+    "equipment": "text"
+  },
+  "plans": {
+    "mode": "text",
+    "days_per_week": "integer"
+  },
+  "pauses": {
+    "start_day": "text",
+    "end_day": "text"
+  },
+  "purges": {
+    "from_day": "text",
+    "to_day": "text",
+    "cutoff_ms": "integer",
+    "tz": "text"
   }
 } as const;
 export type Table = keyof typeof columns;

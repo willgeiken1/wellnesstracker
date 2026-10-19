@@ -19,8 +19,17 @@ export function validateRow(input: unknown): asserts input is Row {
   for (const [key, value] of Object.entries(r.data)) {
     if (!Object.hasOwn(fields, key)) return bad();
     if (value === null) continue;
+    if (['day','target_day','start_day','end_day','from_day','to_day'].includes(key) &&
+        (typeof value !== 'string' || value.length !== 10 || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))) return bad();
     if (fields[key] === 'text' ? typeof value !== 'string' : typeof value !== 'number' || !Number.isFinite(value) || (fields[key] === 'integer' && !Number.isSafeInteger(value))) return bad();
   }
+  if (r.table === 'plans') {
+    if (r.data.mode != null && !['rotation','fixed'].includes(String(r.data.mode))) return bad();
+    if (r.data.days_per_week != null && (Number(r.data.days_per_week)<1 || Number(r.data.days_per_week)>7)) return bad();
+  }
+  if (r.table === 'machine_notes' && r.data.unit_override != null && !['kg','lb'].includes(String(r.data.unit_override))) return bad();
+  if (r.table === 'pauses' && r.data.start_day != null && r.data.end_day != null && r.data.start_day > r.data.end_day) return bad();
+  if (r.table === 'purges' && ((r.data.from_day != null && r.data.to_day != null && r.data.from_day > r.data.to_day) || (r.data.cutoff_ms != null && Number(r.data.cutoff_ms)<0))) return bad();
   if (r.table === 'weigh_ins' && r.data.source !== 'app') return bad();
 }
 export function revision(row: Row) { return `${row.updated_at}:${row.device_id}`; }
@@ -41,4 +50,11 @@ export function fromWire(table: Table, wire: Record<string, unknown>): ServerRow
 export function pushRow(row: Row): Row {
   validateRow(row);
   return row.deleted_at === null ? row : {...row, data: row.table === 'weigh_ins' ? {source: row.data.source} : {}};
+}
+
+/** A newer server may acknowledge columns this client does not yet know. */
+export function fromAcknowledgment(input: unknown): Row {
+  const row=input as Row;
+  if (!row || !Object.hasOwn(columns,row.table) || !row.data || typeof row.data!=='object' || Array.isArray(row.data)) throw new Error('Invalid sync acknowledgment.');
+  return canonicalRow({...row,data:Object.fromEntries(Object.keys(columns[row.table]).map(key=>[key,row.data[key]??null]))});
 }

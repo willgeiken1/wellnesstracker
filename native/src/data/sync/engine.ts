@@ -43,9 +43,25 @@ export class SyncEngine {
       else for (const item of batch) await this.pushBatch([item]);
     }
   }
+  private async pullTable(table: Table) {
+    let more=true;
+    while (more && this.active) {
+      const after=this.repository.cursor(table);
+      const page=await this.transport.pull(table,after,this.pageSize);
+      if (!this.active) return;
+      let cursor=after;
+      for (const item of page) {
+        if (!/^\d+$/.test(item.server_seq) || BigInt(item.server_seq)<=BigInt(cursor)) throw new Error('Invalid sync cursor.');
+        cursor=item.server_seq;
+      }
+      this.repository.applyPage(table,page,cursor);
+      more=page.length===this.pageSize;
+    }
+  }
   private async run() {
     this.setStatus('syncing');
     try {
+      await this.pullTable('purges');
       // Snapshot revisions prevent a successful old push from acknowledging a newer edit.
       const pending=this.repository.pending();
       for (let i=0;i<pending.length;i+=100) {
@@ -53,21 +69,7 @@ export class SyncEngine {
         const batch=pending.slice(i,i+100);
         await this.pushBatch(batch);
       }
-      for (const table of syncedTables) {
-        let more=true;
-        while (more && this.active) {
-          const after=this.repository.cursor(table);
-          const page=await this.transport.pull(table,after,this.pageSize);
-          if (!this.active) return;
-          let cursor=after;
-          for (const item of page) {
-            if (!/^\d+$/.test(item.server_seq) || BigInt(item.server_seq)<=BigInt(cursor)) throw new Error('Invalid sync cursor.');
-            cursor=item.server_seq;
-          }
-          this.repository.applyPage(table,page,cursor);
-          more=page.length===this.pageSize;
-        }
-      }
+      for (const table of syncedTables.filter(t=>t!=='purges')) await this.pullTable(table);
       if (this.active) this.setStatus('idle');
     } catch { if (this.active) this.setStatus('offline'); }
   }

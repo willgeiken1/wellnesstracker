@@ -1,0 +1,765 @@
+-- DRAFT - NOT APPLIED. M1-03 / O-7; requires Quinn PASS and Will's HIGH go.
+
+BEGIN;
+
+ALTER TABLE public.sets ADD COLUMN tag text;
+
+ALTER TABLE public.routine_exercises ADD COLUMN rep_min bigint;
+
+ALTER TABLE public.routine_exercises ADD COLUMN rep_max bigint;
+
+ALTER TABLE public.routine_exercises ADD COLUMN superset_group text;
+
+ALTER TABLE public.entries ADD COLUMN superset_group text;
+
+ALTER TABLE public.machine_notes ADD COLUMN step double precision;
+
+ALTER TABLE public.machine_notes ADD COLUMN bar_weight double precision;
+
+ALTER TABLE public.machine_notes ADD COLUMN unit_override text;
+
+ALTER TABLE public.settings ADD COLUMN plate_set text;
+
+ALTER TABLE public.settings ADD COLUMN rest_per_exercise text;
+
+ALTER TABLE public.settings ADD COLUMN rest_style text;
+
+ALTER TABLE public.food_entries ADD COLUMN fiber_g double precision;
+
+ALTER TABLE public.food_entries ADD COLUMN sugar_g double precision;
+
+ALTER TABLE public.food_entries ADD COLUMN sodium_mg double precision;
+
+ALTER TABLE public.saved_foods ADD COLUMN fiber_g double precision;
+
+ALTER TABLE public.saved_foods ADD COLUMN sugar_g double precision;
+
+ALTER TABLE public.saved_foods ADD COLUMN sodium_mg double precision;
+
+CREATE TABLE public.custom_exercises (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL,
+  updated_at bigint NOT NULL CHECK(updated_at >= 0 AND updated_at <= 9007199254740991),
+  deleted_at bigint CHECK(deleted_at >= 0 AND deleted_at <= 9007199254740991),
+  device_id text COLLATE "C" NOT NULL CHECK(device_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+  server_seq bigint NOT NULL,
+  name text,
+  main_muscle text,
+  helpers text,
+  equipment text, PRIMARY KEY(owner_id,id));
+
+CREATE INDEX custom_exercises_owner_sequence ON public.custom_exercises(owner_id,server_seq);
+
+ALTER TABLE public.custom_exercises ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.custom_exercises FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY owner_access ON public.custom_exercises FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
+
+REVOKE ALL ON TABLE public.custom_exercises FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.custom_exercises TO authenticated;
+
+CREATE TRIGGER custom_exercises_guard BEFORE INSERT OR UPDATE OR DELETE ON public.custom_exercises FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
+
+
+
+CREATE TABLE public.plans (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL,
+  updated_at bigint NOT NULL CHECK(updated_at >= 0 AND updated_at <= 9007199254740991),
+  deleted_at bigint CHECK(deleted_at >= 0 AND deleted_at <= 9007199254740991),
+  device_id text COLLATE "C" NOT NULL CHECK(device_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+  server_seq bigint NOT NULL,
+  mode text,
+  days_per_week bigint, PRIMARY KEY(owner_id,id));
+
+CREATE INDEX plans_owner_sequence ON public.plans(owner_id,server_seq);
+
+ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plans FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY owner_access ON public.plans FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
+
+REVOKE ALL ON TABLE public.plans FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.plans TO authenticated;
+
+CREATE TRIGGER plans_guard BEFORE INSERT OR UPDATE OR DELETE ON public.plans FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
+
+
+
+CREATE TABLE public.pauses (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL,
+  updated_at bigint NOT NULL CHECK(updated_at >= 0 AND updated_at <= 9007199254740991),
+  deleted_at bigint CHECK(deleted_at >= 0 AND deleted_at <= 9007199254740991),
+  device_id text COLLATE "C" NOT NULL CHECK(device_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+  server_seq bigint NOT NULL,
+  start_day text,
+  end_day text, PRIMARY KEY(owner_id,id));
+
+CREATE INDEX pauses_owner_sequence ON public.pauses(owner_id,server_seq);
+
+ALTER TABLE public.pauses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pauses FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY owner_access ON public.pauses FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
+
+REVOKE ALL ON TABLE public.pauses FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.pauses TO authenticated;
+
+CREATE TRIGGER pauses_guard BEFORE INSERT OR UPDATE OR DELETE ON public.pauses FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
+
+
+
+CREATE TABLE public.purges (owner_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL,
+  updated_at bigint NOT NULL CHECK(updated_at >= 0 AND updated_at <= 9007199254740991),
+  deleted_at bigint CHECK(deleted_at >= 0 AND deleted_at <= 9007199254740991),
+  device_id text COLLATE "C" NOT NULL CHECK(device_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+  server_seq bigint NOT NULL,
+  from_day text,
+  to_day text,
+  cutoff_ms bigint,
+  tz text, PRIMARY KEY(owner_id,id));
+
+CREATE INDEX purges_owner_sequence ON public.purges(owner_id,server_seq);
+
+ALTER TABLE public.purges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.purges FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY owner_access ON public.purges FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
+
+REVOKE ALL ON TABLE public.purges FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.purges TO authenticated;
+
+CREATE TRIGGER purges_guard BEFORE INSERT OR UPDATE OR DELETE ON public.purges FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
+
+
+
+ALTER TABLE public.weigh_ins ADD CONSTRAINT weigh_ins_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.measurements ADD CONSTRAINT measurements_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.sessions ADD CONSTRAINT sessions_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.cardio_sessions ADD CONSTRAINT cardio_sessions_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.food_entries ADD CONSTRAINT food_entries_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.food_targets ADD CONSTRAINT food_targets_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.plan_days ADD CONSTRAINT plan_days_day_iso CHECK (day IS NULL OR day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.goals ADD CONSTRAINT goals_target_day_iso CHECK (target_day IS NULL OR target_day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.pauses ADD CONSTRAINT pauses_start_day_iso CHECK (start_day IS NULL OR start_day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.pauses ADD CONSTRAINT pauses_end_day_iso CHECK (end_day IS NULL OR end_day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.purges ADD CONSTRAINT purges_from_day_iso CHECK (from_day IS NULL OR from_day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.purges ADD CONSTRAINT purges_to_day_iso CHECK (to_day IS NULL OR to_day ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+ALTER TABLE public.plans ADD CONSTRAINT plans_mode CHECK (mode IN ('rotation','fixed'));
+
+ALTER TABLE public.plans ADD CONSTRAINT plans_days_per_week CHECK (days_per_week BETWEEN 1 AND 7);
+
+ALTER TABLE public.machine_notes ADD CONSTRAINT machine_notes_unit_override CHECK (unit_override IN ('kg','lb'));
+
+ALTER TABLE public.pauses ADD CONSTRAINT pauses_range CHECK (start_day <= end_day);
+
+ALTER TABLE public.purges ADD CONSTRAINT purges_range CHECK (from_day <= to_day);
+
+ALTER TABLE public.purges ADD CONSTRAINT purges_cutoff CHECK (cutoff_ms BETWEEN 0 AND 9007199254740991);
+
+-- A parent tombstone identifies its marker by this version after payload wipe.
+-- Reject a same-owner same-millisecond second purge; retry in a fresh transaction.
+CREATE UNIQUE INDEX purges_owner_version ON public.purges(owner_id,updated_at,device_id) WHERE cutoff_ms IS NOT NULL;
+CREATE INDEX purges_owner_range ON public.purges(owner_id,from_day,to_day,cutoff_ms);
+
+CREATE OR REPLACE FUNCTION public.row_sync_guard() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE
+  payload jsonb;
+  field text;
+  marker public.purges%ROWTYPE;
+  cascade_marker public.purges%ROWTYPE;
+  parent_payload jsonb;
+  write_now bigint := floor(extract(epoch FROM pg_catalog.now()) * 1000)::bigint;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    -- Only the nested auth.users FK cascade may physically remove rows.
+    -- Ordinary client DELETE remains ungranted and the tombstone guard remains in force.
+    IF pg_catalog.pg_trigger_depth() > 1 AND NOT EXISTS (SELECT 1 FROM auth.users WHERE id=OLD.owner_id) THEN RETURN OLD; END IF;
+    RAISE EXCEPTION 'Use a row tombstone';
+  END IF;
+  IF NEW.owner_id IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Row owner mismatch'; END IF;
+  -- Held until commit, across tables. A reader cannot advance past an uncommitted earlier sequence.
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text, 0));
+  -- Provenance is immutable even when the incoming LWW tuple is stale.
+  IF TG_TABLE_NAME = 'weigh_ins' THEN
+    IF EXISTS (SELECT 1 FROM public.weigh_ins w WHERE w.owner_id=NEW.owner_id AND w.id=NEW.id AND w.source IS DISTINCT FROM NEW.source) THEN
+      RAISE EXCEPTION USING ERRCODE = 'P2001', MESSAGE = 'Sync provenance conflict';
+    END IF;
+  END IF;
+  -- D2: clamp excessive future timestamps to transaction now, BEFORE LWW.
+  -- Choosing now rather than now+5min avoids giving a bad clock a five-minute
+  -- priority over later legitimate edits. Exactly +5min remains accepted.
+  -- Known limitation accepted by Will (Oct 17, 2026), as no worse than no clamp:
+  -- a lost clamped ack leaves the original future stamp on the client. Retrying
+  -- may re-clamp to a newer now(), becoming a new version that can overwrite.
+  -- Thus the same incoming tuple is not necessarily an immutable retry.
+  IF NEW.updated_at > write_now + 300000 THEN
+    NEW.updated_at := write_now;
+    IF NEW.deleted_at IS NOT NULL THEN NEW.deleted_at := NEW.updated_at; END IF;
+  END IF;
+  -- Bound deletion time independently, after the updated_at clamp above.
+  IF NEW.deleted_at > write_now + 300000 THEN
+    NEW.deleted_at := NEW.updated_at;
+  END IF;
+
+  -- F1: evaluate before LWW and payload wiping. Parent tombstone versions
+  -- identify their purge marker even after day/reference payloads are erased.
+  IF NEW.deleted_at IS NULL THEN
+    payload := pg_catalog.to_jsonb(NEW);
+    IF TG_TABLE_NAME IN ('sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days') THEN
+      SELECT p.* INTO marker FROM public.purges p
+       WHERE p.owner_id=NEW.owner_id AND p.deleted_at IS NULL AND NEW.updated_at<=p.cutoff_ms
+         AND payload->>'day' BETWEEN p.from_day AND p.to_day
+       ORDER BY p.updated_at DESC, p.device_id COLLATE "C" DESC LIMIT 1;
+    ELSIF TG_TABLE_NAME IN ('entries','sets') THEN
+      IF TG_TABLE_NAME='entries' THEN
+        SELECT pg_catalog.to_jsonb(x) INTO parent_payload FROM public.sessions x
+         WHERE x.owner_id=NEW.owner_id AND x.id::text=payload->>'session_id';
+      ELSE
+        SELECT pg_catalog.to_jsonb(e) INTO parent_payload FROM public.entries e
+         WHERE e.owner_id=NEW.owner_id AND e.id::text=payload->>'entry_id';
+        IF parent_payload->>'deleted_at' IS NULL THEN
+          SELECT pg_catalog.to_jsonb(x) INTO parent_payload FROM public.sessions x
+           WHERE x.owner_id=NEW.owner_id AND x.id::text=parent_payload->>'session_id';
+        END IF;
+      END IF;
+      SELECT p.* INTO marker FROM public.purges p
+       WHERE p.owner_id=NEW.owner_id AND p.deleted_at IS NULL AND NEW.updated_at<=p.cutoff_ms
+         AND (parent_payload->>'day' BETWEEN p.from_day AND p.to_day
+           OR (parent_payload->>'deleted_at' IS NOT NULL
+             AND (parent_payload->>'updated_at')::bigint=p.updated_at AND parent_payload->>'device_id'=p.device_id))
+       ORDER BY p.updated_at DESC, p.device_id COLLATE "C" DESC LIMIT 1;
+    END IF;
+    IF marker.id IS NOT NULL THEN
+      NEW.deleted_at := marker.updated_at;
+      NEW.updated_at := marker.updated_at;
+      NEW.device_id := marker.device_id;
+    END IF;
+  END IF;
+
+  -- Child-first offline batches can arrive before a parent. Each child has
+  -- its OWN cutoff, even if a post-cutoff parent edit survives. Resolve the
+  -- range before payload wiping, then sweep sets before entry references.
+  payload := pg_catalog.to_jsonb(NEW);
+  IF TG_TABLE_NAME='entries' THEN
+    SELECT pg_catalog.to_jsonb(x) INTO parent_payload FROM public.sessions x
+     WHERE x.owner_id=NEW.owner_id AND x.id::text=payload->>'session_id';
+  END IF;
+  IF TG_TABLE_NAME IN ('sessions','entries') THEN
+    FOR cascade_marker IN SELECT p.* FROM public.purges p WHERE p.owner_id=NEW.owner_id AND p.deleted_at IS NULL
+      AND ((TG_TABLE_NAME='sessions' AND payload->>'day' BETWEEN p.from_day AND p.to_day)
+        OR (TG_TABLE_NAME='entries' AND (parent_payload->>'day' BETWEEN p.from_day AND p.to_day
+          OR (parent_payload->>'deleted_at' IS NOT NULL AND (parent_payload->>'updated_at')::bigint=p.updated_at
+            AND parent_payload->>'device_id'=p.device_id)))
+        OR (NEW.deleted_at IS NOT NULL AND NEW.updated_at=p.updated_at AND NEW.device_id=p.device_id))
+      ORDER BY p.updated_at DESC, p.device_id COLLATE "C" DESC
+    LOOP
+      IF TG_TABLE_NAME='sessions' THEN
+        UPDATE public.sets s SET deleted_at=cascade_marker.updated_at, updated_at=cascade_marker.updated_at, device_id=cascade_marker.device_id
+         WHERE s.owner_id=NEW.owner_id AND s.deleted_at IS NULL AND s.updated_at<=cascade_marker.cutoff_ms
+           AND s.entry_id IN (SELECT e.id::text FROM public.entries e WHERE e.owner_id=NEW.owner_id AND e.session_id=NEW.id::text);
+        UPDATE public.entries e SET deleted_at=cascade_marker.updated_at, updated_at=cascade_marker.updated_at, device_id=cascade_marker.device_id
+         WHERE e.owner_id=NEW.owner_id AND e.deleted_at IS NULL AND e.updated_at<=cascade_marker.cutoff_ms AND e.session_id=NEW.id::text;
+      ELSE
+        UPDATE public.sets s SET deleted_at=cascade_marker.updated_at, updated_at=cascade_marker.updated_at, device_id=cascade_marker.device_id
+         WHERE s.owner_id=NEW.owner_id AND s.deleted_at IS NULL AND s.updated_at<=cascade_marker.cutoff_ms AND s.entry_id=NEW.id::text;
+      END IF;
+    END LOOP;
+  END IF;
+
+  -- D1: all payload is nullable already; source alone is retained for immutable
+  -- weigh-in provenance. No value-column NOT NULL relaxation is required.
+  IF NEW.deleted_at IS NOT NULL THEN
+    payload := pg_catalog.to_jsonb(NEW);
+    FOR field IN SELECT pg_catalog.jsonb_object_keys(payload) LOOP
+      IF field NOT IN ('id','owner_id','deleted_at','updated_at','device_id','server_seq')
+         AND NOT (TG_TABLE_NAME='weigh_ins' AND field='source') THEN
+        payload := pg_catalog.jsonb_set(payload, ARRAY[field], 'null'::jsonb);
+      END IF;
+    END LOOP;
+    NEW := pg_catalog.jsonb_populate_record(NEW, payload);
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.owner_id <> OLD.owner_id OR NEW.id <> OLD.id THEN RAISE EXCEPTION 'Row identity is immutable'; END IF;
+    IF (NEW.updated_at, NEW.device_id COLLATE "C") <= (OLD.updated_at, OLD.device_id COLLATE "C") THEN RETURN NULL; END IF;
+  END IF;
+  NEW.server_seq := pg_catalog.nextval('public.row_sync_seq');
+  RETURN NEW;
+END $$;
+
+
+
+CREATE OR REPLACE FUNCTION public.sync_push(rows jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE item jsonb; payload jsonb; stored jsonb; accepted jsonb := '[]'::jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF jsonb_typeof(rows) <> 'array' OR jsonb_array_length(rows) > 100 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(auth.uid()::text, 0));
+  FOR item IN SELECT value FROM jsonb_array_elements(rows) LOOP
+    IF (item->>'owner_id')::uuid IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Row owner mismatch'; END IF;
+    IF jsonb_typeof(item->'data') <> 'object' THEN RAISE EXCEPTION 'Invalid row'; END IF;
+    payload := (item - 'table' - 'data') || (item->'data');
+    CASE item->>'table'
+
+
+WHEN 'profile' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','name','dob','weight_unit','height_m'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['name','dob','weight_unit','height_m'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.profile (owner_id, id, updated_at, deleted_at, device_id, name, dob, weight_unit, height_m) SELECT owner_id, id, updated_at, deleted_at, device_id, name, dob, weight_unit, height_m FROM jsonb_populate_record(NULL::public.profile, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE profile.name END, dob = CASE WHEN payload ? 'dob' THEN EXCLUDED.dob ELSE profile.dob END, weight_unit = CASE WHEN payload ? 'weight_unit' THEN EXCLUDED.weight_unit ELSE profile.weight_unit END, height_m = CASE WHEN payload ? 'height_m' THEN EXCLUDED.height_m ELSE profile.height_m END;
+      SELECT pg_catalog.jsonb_build_object('table','profile',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.profile t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'weigh_ins' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','weight_kg','entered_value','entered_unit','source'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','weight_kg','entered_value','entered_unit','source'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.weigh_ins (owner_id, id, updated_at, deleted_at, device_id, day, weight_kg, entered_value, entered_unit, source) SELECT owner_id, id, updated_at, deleted_at, device_id, day, weight_kg, entered_value, entered_unit, source FROM jsonb_populate_record(NULL::public.weigh_ins, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE weigh_ins.day END, weight_kg = CASE WHEN payload ? 'weight_kg' THEN EXCLUDED.weight_kg ELSE weigh_ins.weight_kg END, entered_value = CASE WHEN payload ? 'entered_value' THEN EXCLUDED.entered_value ELSE weigh_ins.entered_value END, entered_unit = CASE WHEN payload ? 'entered_unit' THEN EXCLUDED.entered_unit ELSE weigh_ins.entered_unit END, source = CASE WHEN payload ? 'source' THEN EXCLUDED.source ELSE weigh_ins.source END;
+      SELECT pg_catalog.jsonb_build_object('table','weigh_ins',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.weigh_ins t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'measurements' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','waist_m','hips_m','chest_m','arm_m','thigh_m'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','waist_m','hips_m','chest_m','arm_m','thigh_m'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.measurements (owner_id, id, updated_at, deleted_at, device_id, day, waist_m, hips_m, chest_m, arm_m, thigh_m) SELECT owner_id, id, updated_at, deleted_at, device_id, day, waist_m, hips_m, chest_m, arm_m, thigh_m FROM jsonb_populate_record(NULL::public.measurements, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE measurements.day END, waist_m = CASE WHEN payload ? 'waist_m' THEN EXCLUDED.waist_m ELSE measurements.waist_m END, hips_m = CASE WHEN payload ? 'hips_m' THEN EXCLUDED.hips_m ELSE measurements.hips_m END, chest_m = CASE WHEN payload ? 'chest_m' THEN EXCLUDED.chest_m ELSE measurements.chest_m END, arm_m = CASE WHEN payload ? 'arm_m' THEN EXCLUDED.arm_m ELSE measurements.arm_m END, thigh_m = CASE WHEN payload ? 'thigh_m' THEN EXCLUDED.thigh_m ELSE measurements.thigh_m END;
+      SELECT pg_catalog.jsonb_build_object('table','measurements',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.measurements t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'routines' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','name','position'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['name','position'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.routines (owner_id, id, updated_at, deleted_at, device_id, name, position) SELECT owner_id, id, updated_at, deleted_at, device_id, name, position FROM jsonb_populate_record(NULL::public.routines, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE routines.name END, position = CASE WHEN payload ? 'position' THEN EXCLUDED.position ELSE routines.position END;
+      SELECT pg_catalog.jsonb_build_object('table','routines',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.routines t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'routine_exercises' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','routine_id','exercise','position','target_sets','target_reps','rep_min','rep_max','superset_group'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['routine_id','exercise','position','target_sets','target_reps','rep_min','rep_max','superset_group'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.routine_exercises (owner_id, id, updated_at, deleted_at, device_id, routine_id, exercise, position, target_sets, target_reps, rep_min, rep_max, superset_group) SELECT owner_id, id, updated_at, deleted_at, device_id, routine_id, exercise, position, target_sets, target_reps, rep_min, rep_max, superset_group FROM jsonb_populate_record(NULL::public.routine_exercises, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, routine_id = CASE WHEN payload ? 'routine_id' THEN EXCLUDED.routine_id ELSE routine_exercises.routine_id END, exercise = CASE WHEN payload ? 'exercise' THEN EXCLUDED.exercise ELSE routine_exercises.exercise END, position = CASE WHEN payload ? 'position' THEN EXCLUDED.position ELSE routine_exercises.position END, target_sets = CASE WHEN payload ? 'target_sets' THEN EXCLUDED.target_sets ELSE routine_exercises.target_sets END, target_reps = CASE WHEN payload ? 'target_reps' THEN EXCLUDED.target_reps ELSE routine_exercises.target_reps END, rep_min = CASE WHEN payload ? 'rep_min' THEN EXCLUDED.rep_min ELSE routine_exercises.rep_min END, rep_max = CASE WHEN payload ? 'rep_max' THEN EXCLUDED.rep_max ELSE routine_exercises.rep_max END, superset_group = CASE WHEN payload ? 'superset_group' THEN EXCLUDED.superset_group ELSE routine_exercises.superset_group END;
+      SELECT pg_catalog.jsonb_build_object('table','routine_exercises',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.routine_exercises t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'sessions' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','routine_id','name','origin','started_at','finished_at','duration_ms','notes'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','routine_id','name','origin','started_at','finished_at','duration_ms','notes'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.sessions (owner_id, id, updated_at, deleted_at, device_id, day, routine_id, name, origin, started_at, finished_at, duration_ms, notes) SELECT owner_id, id, updated_at, deleted_at, device_id, day, routine_id, name, origin, started_at, finished_at, duration_ms, notes FROM jsonb_populate_record(NULL::public.sessions, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE sessions.day END, routine_id = CASE WHEN payload ? 'routine_id' THEN EXCLUDED.routine_id ELSE sessions.routine_id END, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE sessions.name END, origin = CASE WHEN payload ? 'origin' THEN EXCLUDED.origin ELSE sessions.origin END, started_at = CASE WHEN payload ? 'started_at' THEN EXCLUDED.started_at ELSE sessions.started_at END, finished_at = CASE WHEN payload ? 'finished_at' THEN EXCLUDED.finished_at ELSE sessions.finished_at END, duration_ms = CASE WHEN payload ? 'duration_ms' THEN EXCLUDED.duration_ms ELSE sessions.duration_ms END, notes = CASE WHEN payload ? 'notes' THEN EXCLUDED.notes ELSE sessions.notes END;
+      SELECT pg_catalog.jsonb_build_object('table','sessions',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.sessions t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'entries' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','session_id','exercise','position','notes','superset_group'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['session_id','exercise','position','notes','superset_group'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.entries (owner_id, id, updated_at, deleted_at, device_id, session_id, exercise, position, notes, superset_group) SELECT owner_id, id, updated_at, deleted_at, device_id, session_id, exercise, position, notes, superset_group FROM jsonb_populate_record(NULL::public.entries, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, session_id = CASE WHEN payload ? 'session_id' THEN EXCLUDED.session_id ELSE entries.session_id END, exercise = CASE WHEN payload ? 'exercise' THEN EXCLUDED.exercise ELSE entries.exercise END, position = CASE WHEN payload ? 'position' THEN EXCLUDED.position ELSE entries.position END, notes = CASE WHEN payload ? 'notes' THEN EXCLUDED.notes ELSE entries.notes END, superset_group = CASE WHEN payload ? 'superset_group' THEN EXCLUDED.superset_group ELSE entries.superset_group END;
+      SELECT pg_catalog.jsonb_build_object('table','entries',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.entries t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'sets' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','entry_id','position','weight_kg','entered_value','entered_unit','reps','left_weight_kg','left_entered_value','left_entered_unit','left_reps','right_weight_kg','right_entered_value','right_entered_unit','right_reps','rpe','tag'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['entry_id','position','weight_kg','entered_value','entered_unit','reps','left_weight_kg','left_entered_value','left_entered_unit','left_reps','right_weight_kg','right_entered_value','right_entered_unit','right_reps','rpe','tag'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.sets (owner_id, id, updated_at, deleted_at, device_id, entry_id, position, weight_kg, entered_value, entered_unit, reps, left_weight_kg, left_entered_value, left_entered_unit, left_reps, right_weight_kg, right_entered_value, right_entered_unit, right_reps, rpe, tag) SELECT owner_id, id, updated_at, deleted_at, device_id, entry_id, position, weight_kg, entered_value, entered_unit, reps, left_weight_kg, left_entered_value, left_entered_unit, left_reps, right_weight_kg, right_entered_value, right_entered_unit, right_reps, rpe, tag FROM jsonb_populate_record(NULL::public.sets, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, entry_id = CASE WHEN payload ? 'entry_id' THEN EXCLUDED.entry_id ELSE sets.entry_id END, position = CASE WHEN payload ? 'position' THEN EXCLUDED.position ELSE sets.position END, weight_kg = CASE WHEN payload ? 'weight_kg' THEN EXCLUDED.weight_kg ELSE sets.weight_kg END, entered_value = CASE WHEN payload ? 'entered_value' THEN EXCLUDED.entered_value ELSE sets.entered_value END, entered_unit = CASE WHEN payload ? 'entered_unit' THEN EXCLUDED.entered_unit ELSE sets.entered_unit END, reps = CASE WHEN payload ? 'reps' THEN EXCLUDED.reps ELSE sets.reps END, left_weight_kg = CASE WHEN payload ? 'left_weight_kg' THEN EXCLUDED.left_weight_kg ELSE sets.left_weight_kg END, left_entered_value = CASE WHEN payload ? 'left_entered_value' THEN EXCLUDED.left_entered_value ELSE sets.left_entered_value END, left_entered_unit = CASE WHEN payload ? 'left_entered_unit' THEN EXCLUDED.left_entered_unit ELSE sets.left_entered_unit END, left_reps = CASE WHEN payload ? 'left_reps' THEN EXCLUDED.left_reps ELSE sets.left_reps END, right_weight_kg = CASE WHEN payload ? 'right_weight_kg' THEN EXCLUDED.right_weight_kg ELSE sets.right_weight_kg END, right_entered_value = CASE WHEN payload ? 'right_entered_value' THEN EXCLUDED.right_entered_value ELSE sets.right_entered_value END, right_entered_unit = CASE WHEN payload ? 'right_entered_unit' THEN EXCLUDED.right_entered_unit ELSE sets.right_entered_unit END, right_reps = CASE WHEN payload ? 'right_reps' THEN EXCLUDED.right_reps ELSE sets.right_reps END, rpe = CASE WHEN payload ? 'rpe' THEN EXCLUDED.rpe ELSE sets.rpe END, tag = CASE WHEN payload ? 'tag' THEN EXCLUDED.tag ELSE sets.tag END;
+      SELECT pg_catalog.jsonb_build_object('table','sets',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.sets t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'cardio_sessions' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','kind','duration_ms','distance_m','notes'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','kind','duration_ms','distance_m','notes'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.cardio_sessions (owner_id, id, updated_at, deleted_at, device_id, day, kind, duration_ms, distance_m, notes) SELECT owner_id, id, updated_at, deleted_at, device_id, day, kind, duration_ms, distance_m, notes FROM jsonb_populate_record(NULL::public.cardio_sessions, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE cardio_sessions.day END, kind = CASE WHEN payload ? 'kind' THEN EXCLUDED.kind ELSE cardio_sessions.kind END, duration_ms = CASE WHEN payload ? 'duration_ms' THEN EXCLUDED.duration_ms ELSE cardio_sessions.duration_ms END, distance_m = CASE WHEN payload ? 'distance_m' THEN EXCLUDED.distance_m ELSE cardio_sessions.distance_m END, notes = CASE WHEN payload ? 'notes' THEN EXCLUDED.notes ELSE cardio_sessions.notes END;
+      SELECT pg_catalog.jsonb_build_object('table','cardio_sessions',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.cardio_sessions t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'food_entries' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','meal_id','saved_food_id','name','amount_g','energy_kj','protein_g','carbs_g','fat_g','fiber_g','sugar_g','sodium_mg'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','meal_id','saved_food_id','name','amount_g','energy_kj','protein_g','carbs_g','fat_g','fiber_g','sugar_g','sodium_mg'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.food_entries (owner_id, id, updated_at, deleted_at, device_id, day, meal_id, saved_food_id, name, amount_g, energy_kj, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg) SELECT owner_id, id, updated_at, deleted_at, device_id, day, meal_id, saved_food_id, name, amount_g, energy_kj, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg FROM jsonb_populate_record(NULL::public.food_entries, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE food_entries.day END, meal_id = CASE WHEN payload ? 'meal_id' THEN EXCLUDED.meal_id ELSE food_entries.meal_id END, saved_food_id = CASE WHEN payload ? 'saved_food_id' THEN EXCLUDED.saved_food_id ELSE food_entries.saved_food_id END, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE food_entries.name END, amount_g = CASE WHEN payload ? 'amount_g' THEN EXCLUDED.amount_g ELSE food_entries.amount_g END, energy_kj = CASE WHEN payload ? 'energy_kj' THEN EXCLUDED.energy_kj ELSE food_entries.energy_kj END, protein_g = CASE WHEN payload ? 'protein_g' THEN EXCLUDED.protein_g ELSE food_entries.protein_g END, carbs_g = CASE WHEN payload ? 'carbs_g' THEN EXCLUDED.carbs_g ELSE food_entries.carbs_g END, fat_g = CASE WHEN payload ? 'fat_g' THEN EXCLUDED.fat_g ELSE food_entries.fat_g END, fiber_g = CASE WHEN payload ? 'fiber_g' THEN EXCLUDED.fiber_g ELSE food_entries.fiber_g END, sugar_g = CASE WHEN payload ? 'sugar_g' THEN EXCLUDED.sugar_g ELSE food_entries.sugar_g END, sodium_mg = CASE WHEN payload ? 'sodium_mg' THEN EXCLUDED.sodium_mg ELSE food_entries.sodium_mg END;
+      SELECT pg_catalog.jsonb_build_object('table','food_entries',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.food_entries t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'saved_foods' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','name','serving_g','energy_kj','protein_g','carbs_g','fat_g','fiber_g','sugar_g','sodium_mg'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['name','serving_g','energy_kj','protein_g','carbs_g','fat_g','fiber_g','sugar_g','sodium_mg'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.saved_foods (owner_id, id, updated_at, deleted_at, device_id, name, serving_g, energy_kj, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg) SELECT owner_id, id, updated_at, deleted_at, device_id, name, serving_g, energy_kj, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg FROM jsonb_populate_record(NULL::public.saved_foods, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE saved_foods.name END, serving_g = CASE WHEN payload ? 'serving_g' THEN EXCLUDED.serving_g ELSE saved_foods.serving_g END, energy_kj = CASE WHEN payload ? 'energy_kj' THEN EXCLUDED.energy_kj ELSE saved_foods.energy_kj END, protein_g = CASE WHEN payload ? 'protein_g' THEN EXCLUDED.protein_g ELSE saved_foods.protein_g END, carbs_g = CASE WHEN payload ? 'carbs_g' THEN EXCLUDED.carbs_g ELSE saved_foods.carbs_g END, fat_g = CASE WHEN payload ? 'fat_g' THEN EXCLUDED.fat_g ELSE saved_foods.fat_g END, fiber_g = CASE WHEN payload ? 'fiber_g' THEN EXCLUDED.fiber_g ELSE saved_foods.fiber_g END, sugar_g = CASE WHEN payload ? 'sugar_g' THEN EXCLUDED.sugar_g ELSE saved_foods.sugar_g END, sodium_mg = CASE WHEN payload ? 'sodium_mg' THEN EXCLUDED.sodium_mg ELSE saved_foods.sodium_mg END;
+      SELECT pg_catalog.jsonb_build_object('table','saved_foods',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.saved_foods t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'food_targets' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','energy_kj','protein_g','carbs_g','fat_g'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','energy_kj','protein_g','carbs_g','fat_g'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.food_targets (owner_id, id, updated_at, deleted_at, device_id, day, energy_kj, protein_g, carbs_g, fat_g) SELECT owner_id, id, updated_at, deleted_at, device_id, day, energy_kj, protein_g, carbs_g, fat_g FROM jsonb_populate_record(NULL::public.food_targets, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE food_targets.day END, energy_kj = CASE WHEN payload ? 'energy_kj' THEN EXCLUDED.energy_kj ELSE food_targets.energy_kj END, protein_g = CASE WHEN payload ? 'protein_g' THEN EXCLUDED.protein_g ELSE food_targets.protein_g END, carbs_g = CASE WHEN payload ? 'carbs_g' THEN EXCLUDED.carbs_g ELSE food_targets.carbs_g END, fat_g = CASE WHEN payload ? 'fat_g' THEN EXCLUDED.fat_g ELSE food_targets.fat_g END;
+      SELECT pg_catalog.jsonb_build_object('table','food_targets',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.food_targets t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'meals' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','name','position'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['name','position'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.meals (owner_id, id, updated_at, deleted_at, device_id, name, position) SELECT owner_id, id, updated_at, deleted_at, device_id, name, position FROM jsonb_populate_record(NULL::public.meals, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE meals.name END, position = CASE WHEN payload ? 'position' THEN EXCLUDED.position ELSE meals.position END;
+      SELECT pg_catalog.jsonb_build_object('table','meals',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.meals t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'goals' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','kind','target_value','target_unit','target_day'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['kind','target_value','target_unit','target_day'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.goals (owner_id, id, updated_at, deleted_at, device_id, kind, target_value, target_unit, target_day) SELECT owner_id, id, updated_at, deleted_at, device_id, kind, target_value, target_unit, target_day FROM jsonb_populate_record(NULL::public.goals, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, kind = CASE WHEN payload ? 'kind' THEN EXCLUDED.kind ELSE goals.kind END, target_value = CASE WHEN payload ? 'target_value' THEN EXCLUDED.target_value ELSE goals.target_value END, target_unit = CASE WHEN payload ? 'target_unit' THEN EXCLUDED.target_unit ELSE goals.target_unit END, target_day = CASE WHEN payload ? 'target_day' THEN EXCLUDED.target_day ELSE goals.target_day END;
+      SELECT pg_catalog.jsonb_build_object('table','goals',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.goals t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'plan_days' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','day','routine_id','status'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['day','routine_id','status'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.plan_days (owner_id, id, updated_at, deleted_at, device_id, day, routine_id, status) SELECT owner_id, id, updated_at, deleted_at, device_id, day, routine_id, status FROM jsonb_populate_record(NULL::public.plan_days, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, day = CASE WHEN payload ? 'day' THEN EXCLUDED.day ELSE plan_days.day END, routine_id = CASE WHEN payload ? 'routine_id' THEN EXCLUDED.routine_id ELSE plan_days.routine_id END, status = CASE WHEN payload ? 'status' THEN EXCLUDED.status ELSE plan_days.status END;
+      SELECT pg_catalog.jsonb_build_object('table','plan_days',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.plan_days t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'machine_notes' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','exercise','text','step','bar_weight','unit_override'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['exercise','text','step','bar_weight','unit_override'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.machine_notes (owner_id, id, updated_at, deleted_at, device_id, exercise, text, step, bar_weight, unit_override) SELECT owner_id, id, updated_at, deleted_at, device_id, exercise, text, step, bar_weight, unit_override FROM jsonb_populate_record(NULL::public.machine_notes, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, exercise = CASE WHEN payload ? 'exercise' THEN EXCLUDED.exercise ELSE machine_notes.exercise END, text = CASE WHEN payload ? 'text' THEN EXCLUDED.text ELSE machine_notes.text END, step = CASE WHEN payload ? 'step' THEN EXCLUDED.step ELSE machine_notes.step END, bar_weight = CASE WHEN payload ? 'bar_weight' THEN EXCLUDED.bar_weight ELSE machine_notes.bar_weight END, unit_override = CASE WHEN payload ? 'unit_override' THEN EXCLUDED.unit_override ELSE machine_notes.unit_override END;
+      SELECT pg_catalog.jsonb_build_object('table','machine_notes',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.machine_notes t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'home_layout' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','widget','position','hidden'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['widget','position','hidden'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.home_layout (owner_id, id, updated_at, deleted_at, device_id, widget, position, hidden) SELECT owner_id, id, updated_at, deleted_at, device_id, widget, position, hidden FROM jsonb_populate_record(NULL::public.home_layout, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, widget = CASE WHEN payload ? 'widget' THEN EXCLUDED.widget ELSE home_layout.widget END, position = CASE WHEN payload ? 'position' THEN EXCLUDED.position ELSE home_layout.position END, hidden = CASE WHEN payload ? 'hidden' THEN EXCLUDED.hidden ELSE home_layout.hidden END;
+      SELECT pg_catalog.jsonb_build_object('table','home_layout',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.home_layout t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'settings' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','theme_override','accent','rest_seconds','plate_set','rest_per_exercise','rest_style'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['theme_override','accent','rest_seconds','plate_set','rest_per_exercise','rest_style'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.settings (owner_id, id, updated_at, deleted_at, device_id, theme_override, accent, rest_seconds, plate_set, rest_per_exercise, rest_style) SELECT owner_id, id, updated_at, deleted_at, device_id, theme_override, accent, rest_seconds, plate_set, rest_per_exercise, rest_style FROM jsonb_populate_record(NULL::public.settings, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, theme_override = CASE WHEN payload ? 'theme_override' THEN EXCLUDED.theme_override ELSE settings.theme_override END, accent = CASE WHEN payload ? 'accent' THEN EXCLUDED.accent ELSE settings.accent END, rest_seconds = CASE WHEN payload ? 'rest_seconds' THEN EXCLUDED.rest_seconds ELSE settings.rest_seconds END, plate_set = CASE WHEN payload ? 'plate_set' THEN EXCLUDED.plate_set ELSE settings.plate_set END, rest_per_exercise = CASE WHEN payload ? 'rest_per_exercise' THEN EXCLUDED.rest_per_exercise ELSE settings.rest_per_exercise END, rest_style = CASE WHEN payload ? 'rest_style' THEN EXCLUDED.rest_style ELSE settings.rest_style END;
+      SELECT pg_catalog.jsonb_build_object('table','settings',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.settings t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'photos' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','file_name','captured_at','width','height'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['file_name','captured_at','width','height'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.photos (owner_id, id, updated_at, deleted_at, device_id, file_name, captured_at, width, height) SELECT owner_id, id, updated_at, deleted_at, device_id, file_name, captured_at, width, height FROM jsonb_populate_record(NULL::public.photos, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, file_name = CASE WHEN payload ? 'file_name' THEN EXCLUDED.file_name ELSE photos.file_name END, captured_at = CASE WHEN payload ? 'captured_at' THEN EXCLUDED.captured_at ELSE photos.captured_at END, width = CASE WHEN payload ? 'width' THEN EXCLUDED.width ELSE photos.width END, height = CASE WHEN payload ? 'height' THEN EXCLUDED.height ELSE photos.height END;
+      SELECT pg_catalog.jsonb_build_object('table','photos',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.photos t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'custom_exercises' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','name','main_muscle','helpers','equipment'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['name','main_muscle','helpers','equipment'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.custom_exercises (owner_id, id, updated_at, deleted_at, device_id, name, main_muscle, helpers, equipment) SELECT owner_id, id, updated_at, deleted_at, device_id, name, main_muscle, helpers, equipment FROM jsonb_populate_record(NULL::public.custom_exercises, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, name = CASE WHEN payload ? 'name' THEN EXCLUDED.name ELSE custom_exercises.name END, main_muscle = CASE WHEN payload ? 'main_muscle' THEN EXCLUDED.main_muscle ELSE custom_exercises.main_muscle END, helpers = CASE WHEN payload ? 'helpers' THEN EXCLUDED.helpers ELSE custom_exercises.helpers END, equipment = CASE WHEN payload ? 'equipment' THEN EXCLUDED.equipment ELSE custom_exercises.equipment END;
+      SELECT pg_catalog.jsonb_build_object('table','custom_exercises',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.custom_exercises t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'plans' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','mode','days_per_week'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['mode','days_per_week'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.plans (owner_id, id, updated_at, deleted_at, device_id, mode, days_per_week) SELECT owner_id, id, updated_at, deleted_at, device_id, mode, days_per_week FROM jsonb_populate_record(NULL::public.plans, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, mode = CASE WHEN payload ? 'mode' THEN EXCLUDED.mode ELSE plans.mode END, days_per_week = CASE WHEN payload ? 'days_per_week' THEN EXCLUDED.days_per_week ELSE plans.days_per_week END;
+      SELECT pg_catalog.jsonb_build_object('table','plans',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.plans t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'pauses' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','start_day','end_day'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['start_day','end_day'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.pauses (owner_id, id, updated_at, deleted_at, device_id, start_day, end_day) SELECT owner_id, id, updated_at, deleted_at, device_id, start_day, end_day FROM jsonb_populate_record(NULL::public.pauses, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, start_day = CASE WHEN payload ? 'start_day' THEN EXCLUDED.start_day ELSE pauses.start_day END, end_day = CASE WHEN payload ? 'end_day' THEN EXCLUDED.end_day ELSE pauses.end_day END;
+      SELECT pg_catalog.jsonb_build_object('table','pauses',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.pauses t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+
+WHEN 'purges' THEN
+      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','from_day','to_day','cutoff_ms','tz'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['from_day','to_day','cutoff_ms','tz'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
+      INSERT INTO public.purges (owner_id, id, updated_at, deleted_at, device_id, from_day, to_day, cutoff_ms, tz) SELECT owner_id, id, updated_at, deleted_at, device_id, from_day, to_day, cutoff_ms, tz FROM jsonb_populate_record(NULL::public.purges, payload)
+      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, from_day = CASE WHEN payload ? 'from_day' THEN EXCLUDED.from_day ELSE purges.from_day END, to_day = CASE WHEN payload ? 'to_day' THEN EXCLUDED.to_day ELSE purges.to_day END, cutoff_ms = CASE WHEN payload ? 'cutoff_ms' THEN EXCLUDED.cutoff_ms ELSE purges.cutoff_ms END, tz = CASE WHEN payload ? 'tz' THEN EXCLUDED.tz ELSE purges.tz END;
+      SELECT pg_catalog.jsonb_build_object('table','purges',
+        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
+        'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.purges t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+ELSE RAISE EXCEPTION 'Unsupported sync table';
+    END CASE;
+    -- Return the actual stored version, even if a clamped/stale write was ignored
+    -- and its existing sequence is behind the client's incremental cursor.
+    accepted := accepted || pg_catalog.jsonb_build_array(stored);
+  END LOOP;
+  -- Return final versions after any child sweeps within the batch.
+  accepted := '[]'::jsonb;
+  FOR item IN SELECT value FROM jsonb_array_elements(rows) LOOP
+    CASE item->>'table'
+    WHEN 'profile' THEN
+      SELECT pg_catalog.jsonb_build_object('table','profile', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.profile t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'weigh_ins' THEN
+      SELECT pg_catalog.jsonb_build_object('table','weigh_ins', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.weigh_ins t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'measurements' THEN
+      SELECT pg_catalog.jsonb_build_object('table','measurements', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.measurements t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'routines' THEN
+      SELECT pg_catalog.jsonb_build_object('table','routines', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.routines t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'routine_exercises' THEN
+      SELECT pg_catalog.jsonb_build_object('table','routine_exercises', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.routine_exercises t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'sessions' THEN
+      SELECT pg_catalog.jsonb_build_object('table','sessions', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.sessions t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'entries' THEN
+      SELECT pg_catalog.jsonb_build_object('table','entries', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.entries t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'sets' THEN
+      SELECT pg_catalog.jsonb_build_object('table','sets', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.sets t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'cardio_sessions' THEN
+      SELECT pg_catalog.jsonb_build_object('table','cardio_sessions', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.cardio_sessions t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'food_entries' THEN
+      SELECT pg_catalog.jsonb_build_object('table','food_entries', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.food_entries t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'saved_foods' THEN
+      SELECT pg_catalog.jsonb_build_object('table','saved_foods', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.saved_foods t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'food_targets' THEN
+      SELECT pg_catalog.jsonb_build_object('table','food_targets', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.food_targets t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'meals' THEN
+      SELECT pg_catalog.jsonb_build_object('table','meals', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.meals t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'goals' THEN
+      SELECT pg_catalog.jsonb_build_object('table','goals', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.goals t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'plan_days' THEN
+      SELECT pg_catalog.jsonb_build_object('table','plan_days', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.plan_days t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'machine_notes' THEN
+      SELECT pg_catalog.jsonb_build_object('table','machine_notes', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.machine_notes t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'home_layout' THEN
+      SELECT pg_catalog.jsonb_build_object('table','home_layout', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.home_layout t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'settings' THEN
+      SELECT pg_catalog.jsonb_build_object('table','settings', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.settings t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'photos' THEN
+      SELECT pg_catalog.jsonb_build_object('table','photos', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.photos t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'custom_exercises' THEN
+      SELECT pg_catalog.jsonb_build_object('table','custom_exercises', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.custom_exercises t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'plans' THEN
+      SELECT pg_catalog.jsonb_build_object('table','plans', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.plans t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'pauses' THEN
+      SELECT pg_catalog.jsonb_build_object('table','pauses', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.pauses t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    WHEN 'purges' THEN
+      SELECT pg_catalog.jsonb_build_object('table','purges', 'owner_id',t.owner_id,'id',t.id,
+        'updated_at',t.updated_at,'deleted_at',t.deleted_at,'device_id',t.device_id,
+        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
+      INTO stored FROM public.purges t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+    ELSE RAISE EXCEPTION 'Unsupported sync table';
+    END CASE;
+    accepted := accepted || pg_catalog.jsonb_build_array(stored);
+  END LOOP;
+  RETURN accepted;
+END $$;
+
+REVOKE ALL ON FUNCTION public.sync_push(jsonb) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.sync_push(jsonb) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.row_sync_guard() FROM PUBLIC, anon, authenticated;
+
+-- Trigger execution does not require client EXECUTE; only trigger creation does.
+
+-- USAGE permits invoker nextval; SELECT and UPDATE (setval) are not needed.
+REVOKE ALL ON SEQUENCE public.row_sync_seq FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SEQUENCE public.row_sync_seq TO authenticated;
+
+
+
+-- F1: one owner lock serializes pushes, marker creation and the whole purge.
+CREATE FUNCTION public.sync_purge_range(p_id uuid, p_from date, p_to date, p_cutoff_ms bigint, p_tz text)
+RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE me uuid := auth.uid(); f text := p_from::text; t text := p_to::text;
+  stamp bigint := floor(extract(epoch FROM pg_catalog.now())*1000)::bigint + 300000;
+  dev text := 'ffffffff-ffff-4fff-bfff-ffffffffffff';
+BEGIN
+  IF me IS NULL OR p_id IS NULL OR p_from IS NULL OR p_to IS NULL OR p_from > p_to
+    OR p_cutoff_ms IS NULL OR p_cutoff_ms < 0 OR p_cutoff_ms > 9007199254740991
+    OR p_tz IS NULL OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names WHERE name=p_tz)
+    OR f !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR t !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    THEN RAISE EXCEPTION 'bad purge'; END IF;
+  p_cutoff_ms := LEAST(p_cutoff_ms, stamp - 300000);
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(me::text, 0));
+  INSERT INTO public.purges(owner_id,id,updated_at,device_id,from_day,to_day,cutoff_ms,tz)
+    VALUES (me,p_id,stamp,dev,f,t,p_cutoff_ms,p_tz) ON CONFLICT (owner_id,id) DO NOTHING;
+  -- Reusing the request ID is a no-op, including no new row sequences.
+  IF NOT FOUND THEN RETURN; END IF;
+  UPDATE public.sets s SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE s.owner_id=me AND s.deleted_at IS NULL AND s.updated_at<=p_cutoff_ms AND s.entry_id IN (
+     SELECT e.id::text FROM public.entries e JOIN public.sessions x ON x.owner_id=me AND x.id::text=e.session_id
+      WHERE e.owner_id=me AND x.day BETWEEN f AND t);
+  UPDATE public.entries e SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE e.owner_id=me AND e.deleted_at IS NULL AND e.updated_at<=p_cutoff_ms AND e.session_id IN (
+     SELECT x.id::text FROM public.sessions x WHERE x.owner_id=me AND x.day BETWEEN f AND t);
+  UPDATE public.sessions SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+  UPDATE public.weigh_ins SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+  UPDATE public.measurements SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+  UPDATE public.cardio_sessions SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+  UPDATE public.food_entries SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+  UPDATE public.plan_days SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+END $$;
+REVOKE ALL ON FUNCTION public.sync_purge_range(uuid,date,date,bigint,text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_purge_range(uuid,date,date,bigint,text) TO authenticated;
+
+-- F5: service_role must not bypass row guards with TRUNCATE or install triggers.
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.profile FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.weigh_ins FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.measurements FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.routines FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.routine_exercises FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.sessions FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.entries FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.sets FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.cardio_sessions FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.food_entries FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.saved_foods FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.food_targets FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.meals FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.goals FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.plan_days FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.machine_notes FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.home_layout FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.settings FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.photos FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.custom_exercises FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.plans FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.pauses FROM service_role;
+REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLE public.purges FROM service_role;
+
+-- F4: keep legacy dynamic user_id deletion away from guarded row-sync tables.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_trigger tg JOIN pg_catalog.pg_proc p ON p.oid=tg.tgfoid
+             JOIN pg_catalog.pg_attribute a ON a.attrelid=tg.tgrelid AND a.attname='user_id' AND NOT a.attisdropped
+             WHERE p.proname='row_sync_guard') THEN
+    RAISE EXCEPTION 'row-sync tables must use owner_id; user_id breaks delete_user_rows';
+  END IF;
+END $$;
+COMMIT;

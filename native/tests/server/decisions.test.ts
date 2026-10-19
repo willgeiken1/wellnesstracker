@@ -11,7 +11,7 @@ afterAll(async () => { await db?.close(); });
 
 test.each(syncedTables)('%s wipes pushed and directly updated tombstones, including pull values; resurrection follows LWW', async table => {
  const transport = testTransport(db, OWNER_A);
- const data = Object.fromEntries(Object.entries(columns[table]).map(([key, type]) => [key, key === 'source' ? 'app' : type === 'text' ? 'synthetic' : 42]));
+ const data = Object.fromEntries(Object.entries(columns[table]).map(([key, type]) => [key, key === 'source' ? 'app' : /day$/.test(key) ? '2026-01-01' : key === 'mode' ? 'rotation' : key === 'unit_override' ? 'kg' : key === 'days_per_week' ? 3 : type === 'text' ? 'synthetic' : 42]));
  const row = {...syntheticRow(table), data};
  const expected = Object.fromEntries(Object.keys(data).map(key => [key, key === 'source' ? 'app' : null]));
  await transport.push([{...row, deleted_at: 100}]);
@@ -115,7 +115,7 @@ test.each(['insert','rpc','update'])('independent deletion bound through %s pres
  });
 });
 
-test('account deletion cascades all 19 owner FKs and preserves the other owner', async () => {
+test('account deletion cascades all owner FKs and preserves the other owner', async () => {
  for(const table of syncedTables) {
   const row={...syntheticRow(table),id:'30000000-0000-4000-8000-000000000504'};
   await testTransport(db,OWNER_A).push([row]);

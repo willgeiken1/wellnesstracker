@@ -82,7 +82,7 @@ test('sequence and function privilege matrix; all public functions are invoker w
   }
  }
  const functions=await db.query<{proname:string;prosecdef:boolean;proconfig:string[]}>("SELECT proname,prosecdef,proconfig FROM pg_proc WHERE pronamespace='public'::regnamespace ORDER BY proname");
- expect(functions.rows.map(f=>f.proname)).toEqual(['row_sync_guard','sync_push']);
+ expect(functions.rows.map(f=>f.proname)).toEqual(['row_sync_guard','sync_purge_range','sync_push']);
  for(const f of functions.rows){expect(f.prosecdef).toBe(false);expect(f.proconfig).toEqual(['search_path=""']);}
 });
 test.each(syncedTables)('%s rejects anonymous access, owner DELETE and TRUNCATE; server_seq stays server-assigned',async table=>{

@@ -1,6 +1,7 @@
 import { localDatabase } from './sqlite';
 import { SyncEngine,syncTriggers, type Transport } from '../../src/data/sync/engine';
 import { OWNER_A, syntheticRow } from '../../fixtures/sync';
+const flush = async () => { for(let i=0;i<8;i++)await Promise.resolve(); };
 test('committed changes debounce 2s; foreground/reconnect/manual trigger; stop cancels pending work',async()=>{
  jest.useFakeTimers();const local=await localDatabase();
  const transport:Transport={owner:OWNER_A,push:jest.fn(async()=>{}),pull:jest.fn(async()=>[])};
@@ -16,7 +17,7 @@ test('an edit while a slow sync is in flight is automatically flushed afterward'
  jest.useFakeTimers();const local=await localDatabase();let resolve!:()=>void;
  let first=true;const transport:Transport={owner:OWNER_A,push:jest.fn(async()=>{if(first){first=false;await new Promise<void>(r=>{resolve=r;});}}),pull:async()=>[]};
  const engine=new SyncEngine(local.repo,transport),triggers=syncTriggers(engine);
- local.repo.putLocal(syntheticRow());jest.advanceTimersByTime(2000);
+ local.repo.putLocal(syntheticRow());jest.advanceTimersByTime(2000);await flush();
  local.repo.putLocal({...syntheticRow(),updated_at:101});jest.advanceTimersByTime(2000);
  resolve();await engine.sync();await Promise.resolve();jest.advanceTimersByTime(2000);await engine.sync();
  expect(local.repo.pending()).toHaveLength(0);expect(transport.push).toHaveBeenCalledTimes(2);
@@ -25,8 +26,8 @@ test('an edit while a slow sync is in flight is automatically flushed afterward'
 test('closing during an upload leaves the old outbox unacknowledged',async()=>{
  const local=await localDatabase();local.repo.putLocal(syntheticRow());let resolve!:()=>void;
  const transport:Transport={owner:OWNER_A,push:async()=>new Promise<void>(r=>{resolve=r;}),pull:jest.fn(async()=>[])};
- const engine=new SyncEngine(local.repo,transport);const flight=engine.sync();engine.close();resolve();await flight;
- expect(local.repo.pending()).toHaveLength(1);expect(transport.pull).not.toHaveBeenCalled();local.sqlite.close();
+ const engine=new SyncEngine(local.repo,transport);const flight=engine.sync();await flush();const pulls=(transport.pull as jest.Mock).mock.calls.length;engine.close();resolve();await flight;
+ expect(local.repo.pending()).toHaveLength(1);expect(transport.pull).toHaveBeenCalledTimes(pulls);local.sqlite.close();
 });
 test('closing during a pull prevents applying rows or advancing the old account cursor',async()=>{
  const local=await localDatabase();let resolve!:(rows:import('../../src/data/rows').ServerRow[])=>void;
@@ -39,7 +40,7 @@ test('a debounced edit during a failed slow upload still receives its own sync a
  jest.useFakeTimers();const local=await localDatabase();let reject!:(reason:Error)=>void;
  const push=jest.fn().mockImplementationOnce(()=>new Promise<void>((_resolve,fail)=>{reject=fail;})).mockResolvedValue(undefined);
  const engine=new SyncEngine(local.repo,{owner:OWNER_A,push,pull:async()=>[]}),triggers=syncTriggers(engine);
- local.repo.putLocal(syntheticRow());const running=engine.sync();
+ local.repo.putLocal(syntheticRow());const running=engine.sync();await flush();
  local.repo.putLocal({...syntheticRow(),updated_at:101});jest.advanceTimersByTime(2000);
  reject(new Error('fixture offline'));await running;
  expect(push).toHaveBeenCalledTimes(2);expect(local.repo.pending()).toHaveLength(0);

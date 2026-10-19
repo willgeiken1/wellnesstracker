@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, real, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
 export const profile = sqliteTable('profile', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
   name: text('name'),
@@ -34,7 +35,10 @@ export const routine_exercises = sqliteTable('routine_exercises', {
   exercise: text('exercise'),
   position: integer('position'),
   target_sets: integer('target_sets'),
-  target_reps: integer('target_reps')
+  target_reps: integer('target_reps'),
+  rep_min: integer('rep_min'),
+  rep_max: integer('rep_max'),
+  superset_group: text('superset_group')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const sessions = sqliteTable('sessions', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -52,7 +56,8 @@ export const entries = sqliteTable('entries', {
   session_id: text('session_id'),
   exercise: text('exercise'),
   position: integer('position'),
-  notes: text('notes')
+  notes: text('notes'),
+  superset_group: text('superset_group')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const sets = sqliteTable('sets', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -70,7 +75,8 @@ export const sets = sqliteTable('sets', {
   right_entered_value: real('right_entered_value'),
   right_entered_unit: text('right_entered_unit'),
   right_reps: integer('right_reps'),
-  rpe: real('rpe')
+  rpe: real('rpe'),
+  tag: text('tag')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const cardio_sessions = sqliteTable('cardio_sessions', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -90,7 +96,10 @@ export const food_entries = sqliteTable('food_entries', {
   energy_kj: real('energy_kj'),
   protein_g: real('protein_g'),
   carbs_g: real('carbs_g'),
-  fat_g: real('fat_g')
+  fat_g: real('fat_g'),
+  fiber_g: real('fiber_g'),
+  sugar_g: real('sugar_g'),
+  sodium_mg: real('sodium_mg')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const saved_foods = sqliteTable('saved_foods', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -99,7 +108,10 @@ export const saved_foods = sqliteTable('saved_foods', {
   energy_kj: real('energy_kj'),
   protein_g: real('protein_g'),
   carbs_g: real('carbs_g'),
-  fat_g: real('fat_g')
+  fat_g: real('fat_g'),
+  fiber_g: real('fiber_g'),
+  sugar_g: real('sugar_g'),
+  sodium_mg: real('sodium_mg')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const food_targets = sqliteTable('food_targets', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -130,7 +142,10 @@ export const plan_days = sqliteTable('plan_days', {
 export const machine_notes = sqliteTable('machine_notes', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
   exercise: text('exercise'),
-  text: text('text')
+  text: text('text'),
+  step: real('step'),
+  bar_weight: real('bar_weight'),
+  unit_override: text('unit_override')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const home_layout = sqliteTable('home_layout', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -142,7 +157,10 @@ export const settings = sqliteTable('settings', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
   theme_override: text('theme_override'),
   accent: text('accent'),
-  rest_seconds: integer('rest_seconds')
+  rest_seconds: integer('rest_seconds'),
+  plate_set: text('plate_set'),
+  rest_per_exercise: text('rest_per_exercise'),
+  rest_style: text('rest_style')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 export const photos = sqliteTable('photos', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
@@ -156,3 +174,31 @@ export const sync_outbox = sqliteTable('sync_outbox', { owner_id: text('owner_id
 export const sync_state = sqliteTable('sync_state', { owner_id: text('owner_id').notNull(), key: text('key').notNull(), value: text('value').notNull() }, t => [primaryKey({columns:[t.owner_id,t.key]})]);
 
 export const sync_conflicts = sqliteTable('sync_conflicts', { owner_id: text('owner_id').notNull(), table_name: text('table_name').notNull(), row_id: text('row_id').notNull(), reason: text('reason').notNull() }, t => [primaryKey({columns:[t.owner_id,t.table_name,t.row_id]})]);
+
+export const custom_exercises = sqliteTable('custom_exercises', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  name: text('name'),
+  main_muscle: text('main_muscle'),
+  helpers: text('helpers'),
+  equipment: text('equipment')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const plans = sqliteTable('plans', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  mode: text('mode'),
+  days_per_week: integer('days_per_week')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const pauses = sqliteTable('pauses', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  start_day: text('start_day'),
+  end_day: text('end_day')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const purges = sqliteTable('purges', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  from_day: text('from_day'),
+  to_day: text('to_day'),
+  cutoff_ms: integer('cutoff_ms'),
+  tz: text('tz')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] }), uniqueIndex('purges_owner_version').on(t.owner_id,t.updated_at,t.device_id).where(sql`${t.cutoff_ms} IS NOT NULL`)]);

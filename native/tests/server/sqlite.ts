@@ -26,3 +26,15 @@ export function sqliteClient(sqlite: DatabaseSync) {
     }};
   }} as unknown as SQLiteDatabase;
 }
+
+/** Reconstruct the pre-v1 schema for upgrade fixtures; never used in production. */
+export function downgradeV1Fixture(sqlite: DatabaseSync) {
+ const additions: Record<string,string[]> = {
+  sets:['tag'],routine_exercises:['rep_min','rep_max','superset_group'],entries:['superset_group'],
+  machine_notes:['step','bar_weight','unit_override'],settings:['plate_set','rest_per_exercise','rest_style'],
+  food_entries:['fiber_g','sugar_g','sodium_mg'],saved_foods:['fiber_g','sugar_g','sodium_mg'],
+ };
+ for(const [table,fields] of Object.entries(additions))for(const field of fields)sqlite.exec(`ALTER TABLE ${table} DROP COLUMN ${field}`);
+ for(const table of ['custom_exercises','plans','pauses','purges'])sqlite.exec(`DROP TABLE ${table}`);
+ sqlite.exec('DELETE FROM __drizzle_migrations WHERE created_at>=1792238400004');
+}
