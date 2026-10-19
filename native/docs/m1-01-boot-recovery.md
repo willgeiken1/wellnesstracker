@@ -24,3 +24,10 @@ The screen reuses scrollable Screen, labeled Buttons and ThemedText, including u
 Plan step M1-01 / GitHub #72. The referenced library/work/native-rebuild-plan.md and answers are absent from this checkout; no additional section or Q-number mapping is inferred. No files in supabase/ or native/server/, schema, synced columns, or sync protocol changed. No simulators/emulators, git writes, real data, hosted services, or analytics were used.
 
 TypeScript and Expo lint pass. The full native Jest command passes all 34 suites and 631 tests. Details are recorded in the draft PR body at the worktree root. Expo dependency check and doctor report pre-existing patch mismatches: @expo/ui 58.0.20 to ~58.0.21; expo 58.0.14 to ~58.0.15; expo-image 58.0.15 to ~58.0.16; expo-router 58.0.23 to ~58.0.24. These remain outside this small change. New expo-sharing and expo-file-system dependencies use SDK 58 versions selected by expo install; a rebuilt development client is needed to verify the native share sheet. Device checks are deferred by the task's explicit restriction.
+
+
+## PR #74 review follow-up — 2026-10-19
+
+Addressed OPEN 1–3 only: the recovery-wipe test invokes Cancel and verifies no new wipe, session clear, marker removal, or ready state; diagnostics assert raw mailto encoding, including `%0A`; each export best-effort sweeps stale `boot-export-*` cache directories and guards final staging cleanup. Added synthetic tests for sweep filtering, repeated exports, unavailable sharing, and listing/deletion failures preserving export success or the original error. Mutations wiring Cancel to `retryBoot(true)` and removing `encodeURIComponent` both fail the strengthened tests. Export scope and `bootExportHint` copy remain unchanged; items 4–7 were not addressed.
+
+Validation from `native/`: TypeScript and Expo lint pass with no diagnostics; `npm test -- --ci` passes 34 suites / 638 tests. Commands ran offline with telemetry and dotenv loading disabled. No git writes, simulator use, network access, secrets, or changes under `supabase/` or `native/server/`.

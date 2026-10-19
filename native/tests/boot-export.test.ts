@@ -1,21 +1,27 @@
 import { exportBootDatabase } from '../src/data/boot-export';
+import { Directory, File } from 'expo-file-system';
 import { openDatabaseAsync } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
 const mockCopies: string[] = [], mockWrites: unknown[] = [], mockDeletes: string[] = [];
+let mockCacheEntries: (Directory | File)[] = [];
+let mockDeleteFailures: string[] = [];
+let mockListError = false;
+let mockSharingAvailable = true;
+let mockCreateError = false;
 let mockCopyGate: Promise<void> | undefined;
 let mockCopyStarted = false;
 const mockSnapshot = new Uint8Array([83,81,76]);
 const mockDB = { execAsync: jest.fn(async()=>{}), serializeAsync: jest.fn(async()=>mockSnapshot), closeAsync: jest.fn(async()=>{}) };
 jest.mock('expo-crypto',()=>({randomUUID:()=> 'fixture-id'}));
 jest.mock('expo-sqlite',()=>({defaultDatabaseDirectory:'file:///documents/SQLite',openDatabaseAsync:jest.fn()}));
-jest.mock('expo-sharing',()=>({isAvailableAsync:jest.fn(async()=>true),shareAsync:jest.fn(async()=>{})}));
+jest.mock('expo-sharing',()=>({isAvailableAsync:jest.fn(async()=>mockSharingAvailable),shareAsync:jest.fn(async()=>{})}));
 jest.mock('expo-file-system',()=>({Paths:{cache:'file:///cache'},Directory:class {
- uri:string;constructor(...parts:string[]){this.uri=parts.map(p=>typeof p==='string'?p:(p as {uri:string}).uri).join('/');}create(){}delete(){mockDeletes.push(this.uri);}
+ uri:string;constructor(...parts:string[]){this.uri=parts.map(p=>typeof p==='string'?p:(p as {uri:string}).uri).join('/');}get name(){return this.uri.split('/').pop();}create(){if(mockCreateError)throw new Error('synthetic create failure');}list(){if(mockListError)throw new Error('synthetic list failure');return mockCacheEntries;}delete(){mockDeletes.push(this.uri);if(mockDeleteFailures.includes(this.uri))throw new Error('synthetic delete failure');}
 },File:class {
  uri:string;exists=true;constructor(...parts:unknown[]){this.uri=parts.map(p=>typeof p==='string'?p:(p as {uri:string}).uri).join('/');}
  async copy(dest:{uri:string}){mockCopyStarted=true;await mockCopyGate;mockCopies.push(`${this.uri} -> ${dest.uri}`);}async write(bytes:unknown){await Promise.resolve();mockWrites.push(bytes);}
 }}));
-beforeEach(()=>{jest.clearAllMocks();mockCopyGate=undefined;mockCopyStarted=false;mockCopies.length=0;mockWrites.length=0;mockDeletes.length=0;jest.mocked(openDatabaseAsync).mockResolvedValue(mockDB as never);});
+beforeEach(()=>{jest.clearAllMocks();mockCacheEntries=[];mockDeleteFailures=[];mockListError=false;mockSharingAvailable=true;mockCreateError=false;jest.mocked(Sharing.isAvailableAsync).mockImplementation(async()=>mockSharingAvailable);mockCopyGate=undefined;mockCopyStarted=false;mockCopies.length=0;mockWrites.length=0;mockDeletes.length=0;jest.mocked(openDatabaseAsync).mockResolvedValue(mockDB as never);});
 test('exports a WAL-aware SQLite snapshot from a private copy without migrating or writing to the source',async()=>{
  await exportBootDatabase();
  expect(mockCopies).toEqual([
@@ -49,4 +55,64 @@ test('waits for asynchronous file copies before opening SQLite or sharing',async
  for(let tick=0;tick<5;tick++)await Promise.resolve();
  expect(mockCopyStarted).toBe(true);expect(openDatabaseAsync).not.toHaveBeenCalled();expect(Sharing.shareAsync).not.toHaveBeenCalled();
  release();await flight;expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+});
+
+
+test('sweeps only stale boot-export directories before starting each export',async()=>{
+ const stale=new Directory('file:///cache/boot-export-stale');
+ mockCacheEntries=[stale,new Directory('file:///cache/unrelated'),new File('file:///cache/boot-export-file')];
+ jest.mocked(Sharing.isAvailableAsync).mockImplementation(async()=>{
+  expect(mockDeletes).toEqual([stale.uri]);
+  return true;
+ });
+ await exportBootDatabase();
+ expect(mockDeletes).toEqual([stale.uri,'file:///cache/boot-export-fixture-id']);
+ mockDeletes.length=0;
+ await exportBootDatabase();
+ expect(mockDeletes).toEqual([stale.uri,'file:///cache/boot-export-fixture-id']);
+});
+
+test('sweeps stale exports even when sharing is unavailable',async()=>{
+ mockCacheEntries=[new Directory('file:///cache/boot-export-stale')];
+ mockSharingAvailable=false;
+ await expect(exportBootDatabase()).rejects.toThrow('Sharing is unavailable.');
+ expect(mockDeletes).toEqual(['file:///cache/boot-export-stale']);
+ expect(mockCopies).toEqual([]);
+});
+
+test('a stale directory delete failure does not prevent sweeping later directories or exporting',async()=>{
+ mockCacheEntries=[new Directory('file:///cache/boot-export-locked'),new Directory('file:///cache/boot-export-stale')];
+ mockDeleteFailures=['file:///cache/boot-export-locked'];
+ await expect(exportBootDatabase()).resolves.toBeUndefined();
+ expect(mockDeletes).toEqual(['file:///cache/boot-export-locked','file:///cache/boot-export-stale','file:///cache/boot-export-fixture-id']);
+ expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+});
+
+test('a cache listing failure does not prevent exporting',async()=>{
+ mockListError=true;
+ await expect(exportBootDatabase()).resolves.toBeUndefined();
+ expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+});
+
+test('a staging delete failure preserves a successful export result',async()=>{
+ mockDeleteFailures=['file:///cache/boot-export-fixture-id'];
+ await expect(exportBootDatabase()).resolves.toBeUndefined();
+ expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+ expect(mockDeletes).toEqual(['file:///cache/boot-export-fixture-id']);
+});
+
+test('a staging delete failure preserves the original sharing error',async()=>{
+ const failure=new Error('synthetic sharing failure');
+ jest.mocked(Sharing.shareAsync).mockRejectedValueOnce(failure);
+ mockDeleteFailures=['file:///cache/boot-export-fixture-id'];
+ await expect(exportBootDatabase()).rejects.toBe(failure);
+ expect(mockDeletes).toEqual(['file:///cache/boot-export-fixture-id']);
+});
+
+test('a staging creation failure attempts cleanup and preserves the creation error',async()=>{
+ mockCreateError=true;
+ mockDeleteFailures=['file:///cache/boot-export-fixture-id'];
+ await expect(exportBootDatabase()).rejects.toThrow('synthetic create failure');
+ expect(mockDeletes).toEqual(['file:///cache/boot-export-fixture-id']);
+ expect(mockCopies).toEqual([]);
 });

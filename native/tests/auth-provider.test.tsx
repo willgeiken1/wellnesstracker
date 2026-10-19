@@ -530,6 +530,12 @@ test.each(['migration','locked database','database open','recovery wipe','sessio
  if(failure==='recovery wipe'){
    expect(jest.mocked(repo.wipe)).toHaveBeenCalledTimes(wipes);
    expect(alert).toHaveBeenCalled();
+   jest.mocked(repo.wipe).mockClear();
+   await act(async()=>{alert.mock.calls[0][2]![0].onPress?.();});
+   expect(repo.wipe).not.toHaveBeenCalled();
+   expect(clearLocalSession).not.toHaveBeenCalled();
+   expect(signOutStorage.remove).not.toHaveBeenCalled();
+   expect(observed.ready).toBe(false);
    await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
  }
  await waitFor(()=>expect(observed.ready).toBe(true));
