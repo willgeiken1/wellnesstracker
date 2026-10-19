@@ -1,3 +1,4 @@
+import { BootRecovery } from './boot-recovery';
 import { DepartureFailure } from './sign-out';
 import { useRef, useState } from 'react';
 import { TextInput, Alert } from 'react-native';
@@ -93,6 +94,7 @@ export function Account() {
 export function LocalDataRecovery() {
   const auth=useAuth(),submitting=useRef(false);const [busy,setBusy]=useState(false),[error,setError]=useState(false);
   if(!auth.recovery)return null;
+  if(auth.recovery==='boot-error')return <BootRecovery/>;
   const run=async()=>{
     if(submitting.current)return;submitting.current=true;setBusy(true);setError(false);
     try {if(auth.recovery==='corrupt-marker'||auth.recovery==='unreadable-marker')await auth.recoverLocalData?.();else await auth.signOut(true);}

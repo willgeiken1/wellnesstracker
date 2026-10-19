@@ -435,7 +435,7 @@ test.each([false,true])('three consecutive read failures offer escape; reread re
  jest.mocked(signOutStorage.read).mockResolvedValue(wipeFails?{owner:OWNER_A,startedAt:1234,phase:'pending'}:null);fixture.auth.getSession.mockResolvedValue({data:{session:null},error:null});
  if(wipeFails){const repo=fixtureRepo(OWNER_A);jest.spyOn(repo,'wipe').mockImplementation(()=>{throw new Error('synthetic');});jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:()=>repo});}
  await fireEvent.press(view.getByRole('button',{name:'Try again'}));
- if(wipeFails){await waitFor(()=>expect(observed.recovery).toBeUndefined());expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();}
+ if(wipeFails){await waitFor(()=>expect(observed.recovery).toBe('boot-error'));expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();}
  else await waitFor(()=>expect(observed.ready).toBe(true));
  expect(clearLocalSession).not.toHaveBeenCalled();await view.unmount();
 });
@@ -492,9 +492,9 @@ test('a different boot error resets consecutive marker read failures before esca
   jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic database boot failure'));
   await act(async()=>{observed.retryMarkerRead!();});
   await waitFor(()=>expect(observed.configError).toBe('Local data is unavailable.'));
-  expect(observed.recovery).toBeUndefined();expect(signOutStorage.read).toHaveBeenCalledTimes(2);
+  expect(observed.recovery).toBe('boot-error');expect(signOutStorage.read).toHaveBeenCalledTimes(2);
   for(let count=3;count<=4;count++){
-   await act(async()=>{observed.retryMarkerRead!();});
+   await act(async()=>{if(count===3)observed.retryBoot!();else observed.retryMarkerRead!();});
    await waitFor(()=>expect(signOutStorage.read).toHaveBeenCalledTimes(count));
    expect(observed.recovery).toBe('read-error');expect(observed.ready).toBe(false);
    await act(async()=>{await expect(observed.recoverLocalData!()).resolves.toBeUndefined();});
@@ -506,4 +506,50 @@ test('a different boot error resets consecutive marker read failures before esca
   expect(signOutStorage.read).toHaveBeenCalledTimes(5);expect(observed.ready).toBe(false);
   expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
  } finally {await view.unmount();}
+});
+
+test.each(['migration','locked database','database open','recovery wipe','session clear'])('boot %s fault shows calm recovery; Retry starts over after fault clears',async failure=>{
+ const repo=fixtureRepo(OWNER_A),wipeAll=jest.fn();
+ let marker:Awaited<ReturnType<typeof signOutStorage.read>>=failure==='recovery wipe'?{owner:OWNER_A,startedAt:1,phase:'pending'}:failure==='session clear'?{owner:OWNER_A,startedAt:1,phase:'wiped'}:null;
+ jest.mocked(signOutStorage.read).mockImplementation(async()=>marker);
+ jest.mocked(signOutStorage.write).mockImplementation(async next=>{marker=next;});
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{marker=null;});
+ jest.mocked(openLocalDatabase).mockReset();
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll,forOwner:owner=>owner===OWNER_A?repo:fixtureRepo(owner)});
+ if(['migration','locked database','database open'].includes(failure))jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error(`synthetic ${failure}`));
+ if(failure==='recovery wipe')jest.mocked(repo.wipe).mockImplementationOnce(()=>{throw new Error('synthetic wipe failure');});
+ if(failure==='session clear')jest.mocked(clearLocalSession).mockRejectedValueOnce(new Error('synthetic session failure'));
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const view=await render(<AuthProvider client={null}><RecoveryProbe/></AuthProvider>);
+ await waitFor(()=>expect(view.getByRole('header',{name:'Let’s try opening the app again'})).toBeTruthy());
+ expect(observed.ready).toBe(false);expect(getAuthClient).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+ expect(view.getByRole('button',{name:'Export local data'})).toBeTruthy();expect(view.getByRole('button',{name:'Contact support'})).toBeTruthy();
+ expect(view.queryByText(`synthetic ${failure}`)).toBeNull();
+ const opens=jest.mocked(openLocalDatabase).mock.calls.length,wipes=jest.mocked(repo.wipe).mock.calls.length;
+ await fireEvent.press(view.getByRole('button',{name:'Retry'}));
+ if(failure==='recovery wipe'){
+   expect(jest.mocked(repo.wipe)).toHaveBeenCalledTimes(wipes);
+   expect(alert).toHaveBeenCalled();
+   await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
+ }
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(jest.mocked(openLocalDatabase).mock.calls.length).toBeGreaterThan(opens);
+ expect(wipeAll).not.toHaveBeenCalled();
+ if(failure!=='recovery wipe')expect(repo.wipe).not.toHaveBeenCalled();
+ expect(view.queryByRole('button',{name:'Retry'})).toBeNull();
+ alert.mockRestore();await view.unmount();
+});
+
+test('Retry after a database failure cannot silently resume a pending wipe',async()=>{
+ const repo=fixtureRepo(OWNER_A),wipeAll=jest.fn();
+ jest.mocked(openLocalDatabase).mockReset();jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic migration failure')).mockResolvedValue({wipeAll,forOwner:()=>repo});
+ jest.mocked(signOutStorage.read).mockResolvedValue({owner:OWNER_A,startedAt:1,phase:'pending'});
+ const view=await render(<AuthProvider client={null}><RecoveryProbe/></AuthProvider>);
+ await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
+ await fireEvent.press(view.getByRole('button',{name:'Retry'}));
+ await waitFor(()=>expect(observed.bootRetryNeedsConfirmation).toBe(true));
+ expect(repo.wipe).not.toHaveBeenCalled();expect(wipeAll).not.toHaveBeenCalled();
+ await act(async()=>{observed.retryBoot!();observed.retryMarkerRead!();});
+ expect(repo.wipe).not.toHaveBeenCalled();expect(clearLocalSession).not.toHaveBeenCalled();
+ expect(signOutStorage.remove).not.toHaveBeenCalled();expect(observed.ready).toBe(false);await view.unmount();
 });

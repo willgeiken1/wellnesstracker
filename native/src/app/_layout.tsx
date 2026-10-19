@@ -36,7 +36,7 @@ export function NavigationShell({ access = false }: {access?: boolean}) {
 function Application() {
   const auth = useAuth();
   return <ThemeProvider key={auth.session?.user.id ?? (auth.demo ? 'demo' : 'guest')} repository={auth.repository}>
-    {auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
+    {auth.recovery!=='boot-error' && auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
     <LocalDataRecovery />
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo} />}
   </ThemeProvider>;

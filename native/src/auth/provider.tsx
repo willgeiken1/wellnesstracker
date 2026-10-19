@@ -9,13 +9,14 @@ import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure } from './sign-out';
+import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
 import { seedDemo } from '../../fixtures/demo';
 export interface AuthState {
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   prepareSignOut?(): Promise<void>;
-  recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure'; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
+  recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
 }
@@ -26,6 +27,9 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const [bootReady,setBootReady]=useState(false),[departurePending,setDeparturePending]=useState(false);
   const [recovery,setRecovery]=useState<AuthState['recovery']>(),[recoveryFailed,setRecoveryFailed]=useState(false);
   const [bootAttempt,setBootAttempt]=useState(0);
+  const [bootClass,setBootClass]=useState('Error');
+  const [bootRetryNeedsConfirmation,setBootRetryNeedsConfirmation]=useState(false);
+  const retryWipeConfirmed=useRef(false), recoveringBoot=useRef(false), bootInFlight=useRef(true);
   const readFailures=useRef(0);
   const escapeAllowed=useRef(false);
   const retryDeparture=useRef<(()=>Promise<void>)|null>(null);
@@ -43,7 +47,11 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     void (async()=>{
       try {
         const database=await openLocalDatabase();
-        await recoverSignOut(database,signOutStorage,owner=>owner==='demo'?clearLocalSession():clearLocalSession(true));
+        await recoverSignOut(database,signOutStorage,owner=>owner==='demo'?clearLocalSession():clearLocalSession(true),()=>{
+          setBootRetryNeedsConfirmation(true);
+          // The first boot resumes an already requested sign-out. New recovery retries need consent.
+          if(recoveringBoot.current&&!retryWipeConfirmed.current)throw new Error('Sign-out confirmation required.');
+        });
         readFailures.current=0;
         if(!active)return;
         setDataError(false);setRecovery(undefined);
@@ -52,7 +60,8 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         try {next=supplied===undefined?getAuthClient():supplied;}
         catch {error='Invalid sign-in configuration.';}
         setClientState({client:next,error});setBootReady(true);if(!next)setAuthReady(true);
-      } catch(error) {if(active){setDataError(true);if(error instanceof CorruptSignOutMarker){readFailures.current=0;escapeAllowed.current=true;setRecovery('corrupt-marker');}else if(error instanceof UnreadableSignOutMarker){readFailures.current++;escapeAllowed.current=readFailures.current>=3;setRecovery(escapeAllowed.current?'unreadable-marker':'read-error');}else {readFailures.current=0;setRecovery(undefined);}}}
+      } catch(error) {if(active){setDataError(true);if(error instanceof CorruptSignOutMarker){readFailures.current=0;escapeAllowed.current=true;setRecovery('corrupt-marker');}else if(error instanceof UnreadableSignOutMarker){readFailures.current++;escapeAllowed.current=readFailures.current>=3;setRecovery(escapeAllowed.current?'unreadable-marker':'read-error');}else {readFailures.current=0;setBootClass(bootErrorClass(error));setRecovery('boot-error');}}}
+      finally {if(active)bootInFlight.current=false;}
     })();
     return ()=>{active=false;};
   },[supplied,bootAttempt]);
@@ -99,7 +108,10 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const value: AuthState={prepareSignOut:()=>{
       const flight=syncBeforeSignOut(()=>engine?.sync()??Promise.resolve());
       preparedSync.current={engine,flight};return flight;
-    },recovery,recoveryFailed,retryMarkerRead:()=>{if(!bootReady&&!escapeInFlight.current){escapeAllowed.current=false;setRecovery(undefined);setBootAttempt(attempt=>attempt+1);}},countRecoveryUnsynced:async()=>{try{return (await openLocalDatabase()).countAllUnsynced?.();}catch{return undefined;}},recoverLocalData:async()=>{
+    },recovery,bootErrorClass:bootClass,bootRetryNeedsConfirmation,retryBoot:(confirmed=false)=>{
+      if(bootReady||bootInFlight.current||escapeInFlight.current||recovery!=='boot-error'||(bootRetryNeedsConfirmation&&!confirmed))return;
+      bootInFlight.current=true;recoveringBoot.current=true;retryWipeConfirmed.current=confirmed;setRecovery(undefined);setDataError(false);setBootAttempt(attempt=>attempt+1);
+    },recoveryFailed,retryMarkerRead:()=>{if(!bootReady&&!bootInFlight.current&&!escapeInFlight.current&&(recovery==='read-error'||recovery==='unreadable-marker')){bootInFlight.current=true;escapeAllowed.current=false;setRecovery(undefined);setBootAttempt(attempt=>attempt+1);}},countRecoveryUnsynced:async()=>{try{return (await openLocalDatabase()).countAllUnsynced?.();}catch{return undefined;}},recoverLocalData:async()=>{
       if(!escapeAllowed.current||escapeInFlight.current)return;
       escapeInFlight.current=true;setRecoveryFailed(false);
       try {
