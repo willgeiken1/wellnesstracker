@@ -10,7 +10,7 @@ jest.mock('../src/auth/client',()=>({getAuthClient:()=>null}));
 const state=():AuthState=>({session:null,demo:false,ready:false,configured:false,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',recovery:'boot-error',bootErrorClass:'DatabaseMigrationError',retryBoot:jest.fn(),lookAround:jest.fn(),signIn:jest.fn(),createAccount:jest.fn(),signOut:jest.fn(),syncNow:jest.fn()});
 const screen=(auth:AuthState)=><AuthContext.Provider value={auth}><ThemeProvider><BootRecovery/></ThemeProvider></AuthContext.Provider>;
 test('support opens a mail draft with only safe diagnostics; export uses the local share helper',async()=>{
- const auth=state(),open=jest.spyOn(Linking,'openURL').mockResolvedValue(undefined);
+ const auth={...state(),bootExportOwner:jest.fn(()=> 'synthetic-owner')},open=jest.spyOn(Linking,'openURL').mockResolvedValue(undefined);
  const view=await render(screen(auth));
  await fireEvent.press(view.getByRole('button',{name:'Contact support'}));
  await waitFor(()=>expect(open).toHaveBeenCalledTimes(1));
@@ -19,6 +19,8 @@ test('support opens a mail draft with only safe diagnostics; export uses the loc
  expect(query.get('body')).toBe('App version: 1.0.0\nPlatform: ios\nError class: DatabaseMigrationError');
  await fireEvent.press(view.getByRole('button',{name:'Export local data'}));
  await waitFor(()=>expect(exportBootDatabase).toHaveBeenCalledTimes(1));
+ const getOwner=jest.mocked(exportBootDatabase).mock.calls[0][0];
+ expect(getOwner()).toBe('synthetic-owner');expect(auth.bootExportOwner).toHaveBeenCalled();
  expect(auth.signOut).not.toHaveBeenCalled();expect(auth.retryBoot).not.toHaveBeenCalled();
  expect(view.queryByText('DatabaseMigrationError')).toBeNull();
  await fireEvent.press(view.getByRole('button',{name:'Show details'}));

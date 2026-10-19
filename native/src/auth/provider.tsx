@@ -16,6 +16,7 @@ export interface AuthState {
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   prepareSignOut?(): Promise<void>;
+  bootExportOwner?(): string | null;
   recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
@@ -105,7 +106,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     void triggers.foreground();
     return ()=>{app.remove();network.remove();triggers.stop();};
   },[engine]);
-  const value: AuthState={prepareSignOut:()=>{
+  const value: AuthState={bootExportOwner:()=>departureLocked.current||departingOwner.current?null:activeSession.current?.user.id??null,prepareSignOut:()=>{
       const flight=syncBeforeSignOut(()=>engine?.sync()??Promise.resolve());
       preparedSync.current={engine,flight};return flight;
     },recovery,bootErrorClass:bootClass,bootRetryNeedsConfirmation,retryBoot:(confirmed=false)=>{

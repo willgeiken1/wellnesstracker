@@ -30,7 +30,7 @@ export function BootRecovery() {
       else auth.retryBoot?.();
     }} />
     <Button label={t('bootExport')} variant="secondary" disabled={busy} busy={busy} onPress={() => {
-      void run(exportBootDatabase, t('bootExportFailed'));
+      void run(() => exportBootDatabase(() => auth.bootExportOwner?.() ?? null), t('bootExportFailed'));
     }} />
     <ThemedText muted>{t('bootExportHint')}</ThemedText>
     <Button label={t('bootSupport')} variant="secondary" disabled={busy} onPress={() => {

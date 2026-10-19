@@ -67,18 +67,21 @@ test('restores session, reacts to AppState, switches A to B during upload and is
   const app = jest.spyOn(AppState, 'addEventListener');
   const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
   await waitFor(() => expect(observed.repository).toBe(a));
+  expect(observed.bootExportOwner?.()).toBe(OWNER_A);
   await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
   const refresh = app.mock.calls[0][1];
   await act(async () => { refresh('background'); refresh('active'); });
   expect(fixture.auth.startAutoRefresh).toHaveBeenCalled(); expect(fixture.auth.stopAutoRefresh).toHaveBeenCalled();
   await act(async () => { fixture.emit(session(OWNER_B)); });
   await waitFor(() => expect(observed.repository).toBe(b));
+  expect(observed.bootExportOwner?.()).toBe(OWNER_B);
   expect(observed.pending).toBe(0);
   await act(async () => { push.resolve(); await push.promise; });
   expect(a.ack).not.toHaveBeenCalled(); expect(a.pending()).toHaveLength(1);
   await act(async () => { fixture.emit(null); });
   await waitFor(() => expect(observed.repository).toBe(guest));
   expect(observed.session).toBeNull(); expect(observed.demo).toBe(false);
+  expect(observed.bootExportOwner?.()).toBeNull();
   await view.unmount(); expect(fixture.unsubscribe).toHaveBeenCalled(); app.mockRestore();
 });
 test('unset config enters isolated demo without a transport and can leave demo', async () => {
@@ -277,6 +280,7 @@ test('pending departure blocks old auth events, manual sync and foreground auto-
  const transports=mockTransportCreated.mock.calls.length;
  let leaving!:Promise<void>;await act(async()=>{leaving=observed.signOut();});
  await waitFor(()=>expect(clearLocalSession).toHaveBeenCalledTimes(1));
+ expect(observed.bootExportOwner?.()).toBeNull();
  expect(mockTransportCreated).toHaveBeenCalledTimes(transports);
  const pushes=mockPush.mock.calls.length;fixture.auth.startAutoRefresh.mockClear();
  await act(async()=>{
@@ -324,7 +328,7 @@ test.each(['wipe','marker','session','remove'])('failed %s departure releases it
  await act(async()=>{await expect(observed.signOut()).rejects.toThrow();});
  const pushes=mockPush.mock.calls.length,lockedSession=observed.session;
  await act(async()=>{expect(await observed.signIn('fixture@example.test','synthetic')).toBe('authUnavailable');fixture.emit(session(OWNER_B));fixture.emit(null);await observed.syncNow();});
- expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();expect(observed.session).toBe(lockedSession);expect(observed.recovery).toBe('departure');expect(mockPush).toHaveBeenCalledTimes(pushes);expect(observed.ready).toBe(false);
+ expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();expect(observed.session).toBe(lockedSession);expect(observed.recovery).toBe('departure');expect(observed.bootExportOwner?.()).toBeNull();expect(mockPush).toHaveBeenCalledTimes(pushes);expect(observed.ready).toBe(false);
  await act(async()=>{await observed.signOut(true);});
  expect(marker).toBeNull();expect(observed.session).toBeNull();expect(observed.ready).toBe(true);await view.unmount();
 });
@@ -552,6 +556,7 @@ test('Retry after a database failure cannot silently resume a pending wipe',asyn
  jest.mocked(signOutStorage.read).mockResolvedValue({owner:OWNER_A,startedAt:1,phase:'pending'});
  const view=await render(<AuthProvider client={null}><RecoveryProbe/></AuthProvider>);
  await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
+ expect(observed.bootExportOwner?.()).toBeNull();
  await fireEvent.press(view.getByRole('button',{name:'Retry'}));
  await waitFor(()=>expect(observed.bootRetryNeedsConfirmation).toBe(true));
  expect(repo.wipe).not.toHaveBeenCalled();expect(wipeAll).not.toHaveBeenCalled();
