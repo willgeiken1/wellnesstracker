@@ -7,6 +7,13 @@ export function matchesPurge(row: Row, marker: Row, get: (table: 'sessions'|'ent
   const inRange = (parent: Row | undefined) => !!parent && (
     (typeof parent.data.day === 'string' && parent.data.day >= String(marker.data.from_day) && parent.data.day <= String(marker.data.to_day)) ||
     (parent.deleted_at !== null && parent.updated_at === marker.updated_at && parent.device_id === marker.device_id));
+  if (row.table === 'photos') {
+    if (typeof row.data.captured_at !== 'number' || typeof marker.data.tz !== 'string') return false;
+    const parts = new Intl.DateTimeFormat('en-US', {timeZone:marker.data.tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(row.data.captured_at);
+    const part = (type: string) => parts.find(p=>p.type===type)!.value;
+    const day = `${part('year')}-${part('month')}-${part('day')}`;
+    return day >= String(marker.data.from_day) && day <= String(marker.data.to_day);
+  }
   if (dated.has(row.table)) return inRange(row);
   if (row.table === 'entries') return inRange(get('sessions',String(row.data.session_id)));
   if (row.table === 'sets') {

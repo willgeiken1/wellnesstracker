@@ -48,6 +48,7 @@ export function fromWire(table: Table, wire: Record<string, unknown>): ServerRow
 
 /** Tombstones carry identity plus immutable provenance only. Validate before stripping. */
 export function pushRow(row: Row): Row {
+  if (row.table === 'purges') throw new Error('purges is pull-only.');
   validateRow(row);
   return row.deleted_at === null ? row : {...row, data: row.table === 'weigh_ins' ? {source: row.data.source} : {}};
 }

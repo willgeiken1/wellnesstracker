@@ -18,11 +18,11 @@ test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (
   });
   for(const owner of [OWNER_A,OWNER_B,'demo','guest']){
    const repo=database.forOwner(owner);
-   for(const table of syncedTables){repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
+   for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
    repo.cacheOura('2026-01-01',{fixture:true});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
   }
   // Includes flagged rows excluded from pending(), and every owner namespace.
-  expect(database.countAllUnsynced!()).toBe(syncedTables.length*2);
+  expect(database.countAllUnsynced!()).toBe((syncedTables.length-1)*2);
   const tables=[...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days'];
   const before=tables.map(table=>sqlite.prepare(`SELECT * FROM ${table}`).all());
   if(fail)sqlite.exec("CREATE TRIGGER deny_wipe BEFORE DELETE ON photos BEGIN SELECT RAISE(ABORT,'synthetic'); END");

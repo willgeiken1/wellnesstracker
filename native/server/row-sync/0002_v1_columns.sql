@@ -2,6 +2,12 @@
 
 BEGIN;
 
+DO $$ BEGIN
+  IF pg_catalog.to_regclass('public.purges') IS NOT NULL THEN
+    RAISE EXCEPTION '0002 already applied: public.purges exists';
+  END IF;
+END $$;
+
 ALTER TABLE public.sets ADD COLUMN tag text;
 
 ALTER TABLE public.routine_exercises ADD COLUMN rep_min bigint;
@@ -126,7 +132,7 @@ ALTER TABLE public.purges FORCE ROW LEVEL SECURITY;
 CREATE POLICY owner_access ON public.purges FOR ALL TO authenticated USING (owner_id = (SELECT auth.uid())) WITH CHECK (owner_id = (SELECT auth.uid()));
 
 REVOKE ALL ON TABLE public.purges FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.purges TO authenticated;
+GRANT SELECT ON TABLE public.purges TO authenticated;
 
 CREATE TRIGGER purges_guard BEFORE INSERT OR UPDATE OR DELETE ON public.purges FOR EACH ROW EXECUTE FUNCTION public.row_sync_guard();
 
@@ -188,6 +194,12 @@ BEGIN
     IF pg_catalog.pg_trigger_depth() > 1 AND NOT EXISTS (SELECT 1 FROM auth.users WHERE id=OLD.owner_id) THEN RETURN OLD; END IF;
     RAISE EXCEPTION 'Use a row tombstone';
   END IF;
+  -- Only the purge RPC's definer identity may create immutable markers.
+  -- No client-settable GUC or payload flag can authorize this path.
+  IF TG_TABLE_NAME = 'purges' AND (TG_OP <> 'INSERT' OR CURRENT_USER <> (
+    SELECT pg_catalog.pg_get_userbyid(proowner) FROM pg_catalog.pg_proc
+     WHERE oid='public.sync_purge_range(uuid,date,date,bigint,text)'::pg_catalog.regprocedure
+  )) THEN RAISE EXCEPTION 'purges is pull-only; use sync_purge_range'; END IF;
   IF NEW.owner_id IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Row owner mismatch'; END IF;
   -- Held until commit, across tables. A reader cannot advance past an uncommitted earlier sequence.
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text, 0));
@@ -221,6 +233,12 @@ BEGIN
       SELECT p.* INTO marker FROM public.purges p
        WHERE p.owner_id=NEW.owner_id AND p.deleted_at IS NULL AND NEW.updated_at<=p.cutoff_ms
          AND payload->>'day' BETWEEN p.from_day AND p.to_day
+       ORDER BY p.updated_at DESC, p.device_id COLLATE "C" DESC LIMIT 1;
+    ELSIF TG_TABLE_NAME = 'photos' THEN
+      SELECT p.* INTO marker FROM public.purges p
+       WHERE p.owner_id=NEW.owner_id AND p.deleted_at IS NULL AND NEW.updated_at<=p.cutoff_ms
+         AND (pg_catalog.to_timestamp((payload->>'captured_at')::double precision / 1000)
+              AT TIME ZONE p.tz)::date::text BETWEEN p.from_day AND p.to_day
        ORDER BY p.updated_at DESC, p.device_id COLLATE "C" DESC LIMIT 1;
     ELSIF TG_TABLE_NAME IN ('entries','sets') THEN
       IF TG_TABLE_NAME='entries' THEN
@@ -534,14 +552,8 @@ WHEN 'pauses' THEN
       INTO stored FROM public.pauses t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
 
 WHEN 'purges' THEN
-      IF EXISTS (SELECT 1 FROM jsonb_object_keys(payload) k WHERE NOT k = ANY(ARRAY['owner_id','id','updated_at','deleted_at','device_id','from_day','to_day','cutoff_ms','tz'])) OR EXISTS (SELECT 1 FROM jsonb_object_keys(item->'data') k WHERE NOT k = ANY(ARRAY['from_day','to_day','cutoff_ms','tz'])) THEN RAISE EXCEPTION 'Invalid row fields'; END IF;
-      INSERT INTO public.purges (owner_id, id, updated_at, deleted_at, device_id, from_day, to_day, cutoff_ms, tz) SELECT owner_id, id, updated_at, deleted_at, device_id, from_day, to_day, cutoff_ms, tz FROM jsonb_populate_record(NULL::public.purges, payload)
-      ON CONFLICT (owner_id,id) DO UPDATE SET updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, device_id = EXCLUDED.device_id, from_day = CASE WHEN payload ? 'from_day' THEN EXCLUDED.from_day ELSE purges.from_day END, to_day = CASE WHEN payload ? 'to_day' THEN EXCLUDED.to_day ELSE purges.to_day END, cutoff_ms = CASE WHEN payload ? 'cutoff_ms' THEN EXCLUDED.cutoff_ms ELSE purges.cutoff_ms END, tz = CASE WHEN payload ? 'tz' THEN EXCLUDED.tz ELSE purges.tz END;
-      SELECT pg_catalog.jsonb_build_object('table','purges',
-        'owner_id',t.owner_id,'id',t.id,'updated_at',t.updated_at,
-        'deleted_at',t.deleted_at,'device_id',t.device_id,
-        'data',pg_catalog.to_jsonb(t)-ARRAY['owner_id','id','updated_at','deleted_at','device_id','server_seq'])
-      INTO stored FROM public.purges t WHERE t.owner_id=auth.uid() AND t.id=(item->>'id')::uuid;
+      RAISE EXCEPTION 'purges is pull-only; use sync_purge_range';
+
 ELSE RAISE EXCEPTION 'Unsupported sync table';
     END CASE;
     -- Return the actual stored version, even if a clamped/stale write was ignored
@@ -690,7 +702,9 @@ GRANT USAGE ON SEQUENCE public.row_sync_seq TO authenticated;
 
 -- F1: one owner lock serializes pushes, marker creation and the whole purge.
 CREATE FUNCTION public.sync_purge_range(p_id uuid, p_from date, p_to date, p_cutoff_ms bigint, p_tz text)
-RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+-- Definer rights are limited to this static owner-scoped operation so clients
+-- need no write privileges on purges. All queries explicitly constrain auth.uid().
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE me uuid := auth.uid(); f text := p_from::text; t text := p_to::text;
   stamp bigint := floor(extract(epoch FROM pg_catalog.now())*1000)::bigint + 300000;
   dev text := 'ffffffff-ffff-4fff-bfff-ffffffffffff';
@@ -723,10 +737,13 @@ BEGIN
    WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
   UPDATE public.food_entries SET deleted_at=stamp, updated_at=stamp, device_id=dev
    WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
+  UPDATE public.photos SET deleted_at=stamp, updated_at=stamp, device_id=dev
+   WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms
+     AND (pg_catalog.to_timestamp(captured_at::double precision / 1000) AT TIME ZONE p_tz)::date::text BETWEEN f AND t;
   UPDATE public.plan_days SET deleted_at=stamp, updated_at=stamp, device_id=dev
    WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
 END $$;
-REVOKE ALL ON FUNCTION public.sync_purge_range(uuid,date,date,bigint,text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.sync_purge_range(uuid,date,date,bigint,text) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.sync_purge_range(uuid,date,date,bigint,text) TO authenticated;
 
 -- F5: service_role must not bypass row guards with TRUNCATE or install triggers.

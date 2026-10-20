@@ -7,7 +7,7 @@ import { syncedTables } from '../../src/data/rows';
 let db: PGlite;
 beforeAll(async () => { db = await serverDatabase(); });
 afterAll(async () => { await db?.close(); });
-test.each(syncedTables)('%s enforces SELECT/INSERT/UPDATE/DELETE ownership and WITH CHECK', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s enforces SELECT/INSERT/UPDATE/DELETE ownership and WITH CHECK', async table => {
   const a = testTransport(db,OWNER_A), row = syntheticRow(table);
   await a.push([row]);
   await asUser(db,OWNER_B,async tx => {
@@ -41,7 +41,7 @@ test('RPC rejects local-only tables, non-app sources and envelope-field spoofing
   await expect(a.push([{...syntheticRow(),data:{owner_id:OWNER_B}}])).rejects.toThrow();
 });
 test('WITH CHECK independently blocks spoofed inserts and owner reassignment on every table',async()=>{
- for(const table of syncedTables){
+ for(const table of syncedTables.filter(t=>t!=='purges')){
   await db.exec(`ALTER TABLE public.${table} DISABLE TRIGGER ${table}_guard`);
   try{
    const row=syntheticRow(table);
@@ -67,12 +67,12 @@ test.each(syncedTables)('%s has exact privileges and forced RLS despite Supabase
  for (const role of ['anon','authenticated']) {
   for (const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) {
    const result=await db.query<{allowed:boolean}>('SELECT has_table_privilege($1,$2,$3) AS allowed',[role,`public.${table}`,privilege]);
-   expect({role,table,privilege,allowed:result.rows[0].allowed}).toEqual({role,table,privilege,allowed:role==='authenticated'&&['SELECT','INSERT','UPDATE'].includes(privilege)});
+   expect({role,table,privilege,allowed:result.rows[0].allowed}).toEqual({role,table,privilege,allowed:role==='authenticated'&&(table==='purges'?privilege==='SELECT':['SELECT','INSERT','UPDATE'].includes(privilege))});
   }
  }
  expect((await db.query('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',[`public.${table}`])).rows).toEqual([{relrowsecurity:true,relforcerowsecurity:true}]);
 });
-test('sequence and function privilege matrix; all public functions are invoker with pinned search_path',async()=>{
+test('sequence and function privilege matrix; public functions have explicit security modes and pinned search_path',async()=>{
  for(const role of ['anon','authenticated']) {
   for(const privilege of ['USAGE','SELECT','UPDATE']) {
    expect((await db.query<{allowed:boolean}>('SELECT has_sequence_privilege($1,$2,$3) AS allowed',[role,'public.row_sync_seq',privilege])).rows[0].allowed).toBe(role==='authenticated'&&privilege==='USAGE');
@@ -83,9 +83,9 @@ test('sequence and function privilege matrix; all public functions are invoker w
  }
  const functions=await db.query<{proname:string;prosecdef:boolean;proconfig:string[]}>("SELECT proname,prosecdef,proconfig FROM pg_proc WHERE pronamespace='public'::regnamespace ORDER BY proname");
  expect(functions.rows.map(f=>f.proname)).toEqual(['row_sync_guard','sync_purge_range','sync_push']);
- for(const f of functions.rows){expect(f.prosecdef).toBe(false);expect(f.proconfig).toEqual(['search_path=""']);}
+ for(const f of functions.rows){expect(f.prosecdef).toBe(f.proname==='sync_purge_range');expect(f.proconfig).toEqual(['search_path=""']);}
 });
-test.each(syncedTables)('%s rejects anonymous access, owner DELETE and TRUNCATE; server_seq stays server-assigned',async table=>{
+test.each(syncedTables.filter(t=>t!=='purges'))('%s rejects anonymous access, owner DELETE and TRUNCATE; server_seq stays server-assigned',async table=>{
  for(const query of [`SELECT * FROM public.${table}`,`INSERT INTO public.${table} DEFAULT VALUES`,`UPDATE public.${table} SET updated_at=1`,`DELETE FROM public.${table}`,`TRUNCATE public.${table}`]) {
   await expect(db.transaction(async tx=>{await tx.exec('SET LOCAL ROLE anon');await tx.query(query);})).rejects.toThrow(/permission denied/);
  }
@@ -136,7 +136,7 @@ test('draft SQL explicitly declares both functions SECURITY INVOKER',()=>{
 
 // Raw SQL/RPC calls deliberately bypass client validation and use the existing
 // authenticated-role harness, including its permissive Supabase default grants.
-test.each(syncedTables)('%s isolates B tombstones and rejects forged ownership without changing A rows', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s isolates B tombstones and rejects forged ownership without changing A rows', async table => {
  const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000201'};
  await testTransport(db, OWNER_A).push([row]);
  const before = (await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows;
@@ -154,7 +154,7 @@ test.each(syncedTables)('%s isolates B tombstones and rejects forged ownership w
  expect(Number(own[0].deleted_at)).toBe(200);
 });
 
-test.each(syncedTables)('%s rolls back a valid first batch row when a later row forges owner_id', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s rolls back a valid first batch row when a later row forges owner_id', async table => {
  const valid = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000202'};
  const forged = {...valid, id: '30000000-0000-4000-8000-000000000203', owner_id: OWNER_B};
  // The legitimate row must run first to distinguish atomic rollback from early rejection.
@@ -163,7 +163,7 @@ test.each(syncedTables)('%s rolls back a valid first batch row when a later row 
  expect((await db.query(`SELECT * FROM public.${table} WHERE id IN ($1,$2)`, [valid.id, forged.id])).rows).toEqual([]);
 });
 
-test.each(syncedTables)('%s RPC rejects a missing owner_id and rolls back the preceding valid row', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s RPC rejects a missing owner_id and rolls back the preceding valid row', async table => {
  const valid = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000204'};
  const missing = Object.fromEntries(Object.entries({...valid, id: '30000000-0000-4000-8000-000000000205'})
   .filter(([key]) => key !== 'owner_id'));
@@ -174,7 +174,7 @@ test.each(syncedTables)('%s RPC rejects a missing owner_id and rolls back the pr
  expect((await db.query(`SELECT * FROM public.${table} WHERE id IN ($1,$2)`, [valid.id, missing.id])).rows).toEqual([]);
 });
 
-test.each(syncedTables)('%s RPC rejects server_seq in either envelope or data; accepted writes get a server sequence', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s RPC rejects server_seq in either envelope or data; accepted writes get a server sequence', async table => {
  const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000206'};
  const transport = testTransport(db, OWNER_A);
  await transport.push([row]);
@@ -192,7 +192,7 @@ test.each(syncedTables)('%s RPC rejects server_seq in either envelope or data; a
  expect(Number(stored.updated_at)).toBe(200);
 });
 
-test.each(syncedTables)('%s direct authenticated INSERT overwrites a forged server_seq', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s direct authenticated INSERT overwrites a forged server_seq', async table => {
  const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000207'};
  const result = await asUser(db, OWNER_A, tx => tx.query<{owner_id: string; server_seq: string}>(
   `INSERT INTO public.${table}(owner_id,id,updated_at,device_id,server_seq${table === 'weigh_ins' ? ',source' : ''})
@@ -205,7 +205,7 @@ test.each(syncedTables)('%s direct authenticated INSERT overwrites a forged serv
  expect((await db.query(`SELECT owner_id,server_seq::text FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(result.rows);
 });
 
-test.each(syncedTables)('%s guard skips direct stale UPDATE and preserves the entire stored row and sequence', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s guard skips direct stale UPDATE and preserves the entire stored row and sequence', async table => {
  const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000208', updated_at: 300};
  await testTransport(db, OWNER_A).push([row]);
  const before = (await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows;
@@ -217,7 +217,7 @@ test.each(syncedTables)('%s guard skips direct stale UPDATE and preserves the en
  expect((await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows).toEqual(before);
 });
 
-test.each(syncedTables)('%s guard rejects owner changes, including reassignment to the calling owner', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s guard rejects owner changes, including reassignment to the calling owner', async table => {
  const row = {...syntheticRow(table), id: '30000000-0000-4000-8000-000000000209'};
  await testTransport(db, OWNER_A).push([row]);
  const before = (await db.query(`SELECT * FROM public.${table} WHERE id=$1`, [row.id])).rows;

@@ -105,6 +105,7 @@ export class Repository {
   /** One synchronous transaction commits both row and outbox before notifying subscribers. */
   putLocal(input: Row): void {
     this.safe(() => {
+      if (input.table === 'purges') throw new Error('purges is pull-only.');
       if (input.owner_id !== this.owner || input.device_id !== this.device) throw new Error('Owner/device mismatch.');
       const healthLocal = input.table === 'weigh_ins' && input.data.source !== 'app';
       if (healthLocal && !['healthkit','health_connect'].includes(String(input.data.source))) throw new Error('Invalid provenance.');
@@ -152,7 +153,7 @@ export class Repository {
     this.putLocal({...row,device_id:this.device,updated_at:stamp,deleted_at:stamp});
   }
   pending(): Pending[] {
-    return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).map(item => {
+    return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).map(item => {
       const row = this.get(item.table_name,item.row_id); if (!row) throw new Error('Invalid outbox.'); validateRow(row); return {row,revision:item.revision};
     }));
   }
@@ -226,7 +227,7 @@ export class Repository {
   private applyPurges() {
     const markers=this.list('purges').sort((a,b)=>compareRows(b,a));
     for (const marker of markers) {
-      for (const table of ['sets','entries','sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days'] as const) {
+      for (const table of ['sets','entries','sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days','photos'] as const) {
         for (const row of this.list(table)) {
           // Health-origin rows remain local and never enter a sync outbox.
           if (!matchesPurge(row,marker,(parent,id)=>this.get(parent,id))) continue;
