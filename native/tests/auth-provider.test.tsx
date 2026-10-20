@@ -14,7 +14,7 @@ import { seedDemo } from '../fixtures/demo';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
 
-jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),WHEN_UNLOCKED_THIS_DEVICE_ONLY:6}));
+jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),setItemAsync:jest.fn(),deleteItemAsync:jest.fn(),WHEN_UNLOCKED_THIS_DEVICE_ONLY:6}));
 jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), clearLocalSession: jest.fn(async()=>{}) }));
 jest.mock('../src/auth/sign-out-storage',()=>({signOutStorage:{read:jest.fn(async()=>null),write:jest.fn(async()=>{}),remove:jest.fn(async()=>{})}}));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
@@ -55,9 +55,11 @@ function clientFixture(initial: Session | null = session(OWNER_A)) {
   };
   return { client: { auth } as unknown as SupabaseClient, auth, emit: (value: Session | null) => emit('SIGNED_IN', value), unsubscribe };
 }
+const storedItems=new Map<string,string>();
+const ownerKey='insight.last-signed-in-owner.v1';
 let observed: AuthState;
 function Probe() { observed = useAuth(); return null; }
-beforeEach(() => { mockTransportCreated.mockClear(); jest.mocked(signOutStorage.read).mockReset();jest.mocked(signOutStorage.read).mockResolvedValue(null);jest.mocked(signOutStorage.write).mockReset();jest.mocked(signOutStorage.write).mockResolvedValue();jest.mocked(signOutStorage.remove).mockReset();jest.mocked(signOutStorage.remove).mockResolvedValue();jest.mocked(getAuthClient).mockReset();jest.mocked(getAuthClient).mockReturnValue(null);jest.mocked(clearLocalSession).mockReset();jest.mocked(clearLocalSession).mockResolvedValue(); jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({remove:jest.fn()})); mockPush.mockReset(); mockPush.mockResolvedValue(undefined); });
+beforeEach(() => { storedItems.clear();jest.mocked(SecureStore.getItemAsync).mockReset().mockImplementation(async key=>storedItems.get(key)??null);jest.mocked(SecureStore.setItemAsync).mockReset().mockImplementation(async(key,value)=>{storedItems.set(key,value);});jest.mocked(SecureStore.deleteItemAsync).mockReset().mockImplementation(async key=>{storedItems.delete(key);}); mockTransportCreated.mockClear(); jest.mocked(signOutStorage.read).mockReset();jest.mocked(signOutStorage.read).mockResolvedValue(null);jest.mocked(signOutStorage.write).mockReset();jest.mocked(signOutStorage.write).mockResolvedValue();jest.mocked(signOutStorage.remove).mockReset();jest.mocked(signOutStorage.remove).mockResolvedValue();jest.mocked(getAuthClient).mockReset();jest.mocked(getAuthClient).mockReturnValue(null);jest.mocked(clearLocalSession).mockReset();jest.mocked(clearLocalSession).mockResolvedValue(); jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({remove:jest.fn()})); mockPush.mockReset(); mockPush.mockResolvedValue(undefined); });
 
 test('restores session, reacts to AppState, switches A to B during upload and isolates pending rows', async () => {
   const a = fixtureRepo(OWNER_A), b = fixtureRepo(OWNER_B), guest = fixtureRepo('guest');
@@ -67,18 +69,21 @@ test('restores session, reacts to AppState, switches A to B during upload and is
   const app = jest.spyOn(AppState, 'addEventListener');
   const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
   await waitFor(() => expect(observed.repository).toBe(a));
+  expect(observed.bootExportOwner?.()).toBe(OWNER_A);
   await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
   const refresh = app.mock.calls[0][1];
   await act(async () => { refresh('background'); refresh('active'); });
   expect(fixture.auth.startAutoRefresh).toHaveBeenCalled(); expect(fixture.auth.stopAutoRefresh).toHaveBeenCalled();
   await act(async () => { fixture.emit(session(OWNER_B)); });
   await waitFor(() => expect(observed.repository).toBe(b));
+  expect(observed.bootExportOwner?.()).toBe(OWNER_B);
   expect(observed.pending).toBe(0);
   await act(async () => { push.resolve(); await push.promise; });
   expect(a.ack).not.toHaveBeenCalled(); expect(a.pending()).toHaveLength(1);
   await act(async () => { fixture.emit(null); });
   await waitFor(() => expect(observed.repository).toBe(guest));
   expect(observed.session).toBeNull(); expect(observed.demo).toBe(false);
+  expect(observed.bootExportOwner?.()).toBeNull();
   await view.unmount(); expect(fixture.unsubscribe).toHaveBeenCalled(); app.mockRestore();
 });
 test('unset config enters isolated demo without a transport and can leave demo', async () => {
@@ -89,7 +94,7 @@ test('unset config enters isolated demo without a transport and can leave demo',
   expect(observed.configured).toBe(false);
   await act(async () => { observed.lookAround(); });
   await waitFor(() => expect(observed.repository).toBe(demo));
-  expect(seedDemo).toHaveBeenCalledWith(demo); expect(mockPush).not.toHaveBeenCalled();
+  expect(seedDemo).toHaveBeenCalledWith(demo); expect(mockPush).not.toHaveBeenCalled();expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   await act(async () => { await observed.signOut(); });
   await waitFor(() => expect(observed.repository).toBe(guest));
   expect(observed.demo).toBe(false); expect(demo.wipe).toHaveBeenCalledTimes(1); await view.unmount();
@@ -277,6 +282,7 @@ test('pending departure blocks old auth events, manual sync and foreground auto-
  const transports=mockTransportCreated.mock.calls.length;
  let leaving!:Promise<void>;await act(async()=>{leaving=observed.signOut();});
  await waitFor(()=>expect(clearLocalSession).toHaveBeenCalledTimes(1));
+ expect(observed.bootExportOwner?.()).toBeNull();
  expect(mockTransportCreated).toHaveBeenCalledTimes(transports);
  const pushes=mockPush.mock.calls.length;fixture.auth.startAutoRefresh.mockClear();
  await act(async()=>{
@@ -324,7 +330,7 @@ test.each(['wipe','marker','session','remove'])('failed %s departure releases it
  await act(async()=>{await expect(observed.signOut()).rejects.toThrow();});
  const pushes=mockPush.mock.calls.length,lockedSession=observed.session;
  await act(async()=>{expect(await observed.signIn('fixture@example.test','synthetic')).toBe('authUnavailable');fixture.emit(session(OWNER_B));fixture.emit(null);await observed.syncNow();});
- expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();expect(observed.session).toBe(lockedSession);expect(observed.recovery).toBe('departure');expect(mockPush).toHaveBeenCalledTimes(pushes);expect(observed.ready).toBe(false);
+ expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();expect(observed.session).toBe(lockedSession);expect(observed.recovery).toBe('departure');expect(observed.bootExportOwner?.()).toBeNull();expect(mockPush).toHaveBeenCalledTimes(pushes);expect(observed.ready).toBe(false);
  await act(async()=>{await observed.signOut(true);});
  expect(marker).toBeNull();expect(observed.session).toBeNull();expect(observed.ready).toBe(true);await view.unmount();
 });
@@ -435,7 +441,7 @@ test.each([false,true])('three consecutive read failures offer escape; reread re
  jest.mocked(signOutStorage.read).mockResolvedValue(wipeFails?{owner:OWNER_A,startedAt:1234,phase:'pending'}:null);fixture.auth.getSession.mockResolvedValue({data:{session:null},error:null});
  if(wipeFails){const repo=fixtureRepo(OWNER_A);jest.spyOn(repo,'wipe').mockImplementation(()=>{throw new Error('synthetic');});jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:()=>repo});}
  await fireEvent.press(view.getByRole('button',{name:'Try again'}));
- if(wipeFails){await waitFor(()=>expect(observed.recovery).toBeUndefined());expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();}
+ if(wipeFails){await waitFor(()=>expect(observed.recovery).toBe('boot-error'));expect(observed.ready).toBe(false);expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(view.queryByRole('button',{name:'Erase all local data and sign out'})).toBeNull();}
  else await waitFor(()=>expect(observed.ready).toBe(true));
  expect(clearLocalSession).not.toHaveBeenCalled();await view.unmount();
 });
@@ -492,9 +498,9 @@ test('a different boot error resets consecutive marker read failures before esca
   jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic database boot failure'));
   await act(async()=>{observed.retryMarkerRead!();});
   await waitFor(()=>expect(observed.configError).toBe('Local data is unavailable.'));
-  expect(observed.recovery).toBeUndefined();expect(signOutStorage.read).toHaveBeenCalledTimes(2);
+  expect(observed.recovery).toBe('boot-error');expect(signOutStorage.read).toHaveBeenCalledTimes(2);
   for(let count=3;count<=4;count++){
-   await act(async()=>{observed.retryMarkerRead!();});
+   await act(async()=>{if(count===3)observed.retryBoot!();else observed.retryMarkerRead!();});
    await waitFor(()=>expect(signOutStorage.read).toHaveBeenCalledTimes(count));
    expect(observed.recovery).toBe('read-error');expect(observed.ready).toBe(false);
    await act(async()=>{await expect(observed.recoverLocalData!()).resolves.toBeUndefined();});
@@ -506,4 +512,105 @@ test('a different boot error resets consecutive marker read failures before esca
   expect(signOutStorage.read).toHaveBeenCalledTimes(5);expect(observed.ready).toBe(false);
   expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
  } finally {await view.unmount();}
+});
+
+test.each(['migration','locked database','database open','recovery wipe','session clear'])('boot %s fault shows calm recovery; Retry starts over after fault clears',async failure=>{
+ const repo=fixtureRepo(OWNER_A),wipeAll=jest.fn();
+ let marker:Awaited<ReturnType<typeof signOutStorage.read>>=failure==='recovery wipe'?{owner:OWNER_A,startedAt:1,phase:'pending'}:failure==='session clear'?{owner:OWNER_A,startedAt:1,phase:'wiped'}:null;
+ jest.mocked(signOutStorage.read).mockImplementation(async()=>marker);
+ jest.mocked(signOutStorage.write).mockImplementation(async next=>{marker=next;});
+ jest.mocked(signOutStorage.remove).mockImplementation(async()=>{marker=null;});
+ jest.mocked(openLocalDatabase).mockReset();
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll,forOwner:owner=>owner===OWNER_A?repo:fixtureRepo(owner)});
+ if(['migration','locked database','database open'].includes(failure))jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error(`synthetic ${failure}`));
+ if(failure==='recovery wipe')jest.mocked(repo.wipe).mockImplementationOnce(()=>{throw new Error('synthetic wipe failure');});
+ if(failure==='session clear')jest.mocked(clearLocalSession).mockRejectedValueOnce(new Error('synthetic session failure'));
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const view=await render(<AuthProvider client={null}><RecoveryProbe/></AuthProvider>);
+ await waitFor(()=>expect(view.getByRole('header',{name:'Let’s try opening the app again'})).toBeTruthy());
+ expect(observed.ready).toBe(false);expect(getAuthClient).not.toHaveBeenCalled();expect(mockPush).not.toHaveBeenCalled();
+ expect(view.getByRole('button',{name:'Export local data'})).toBeTruthy();expect(view.getByRole('button',{name:'Contact support'})).toBeTruthy();
+ expect(view.queryByText(`synthetic ${failure}`)).toBeNull();
+ const opens=jest.mocked(openLocalDatabase).mock.calls.length,wipes=jest.mocked(repo.wipe).mock.calls.length;
+ await fireEvent.press(view.getByRole('button',{name:'Retry'}));
+ if(failure==='recovery wipe'){
+   expect(jest.mocked(repo.wipe)).toHaveBeenCalledTimes(wipes);
+   expect(alert).toHaveBeenCalled();
+   jest.mocked(repo.wipe).mockClear();
+   await act(async()=>{alert.mock.calls[0][2]![0].onPress?.();});
+   expect(repo.wipe).not.toHaveBeenCalled();
+   expect(clearLocalSession).not.toHaveBeenCalled();
+   expect(signOutStorage.remove).not.toHaveBeenCalled();
+   expect(observed.ready).toBe(false);
+   await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
+ }
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ expect(jest.mocked(openLocalDatabase).mock.calls.length).toBeGreaterThan(opens);
+ expect(wipeAll).not.toHaveBeenCalled();
+ if(failure!=='recovery wipe')expect(repo.wipe).not.toHaveBeenCalled();
+ expect(view.queryByRole('button',{name:'Retry'})).toBeNull();
+ alert.mockRestore();await view.unmount();
+});
+
+test('Retry after a database failure cannot silently resume a pending wipe',async()=>{
+ const repo=fixtureRepo(OWNER_A),wipeAll=jest.fn();
+ jest.mocked(openLocalDatabase).mockReset();jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic migration failure')).mockResolvedValue({wipeAll,forOwner:()=>repo});
+ jest.mocked(signOutStorage.read).mockResolvedValue({owner:OWNER_A,startedAt:1,phase:'pending'});
+ const view=await render(<AuthProvider client={null}><RecoveryProbe/></AuthProvider>);
+ await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
+ expect(observed.bootExportOwner?.()).toBeNull();
+ await fireEvent.press(view.getByRole('button',{name:'Retry'}));
+ await waitFor(()=>expect(observed.bootRetryNeedsConfirmation).toBe(true));
+ expect(repo.wipe).not.toHaveBeenCalled();expect(wipeAll).not.toHaveBeenCalled();
+ await act(async()=>{observed.retryBoot!();observed.retryMarkerRead!();});
+ expect(repo.wipe).not.toHaveBeenCalled();expect(clearLocalSession).not.toHaveBeenCalled();
+ expect(signOutStorage.remove).not.toHaveBeenCalled();expect(observed.ready).toBe(false);await view.unmount();
+});
+
+// OPEN 9: a DB boot fault must not require restoring credentials to scope a backup.
+test('boot-error exports the stored owner with a non-null restorable client and no DB access',async()=>{
+ storedItems.set(ownerKey,OWNER_A);
+ const fixture=clientFixture(session(OWNER_A));
+ jest.mocked(openLocalDatabase).mockRejectedValue(new Error('synthetic open failure'));
+ const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
+ expect(observed.bootExportOwner?.()).toBe(OWNER_A);
+ expect(observed.session).toBeNull();expect(observed.repository).toBeNull();
+ expect(fixture.auth.getSession).not.toHaveBeenCalled();expect(fixture.auth.onAuthStateChange).not.toHaveBeenCalled();
+ expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+ await view.unmount();
+});
+test.each(['pending','wiped','session-cleared','unreadable','corrupt'])('stored boot owner is blocked by a %s sign-out marker',async kind=>{
+ storedItems.set(ownerKey,OWNER_A);
+ if(kind==='unreadable')jest.mocked(signOutStorage.read).mockRejectedValue(new Error('synthetic marker failure'));
+ else if(kind==='corrupt')jest.mocked(signOutStorage.read).mockRejectedValue(new CorruptSignOutMarker());
+ else jest.mocked(signOutStorage.read).mockResolvedValue({owner:OWNER_A,startedAt:1,phase:kind as 'pending'|'wiped'|'session-cleared'});
+ jest.mocked(openLocalDatabase).mockRejectedValue(new Error('synthetic open failure'));
+ const view=await render(<AuthProvider client={clientFixture().client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
+ expect(observed.bootExportOwner?.()).toBeNull();await view.unmount();
+});
+test('session restore and real sign-in store only the id outside the database; sign-out clears it before wipe',async()=>{
+ const repos=new Map<string,Repository>();
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>{
+  if(!repos.has(owner))repos.set(owner,Object.assign(fixtureRepo(owner),{localSave:jest.fn(),putLocal:jest.fn()}));return repos.get(owner)!;
+ }});
+ const fixture=clientFixture(),view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(storedItems.get(ownerKey)).toBe(OWNER_A));
+ await act(async()=>{fixture.emit(session(OWNER_B));});
+ await waitFor(()=>expect(storedItems.get(ownerKey)).toBe(OWNER_B));
+ expect(jest.mocked(SecureStore.setItemAsync).mock.calls.map(call=>call.slice(0,2))).toEqual([[ownerKey,OWNER_A],[ownerKey,OWNER_B]]);
+ for(const repo of repos.values()){expect(repo.localSave).not.toHaveBeenCalled();expect(repo.putLocal).not.toHaveBeenCalled();}
+ const b=repos.get(OWNER_B)!;
+ jest.mocked(b.wipe).mockImplementation(()=>{expect(storedItems.has(ownerKey)).toBe(false);});
+ await act(async()=>{await observed.signOut();});
+ expect(storedItems.has(ownerKey)).toBe(false);expect(observed.bootExportOwner?.()).toBeNull();
+ await view.unmount();
+});
+test.each(['demo','guest','not-an-owner'])('boot-error rejects a stored synthetic or invalid owner: %s',async owner=>{
+ storedItems.set(ownerKey,owner);
+ jest.mocked(openLocalDatabase).mockRejectedValue(new Error('synthetic open failure'));
+ const view=await render(<AuthProvider client={clientFixture().client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
+ expect(observed.bootExportOwner?.()).toBeNull();expect(SecureStore.setItemAsync).not.toHaveBeenCalled();await view.unmount();
 });

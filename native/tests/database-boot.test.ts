@@ -1,0 +1,21 @@
+import { openDatabaseSync } from 'expo-sqlite';
+import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
+import { openLocalDatabase } from '../src/data/database';
+const mockSQLite={execSync:jest.fn(),closeSync:jest.fn()};
+jest.mock('expo-sqlite',()=>({openDatabaseSync:jest.fn()}));
+jest.mock('drizzle-orm/expo-sqlite',()=>({drizzle:()=>({})}));
+jest.mock('drizzle-orm/expo-sqlite/migrator',()=>({migrate:jest.fn()}));
+jest.mock('../src/data/repository',()=>({deviceId:()=> 'fixture-device',Repository:class {},wipeAllOwners:jest.fn()}));
+test('open, locked connection and migration failures release the cached boot promise and close failed connections',async()=>{
+ jest.mocked(openDatabaseSync).mockImplementationOnce(()=>{throw new Error('synthetic open failure');}).mockReturnValue(mockSQLite as never);
+ await expect(openLocalDatabase()).rejects.toMatchObject({name:'DatabaseOpenError'});
+ mockSQLite.execSync.mockImplementationOnce(()=>{throw new Error('synthetic database locked');});
+ await expect(openLocalDatabase()).rejects.toMatchObject({name:'DatabaseOpenError'});
+ expect(mockSQLite.closeSync).toHaveBeenCalledTimes(1);
+ jest.mocked(migrate).mockRejectedValueOnce(new Error('synthetic failed migration'));
+ await expect(openLocalDatabase()).rejects.toMatchObject({name:'DatabaseMigrationError'});
+ expect(mockSQLite.closeSync).toHaveBeenCalledTimes(2);
+ jest.mocked(migrate).mockResolvedValue();
+ await expect(openLocalDatabase()).resolves.toHaveProperty('forOwner');
+ expect(openDatabaseSync).toHaveBeenCalledTimes(4);
+});
