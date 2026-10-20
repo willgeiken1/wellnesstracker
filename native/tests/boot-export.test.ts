@@ -1,4 +1,4 @@
-import { exportBootDatabase } from '../src/data/boot-export';
+import { databaseDirectoryUri, exportBootDatabase } from '../src/data/boot-export';
 import { Directory, File } from 'expo-file-system';
 import { openDatabaseAsync } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
@@ -11,10 +11,11 @@ let mockSharingAvailable = true;
 let mockCreateError = false;
 let mockCopyGate: Promise<void> | undefined;
 let mockCopyStarted = false;
+let mockDatabaseDirectory = 'file:///documents/SQLite';
 const mockSnapshot = new Uint8Array([83,81,76]);
 const mockDB = { getAllAsync: jest.fn(async (query: string) => query.includes('sqlite_schema') ? [{name:'sessions',type:'table'}, {name:'oura_days',type:'table'}, {name:'oura_sleep',type:'table'}, {name:'sync_state',type:'table'}, {name:'legacy_sync',type:'table'}] : query.includes('legacy_sync') ? [] : [{name:'owner_id'}]), runAsync: jest.fn(async()=>{}), execAsync: jest.fn(async()=>{}), serializeAsync: jest.fn(async()=>mockSnapshot), closeAsync: jest.fn(async()=>{}) };
 jest.mock('expo-crypto',()=>({randomUUID:()=> 'fixture-id'}));
-jest.mock('expo-sqlite',()=>({defaultDatabaseDirectory:'file:///documents/SQLite',openDatabaseAsync:jest.fn()}));
+jest.mock('expo-sqlite',()=>({get defaultDatabaseDirectory(){return mockDatabaseDirectory;},openDatabaseAsync:jest.fn()}));
 jest.mock('expo-sharing',()=>({isAvailableAsync:jest.fn(async()=>mockSharingAvailable),shareAsync:jest.fn(async()=>{})}));
 jest.mock('expo-file-system',()=>({Paths:{cache:'file:///cache'},Directory:class {
  uri:string;constructor(...parts:string[]){this.uri=parts.map(p=>typeof p==='string'?p:(p as {uri:string}).uri).join('/');}get name(){return this.uri.split('/').pop();}create(){if(mockCreateError)throw new Error('synthetic create failure');}list(){if(mockListError)throw new Error('synthetic list failure');return mockCacheEntries;}delete(){mockDeletes.push(this.uri);if(mockDeleteFailures.includes(this.uri))throw new Error('synthetic delete failure');}
@@ -23,6 +24,25 @@ jest.mock('expo-file-system',()=>({Paths:{cache:'file:///cache'},Directory:class
  async copy(dest:{uri:string}){mockCopyStarted=true;await mockCopyGate;mockCopies.push(`${this.uri} -> ${dest.uri}`);}async write(bytes:unknown){await Promise.resolve();mockWrites.push(bytes);}
 }}));
 beforeEach(()=>{jest.clearAllMocks();mockOwner='fixture-owner';mockCacheEntries=[];mockDeleteFailures=[];mockListError=false;mockSharingAvailable=true;mockCreateError=false;jest.mocked(Sharing.isAvailableAsync).mockImplementation(async()=>mockSharingAvailable);mockCopyGate=undefined;mockCopyStarted=false;mockCopies.length=0;mockWrites.length=0;mockDeletes.length=0;jest.mocked(openDatabaseAsync).mockResolvedValue(mockDB as never);});
+beforeEach(()=>{mockDatabaseDirectory='file:///documents/SQLite';});
+
+test('converts a bare database directory path to a file URI',()=>{
+ expect(databaseDirectoryUri('/data/user/0/com.insightwellness.app/files/SQLite')).toBe('file:///data/user/0/com.insightwellness.app/files/SQLite');
+});
+
+test('preserves a database directory that is already a file URI',()=>{
+ expect(databaseDirectoryUri('file:///documents/SQLite')).toBe('file:///documents/SQLite');
+});
+
+test('exports both database and WAL using file URIs when SQLite supplies a bare Android path',async()=>{
+ mockDatabaseDirectory='/data/user/0/com.insightwellness.app/files/SQLite';
+ await exportBootDatabase(()=>mockOwner);
+ expect(mockCopies).toEqual([
+  'file:///data/user/0/com.insightwellness.app/files/SQLite/insight.db -> file:///cache/boot-export-fixture-id/insight.db',
+  'file:///data/user/0/com.insightwellness.app/files/SQLite/insight.db-wal -> file:///cache/boot-export-fixture-id/insight.db-wal',
+ ]);
+});
+
 test('exports a WAL-aware SQLite snapshot from a private copy without migrating or writing to the source',async()=>{
  await exportBootDatabase(()=>mockOwner);
  expect(mockCopies).toEqual([

@@ -4,6 +4,10 @@ import { defaultDatabaseDirectory, openDatabaseAsync } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
 import { filterBootExport } from './boot-export-filter';
 
+export function databaseDirectoryUri(dir: string): string {
+  return dir.startsWith('/') ? `file://${dir}` : dir;
+}
+
 /** No migrations, repository, network, or writes to the original database. */
 export async function exportBootDatabase(currentOwner: () => string | null): Promise<void> {
   try {
@@ -20,9 +24,9 @@ export async function exportBootDatabase(currentOwner: () => string | null): Pro
   try {
     staging.create();
     const raw = new File(staging, 'insight.db');
-    await new File(defaultDatabaseDirectory, 'insight.db').copy(raw);
+    await new File(databaseDirectoryUri(defaultDatabaseDirectory), 'insight.db').copy(raw);
     // WAL can contain committed rows absent from the main file. Work only on copies.
-    const wal = new File(defaultDatabaseDirectory, 'insight.db-wal');
+    const wal = new File(databaseDirectoryUri(defaultDatabaseDirectory), 'insight.db-wal');
     if (wal.exists) await wal.copy(new File(staging, 'insight.db-wal'));
     const snapshot = new File(staging, 'backup.sqlite');
     const copy = await openDatabaseAsync('insight.db', { useNewConnection: true }, staging.uri);
