@@ -1,6 +1,6 @@
 # Insight Daily P1 scaffold report
 
-Updated: October 20, 2026 (M1-05 retro-check). P1 merged via PR #67 at main `b5f145e`; P2a follow-ups: `native/p1-followups`.
+Updated: October 21, 2026 (M1-05 review fixes). P1 merged via PR #67 at main `b5f145e`; P2a follow-ups: `native/p1-followups`.
 
 ## Follow-ups
 
@@ -57,9 +57,13 @@ The app-target plugin now removes `[Expo Dev Launcher] Strip Local Network Keys 
 
 Whole unquoted, double-quoted and single-quoted `DEBUG=1` tokens preserve the local-network keys. `DEBUG=0`, `DEBUG=10`, `OTHER_DEBUG=1`, malformed quotes and a `CustomDebug` name without the definition still strip. Missing processed plists now fail loudly in **all** configurations before writing a stamp, consistent with non-debug behavior.
 
-The existing **Native real PlistBuddy tests** macOS CI job already sets `REQUIRE_PLISTBUDDY=1` and runs `node --test plugins/*.test.js`; no CI change is needed. The real behavior test explicitly asserts `NSAllowsLocalNetworking` is absent after Release processing and present after Debug processing of synthetic plists, along with the other two local-network keys. Linux reports both Mac-only skips with a reason; forcing the requirement without PlistBuddy fails immediately.
+The **Native real PlistBuddy tests** macOS CI job sets `REQUIRE_PLISTBUDDY=1`. Its dedicated strict round-trip step writes a synthetic pbxproj, decodes it with `plutil -convert json`, extracts the decoded shellScript and executes it against synthetic plists using real PlistBuddy. The assertions require all three local-network keys absent for Release/Profile/custom configurations and present for whole unquoted or matching-quoted `DEBUG=1` tokens; mismatched quotes strip. macOS CI proves only synthetic project parsing and script execution when this step passes. The earlier in-memory script tests did not prove OpenStep decoding. Mac-only tests visibly skip on Linux; forcing the requirement without PlistBuddy fails immediately.
 
-Local validation: typecheck and lint PASS; Jest PASS (36 suites, 667 tests); real macOS plugin suite PASS (10/10, zero skips); dependency compatibility PASS; Expo Doctor PASS (20/20); simulated Linux PASS (4 tests, 2 visible skips, required-PlistBuddy assertion fails as expected). The Release/Debug checks run the generated build-phase script on synthetic processed-plist fixtures; they are not a new Xcode build or physical-device artifact check. The first physical-device Release/store plist re-check from #69 minor 4 is **accepted as deferred** until that build is authorized and signing is available under plan §0.1. At that gate, verify all three local-network keys are absent before distribution. Historical simulator evidence above remains applicable. No UI changed, so simulator screenshots do not apply to M1-05.
+The review fix removes shell backslashes from the Debug token pattern and printf invocation, so quote-only pbxproj serialization no longer produces the broken doubled-backslash/quote sequence. Prebuild now fails if expo-dev-client is configured but its expected app-target strip phase is missing, identifying potential phase renames or mod ordering changes. All of `NSBonjourServices` is stripped in non-debug builds. The plugin assumes `ENABLE_USER_SCRIPT_SANDBOXING` is off.
+
+A Mac `expo prebuild --clean` plus simulator Debug and Release builds, with inspection of each built Info.plist, are still required for this revision (Will/Mac, deferred). These must confirm that the processed-plist dependency orders the phase after ProcessInfoPlistFile and that Debug's missing-plist fail-closed guard is safe in real Xcode. No real Xcode ordering or simulator build success is established by the synthetic tests.
+
+Historical October 20 validation (before review fixes): typecheck and lint PASS; Jest PASS (36 suites, 667 tests); real macOS plugin suite PASS (10/10, zero skips); dependency compatibility PASS; Expo Doctor PASS (20/20); simulated Linux PASS (4 tests, 2 visible skips, required-PlistBuddy assertion fails as expected). The Release/Debug checks run the generated build-phase script on synthetic processed-plist fixtures; they are not a new Xcode build or physical-device artifact check. The first physical-device Release/store plist re-check from #69 minor 4 is **accepted as deferred** until that build is authorized and signing is available under plan §0.1. At that gate, verify all three local-network keys are absent before distribution. Historical simulator evidence above predates these fixes and does not validate this revision. No UI changed, so simulator screenshots do not apply to M1-05.
 
 ## P1 status (historical)
 
