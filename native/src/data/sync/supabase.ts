@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { columns, canonicalRow, fromWire, pushRow, validateRow, type Row, type Table } from '../rows';
+import { columns, fromAcknowledgment, fromWire, pushRow, validateRow, type Row, type Table } from '../rows';
 import { ProvenanceConflict } from './conflict';
 import type { Transport } from './engine';
 
@@ -22,12 +22,13 @@ export class SupabaseTransport implements Transport {
       validateRow(row);
       if (row.owner_id !== this.owner) throw new Error('Sync account changed.');
     }
-    const { data, error } = await this.request(() => this.client.rpc('sync_push', { rows: rows.map(pushRow) }));
+    const payload = rows.map(pushRow);
+    const { data, error } = await this.request(() => this.client.rpc('sync_push', { rows: payload }));
     if (error?.code === 'P2001') throw new ProvenanceConflict();
     if (error) throw new Error('Sync unavailable.');
     if (!Array.isArray(data) || data.length !== rows.length) throw new Error('Invalid sync acknowledgment.');
     return data.map((value,index) => {
-      const accepted = canonicalRow(value);
+      const accepted = fromAcknowledgment(value);
       if (accepted.owner_id !== this.owner || accepted.table !== rows[index].table || accepted.id !== rows[index].id) throw new Error('Invalid sync acknowledgment.');
       return accepted;
     });

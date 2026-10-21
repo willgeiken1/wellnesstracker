@@ -94,7 +94,7 @@ test.each([false,true])('escape all-owner wipe is one transaction (injected fail
  try {
   for(const owner of [OWNER_A,OWNER_B,'demo','guest']) {
    const repo=new Repository(local.db,owner,DEVICE_A,()=>syntheticRow().id);
-   for(const table of syncedTables){repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
+   for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
    repo.cacheOura('2026-01-01',{fixture:true});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
   }
   if(fail)local.sqlite.exec("CREATE TRIGGER deny_wipe BEFORE DELETE ON photos BEGIN SELECT RAISE(ABORT,'synthetic'); END");
