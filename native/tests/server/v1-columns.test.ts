@@ -1,4 +1,6 @@
 import fc from 'fast-check';
+import { SyncEngine } from '../../src/data/sync/engine';
+import { matchesPurge } from '../../src/data/purges';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PGlite } from '@electric-sql/pglite';
@@ -232,7 +234,7 @@ test('purges are pull-only locally, including stale outbox entries and serializa
   local.repo.applyPage('purges',[{row:marker,server_seq:'1'}],'1');
   expect(()=>local.repo.remove('purges',marker.id)).toThrow();
   local.sqlite.prepare('INSERT INTO sync_outbox(owner_id,table_name,row_id,revision) VALUES(?,?,?,?)').run(OWNER_A,'purges',marker.id,'500:'+marker.device_id);
-  expect(local.repo.pending()).toEqual([]);expect(()=>pushRow(marker)).toThrow(/pull-only/);
+  expect(local.repo.pending()).toEqual([]);expect(local.repo.unsyncedCount()).toBe(0);expect(local.repo.hasUnsynced()).toBe(false);expect(()=>pushRow(marker)).toThrow(/pull-only/);
   expect(local.repo.get('purges',marker.id)).toEqual(canonicalRow(marker));
  }finally{local.sqlite.close();}
 });
@@ -247,6 +249,7 @@ test('purge cutoff caps to transaction now and retains accepted future edits',as
  });
 });
 const invalidChecks: [Table,Row['data'],string][] = [
+ ['photos',{captured_at:-62135596800001},'photos_captured_at_range'],['photos',{captured_at:253402300800000},'photos_captured_at_range'],
  ['plans',{mode:'other'},'plans_mode'],['plans',{days_per_week:0},'plans_days_per_week'],['plans',{days_per_week:8},'plans_days_per_week'],
  ['machine_notes',{unit_override:'stone'},'machine_notes_unit_override'],
  ['pauses',{start_day:'2026-10-02',end_day:'2026-10-01'},'pauses_range'],
@@ -276,4 +279,63 @@ test('purge RPC requires authenticated identity and denies anonymous and service
   await tx.exec(`SET LOCAL ROLE ${role}`);await tx.query(sql,[id()]);
  })).rejects.toThrow(/permission denied/);
  await expect(db.query(sql,[id()])).rejects.toThrow('bad purge');
+});
+
+// MED-1a: reject before the trigger attempts timestamp conversion, even with a marker.
+test.each([-62135596800001,253402300800000,-1e15,1e15,-8640000000000001,8640000000000001])('photo captured_at %s rejects cleanly on client and server',async captured_at=>{
+ const bad=row('photos',{captured_at});
+ expect(()=>validateRow(bad)).toThrow('Invalid sync row.');
+ await purge();
+ await expect(testTransport(db,OWNER_A).push([bad])).rejects.toMatchObject({code:'23514',constraint:'photos_captured_at_range'});
+ await expect(asUser(db,OWNER_A,tx=>tx.query('INSERT INTO public.photos(owner_id,id,updated_at,device_id,captured_at) VALUES($1,$2,100,$3,$4)',[OWNER_A,id(),bad.device_id,captured_at]))).rejects.toMatchObject({code:'23514',constraint:'photos_captured_at_range'});
+});
+test('photo range endpoints and ordinary instants are accepted and do not break purge RPC',async()=>{
+ const t=testTransport(db,OWNER_A);
+ const photos=[-62135596800000,253402300799999,0,Date.parse('2026-10-12T12:00:00Z')].map(captured_at=>row('photos',{captured_at}));
+ for(const photo of photos)expect(()=>validateRow(photo)).not.toThrow();
+ await t.push(photos);await purge();
+ const pulled=await t.pull('photos','0',100);
+ for(const photo of photos)expect(pulled.find(p=>p.row.id===photo.id)!.row.deleted_at!==null).toBe(photo===photos[3]);
+});
+const invalidTimezones=['posixrules','Factory','posix/UTC','right/UTC'];
+test.each(invalidTimezones)('purge timezone %s is rejected by client and RPC',async tz=>{
+ expect(()=>validateRow(row('purges',{tz}))).toThrow('Invalid sync row.');
+ await expect(asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'2026-10-01','2026-10-31',100,$2)",[id(),tz]))).rejects.toThrow('bad purge');
+});
+test.each(invalidTimezones)('pulls continue past an unusable %s marker and apply later valid markers',async tz=>{
+ const local=await localDatabase();
+ try {
+  const photo=row('photos',rangeData('photos'));
+  local.repo.putLocal(photo);local.repo.ack(local.repo.pending());
+  const bad=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz},500);
+  const good=row('purges',{...bad.data,tz:'America/Chicago'},501);
+  // Exercise wire decoding too: transport must preserve cursors for skipped markers.
+  const wire=(r:Row,seq:string)=>fromWire('purges',{...r,...r.data,data:undefined,server_seq:seq});
+  const later=row('sessions',{day:'2026-11-02'});
+  const engine=new SyncEngine(local.repo,{owner:OWNER_A,push:async()=>[],pull:async(table,after)=>{
+   if(table==='purges')return after==='0'?[wire(bad,'1')]:after==='1'?[wire(good,'2')]:[];
+   return table==='sessions' && after==='0'?[{row:later,server_seq:'3'}]:[];
+  }},1);
+  await engine.sync();
+  expect(engine.status).toBe('idle');expect(local.repo.cursor('purges')).toBe('2');
+  expect(local.repo.get('purges',bad.id)).toBeUndefined();
+  expect(local.repo.get('photos',photo.id)!.deleted_at).toBe(501);
+  expect(local.repo.get('sessions',later.id)).toBeDefined();engine.close();
+ }finally{local.sqlite.close();}
+});
+test('photo matching catches formatter failures from legacy data and continues applying later pages',async()=>{
+ const local=await localDatabase();
+ try {
+  const photo=row('photos',{captured_at:1e16});
+  const marker=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz:'UTC'},500);
+  expect(()=>matchesPurge(photo,marker,()=>undefined)).not.toThrow();
+  expect(matchesPurge(photo,marker,()=>undefined)).toBe(false);
+  // Simulate a formatter rejecting a timezone supported by another device's ICU.
+  local.repo.putLocal(row('photos',rangeData('photos')));
+  const formatter=jest.spyOn(Intl,'DateTimeFormat').mockImplementation(()=>{throw new RangeError('synthetic ICU failure');});
+  try {expect(()=>local.repo.applyPage('purges',[{row:marker,server_seq:'1'}],'1')).not.toThrow();}
+  finally{formatter.mockRestore();}
+  expect(local.repo.cursor('purges')).toBe('1');
+  expect(()=>local.repo.applyPage('sessions',[{row:row('sessions',{day:'2026-11-02'}),server_seq:'2'}],'2')).not.toThrow();
+ }finally{local.sqlite.close();}
 });

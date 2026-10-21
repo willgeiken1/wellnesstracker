@@ -21,6 +21,8 @@ test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (
    for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
    repo.cacheOura('2026-01-01',{fixture:true});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
   }
+  // Legacy pull-only markers must not inflate the all-owner recovery warning.
+  for(const owner of [OWNER_A,OWNER_B])sqlite.prepare('INSERT INTO sync_outbox(owner_id,table_name,row_id,revision) VALUES(?,?,?,?)').run(owner,'purges',syntheticRow('purges').id,'100:fixture');
   // Includes flagged rows excluded from pending(), and every owner namespace.
   expect(database.countAllUnsynced!()).toBe((syncedTables.length-1)*2);
   const tables=[...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days'];

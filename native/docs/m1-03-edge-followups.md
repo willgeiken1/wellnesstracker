@@ -102,7 +102,9 @@ These are follow-up edits only; M1-03 does not modify those deploy-on-merge file
   This proves the nested trigger depth/auth-parent visibility assumption that
   PGlite's auth stub cannot prove. Verify the new edge zero-row assertion fails
   closed on an injected nonzero count or query error, and on retries.
-- Record `SELECT rolbypassrls FROM pg_roles WHERE rolname='postgres'`; verify
+- Record the actual `sync_purge_range` function owner and its role's
+  `rolbypassrls` (do not assume the owner is `postgres`); recheck explicit
+  owner filters and synthetic A/B isolation under that definer identity. Verify
   authenticated/anon grants, service_role TRUNCATE/TRIGGER/REFERENCES revokes,
   FORCE RLS, and RPC invoker/search_path settings on the real local roles.
 - Verify local simulator/emulator launch and screenshots when an environment is

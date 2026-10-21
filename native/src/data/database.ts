@@ -14,7 +14,7 @@ export function openLocalDatabase() {
       const db = drizzle(sqlite);
       await migrate(db,migrations);
       const device = deviceId(db, randomUUID);
-      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
+      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name <> 'purges'`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
     } catch { database = undefined; throw new Error('Local data is unavailable.'); }
   })();
 }

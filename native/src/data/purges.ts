@@ -1,7 +1,8 @@
-import { columns, type Row } from './rows';
+import { columns, supportsPurgeTimezone, type Row } from './rows';
 const dated = new Set(['sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days']);
 /** Parent purge versions survive payload erasure. No health values are retained. */
 export function matchesPurge(row: Row, marker: Row, get: (table: 'sessions'|'entries', id: string) => Row | undefined): boolean {
+  if (marker.data.tz != null && !supportsPurgeTimezone(marker.data.tz)) return false;
   if (marker.deleted_at !== null || marker.data.cutoff_ms == null || marker.data.from_day == null || marker.data.to_day == null ||
       row.owner_id !== marker.owner_id || row.deleted_at !== null || row.updated_at > Number(marker.data.cutoff_ms)) return false;
   const inRange = (parent: Row | undefined) => !!parent && (
@@ -9,10 +10,12 @@ export function matchesPurge(row: Row, marker: Row, get: (table: 'sessions'|'ent
     (parent.deleted_at !== null && parent.updated_at === marker.updated_at && parent.device_id === marker.device_id));
   if (row.table === 'photos') {
     if (typeof row.data.captured_at !== 'number' || typeof marker.data.tz !== 'string') return false;
-    const parts = new Intl.DateTimeFormat('en-US', {timeZone:marker.data.tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(row.data.captured_at);
-    const part = (type: string) => parts.find(p=>p.type===type)!.value;
-    const day = `${part('year')}-${part('month')}-${part('day')}`;
-    return day >= String(marker.data.from_day) && day <= String(marker.data.to_day);
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {timeZone:marker.data.tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(row.data.captured_at);
+      const part = (type: string) => parts.find(p=>p.type===type)!.value;
+      const day = `${part('year')}-${part('month')}-${part('day')}`;
+      return day >= String(marker.data.from_day) && day <= String(marker.data.to_day);
+    } catch { return false; } // Legacy timestamps or device ICU differences must not block pulls.
   }
   if (dated.has(row.table)) return inRange(row);
   if (row.table === 'entries') return inRange(get('sessions',String(row.data.session_id)));

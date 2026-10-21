@@ -57,6 +57,14 @@ M2 work. `rest_style` and `tag` store feature-defined text identifiers.
 Purge ranges compare canonical day strings for dated logs. Photos use captured_at
 (milliseconds since epoch), converted to a calendar day in the marker timezone;
 the RPC sweep, trigger backstop, and client use the same inclusive day range.
+Photo timestamps are bounded to UTC years 0001–9999 (inclusive); the CHECK and
+pre-conversion trigger validation reject extremes with SQLSTATE 23514. The
+client enforces the same bounds. PostgreSQL-only `posix/*`, `right/*`, `Factory`
+and `posixrules` timezone names are rejected on both sides; the client also
+checks device Intl support. Unusable legacy markers are skipped while their
+pull cursor advances, and photo formatter failures cannot halt later pulls.
+Server timezone data is authoritative; device timezone data can differ near
+midnight until that device receives the server tombstone.
 The RPC validates the supplied timezone and caps cutoff at now, stamps at
 now+5min and uses the report's purge device ID. Children are keyed through
 sessions, swept first, and late parent/child arrivals are checked too. Markers
@@ -102,7 +110,13 @@ authenticated has SELECT only, and the guard rejects client inserts/updates even
 if write grants are accidentally restored. Only `sync_purge_range` uses SECURITY
 DEFINER (empty search_path, static SQL, auth.uid() required, explicit owner filters
 on every read/write); its definer identity may insert markers but never update
-them. Keep its owner a trusted migration role that clients cannot assume. Other
+them. The RPC runs as its owner, likely `postgres` on Supabase, which may bypass
+RLS. Isolation therefore rests on the explicit `auth.uid()` owner filters in
+every statement, including child subqueries; FORCE RLS is not a second barrier
+for a BYPASSRLS owner. The guard trusts that owner role, rather than the calling
+function's identity. Keep its owner a trusted migration role that clients cannot
+assume. M1-04 must record the actual function owner and that role's `rolbypassrls`
+setting and recheck synthetic A/B isolation. Other
 functions remain SECURITY INVOKER. No client-settable configuration flag permits
 marker writes. Anonymous and service_role execution are revoked on the purge RPC.
 

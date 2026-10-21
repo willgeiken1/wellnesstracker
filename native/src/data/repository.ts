@@ -1,7 +1,7 @@
 import { matchesPurge, purgeTombstone } from './purges';
 import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
+import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow, validatePulledRow, supportsPurgeTimezone, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 type Physical = Record<string, Scalar>;
 // Repositories sharing a database handle must share transaction guards.
@@ -137,10 +137,10 @@ export class Repository {
   }
   /** Includes conflict-flagged rows, which pending() intentionally excludes from upload. */
   unsyncedCount() {
-    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner}`)?.count ?? 0);
+    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges'`)?.count ?? 0);
   }
   hasUnsynced() {
-    return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} LIMIT 1`));
+    return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' LIMIT 1`));
   }
   save(table: Table, data: Row['data'], id = this.uuid(), now = Date.now()): Row {
     const stamp = this.safe(() => Math.max(now, Number(this.state('clock') ?? 0) + 1));
@@ -207,15 +207,18 @@ export class Repository {
       if (!/^\d+$/.test(cursor) || BigInt(cursor) < BigInt(this.cursor(table))) throw new Error('Invalid cursor.');
       let clock = Number(this.state('clock') ?? 0);
       for (const remote of page) {
-        const row = canonicalRow(remote.row);
+        validatePulledRow(remote.row);
+        const row = remote.row;
         if (row.owner_id !== this.owner || row.table !== table || !/^\d+$/.test(remote.server_seq) || BigInt(remote.server_seq) > BigInt(cursor)) throw new Error('Invalid page.');
+        // Skip incompatible legacy markers without losing their pull cursor.
+        if (table === 'purges' && row.data.tz != null && !supportsPurgeTimezone(row.data.tz)) continue;
         const local = this.get(table,row.id);
         clock = Math.max(clock, row.updated_at);
         if (local?.table === 'weigh_ins' && local.data.source !== row.data.source) {
           this.recordConflict(table,row.id); continue;
         }
         if (this.db.get(sql`SELECT 1 FROM sync_conflicts WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)) continue;
-        if (!local || compareRows(row,local) > 0) this.write(row);
+        if (!local || compareRows(row,local) > 0) this.write(canonicalRow(row));
       }
       this.applyPurges();
       this.setState('clock', String(clock));

@@ -8,6 +8,10 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- UTC years 0001..9999, matching the four-digit dated-column contract.
+ALTER TABLE public.photos ADD CONSTRAINT photos_captured_at_range
+  CHECK (captured_at BETWEEN -62135596800000 AND 253402300799999);
+
 ALTER TABLE public.sets ADD COLUMN tag text;
 
 ALTER TABLE public.routine_exercises ADD COLUMN rep_min bigint;
@@ -201,6 +205,14 @@ BEGIN
      WHERE oid='public.sync_purge_range(uuid,date,date,bigint,text)'::pg_catalog.regprocedure
   )) THEN RAISE EXCEPTION 'purges is pull-only; use sync_purge_range'; END IF;
   IF NEW.owner_id IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Row owner mismatch'; END IF;
+  -- BEFORE triggers precede CHECK constraints: reject before timestamp conversion
+  -- or tombstone wiping can hide an invalid incoming value.
+  IF TG_TABLE_NAME = 'photos' THEN
+    payload := pg_catalog.to_jsonb(NEW);
+    IF (payload->>'captured_at')::bigint NOT BETWEEN -62135596800000 AND 253402300799999 THEN
+      RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='photos_captured_at_range', MESSAGE='Invalid photo captured_at';
+    END IF;
+  END IF;
   -- Held until commit, across tables. A reader cannot advance past an uncommitted earlier sequence.
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text, 0));
   -- Provenance is immutable even when the incoming LWW tuple is stale.
@@ -711,7 +723,7 @@ DECLARE me uuid := auth.uid(); f text := p_from::text; t text := p_to::text;
 BEGIN
   IF me IS NULL OR p_id IS NULL OR p_from IS NULL OR p_to IS NULL OR p_from > p_to
     OR p_cutoff_ms IS NULL OR p_cutoff_ms < 0 OR p_cutoff_ms > 9007199254740991
-    OR p_tz IS NULL OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names WHERE name=p_tz)
+    OR p_tz IS NULL OR p_tz ~* '^(posix/|right/|posixrules$|Factory$)' OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names WHERE name=p_tz)
     OR f !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR t !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
     THEN RAISE EXCEPTION 'bad purge'; END IF;
   p_cutoff_ms := LEAST(p_cutoff_ms, stamp - 300000);

@@ -6,6 +6,12 @@ export interface Row {
   data: Record<string, Scalar>;
 }
 export interface ServerRow { row: Row; server_seq: string }
+/** PostgreSQL-only timezone files are not portable to device ICU. */
+export function supportsPurgeTimezone(tz: unknown): tz is string {
+  if (typeof tz !== 'string' || /^(?:posix\/|right\/|posixrules$|Factory$)/i.test(tz)) return false;
+  try { new Intl.DateTimeFormat('en-US', {timeZone:tz}).format(0); return true; }
+  catch { return false; }
+}
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export function compareRows(a: Row, b: Row): number {
   return a.updated_at === b.updated_at ? (a.device_id < b.device_id ? -1 : a.device_id > b.device_id ? 1 : 0) : a.updated_at < b.updated_at ? -1 : 1;
@@ -23,6 +29,8 @@ export function validateRow(input: unknown): asserts input is Row {
         (typeof value !== 'string' || value.length !== 10 || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))) return bad();
     if (fields[key] === 'text' ? typeof value !== 'string' : typeof value !== 'number' || !Number.isFinite(value) || (fields[key] === 'integer' && !Number.isSafeInteger(value))) return bad();
   }
+  if (r.table === 'photos' && r.data.captured_at != null && (Number(r.data.captured_at)<-62135596800000 || Number(r.data.captured_at)>253402300799999)) return bad();
+  if (r.table === 'purges' && r.data.tz != null && !supportsPurgeTimezone(r.data.tz)) return bad();
   if (r.table === 'plans') {
     if (r.data.mode != null && !['rotation','fixed'].includes(String(r.data.mode))) return bad();
     if (r.data.days_per_week != null && (Number(r.data.days_per_week)<1 || Number(r.data.days_per_week)>7)) return bad();
@@ -31,6 +39,13 @@ export function validateRow(input: unknown): asserts input is Row {
   if (r.table === 'pauses' && r.data.start_day != null && r.data.end_day != null && r.data.start_day > r.data.end_day) return bad();
   if (r.table === 'purges' && ((r.data.from_day != null && r.data.to_day != null && r.data.from_day > r.data.to_day) || (r.data.cutoff_ms != null && Number(r.data.cutoff_ms)<0))) return bad();
   if (r.table === 'weigh_ins' && r.data.source !== 'app') return bad();
+}
+/** Pulls retain unusable timezone strings until applyPage can skip the marker
+ * and still advance its cursor. All other validation remains fail-closed. */
+export function validatePulledRow(input: unknown): asserts input is Row {
+  const row = input as Row;
+  validateRow(row?.table === 'purges' && typeof row.data?.tz === 'string'
+    ? {...row,data:{...row.data,tz:null}} : row);
 }
 export function revision(row: Row) { return `${row.updated_at}:${row.device_id}`; }
 export function canonicalRow(row: Row): Row {
@@ -41,7 +56,7 @@ export function canonicalRow(row: Row): Row {
 export function fromWire(table: Table, wire: Record<string, unknown>): ServerRow {
   const row = { table, owner_id: wire.owner_id, id: wire.id, updated_at: Number(wire.updated_at), deleted_at: wire.deleted_at === null ? null : Number(wire.deleted_at), device_id: wire.device_id,
     data: Object.fromEntries(Object.keys(columns[table]).map(k => [k, wire[k] ?? null])) };
-  validateRow(row);
+  validatePulledRow(row);
   if (typeof wire.server_seq !== 'string' || !/^\d+$/.test(wire.server_seq)) throw new Error('Invalid sync cursor.');
   return { row, server_seq: wire.server_seq };
 }
