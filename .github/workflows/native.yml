@@ -70,4 +70,7 @@ jobs:
           cache: npm
           cache-dependency-path: native/package-lock.json
       - run: npm ci
-      - run: node --test plugins/*.test.js
+      - name: Run plugin tests with real PlistBuddy
+        run: node --test --test-skip-pattern="strict plutil round-trip" plugins/*.test.js
+      - name: Strict pbxproj write/read and decoded Release/Debug execution
+        run: node --test --test-name-pattern="strict plutil round-trip" plugins/withStripLocalNetworkingRelease.test.js

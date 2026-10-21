@@ -15,9 +15,9 @@ assert.ok(process.env.REQUIRE_PLISTBUDDY !== '1' || plistBuddyAvailable,
   'REQUIRE_PLISTBUDDY=1: real macOS PlistBuddy tests must run, not skip');
 const plistBuddyOptions = { skip: plistBuddyAvailable ? false : 'requires real macOS /usr/libexec/PlistBuddy (unavailable on Linux)' };
 
-const phaseName = '[Insight Daily] Strip Local Networking for Release';
+const { PHASE_NAME: phaseName, EXPO_PHASE_NAME: expoPhaseName } = require(pluginPath);
 
-async function getPhase(existingPhase = true) {
+async function getPhase(existingPhase = true, withDevLauncher = false, { written = false, plugins = [] } = {}) {
   assert.ok(existsSync(pluginPath), 'Release ATS config plugin must exist');
   const plugin = require(pluginPath);
   const project = xcode.project('synthetic.pbxproj');
@@ -42,10 +42,19 @@ async function getPhase(existingPhase = true) {
   project.addBuildPhase([], 'PBXShellScriptBuildPhase', '[CP] Embed Pods Frameworks', appTarget, {
     shellPath: '/bin/sh', shellScript: 'echo embed',
   });
+  let widgetPhaseId;
+  if (withDevLauncher) {
+    project.addBuildPhase([], 'PBXShellScriptBuildPhase', expoPhaseName, widgetTarget, {
+      shellPath: '/bin/sh', shellScript: 'echo widget phase',
+    });
+    widgetPhaseId = project.pbxNativeTargetSection()[widgetTarget].buildPhases[0].value;
+  }
   let firstResult;
   // Exercise Expo's registered mod twice, as on repeated non-clean prebuilds.
   for (let i = 0; i < 2; i++) {
-    const config = plugin({ name: 'Insight Daily', slug: 'insight-daily' });
+    let config = plugin({ name: 'Insight Daily', slug: 'insight-daily', plugins });
+    // Match app.json order; Expo executes the later-registered mod first.
+    if (withDevLauncher) config = require('expo-dev-launcher/app.plugin').default(config, {});
     await config.mods.ios.xcodeproj({
       ...config,
       modResults: project,
@@ -56,7 +65,13 @@ async function getPhase(existingPhase = true) {
   }
   const targets = project.pbxNativeTargetSection();
   assert.equal(targets[appTarget].buildPhases.length, 2);
-  assert.equal(targets[widgetTarget].buildPhases.length, 0);
+  assert.equal(targets[widgetTarget].buildPhases.length, withDevLauncher ? 1 : 0);
+  if (withDevLauncher) {
+    assert.equal(targets[widgetTarget].buildPhases[0].value, widgetPhaseId);
+    const section = parse(project.writeSync()).project.objects.PBXShellScriptBuildPhase;
+    const expoIds = Object.keys(section).filter((id) => section[id]?.name === `"${expoPhaseName}"`);
+    assert.deepEqual(expoIds, [widgetPhaseId], 'only the unrelated widget phase should remain');
+  }
   const phaseId = targets[appTarget].buildPhases.find((phase) => phase.comment === phaseName).value;
   const phase = project.hash.project.objects.PBXShellScriptBuildPhase[phaseId];
   assert.equal(phase.shellPath, '/bin/sh');
@@ -65,15 +80,52 @@ async function getPhase(existingPhase = true) {
   const serializedPhase = parse(project.writeSync()).project.objects.PBXShellScriptBuildPhase[phaseId];
   assert.deepEqual(serializedPhase.inputPaths, phase.inputPaths, 'input paths survive pbxproj serialization');
   assert.deepEqual(serializedPhase.outputPaths, phase.outputPaths, 'output paths survive pbxproj serialization');
-  // xcode stores escaped quotes but literal newlines until project serialization.
+  // This legacy helper decodes the in-memory field, not the written OpenStep project.
+  if (written) return { contents: project.writeSync(), phaseId };
   return phase.shellScript.slice(1, -1).replace(/\\"/g, '"');
 }
 
 test('adds one phase with processed plist input dependency and idempotency', () => getPhase(false));
 test('upgrades the existing phase with processed plist input dependency and idempotency', () => getPhase());
 
+test('removes the redundant Expo dev-launcher app phase after Expo mods, preserving widget phases', async () => {
+  await getPhase(false, true, { plugins: ['expo-dev-client'] });
+  await getPhase(true, true, { plugins: [['expo-dev-client', {}]] });
+});
+
+test('written shellScript contains no doubled backslash before a quote', async () => {
+  const { contents, phaseId } = await getPhase(true, false, { written: true });
+  const field = parse(contents).project.objects.PBXShellScriptBuildPhase[phaseId].shellScript;
+  // A doubled backslash before a quote makes the quote terminate the OpenStep string.
+  assert.ok(!field.includes(String.raw`\\"`), 'written script must not contain doubled backslashes before quotes');
+});
+
+test('fails when expo-dev-client is configured but its local-network phase is missing', async () => {
+  for (const entry of ['expo-dev-client', ['expo-dev-client', {}]]) {
+    await assert.rejects(getPhase(false, false, { plugins: [entry] }), /expo-dev-client.*local.network phase.*not found/i);
+  }
+});
+
 test('DEBUG=1 preserves keys; Release, Profile and custom configurations strip keys and write stamps', plistBuddyOptions, async () => {
-  const script = await getPhase();
+  assertScriptBehavior(await getPhase());
+});
+
+test('strict plutil round-trip executes decoded Release and Debug scripts with real PlistBuddy', plistBuddyOptions, async () => {
+  const { contents, phaseId } = await getPhase(false, true, { written: true });
+  const dir = mkdtempSync(path.join(tmpdir(), 'insight-pbxproj-'));
+  try {
+    const file = path.join(dir, 'synthetic.pbxproj');
+    writeFileSync(file, contents);
+    const decoded = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', file], { encoding: 'utf8' }));
+    const script = decoded.objects[phaseId].shellScript;
+    assert.ok(!script.includes(String.raw`\"`), 'decoded script must have no backslash-escaped quotes');
+    assertScriptBehavior(script);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function assertScriptBehavior(script) {
   const buildDir = mkdtempSync(path.join(tmpdir(), 'insight-ats-'));
   const plistPath = path.join(buildDir, 'Synthetic App.app', 'Info.plist');
   const derivedDir = path.join(buildDir, 'Derived Files');
@@ -91,7 +143,12 @@ test('DEBUG=1 preserves keys; Release, Profile and custom configurations strip k
       ['Debug', '$(inherited) DEBUG=1 OTHER=1', true],
       ['Release', '', false], ['Profile', 'NDEBUG=1', false],
       ['Internal', 'OTHER_DEBUG=1 DEBUG=10', false],
-      ['Debug', 'DEBUG=0', false], ['CustomDebug', 'DEBUG=1', true],
+      ['Debug', 'DEBUG=0', false], ['CustomDebug', '', false], ['CustomDebug', 'DEBUG=1', true],
+      ['Debug', '"DEBUG=1"', true], ['Debug', "'DEBUG=1'", true],
+      ['Debug', '$(inherited)\t"DEBUG=1" OTHER=1', true],
+      ['Debug', '"DEBUG=0" "DEBUG=10" "OTHER_DEBUG=1"', false],
+      ['Debug', '"DEBUG=1', false], ['Debug', 'DEBUG=1"', false],
+      ['Debug', `'DEBUG=1"`, false], ['Debug', `"DEBUG=1'`, false],
     ]) {
       writeFileSync(plistPath, '<?xml version="1.0" encoding="UTF-8"?>\n' +
         '<plist version="1.0"><dict><key>NSAppTransportSecurity</key><dict>' +
@@ -119,17 +176,17 @@ test('DEBUG=1 preserves keys; Release, Profile and custom configurations strip k
   } finally {
     rmSync(buildDir, { recursive: true, force: true });
   }
-});
+}
 
 // Missing files must fail even on Linux, before PlistBuddy would be invoked.
-test('non-debug builds fail closed when the processed plist is missing', async () => {
+test('all builds including quoted DEBUG=1 fail closed when the processed plist is missing', async () => {
   const script = await getPhase();
   const buildDir = mkdtempSync(path.join(tmpdir(), 'insight-ats-missing-'));
   try {
-    for (const configuration of ['Release', 'Profile', 'Internal']) {
+    for (const [configuration, definitions] of [['Release', ''], ['Profile', ''], ['Internal', ''], ['Debug', 'DEBUG=1'], ['Debug', '"DEBUG=1"']]) {
       const result = spawnSync('/bin/sh', ['-c', script], {
         encoding: 'utf8',
-        env: { ...process.env, CONFIGURATION: configuration, GCC_PREPROCESSOR_DEFINITIONS: '',
+        env: { ...process.env, CONFIGURATION: configuration, GCC_PREPROCESSOR_DEFINITIONS: definitions,
           TARGET_BUILD_DIR: buildDir, INFOPLIST_PATH: 'Missing.app/Info.plist', DERIVED_FILE_DIR: buildDir },
       });
       assert.equal(result.status, 1);
