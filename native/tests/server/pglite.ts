@@ -7,13 +7,14 @@ export async function serverDatabase() {
   const db = new PGlite();
   await db.exec(`CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
-    CREATE ROLE anon; CREATE ROLE authenticated; GRANT USAGE ON SCHEMA auth, public TO authenticated,anon;
+    CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; GRANT USAGE ON SCHEMA auth, public TO authenticated,anon;
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
     INSERT INTO auth.users VALUES ('${OWNER_A}'), ('${OWNER_B}');`);
   await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0001_row_sync.sql'),'utf8'));
+  await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0002_v1_columns.sql'),'utf8'));
   return db;
 }
 export async function asUser<T>(db: PGlite, owner: string, operation: (tx: Parameters<Parameters<PGlite['transaction']>[0]>[0]) => Promise<T>): Promise<T> {
@@ -23,7 +24,7 @@ export async function asUser<T>(db: PGlite, owner: string, operation: (tx: Param
     return operation(tx);
   });
 }
-export function testTransport(db: PGlite, owner: string): Transport {
+export function testTransport(db: PGlite, owner: string) {
   return {
     owner,
     async push(rows: Row[]) {
@@ -37,5 +38,5 @@ export function testTransport(db: PGlite, owner: string): Transport {
         return result.rows.map(r => fromWire(table,r));
       });
     },
-  };
+  } satisfies Transport;
 }

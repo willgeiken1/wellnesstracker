@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import type { PGlite } from '@electric-sql/pglite';
-import { serverDatabase, testTransport } from './pglite';
+import { serverDatabase, asUser, testTransport } from './pglite';
 import { localDatabase } from './sqlite';
 import { Repository } from '../../src/data/repository';
 import { SyncEngine } from '../../src/data/sync/engine';
@@ -59,7 +59,8 @@ test('failed push retries after restart; no cross-account or demo transport; int
 test('all synced tables pull independently and cursors never use device time', async () => {
   const local=await localDatabase();
   const transport=testTransport(db,OWNER_A);
-  for (const table of syncedTables) await transport.push([{...syntheticRow(table),updated_at:500}]);
+  for (const table of syncedTables.filter(t=>t!=='purges')) await transport.push([{...syntheticRow(table),updated_at:500}]);
+  await asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'2026-10-01','2026-10-01',0,'UTC')",[syntheticRow().id]));
   const engine=new SyncEngine(local.repo,transport,1);
   await engine.sync();
   for (const table of syncedTables) expect(local.repo.list(table,true).length).toBeGreaterThan(0);

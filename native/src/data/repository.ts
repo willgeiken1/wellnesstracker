@@ -1,6 +1,7 @@
+import { matchesPurge, purgeTombstone } from './purges';
 import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
+import { columns, syncedTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 type Physical = Record<string, Scalar>;
 // Repositories sharing a database handle must share transaction guards.
@@ -82,13 +83,18 @@ export class Repository {
     const { owner_id, id, updated_at, deleted_at, device_id, ...data } = physical;
     return { table, owner_id: String(owner_id), id: String(id), updated_at: Number(updated_at), deleted_at: deleted_at === null ? null : Number(deleted_at), device_id: String(device_id), data };
   }
-  private write(row: Row) {
+  private write(input: Row) {
+    let row = input;
+    for (const marker of this.list('purges').sort((a,b)=>compareRows(b,a))) {
+      if (matchesPurge(row,marker,(table,id)=>this.get(table,id))) { row=purgeTombstone(row,marker); break; }
+    }
     const data = {owner_id: row.owner_id, id: row.id, updated_at: row.updated_at, deleted_at: row.deleted_at, device_id: row.device_id, ...row.data};
     const keys = Object.keys(data);
     const fields = sql.join(keys.map(k => sql.identifier(k)), sql`, `);
     const values = sql.join(Object.values(data).map(v => sql`${v}`), sql`, `);
     const updates = sql.join(keys.filter(k => !['owner_id','id'].includes(k)).map(k => sql`${sql.identifier(k)}=excluded.${sql.identifier(k)}`), sql`, `);
     this.db.run(sql`INSERT INTO ${this.table(row.table)} (${fields}) VALUES (${values}) ON CONFLICT(owner_id,id) DO UPDATE SET ${updates}`);
+    return row;
   }
   get(table: Table, id: string): Row | undefined {
     return this.safe(() => { const value = this.db.get<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} AND id=${id}`); return value ? this.decode(table, value) : undefined; });
@@ -99,16 +105,18 @@ export class Repository {
   /** One synchronous transaction commits both row and outbox before notifying subscribers. */
   putLocal(input: Row): void {
     this.safe(() => {
+      if (input.table === 'purges') throw new Error('purges is pull-only.');
       if (input.owner_id !== this.owner || input.device_id !== this.device) throw new Error('Owner/device mismatch.');
       const healthLocal = input.table === 'weigh_ins' && input.data.source !== 'app';
       if (healthLocal && !['healthkit','health_connect'].includes(String(input.data.source))) throw new Error('Invalid provenance.');
       validateRow(healthLocal ? {...input, data: {...input.data, source:'app'}} : input);
       const previous = this.get(input.table, input.id);
       if (previous && previous.table === 'weigh_ins' && previous.data.source !== input.data.source) throw new Error('Provenance is immutable.');
-      const row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
+      let row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
       if (previous && compareRows(row, previous) <= 0) return;
       this.atomic(() => {
-        this.write(row);
+        row = this.write(row);
+        this.applyPurges();
         const clock = Math.max(Number(this.state('clock') ?? 0), row.updated_at);
         this.setState('clock', String(clock));
         if (this.owner !== 'demo' && this.owner !== 'guest' && !healthLocal) {
@@ -129,10 +137,10 @@ export class Repository {
   }
   /** Includes conflict-flagged rows, which pending() intentionally excludes from upload. */
   unsyncedCount() {
-    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner}`)?.count ?? 0);
+    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges'`)?.count ?? 0);
   }
   hasUnsynced() {
-    return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} LIMIT 1`));
+    return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' LIMIT 1`));
   }
   save(table: Table, data: Row['data'], id = this.uuid(), now = Date.now()): Row {
     const stamp = this.safe(() => Math.max(now, Number(this.state('clock') ?? 0) + 1));
@@ -145,7 +153,7 @@ export class Repository {
     this.putLocal({...row,device_id:this.device,updated_at:stamp,deleted_at:stamp});
   }
   pending(): Pending[] {
-    return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).map(item => {
+    return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).map(item => {
       const row = this.get(item.table_name,item.row_id); if (!row) throw new Error('Invalid outbox.'); validateRow(row); return {row,revision:item.revision};
     }));
   }
@@ -199,7 +207,8 @@ export class Repository {
       if (!/^\d+$/.test(cursor) || BigInt(cursor) < BigInt(this.cursor(table))) throw new Error('Invalid cursor.');
       let clock = Number(this.state('clock') ?? 0);
       for (const remote of page) {
-        const row = canonicalRow(remote.row);
+        validatePulledRow(remote.row);
+        const row = remote.row;
         if (row.owner_id !== this.owner || row.table !== table || !/^\d+$/.test(remote.server_seq) || BigInt(remote.server_seq) > BigInt(cursor)) throw new Error('Invalid page.');
         const local = this.get(table,row.id);
         clock = Math.max(clock, row.updated_at);
@@ -207,12 +216,27 @@ export class Repository {
           this.recordConflict(table,row.id); continue;
         }
         if (this.db.get(sql`SELECT 1 FROM sync_conflicts WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)) continue;
-        if (!local || compareRows(row,local) > 0) this.write(row);
+        if (!local || compareRows(row,local) > 0) this.write(canonicalPulledRow(row));
       }
+      this.applyPurges();
       this.setState('clock', String(clock));
       this.setState(`cursor:${table}`,cursor);
     }));
     this.notify();
+  }
+  /** Within the caller's transaction. Children must be wiped before references. */
+  private applyPurges() {
+    const markers=this.list('purges').sort((a,b)=>compareRows(b,a));
+    for (const marker of markers) {
+      for (const table of ['sets','entries','sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days','photos'] as const) {
+        for (const row of this.list(table)) {
+          // Health-origin rows remain local and never enter a sync outbox.
+          if (!matchesPurge(row,marker,(parent,id)=>this.get(parent,id))) continue;
+          const dead=this.write(purgeTombstone(row,marker));
+          this.db.run(sql`UPDATE sync_outbox SET revision=${revision(dead)} WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`);
+        }
+      }
+    }
   }
   cacheOura(day: string, cache: Record<string,unknown>) {
     this.safe(() => this.db.run(sql`INSERT INTO oura_days(owner_id,day,cache) VALUES(${this.owner},${day},${JSON.stringify(cache)}) ON CONFLICT(owner_id,day) DO UPDATE SET cache=excluded.cache`));

@@ -55,8 +55,23 @@ test('push sends only tombstone identity and provenance, even if caller supplies
 
 test('push fails closed on missing, mismatched or invalid authoritative acknowledgments',async()=>{
  const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A),row=syntheticRow();
- for(const data of [null,[],[{...row,owner_id:OWNER_B}],[{...row,table:'meals'}],[{...row,id:OWNER_B}],[{...row,data:{unknown:'fixture'}}]]) {
+ for(const data of [null,[],[{...row,owner_id:OWNER_B}],[{...row,table:'meals'}],[{...row,id:OWNER_B}],[{...row,data:null}]]) {
   fixture.rpc.mockResolvedValueOnce({data,error:null} as never);
   await expect(transport.push([row])).rejects.toThrow();
  }
+});
+
+test('authoritative acknowledgments ignore future data columns while validating known values and identity',async()=>{
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A),row=syntheticRow('sets');
+ fixture.rpc.mockResolvedValueOnce({data:[{...row,data:{reps:8,future_set_column:'fixture'}}],error:null});
+ expect((await transport.push([row]))[0].data.reps).toBe(8);
+ fixture.rpc.mockResolvedValueOnce({data:[{...row,data:{reps:'invalid',future_set_column:'fixture'}}],error:null} as never);
+ await expect(transport.push([row])).rejects.toThrow();
+});
+
+test('purge markers can be pulled but neither live markers nor tombstones reach push RPC',async()=>{
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A);
+ for(const deleted_at of [null,100])await expect(transport.push([{...syntheticRow('purges'),deleted_at}])).rejects.toThrow(/pull-only/);
+ expect(fixture.rpc).not.toHaveBeenCalled();
+ await transport.pull('purges','0',100);expect(fixture.from).toHaveBeenCalledWith('purges');
 });

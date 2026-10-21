@@ -9,9 +9,9 @@ let db: PGlite;
 beforeAll(async () => { db = await serverDatabase(); });
 afterAll(async () => { await db?.close(); });
 
-test.each(syncedTables)('%s wipes pushed and directly updated tombstones, including pull values; resurrection follows LWW', async table => {
+test.each(syncedTables.filter(t=>t!=='purges'))('%s wipes pushed and directly updated tombstones, including pull values; resurrection follows LWW', async table => {
  const transport = testTransport(db, OWNER_A);
- const data = Object.fromEntries(Object.entries(columns[table]).map(([key, type]) => [key, key === 'source' ? 'app' : type === 'text' ? 'synthetic' : 42]));
+ const data = Object.fromEntries(Object.entries(columns[table]).map(([key, type]) => [key, key === 'source' ? 'app' : /day$/.test(key) ? '2026-01-01' : key === 'mode' ? 'rotation' : key === 'unit_override' ? 'kg' : key === 'days_per_week' ? 3 : type === 'text' ? 'synthetic' : 42]));
  const row = {...syntheticRow(table), data};
  const expected = Object.fromEntries(Object.keys(data).map(key => [key, key === 'source' ? 'app' : null]));
  await transport.push([{...row, deleted_at: 100}]);
@@ -115,11 +115,15 @@ test.each(['insert','rpc','update'])('independent deletion bound through %s pres
  });
 });
 
-test('account deletion cascades all 19 owner FKs and preserves the other owner', async () => {
+test('account deletion cascades all owner FKs and preserves the other owner', async () => {
  for(const table of syncedTables) {
   const row={...syntheticRow(table),id:'30000000-0000-4000-8000-000000000504'};
-  await testTransport(db,OWNER_A).push([row]);
-  await testTransport(db,OWNER_B).push([{...row,owner_id:OWNER_B}]);
+  if(table==='purges') {
+   for(const owner of [OWNER_A,OWNER_B])await asUser(db,owner,tx=>tx.query("SELECT public.sync_purge_range($1,'2026-10-01','2026-10-01',0,'UTC')",[row.id]));
+  }else {
+   await testTransport(db,OWNER_A).push([row]);
+   await testTransport(db,OWNER_B).push([{...row,owner_id:OWNER_B}]);
+  }
  }
  const constraints=await db.query<{table_name:string;confdeltype:string}>(`SELECT conrelid::regclass::text AS table_name,confdeltype FROM pg_constraint WHERE contype='f' AND confrelid='auth.users'::regclass`);
  expect(constraints.rows.map(row=>row.table_name.replace(/^public\./,'')).sort()).toEqual([...syncedTables].sort());
@@ -136,7 +140,10 @@ test.each([OWNER_A,'demo'])('wipe erases every local table and sync metadata for
  const other=new Repository(local.db,OWNER_B,local.repo.device,()=>syntheticRow().id);
  try {
   for(const table of syncedTables) {
-   repo.putLocal({...syntheticRow(table),owner_id:owner});other.putLocal({...syntheticRow(table),owner_id:OWNER_B});
+   if(table==='purges') {
+    repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');
+    other.applyPage(table,[{row:{...syntheticRow(table),owner_id:OWNER_B},server_seq:'1'}],'1');
+   }else {repo.putLocal({...syntheticRow(table),owner_id:owner});other.putLocal({...syntheticRow(table),owner_id:OWNER_B});}
    repo.applyPage(table,[],'17');
   }
   if(owner===OWNER_A)repo.flagConflict(repo.pending()[0]);

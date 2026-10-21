@@ -86,4 +86,47 @@ export const workoutLocalSql = `CREATE TABLE workout_local (owner_id TEXT NOT NU
 CREATE TABLE workout_milestones (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));
 --> statement-breakpoint
 CREATE TABLE workout_weekly (owner_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(owner_id,key));`;
-export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql } };
+export const v1ColumnsSql = `ALTER TABLE sets ADD COLUMN tag TEXT;
+--> statement-breakpoint
+ALTER TABLE routine_exercises ADD COLUMN rep_min INTEGER;
+--> statement-breakpoint
+ALTER TABLE routine_exercises ADD COLUMN rep_max INTEGER;
+--> statement-breakpoint
+ALTER TABLE routine_exercises ADD COLUMN superset_group TEXT;
+--> statement-breakpoint
+ALTER TABLE entries ADD COLUMN superset_group TEXT;
+--> statement-breakpoint
+ALTER TABLE machine_notes ADD COLUMN step REAL;
+--> statement-breakpoint
+ALTER TABLE machine_notes ADD COLUMN bar_weight REAL;
+--> statement-breakpoint
+ALTER TABLE machine_notes ADD COLUMN unit_override TEXT;
+--> statement-breakpoint
+ALTER TABLE settings ADD COLUMN plate_set TEXT;
+--> statement-breakpoint
+ALTER TABLE settings ADD COLUMN rest_per_exercise TEXT;
+--> statement-breakpoint
+ALTER TABLE settings ADD COLUMN rest_style TEXT;
+--> statement-breakpoint
+ALTER TABLE food_entries ADD COLUMN fiber_g REAL;
+--> statement-breakpoint
+ALTER TABLE food_entries ADD COLUMN sugar_g REAL;
+--> statement-breakpoint
+ALTER TABLE food_entries ADD COLUMN sodium_mg REAL;
+--> statement-breakpoint
+ALTER TABLE saved_foods ADD COLUMN fiber_g REAL;
+--> statement-breakpoint
+ALTER TABLE saved_foods ADD COLUMN sugar_g REAL;
+--> statement-breakpoint
+ALTER TABLE saved_foods ADD COLUMN sodium_mg REAL;
+--> statement-breakpoint
+CREATE TABLE custom_exercises (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, main_muscle TEXT, helpers TEXT, equipment TEXT, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE plans (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, mode TEXT, days_per_week INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE pauses (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, start_day TEXT, end_day TEXT, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE purges (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, from_day TEXT, to_day TEXT, cutoff_ms INTEGER, tz TEXT, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE UNIQUE INDEX purges_owner_version ON purges(owner_id,updated_at,device_id) WHERE cutoff_ms IS NOT NULL;`;
+export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }, { idx: 4, when: 1792238400004, tag: '0004_v1_columns', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql, m0004: v1ColumnsSql } };

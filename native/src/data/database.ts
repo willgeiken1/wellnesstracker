@@ -18,7 +18,7 @@ export function openLocalDatabase() {
       await migrate(db,migrations);
       stage = 'DatabaseOpenError';
       const device = deviceId(db, randomUUID);
-      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
+      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name <> 'purges'`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
     } catch {
       try { sqlite?.closeSync(); } catch { /* Keep the original failure category. */ }
       const error = new Error('Local data is unavailable.');
