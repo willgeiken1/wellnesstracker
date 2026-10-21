@@ -1,5 +1,5 @@
 import { exerciseLibrary, exerciseFor } from '../src/core/workout/library';
-import { displayWeight, suggestion, step, plates, detectPR, setMetrics, attribute, localDay, weekOf, validateSet, validateDate, cardKey, shouldShowCard, keypad } from '../src/core/workout/rules';
+import { NO_GAP_INFO_WARNING, displayWeight, suggestion, step, plates, detectPR, setMetrics, attribute, localDay, weekOf, validateSet, validateDate, cardKey, shouldShowCard, keypad } from '../src/core/workout/rules';
 const done = (weight: number, reps = 8) => ({
   weight,
   reps,
@@ -177,8 +177,8 @@ describe('M2-02 logger rules', () => {
     expect(suggestion([], 'barbell', 'lb', 8, undefined, { sessions }).weight).toBeNull();
   });
 
-  test.each([['barbell', 'lb', undefined, 1, 5], ['cable', 'kg', 4, 1, 4]] as const)(
-    'step-back keeps at least one equipment step for %s %s', (equipment, unit, stack, weight, expected) => {
+  test.each([['barbell', 'lb', undefined, 2.5, 2.5], ['machine', 'lb', undefined, 5, 5], ['cable', 'kg', 4, 2, 2], ['barbell', 'lb', undefined, 1, 1]] as const)(
+    'step-back holds below one equipment step for %s %s', (equipment, unit, stack, weight, expected) => {
       const sessions = [miss('2026-10-01', weight), miss('2026-10-03', weight)];
       expect(suggestion(sessions[1].sets, equipment, unit, 8, stack, { sessions })).toMatchObject({ weight: expected, jump: false });
     }
@@ -207,14 +207,49 @@ describe('M2-02 logger rules', () => {
     ['unreadable', '2026-10-01'], ['2026-10-08', 'unreadable'],
     ['', '2026-10-01'], ['2026-02-30', '2026-02-01'],
     ['2026-10-08', '2026-13-01'], ['10/08/2026', '2026-10-01'],
-    ['2026-10-01', '2026-10-08'],
-  ])('invalid gap dates use conservative ease-in (%s, %s)', (today, lastTrainingDay) => {
+    ['2026-10-01', '2026-10-08'], ['2026-10-01', '2026-10-02'],
+    ['2026-10', '2026-10-01'], ['2026-10-08', '2026-10'],
+    ['unreadable', undefined], [undefined, 'unreadable'],
+    ['2026-10-08', undefined], [undefined, '2026-10-01'],
+    ['-1', '2026-10-01'], ['2026-10-08', '-1'],
+  ])('invalid or partial gap dates hold with one value-free warning (%s, %s)', (today, lastTrainingDay) => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       expect(suggestion([done(100)], 'barbell', 'lb', 8, undefined, { today, lastTrainingDay }))
-        .toMatchObject({ weight: 80, jump: false });
+        .toMatchObject({ weight: 100, jump: false });
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith('Workout suggestion: invalid gap date; using conservative ease-in.');
+      expect(warn).toHaveBeenCalledWith(NO_GAP_INFO_WARNING);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('chained unreadable dates never compound a reduction', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      let weight = 100;
+      for (let call = 0; call < 4; call++) {
+        const result = suggestion([done(weight)], 'barbell', 'lb', 8, undefined, {
+          today: 'unreadable', lastTrainingDay: 'unreadable'
+        });
+        expect(result).toMatchObject({ weight: 100, jump: false });
+        weight = result.weight!;
+      }
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn.mock.calls).toEqual(Array(4).fill([NO_GAP_INFO_WARNING]));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('no gap info holds even when session history would trigger step-back', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, {
+        sessions: [miss('2026-10-01'), miss('2026-10-03')],
+        today: 'unreadable', lastTrainingDay: '2026-10-03'
+      })).toMatchObject({ weight: 100, jump: false });
+      expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
     }

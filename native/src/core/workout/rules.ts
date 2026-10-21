@@ -32,6 +32,7 @@ export interface SuggestionContext {
   /** Last training day across all exercises, not just this exercise. */
   lastTrainingDay?: string;
 }
+export const NO_GAP_INFO_WARNING = 'Workout suggestion: no gap info; holding last weight.';
 const meetsTarget = (sets: WorkingSet[], target?: number) => sets.every(s => s.reps >= (target ?? s.reps));
 export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: Unit, targetReps?: number, stack?: number, context: SuggestionContext = {}) {
   const sets = working(previous);
@@ -52,11 +53,18 @@ export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: U
       && new Date(stamp).toISOString().slice(0, 10) === day ? stamp : NaN;
   };
   let gap = 0;
-  if (context.today !== undefined && context.lastTrainingDay !== undefined) {
-    gap = (dayStamp(context.today) - dayStamp(context.lastTrainingDay)) / 86400000;
+  if (context.today !== undefined || context.lastTrainingDay !== undefined) {
+    gap = context.today !== undefined && context.lastTrainingDay !== undefined
+      ? (dayStamp(context.today) - dayStamp(context.lastTrainingDay)) / 86400000 : NaN;
     if (!Number.isFinite(gap) || gap < 0) {
-      console.warn('Workout suggestion: invalid gap date; using conservative ease-in.');
-      gap = 21;
+      console.warn(NO_GAP_INFO_WARNING);
+      return {
+        weight: last.weight,
+        jump: false,
+        previous: last.weight,
+        target: targetReps ?? last.reps,
+        count: sets.length
+      };
     }
   }
   const recent = jump > 0 ? (context.sessions ?? [])
@@ -74,7 +82,7 @@ export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: U
   const factor = gap >= 21 ? .8 : gap >= 7 || twoMisses ? .9 : 1;
   const reduce = jump > 0 && factor < 1;
   return {
-    weight: rounded(reduce ? Math.max(jump, Math.min(last.weight, Math.round(last.weight * factor / jump) * jump)) : last.weight + (hit ? jump : 0)),
+    weight: rounded(reduce ? Math.min(last.weight, Math.max(jump, Math.round(last.weight * factor / jump) * jump)) : last.weight + (hit ? jump : 0)),
     jump: !reduce && hit && jump > 0,
     previous: last.weight,
     target: targetReps ?? last.reps,
@@ -113,16 +121,17 @@ export function setMetrics(set: WorkingSet, context: LoadContext = {}) {
  * Supply separate prior context when the historical weigh-in differs. */
 export function detectPR(current: WorkingSet[], prior: WorkingSet[], context: LoadContext = {}, priorContext: LoadContext = context) {
   const eligible = (sets: WorkingSet[]) => working(sets).filter(s => s.reps >= 1);
-  const best = (sets: WorkingSet[], context: LoadContext) => ({
-    weight: Math.max(0, ...sets.map(s => s.weight)),
-    e1rm: Math.max(0, ...sets.map(s => setMetrics(s, context).e1rm ?? 0))
-  });
-  const before = eligible(prior), now = best(eligible(current), context), old = best(before, priorContext);
+  // Bodyweight bestWeight is ADDED load; the UI must not label it as total load.
+  const bestWeight = (sets: WorkingSet[]) => Math.max(0, ...sets.map(s => s.weight));
+  const before = eligible(prior), now = eligible(current);
+  const currentE1rms = now.map(s => setMetrics(s, context).e1rm);
+  const priorE1rms = before.map(s => setMetrics(s, priorContext).e1rm);
+  const bestE1rm = Math.max(0, ...currentE1rms.map(value => value ?? 0));
   return {
-    weight: before.length > 0 && now.weight > old.weight + 1e-7,
-    e1rm: before.some(s => setMetrics(s, priorContext).e1rm !== null) && now.e1rm > old.e1rm + 1e-7,
-    bestWeight: now.weight,
-    bestE1rm: now.e1rm
+    weight: before.length > 0 && bestWeight(now) > bestWeight(before) + 1e-7,
+    e1rm: priorE1rms.some(value => value !== null) && bestE1rm > Math.max(0, ...priorE1rms.map(value => value ?? 0)) + 1e-7,
+    bestWeight: bestWeight(now),
+    bestE1rm
   };
 }
 export function attribute(exercises: {
