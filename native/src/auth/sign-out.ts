@@ -40,12 +40,13 @@ export async function escapeSignOut(database: {wipeAll():void}, storage: SignOut
 }
 // StrictMode/multiple boot consumers must not clear credentials after another consumer starts auth.
 const recoveries=new WeakMap<SignOutStorage,Promise<string|null>>();
-export function recoverSignOut(database: OwnerDatabase, storage: SignOutStorage, clearSession:(owner:string)=>Promise<void>): Promise<string|null> {
+export function recoverSignOut(database: OwnerDatabase, storage: SignOutStorage, clearSession:(owner:string)=>Promise<void>, beforeWipe?:()=>void): Promise<string|null> {
   const existing=recoveries.get(storage);if(existing)return existing;
   const flight=(async()=>{
     let marker:SignOutMarker|null;
     try {marker=await storage.read();} catch(error) {if(error instanceof CorruptSignOutMarker)throw error;throw new UnreadableSignOutMarker();}
     if(!marker)return null;
+    if(marker.phase==='pending')beforeWipe?.();
     await completeSignOut(marker,database.forOwner(marker.owner),storage,clearSession);
     return marker.owner;
   })().finally(()=>{recoveries.delete(storage);});

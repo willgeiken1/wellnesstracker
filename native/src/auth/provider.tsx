@@ -9,13 +9,21 @@ import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure } from './sign-out';
+import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
+import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
+// Clear the hint for every resumed departure phase, before recovery can wipe/remove its marker.
+const bootSignOutStorage: typeof signOutStorage={
+  async read(){const marker=await signOutStorage.read();if(marker)await lastOwnerStorage.clear();return marker;},
+  write:marker=>signOutStorage.write(marker),remove:()=>signOutStorage.remove(),
+};
 export interface AuthState {
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   prepareSignOut?(): Promise<void>;
-  recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure'; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
+  bootExportOwner?(): string | null;
+  recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
 }
@@ -26,6 +34,9 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const [bootReady,setBootReady]=useState(false),[departurePending,setDeparturePending]=useState(false);
   const [recovery,setRecovery]=useState<AuthState['recovery']>(),[recoveryFailed,setRecoveryFailed]=useState(false);
   const [bootAttempt,setBootAttempt]=useState(0);
+  const [bootClass,setBootClass]=useState('Error');
+  const [bootRetryNeedsConfirmation,setBootRetryNeedsConfirmation]=useState(false);
+  const retryWipeConfirmed=useRef(false), recoveringBoot=useRef(false), bootInFlight=useRef(true);
   const readFailures=useRef(0);
   const escapeAllowed=useRef(false);
   const retryDeparture=useRef<(()=>Promise<void>)|null>(null);
@@ -37,13 +48,19 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const [session,setSession]=useState<Session|null>(null), [demo,setDemo]=useState(false), [authReady,setAuthReady]=useState(false);
   const [repository,setRepository]=useState<Repository|null>(null),[dataError,setDataError]=useState(false);
   const activeSession=useRef<Session|null>(null);
+  const bootOwner=useRef<string|null>(null);
   useEffect(()=>{
     let active=true;
     escapeAllowed.current=false;
+    bootOwner.current=null;
     void (async()=>{
       try {
         const database=await openLocalDatabase();
-        await recoverSignOut(database,signOutStorage,owner=>owner==='demo'?clearLocalSession():clearLocalSession(true));
+        await recoverSignOut(database,bootSignOutStorage,owner=>owner==='demo'?clearLocalSession():clearLocalSession(true),()=>{
+          setBootRetryNeedsConfirmation(true);
+          // The first boot resumes an already requested sign-out. New recovery retries need consent.
+          if(recoveringBoot.current&&!retryWipeConfirmed.current)throw new Error('Sign-out confirmation required.');
+        });
         readFailures.current=0;
         if(!active)return;
         setDataError(false);setRecovery(undefined);
@@ -52,15 +69,26 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         try {next=supplied===undefined?getAuthClient():supplied;}
         catch {error='Invalid sign-in configuration.';}
         setClientState({client:next,error});setBootReady(true);if(!next)setAuthReady(true);
-      } catch(error) {if(active){setDataError(true);if(error instanceof CorruptSignOutMarker){readFailures.current=0;escapeAllowed.current=true;setRecovery('corrupt-marker');}else if(error instanceof UnreadableSignOutMarker){readFailures.current++;escapeAllowed.current=readFailures.current>=3;setRecovery(escapeAllowed.current?'unreadable-marker':'read-error');}else {readFailures.current=0;setRecovery(undefined);}}}
+      } catch(error) {
+        if(!(error instanceof CorruptSignOutMarker)&&!(error instanceof UnreadableSignOutMarker)) {
+          // Do not restore auth to scope a backup. A missing/unreadable marker check fails closed.
+          try {
+            const stored=await lastOwnerStorage.read();
+            if(stored && !(await signOutStorage.read()) && active)bootOwner.current=stored;
+          } catch {bootOwner.current=null;}
+        }
+        if(active){setDataError(true);if(error instanceof CorruptSignOutMarker){readFailures.current=0;escapeAllowed.current=true;setRecovery('corrupt-marker');}else if(error instanceof UnreadableSignOutMarker){readFailures.current++;escapeAllowed.current=readFailures.current>=3;setRecovery(escapeAllowed.current?'unreadable-marker':'read-error');}else {readFailures.current=0;setBootClass(bootErrorClass(error));setRecovery('boot-error');}}
+      }
+      finally {if(active)bootInFlight.current=false;}
     })();
     return ()=>{active=false;};
   },[supplied,bootAttempt]);
   useEffect(()=>{
     let active=true, received=false;
     if(!bootReady||!client)return;
-    const {data:{subscription}}=client.auth.onAuthStateChange((_event,next)=>{received=true;if(next?.user.id===departingOwner.current || (departureLocked.current&&!departingOwner.current))return;if(active){activeSession.current=next;setSession(next);setAuthReady(true);if(next)setDemo(false);}});
-    void client.auth.getSession().then(({data,error})=>{if(active&&!received){activeSession.current=error?null:data.session;setSession(activeSession.current);setAuthReady(true);}}).catch(()=>{if(active)setAuthReady(true);});
+    const remember=(next:Session|null)=>{void lastOwnerStorage.write(next?.user.id).catch(()=>{/* Keep authentication available if the optional hint cannot be saved. */});};
+    const {data:{subscription}}=client.auth.onAuthStateChange((_event,next)=>{received=true;if(next?.user.id===departingOwner.current || (departureLocked.current&&!departingOwner.current))return;if(active){activeSession.current=next;remember(next);setSession(next);setAuthReady(true);if(next)setDemo(false);}});
+    void client.auth.getSession().then(({data,error})=>{if(active&&!received){activeSession.current=error?null:data.session;remember(activeSession.current);setSession(activeSession.current);setAuthReady(true);}}).catch(()=>{if(active)setAuthReady(true);});
     const refresh=(state:string)=>{if(state==='active'&&!departingOwner.current&&!departureLocked.current)client.auth.startAutoRefresh();else client.auth.stopAutoRefresh();};
     refresh(AppState.currentState ?? 'background');
     const listener=AppState.addEventListener('change',refresh);
@@ -96,14 +124,18 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     void triggers.foreground();
     return ()=>{app.remove();network.remove();triggers.stop();};
   },[engine]);
-  const value: AuthState={prepareSignOut:()=>{
+  const value: AuthState={bootExportOwner:()=>departureLocked.current||departingOwner.current?null:recovery==='boot-error'?bootOwner.current:realOwnerId(activeSession.current?.user.id),prepareSignOut:()=>{
       const flight=syncBeforeSignOut(()=>engine?.sync()??Promise.resolve());
       preparedSync.current={engine,flight};return flight;
-    },recovery,recoveryFailed,retryMarkerRead:()=>{if(!bootReady&&!escapeInFlight.current){escapeAllowed.current=false;setRecovery(undefined);setBootAttempt(attempt=>attempt+1);}},countRecoveryUnsynced:async()=>{try{return (await openLocalDatabase()).countAllUnsynced?.();}catch{return undefined;}},recoverLocalData:async()=>{
+    },recovery,bootErrorClass:bootClass,bootRetryNeedsConfirmation,retryBoot:(confirmed=false)=>{
+      if(bootReady||bootInFlight.current||escapeInFlight.current||recovery!=='boot-error'||(bootRetryNeedsConfirmation&&!confirmed))return;
+      bootInFlight.current=true;recoveringBoot.current=true;retryWipeConfirmed.current=confirmed;setRecovery(undefined);setDataError(false);setBootAttempt(attempt=>attempt+1);
+    },recoveryFailed,retryMarkerRead:()=>{if(!bootReady&&!bootInFlight.current&&!escapeInFlight.current&&(recovery==='read-error'||recovery==='unreadable-marker')){bootInFlight.current=true;escapeAllowed.current=false;setRecovery(undefined);setBootAttempt(attempt=>attempt+1);}},countRecoveryUnsynced:async()=>{try{return (await openLocalDatabase()).countAllUnsynced?.();}catch{return undefined;}},recoverLocalData:async()=>{
       if(!escapeAllowed.current||escapeInFlight.current)return;
       escapeInFlight.current=true;setRecoveryFailed(false);
       try {
         const database=await openLocalDatabase();
+        await lastOwnerStorage.clear();
         await escapeSignOut(database,signOutStorage,()=>clearLocalSession(true));
         // Boot auth only after erasure and marker removal. Never restore the pre-escape session.
         setSession(null);activeSession.current=null;setDemo(false);setDataError(false);setRecovery(undefined);escapeAllowed.current=false;
@@ -135,6 +167,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         engine?.close();
         client?.auth.stopAutoRefresh();
         try {
+          await lastOwnerStorage.clear();
           const marker=await beginSignOut(currentRepo.owner,signOutStorage);
           await completeSignOut(marker,currentRepo,signOutStorage,async()=>{
             if(client && session && (!activeSession.current || activeSession.current.user.id===session.user.id)) {

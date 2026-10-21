@@ -1,6 +1,6 @@
 # Insight Daily P1 scaffold report
 
-Updated: October 17, 2026. P1 merged via PR #67 at main `b5f145e`; P2a follow-ups: `native/p1-followups`.
+Updated: October 21, 2026 (M1-05 review fixes). P1 merged via PR #67 at main `b5f145e`; P2a follow-ups: `native/p1-followups`.
 
 ## Follow-ups
 
@@ -13,7 +13,7 @@ Quinn's four P1 follow-ups are handled in P2a (`native/p1-followups`, based on m
 
 ## P2a validation
 
-No commits/pushes, device builds, prebuilds, EAS or native project edits. Checks used `EXPO_NO_TELEMETRY=1`, `EXPO_NO_DOTENV=1`, npm cache `/tmp/insight-npm` and a fresh Expo home `/tmp/insight-expo` (the first compatibility attempt hit the protected default cache).
+The P2a sandbox validation did not run commits/pushes, device builds, prebuilds, EAS or native project edits. The coordinator separately ran the Mac prebuilds and simulator Release builds recorded below. Sandbox checks used `EXPO_NO_TELEMETRY=1`, `EXPO_NO_DOTENV=1`, npm cache `/tmp/insight-npm` and a fresh Expo home `/tmp/insight-expo` (the first compatibility attempt hit the protected default cache).
 
 | Check | P2a result |
 | --- | --- |
@@ -47,7 +47,23 @@ Local validation (October 17, 2026), with `EXPO_NO_TELEMETRY=1`, `EXPO_NO_DOTENV
 - `npx expo install --check`: PASS, dependencies up to date after redirecting Expo's protected default cache with `__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/insight-expo`.
 - Simulated Linux platform: PASS, 3 tests and 2 visible skips; adding `REQUIRE_PLISTBUDDY=1` produces the expected failure.
 
-Only the four requested files were edited. No git commands, prebuilds, simulators, secrets or paid services were used. GitHub CI has not been run for these edits.
+The original post-#69 sandbox pass edited four files and did not run git commands, prebuilds or simulators, or access secrets or paid services. Subsequent GitHub CI on #71 head `6df7891` passed 8/8 checks, including **Native real PlistBuddy tests** on macOS (Quinn post-merge check, October 17, 2026). #69 head `463e429` passed 7/7 checks. Those are historical results; M1-05 CI is pending the wrapper push.
+
+## M1-05 minor close-out (October 20, 2026)
+
+Plan step M1-05 (§3 “M1 close-out” in the task's master-plan row; scaffold decisions Q3/Q4/Q5/Q8/Q127). Reproduction confirmed three causes: token boundaries excluded quoted `DEBUG=1`; the missing-plist guard ran only in non-debug builds; and Expo's earlier phase remained alongside our ordered replacement. Regression tests failed before the fixes and pass with real macOS PlistBuddy afterward.
+
+The app-target plugin now removes `[Expo Dev Launcher] Strip Local Network Keys for Release` and its project object. Our processed-plist-dependent phase supersedes its work; unrelated target phases remain intact. The existing app.json order registers our plugin before expo-dev-client, so Expo's mod runs first and our cleanup runs afterward. Tests compose the installed Expo dev-launcher mod with ours twice to cover clean and repeated application.
+
+Whole unquoted, double-quoted and single-quoted `DEBUG=1` tokens preserve the local-network keys. `DEBUG=0`, `DEBUG=10`, `OTHER_DEBUG=1`, malformed quotes and a `CustomDebug` name without the definition still strip. Missing processed plists now fail loudly in **all** configurations before writing a stamp, consistent with non-debug behavior.
+
+The **Native real PlistBuddy tests** macOS CI job sets `REQUIRE_PLISTBUDDY=1`. Its dedicated strict round-trip step writes a synthetic pbxproj, decodes it with `plutil -convert json`, extracts the decoded shellScript and executes it against synthetic plists using real PlistBuddy. The assertions require all three local-network keys absent for Release/Profile/custom configurations and present for whole unquoted or matching-quoted `DEBUG=1` tokens; mismatched quotes strip. macOS CI proves only synthetic project parsing and script execution when this step passes. The earlier in-memory script tests did not prove OpenStep decoding. Mac-only tests visibly skip on Linux; forcing the requirement without PlistBuddy fails immediately.
+
+The review fix removes shell backslashes from the Debug token pattern and printf invocation, so quote-only pbxproj serialization no longer produces the broken doubled-backslash/quote sequence. Prebuild now fails if expo-dev-client is configured but its expected app-target strip phase is missing, identifying potential phase renames or mod ordering changes. All of `NSBonjourServices` is stripped in non-debug builds. The plugin assumes `ENABLE_USER_SCRIPT_SANDBOXING` is off.
+
+A Mac `expo prebuild --clean` plus simulator Debug and Release builds, with inspection of each built Info.plist, are still required for this revision (Will/Mac, deferred). These must confirm that the processed-plist dependency orders the phase after ProcessInfoPlistFile and that Debug's missing-plist fail-closed guard is safe in real Xcode. No real Xcode ordering or simulator build success is established by the synthetic tests.
+
+Historical October 20 validation (before review fixes): typecheck and lint PASS; Jest PASS (36 suites, 667 tests); real macOS plugin suite PASS (10/10, zero skips); dependency compatibility PASS; Expo Doctor PASS (20/20); simulated Linux PASS (4 tests, 2 visible skips, required-PlistBuddy assertion fails as expected). The Release/Debug checks run the generated build-phase script on synthetic processed-plist fixtures; they are not a new Xcode build or physical-device artifact check. The first physical-device Release/store plist re-check from #69 minor 4 is **accepted as deferred** until that build is authorized and signing is available under plan §0.1. At that gate, verify all three local-network keys are absent before distribution. Historical simulator evidence above predates these fixes and does not validate this revision. No UI changed, so simulator screenshots do not apply to M1-05.
 
 ## P1 status (historical)
 

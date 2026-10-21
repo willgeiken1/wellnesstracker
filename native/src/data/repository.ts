@@ -1,7 +1,7 @@
 import { matchesPurge, purgeTombstone } from './purges';
 import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { columns, syncedTables, canonicalRow, compareRows, revision, validateRow, validatePulledRow, supportsPurgeTimezone, type Row, type Table, type Scalar, type ServerRow } from './rows';
+import { columns, syncedTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 type Physical = Record<string, Scalar>;
 // Repositories sharing a database handle must share transaction guards.
@@ -210,15 +210,13 @@ export class Repository {
         validatePulledRow(remote.row);
         const row = remote.row;
         if (row.owner_id !== this.owner || row.table !== table || !/^\d+$/.test(remote.server_seq) || BigInt(remote.server_seq) > BigInt(cursor)) throw new Error('Invalid page.');
-        // Skip incompatible legacy markers without losing their pull cursor.
-        if (table === 'purges' && row.data.tz != null && !supportsPurgeTimezone(row.data.tz)) continue;
         const local = this.get(table,row.id);
         clock = Math.max(clock, row.updated_at);
         if (local?.table === 'weigh_ins' && local.data.source !== row.data.source) {
           this.recordConflict(table,row.id); continue;
         }
         if (this.db.get(sql`SELECT 1 FROM sync_conflicts WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)) continue;
-        if (!local || compareRows(row,local) > 0) this.write(canonicalRow(row));
+        if (!local || compareRows(row,local) > 0) this.write(canonicalPulledRow(row));
       }
       this.applyPurges();
       this.setState('clock', String(clock));

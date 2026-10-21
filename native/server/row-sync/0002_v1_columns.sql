@@ -249,8 +249,8 @@ BEGIN
     ELSIF TG_TABLE_NAME = 'photos' THEN
       SELECT p.* INTO marker FROM public.purges p
        WHERE p.owner_id=NEW.owner_id AND p.deleted_at IS NULL AND NEW.updated_at<=p.cutoff_ms
-         AND (pg_catalog.to_timestamp((payload->>'captured_at')::double precision / 1000)
-              AT TIME ZONE p.tz)::date::text BETWEEN p.from_day AND p.to_day
+         AND pg_catalog.to_char((pg_catalog.to_timestamp((payload->>'captured_at')::double precision / 1000)
+              AT TIME ZONE p.tz)::date, 'YYYY-MM-DD') BETWEEN p.from_day AND p.to_day
        ORDER BY p.updated_at DESC, p.device_id COLLATE "C" DESC LIMIT 1;
     ELSIF TG_TABLE_NAME IN ('entries','sets') THEN
       IF TG_TABLE_NAME='entries' THEN
@@ -717,11 +717,13 @@ CREATE FUNCTION public.sync_purge_range(p_id uuid, p_from date, p_to date, p_cut
 -- Definer rights are limited to this static owner-scoped operation so clients
 -- need no write privileges on purges. All queries explicitly constrain auth.uid().
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE me uuid := auth.uid(); f text := p_from::text; t text := p_to::text;
+DECLARE me uuid := auth.uid(); f text := pg_catalog.to_char(p_from, 'YYYY-MM-DD'); t text := pg_catalog.to_char(p_to, 'YYYY-MM-DD');
   stamp bigint := floor(extract(epoch FROM pg_catalog.now())*1000)::bigint + 300000;
   dev text := 'ffffffff-ffff-4fff-bfff-ffffffffffff';
 BEGIN
+  -- to_char omits the era; retain the original AD-only date range.
   IF me IS NULL OR p_id IS NULL OR p_from IS NULL OR p_to IS NULL OR p_from > p_to
+    OR p_from < DATE '0001-01-01'
     OR p_cutoff_ms IS NULL OR p_cutoff_ms < 0 OR p_cutoff_ms > 9007199254740991
     OR p_tz IS NULL OR p_tz ~* '^(posix/|right/|posixrules$|Factory$)' OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names WHERE name=p_tz)
     OR f !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR t !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
@@ -751,7 +753,7 @@ BEGIN
    WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
   UPDATE public.photos SET deleted_at=stamp, updated_at=stamp, device_id=dev
    WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms
-     AND (pg_catalog.to_timestamp(captured_at::double precision / 1000) AT TIME ZONE p_tz)::date::text BETWEEN f AND t;
+     AND pg_catalog.to_char((pg_catalog.to_timestamp(captured_at::double precision / 1000) AT TIME ZONE p_tz)::date, 'YYYY-MM-DD') BETWEEN f AND t;
   UPDATE public.plan_days SET deleted_at=stamp, updated_at=stamp, device_id=dev
    WHERE owner_id=me AND deleted_at IS NULL AND updated_at<=p_cutoff_ms AND day BETWEEN f AND t;
 END $$;

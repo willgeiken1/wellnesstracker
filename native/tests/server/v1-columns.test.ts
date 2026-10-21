@@ -309,7 +309,7 @@ test.each(invalidTimezones)('pulls continue past an unusable %s marker and apply
   local.repo.putLocal(photo);local.repo.ack(local.repo.pending());
   const bad=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz},500);
   const good=row('purges',{...bad.data,tz:'America/Chicago'},501);
-  // Exercise wire decoding too: transport must preserve cursors for skipped markers.
+  // Exercise wire decoding too: incompatible markers still persist and advance cursors.
   const wire=(r:Row,seq:string)=>fromWire('purges',{...r,...r.data,data:undefined,server_seq:seq});
   const later=row('sessions',{day:'2026-11-02'});
   const engine=new SyncEngine(local.repo,{owner:OWNER_A,push:async()=>[],pull:async(table,after)=>{
@@ -318,7 +318,7 @@ test.each(invalidTimezones)('pulls continue past an unusable %s marker and apply
   }},1);
   await engine.sync();
   expect(engine.status).toBe('idle');expect(local.repo.cursor('purges')).toBe('2');
-  expect(local.repo.get('purges',bad.id)).toBeUndefined();
+  expect(local.repo.get('purges',bad.id)?.data.tz).toBe(tz);
   expect(local.repo.get('photos',photo.id)!.deleted_at).toBe(501);
   expect(local.repo.get('sessions',later.id)).toBeDefined();engine.close();
  }finally{local.sqlite.close();}
@@ -338,4 +338,57 @@ test('photo matching catches formatter failures from legacy data and continues a
   expect(local.repo.cursor('purges')).toBe('1');
   expect(()=>local.repo.applyPage('sessions',[{row:row('sessions',{day:'2026-11-02'}),server_seq:'2'}],'2')).not.toThrow();
  }finally{local.sqlite.close();}
+});
+
+test.each(['healthkit','health_connect'])('unsupported purge timezone still erases local %s weigh-ins and sessions',async source=>{
+ const local=await localDatabase();
+ try {
+  const weight=row('weigh_ins',{day:'2026-10-04',source,weight_kg:70});
+  const session=row('sessions',{day:'2026-10-04',name:'Synthetic session'});
+  const photo=row('photos',rangeData('photos'));
+  for(const item of [weight,session,photo])local.repo.putLocal(item);
+  const marker=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz:'Unsupported/DeviceZone'},500);
+  local.repo.applyPage('purges',[{row:marker,server_seq:'1'}],'1');
+  expect(local.repo.get('purges',marker.id)?.data.tz).toBe('Unsupported/DeviceZone');
+  expect(local.repo.cursor('purges')).toBe('1');
+  expect(local.repo.get('weigh_ins',weight.id)).toMatchObject({deleted_at:500,data:{source,weight_kg:null,day:null}});
+  expect(local.repo.get('sessions',session.id)).toMatchObject({deleted_at:500,data:{day:null,name:null}});
+  expect(local.repo.get('photos',photo.id)?.deleted_at).toBeNull();
+  const late=row('sessions',{day:'2026-10-05'});
+  local.repo.putLocal(late);
+  expect(local.repo.get('sessions',late.id)?.deleted_at).toBe(500);
+ }finally{local.sqlite.close();}
+});
+
+test('matchesPurge catches an out-of-Date-range timestamp without a mocked formatter',()=>{
+ const photo=row('photos',{captured_at:1e16});
+ const marker=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz:'UTC'},500);
+ expect(matchesPurge(photo,marker,()=>undefined)).toBe(false);
+});
+
+test.each(['SQL, DMY','German, DMY'])('purge dates remain ISO under DateStyle %s, including stale photo writes',async style=>{
+ const transport=testTransport(db,OWNER_A);
+ const session=row('sessions',{day:'2026-10-04'});
+ const photo=row('photos',{captured_at:Date.parse('2026-10-04T12:00:00Z')});
+ await transport.push([session,photo]);
+ await db.exec(`SET DateStyle = '${style}'`);
+ await purge();
+ expect((await transport.pull('sessions','0',100)).find(r=>r.row.id===session.id)!.row.deleted_at).not.toBeNull();
+ expect((await transport.pull('photos','0',100)).find(r=>r.row.id===photo.id)!.row.deleted_at).not.toBeNull();
+ const late=row('photos',{captured_at:Date.parse('2026-10-05T12:00:00Z')});
+ expect((await transport.push([late]))[0].deleted_at).not.toBeNull();
+});
+
+test('client and server match a photo in a zero-padded year before 1000',async()=>{
+ const photo=row('photos',{captured_at:Date.parse('0001-01-01T12:00:00Z')});
+ const marker=row('purges',{from_day:'0001-01-01',to_day:'0001-01-01',cutoff_ms:100,tz:'UTC'},500);
+ expect(matchesPurge(photo,marker,()=>undefined)).toBe(true);
+ const transport=testTransport(db,OWNER_A);
+ await transport.push([photo]);
+ await asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'0001-01-01','0001-01-01',100,'UTC')",[id()]));
+ expect((await transport.pull('photos','0',100)).find(r=>r.row.id===photo.id)!.row.deleted_at).not.toBeNull();
+});
+
+test('purge date formatting preserves rejection of BC dates',async()=>{
+ await expect(asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'0001-01-01 BC','0001-01-01 BC',100,'UTC')",[id()]))).rejects.toThrow('bad purge');
 });

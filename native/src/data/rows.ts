@@ -40,8 +40,8 @@ export function validateRow(input: unknown): asserts input is Row {
   if (r.table === 'purges' && ((r.data.from_day != null && r.data.to_day != null && r.data.from_day > r.data.to_day) || (r.data.cutoff_ms != null && Number(r.data.cutoff_ms)<0))) return bad();
   if (r.table === 'weigh_ins' && r.data.source !== 'app') return bad();
 }
-/** Pulls retain unusable timezone strings until applyPage can skip the marker
- * and still advance its cursor. All other validation remains fail-closed. */
+/** Pulled markers retain device-incompatible zones for non-photo purges.
+ * All other validation remains fail-closed. */
 export function validatePulledRow(input: unknown): asserts input is Row {
   const row = input as Row;
   validateRow(row?.table === 'purges' && typeof row.data?.tz === 'string'
@@ -50,6 +50,14 @@ export function validatePulledRow(input: unknown): asserts input is Row {
 export function revision(row: Row) { return `${row.updated_at}:${row.device_id}`; }
 export function canonicalRow(row: Row): Row {
   validateRow(row);
+  return canonicalFields(row);
+}
+/** Preserve pulled marker zones even when this device cannot format photos. */
+export function canonicalPulledRow(row: Row): Row {
+  validatePulledRow(row);
+  return canonicalFields(row);
+}
+function canonicalFields(row: Row): Row {
   return { ...row, data: Object.fromEntries(Object.keys(columns[row.table]).map(k => [k, row.deleted_at !== null && !(row.table === 'weigh_ins' && k === 'source') ? null : row.data[k] ?? null])) };
 }
 /** Only allowlisted physical columns cross the transport boundary. */
