@@ -45,21 +45,36 @@ export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: U
   };
   const jump = step(equipment, unit, stack);
   const hit = meetsTarget(sets, targetReps);
-  // UTC arithmetic on local day strings counts calendar days across DST changes.
-  const gap = context.today && context.lastTrainingDay
-    ? (Date.parse(context.today) - Date.parse(context.lastTrainingDay)) / 86400000 : 0;
-  const recent = (context.sessions ?? [])
-    .filter(s => !(context.paused ?? []).some(p => p.start <= s.day && s.day <= p.end))
-    .slice().sort((a, b) => a.day.localeCompare(b.day)).slice(-2);
+  // UTC arithmetic on strict local day strings counts calendar days across DST.
+  const dayStamp = (day: string) => {
+    const stamp = Date.parse(day);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(stamp)
+      && new Date(stamp).toISOString().slice(0, 10) === day ? stamp : NaN;
+  };
+  let gap = 0;
+  if (context.today !== undefined && context.lastTrainingDay !== undefined) {
+    gap = (dayStamp(context.today) - dayStamp(context.lastTrainingDay)) / 86400000;
+    if (!Number.isFinite(gap) || gap < 0) {
+      console.warn('Workout suggestion: invalid gap date; using conservative ease-in.');
+      gap = 21;
+    }
+  }
+  const recent = jump > 0 ? (context.sessions ?? [])
+    .filter(s => {
+      const sessionSets = working(s.sets);
+      const success = sessionSets.length > 0 && meetsTarget(sessionSets, targetReps);
+      return success || !(context.paused ?? []).some(p => p.start <= s.day && s.day <= p.end);
+    })
+    .sort((a, b) => a.day.localeCompare(b.day)).slice(-2) : [];
   const twoMisses = recent.length === 2 && recent.every(s => {
-    const sets = working(s.sets);
-    return !s.easedIn && sets.length > 0 && !meetsTarget(sets, targetReps);
+    const sessionSets = working(s.sets);
+    return !s.easedIn && sessionSets.length > 0 && !meetsTarget(sessionSets, targetReps);
   });
   // Ease-in wins over step-back: never compound the two reductions or add a jump.
   const factor = gap >= 21 ? .8 : gap >= 7 || twoMisses ? .9 : 1;
   const reduce = jump > 0 && factor < 1;
   return {
-    weight: rounded(reduce ? Math.min(last.weight, Math.round(last.weight * factor / jump) * jump) : last.weight + (hit ? jump : 0)),
+    weight: rounded(reduce ? Math.max(jump, Math.min(last.weight, Math.round(last.weight * factor / jump) * jump)) : last.weight + (hit ? jump : 0)),
     jump: !reduce && hit && jump > 0,
     previous: last.weight,
     target: targetReps ?? last.reps,
@@ -90,19 +105,21 @@ export function setMetrics(set: WorkingSet, context: LoadContext = {}) {
     volume: !eligible ? 0 : load === null ? null : load * set.reps * (perHand ? 2 : 1),
     e1rm: eligible && set.reps <= 12 && load !== null ? load * (1 + set.reps / 30) : null,
     perHand,
+    /** Only meaningful for bodyweight: the weigh-in needed for total load is unknown. */
     est: load === null
   };
 }
-/** Supply separate prior context when the historical weigh-in differs. */
+/** Weight PRs compare added load only; e1RM uses total load for bodyweight.
+ * Supply separate prior context when the historical weigh-in differs. */
 export function detectPR(current: WorkingSet[], prior: WorkingSet[], context: LoadContext = {}, priorContext: LoadContext = context) {
   const eligible = (sets: WorkingSet[]) => working(sets).filter(s => s.reps >= 1);
   const best = (sets: WorkingSet[], context: LoadContext) => ({
-    weight: Math.max(0, ...sets.map(s => loadFor(s, context) ?? 0)),
+    weight: Math.max(0, ...sets.map(s => s.weight)),
     e1rm: Math.max(0, ...sets.map(s => setMetrics(s, context).e1rm ?? 0))
   });
   const before = eligible(prior), now = best(eligible(current), context), old = best(before, priorContext);
   return {
-    weight: before.some(s => loadFor(s, priorContext) !== null) && now.weight > old.weight + 1e-7,
+    weight: before.length > 0 && now.weight > old.weight + 1e-7,
     e1rm: before.some(s => setMetrics(s, priorContext).e1rm !== null) && now.e1rm > old.e1rm + 1e-7,
     bestWeight: now.weight,
     bestE1rm: now.e1rm
