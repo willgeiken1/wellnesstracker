@@ -11,6 +11,7 @@ import { clearLocalSession, getAuthClient } from '../src/auth/client';
 import { CorruptSignOutMarker } from '../src/auth/sign-out';
 import { signOutStorage } from '../src/auth/sign-out-storage';
 import { seedDemo } from '../fixtures/demo';
+import { syncTables } from '../src/data/sync/flags';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
 
@@ -35,7 +36,7 @@ function fixtureRepo(owner: string) {
   const listeners = new Set<() => void>();
   let pending = owner === OWNER_A ? [{ row: syntheticRow(), revision: '100:fixture' }] : [];
   return {
-    owner, pending: () => pending, conflicts: () => [],
+    owner, syncTables: () => syncTables(), pending: () => pending, conflicts: () => [],
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     ack: jest.fn(() => { pending = []; listeners.forEach(l => l()); }),
     wipe: jest.fn(() => {pending=[];listeners.forEach(l=>l());}), hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,
