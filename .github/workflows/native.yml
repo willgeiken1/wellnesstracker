@@ -73,4 +73,11 @@ jobs:
       - name: Run plugin tests with real PlistBuddy
         run: node --test --test-skip-pattern="strict plutil round-trip" plugins/*.test.js
       - name: Strict pbxproj write/read and decoded Release/Debug execution
-        run: node --test --test-name-pattern="strict plutil round-trip" plugins/withStripLocalNetworkingRelease.test.js
+        shell: bash
+        run: |
+          node --test --test-reporter=tap --test-name-pattern="strict plutil round-trip" plugins/withStripLocalNetworkingRelease.test.js | tee "$RUNNER_TEMP/release-plist-tests.tap"
+          # Node can exit successfully when a renamed selector matches no tests.
+          grep -Eq '^# pass [1-9][0-9]*$' "$RUNNER_TEMP/release-plist-tests.tap"
+          grep -Eq '^# fail 0$' "$RUNNER_TEMP/release-plist-tests.tap"
+          grep -Eq '^# skipped 0$' "$RUNNER_TEMP/release-plist-tests.tap"
+          grep -Eq '^# todo 0$' "$RUNNER_TEMP/release-plist-tests.tap"
