@@ -207,17 +207,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Concentration Curl",
   "main": "biceps",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Cross-Body Hammer Curl",
   "main": "biceps",
   "helpers": ["forearms"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Drag Curl",
   "main": "biceps",
   "helpers": ["frontDelts"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Dumbbell Curl",
   "main": "biceps",
@@ -242,7 +242,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Hammer Curl",
   "main": "forearms",
   "helpers": ["biceps"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Incline Dumbbell Curl",
   "main": "biceps",
@@ -252,7 +252,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Incline Hammer Curl",
   "main": "biceps",
   "helpers": ["forearms"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Kettlebell Curl",
   "main": "biceps",
@@ -307,7 +307,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Zottman Curl",
   "main": "biceps",
   "helpers": ["forearms"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Assisted Dip",
   "main": "chest",
@@ -337,7 +337,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Board Press",
   "main": "chest",
   "helpers": ["triceps", "frontDelts"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Cable Chest Press",
   "main": "chest",
@@ -422,7 +422,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Floor Press",
   "main": "chest",
   "helpers": ["triceps", "frontDelts"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Incline Bench Press",
   "main": "chest",
@@ -617,7 +617,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Box Jump",
   "main": "quads",
   "helpers": ["glutes", "hamstrings", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Box Squat",
   "main": "quads",
@@ -632,7 +632,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Burpee",
   "main": "quads",
   "helpers": ["glutes", "chest", "frontDelts", "triceps", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Cable Machine Hip Adduction",
   "main": "adductors",
@@ -647,12 +647,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Curtsy Lunge",
   "main": "quads",
   "helpers": ["abductors", "glutes", "adductors"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Depth Jump",
   "main": "quads",
   "helpers": ["glutes", "hamstrings", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Dumbbell Lunge",
   "main": "quads",
@@ -687,7 +687,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Glute Ham Raise",
   "main": "hamstrings",
   "helpers": ["glutes", "lowerBack", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Goblet Squat",
   "main": "quads",
@@ -712,7 +712,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Heel Walk",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Hip Adduction Against Band",
   "main": "adductors",
@@ -737,7 +737,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Jumping Lunge",
   "main": "quads",
   "helpers": ["glutes", "hamstrings", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Kettlebell Front Squat",
   "main": "quads",
@@ -762,17 +762,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Lateral Bound",
   "main": "abductors",
   "helpers": ["quads", "adductors", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Leg Curl On Ball",
   "main": "hamstrings",
   "helpers": ["glutes", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Leg Extension",
   "main": "quads",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Leg Press",
   "main": "quads",
@@ -782,17 +782,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Lying Leg Curl",
   "main": "hamstrings",
   "helpers": ["calves"],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Nordic Hamstring Eccentric",
   "main": "hamstrings",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "One-Legged Leg Extension",
   "main": "quads",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "One-Legged Leg Press",
   "main": "quads",
@@ -802,12 +802,12 @@ const bundledExercises: Exercise[] = [{
   "name": "One-Legged Lying Leg Curl",
   "main": "hamstrings",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "One-Legged Seated Leg Curl",
   "main": "hamstrings",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Overhead Squat",
   "main": "quads",
@@ -837,12 +837,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Poliquin Step-Up",
   "main": "quads",
   "helpers": ["glutes", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Prisoner Get Up",
   "main": "quads",
   "helpers": ["glutes", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Resistance Band Romanian Deadlift",
   "main": "hamstrings",
@@ -867,7 +867,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Reverse Nordic",
   "main": "quads",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Romanian Deadlift",
   "main": "hamstrings",
@@ -882,7 +882,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Seated Leg Curl",
   "main": "hamstrings",
   "helpers": ["calves"],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Shallow Body Weight Lunge",
   "main": "quads",
@@ -952,7 +952,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Standing Leg Curl",
   "main": "hamstrings",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Standing Leg Curl Against Band",
   "main": "hamstrings",
@@ -962,7 +962,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Step Up",
   "main": "quads",
   "helpers": ["glutes", "hamstrings", "calves"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Sumo Squat",
   "main": "quads",
@@ -977,7 +977,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Tibialis Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Vertical Leg Press",
   "main": "quads",
@@ -987,7 +987,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Wall Sit",
   "main": "quads",
   "helpers": ["glutes"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Zercher Squat",
   "main": "quads",
@@ -997,7 +997,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Arnold Press",
   "main": "frontDelts",
   "helpers": ["sideDelts", "triceps", "chest"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Band External Shoulder Rotation",
   "main": "upperBack",
@@ -1042,7 +1042,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Behind the Neck Press",
   "main": "frontDelts",
   "helpers": ["sideDelts", "traps", "triceps"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Cable External Shoulder Rotation",
   "main": "upperBack",
@@ -1082,7 +1082,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Devils Press",
   "main": "frontDelts",
   "helpers": ["sideDelts", "rearDelts", "chest", "triceps", "glutes", "abductors", "hamstrings", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Dumbbell Front Raise",
   "main": "frontDelts",
@@ -1142,7 +1142,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Jerk",
   "main": "frontDelts",
   "helpers": ["triceps", "quads", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Kettlebell Halo",
   "main": "frontDelts",
@@ -1162,7 +1162,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Landmine Press",
   "main": "frontDelts",
   "helpers": ["chest", "triceps", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Lying Dumbbell External Shoulder Rotation",
   "main": "upperBack",
@@ -1192,7 +1192,7 @@ const bundledExercises: Exercise[] = [{
   "name": "One-Arm Landmine Press",
   "main": "frontDelts",
   "helpers": ["chest", "triceps", "obliques", "abs"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Pike Push-Up",
   "main": "frontDelts",
@@ -1207,17 +1207,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Poliquin Raise",
   "main": "sideDelts",
   "helpers": ["frontDelts"],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Power Jerk",
   "main": "frontDelts",
   "helpers": ["triceps", "quads", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Push Press",
   "main": "frontDelts",
   "helpers": ["triceps", "quads", "glutes", "abductors"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Resistance Band Lateral Raise",
   "main": "sideDelts",
@@ -1282,7 +1282,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Snatch Grip Behind the Neck Press",
   "main": "frontDelts",
   "helpers": ["traps", "upperBack", "triceps"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Squat Jerk",
   "main": "frontDelts",
@@ -1292,7 +1292,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Split Jerk",
   "main": "frontDelts",
   "helpers": ["quads", "glutes", "abductors", "triceps", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Turkish Get-Up",
   "main": "frontDelts",
@@ -1302,12 +1302,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Wall Walk",
   "main": "frontDelts",
   "helpers": ["sideDelts", "abs", "obliques", "triceps", "traps", "upperBack"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Z Press",
   "main": "frontDelts",
   "helpers": ["sideDelts", "triceps", "abs", "obliques", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Barbell Incline Triceps Extension",
   "main": "triceps",
@@ -1392,7 +1392,7 @@ const bundledExercises: Exercise[] = [{
   "name": "JM Press",
   "main": "triceps",
   "helpers": ["chest", "frontDelts"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Reverse-Grip Tricep Pushdown",
   "main": "triceps",
@@ -1417,7 +1417,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Tate Press",
   "main": "triceps",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "dumbbell"
 }, {
   "name": "Tricep Bodyweight Extension",
   "main": "triceps",
@@ -1447,12 +1447,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Bench Leg Pull-In",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Bicycle Crunch",
   "main": "abs",
   "helpers": ["obliques", "quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Cable Crunch",
   "main": "abs",
@@ -1462,12 +1462,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Captain's Chair Knee Raise",
   "main": "abs",
   "helpers": ["quads", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Captain's Chair Leg Raise",
   "main": "abs",
   "helpers": ["quads", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Copenhagen Plank",
   "main": "adductors",
@@ -1487,7 +1487,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Dead Bug",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Dead Bug With Dumbbells",
   "main": "abs",
@@ -1497,12 +1497,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Decline Sit-Up",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Dragon Flag",
   "main": "abs",
   "helpers": ["obliques", "lowerBack", "lats"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Dumbbell Side Bend",
   "main": "obliques",
@@ -1517,32 +1517,32 @@ const bundledExercises: Exercise[] = [{
   "name": "Flutter Kicks",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Hanging Knee Raise",
   "main": "abs",
   "helpers": ["quads", "forearms"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Hanging Leg Raise",
   "main": "abs",
   "helpers": ["quads", "forearms"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Hanging Sit-Up",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Hanging Windshield Wiper",
   "main": "obliques",
   "helpers": ["abs", "quads", "forearms"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Heel Touches",
   "main": "obliques",
   "helpers": ["abs"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "High to Low Wood Chop with Band",
   "main": "obliques",
@@ -1557,12 +1557,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Hollow Body Crunch",
   "main": "abs",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Hollow Hold",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Horizontal Wood Chop with Band",
   "main": "obliques",
@@ -1577,7 +1577,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Jackknife Sit-Up",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Kettlebell Plank Pull Through",
   "main": "abs",
@@ -1587,7 +1587,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Kneeling Ab Wheel Roll-Out",
   "main": "abs",
   "helpers": ["lats", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Kneeling Plank",
   "main": "abs",
@@ -1602,12 +1602,12 @@ const bundledExercises: Exercise[] = [{
   "name": "L-Sit",
   "main": "abs",
   "helpers": ["quads", "triceps", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Landmine Rotation",
   "main": "obliques",
   "helpers": ["abs", "frontDelts", "sideDelts", "rearDelts"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Low to High Wood Chop with Band",
   "main": "obliques",
@@ -1622,17 +1622,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Lying Leg Raise",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Lying Windshield Wiper",
   "main": "obliques",
   "helpers": ["abs"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Lying Windshield Wiper with Bent Knees",
   "main": "obliques",
   "helpers": ["abs"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Machine Crunch",
   "main": "abs",
@@ -1642,17 +1642,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Mountain Climbers",
   "main": "abs",
   "helpers": ["quads", "frontDelts", "sideDelts", "rearDelts", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Oblique Crunch",
   "main": "obliques",
   "helpers": ["abs"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Oblique Sit-Up",
   "main": "obliques",
   "helpers": ["abs", "quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Pallof Press",
   "main": "abs",
@@ -1677,7 +1677,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Reverse Crunch",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Side Plank",
   "main": "obliques",
@@ -1687,22 +1687,22 @@ const bundledExercises: Exercise[] = [{
   "name": "Sit-Up",
   "main": "abs",
   "helpers": ["quads"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Stability Ball Crunch",
   "main": "abs",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Stability Ball Knee Tuck",
   "main": "abs",
   "helpers": ["quads", "frontDelts"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Stability Ball Pike",
   "main": "abs",
   "helpers": ["quads", "frontDelts"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Suitcase Carry",
   "main": "obliques",
@@ -1712,7 +1712,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Toes to Bar",
   "main": "abs",
   "helpers": ["quads", "lats", "forearms", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Torso Rotation Machine",
   "main": "obliques",
@@ -1737,7 +1737,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Back Extension",
   "main": "lowerBack",
   "helpers": ["glutes", "hamstrings"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Banded Muscle-Up",
   "main": "lats",
@@ -1762,12 +1762,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Block Clean",
   "main": "traps",
   "helpers": ["lats", "lowerBack", "hamstrings", "quads", "frontDelts", "sideDelts", "rearDelts"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Block Snatch",
   "main": "traps",
   "helpers": ["lats", "frontDelts", "sideDelts", "rearDelts", "lowerBack", "glutes", "abductors", "hamstrings"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Cable Close Grip Seated Row",
   "main": "lats",
@@ -1787,7 +1787,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Chest to Bar",
   "main": "lats",
   "helpers": ["upperBack", "traps", "biceps"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Chest-Supported Dumbbell Row",
   "main": "lats",
@@ -1807,17 +1807,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Clean",
   "main": "traps",
   "helpers": ["lowerBack", "lats", "glutes", "abductors", "hamstrings", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Clean Pull",
   "main": "traps",
   "helpers": ["lowerBack", "glutes", "hamstrings", "quads", "forearms"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Clean and Jerk",
   "main": "traps",
   "helpers": ["upperBack", "lats", "lowerBack", "quads", "glutes", "abductors", "frontDelts", "sideDelts", "rearDelts", "triceps", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Close-Grip Chin-Up",
   "main": "biceps",
@@ -1852,12 +1852,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Floor Back Extension",
   "main": "lowerBack",
   "helpers": ["glutes"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Good Morning",
   "main": "lowerBack",
   "helpers": ["hamstrings", "glutes"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Gorilla Row",
   "main": "lats",
@@ -1867,22 +1867,22 @@ const bundledExercises: Exercise[] = [{
   "name": "Hang Clean",
   "main": "traps",
   "helpers": ["lowerBack", "hamstrings", "glutes", "abductors", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Hang Power Clean",
   "main": "traps",
   "helpers": ["lowerBack", "hamstrings", "glutes", "abductors", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Hang Power Snatch",
   "main": "traps",
   "helpers": ["frontDelts", "sideDelts", "rearDelts", "lowerBack", "hamstrings", "glutes", "abductors"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Hang Snatch",
   "main": "traps",
   "helpers": ["frontDelts", "sideDelts", "rearDelts", "lowerBack", "hamstrings", "glutes", "abductors"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Inverted Row",
   "main": "upperBack",
@@ -1902,7 +1902,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Jumping Muscle-Up",
   "main": "lats",
   "helpers": ["chest", "triceps", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Kettlebell Clean",
   "main": "traps",
@@ -1997,12 +1997,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Muscle-Up (Bar)",
   "main": "lats",
   "helpers": ["chest", "triceps", "frontDelts", "sideDelts", "rearDelts", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Muscle-Up (Rings)",
   "main": "lats",
   "helpers": ["chest", "triceps", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Neutral Close-Grip Lat Pulldown",
   "main": "lats",
@@ -2037,12 +2037,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Power Clean",
   "main": "traps",
   "helpers": ["lowerBack", "hamstrings", "glutes", "abductors", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Power Snatch",
   "main": "traps",
   "helpers": ["frontDelts", "sideDelts", "rearDelts", "lowerBack", "glutes", "abductors", "hamstrings"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Pull-Up",
   "main": "lats",
@@ -2057,7 +2057,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Rack Pull",
   "main": "lowerBack",
   "helpers": ["traps", "upperBack", "glutes", "forearms"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Renegade Row",
   "main": "lats",
@@ -2087,7 +2087,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Rope Climb",
   "main": "lats",
   "helpers": ["upperBack", "biceps", "forearms", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Rope Pulldown",
   "main": "lats",
@@ -2142,7 +2142,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Snatch",
   "main": "traps",
   "helpers": ["frontDelts", "sideDelts", "rearDelts", "lowerBack", "glutes", "abductors", "hamstrings", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Snatch Grip Deadlift",
   "main": "traps",
@@ -2167,7 +2167,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Superman Raise",
   "main": "lowerBack",
   "helpers": ["glutes", "traps", "upperBack"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "T-Bar Row",
   "main": "lats",
@@ -2227,22 +2227,22 @@ const bundledExercises: Exercise[] = [{
   "name": "Eccentric Heel Drop",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Heel Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "One-Legged Calf Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Seated Calf Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Smith Machine Calf Raise",
   "main": "calves",
@@ -2252,12 +2252,12 @@ const bundledExercises: Exercise[] = [{
   "name": "Standing Calf Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Bar Hang",
   "main": "forearms",
   "helpers": ["lats"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Barbell Reverse Wrist Curl",
   "main": "forearms",
@@ -2307,7 +2307,7 @@ const bundledExercises: Exercise[] = [{
   "name": "One-Handed Bar Hang",
   "main": "forearms",
   "helpers": ["abs", "obliques", "lats"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Plate Pinch",
   "main": "forearms",
@@ -2357,7 +2357,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Clamshells",
   "main": "abductors",
   "helpers": ["glutes"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Cossack Squat",
   "main": "glutes",
@@ -2372,7 +2372,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Donkey Kicks",
   "main": "glutes",
   "helpers": ["hamstrings"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Dumbbell Frog Pumps",
   "main": "glutes",
@@ -2397,17 +2397,17 @@ const bundledExercises: Exercise[] = [{
   "name": "Fire Hydrants",
   "main": "abductors",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Frog Pumps",
   "main": "glutes",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Glute Bridge",
   "main": "glutes",
   "helpers": ["hamstrings", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Glute Bridge With Band Around Knees",
   "main": "glutes",
@@ -2427,7 +2427,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Hip Thrust",
   "main": "glutes",
   "helpers": ["hamstrings", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Hip Thrust Machine",
   "main": "glutes",
@@ -2462,22 +2462,22 @@ const bundledExercises: Exercise[] = [{
   "name": "One-Legged Glute Bridge",
   "main": "glutes",
   "helpers": ["hamstrings", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "One-Legged Hip Thrust",
   "main": "glutes",
   "helpers": ["hamstrings", "abs", "obliques"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Reverse Hyperextension",
   "main": "glutes",
   "helpers": ["hamstrings", "lowerBack"],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Side-Lying Hip Abduction",
   "main": "abductors",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Single Leg Romanian Deadlift",
   "main": "glutes",
@@ -2497,7 +2497,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Standing Glute Push Down",
   "main": "glutes",
   "helpers": ["hamstrings"],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Standing Hip Abduction Against Band",
   "main": "abductors",
@@ -2517,7 +2517,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Bird Dog",
   "main": "abs",
   "helpers": ["lowerBack", "glutes", "rearDelts"],
-  "equipment": "other"
+  "equipment": "bodyweight"
 }, {
   "name": "Russian Twist",
   "main": "obliques",
