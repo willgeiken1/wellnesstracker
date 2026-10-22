@@ -2242,7 +2242,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Seated Calf Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Smith Machine Calf Raise",
   "main": "calves",
@@ -2252,7 +2252,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Standing Calf Raise",
   "main": "calves",
   "helpers": [],
-  "equipment": "other"
+  "equipment": "machine"
 }, {
   "name": "Bar Hang",
   "main": "forearms",
@@ -2427,7 +2427,7 @@ const bundledExercises: Exercise[] = [{
   "name": "Hip Thrust",
   "main": "glutes",
   "helpers": ["hamstrings", "quads"],
-  "equipment": "other"
+  "equipment": "barbell"
 }, {
   "name": "Hip Thrust Machine",
   "main": "glutes",

@@ -24,7 +24,17 @@ export function step(equipment: Equipment, unit: Unit, stack?: number) {
   return equipment === 'machine' || equipment === 'cable' ? stack ?? (unit === 'lb' ? 10 : 5) : unit === 'lb' ? 5 : 2.5;
 }
 const working = (sets: WorkingSet[]) => sets.filter(s => s.done && !s.warmup);
-export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: Unit, targetReps?: number, stack?: number) {
+export interface SuggestionContext {
+  /** Finished sessions for this exercise, including previous; dates are local YYYY-MM-DD. */
+  sessions?: { day: string; sets: WorkingSet[]; easedIn?: boolean }[];
+  paused?: { start: string; end: string }[];
+  today?: string;
+  /** Last training day across all exercises, not just this exercise. */
+  lastTrainingDay?: string;
+}
+export const NO_GAP_INFO_WARNING = 'Workout suggestion: no gap info; holding last weight.';
+const meetsTarget = (sets: WorkingSet[], target?: number) => sets.every(s => s.reps >= (target ?? s.reps));
+export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: Unit, targetReps?: number, stack?: number, context: SuggestionContext = {}) {
   const sets = working(previous);
   const last = sets.at(-1);
   if (!last) return {
@@ -35,10 +45,45 @@ export function suggestion(previous: WorkingSet[], equipment: Equipment, unit: U
     count: 0
   };
   const jump = step(equipment, unit, stack);
-  const hit = sets.every(s => s.reps >= (targetReps ?? s.reps));
+  const hit = meetsTarget(sets, targetReps);
+  // UTC arithmetic on strict local day strings counts calendar days across DST.
+  const dayStamp = (day: string) => {
+    const stamp = Date.parse(day);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(stamp)
+      && new Date(stamp).toISOString().slice(0, 10) === day ? stamp : NaN;
+  };
+  let gap = 0;
+  if (context.today !== undefined || context.lastTrainingDay !== undefined) {
+    gap = context.today !== undefined && context.lastTrainingDay !== undefined
+      ? (dayStamp(context.today) - dayStamp(context.lastTrainingDay)) / 86400000 : NaN;
+    if (!Number.isFinite(gap) || gap < 0) {
+      console.warn(NO_GAP_INFO_WARNING);
+      return {
+        weight: last.weight,
+        jump: false,
+        previous: last.weight,
+        target: targetReps ?? last.reps,
+        count: sets.length
+      };
+    }
+  }
+  const recent = jump > 0 ? (context.sessions ?? [])
+    .filter(s => {
+      const sessionSets = working(s.sets);
+      const success = sessionSets.length > 0 && meetsTarget(sessionSets, targetReps);
+      return success || !(context.paused ?? []).some(p => p.start <= s.day && s.day <= p.end);
+    })
+    .sort((a, b) => a.day.localeCompare(b.day)).slice(-2) : [];
+  const twoMisses = recent.length === 2 && recent.every(s => {
+    const sessionSets = working(s.sets);
+    return !s.easedIn && sessionSets.length > 0 && !meetsTarget(sessionSets, targetReps);
+  });
+  // Ease-in wins over step-back: never compound the two reductions or add a jump.
+  const factor = gap >= 21 ? .8 : gap >= 7 || twoMisses ? .9 : 1;
+  const reduce = jump > 0 && factor < 1;
   return {
-    weight: rounded(last.weight + (hit ? jump : 0)),
-    jump: hit && jump > 0,
+    weight: rounded(reduce ? Math.min(last.weight, Math.max(jump, Math.round(last.weight * factor / jump) * jump)) : last.weight + (hit ? jump : 0)),
+    jump: !reduce && hit && jump > 0,
     previous: last.weight,
     target: targetReps ?? last.reps,
     count: sets.length
@@ -48,20 +93,45 @@ export const cardKey = (exercise: string, weight: number, unit: Unit) => `${exer
 export function shouldShowCard(exercise: string, s: ReturnType<typeof suggestion>, unit: Unit, seen: string[]) {
   return s.jump && s.weight !== null && !seen.includes(cardKey(exercise, s.weight, unit));
 }
-export function detectPR(current: WorkingSet[], prior: WorkingSet[]) {
-  const eligible = (sets: WorkingSet[]) => working(sets).filter(s => s.reps >= 1);
-  const best = (sets: WorkingSet[]) => ({
-    weight: Math.max(0, ...sets.map(s => s.weight)),
-    e1rm: Math.max(0, ...sets.map(s => s.weight * (1 + s.reps / 30)))
-  });
-  const before = eligible(prior),
-    now = best(eligible(current)),
-    old = best(before);
+export interface LoadContext {
+  equipment?: Equipment;
+  /** Latest weigh-in at the session date, in the same unit as WorkingSet.weight. */
+  bodyweight?: number;
+}
+function loadFor(set: WorkingSet, context: LoadContext) {
+  if (context.equipment !== 'bodyweight') return set.weight;
+  const bodyweight = context.bodyweight;
+  return bodyweight !== undefined && Number.isFinite(bodyweight) && bodyweight > 0 ? bodyweight + set.weight : null;
+}
+/** Pure row metrics; null means unknown/ineligible, never a fabricated load. */
+export function setMetrics(set: WorkingSet, context: LoadContext = {}) {
+  const perHand = context.equipment === 'dumbbell';
+  const load = loadFor(set, context);
+  const eligible = set.done && !set.warmup && set.reps >= 1;
   return {
-    weight: before.length > 0 && now.weight > old.weight + 1e-7,
-    e1rm: before.length > 0 && now.e1rm > old.e1rm + 1e-7,
-    bestWeight: now.weight,
-    bestE1rm: now.e1rm
+    reps: eligible ? set.reps : 0,
+    volume: !eligible ? 0 : load === null ? null : load * set.reps * (perHand ? 2 : 1),
+    e1rm: eligible && set.reps <= 12 && load !== null ? load * (1 + set.reps / 30) : null,
+    perHand,
+    /** Only meaningful for bodyweight: the weigh-in needed for total load is unknown. */
+    est: load === null
+  };
+}
+/** Weight PRs compare added load only; e1RM uses total load for bodyweight.
+ * Supply separate prior context when the historical weigh-in differs. */
+export function detectPR(current: WorkingSet[], prior: WorkingSet[], context: LoadContext = {}, priorContext: LoadContext = context) {
+  const eligible = (sets: WorkingSet[]) => working(sets).filter(s => s.reps >= 1);
+  // Bodyweight bestWeight is ADDED load; the UI must not label it as total load.
+  const bestWeight = (sets: WorkingSet[]) => Math.max(0, ...sets.map(s => s.weight));
+  const before = eligible(prior), now = eligible(current);
+  const currentE1rms = now.map(s => setMetrics(s, context).e1rm);
+  const priorE1rms = before.map(s => setMetrics(s, priorContext).e1rm);
+  const bestE1rm = Math.max(0, ...currentE1rms.map(value => value ?? 0));
+  return {
+    weight: before.length > 0 && bestWeight(now) > bestWeight(before) + 1e-7,
+    e1rm: priorE1rms.some(value => value !== null) && bestE1rm > Math.max(0, ...priorE1rms.map(value => value ?? 0)) + 1e-7,
+    bestWeight: bestWeight(now),
+    bestE1rm
   };
 }
 export function attribute(exercises: {

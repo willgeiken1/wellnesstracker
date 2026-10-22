@@ -1,5 +1,5 @@
 import { exerciseLibrary, exerciseFor } from '../src/core/workout/library';
-import { displayWeight, suggestion, step, plates, detectPR, attribute, localDay, weekOf, validateSet, validateDate, cardKey, shouldShowCard, keypad } from '../src/core/workout/rules';
+import { NO_GAP_INFO_WARNING, displayWeight, suggestion, step, plates, detectPR, setMetrics, attribute, localDay, weekOf, validateSet, validateDate, cardKey, shouldShowCard, keypad } from '../src/core/workout/rules';
 const done = (weight: number, reps = 8) => ({
   weight,
   reps,
@@ -120,6 +120,13 @@ test.each([
   ['EZ Bar Preacher Curl', 'barbell'], ['Bodyweight Curl', 'bodyweight'],
   ['Cable Close Grip Seated Row', 'cable'], ['Dumbbell Row', 'dumbbell'],
   ['Goblet Squat', 'dumbbell'], ['Inverted Row', 'bodyweight'],
+  ['Drag Curl', 'barbell'], ['Concentration Curl', 'dumbbell'],
+  ['Box Jump', 'bodyweight'], ['Leg Extension', 'machine'],
+  ['Hip Thrust', 'barbell'], ['Seated Calf Raise', 'machine'],
+  ['Standing Calf Raise', 'machine'], ['Tibialis Raise', 'bodyweight'],
+  ['Dumbbell Hip Thrust', 'dumbbell'], ['Hip Thrust Machine', 'machine'],
+  ['Smith Machine Hip Thrust', 'machine'], ['Kettlebell Curl', 'other'],
+  ['Hip Thrust With Band Around Knees', 'other'],
 ])('bundled %s resolves to %s', (name, equipment) => {
   expect(exerciseFor(name).equipment).toBe(equipment);
 });
@@ -184,8 +191,6 @@ test('bundled other equipment matches exactly the reviewed ambiguity list', () =
     "Resistance Band Row",
     "Single Leg Deadlift with Kettlebell",
     "Donkey Calf Raise",
-    "Seated Calf Raise",
-    "Standing Calf Raise",
     "Farmers Walk",
     "Gripper",
     "Plate Pinch",
@@ -194,7 +199,6 @@ test('bundled other equipment matches exactly the reviewed ambiguity list', () =
     "Banded Side Kicks",
     "Glute Bridge With Band Around Knees",
     "Hip Abduction Against Band",
-    "Hip Thrust",
     "Hip Thrust With Band Around Knees",
     "Kettlebell Sumo Deadlift",
     "Kettlebell Windmill",
@@ -234,4 +238,218 @@ test.each([['lb', 2204.7], ['kg', 1000.01], ['lb', 135135], ['kg', Infinity]] as
 
 test('a main muscle repeated in helpers counts only one set', () => {
   expect(attribute([{ main: 'chest', helpers: ['chest'], sets: [done(100)] }])).toEqual({ chest: 1 });
+});
+
+describe('M2-02 logger rules', () => {
+  const miss = (day: string, weight = 100) => ({ day, sets: [done(weight, 7)] });
+
+  test.each([
+    ['barbell', 'lb', undefined, 95, 85],
+    ['dumbbell', 'kg', undefined, 47.5, 42.5],
+    ['machine', 'lb', undefined, 95, 90],
+    ['cable', 'kg', undefined, 47.5, 45],
+    ['machine', 'lb', 15, 100, 90],
+    ['cable', 'kg', 4, 50, 44],
+  ] as const)('WK-07 two misses step back with %s %s step %s', (equipment, unit, stack, weight, expected) => {
+    const sessions = [miss('2026-10-01', weight), miss('2026-10-03', weight)];
+    const s = suggestion(sessions[1].sets, equipment, unit, 8, stack, { sessions });
+    expect(s.weight).toBe(expected);
+    expect(s.jump).toBe(false);
+    expect(shouldShowCard('Fixture lift', s, unit, [])).toBe(false);
+  });
+
+  test('WK-07 a success breaks the miss streak; no target or working sets cannot miss', () => {
+    const sessions = [miss('2026-10-01'), { day: '2026-10-03', sets: [done(100)] }, miss('2026-10-05')];
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, { sessions }).weight).toBe(100);
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', undefined, undefined, { sessions: [sessions[0], sessions[2]] }).weight).toBe(105);
+    expect(suggestion([], 'barbell', 'lb', 8, undefined, { sessions }).weight).toBeNull();
+  });
+
+  test.each([['barbell', 'lb', undefined, 2.5, 2.5], ['machine', 'lb', undefined, 5, 5], ['cable', 'kg', 4, 2, 2], ['barbell', 'lb', undefined, 1, 1]] as const)(
+    'step-back holds below one equipment step for %s %s', (equipment, unit, stack, weight, expected) => {
+      const sessions = [miss('2026-10-01', weight), miss('2026-10-03', weight)];
+      expect(suggestion(sessions[1].sets, equipment, unit, 8, stack, { sessions })).toMatchObject({ weight: expected, jump: false });
+    }
+  );
+
+  test('a success during Pause breaks misses on either side', () => {
+    const sessions = [miss('2026-10-01'), { day: '2026-10-03', sets: [done(100)] }, miss('2026-10-05')];
+    expect(suggestion(sessions[2].sets, 'barbell', 'lb', 8, undefined, {
+      sessions, paused: [{ start: '2026-10-03', end: '2026-10-03' }]
+    })).toMatchObject({ weight: 100, jump: false });
+  });
+
+  test.each(['bodyweight', 'other'] as const)('%s repeats after two misses without a gap', equipment => {
+    const sessions = [miss('2026-10-01'), miss('2026-10-03')];
+    expect(suggestion(sessions[1].sets, equipment, 'lb', 8, undefined, { sessions })).toMatchObject({ weight: 100, jump: false });
+  });
+
+  test.each([7, 20])('a %s-day gap with two misses reduces only once', days => {
+    const sessions = [miss('2026-09-29'), miss('2026-10-01')];
+    expect(suggestion(sessions[1].sets, 'barbell', 'lb', 8, undefined, {
+      sessions, today: `2026-10-${String(1 + days).padStart(2, '0')}`, lastTrainingDay: '2026-10-01'
+    })).toMatchObject({ weight: 90, jump: false });
+  });
+
+  test.each([
+    ['unreadable', '2026-10-01'], ['2026-10-08', 'unreadable'],
+    ['', '2026-10-01'], ['2026-02-30', '2026-02-01'],
+    ['2026-10-08', '2026-13-01'], ['10/08/2026', '2026-10-01'],
+    ['2026-10-01', '2026-10-08'], ['2026-10-01', '2026-10-02'],
+    ['2026-10', '2026-10-01'], ['2026-10-08', '2026-10'],
+    ['unreadable', undefined], [undefined, 'unreadable'],
+    ['2026-10-08', undefined], [undefined, '2026-10-01'],
+    ['-1', '2026-10-01'], ['2026-10-08', '-1'],
+  ])('invalid or partial gap dates hold with one value-free warning (%s, %s)', (today, lastTrainingDay) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(suggestion([done(100)], 'barbell', 'lb', 8, undefined, { today, lastTrainingDay }))
+        .toMatchObject({ weight: 100, jump: false });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(NO_GAP_INFO_WARNING);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('chained unreadable dates never compound a reduction', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      let weight = 100;
+      for (let call = 0; call < 4; call++) {
+        const result = suggestion([done(weight)], 'barbell', 'lb', 8, undefined, {
+          today: 'unreadable', lastTrainingDay: 'unreadable'
+        });
+        expect(result).toMatchObject({ weight: 100, jump: false });
+        weight = result.weight!;
+      }
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn.mock.calls).toEqual(Array(4).fill([NO_GAP_INFO_WARNING]));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('no gap info holds even when session history would trigger step-back', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, {
+        sessions: [miss('2026-10-01'), miss('2026-10-03')],
+        today: 'unreadable', lastTrainingDay: '2026-10-03'
+      })).toMatchObject({ weight: 100, jump: false });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('Pause excludes inclusive dates from misses without storing ranges', () => {
+    const sessions = [miss('2026-10-01'), miss('2026-10-03'), miss('2026-10-05')];
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, { sessions }).weight).toBe(90);
+    const paused = [{ start: '2026-10-01', end: '2026-10-03' }];
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, { sessions, paused }).weight).toBe(100);
+    // An ignored paused date does not erase misses outside the pause.
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, {
+      sessions, paused: [{ start: '2026-10-03', end: '2026-10-03' }]
+    }).weight).toBe(90);
+  });
+
+  test('ease-in sessions break the miss streak and cannot trigger step-back', () => {
+    const sessions = [miss('2026-10-01'), { ...miss('2026-10-03'), easedIn: true }];
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, { sessions }).weight).toBe(100);
+    expect(suggestion([done(100, 7)], 'barbell', 'lb', 8, undefined, {
+      sessions: [...sessions, miss('2026-10-05')]
+    }).weight).toBe(100);
+  });
+
+  test.each([
+    ['lb', '2026-10-07', 105], ['lb', '2026-10-08', 90],
+    ['lb', '2026-10-15', 90], ['lb', '2026-10-21', 90],
+    ['lb', '2026-10-22', 80], ['kg', '2026-10-08', 90],
+    ['kg', '2026-10-22', 80], ['lb', '2026-12-01', 80],
+  ] as const)('WK-32 gap ease-in %s on %s', (unit, today, weight) => {
+    expect(suggestion([done(100)], 'barbell', unit, 8, undefined, {
+      today, lastTrainingDay: '2026-10-01'
+    })).toEqual({ weight, jump: weight === 105, previous: 100, target: 8, count: 1 });
+  });
+
+  test('WK-32 rounds equipment steps, avoids double reduction and resumes normal climb', () => {
+    const context = { today: '2026-10-22', lastTrainingDay: '2026-10-01', sessions: [miss('2026-09-29'), miss('2026-10-01')] };
+    expect(suggestion([done(100, 7)], 'machine', 'lb', 8, 15, context).weight).toBe(75);
+    expect(suggestion([done(47.5)], 'dumbbell', 'kg', 8, undefined, context).weight).toBe(37.5);
+    expect(suggestion([done(80)], 'barbell', 'lb', 8, undefined, {
+      today: '2026-10-24', lastTrainingDay: '2026-10-22',
+      sessions: [{ day: '2026-10-22', sets: [done(80)], easedIn: true }]
+    }).weight).toBe(85);
+  });
+
+  test.each(['bodyweight', 'other'] as const)('%s has no invented equipment step or reduction', equipment => {
+    expect(suggestion([done(100, 7)], equipment, 'lb', 8, undefined, {
+      today: '2026-10-22', lastTrainingDay: '2026-10-01', sessions: [miss('2026-09-29'), miss('2026-10-01')]
+    }).weight).toBe(100);
+  });
+
+  test.each(['lb', 'kg'] as const)('WK-14 dumbbell volume is both hands; records stay per hand in %s', unit => {
+    const weight = unit === 'lb' ? 50 : 22.5;
+    expect(setMetrics(done(weight), { equipment: 'dumbbell' })).toEqual({
+      reps: 8, volume: weight * 8 * 2, e1rm: weight * (1 + 8 / 30), perHand: true, est: false
+    });
+    expect(setMetrics(done(weight), { equipment: 'barbell' }).perHand).toBe(false);
+    expect(detectPR([done(weight)], [done(weight - 5)], { equipment: 'dumbbell' })).toMatchObject({
+      weight: true, e1rm: true, bestWeight: weight, bestE1rm: weight * (1 + 8 / 30)
+    });
+  });
+
+  test.each(['lb', 'kg'] as const)('WK-15 bodyweight plus added load uses supplied latest weigh-in in %s', unit => {
+    const bodyweight = unit === 'lb' ? 180 : 80;
+    for (const added of [0, 10]) {
+      expect(setMetrics(done(added), { equipment: 'bodyweight', bodyweight })).toEqual({
+        reps: 8, volume: (bodyweight + added) * 8, e1rm: (bodyweight + added) * (1 + 8 / 30), perHand: false, est: false
+      });
+    }
+    expect(detectPR([done(10)], [done(5)], { equipment: 'bodyweight', bodyweight })).toMatchObject({
+      weight: true, e1rm: true, bestWeight: 10, bestE1rm: (bodyweight + 10) * (1 + 8 / 30)
+    });
+  });
+
+  test('WK-15 no weigh-in leaves total-load metrics unknown but added-load PR known', () => {
+    for (const bodyweight of [undefined, 0, NaN, Infinity, -1]) {
+      expect(setMetrics(done(10), { equipment: 'bodyweight', bodyweight })).toEqual({
+        reps: 8, volume: null, e1rm: null, perHand: false, est: true
+      });
+    }
+    expect(detectPR([done(10)], [done(5)], { equipment: 'bodyweight' })).toMatchObject({
+      weight: true, e1rm: false, bestWeight: 10, bestE1rm: 0
+    });
+  });
+
+  test('bodyweight PR at zero added load can improve e1RM but ties weight', () => {
+    expect(detectPR([done(0, 10)], [done(0, 8)], { equipment: 'bodyweight', bodyweight: 180 }))
+      .toMatchObject({ weight: false, e1rm: true, bestWeight: 0, bestE1rm: 240 });
+    expect(detectPR([done(10)], [done(0)], { equipment: 'bodyweight', bodyweight: 180 }).weight).toBe(true);
+    expect(detectPR([done(0)], [], { equipment: 'bodyweight', bodyweight: 180 }).weight).toBe(false);
+  });
+
+  test.each([0, 10])('same added load %s with a heavier weigh-in is no weight PR', added => {
+    expect(detectPR([done(added)], [done(added)],
+      { equipment: 'bodyweight', bodyweight: 190 }, { equipment: 'bodyweight', bodyweight: 180 }))
+      .toMatchObject({ weight: false, e1rm: true, bestWeight: added });
+  });
+
+  test('WK-16 twelve reps counts for e1RM; thirteen counts only for volume and weight PR', () => {
+    expect(setMetrics(done(100, 12)).e1rm).toBe(140);
+    expect(setMetrics(done(100, 13))).toMatchObject({ volume: 1300, e1rm: null });
+    expect(detectPR([done(100, 12)], [done(95, 12)]).e1rm).toBe(true);
+    expect(detectPR([done(105, 13)], [done(100, 12)])).toEqual({
+      weight: true, e1rm: false, bestWeight: 105, bestE1rm: 0
+    });
+    expect(detectPR([done(100, 12)], [done(95, 13)]).e1rm).toBe(false);
+    expect(detectPR([done(100, 12), done(500, 13)], [done(95, 12)]).bestE1rm).toBe(140);
+  });
+
+  test('metrics exclude warmups, undone and zero-rep sets', () => {
+    for (const set of [{ ...done(100), warmup: true }, { ...done(100), done: false }, done(100, 0)]) {
+      expect(setMetrics(set)).toMatchObject({ reps: 0, volume: 0, e1rm: null });
+    }
+  });
 });
