@@ -80,3 +80,4 @@ jobs:
           grep -Eq '^# pass [1-9][0-9]*$' "$RUNNER_TEMP/release-plist-tests.tap"
           grep -Eq '^# fail 0$' "$RUNNER_TEMP/release-plist-tests.tap"
           grep -Eq '^# skipped 0$' "$RUNNER_TEMP/release-plist-tests.tap"
+          grep -Eq '^# todo 0$' "$RUNNER_TEMP/release-plist-tests.tap"

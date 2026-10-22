@@ -16,18 +16,19 @@ test('native PRs include the macOS Release/Debug check', () => {
   assert.equal(workflow.jobs.plistbuddy.if, 'github.event.repository.private == false');
 });
 
-test('strict CI step rejects zero passes, skips and runner failures', () => {
+test('strict CI step rejects zero passes, skips, todos and runner failures', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'insight-ci-guard-'));
   try {
     // Run the actual workflow shell with a synthetic Node test reporter.
     writeFileSync(path.join(dir, 'node'), '#!/bin/sh\nprintf "%s\\n" "$SYNTHETIC_TAP"\nexit "$SYNTHETIC_EXIT"\n', { mode: 0o755 });
     for (const [tap, exit, expected] of [
-      ['# pass 1\n# fail 0\n# skipped 0', '0', true],
-      ['# pass 0\n# fail 0\n# skipped 0', '0', false],
-      ['# pass 0\n# fail 0\n# skipped 1', '0', false],
-      ['# pass 1\n# fail 0\n# skipped 1', '0', false],
-      ['# pass 1\n# fail 1\n# skipped 0', '1', false],
-      ['# pass 1\n# fail 0\n# skipped 0', '1', false],
+      ['# pass 1\n# fail 0\n# skipped 0\n# todo 0', '0', true],
+      ['# pass 0\n# fail 0\n# skipped 0\n# todo 0', '0', false],
+      ['# pass 0\n# fail 0\n# skipped 1\n# todo 0', '0', false],
+      ['# pass 1\n# fail 0\n# skipped 1\n# todo 0', '0', false],
+      ['# pass 1\n# fail 1\n# skipped 0\n# todo 0', '1', false],
+      ['# pass 1\n# fail 0\n# skipped 0\n# todo 0', '1', false],
+      ['# pass 1\n# fail 0\n# skipped 0\n# todo 1', '0', false],
       ['', '0', false],
     ]) {
       const result = spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', step.run], {
