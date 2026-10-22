@@ -1,70 +1,86 @@
-# Native npm audit triage — P2a
+# Native npm audit triage — M3-22
 
-Recorded October 17, 2026 on `native/p1-followups`, based on main `b5f145e` (P1/M0; plan §0.1/§15.2, Q127).
+Recorded October 22, 2026 at base `f016079`, Node 24.21.0 / npm 11.19.0, after the SDK 58 patch update in #78. Supersedes the October 17 P2a snapshot. Package manifests and lockfile are unchanged in this task.
 
-**No runtime-reachable high advisory identified in the current scaffold.** The two high advisories affect JavaScript build/development tools. They remain unfixed because no patched releases are published. This assessment covers the current native entry bundles and installed dependency paths, not future imports.
+## Results and action
 
-## Counts and disposition
+| Command (from native/) | Moderate | High | Total affected-package records | Exit |
+| --- | ---: | ---: | ---: | ---: |
+| `npm audit --omit=dev` (captured with `--json`) | 19 | 21 | 40 | 1 |
+| `npm audit` (captured with `--json`) | 18 | 30 | 48 | 1 |
 
-| Audit | Before: moderate / high / total | After: moderate / high / total |
-| --- | --- | --- |
-| `npm audit --json` | 8 / 19 / 27 | 8 / 19 / 27 |
-| `npm audit --omit=dev --json` | 8 / 19 / 27 | 8 / 19 / 27 |
+Both reports contain **three distinct advisories**, below; low/critical are zero. These totals are dependency/peer propagation records, not 40 or 48 distinct vulnerabilities. npm's omit-dev graph reports different propagated severity counts; it is not a shipped-bundle reachability analysis. Expo/RN production dependencies include host CLI/bundler tools and peer cycles (even test packages can appear in the omit-dev report).
 
-All runs returned exit 1 for findings; low/critical counts are zero. These are **27 affected-package records from three distinct advisories**, including propagated and cyclic peer-dependency findings. `--omit=dev` keeps Expo/RN's production-declared CLI/build dependencies; it does not measure code shipped on a phone.
-
-No packages fixed or changed. `npm audit fix --dry-run --json` still reported 27 findings and proposed no advisory resolution within current ranges, so an actual install was not applied. No overrides were added:
-
-- **braces 3.0.3:** latest registry release; [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) affects <=3.0.3 and has no patched version. Await upstream depth guards; no safe patch/minor override exists.
-- **node-forge 1.4.0:** latest registry release; [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) affects <=1.4.0 and has no patched version. Await upstream signature-verification fix.
-- **uuid 7.0.3:** [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) is fixed in 11.1.1, outside `xcode@3.0.1`'s `^7.0.3` range. This is a major upgrade, disallowed here; await compatible upstream Xcode tooling. Only tooling imports this npm package; Expo's runtime UUID implementation is separate.
-
-Audit's suggested Expo 44.0.6, RN 0.72.17, splash-screen 55.0.25, Reanimated 4.2.2 and Worklets 0.7.4 are downgrades, not safe SDK 58 fixes. None were applied. `npx expo install --check` passes with the existing package manifest/lockfile unchanged.
+No fix applied: npm proposes incompatible major downgrades (Expo 44.0.6, Jest 25.0.0 or jest-expo 56.0.0), not an SDK 58 patch/minor remedy. Registry checks return latest braces 3.0.3, node-forge 1.4.0 and sprintf-js 1.1.3, all within the reported affected ranges. Thus no available non-major patch/minor release resolves these findings. No SDK change, override, forced audit fix, or unrelated dependency bump was made. Re-run both audits when upstream fixes land; accept the current host-tool exposure with the reasons below while waiting for Expo/tooling updates.
 
 ## Advisory inventory
 
-“Dev-only” below means execution in CLI, configuration, bundler, or build tooling, even when installed through `dependencies`. “Runtime” means Metro-bundled code or linked native code. Reachability describes the **advisory's affected code**, not whether an ancestor package has any runtime code.
+| Advisory / installed package | Severity and affected range | Dependency path / affected behavior | Reaches shipped phone app? | Action |
+| --- | --- | --- | --- | --- |
+| [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), `braces@3.0.3` | High; `<=3.0.3` | `expo → @expo/metro → metro-file-map → micromatch → braces`; recursive glob parsing can exhaust the host stack. Also reached by Jest tooling. | No affected module in either production export map; pure JS build/test tool, no native library. | **Wait for Expo/upstream**. No patched release. Accept current build/test exposure: this parser handles repository glob patterns, not app user input. |
+| [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv), `node-forge@1.4.0` | High; `<=1.4.0` | `expo → @expo/cli → @expo/code-signing-certificates → node-forge` (CLI also uses it directly); RSA signature verification can accept an invalid nested algorithm structure. | No affected module in either production export map; Node certificate tooling, no native library. | **Wait for Expo/upstream**. No patched release. Accept current host-tool exposure; this app does not import forge or enable an app-side certificate verification feature. |
+| [GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c), `sprintf-js@1.0.3` | Moderate; `<=1.1.3` | `jest → @jest/core → @jest/transform → babel-plugin-istanbul → @istanbuljs/load-nyc-config → js-yaml@3.15.2 → argparse@1.0.10 → sprintf-js`; unbounded precision formatting can exhaust resources. | No affected module in either production export map; coverage/config/argument parsing on the host. | **Wait for upstream tooling**. Latest 1.1.3 is also affected; updating within 1.x would not fix it. Accept current test/build exposure: no app user formatting reaches this package. |
 
-| Package | Severity | Advisory ID / URL | Representative dependency path from app root | Role | Runtime-reachable in shipped app bundle? |
-| --- | --- | --- | --- | --- | --- |
-| `braces@3.0.3` | High | [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) | `expo → @expo/metro → metro-file-map → micromatch → braces` | Dev-only | No — recursive glob parser runs in Metro's file-map tooling; absent from both native export maps. |
-| `node-forge@1.4.0` | High | [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) | `expo → @expo/cli → @expo/code-signing-certificates → node-forge` (also CLI direct) | Dev-only | No — Node certificate/signature tooling; absent from both native export maps, no native code. |
-| `uuid@7.0.3` | Moderate | [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) | `expo → @expo/config-plugins → xcode → uuid` | Dev-only | No — Xcode project ID generation on the build host; npm uuid absent from both native export maps. |
+The earlier uuid advisory is absent from both current audit reports; do not carry its old affected-package list forward. No claim is made about arbitrary future imports or web/server deployments.
 
-The remaining affected-package records below inherit those advisories via dependencies/peers; they do not introduce additional advisory IDs. B = [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), F = [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv), U = [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq). Paths are representative; Expo/RN peer cycles can lead back to the same root advisory.
+## Evidence
 
-| Package | Severity | Advisory (above) | Dependency path root | Role | Runtime-reachable affected code? |
-| --- | --- | --- | --- | --- | --- |
-| `@expo/cli` | High | B, F, U | `expo → @expo/cli` | Dev-only tools + runtime require helper | No — bundled `metro-require/require.js` does not import affected tooling. |
-| `@expo/code-signing-certificates` | High | F | `expo → @expo/cli → @expo/code-signing-certificates` | Dev-only | No — certificates generated/checked by Node CLI, not app code. |
-| `@expo/config` | Moderate | U | `expo → @expo/config` | Dev-only | No — app-config evaluation on host. |
-| `@expo/config-plugins` | Moderate | U | `expo → @expo/config-plugins` | Dev-only | No — Xcode project generation on host. |
-| `@expo/inline-modules` | Moderate | U | `expo → @expo/cli → @expo/inline-modules` | Dev-only | No — native-module configuration tooling. |
-| `@expo/local-build-cache-provider` | Moderate | U | `expo → @expo/local-build-cache-provider` | Dev-only | No — host build-cache tooling. |
-| `@expo/metro` | High | B | `expo → @expo/metro` | Dev-only bundler + runtime helpers | No — HMR helper is present; vulnerable glob/file-map tooling is absent. |
-| `@expo/metro-config` | High | B, U | `expo → @expo/metro-config` | Dev-only | No — Metro configuration runs on host. |
-| `@expo/prebuild-config` | Moderate | U | `expo → @expo/cli → @expo/prebuild-config` | Dev-only | No — prebuild configuration runs on host. |
-| `@react-native/community-cli-plugin` | High | B | `react-native → @react-native/community-cli-plugin` | Dev-only | No — RN CLI's Metro server integration. |
-| `@react-native/metro-config` | High | B | `react-native-worklets → @react-native/metro-config` (peer) | Dev-only | No — bundler configuration, not Worklets runtime. |
-| `@react-native/virtualized-lists` | High | B | `react-native → @react-native/virtualized-lists → react-native` (peer cycle) | Runtime | No — list runtime is shipped, but audit propagates RN's CLI finding through a peer cycle. |
-| `expo` | High | B, F, U | `expo` | Runtime + tools | No — runtime shipped; vulnerable code belongs to separate host-side imports. |
-| `expo-modules-core` | High | B | `expo → expo-modules-core → react-native-worklets` (peer) | Runtime | No — native/JS runtime shipped; finding flows from Worklets' Metro/RN tooling peers. |
-| `expo-splash-screen` | Moderate | U | `expo-splash-screen → @expo/config-plugins` | Runtime + config plugin | No — runtime splash implementation does not load Xcode config tooling. |
-| `metro` | High | B | `expo → @expo/metro → metro` | Dev-only | No — bundle server/compiler; vulnerable parser absent from exports. |
-| `metro-config` | High | B | `expo → @expo/metro → metro-config` | Dev-only | No — host bundler configuration. |
-| `metro-file-map` | High | B | `expo → @expo/metro → metro-file-map` | Dev-only | No — host filesystem crawler. |
-| `metro-transform-worker` | High | B | `expo → @expo/metro → metro-transform-worker` | Dev-only | No — host transformation workers. |
-| `micromatch` | High | B | `expo → @expo/metro → metro-file-map → micromatch` | Dev-only | No — glob matching in file-map tooling; absent from exports. |
-| `react-native` | High | B | `react-native → @react-native/community-cli-plugin → metro` | Runtime + tools | No — linked RN runtime does not execute Node's glob parser. |
-| `react-native-reanimated` | High | B | `react-native-reanimated → react-native / react-native-worklets` (peers) | Runtime | No — peer-propagated Metro finding, not animation runtime code. |
-| `react-native-worklets` | High | B | `react-native-worklets → @react-native/metro-config / react-native` (peers) | Runtime + tooling | No — runtime linked/bundled; affected dependencies are host-side peers. |
-| `xcode` | Moderate | U | `expo → @expo/config-plugins → xcode` | Dev-only | No — Node PBX project manipulation; absent from exports. |
+- Installed dependency paths/manifests and `npm explain sprintf-js --json` identify host-only uses. Audit JSON supplies the linked advisory IDs/ranges and proposed remediation values; registry version queries confirm no patched release is available today.
+- Fresh `expo export --platform ios --source-maps` and `expo export --platform android --source-maps` both passed with dotenv and telemetry disabled. Source maps contain 1,579 iOS sources and 1,714 Android sources, with **zero** sources from each of `braces`, `node-forge`, and `sprintf-js`. These packages have no native code to link. This is current bundle evidence, not the historical P1 export result.
+- `expo install --check` reports dependencies up to date. `expo-doctor` passes 20/20. Export outputs and audit JSON are temporary verification artifacts, not shipped files.
+- No real user/Health values, environment files or secrets were used. Exports are JS/Hermes bundle checks, not new simulator/emulator/store builds.
 
-## Verification and limits
+## All propagated package records
 
-Evidence: full/omit-dev audit JSON, `npm explain braces node-forge uuid --json`, installed manifests/imports and registry version queries. The three advisory links above supply affected/fixed ranges. Inspected runtime imports in Expo, RN, Worklets, Reanimated, modules-core and splash-screen; Metro production exports with source maps provide platform-specific bundle evidence. These checks use scaffold/demo code only, with `EXPO_NO_TELEMETRY=1` and `EXPO_NO_DOTENV=1`.
+The following union inventories every package record in the two reports. Severity is npm's reported inherited severity, not an additional advisory in that package's runtime. Each row's immediate `via` dependencies allow tracing it back to the three advisory roots above. All share the root actions above; none has an allowed patch/minor fix. “Full only” means absent from this omit-dev report.
 
-- `npx expo export --platform ios --source-maps --output-dir /tmp/insight-p2a-ios-export`
-- `npx expo export --platform android --source-maps --output-dir /tmp/insight-p2a-android-export`
-
-Both exports succeed. Their source-map source lists contain zero modules from npm `braces`, `node-forge`, `uuid`, `micromatch`, `xcode`, or `metro-file-map`. Expo's CLI require polyfill and Metro HMR helper do appear; that does not pull in their vulnerable host tooling. The three affected packages are pure JavaScript tools, not linked native libraries. No simulator/emulator build, prebuild, or Release artifact re-check was performed. Reassess reachability when imports/dependencies change and rerun audits when upstream patches ship.
+| Package | Full severity | Omit-dev severity | Immediate advisory dependency (`via`) |
+| --- | --- | --- | --- |
+| `@expo/cli` | high | high | `@expo/code-signing-certificates`, `@expo/metro`, `@expo/metro-config`, `node-forge` |
+| `@expo/code-signing-certificates` | high | high | `node-forge` |
+| `@expo/metro` | high | high | `metro`, `metro-config`, `metro-file-map`, `metro-transform-worker` |
+| `@expo/metro-config` | high | high | `@expo/metro` |
+| `@istanbuljs/load-nyc-config` | moderate | moderate | `js-yaml` |
+| `@jest/core` | moderate | moderate | `@jest/reporters`, `@jest/transform`, `jest-config`, `jest-resolve-dependencies`, `jest-runner`, `jest-runtime`, `jest-snapshot` |
+| `@jest/environment` | high | Full only | `@jest/fake-timers` |
+| `@jest/expect` | moderate | moderate | `jest-snapshot` |
+| `@jest/fake-timers` | high | Full only | `jest-message-util` |
+| `@jest/globals` | moderate | moderate | `@jest/expect` |
+| `@jest/reporters` | moderate | moderate | `@jest/transform` |
+| `@jest/transform` | high | moderate | `babel-plugin-istanbul`, `jest-haste-map`, `micromatch` |
+| `@react-native/community-cli-plugin` | high | high | `@react-native/metro-config`, `metro` |
+| `@react-native/jest-preset` | high | Full only | `babel-jest`, `jest-environment-node` |
+| `@react-native/metro-config` | high | high | `metro-config` |
+| `@react-native/virtualized-lists` | high | high | `react-native` |
+| `@testing-library/react-native` | high | high | `jest`, `react-native` |
+| `argparse` | moderate | moderate | `sprintf-js` |
+| `babel-jest` | high | moderate | `@jest/transform`, `@jest/transform`, `babel-plugin-istanbul` |
+| `babel-plugin-istanbul` | moderate | moderate | `@istanbuljs/load-nyc-config` |
+| `braces` | high | high | `GHSA-vfj7-8cjw-p6xm` |
+| `expo` | high | high | `@expo/cli`, `@expo/metro`, `@expo/metro-config`, `expo-modules-core` |
+| `expo-modules-core` | high | high | `react-native-worklets` |
+| `expo-router` | high | high | `@testing-library/react-native` |
+| `jest` | moderate | moderate | `@jest/core`, `jest-cli` |
+| `jest-circus` | moderate | moderate | `@jest/expect`, `jest-runtime`, `jest-snapshot` |
+| `jest-cli` | moderate | moderate | `@jest/core`, `jest-config` |
+| `jest-config` | moderate | moderate | `babel-jest`, `jest-circus`, `jest-runner` |
+| `jest-environment-node` | high | Full only | `@jest/environment`, `@jest/fake-timers` |
+| `jest-expo` | high | Full only | `@jest/globals`, `@react-native/jest-preset`, `babel-jest`, `jest`, `jest-snapshot`, `jest-watch-typeahead` |
+| `jest-haste-map` | high | Full only | `micromatch` |
+| `jest-message-util` | high | Full only | `micromatch` |
+| `jest-resolve-dependencies` | moderate | moderate | `jest-snapshot` |
+| `jest-runner` | moderate | moderate | `@jest/transform`, `jest-runtime` |
+| `jest-runtime` | moderate | moderate | `@jest/globals`, `@jest/transform`, `jest-snapshot` |
+| `jest-snapshot` | moderate | moderate | `@jest/transform` |
+| `jest-watch-typeahead` | moderate | Full only | `jest` |
+| `js-yaml` | moderate | moderate | `argparse` |
+| `metro` | high | high | `metro-config`, `metro-file-map`, `metro-transform-worker` |
+| `metro-config` | high | high | `metro` |
+| `metro-file-map` | high | high | `micromatch` |
+| `metro-transform-worker` | high | high | `metro` |
+| `micromatch` | high | high | `braces` |
+| `node-forge` | high | high | `GHSA-86w9-cpqp-85rv` |
+| `react-native` | high | high | `@react-native/community-cli-plugin`, `@react-native/virtualized-lists` |
+| `react-native-reanimated` | high | high | `react-native`, `react-native-worklets` |
+| `react-native-worklets` | high | high | `@react-native/metro-config`, `react-native` |
+| `sprintf-js` | moderate | moderate | `GHSA-hp3w-g68c-fv3c` |

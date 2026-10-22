@@ -100,6 +100,17 @@ Review validation uses EXPO_NO_TELEMETRY=1, EXPO_NO_DOTENV=1, npm_config_cache=/
 
 No git commands, prebuild, simulator/emulator, EAS or paid services were used. M6/M7 device results are recorded above; a native Release artifact check of the dev-scheme strip is still pending.
 
+## M3-22 review-nit disposition (October 22, 2026)
+
+Rechecked the merged #68 commit (`9c1963b`), the PR body (Quinn PASS-WITH-MINORS at `ffe96e2`), and the “Review fixes (Quinn #68)” table above. GitHub's comments/reviews/thread endpoints returned empty lists; this repository table is the available finding-level record. The external `library` review notes and full rebuild plan are not in this worktree.
+
+- B1/B1b and M2/M3/M5 already have fixes recorded above; no duplicate implementation is needed. M6 already has coordinator device evidence.
+- M4's remaining full in-app Lexend/RepDB notices are skipped here: the license file and Licenses route already exist, but completing that screen changes UI, expressly excluded from M3-22. It remains a before-release follow-up.
+- M7's large-text tab-bar/Settings/Appearance checks and live VoiceOver/TalkBack pass remain skipped: they require interactive native-host accessibility validation, not a small local code nit. No new device evidence is claimed.
+- The Release artifact re-check of the dev-scheme strip remains deferred to an authorized native build. M3-22 verifies synthetic processed plists with real PlistBuddy, not a signed/store artifact.
+
+No additional unresolved small local LOW code nit could be established from these sources. M3-22 adds this explicit disposition so the open follow-ups are not mistaken for completed release checks.
+
 ## Complete file manifest
 
 Paths are relative to the repository root. No file was staged. The native ignore file narrowly re-includes `src/design/tokens.json`; the repository-wide rule for other files named tokens.json remains in force.
