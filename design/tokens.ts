@@ -1,11 +1,11 @@
 /**
- * Insight Daily design tokens — v0.1.0 (S1 draft, PLACEHOLDER VALUES).
+ * Insight Daily design tokens — v0.1.1 (S1 draft, PLACEHOLDER VALUES).
  * Source of truth for colour, type, spacing, radius, motion and haptics (D1, D2).
  * Real values come from the S3 slider mockup via a proposal PR (D19, D23).
  * Codex never edits this file (D18). Figma mirrors it; this file wins (D24).
  */
 
-export const TOKENS_VERSION = "0.1.0";
+export const TOKENS_VERSION = "0.1.1";
 
 /**
  * Base colours, named by meaning (D3). Values are placeholders.

@@ -1,4 +1,4 @@
-# Insight Daily design system (v0.1.0, S1 draft)
+# Insight Daily design system (v0.1.1, S1 draft)
 
 Status: **draft with placeholder values.** The real values come from the S3 slider mockup, through a proposal PR.
 
@@ -12,9 +12,10 @@ Status: **draft with placeholder values.** The real values come from the S3 slid
 - Names describe meaning, not looks: `color.pillar.training`, not `orange` (D3).
 - One base set, plus per-theme overrides for Calm, Dusk and Sandstone (D4). Each theme picks its own pillar colours in the same hue family (D5).
 - Placeholder colours do not meet the D6 contrast rule yet. Sandstone tertiary is about 3.4-3.8:1, and white on accent is about 2.16:1. The slider-mockup step (S3) sets the real values.
-- Type: named steps that scale with Dynamic Type, the iPhone text-size setting (D7). Display, title, body and caption map to the iOS text styles largeTitle, title2, body and caption1. Every number uses tabular figures, so digits are equal width and line up (D8).
+- Recovery and water are both blue. S3 must check they look distinct.
+- Type: named steps that scale with Dynamic Type, the iPhone text-size setting (D7). The six steps map to iOS text styles: display → largeTitle, title → title2, body → body, caption → caption1, headline → headline, callout → callout. Every number uses tabular figures, so digits are equal width and line up (D8).
 - Spacing uses a 4 pt grid: 4, 8, 12, 16, 24, 32 (D9). There are 3 corner sizes: small, card, sheet (D10).
-- Motion: each preset (Basic, Calm, Lively) shares one duration scale and has its own curve (D11). Intensity changes the amount, never the speed.
+- Motion: each preset (Basic, Calm, Lively) shares one duration scale, 160/260/420, on purpose, so Basic is slightly slower than before, and has its own curve (D11). Intensity changes the amount, never the speed. S3 tunes the scale.
 - Every animation goes through one shared Reduce Motion hook (D12, built in S2).
 
 ## Haptics (D13)
@@ -52,7 +53,7 @@ Screenshot pairs from the mockups get added here in the next mockup pass.
 
 ## Changelog (D20)
 - 0.1.0 (Oct 23, 2026): S1 draft with placeholder values.
-- 0.1.0 (Oct 23, 2026): Theme overrides typecheck against string colour leaves. Accent and recovery placeholders differ. Motion presets share one duration scale. Type steps name their iOS text styles. Contrast still waits on S3.
+- 0.1.1 (Oct 23, 2026): B1 — colour leaves are string, so theme overrides typecheck. M1 — placeholder colours miss the D6 contrast rule; S3 sets the real values. M2 — accent and recovery placeholders differ. M3 — one shared motion scale, and all six type steps map to iOS text styles. M4 — the selection-detent comment reads animation idea #23 / W6.
 
 ## Quinn HIG log (D21)
 No milestone checks yet.
