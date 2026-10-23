@@ -118,6 +118,9 @@ export class Repository {
       const previous = this.get(input.table, input.id);
       if (previous && previous.table === 'weigh_ins' && previous.data.source !== input.data.source) throw new Error('Provenance is immutable.');
       let row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
+      // An OFF edit cannot author v1 values retained from an earlier enabled run.
+      // Clear those dormant fields so a later ON push cannot resurrect them.
+      if (!this.syncFlags.syncedV1Columns && hasGatedColumns(row.table)) row = canonicalRow(projectSyncRow(row,this.syncFlags));
       if (previous && compareRows(row, previous) <= 0) return;
       this.atomic(() => {
         row = this.write(row);

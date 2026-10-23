@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import { randomUUID } from 'expo-crypto';
 import migrations from './migrations';
+import { syncTables } from './sync/flags';
 import { Repository, deviceId, wipeAllOwners } from './repository';
 let database: Promise<{forOwner: (owner: string) => Repository; wipeAll(): void; countAllUnsynced?():number}> | undefined;
 export function openLocalDatabase() {
@@ -18,7 +19,7 @@ export function openLocalDatabase() {
       await migrate(db,migrations);
       stage = 'DatabaseOpenError';
       const device = deviceId(db, randomUUID);
-      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name <> 'purges'`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
+      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name IN (${sql.join(syncTables().filter(table=>table!=='purges').map(table=>sql`${table}`),sql`, `)})`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
     } catch {
       try { sqlite?.closeSync(); } catch { /* Keep the original failure category. */ }
       const error = new Error('Local data is unavailable.');

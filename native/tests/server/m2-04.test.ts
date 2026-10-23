@@ -6,7 +6,7 @@ import migrations from '../../src/data/migrations';
 import { Repository } from '../../src/data/repository';
 import { SyncEngine } from '../../src/data/sync/engine';
 import { canonicalRow } from '../../src/data/rows';
-import { syncFields, syncTables, projectSyncRow, DEFAULT_SYNC_FLAGS } from '../../src/data/sync/flags';
+import { syncFields, syncTables, projectSyncRow, mergeSyncRow, DEFAULT_SYNC_FLAGS } from '../../src/data/sync/flags';
 import { OWNER_A, DEVICE_A, syntheticRow } from '../../fixtures/sync';
 import { localDatabase, sqliteClient } from './sqlite';
 import { serverDatabase, testTransport } from './pglite';
@@ -68,19 +68,21 @@ test('OFF outbox/apply gates fields/tables, preserves dormant values and isolate
   expect(off.get('sets',pending[0].row.id)?.data.tag).toBeNull();
  }finally{local.sqlite.close();}
 });
-test.each(examples)('%s two simulated devices: LWW ties/stale writes, nullable values and tombstones',async(table,data)=>{
+test.each([false,true].flatMap(syncedV1Columns=>examples.filter(([table])=>syncTables({syncedV1Columns}).includes(table)).map(([table,data])=>({table,data,flags:{syncedV1Columns}}))))('$table flag=$flags.syncedV1Columns two simulated devices: LWW ties/stale writes, nullable values and tombstones',async({table,data,flags})=>{
  const server=await serverDatabase();let serial=0;
  try {
   await fc.assert(fc.asyncProperty(fc.integer({min:101,max:500}),fc.boolean(),fc.integer({min:1,max:7}),async(stamp,nullable,n)=>{
    const a=await localDatabase(),b=await localDatabase();
-   const ra=new Repository(a.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on),rb=new Repository(b.db,OWNER_A,DEVICE_B,()=>syntheticRow().id,on);
-   const transport=testTransport(server,OWNER_A),ea=new SyncEngine(ra,transport),eb=new SyncEngine(rb,transport);
+   const ra=new Repository(a.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,flags),rb=new Repository(b.db,OWNER_A,DEVICE_B,()=>syntheticRow().id,flags);
+   const transport=testTransport(server,OWNER_A,flags),ea=new SyncEngine(ra,transport),eb=new SyncEngine(rb,transport);
    const id=`30000000-0000-4000-8000-${String(++serial).padStart(12,'0')}`;
    const generated=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,typeof value==='number'?n: key==='tag'||key==='superset_group'?`fixture ${n}`:value]));
-   const original={...syntheticRow(table),id,updated_at:stamp,data:nullable?Object.fromEntries(Object.keys(data).map(k=>[k,null])):generated};
+   const baseKey={sets:'reps',routine_exercises:'target_reps',entries:'position',machine_notes:'exercise',settings:'rest_seconds',food_entries:'name',saved_foods:'name'}[table as string];
+   const base=baseKey?{[baseKey]:['exercise','name'].includes(baseKey)?`fixture ${n}`:n}:{};
+   const original={...syntheticRow(table),id,updated_at:stamp,data:flags.syncedV1Columns?(nullable?Object.fromEntries(Object.keys(data).map(k=>[k,null])):generated):base};
    try {
     ra.putLocal(original);await ea.sync();await eb.sync();expect(rb.get(table,id)).toEqual(canonicalRow(original));
-    const winner={...original,device_id:DEVICE_B,updated_at:stamp+1,data};
+    const winner={...original,device_id:DEVICE_B,updated_at:stamp+1,data:flags.syncedV1Columns?data:base};
     rb.putLocal(winner);ra.putLocal({...original,updated_at:stamp+1,data:{}});
     await eb.sync();await ea.sync();await eb.sync();
     expect(ra.get(table,id)).toEqual(canonicalRow(winner));expect(rb.get(table,id)).toEqual(canonicalRow(winner));
@@ -95,7 +97,7 @@ test.each(examples)('%s two simulated devices: LWW ties/stale writes, nullable v
     expect(Object.values(ra.get(table,id)!.data).every(v=>v===null)).toBe(true);
     expect(ra.pending()).toEqual([]);expect(rb.pending()).toEqual([]);
    }finally{ea.close();eb.close();a.sqlite.close();b.sqlite.close();}
-  }),{numRuns:5});
+  }),{numRuns:10});
  }finally{await server.close();}
 });
 
@@ -118,27 +120,128 @@ test('engine rejects mismatched transport/repository capabilities before network
  const local=await localDatabase();
  try {
   const push=jest.fn(),pull=jest.fn();
-  expect(()=>new SyncEngine(local.repo,{owner:OWNER_A,syncFlags:DEFAULT_SYNC_FLAGS,push,pull})).toThrow('Sync feature flags must match.');
+  expect(()=>new SyncEngine(local.repo,{owner:OWNER_A,syncFlags:on,push,pull})).toThrow('Sync feature flags must match.');
   expect(push).not.toHaveBeenCalled();expect(pull).not.toHaveBeenCalled();
  }finally{local.sqlite.close();}
 });
 
 test('OFF device syncs old fields without uploading/accepting v1 fields or querying gated tables',async()=>{
  const server=await serverDatabase(),a=await localDatabase(),b=await localDatabase();
- const transport=testTransport(server,OWNER_A);
+ const transport=testTransport(server,OWNER_A,on);
  const off=new Repository(b.db,OWNER_A,DEVICE_B,()=>syntheticRow().id);
- const pull=jest.fn(transport.pull),push=jest.fn(transport.push);
- const enabledEngine=new SyncEngine(a.repo,transport),offEngine=new SyncEngine(off,{owner:OWNER_A,push,pull});
+ const offTransport=testTransport(server,OWNER_A);
+ const pull=jest.fn(offTransport.pull),push=jest.fn(offTransport.push);
+ const enabledRepo=new Repository(a.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const enabledEngine=new SyncEngine(enabledRepo,{...transport,syncFlags:on}),offEngine=new SyncEngine(off,{owner:OWNER_A,push,pull});
  try {
   const original={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
-  a.repo.putLocal(original);a.repo.putLocal({...syntheticRow('pauses'),data:{start_day:'2026-10-01'}});
+  enabledRepo.putLocal(original);enabledRepo.putLocal({...syntheticRow('pauses'),data:{start_day:'2026-10-01'}});
   await enabledEngine.sync();await offEngine.sync();expect(offEngine.status).toBe('idle');
   expect(off.get('sets',original.id)?.data.tag).toBeNull();expect(off.list('pauses')).toEqual([]);
   for(const [table] of pull.mock.calls)expect(['custom_exercises','plans','pauses']).not.toContain(table);
   off.save('sets',{reps:9},original.id,200);await offEngine.sync();
   for(const [rows] of push.mock.calls)for(const row of rows)expect(row.data).not.toHaveProperty('tag');
   const remote=(await transport.pull('sets','0',100))[0].row;expect(remote.data).toMatchObject({reps:9,tag:'warmup'});
-  const enabled=new Repository(b.db,OWNER_A,DEVICE_B,()=>original.id,on),engine=new SyncEngine(enabled,transport);
+  const enabled=new Repository(b.db,OWNER_A,DEVICE_B,()=>original.id,on),engine=new SyncEngine(enabled,{...transport,syncFlags:on});
   await engine.sync();expect(engine.status).toBe('idle');expect(enabled.get('sets',original.id)?.data.tag).toBe('warmup');engine.close();
  }finally{enabledEngine.close();offEngine.close();a.sqlite.close();b.sqlite.close();await server.close();}
+});
+
+
+test('SQLite helper defaults OFF',async()=>{
+ const local=await localDatabase();
+ try {expect(local.repo.syncFlags).toEqual(DEFAULT_SYNC_FLAGS);}finally{local.sqlite.close();}
+});
+
+test('merge tombstone wipes dormant fields before canonicalization',()=>{
+ const local={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+ const dead=mergeSyncRow({...local,deleted_at:101,data:{}},local,DEFAULT_SYNC_FLAGS);
+ expect(dead.data.tag).toBeNull();
+ expect(mergeSyncRow(local,undefined,DEFAULT_SYNC_FLAGS).data.tag).toBeNull();
+ expect(mergeSyncRow(local,local,DEFAULT_SYNC_FLAGS).data.tag).toBe('warmup');
+});
+
+test('applyPage projects disabled invalid values before validation and hydration',async()=>{
+ const local=await localDatabase();
+ const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:42,future_column:'ignored'}};
+  expect(()=>off.applyPage('sets',[{row,server_seq:'1'}],'1')).not.toThrow();
+  expect(off.get('sets',row.id)?.data).toMatchObject({reps:8,tag:null});
+  expect(off.get('sets',row.id)?.data).not.toHaveProperty('future_column');
+ }finally{local.sqlite.close();}
+});
+
+test('undefined transport flags are OFF, so enabled repositories reject them',async()=>{
+ const local=await localDatabase();
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ try {
+  expect(()=>new SyncEngine(enabled,{owner:OWNER_A,push:jest.fn(),pull:jest.fn()})).toThrow('Sync feature flags must match.');
+ }finally{local.sqlite.close();}
+});
+
+test('OFF delete wipes server v1 columns and an ON device pulls the tombstone',async()=>{
+ const server=await serverDatabase(),a=await localDatabase(),b=await localDatabase();
+ const enabled=new Repository(a.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const off=new Repository(b.db,OWNER_A,DEVICE_B,()=>syntheticRow().id);
+ const transport=testTransport(server,OWNER_A,on);
+ const ea=new SyncEngine(enabled,{...transport,syncFlags:on}),eb=new SyncEngine(off,testTransport(server,OWNER_A));
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  enabled.putLocal(row);await ea.sync();await eb.sync();
+  off.remove('sets',row.id,200);
+  expect(off.pending()[0].row.data).not.toHaveProperty('tag');
+  await eb.sync();expect(eb.status).toBe('idle');
+  const result=await server.query<{tag:null;deleted_at:string}>('SELECT tag,deleted_at FROM public.sets WHERE id=$1',[row.id]);
+  expect(result.rows[0].tag).toBeNull();expect(result.rows[0].deleted_at).not.toBeNull();
+  await ea.sync();expect(ea.status).toBe('idle');
+  expect(enabled.get('sets',row.id)).toEqual(off.get('sets',row.id));
+  expect(Object.values(enabled.get('sets',row.id)!.data).every(v=>v===null)).toBe(true);
+ }finally{ea.close();eb.close();a.sqlite.close();b.sqlite.close();await server.close();}
+});
+
+test('ON rollback replays remote v1 changes before its first push',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
+ const first=new SyncEngine(enabled,{...transport,syncFlags:on});
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  enabled.putLocal(row);await first.sync();first.close();
+  await transport.push([{...row,device_id:DEVICE_B,updated_at:200,data:{reps:9,tag:'drop'}}]);
+  const rollback=new SyncEngine(off,testTransport(server,OWNER_A));await rollback.sync();rollback.close();
+  expect(off.get('sets',row.id)?.data).toMatchObject({reps:9,tag:'warmup'});
+  const push=jest.fn(transport.push),pull=jest.fn(transport.pull);
+  const restored=new SyncEngine(enabled,{...transport,syncFlags:on,push,pull});
+  // An unrelated pending row forces a push on the first re-enabled run.
+  enabled.putLocal({...syntheticRow('sessions'),updated_at:201});
+  await restored.sync();restored.close();
+  expect(enabled.get('sets',row.id)?.data.tag).toBe('drop');
+  const setsPull=pull.mock.calls.findIndex(([table])=>table==='sets');
+  expect(pull.mock.invocationCallOrder[setsPull]).toBeLessThan(push.mock.invocationCallOrder[0]);
+ }finally{first.close();local.sqlite.close();await server.close();}
+});
+
+
+test('OFF edits clear dormant v1 values before a re-enabled push',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
+ const transport=testTransport(server,OWNER_A,on);
+ const first=new SyncEngine(enabled,transport),rollback=new SyncEngine(off,testTransport(server,OWNER_A));
+ const push=jest.fn(transport.push),restored=new SyncEngine(enabled,{...transport,push});
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  enabled.putLocal(row);await first.sync();first.close();
+  await transport.push([{...row,device_id:DEVICE_B,updated_at:200,data:{reps:9,tag:'drop'}}]);
+  await rollback.sync();rollback.close();
+  expect(off.get('sets',row.id)?.data.tag).toBe('warmup');
+  off.save('sets',{...off.get('sets',row.id)!.data,reps:10},row.id,300);
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:null});
+  await restored.sync();expect(restored.status).toBe('idle');
+  expect(push).toHaveBeenCalledTimes(1);
+  expect(push.mock.calls[0][0][0].data).toMatchObject({reps:10,tag:null});
+  expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:10,tag:null});
+ }finally{first.close();rollback.close();restored.close();local.sqlite.close();await server.close();}
 });

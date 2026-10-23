@@ -3,17 +3,18 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import migrations from '../../src/data/migrations';
+import { DEFAULT_SYNC_FLAGS, type SyncFlags } from '../../src/data/sync/flags';
 import { Repository } from '../../src/data/repository';
 import { DEVICE_A, OWNER_A } from '../../fixtures/sync';
 
 /** Exercise the production Drizzle driver/repository/migrator on actual SQLite. */
-export async function localDatabase(path = ':memory:') {
+export async function localDatabase(path = ':memory:', flags: SyncFlags = DEFAULT_SYNC_FLAGS) {
   const sqlite = new DatabaseSync(path);
   sqlite.exec('PRAGMA journal_mode = WAL');
   const client = sqliteClient(sqlite);
   const db = drizzle(client);
   await migrate(db, migrations);
-  return { sqlite, db, repo: new Repository(db, OWNER_A, DEVICE_A, () => '40000000-0000-4000-8000-000000000001', {syncedV1Columns:true}) };
+  return { sqlite, db, repo: new Repository(db, OWNER_A, DEVICE_A, () => '40000000-0000-4000-8000-000000000001', flags) };
 }
 
 export function sqliteClient(sqlite: DatabaseSync) {
