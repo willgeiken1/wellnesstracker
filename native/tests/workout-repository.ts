@@ -25,6 +25,7 @@ export function memoryRepository() {
       rows.find((r) => r.table === table && r.id === id),
     atomic: (f: () => unknown) => f(),
     localGet: (key: string) => local.get(key),
+    localSnapshot: () => Object.fromEntries(local),
     localSave: (key: string, value: unknown) => {
       local.set(key, value);
       notify();

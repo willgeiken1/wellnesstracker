@@ -19,6 +19,7 @@ const bootSignOutStorage: typeof signOutStorage={
   write:marker=>signOutStorage.write(marker),remove:()=>signOutStorage.remove(),
 };
 export interface AuthState {
+  phoneOnly?: boolean;
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   prepareSignOut?(): Promise<void>;

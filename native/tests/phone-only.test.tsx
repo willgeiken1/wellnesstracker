@@ -1,0 +1,60 @@
+import { act, render, waitFor } from '@testing-library/react-native';
+import { AuthProvider, useAuth } from '../src/phone-only/provider';
+import { openLocalDatabase } from '../src/data/database';
+import { memoryRepository } from './workout-repository';
+import { seedDemo } from '../fixtures/demo';
+import { createPhoneBackup } from '../src/phone-only/backup';
+import { health, widgets, push } from '../src/phone-only/capabilities';
+jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
+jest.mock('../fixtures/demo', () => ({ seedDemo: jest.fn() }));
+let observed: ReturnType<typeof useAuth>;
+function Probe() { observed = useAuth(); return null; }
+test('phone-only boots guest SQLite, disables auth and sync, and preserves data when leaving demo', async () => {
+  const guest = Object.assign(memoryRepository(), { owner: 'guest' });
+  const demo = memoryRepository();
+  const forOwner = jest.fn((owner: string) => owner === 'demo' ? demo : guest);
+  jest.mocked(openLocalDatabase).mockResolvedValue({ forOwner, wipeAll: jest.fn() });
+  const view = await render(<AuthProvider><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  expect(observed.phoneOnly).toBe(true);
+  expect(observed.repository).toBe(guest);
+  expect(observed.configured).toBe(false);
+  expect(await observed.signIn('synthetic', 'synthetic')).toBe('authUnavailable');
+  expect(await observed.createAccount('synthetic', 'synthetic')).toBe('authUnavailable');
+  await observed.syncNow();
+  await act(() => observed.lookAround());
+  await waitFor(() => expect(observed.repository).toBe(demo));
+  expect(seedDemo).toHaveBeenCalledWith(demo);
+  await act(() => observed.signOut());
+  await waitFor(() => expect(observed.repository).toBe(guest));
+  expect(observed.session).toBeNull();
+  expect(observed.pending).toBe(0);
+  await view.unmount();
+});
+test('phone-only boot failure has a calm retry without deleting data', async () => {
+  jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic failure')).mockResolvedValue({ forOwner: () => Object.assign(memoryRepository(), { owner: 'guest' }), wipeAll: jest.fn() });
+  const view = await render(<AuthProvider><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.configError).toBe('Local data is unavailable.'));
+  expect(observed.recovery).toBe('boot-error');
+  await act(() => observed.retryBoot?.());
+  await waitFor(() => expect(observed.ready).toBe(true));
+  expect(observed.recovery).toBeUndefined();
+  await view.unmount();
+});
+test.each([health, widgets, push])('absent capability never loads or calls native code', async capability => {
+  const native = jest.fn(() => { throw new Error('must not load native module'); });
+  expect(await capability.run(native)).toBe(false);
+  expect(capability.available).toBe(false);
+  expect(native).not.toHaveBeenCalled();
+});
+test('JSON backup includes guest data and local logger state without account/demo data', () => {
+  const repo = Object.assign(memoryRepository(), { owner: 'guest' });
+  repo.save('sessions', { name: 'Synthetic workout' }, 'synthetic-session');
+  repo.localSave('active', { session: 'synthetic-session' });
+  const backup = JSON.parse(createPhoneBackup(repo));
+  expect(backup.format).toBe('insight-phone-only');
+  expect(backup.version).toBe(1);
+  expect(backup.rows.sessions[0].data.name).toBe('Synthetic workout');
+  expect(backup.local.active).toEqual({ session: 'synthetic-session' });
+  expect(() => createPhoneBackup(memoryRepository())).toThrow('Phone-only data is unavailable.');
+});

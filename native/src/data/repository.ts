@@ -32,6 +32,14 @@ export class Repository {
   localGet<T>(key: string): T | undefined {
     return this.safe(() => { const row=this.db.get<{value:string}>(sql`SELECT value FROM ${this.localTable(key)} WHERE owner_id=${this.owner} AND key=${key}`); return row ? JSON.parse(row.value) as T : undefined; });
   }
+  /** Owner-scoped local logger state for the phone-only JSON backup. */
+  localSnapshot(): Record<string, unknown> {
+    return this.safe(() => Object.fromEntries(
+      ['workout_local', 'workout_milestones', 'workout_weekly'].flatMap(table =>
+        this.db.all<{key:string;value:string}>(sql`SELECT key,value FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`)
+          .map(row => [row.key, JSON.parse(row.value)])),
+    ));
+  }
   localSave(key:string,value:unknown) {
     this.safe(()=>this.db.run(sql`INSERT INTO ${this.localTable(key)}(owner_id,key,value) VALUES(${this.owner},${key},${JSON.stringify(value)}) ON CONFLICT(owner_id,key) DO UPDATE SET value=excluded.value`));
     this.notify();
