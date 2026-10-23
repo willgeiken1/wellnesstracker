@@ -37,10 +37,10 @@ for (const file of files(path.join(project, 'bundle'))) {
     const map = JSON.parse(fs.readFileSync(file, 'utf8'));
     const sources = value => [...(value.sources || []), ...(value.sections || []).flatMap(section => sources(section.map))];
     assert(sources(map).length > 0, 'Source map is empty');
-    assert(!sources(map).some(source => /src\/auth\/|src\/data\/sync\/|@supabase\//.test(source)), 'Backend module present in bundle');
+    assert(!sources(map).some(source => /src\/auth\/|src\/data\/sync\/(?!flags\.ts$)|@supabase\/|@sentry\/|sentry-expo(?:\/|$)|posthog-/.test(source)), 'Backend or telemetry module present in bundle');
   }
 }
-console.log('PASS: resolved phone-only config and iOS bundle/source maps contain no backend values or auth/sync modules (synthetic canaries).');
+console.log('PASS: phone-only config and iOS bundle/source maps contain no backend values, auth, telemetry or sync modules except pure flags.ts (synthetic canaries).');
 if (process.argv.includes('--prebuild')) {
   expo(['prebuild', '--platform', 'ios', '--no-install', '--clean']);
   const iosFiles = files(path.join(project, 'ios'));

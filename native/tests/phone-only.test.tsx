@@ -35,8 +35,10 @@ test('phone-only boot failure has a calm retry without deleting data', async () 
   jest.mocked(openLocalDatabase).mockRejectedValueOnce(new Error('synthetic failure')).mockResolvedValue({ forOwner: () => Object.assign(memoryRepository(), { owner: 'guest' }), wipeAll: jest.fn() });
   const view = await render(<AuthProvider><Probe /></AuthProvider>);
   await waitFor(() => expect(observed.configError).toBe('Local data is unavailable.'));
+  expect(observed.recovery).toBe('boot-error');
   await act(() => observed.retryBoot?.());
   await waitFor(() => expect(observed.ready).toBe(true));
+  expect(observed.recovery).toBeUndefined();
   await view.unmount();
 });
 test.each([health, widgets, push])('absent capability never loads or calls native code', async capability => {

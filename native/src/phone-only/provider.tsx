@@ -30,6 +30,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value: AuthState = {
     phoneOnly: true, session: null, demo, ready: !!current && !error,
     configured: false, configError: error, repository: current,
+    recovery: error ? 'boot-error' : undefined,
     pending: 0, conflicts: 0, syncStatus: 'idle',
     lookAround: () => setDemo(true),
     signIn: async () => 'authUnavailable', createAccount: async () => 'authUnavailable',

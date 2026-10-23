@@ -69,6 +69,9 @@ ad-hoc distribution is not a substitute for free personal-team signing.
 
 For interactive debugging, start Metro with the same variant and a clean cache:
 
+**Warning:** starting Metro without `APP_VARIANT=freeiphone` loads the full default
+bundle, including the default auth and sync code, even in the stripped phone app.
+
 ```sh
 APP_VARIANT=freeiphone EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 npx expo start --dev-client --clear
 ```
