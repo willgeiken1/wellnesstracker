@@ -1,0 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
+test('CNG bundling mod pins variant/dotenv and embeds Debug JS, repeatably; fails if upstream phase changes', async () => {
+  const file = path.resolve(__dirname, '../plugins/withPhoneOnlyBundle.js');
+  expect(fs.existsSync(file)).toBe(true);
+  if (!fs.existsSync(file)) return;
+  const plugin = require(file);
+  const phase = { name: '"Bundle React Native code and images"', shellScript: '"if debug; then\\n  export SKIP_BUNDLING=1\\nfi\\nnode bundle"' };
+  const objects = { PBXShellScriptBuildPhase: { fixture: phase } };
+  const config = plugin({ name: 'Synthetic', slug: 'synthetic' });
+  const run = () => config.mods.ios.xcodeproj({ ...config, modResults: { hash: { project: { objects } } } });
+  await run();
+  expect(phase.shellScript).toContain('export APP_VARIANT=freeiphone');
+  expect(phase.shellScript).toContain('EXPO_NO_DOTENV=1');
+  expect(phase.shellScript).toContain('export FORCE_BUNDLING=1');
+  expect(phase.shellScript).not.toContain('SKIP_BUNDLING');
+  const first = phase.shellScript;
+  await run();
+  expect(phase.shellScript).toBe(first);
+  phase.shellScript = '"new upstream script"';
+  await expect(run()).rejects.toThrow('Phone-only bundling phase changed');
+});

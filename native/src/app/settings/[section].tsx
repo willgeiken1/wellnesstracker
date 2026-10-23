@@ -7,9 +7,11 @@ import { EmptyState } from '@/components/empty-state';
 import { settingsSections } from '@/features/settings/sections';
 import { WorkoutSettings } from '@/features/workout/settings';
 import { t } from '@/i18n/en';
+import Constants from 'expo-constants';
 export default function SettingPlaceholder() {
   const { section } = useLocalSearchParams<{ section: string }>();
   const title = section === 'licenses' ? t('licenses') : t(settingsSections.find(item => item.route === section)?.label ?? 'settings');
+  if (Constants.expoConfig?.extra?.phoneOnly === true && ['health', 'notifications'].includes(section)) return <Screen title={title}><ThemedText>Not in this build.</ThemedText></Screen>;
   if (section === 'workout') return <WorkoutSettings/>;
   return <><Stack.Screen options={{ title }} /><Screen><EmptyState title={title}
     action={{ label: t('backSettings'), onPress: () => router.navigate('/settings') }} />
