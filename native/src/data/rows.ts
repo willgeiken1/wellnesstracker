@@ -61,9 +61,9 @@ function canonicalFields(row: Row): Row {
   return { ...row, data: Object.fromEntries(Object.keys(columns[row.table]).map(k => [k, row.deleted_at !== null && !(row.table === 'weigh_ins' && k === 'source') ? null : row.data[k] ?? null])) };
 }
 /** Only allowlisted physical columns cross the transport boundary. */
-export function fromWire(table: Table, wire: Record<string, unknown>): ServerRow {
+export function fromWire(table: Table, wire: Record<string, unknown>, fields: Record<string,string> = columns[table]): ServerRow {
   const row = { table, owner_id: wire.owner_id, id: wire.id, updated_at: Number(wire.updated_at), deleted_at: wire.deleted_at === null ? null : Number(wire.deleted_at), device_id: wire.device_id,
-    data: Object.fromEntries(Object.keys(columns[table]).map(k => [k, wire[k] ?? null])) };
+    data: Object.fromEntries(Object.keys(fields).map(k => [k, wire[k] ?? null])) };
   validatePulledRow(row);
   if (typeof wire.server_seq !== 'string' || !/^\d+$/.test(wire.server_seq)) throw new Error('Invalid sync cursor.');
   return { row, server_seq: wire.server_seq };

@@ -1,7 +1,9 @@
 import { ProvenanceConflict } from './conflict';
 import type { Pending, Repository } from '../repository';
-import { syncedTables, type Row, type ServerRow, type Table } from '../rows';
+import type { Row, ServerRow, Table } from '../rows';
+import type { SyncFlags } from './flags';
 export interface Transport {
+  readonly syncFlags?: Readonly<SyncFlags>;
   readonly owner: string;
   push(rows: Row[]): Promise<Row[] | void>;
   pull(table: Table, after: string, limit: number): Promise<ServerRow[]>;
@@ -14,6 +16,7 @@ export class SyncEngine {
   private requested = false;
   private listeners = new Set<() => void>();
   constructor(readonly repository: Repository, private transport: Transport, private pageSize = 100) {
+    if (transport.syncFlags && repository.syncFlags.syncedV1Columns !== transport.syncFlags.syncedV1Columns) throw new Error('Sync feature flags must match.');
     if (repository.owner !== transport.owner || ['guest','demo'].includes(repository.owner)) throw new Error('Sync requires the matching signed-in account.');
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => {this.listeners.delete(listener);}; }
@@ -69,7 +72,7 @@ export class SyncEngine {
         const batch=pending.slice(i,i+100);
         await this.pushBatch(batch);
       }
-      for (const table of syncedTables.filter(t=>t!=='purges')) await this.pullTable(table);
+      for (const table of this.repository.syncTables().filter(t=>t!=='purges')) await this.pullTable(table);
       if (this.active) this.setStatus('idle');
     } catch { if (this.active) this.setStatus('offline'); }
   }

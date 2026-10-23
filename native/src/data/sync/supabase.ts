@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { columns, fromAcknowledgment, fromWire, pushRow, validateRow, type Row, type Table } from '../rows';
+import { DEFAULT_SYNC_FLAGS, projectSyncRow, syncFields, type SyncFlags } from './flags';
 import { ProvenanceConflict } from './conflict';
 import type { Transport } from './engine';
 
 export class SupabaseTransport implements Transport {
-  constructor(private client: SupabaseClient, readonly owner: string) {}
+  readonly syncFlags: Readonly<SyncFlags>;
+  constructor(private client: SupabaseClient, readonly owner: string, flags: SyncFlags = DEFAULT_SYNC_FLAGS) { this.syncFlags = Object.freeze({...flags}); }
 
   private async request<T>(operation: () => PromiseLike<T>): Promise<T> {
     try { return await operation(); }
@@ -22,13 +24,13 @@ export class SupabaseTransport implements Transport {
       validateRow(row);
       if (row.owner_id !== this.owner) throw new Error('Sync account changed.');
     }
-    const payload = rows.map(pushRow);
+    const payload = rows.map(row=>pushRow(projectSyncRow(row,this.syncFlags)));
     const { data, error } = await this.request(() => this.client.rpc('sync_push', { rows: payload }));
     if (error?.code === 'P2001') throw new ProvenanceConflict();
     if (error) throw new Error('Sync unavailable.');
     if (!Array.isArray(data) || data.length !== rows.length) throw new Error('Invalid sync acknowledgment.');
     return data.map((value,index) => {
-      const accepted = fromAcknowledgment(value);
+      const accepted = projectSyncRow(fromAcknowledgment(projectSyncRow(value as Row,this.syncFlags)),this.syncFlags);
       if (accepted.owner_id !== this.owner || accepted.table !== rows[index].table || accepted.id !== rows[index].id) throw new Error('Invalid sync acknowledgment.');
       return accepted;
     });
@@ -40,10 +42,10 @@ export class SupabaseTransport implements Transport {
       throw new Error('Invalid sync request.');
     }
     // Cast bigint before JSON serialization, but filter/order the physical bigint column.
-    const fields = ['owner_id', 'id', 'updated_at', 'deleted_at', 'device_id', ...Object.keys(columns[table]), 'server_seq::text'].join(',');
+    const fields = ['owner_id', 'id', 'updated_at', 'deleted_at', 'device_id', ...Object.keys(syncFields(table,this.syncFlags)), 'server_seq::text'].join(',');
     const { data, error } = await this.request(() => this.client.from(table).select(fields)
       .eq('owner_id', this.owner).gt('server_seq', after).order('server_seq', { ascending: true }).limit(limit));
     if (error || !Array.isArray(data)) throw new Error('Sync unavailable.');
-    return (data as unknown as Record<string, unknown>[]).map(row => fromWire(table, row));
+    return (data as unknown as Record<string, unknown>[]).map(row => fromWire(table, row, syncFields(table,this.syncFlags)));
   }
 }

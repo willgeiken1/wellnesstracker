@@ -13,7 +13,7 @@ export async function localDatabase(path = ':memory:') {
   const client = sqliteClient(sqlite);
   const db = drizzle(client);
   await migrate(db, migrations);
-  return { sqlite, db, repo: new Repository(db, OWNER_A, DEVICE_A, () => '40000000-0000-4000-8000-000000000001') };
+  return { sqlite, db, repo: new Repository(db, OWNER_A, DEVICE_A, () => '40000000-0000-4000-8000-000000000001', {syncedV1Columns:true}) };
 }
 
 export function sqliteClient(sqlite: DatabaseSync) {
