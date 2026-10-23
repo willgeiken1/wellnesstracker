@@ -45,15 +45,34 @@ export const base: {
 
 export type ThemeName = "calm" | "dusk" | "sandstone";
 
-/** Per-theme overrides (D4). Each theme sets its own pillar colours in the same hue family (D5). */
+/**
+ * Per-theme overrides (D4). Dusk and Sandstone each set all five pillar colours
+ * in the same hue family as base (D5). Those pillar hexes are placeholders; S3 tunes them.
+ */
 export const themes: Record<ThemeName, DeepPartial<typeof base>> = {
   calm: {},
-  dusk: { color: { pillar: { training: "#FF7A3D", water: "#3FB4EA" } } },
+  dusk: {
+    color: {
+      pillar: {
+        training: "#FF7A3D",
+        food: "#6BC47C",
+        recovery: "#4684DC",
+        sleep: "#9A7AF2",
+        water: "#3FB4EA",
+      },
+    },
+  },
   sandstone: {
     color: {
       surface: { page: "#F6F1E8", card: "#FFFFFF", sheet: "#FBF7F0" },
       text: { primary: "#1E1B16", secondary: "#5A5247", tertiary: "#8A8173", onAccent: "#FFFFFF" },
-      pillar: { training: "#D9622B", food: "#3F9A55", recovery: "#3B78D8", sleep: "#6F52D9", water: "#1E8FC2" },
+      pillar: {
+        training: "#D9622B",
+        food: "#3F9A55",
+        recovery: "#3B78D8",
+        sleep: "#6F52D9",
+        water: "#1E8FC2",
+      },
     },
   },
 };
