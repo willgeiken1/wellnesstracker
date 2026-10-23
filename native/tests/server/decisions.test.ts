@@ -144,7 +144,7 @@ test.each([OWNER_A,'demo'])('wipe erases every local table and sync metadata for
     repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');
     other.applyPage(table,[{row:{...syntheticRow(table),owner_id:OWNER_B},server_seq:'1'}],'1');
    }else {repo.putLocal({...syntheticRow(table),owner_id:owner});other.putLocal({...syntheticRow(table),owner_id:OWNER_B});}
-   repo.applyPage(table,[],'17');
+   if(repo.syncTables().includes(table))repo.applyPage(table,[],'17');
   }
   if(owner===OWNER_A)repo.flagConflict(repo.pending()[0]);
   repo.cacheOura('2026-01-01',{fixture:true});

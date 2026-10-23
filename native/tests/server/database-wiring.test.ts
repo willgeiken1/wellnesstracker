@@ -18,7 +18,7 @@ test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (
   });
   for(const owner of [OWNER_A,OWNER_B,'demo','guest']){
    const repo=database.forOwner(owner);
-   for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});repo.applyPage(table,[],'17');}
+   for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});if(repo.syncTables().includes(table))repo.applyPage(table,[],'17');}
    repo.cacheOura('2026-01-01',{fixture:true});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
   }
   // Legacy pull-only markers must not inflate the all-owner recovery warning.

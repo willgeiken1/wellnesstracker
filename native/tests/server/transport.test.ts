@@ -75,3 +75,32 @@ test('purge markers can be pulled but neither live markers nor tombstones reach 
  expect(fixture.rpc).not.toHaveBeenCalled();
  await transport.pull('purges','0',100);expect(fixture.from).toHaveBeenCalledWith('purges');
 });
+
+test('M2-04 defaults OFF at RPC/select/ack boundaries, including invalid disabled fields',async()=>{
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A);
+ const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+ fixture.rpc.mockResolvedValueOnce({data:[{...row,data:{reps:8,tag:123,future_column:'ignored'}}],error:null} as never);
+ expect((await transport.push([row]))[0].data).not.toHaveProperty('tag');
+ expect(fixture.rpc.mock.calls[0][1].rows[0].data).not.toHaveProperty('tag');
+ fixture.query.limit.mockResolvedValueOnce({data:[{...row,...row.data,tag:123,server_seq:'1'}],error:null} as never);
+ const page=await transport.pull('sets','0',100);
+ expect(page[0].row.data).not.toHaveProperty('tag');expect(fixture.select.mock.calls[0][0].split(',')).not.toContain('tag');
+ for(const table of ['custom_exercises','plans','pauses'] as const) {
+  await expect(transport.push([syntheticRow(table)])).rejects.toThrow();
+  await expect(transport.pull(table,'0',100)).rejects.toThrow();
+ }
+ expect(fixture.rpc).toHaveBeenCalledTimes(1);expect(fixture.from).toHaveBeenCalledTimes(1);
+});
+test('M2-04 enabled transport uses shared validators for outgoing/pulled/acknowledged values',async()=>{
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A,{syncedV1Columns:true});
+ const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+ expect((await transport.push([row]))[0].data.tag).toBe('warmup');
+ expect(fixture.rpc.mock.calls[0][1].rows[0].data.tag).toBe('warmup');
+ await transport.pull('sets','0',100);expect(fixture.select.mock.calls[0][0].split(',')).toContain('tag');
+ const invalid={...syntheticRow('plans'),data:{mode:'invalid'}};
+ await expect(transport.push([invalid])).rejects.toThrow();
+ fixture.rpc.mockResolvedValueOnce({data:[invalid],error:null});
+ await expect(transport.push([{...invalid,data:{mode:'rotation'}}])).rejects.toThrow();
+ fixture.query.limit.mockResolvedValueOnce({data:[{...invalid,mode:'invalid',server_seq:'1'}],error:null} as never);
+ await expect(transport.pull('plans','0',100)).rejects.toThrow();
+});
