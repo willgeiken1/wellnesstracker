@@ -1,7 +1,7 @@
 import { ProvenanceConflict } from './conflict';
 import type { Pending, Repository } from '../repository';
 import type { Row, ServerRow, Table } from '../rows';
-import type { SyncFlags } from './flags';
+import { DEFAULT_SYNC_FLAGS, hasGatedColumns, type SyncFlags } from './flags';
 export interface Transport {
   readonly syncFlags?: Readonly<SyncFlags>;
   readonly owner: string;
@@ -16,7 +16,7 @@ export class SyncEngine {
   private requested = false;
   private listeners = new Set<() => void>();
   constructor(readonly repository: Repository, private transport: Transport, private pageSize = 100) {
-    if (transport.syncFlags && repository.syncFlags.syncedV1Columns !== transport.syncFlags.syncedV1Columns) throw new Error('Sync feature flags must match.');
+    if (repository.syncFlags.syncedV1Columns !== (transport.syncFlags ?? DEFAULT_SYNC_FLAGS).syncedV1Columns) throw new Error('Sync feature flags must match.');
     if (repository.owner !== transport.owner || ['guest','demo'].includes(repository.owner)) throw new Error('Sync requires the matching signed-in account.');
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => {this.listeners.delete(listener);}; }
@@ -65,6 +65,10 @@ export class SyncEngine {
     this.setStatus('syncing');
     try {
       await this.pullTable('purges');
+      // Replay v1 columns before an enabled upload can publish dormant values.
+      if (this.repository.syncFlags.syncedV1Columns) {
+        for (const table of this.repository.syncTables().filter(hasGatedColumns)) await this.pullTable(table);
+      }
       // Snapshot revisions prevent a successful old push from acknowledging a newer edit.
       const pending=this.repository.pending();
       for (let i=0;i<pending.length;i+=100) {

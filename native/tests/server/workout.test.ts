@@ -5,7 +5,7 @@ import { localDatabase } from './sqlite';
 import { DEVICE_A, OWNER_A } from '../../fixtures/sync';
 async function setup() {
   const db = await localDatabase();
-  const repo = new Repository(db.db, OWNER_A, DEVICE_A, randomUUID);
+  const repo = new Repository(db.db, OWNER_A, DEVICE_A, randomUUID, {syncedV1Columns:true});
   return {
     ...db,
     repo,
