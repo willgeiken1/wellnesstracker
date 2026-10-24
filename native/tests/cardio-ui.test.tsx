@@ -1,0 +1,106 @@
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
+import { ThemeProvider } from '../src/design/theme-provider';
+import { Cardio } from '../src/features/cardio/screen';
+import { memoryRepository } from './workout-repository';
+import { CardioStore } from '../src/features/cardio/store';
+const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
+afterEach(() => jest.useRealTimers());
+test('five accessible machines, default weekly ring and fallback est. label', async () => {
+  await render(<Cardio repository={memoryRepository()} />, { wrapper });
+  for (const name of ['Incline treadmill','StairMaster','Elliptical','Bike','Rower']) expect(screen.getByRole('button', { name })).toBeTruthy();
+  expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ min: 0, max: 150, now: 0 });
+  expect(screen.getByText(/est\./)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Log finished cardio' })).toBeTruthy();
+});
+test('live timer pauses, resumes and saves exactly one session with fallback label', async () => {
+  jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+  const repository = memoryRepository();
+  await render(<Cardio repository={repository} />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Bike' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Start timer' }));
+  await act(() => jest.advanceTimersByTime(60000));
+  expect(screen.getByText('1:00')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Pause' }));
+  await act(() => jest.advanceTimersByTime(60000));
+  expect(screen.getByText('1:00')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Resume' }));
+  await act(() => jest.advanceTimersByTime(60000));
+  await fireEvent.press(screen.getByRole('button', { name: 'Finish' }));
+  expect(repository.list('cardio_sessions')).toHaveLength(1);
+  expect(repository.list('cardio_sessions')[0].data.duration_ms).toBe(120000);
+  expect(screen.getByText('Saved sessions')).toBeTruthy();
+  expect(screen.queryByText('Finished cardio sessions will appear here.')).toBeNull();
+  expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ now: 2 });
+});
+test('finished form saves backdated cardio, computes kcal with latest weigh-in and restarts', async () => {
+  jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+  const repository = memoryRepository();
+  repository.save('weigh_ins', { day: '2026-10-23', weight_kg: 80, entered_value: 176.3698, entered_unit: 'lb', source: 'app' });
+  await render(<Cardio repository={repository} />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Rower' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Log finished cardio' }));
+  await fireEvent.changeText(screen.getByLabelText('Date (YYYY-MM-DD)'), '2026-10-23');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save cardio' }));
+  expect(repository.list('cardio_sessions')[0].data).toMatchObject({ day: '2026-10-23', duration_ms: 1800000, kind: 'rower' });
+  expect(within(screen.getByTestId(`cardio-session-${repository.list('cardio_sessions')[0].id}`)).getByText(/290 kcal/)).toBeTruthy();
+  expect(screen.queryByText(/est\./)).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Start Rower again' }));
+  expect(new CardioStore(repository).live()?.machine).toBe('rower');
+});
+test('invalid form preserves input and failed save offers retry', async () => {
+  const repository = memoryRepository();
+  await render(<Cardio repository={repository} />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Log finished cardio' }));
+  await fireEvent.changeText(screen.getByLabelText('Minutes'), '0');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save cardio' }));
+  expect(screen.getByRole('alert')).toBeTruthy();
+  expect(repository.list('cardio_sessions')).toHaveLength(0);
+  await fireEvent.changeText(screen.getByLabelText('Minutes'), '30');
+  const save = jest.spyOn(repository, 'save').mockImplementation(() => { throw new Error('Synthetic failure'); });
+  await fireEvent.press(screen.getByRole('button', { name: 'Save cardio' }));
+  expect(screen.getByRole('alert')).toBeTruthy();
+  save.mockRestore();
+  await fireEvent.press(screen.getByRole('button', { name: 'Save cardio' }));
+  expect(repository.list('cardio_sessions')).toHaveLength(1);
+});
+
+test('local goal updates and over-goal progress stays accessible with Reduce Motion', async () => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+  const repository = memoryRepository();
+  repository.save('cardio_sessions', { day: new Date().toLocaleDateString('en-CA'), kind: 'bike', duration_ms: 7200000 });
+  await render(<Cardio repository={repository} />, { wrapper });
+  await fireEvent.changeText(screen.getByLabelText('Weekly goal (minutes)'), '90');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save goal' }));
+  expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ min: 0, max: 90, now: 90, text: '120 of 90 minutes this week' });
+  expect(new CardioStore(repository).goal()).toBe(90);
+  const ring = screen.getByRole('progressbar').queryAll(node => node.type === 'RNSVGCircle')[1];
+  expect(ring.props.strokeDasharray[0]).toBeCloseTo(ring.props.strokeDasharray[1]);
+});
+test('metric speed input converts to mph and live session survives unmount while paused', async () => {
+  jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+  const repository = memoryRepository();
+  repository.save('profile', { weight_unit: 'kg' });
+  const view = await render(<Cardio repository={repository} />, { wrapper });
+  await fireEvent.changeText(screen.getByLabelText('Speed (km/h)'), '4.828032');
+  await fireEvent.press(screen.getByRole('button', { name: 'Start timer' }));
+  await act(() => jest.advanceTimersByTime(60000));
+  await fireEvent.press(screen.getByRole('button', { name: 'Pause' }));
+  expect(new CardioStore(repository).live()?.segments[0].settings.mph).toBeCloseTo(3);
+  await view.unmount();
+  await act(() => jest.advanceTimersByTime(60000));
+  await render(<Cardio repository={repository} />, { wrapper });
+  expect(screen.getByText('1:00')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy();
+  expect(screen.getByText(/12 kcal/)).toBeTruthy();
+});
+
+test('a new latest weigh-in recomputes estimates while the Cardio screen stays mounted', async () => {
+  jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+  const repository = memoryRepository();
+  await render(<Cardio repository={repository} />, { wrapper });
+  expect(screen.getByText(/347 kcal/)).toBeTruthy();
+  await act(() => { repository.save('weigh_ins', { day: '2026-10-24', weight_kg: 100, entered_value: 100, entered_unit: 'kg', source: 'app' }); });
+  expect(screen.getByText(/434 kcal/)).toBeTruthy();
+  expect(screen.queryByText(/est\./)).toBeNull();
+});
