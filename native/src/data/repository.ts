@@ -119,11 +119,19 @@ export class Repository {
       if (previous && previous.table === 'weigh_ins' && previous.data.source !== input.data.source) throw new Error('Provenance is immutable.');
       let row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
       // An OFF edit cannot author v1 values retained from an earlier enabled run.
-      // Clear those dormant fields so a later ON push cannot resurrect them.
+      // Clear dormant fields and mark them for server refill before an ON push.
       if (!this.syncFlags.syncedV1Columns && hasGatedColumns(row.table)) row = canonicalRow(projectSyncRow(row,this.syncFlags));
       if (previous && compareRows(row, previous) <= 0) return;
       this.atomic(() => {
         row = this.write(row);
+        if (hasGatedColumns(row.table)) {
+          if (!this.syncFlags.syncedV1Columns) {
+            this.setState(this.dormantKey(row.table,row.id),'1');
+            // Even a previously enabled cursor must replay this server row.
+            this.setState(`cursor:v1:${row.table}`,'0');
+          }
+          else this.clearDormant(row.table,row.id);
+        }
         this.applyPurges();
         const clock = Math.max(Number(this.state('clock') ?? 0), row.updated_at);
         this.setState('clock', String(clock));
@@ -207,6 +215,10 @@ export class Repository {
     }));
     this.notify();
   }
+  private dormantKey(table: Table, id: string) { return `dormant-v1:${table}:${id}`; }
+  private clearDormant(table: Table, id: string) {
+    this.db.run(sql`DELETE FROM sync_state WHERE owner_id=${this.owner} AND key=${this.dormantKey(table,id)}`);
+  }
   private cursorKey(table: Table) { return `cursor:${this.syncFlags.syncedV1Columns && hasGatedColumns(table) ? 'v1:' : ''}${table}`; }
   cursor(table: Table) { return this.safe(() => this.state(this.cursorKey(table)) ?? '0'); }
   applyPage(table: Table, page: ServerRow[], cursor: string) {
@@ -227,13 +239,17 @@ export class Repository {
         }
         if (this.db.get(sql`SELECT 1 FROM sync_conflicts WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)) continue;
         const order = local ? compareRows(row,local) : 1;
-        // Replaying the enabled cursor hydrates fields ignored at the same revision.
-        const hydrate = order === 0 && local && this.syncFlags.syncedV1Columns && !this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`);
+        // OFF edits did not author v1 fields. Refill even a newer pending base edit
+        // from the server; ON edits clear the marker so intentional v1 nulls survive.
+        const dormant = this.syncFlags.syncedV1Columns && this.state(this.dormantKey(table,row.id)) === '1';
+        const hydrate = local && this.syncFlags.syncedV1Columns && (dormant ||
+          (order === 0 && !this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)));
         if (order > 0) this.write(canonicalPulledRow(mergeSyncRow(row,local,this.syncFlags)));
         else if (hydrate) {
           const hydrated = hydrateSyncRow(row,local!);
           if (hydrated) this.write(canonicalPulledRow(hydrated));
         }
+        if (dormant) this.clearDormant(table,row.id);
       }
       this.applyPurges();
       this.setState('clock', String(clock));

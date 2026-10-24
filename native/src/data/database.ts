@@ -4,10 +4,10 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import { randomUUID } from 'expo-crypto';
 import migrations from './migrations';
-import { syncTables } from './sync/flags';
+import { DEFAULT_SYNC_FLAGS, syncTables, type SyncFlags } from './sync/flags';
 import { Repository, deviceId, wipeAllOwners } from './repository';
 let database: Promise<{forOwner: (owner: string) => Repository; wipeAll(): void; countAllUnsynced?():number}> | undefined;
-export function openLocalDatabase() {
+export function openLocalDatabase(flags: SyncFlags = DEFAULT_SYNC_FLAGS) {
   return database ??= (async () => {
     let sqlite: ReturnType<typeof openDatabaseSync> | undefined;
     let stage = 'DatabaseOpenError';
@@ -19,7 +19,8 @@ export function openLocalDatabase() {
       await migrate(db,migrations);
       stage = 'DatabaseOpenError';
       const device = deviceId(db, randomUUID);
-      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name IN (${sql.join(syncTables().filter(table=>table!=='purges').map(table=>sql`${table}`),sql`, `)})`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID)};
+      const syncFlags = Object.freeze({...flags});
+      return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name IN (${sql.join(syncTables(syncFlags).filter(table=>table!=='purges').map(table=>sql`${table}`),sql`, `)})`)?.count??0,wipeAll:()=>wipeAllOwners(db),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID,syncFlags)};
     } catch {
       try { sqlite?.closeSync(); } catch { /* Keep the original failure category. */ }
       const error = new Error('Local data is unavailable.');

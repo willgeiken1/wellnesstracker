@@ -6,7 +6,7 @@ import migrations from '../../src/data/migrations';
 import { Repository } from '../../src/data/repository';
 import { SyncEngine } from '../../src/data/sync/engine';
 import { canonicalRow } from '../../src/data/rows';
-import { syncFields, syncTables, projectSyncRow, mergeSyncRow, DEFAULT_SYNC_FLAGS } from '../../src/data/sync/flags';
+import { syncFields, syncTables, projectSyncRow, mergeSyncRow, hasGatedColumns, DEFAULT_SYNC_FLAGS } from '../../src/data/sync/flags';
 import { OWNER_A, DEVICE_A, syntheticRow } from '../../fixtures/sync';
 import { localDatabase, sqliteClient } from './sqlite';
 import { serverDatabase, testTransport } from './pglite';
@@ -224,7 +224,7 @@ test('ON rollback replays remote v1 changes before its first push',async()=>{
 });
 
 
-test('OFF edits clear dormant v1 values before a re-enabled push',async()=>{
+test('OFF edits preserve server v1 values on a re-enabled push',async()=>{
  const server=await serverDatabase(),local=await localDatabase();
  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
  const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
@@ -241,7 +241,65 @@ test('OFF edits clear dormant v1 values before a re-enabled push',async()=>{
   expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:null});
   await restored.sync();expect(restored.status).toBe('idle');
   expect(push).toHaveBeenCalledTimes(1);
-  expect(push.mock.calls[0][0][0].data).toMatchObject({reps:10,tag:null});
-  expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:10,tag:null});
+  expect(push.mock.calls[0][0][0].data).toMatchObject({reps:10,tag:'drop'});
+  expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:10,tag:'drop'});
  }finally{first.close();rollback.close();restored.close();local.sqlite.close();await server.close();}
+});
+
+
+test('pending OFF edit refills a newer v1 value from another device after repository restart',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  await transport.push([row]);
+  const rollback=new SyncEngine(off,testTransport(server,OWNER_A));
+  await rollback.sync();rollback.close();
+  off.save('sets',{...off.get('sets',row.id)!.data,reps:10},row.id,300);
+  // The other device changes the server after the OFF edit, with an older LWW stamp.
+  await transport.push([{...row,device_id:DEVICE_B,updated_at:200,data:{reps:9,tag:'drop'}}]);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  const push=jest.fn(transport.push),restored=new SyncEngine(enabled,{...transport,push});
+  await restored.sync();restored.close();
+  expect(restored.status).toBe('idle');
+  expect(push.mock.calls[0][0][0].data).toMatchObject({reps:10,tag:'drop'});
+  expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:10,tag:'drop'});
+  expect(enabled.pending()).toEqual([]);
+ }finally{local.sqlite.close();await server.close();}
+});
+
+
+test.each(examples.filter(([table])=>hasGatedColumns(table)))('%s OFF pending edit refills every dormant column without changing its base revision',async(table,data)=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow(table),data};
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage(table,[{row,server_seq:'1'}],'1');
+  local.repo.save(table,{},row.id,300);
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  expect(restarted.cursor(table)).toBe('0');
+  const before=restarted.pending()[0];
+  restarted.applyPage(table,[{row,server_seq:'1'}],'1');
+  expect(restarted.pending()[0]).toMatchObject({revision:before.revision,row:{updated_at:300,data}});
+  restarted.ack(restarted.pending());
+  expect(restarted.pending()).toEqual([]);
+ }finally{local.sqlite.close();}
+});
+
+test('ON explicit null and OFF tombstone are not overwritten by dormant refill',async()=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.save('sets',{reps:10},row.id,300);
+  enabled.save('sets',{reps:11,tag:null},row.id,400);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:11,tag:null});
+  local.repo.remove('sets',row.id,500);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  expect(enabled.pending()[0].row.deleted_at).toBe(500);
+  expect(Object.values(enabled.pending()[0].row.data).every(value=>value===null)).toBe(true);
+ }finally{local.sqlite.close();}
 });

@@ -56,3 +56,22 @@ test('all-owner pending count reaches zero with only OFF-held rows remaining',as
   });
  }finally{sqlite.close();}
 });
+
+
+test.each([false,true])('all-owner count uses the same live v1 flag as repositories (%s)',async syncedV1Columns=>{
+ const sqlite=new DatabaseSync(':memory:');
+ const client=Object.assign(sqliteClient(sqlite),{execSync:(query:string)=>sqlite.exec(query)});
+ try {
+  await jest.isolateModulesAsync(async()=>{
+   require('expo-sqlite').openDatabaseSync.mockReturnValue(client);
+   const database=await require('../../src/data/database').openLocalDatabase({syncedV1Columns});
+   for(const owner of [OWNER_A,OWNER_B]) {
+    const repo=database.forOwner(owner);
+    expect(repo.syncFlags.syncedV1Columns).toBe(syncedV1Columns);
+    repo.putLocal({...syntheticRow('pauses'),owner_id:owner});
+    repo.putLocal({...syntheticRow('sessions'),owner_id:owner});
+   }
+   expect(database.countAllUnsynced()).toBe(syncedV1Columns?4:2);
+  });
+ }finally{sqlite.close();}
+});
