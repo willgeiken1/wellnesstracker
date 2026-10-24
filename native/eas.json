@@ -1,0 +1,17 @@
+{
+  "build": {
+    "free-iphone": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "credentialsSource": "local",
+      "env": {
+        "APP_VARIANT": "freeiphone",
+        "EXPO_NO_DOTENV": "1",
+        "EXPO_NO_TELEMETRY": "1"
+      },
+      "ios": {
+        "buildConfiguration": "Debug"
+      }
+    }
+  }
+}

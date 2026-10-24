@@ -42,6 +42,8 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx expo lint
       - run: npm test -- --ci
+      - name: Inspect free iPhone config and bundle
+        run: npm run check:free-iphone
 
   plistbuddy:
     name: Native real PlistBuddy tests

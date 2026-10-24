@@ -38,7 +38,7 @@ function Application() {
   return <ThemeProvider key={auth.session?.user.id ?? (auth.demo ? 'demo' : 'guest')} repository={auth.repository}>
     {auth.recovery!=='boot-error' && auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
     <LocalDataRecovery />
-    {auth.ready && <NavigationShell access={!!auth.session || auth.demo} />}
+    {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} />}
   </ThemeProvider>;
 }
 export default function RootLayout() {
