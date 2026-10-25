@@ -57,8 +57,9 @@ export class SyncEngine {
         if (!/^\d+$/.test(item.server_seq) || BigInt(item.server_seq)<=BigInt(cursor)) throw new Error('Invalid sync cursor.');
         cursor=item.server_seq;
       }
-      this.repository.applyPage(table,page,cursor);
       more=page.length===this.pageSize;
+      // Completion is known only after the final (possibly empty) page.
+      this.repository.applyPage(table,page,cursor,!more);
     }
   }
   private async run() {

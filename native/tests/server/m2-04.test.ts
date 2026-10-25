@@ -287,6 +287,91 @@ test.each(examples.filter(([table])=>hasGatedColumns(table)))('%s OFF pending ed
  }finally{local.sqlite.close();}
 });
 
+
+test('steady-state ON edits after a completed replay preserve the cursor and create no marker across restart',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const engine=new SyncEngine(enabled,transport);
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  await transport.push([row]);await engine.sync();
+  expect(engine.status).toBe('idle');
+  enabled.applyPage('sets',[{row,server_seq:'5'}],'5');
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:9},row.id,300);
+  expect(restarted.cursor('sets')).toBe('5');
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,`dormant-v1:sets:${row.id}`)).toBeUndefined();
+  expect(restarted.pending()[0].row.data).toMatchObject({reps:9,tag:'warmup'});
+ }finally{engine.close();local.sqlite.close();await server.close();}
+});
+
+
+test('interrupted paginated ON replay stays needed until the final empty page',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+ const interrupted=new SyncEngine(enabled,{...transport,pull:async(table,after,limit)=>{
+  if(table==='sets'&&after==='1')throw new Error('Synthetic interruption');
+  return transport.pull(table,after,limit);
+ }},1);
+ let resumed: SyncEngine | undefined;
+ try {
+  await transport.push([row]);await interrupted.sync();
+  expect(interrupted.status).toBe('offline');expect(enabled.cursor('sets')).toBe('1');
+  interrupted.close();
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:9},row.id,300);
+  expect(restarted.cursor('sets')).toBe('0');
+  resumed=new SyncEngine(restarted,transport,1);await resumed.sync();
+  expect(resumed.status).toBe('idle');expect(restarted.pending()).toEqual([]);
+  const cursor=restarted.cursor('sets');expect(BigInt(cursor)).toBeGreaterThan(0n);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:10},row.id,400);
+  expect(restarted.cursor('sets')).toBe(cursor);
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,`dormant-v1:sets:${row.id}`)).toBeUndefined();
+ }finally{interrupted.close();resumed?.close();local.sqlite.close();await server.close();}
+});
+
+test('unchanged gated value re-saved before the first ON replay takes the server value',async()=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.applyPage('sets',[{row:{...row,updated_at:200,data:{reps:9,tag:'drop'}},server_seq:'2'}],'2');
+  enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:10,tag:'warmup'},row.id,300);
+  enabled.applyPage('sets',[{row:{...row,updated_at:200,data:{reps:9,tag:'drop'}},server_seq:'2'}],'2');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'drop'});
+ }finally{local.sqlite.close();}
+});
+
+test.each(['{broken', '{"tag":true}', 'null', '"tag"', ''])('invalid dormant marker %p refills all gated fields',async(marker)=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  local.repo.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.save('sets',{reps:10},row.id,300);
+  local.sqlite.prepare('UPDATE sync_state SET value=? WHERE owner_id=? AND key=?').run(marker,OWNER_A,`dormant-v1:sets:${row.id}`);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'warmup'});
+ }finally{local.sqlite.close();}
+});
+
+test('dormant marker arrays refill only gated fields',async()=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  local.repo.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.save('sets',{reps:10},row.id,300);
+  local.sqlite.prepare('UPDATE sync_state SET value=? WHERE owner_id=? AND key=?').run('["tag","reps",null,42]',OWNER_A,`dormant-v1:sets:${row.id}`);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'warmup'});
+ }finally{local.sqlite.close();}
+});
+
 test('ON explicit null and OFF tombstone are not overwritten by dormant refill',async()=>{
  const local=await localDatabase();
  try {
@@ -294,6 +379,8 @@ test('ON explicit null and OFF tombstone are not overwritten by dormant refill',
   const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
   enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
   local.repo.save('sets',{reps:10},row.id,300);
+  // Author a tag change before clearing it; an unchanged dormant null is not an edit.
+  enabled.save('sets',{reps:10,tag:'drop'},row.id,350);
   enabled.save('sets',{reps:11,tag:null},row.id,400);
   enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
   expect(enabled.pending()[0].row.data).toMatchObject({reps:11,tag:null});
@@ -301,5 +388,53 @@ test('ON explicit null and OFF tombstone are not overwritten by dormant refill',
   enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
   expect(enabled.pending()[0].row.deleted_at).toBe(500);
   expect(Object.values(enabled.pending()[0].row.data).every(value=>value===null)).toBe(true);
+ }finally{local.sqlite.close();}
+});
+
+
+test.each(['retained', 'never ON', 'pending OFF'] as const)('%s: ON edit before first ON pull preserves the other device tag',async(history)=>{
+ const server=await serverDatabase(),a=await localDatabase(),b=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const ra=new Repository(a.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const off=new Repository(b.db,OWNER_A,DEVICE_B,()=>syntheticRow().id);
+ const ea=new SyncEngine(ra,transport);
+ const initial=new SyncEngine(new Repository(b.db,OWNER_A,DEVICE_B,()=>syntheticRow().id,on),transport);
+ const ebOff=new SyncEngine(off,testTransport(server,OWNER_A));
+ let eb: SyncEngine | undefined;
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  ra.putLocal(row);await ea.sync();
+  if(history==='retained')await initial.sync();
+  ra.save('sets',{reps:8,tag:'drop'},row.id,200);await ea.sync();
+  await ebOff.sync();
+  expect(off.get('sets',row.id)?.data.tag).toBe(history==='retained'?'warmup':null);
+  if(history==='pending OFF')off.save('sets',{reps:9},row.id,250);
+  const rb=new Repository(b.db,OWNER_A,DEVICE_B,()=>row.id,on);
+  // Edit the base field before any enabled replay, retaining the local gated values.
+  rb.save('sets',{...rb.get('sets',row.id)!.data,reps:10},row.id,300);
+  const push=jest.fn(transport.push);
+  eb=new SyncEngine(rb,{...transport,push});await eb.sync();
+  expect(eb.status).toBe('idle');expect(push).toHaveBeenCalledTimes(1);
+  expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:10,tag:'drop'});
+  await ea.sync();await eb.sync();
+  expect(ra.get('sets',row.id)).toEqual(rb.get('sets',row.id));
+  expect(ra.get('sets',row.id)?.data).toMatchObject({reps:10,tag:'drop'});
+  expect(ra.pending()).toEqual([]);expect(rb.pending()).toEqual([]);
+ }finally{ea.close();initial.close();ebOff.close();eb?.close();a.sqlite.close();b.sqlite.close();await server.close();}
+});
+
+
+test('pre-replay ON edits reconcile only unchanged gated columns across repeated edits and restart',async()=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('machine_notes'),data:{step:5,bar_weight:20,unit_override:'kg'}};
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('machine_notes',[{row,server_seq:'1'}],'1');
+  enabled.save('machine_notes',{...enabled.get('machine_notes',row.id)!.data,step:10,unit_override:null},row.id,300);
+  enabled.save('machine_notes',{...enabled.get('machine_notes',row.id)!.data,exercise:'Fixture lift'},row.id,301);
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  expect(restarted.cursor('machine_notes')).toBe('0');
+  restarted.applyPage('machine_notes',[{row:{...row,updated_at:200,data:{step:7,bar_weight:30,unit_override:'lb'}},server_seq:'2'}],'2');
+  expect(restarted.pending()[0].row).toMatchObject({updated_at:301,data:{step:10,bar_weight:30,unit_override:null,exercise:'Fixture lift'}});
  }finally{local.sqlite.close();}
 });
