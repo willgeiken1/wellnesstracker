@@ -27,10 +27,35 @@ if [[ "${INSIGHT_NETNS:-}" != "1" ]]; then
   fi
   workdir=$PWD
   script=$0
-  # sudo's secure_path drops the caller PATH, which hides node. Put it back
-  # inside the namespace; HOME is already preserved for the browser cache.
-  exec sudo --preserve-env env INSIGHT_NETNS=1 "PATH=$PATH" unshare --net \
-    bash -c 'cd "$1" && shift && exec bash "$@"' bash "$workdir" "$script" "$@"
+  # sudo-rs (Ubuntu 25.10 and 26.04, the current ubuntu-latest image) ignores
+  # a bare --preserve-env and resets the environment. HOME becomes /root, so
+  # Playwright misses ~/.cache/ms-playwright, and PW_PROJECTS, CI, and PATH
+  # are dropped with it. secure_path would hide node even on classic sudo.
+  # Snapshot the caller environment and re-apply it inside the namespace.
+  expected_home=$HOME
+  env_file=$(mktemp)
+  chmod 600 "$env_file"
+  cleanup_env() { rm -f "$env_file"; }
+  trap cleanup_env EXIT
+  export -p > "$env_file"
+  exec sudo unshare --net \
+    bash -c 'set -euo pipefail
+      lock_env=$1
+      expected_home=$2
+      workdir=$3
+      shift 3
+      status=0
+      source "$lock_env" || status=$?
+      rm -f "$lock_env"
+      if [[ "$status" -ne 0 ]]; then
+        echo "OS network lock failed: could not restore the caller environment." >&2
+        exit "$status"
+      fi
+      export INSIGHT_NETNS=1
+      export INSIGHT_LOCK_HOME="$expected_home"
+      cd "$workdir"
+      exec bash "$@"' \
+    bash "$env_file" "$expected_home" "$workdir" "$script" "$@"
 fi
 
 if [[ -z "${SUDO_UID:-}" || -z "${SUDO_GID:-}" ]]; then
@@ -41,6 +66,11 @@ if ! command -v setpriv >/dev/null 2>&1; then
   echo "OS network lock unavailable: setpriv is not installed, so the tests cannot drop root. Refusing to run unprotected." >&2
   exit 1
 fi
+if [[ "${HOME:-}" != "${INSIGHT_LOCK_HOME:-}" ]]; then
+  echo "OS network lock failed: HOME is '${HOME:-}' (expected '${INSIGHT_LOCK_HOME:-}'). Playwright would miss its browser cache. Refusing to run." >&2
+  exit 1
+fi
+unset INSIGHT_LOCK_HOME
 
 python3 - <<'PY'
 import fcntl, socket, struct, sys
