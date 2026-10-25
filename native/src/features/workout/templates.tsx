@@ -11,6 +11,8 @@ import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
 import { layout, Panel } from './primitives';
 import { ExercisePicker } from './picker';
+import { PlansPanel } from '../plans/panel';
+import { PlanStore } from '../plans/store';
 import { Cardio } from '../cardio/screen';
 export function Workouts() {
   const {
@@ -35,6 +37,7 @@ export function Workouts() {
     {error && <ThemedText accessibilityRole="alert">{t('workoutSaveError')}</ThemedText>}
     {store?.active() && <Button label={t('resumeWorkout')} onPress={() => router.push('/workout')} />}
     {segment === 'routines' && <>
+      {store && <PlansPanel store={store} />}
       <Button label={t('startEmpty')} onPress={() => run(() => {
         store?.start();
         router.push('/workout');
@@ -47,7 +50,9 @@ export function Workouts() {
         <View style={layout.row}><View style={{
               flex: 1
             }}><Button label={t('startTemplate').replace('{name}', String(r.data.name))} onPress={() => run(() => {
-                store.start(r.id);
+                const plans = new PlanStore(store.repo);
+                if (!store.active() && plans.read().days.some(day => day.routineId === r.id)) plans.startDay(r.id);
+                else store.start(r.id);
                 router.push('/workout');
               })} /></View><Button label={t('edit')} variant="secondary" onPress={() => router.push({
               pathname: '/workout/template',
