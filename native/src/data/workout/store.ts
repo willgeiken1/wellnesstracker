@@ -9,6 +9,9 @@ export interface Draft {
   reps: string;
   setId?: string;
   warmup?: boolean;
+  tag?: 'warmup' | 'failure' | 'drop' | null;
+  rightWeight?: string;
+  rightReps?: string;
 }
 export interface TimerState {
   sessionId: string;
@@ -24,12 +27,97 @@ export interface TemplateExercise {
   exercise: string;
   target_sets: number;
   target_reps: number;
+  restSeconds?: number;
+  restStyle?: 'unwind' | 'converge';
 }
 const order = (rows: Row[]) => rows.sort((a, b) => Number(a.data.position) - Number(b.data.position) || a.id.localeCompare(b.id));
 export class WorkoutStore {
   constructor(readonly repo: Repository, readonly viewRevision = 0) {}
   unit(): Unit {
     return this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
+  }
+  hapticsEnabled() { return this.repo.localGet<boolean>('haptics') !== false; }
+  toggleHaptics() { this.repo.localSave('haptics', !this.hapticsEnabled()); }
+  private settings() { return this.repo.list('settings').sort(compareRows).at(-1); }
+  private restMap(): Record<string, number> {
+    if (!this.repo.syncFlags?.syncedV1Columns) return {};
+    try {
+      const value: unknown = JSON.parse(String(this.settings()?.data.rest_per_exercise ?? '{}'));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, number> : {};
+    } catch { return {}; }
+  }
+  rest(name: string) {
+    const key = name.trim().toLowerCase();
+    const stored = this.repo.syncFlags?.syncedV1Columns ? this.restMap()[key] : this.repo.localGet<number>(`rest:${key}`);
+    const seconds = Number(stored ?? this.settings()?.data.rest_seconds ?? 90);
+    return { seconds: Number.isInteger(seconds) && seconds >= 15 && seconds <= 3600 ? seconds : 90,
+      style: this.repo.localGet<'unwind' | 'converge'>(`restStyle:${key}`) ?? this.defaultRestStyle() };
+  }
+  defaultRestStyle(): 'unwind' | 'converge' {
+    const style = this.repo.syncFlags?.syncedV1Columns ? this.settings()?.data.rest_style : this.repo.localGet('restStyle');
+    return style === 'converge' ? 'converge' : 'unwind';
+  }
+  setDefaultRestStyle(style: 'unwind' | 'converge') {
+    if (this.repo.syncFlags?.syncedV1Columns) {
+      const row = this.settings(); this.repo.save('settings', { ...row?.data, rest_style: style }, row?.id);
+    } else this.repo.localSave('restStyle', style);
+  }
+  setRest(name: string, rest: {seconds: number; style: 'unwind' | 'converge'}) {
+    if (!Number.isInteger(rest.seconds) || rest.seconds < 15 || rest.seconds > 3600 || !['unwind','converge'].includes(rest.style)) throw Error('Invalid rest.');
+    const key = name.trim().toLowerCase();
+    this.repo.atomic(() => {
+      if (this.repo.syncFlags?.syncedV1Columns) {
+        const row = this.settings();
+        this.repo.save('settings', { ...row?.data, rest_per_exercise: JSON.stringify({...this.restMap(), [key]: rest.seconds}) }, row?.id);
+      }
+      // Keep a phone-local fallback when a later launch turns the v1 flag off.
+      this.repo.localSave(`rest:${key}`, rest.seconds);
+      // No per-exercise style column exists in v1; never overload the wire map.
+      this.repo.localSave(`restStyle:${key}`, rest.style);
+    });
+  }
+  isUnilateral(entryId: string) {
+    const name = String(this.repo.get('entries', entryId)?.data.exercise).toLowerCase();
+    return this.repo.localGet<boolean>(`unilateral:${name}`) === true || this.sets(entryId).some(s => s.data.left_reps != null && s.data.right_reps != null);
+  }
+  setUnilateral(entryId: string, enabled: boolean) {
+    const name = String(this.repo.get('entries', entryId)?.data.exercise).toLowerCase();
+    this.repo.localSave(`unilateral:${name}`, enabled);
+  }
+  skipped(entryId: string) { return this.repo.localGet<boolean>(`skipped:${entryId}`) === true; }
+  skipExercise(entryId: string, skipped = true) {
+    this.repo.atomic(() => {
+      this.repo.localSave(`skipped:${entryId}`, skipped);
+      if (skipped && this.timer()?.entryId === entryId) this.skipTimer();
+      this.recompute();
+    });
+  }
+  trainingHistory() { return this.history().filter(s => this.entries(s.id).some(e => this.working(e).some(s => !s.warmup && s.reps > 0))); }
+  replaceExercise(entryId: string, name: string, mode: 'swap' | 'replace' = 'replace') {
+    const entry = this.repo.get('entries', entryId);
+    if (!entry || !name.trim() || !['swap','replace'].includes(mode)) throw Error('Invalid exercise.');
+    return this.repo.atomic(() => {
+      const drafts = this.drafts(entryId), completed = drafts.filter(d => d.setId), pending = drafts.filter(d => !d.setId);
+      if (!completed.length) {
+        const updated = this.repo.save('entries', {...entry.data, exercise: name.trim()}, entryId);
+        this.repo.localSave(`draft:${entryId}`, pending.map(() => ({weight:'',reps:''})));
+        this.repo.localSave(`skipped:${entryId}`, false);
+        return updated;
+      }
+      const replacement = this.addExercise(String(entry.data.session_id), name, Math.max(1,pending.length));
+      this.repo.localSave(`draft:${replacement.id}`, pending.length ? pending.map(() => ({weight:'',reps:''})) : [{weight:'',reps:''}]);
+      // Compact completed rows without changing their IDs or exercise attribution.
+      completed.forEach((draft, position) => {
+        const set = this.repo.get('sets', draft.setId!)!;
+        this.repo.save('sets', {...set.data, position}, set.id);
+      });
+      this.repo.localSave(`draft:${entryId}`, completed);
+      const entries = this.entries(String(entry.data.session_id)).filter(e => e.id !== replacement.id);
+      entries.splice(entries.findIndex(e => e.id === entryId) + 1, 0, replacement);
+      entries.forEach((e, position) => this.repo.save('entries', {...e.data, position}, e.id));
+      if (this.timer()?.entryId === entryId) this.skipTimer();
+      return replacement;
+    });
   }
   templates() {
     return order(this.repo.list('routines'));
@@ -47,13 +135,15 @@ export class WorkoutStore {
       }, id);
       const prior = this.templateExercises(routine.id);
       for (const e of prior) if (!exercises.some(x => x.id === e.id)) this.repo.remove('routine_exercises', e.id);
-      exercises.forEach((e, position) => this.repo.save('routine_exercises', {
+      exercises.forEach((e, position) => {
+        if (e.restSeconds !== undefined || e.restStyle !== undefined) this.setRest(e.exercise, {seconds: e.restSeconds ?? this.rest(e.exercise).seconds, style: e.restStyle ?? this.rest(e.exercise).style});
+        this.repo.save('routine_exercises', {
         routine_id: routine.id,
         exercise: e.exercise.trim(),
         target_sets: e.target_sets,
         target_reps: e.target_reps,
         position
-      }, e.id));
+      }, e.id); });
       return routine;
     });
   }
@@ -169,7 +259,10 @@ export class WorkoutStore {
         ...result[i],
         setId: s.id,
         weight: String(displayWeight(Number(s.data.weight_kg), this.unit())),
-        reps: String(s.data.reps)
+        reps: String(s.data.left_reps ?? s.data.reps),
+        ...(s.data.left_weight_kg != null ? {weight: String(displayWeight(Number(s.data.left_weight_kg), this.unit()))} : {}),
+        ...(s.data.right_weight_kg != null ? {rightWeight: String(displayWeight(Number(s.data.right_weight_kg), this.unit())), rightReps: String(s.data.right_reps)} : {}),
+        ...(this.repo.syncFlags?.syncedV1Columns ? {tag: this.tag(s.data.tag), warmup: s.data.tag === 'warmup'} : {})
       };
     });
     return result.map(d => d.setId && !sets.some(s => s.id === d.setId) ? {
@@ -177,28 +270,36 @@ export class WorkoutStore {
       setId: undefined
     } : d);
   }
-  editDraft(entryId: string, index: number, patch: Partial<Pick<Draft, 'weight' | 'reps' | 'warmup'>>) {
+  editDraft(entryId: string, index: number, patch: Partial<Pick<Draft, 'weight' | 'reps' | 'warmup' | 'tag' | 'rightWeight' | 'rightReps'>>) {
     const drafts = this.drafts(entryId),
       d = drafts[index];
     if (!d) return;
     drafts[index] = {
       ...d,
-      ...patch
+      ...patch,
+      ...(patch.tag !== undefined ? {warmup: patch.tag === 'warmup'} : {})
     };
     this.repo.atomic(() => {
       if (d.setId) {
-        const v = validateSet(drafts[index].weight, drafts[index].reps, this.unit());
-        if (!v.valid) throw Error('Invalid set.');
         const previous = this.repo.get('sets', d.setId)!;
-        this.repo.save('sets', {
-          ...previous.data,
-          reps: Number(drafts[index].reps),
-          ...(patch.weight !== undefined ? {
-            weight_kg: toKg(Number(patch.weight), this.unit()),
-            entered_value: Number(patch.weight),
-            entered_unit: this.unit()
-          } : {})
-        }, d.setId);
+        const values = this.setData(entryId, index, drafts[index]);
+        // Preserve canonical kg when editing only reps/tags, avoiding display rounding.
+        if (patch.weight === undefined && !this.isUnilateral(entryId)) {
+          values.weight_kg = previous.data.weight_kg;
+          values.entered_value = previous.data.entered_value;
+          values.entered_unit = previous.data.entered_unit;
+        }
+        if (this.isUnilateral(entryId)) {
+          for (const [side, field] of [['left','weight'],['right','rightWeight']] as const) {
+            if (patch[field] === undefined && previous.data[`${side}_weight_kg`] != null) {
+              for (const suffix of ['weight_kg','entered_value','entered_unit']) values[`${side}_${suffix}`] = previous.data[`${side}_${suffix}`];
+            }
+          }
+          const side = Number(values.left_weight_kg) * (1 + Number(values.left_reps) / 30) <= Number(values.right_weight_kg) * (1 + Number(values.right_reps) / 30) ? 'left' : 'right';
+          values.weight_kg = values[`${side}_weight_kg`]; values.reps = values[`${side}_reps`];
+          values.entered_value = values[`${side}_entered_value`]; values.entered_unit = values[`${side}_entered_unit`];
+        }
+        this.repo.save('sets', {...previous.data, ...values}, d.setId);
       }
       this.repo.localSave(`draft:${entryId}`, drafts);
     });
@@ -231,21 +332,28 @@ export class WorkoutStore {
     });
     this.recompute();
   }
+  private tag(value: unknown): Draft['tag'] { return value === 'warmup' || value === 'failure' || value === 'drop' ? value : null; }
+  private setData(entryId: string, index: number, d: Draft): Row['data'] {
+    if (!validateSet(d.weight, d.reps, this.unit()).valid) throw Error('Invalid set.');
+    const left = {weight: toKg(Number(d.weight), this.unit()), reps: Number(d.reps)};
+    const unilateral = this.isUnilateral(entryId);
+    if (unilateral && !validateSet(d.rightWeight ?? '', d.rightReps ?? '', this.unit()).valid) throw Error('Invalid set.');
+    const right = {weight: toKg(Number(d.rightWeight), this.unit()), reps: Number(d.rightReps)};
+    const weak = unilateral && right.weight * (1 + right.reps / 30) < left.weight * (1 + left.reps / 30) ? right : left;
+    return { entry_id: entryId, position: index, weight_kg: weak.weight, reps: weak.reps,
+      entered_value: fromKg(weak.weight, this.unit()), entered_unit: this.unit(),
+      ...(unilateral ? {left_weight_kg:left.weight,left_reps:left.reps,left_entered_value:Number(d.weight),left_entered_unit:this.unit(),
+        right_weight_kg:right.weight,right_reps:right.reps,right_entered_value:Number(d.rightWeight),right_entered_unit:this.unit()} : {}),
+      ...(this.repo.syncFlags?.syncedV1Columns ? {tag: d.tag ?? (d.warmup ? 'warmup' : null)} : {}) };
+  }
   private writeSet(entryId: string, index: number, d: Draft, id?: string) {
-    return this.repo.save('sets', {
-      entry_id: entryId,
-      position: index,
-      weight_kg: toKg(Number(d.weight), this.unit()),
-      entered_value: Number(d.weight),
-      entered_unit: this.unit(),
-      reps: Number(d.reps)
-    }, id);
+    return this.repo.save('sets', this.setData(entryId, index, d), id);
   }
   toggleDone(entryId: string, index: number, now = Date.now()) {
     return this.repo.atomic(() => {
       const drafts = this.drafts(entryId),
         d = drafts[index];
-      if (!d) throw Error('Missing set.');
+      if (!d || this.skipped(entryId)) throw Error('Missing set.');
       if (d.setId) {
         if (this.timer()?.setId === d.setId) this.skipTimer();
         this.repo.remove('sets', d.setId);
@@ -254,7 +362,7 @@ export class WorkoutStore {
         if (!validateSet(d.weight, d.reps, this.unit()).valid) throw Error('Invalid set.');
         d.setId = this.writeSet(entryId, index, d).id;
         const entry = this.repo.get('entries', entryId)!;
-        const seconds = this.repo.localGet<number>(`rest:${String(entry.data.exercise).toLowerCase()}`) ?? Number(this.repo.list('settings').sort(compareRows).at(-1)?.data.rest_seconds ?? 90);
+        const seconds = this.rest(String(entry.data.exercise)).seconds;
         this.repo.localSave('timer', {
           sessionId: String(entry.data.session_id),
           setId: d.setId,
@@ -278,18 +386,19 @@ export class WorkoutStore {
     const session = this.repo.get('sessions', String(entry.data.session_id));
     const prior = this.history().filter(s => s.id !== session?.id && Number(s.data.started_at) < Number(session?.data.started_at));
     for (const s of prior) {
-      const matches = this.entries(s.id).filter(e => e.data.exercise === entry.data.exercise);
+      const matches = this.entries(s.id).filter(e => e.data.exercise === entry.data.exercise && !this.skipped(e.id));
       const sets = matches.flatMap(e => this.sets(e.id));
       if (sets.length) return order(sets);
     }
     return [];
   }
   working(entry: Row): WorkingSet[] {
+    if (this.skipped(entry.id)) return [];
     return this.sets(entry.id).map(s => ({
       weight: Number(s.data.weight_kg),
       reps: Number(s.data.reps),
       done: true,
-      warmup: this.drafts(entry.id)[Number(s.data.position)]?.warmup
+      warmup: this.repo.syncFlags?.syncedV1Columns ? s.data.tag === 'warmup' : this.drafts(entry.id)[Number(s.data.position)]?.warmup
     }));
   }
   suggestion(entry: Row) {
@@ -299,7 +408,7 @@ export class WorkoutStore {
       weight: displayWeight(Number(s.data.weight_kg), unit),
       reps: Number(s.data.reps),
       done: true,
-      warmup: this.repo.localGet<Draft[]>(`draft:${String(s.data.entry_id)}`)?.[Number(s.data.position)]?.warmup
+      warmup: this.repo.syncFlags?.syncedV1Columns ? s.data.tag === 'warmup' : this.repo.localGet<Draft[]>(`draft:${String(s.data.entry_id)}`)?.[Number(s.data.position)]?.warmup
     }));
     return suggestion(previous, equipment, unit, this.repo.localGet<number>(`target:${entry.id}`));
   }
@@ -331,7 +440,7 @@ export class WorkoutStore {
       ended: false
     });
     const e = this.repo.get('entries', t.entryId);
-    if (e) this.repo.localSave(`rest:${String(e.data.exercise).toLowerCase()}`, duration);
+    if (e) this.setRest(String(e.data.exercise), {...this.rest(String(e.data.exercise)), seconds: Math.min(3600, duration)});
   }
   skipTimer() {
     this.repo.localSave('timer', null);
@@ -369,7 +478,7 @@ export class WorkoutStore {
   }
   summary(id: string) {
     const s = this.repo.get('sessions', id)!,
-      entries = this.entries(id),
+      entries = this.entries(id).filter(e => !this.skipped(e.id)),
       sets = entries.flatMap(e => this.sets(e.id));
     const prs = [...new Set(entries.map(e => String(e.data.exercise)))].map(name => {
       const matches = entries.filter(e => e.data.exercise === name);
@@ -389,7 +498,9 @@ export class WorkoutStore {
       session: s,
       count: sets.length,
       volume: sets.reduce((n, s) => {
-        const volume = fromKg(Number(s.data.weight_kg), this.unit()) * Number(s.data.reps);
+        const volume = s.data.left_weight_kg != null && s.data.right_weight_kg != null
+          ? fromKg(Number(s.data.left_weight_kg), this.unit()) * Number(s.data.left_reps) + fromKg(Number(s.data.right_weight_kg), this.unit()) * Number(s.data.right_reps)
+          : fromKg(Number(s.data.weight_kg), this.unit()) * Number(s.data.reps);
         return n + (Number.isFinite(volume) ? volume : 0);
       }, 0),
       prs

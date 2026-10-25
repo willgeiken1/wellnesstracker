@@ -26,6 +26,7 @@ import {
 } from "./primitives";
 import { Keypad, type Cursor } from "./keypad";
 import { ExercisePicker } from "./picker";
+import { RestOptions } from "./rest-options";
 import { SetRow } from "./set-row";
 import { RestTimer } from "./timer";
 import { FinishSheet } from "./finish";
@@ -115,6 +116,8 @@ function Logger({
         : "",
     ),
     [picker, setPicker] = useState(false),
+    [replacement, setReplacement] = useState<{entryId:string; mode:"swap" | "replace"} | null>(null),
+    [options, setOptions] = useState<string | null>(null),
     [finish, setFinish] = useState(false),
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState<string[]>([]);
@@ -125,7 +128,7 @@ function Logger({
     return () => clearInterval(timer);
   }, []);
   const entries = store.entries(session.id),
-    drafts = entries.flatMap((e) => store.drafts(e.id)),
+    drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
     total = drafts.length;
   function run(action: () => void) {
@@ -161,18 +164,19 @@ function Logger({
       .find((d) => d.weight !== "");
     return preceding?.weight ?? (sg.weight === null ? "" : String(sg.weight));
   }
-  function edit(entryId: string, index: number, field: "weight" | "reps") {
+  function edit(entryId: string, index: number, field: "weight" | "reps", side?: "right") {
     const d = store.drafts(entryId)[index];
     setCursor({
       entryId,
       index,
       field,
+      side,
     });
     setValue(
       store.repo.localGet<string | null>(
-        `input:${entryId}:${index}:${field}`,
+        `input:${entryId}:${index}:${side ? "right:" : ""}${field}`,
       ) ??
-        (d[field] ||
+        (d[side ? field === "weight" ? "rightWeight" : "rightReps" : field] ||
           (field === "weight"
             ? weightHint(
                 entries.find((e) => e.id === entryId)!,
@@ -186,13 +190,13 @@ function Logger({
     setValue(text);
     run(() => {
       store.repo.localSave(
-        `input:${cursor.entryId}:${cursor.index}:${cursor.field}`,
+        `input:${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`,
         text,
       );
       const d = store.drafts(cursor.entryId)[cursor.index];
       if (!d.setId)
         store.editDraft(cursor.entryId, cursor.index, {
-          [cursor.field]: text,
+          [cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field]: text,
         });
     });
   }
@@ -202,8 +206,8 @@ function Logger({
     if (
       d.setId &&
       !validateSet(
-        cursor.field === "weight" ? value : d.weight,
-        cursor.field === "reps" ? value : d.reps,
+        cursor.field === "weight" ? value : cursor.side ? d.rightWeight ?? "" : d.weight,
+        cursor.field === "reps" ? value : cursor.side ? d.rightReps ?? "" : d.reps,
         store.unit(),
       ).valid
     ) {
@@ -213,7 +217,7 @@ function Logger({
     const commit = () => {
       try {
         if (
-          value !== d[cursor.field] &&
+          value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] &&
           !(
             cursor.field === "weight" &&
             !d.weight &&
@@ -225,10 +229,10 @@ function Logger({
           )
         )
           store.editDraft(cursor.entryId, cursor.index, {
-            [cursor.field]: value,
+            [cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field]: value,
           });
         store.repo.localSave(
-          `input:${cursor.entryId}:${cursor.index}:${cursor.field}`,
+          `input:${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`,
           null,
         );
         const next = nextField(
@@ -236,7 +240,9 @@ function Logger({
           cursor.index,
           store.drafts(cursor.entryId).length,
         );
-        if (next) edit(cursor.entryId, next.index, next.field);
+        if (store.isUnilateral(cursor.entryId) && cursor.field === 'reps' && !cursor.side) edit(cursor.entryId, cursor.index, 'weight', 'right');
+        else if (cursor.side && cursor.field === 'weight') edit(cursor.entryId, cursor.index, 'reps', 'right');
+        else if (next) edit(cursor.entryId, next.index, next.field);
         else {
           const i = entries.findIndex((e) => e.id === cursor.entryId);
           if (i + 1 < entries.length) edit(entries[i + 1].id, 0, "weight");
@@ -249,12 +255,12 @@ function Logger({
     };
     const baseline = store.sets(cursor.entryId).find((s) => s.id === d.setId);
     const check = validateSet(
-      cursor.field === "weight" ? value : d.weight,
-      cursor.field === "reps" ? value : d.reps,
+      cursor.field === "weight" ? value : cursor.side ? d.rightWeight ?? "" : d.weight,
+      cursor.field === "reps" ? value : cursor.side ? d.rightReps ?? "" : d.reps,
       store.unit(),
       baseline ? Number(baseline.data.weight_kg) : undefined,
     );
-    if (d.setId && value !== d[cursor.field] && check.warning)
+    if (d.setId && value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] && check.warning)
       Alert.alert(t("checkSet"), t(check.warning), [
         {
           text: t("cancel"),
@@ -454,7 +460,7 @@ function Logger({
             collapsed = compact && !open.includes(e.id),
             previous = store.previous(e);
           return (
-            <Panel key={e.id} style={collapsed ? { paddingVertical: 8 } : {}}>
+            <Panel key={e.id} style={{...(collapsed ? {paddingVertical:8} : {}), ...(store.skipped(e.id) ? {opacity:0.45} : {})}}>
               <View style={layout.row}>
                 {compact && (
                   <View
@@ -515,53 +521,26 @@ function Logger({
                     }
                   />
                 )}
-                {!collapsed && (
+
                   <IconButton
                     name="more"
                     label={`${e.data.exercise}, ${t("exerciseOptions")}`}
-                    onPress={() =>
-                      Alert.alert(String(e.data.exercise), undefined, [
-                        {
-                          text: t("addSet"),
-                          onPress: () => run(() => store.addSet(e.id)),
-                        },
-                        {
-                          text: t("moveUp"),
-                          onPress: () => run(() => store.moveEntry(e.id, -1)),
-                        },
-                        {
-                          text: t("moveDown"),
-                          onPress: () => run(() => store.moveEntry(e.id, 1)),
-                        },
-                        {
-                          text: t("removeExercise"),
-                          onPress: () =>
-                            Alert.alert(
-                              t("removeExercise"),
-                              t("removeExerciseBody"),
-                              [
-                                {
-                                  text: t("cancel"),
-                                  style: "cancel",
-                                },
-                                {
-                                  text: t("remove"),
-                                  onPress: () =>
-                                    run(() => store.removeExercise(e.id)),
-                                },
-                              ],
-                            ),
-                        },
-                        {
-                          text: t("cancel"),
-                          style: "cancel",
-                        },
-                      ])
-                    }
+                    onPress={() => setOptions(options === e.id ? null : e.id)}
                   />
-                )}
               </View>
-              {!collapsed && (
+                {store.skipped(e.id) && <ThemedText>{t('skippedExercise')}</ThemedText>}
+              {options === e.id && <View style={layout.stack}>
+                <Button label={t('cancel')} variant="secondary" onPress={() => setOptions(null)} />
+                <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
+                {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => {store.updateTimer({minimized:true}); setReplacement({entryId:e.id,mode}); setPicker(true);}} />)}
+                <Button label={t(store.isUnilateral(e.id) ? 'bilateral' : 'unilateral')} disabled={store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.setUnilateral(e.id, !store.isUnilateral(e.id)))} />
+                <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />
+                <Button label={t('addSet')} variant="secondary" onPress={() => run(() => store.addSet(e.id))} />
+                <Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, -1))} />
+                <Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, 1))} />
+                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),onPress:() => run(() => store.removeExercise(e.id))}])} />
+              </View>}
+              {!collapsed && !store.skipped(e.id) && (
                 <>
                   <View style={layout.row}>
                     <ThemedText
@@ -626,6 +605,8 @@ function Logger({
                           exerciseIndex={exerciseIndex}
                           exercise={String(e.data.exercise)}
                           index={i}
+                          side={store.isUnilateral(e.id) ? 'left' : undefined}
+                          onTag={tag => run(() => store.editDraft(e.id, i, {tag}))}
                           draft={d}
                           previous={
                             previous.find((s) => Number(s.data.position) === i)
@@ -650,6 +631,7 @@ function Logger({
                             ])
                           }
                         />
+                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => run(() => store.removeSet(e.id,i))} />}
                         {i ===
                           Math.max(
                             0,
@@ -671,6 +653,7 @@ function Logger({
             store.updateTimer({
               minimized: true,
             });
+            setReplacement(null);
             setPicker(true);
           }}
         />
@@ -701,10 +684,14 @@ function Logger({
         />
         {picker && (
           <ExercisePicker
+            label={replacement ? t(replacement.mode === 'swap' ? 'swapExercise' : 'replaceExercise') : t('addExercise')}
             onClose={() => setPicker(false)}
             onPick={(name) =>
               run(() => {
-                store.addExercise(session.id, name);
+                if (replacement) store.replaceExercise(replacement.entryId, name, replacement.mode);
+                else store.addExercise(session.id, name);
+                setReplacement(null);
+                setOptions(null);
                 setPicker(false);
               })
             }
@@ -712,8 +699,8 @@ function Logger({
         )}
         {cursor && current && (
           <Keypad
-            inputId={`${cursor.entryId}:${cursor.index}:${cursor.field}`}
-            label={`${current.data.exercise} · ${t("set")} ${cursor.index + 1} · ${t(cursor.field)}`}
+            inputId={`${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`}
+            label={`${current.data.exercise} · ${t("set")} ${cursor.index + 1} · ${cursor.side ? `${t("rightSide")} · ` : store.isUnilateral(cursor.entryId) ? `${t("leftSide")} · ` : ""}${t(cursor.field)}`}
             field={cursor.field}
             unit={store.unit()}
             equipment={exerciseFor(String(current.data.exercise)).equipment}

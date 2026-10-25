@@ -7,10 +7,12 @@ import { t } from '@/i18n/en';
 import { Sheet, layout } from './primitives';
 export function ExercisePicker({
   onPick,
-  onClose
+  onClose,
+  label = t('addExercise')
 }: {
   onPick: (name: string) => void;
   onClose: () => void;
+  label?: string;
 }) {
   const [query, setQuery] = useState('');
   const results = useRef<FlatList<(typeof exerciseLibrary)[number]>>(null);
@@ -19,7 +21,7 @@ export function ExercisePicker({
   } = useTheme();
   const pick = (name: string) => { Keyboard.dismiss(); onPick(name); };
   const matches = exerciseLibrary.filter(e => e.name.toLowerCase().includes(query.trim().toLowerCase()));
-  return <Sheet expanded label={t('addExercise')} onClose={onClose}>
+  return <Sheet expanded label={label} onClose={onClose}>
     <TextInput testID="exercise-picker-search" accessibilityLabel={t('searchExercise')} placeholder={t('searchExercise')} placeholderTextColor={colors['text-muted']} value={query} onChangeText={text => { setQuery(text); results.current?.scrollToOffset({ offset: 0, animated: false }); }} style={[layout.input, {
       color: colors.text,
       backgroundColor: colors['surface-2']

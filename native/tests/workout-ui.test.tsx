@@ -521,9 +521,9 @@ test('exercise options can cancel and reopen, then add a set', async () => {
   await render(<ActiveWorkout />, { wrapper });
   const open = () => fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Exercise options' }));
   await open();
-  await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.style === 'cancel')?.onPress?.(); });
+  await fireEvent.press(screen.getByRole('button', {name:'Cancel'}));
   await open();
-  await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.text === 'Add set')!.onPress!(); });
+  await fireEvent.press(screen.getByRole('button', {name:'Add set'}));
   expect(store.drafts(entry.id)).toHaveLength(4);
   alert.mockRestore();
 });
@@ -686,4 +686,57 @@ test.each([false, true])('PR buzz respects haptics disabled with Reduce Motion %
   store.repo.localSave('haptics', false);
   await render(<WorkoutSummary store={store} id={fixture.sessionId} />, { wrapper });
   expect(signatureBuzz).not.toHaveBeenCalled();
+});
+
+test('M2-06 clearable tag picker updates a draft set accessibly', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), s = store.start(), e = store.addExercise(s.id, 'Bench Press');
+  activeRepository(repo); await render(<ActiveWorkout />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Set 1, Set tag'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Warm-up'}));
+  expect(store.drafts(e.id)[0].tag).toBe('warmup');
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Set 1, Set tag, Warm-up'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Clear tag'}));
+  expect(store.drafts(e.id)[0].tag).toBeNull();
+});
+test('M2-06 unilateral entry, per-exercise rest, skip and replace controls', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), s = store.start(), e = store.addExercise(s.id, 'Bench Press');
+  activeRepository(repo); await render(<ActiveWorkout />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Exercise options'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Log left and right separately'}));
+  expect(screen.getByRole('button', {name: 'Bench Press, Set 1, Right, Weight, blank'})).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', {name: '120 seconds'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Converge'}));
+  expect(store.rest('Bench Press')).toEqual({seconds:120,style:'converge'});
+  await fireEvent.press(screen.getByRole('button', {name: 'Skip exercise'}));
+  expect(store.skipped(e.id)).toBe(true);
+  expect(screen.queryByTestId('set-0-0-done')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', {name: 'Replace exercise'}));
+  await fireEvent.changeText(screen.getByTestId('exercise-picker-search'), 'Dumbbell Row');
+  await fireEvent.press(screen.getByTestId('exercise-picker-result-0'));
+  expect(store.entries(s.id).some(e => e.data.exercise === 'Dumbbell Row')).toBe(true);
+});
+test('M2-06 right-side keypad logs independently and requires both sides', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), e = store.addExercise(store.start().id,'Bench Press');
+  store.setUnilateral(e.id,true); store.editDraft(e.id,0,{weight:'100',reps:'8'});
+  activeRepository(repo); await render(<ActiveWorkout/>,{wrapper});
+  await fireEvent.press(screen.getByRole('button',{name:'Bench Press, Set 1, Right, Weight, blank'}));
+  await fireEvent.press(screen.getByRole('button',{name:'8'}));
+  await fireEvent.press(screen.getByRole('button',{name:'0'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Next: Reps'}));
+  await fireEvent.press(screen.getByRole('button',{name:'6'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Next: Set'}));
+  await fireEvent(screen.getByTestId('workout-sheet-host'),'requestClose');
+  await fireEvent.press(screen.getByTestId('set-0-0-right-done'));
+  expect(store.drafts(e.id)[0]).toMatchObject({weight:'100',reps:'8',rightWeight:'80',rightReps:'6'});
+  expect(store.working(e)[0].reps).toBe(6);
+});
+test.each([false,true])('M2-06 haptics switch writes only phone-local state, flag %s', async enabled => {
+  const { WorkoutSettings } = require('../src/features/workout/settings') as typeof import('../src/features/workout/settings');
+  const repo = memoryRepository(); Object.defineProperty(repo,'syncFlags',{value:{syncedV1Columns:enabled}});
+  activeRepository(repo); const save = jest.spyOn(repo,'save');
+  await render(<WorkoutSettings/>,{wrapper});
+  await fireEvent.press(screen.getByRole('button',{name:'Disable workout haptics'}));
+  expect(repo.localGet('haptics')).toBe(false);
+  await fireEvent.press(screen.getByRole('button',{name:'Enable workout haptics'}));
+  expect(repo.localGet('haptics')).toBe(true); expect(save).not.toHaveBeenCalled();
 });

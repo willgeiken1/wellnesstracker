@@ -10,6 +10,7 @@ import { pluralize, t } from '@/i18n/en';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
 import { layout, Panel } from './primitives';
+import { RestOptions } from './rest-options';
 import { ExercisePicker } from './picker';
 import { PlansPanel } from '../plans/panel';
 import { PlanStore } from '../plans/store';
@@ -113,7 +114,9 @@ function Editor({
       id: e.id,
       exercise: String(e.data.exercise),
       target_sets: Number(e.data.target_sets) || 3,
-      target_reps: Number(e.data.target_reps) || 8
+      target_reps: Number(e.data.target_reps) || 8,
+      restSeconds: store.rest(String(e.data.exercise)).seconds,
+      restStyle: store.rest(String(e.data.exercise)).style
     })) : []),
     [picker, setPicker] = useState(false),
     [error, setError] = useState(false);
@@ -139,7 +142,7 @@ function Editor({
             ...v,
             [field]: text === '' ? NaN : Number(text)
           } : v))} /></View>)}
-    </View><View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => move(i, -1)} /><Button label={t('moveDown')} variant="secondary" onPress={() => move(i, 1)} /><Button label={t('remove')} variant="secondary" onPress={() => setExercises(es => es.filter((_, j) => j !== i))} /></View></Panel>)}
+    </View><RestOptions value={{seconds:e.restSeconds ?? store.rest(e.exercise).seconds, style:e.restStyle ?? store.rest(e.exercise).style}} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,restSeconds:value.seconds,restStyle:value.style} : v))} /><View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => move(i, -1)} /><Button label={t('moveDown')} variant="secondary" onPress={() => move(i, 1)} /><Button label={t('remove')} variant="secondary" onPress={() => setExercises(es => es.filter((_, j) => j !== i))} /></View></Panel>)}
     {error && <ThemedText accessibilityRole="alert">{t('invalidTemplate')}</ThemedText>}
     <Button label={t('addExercise')} variant="secondary" onPress={() => setPicker(true)} />
     <Button label={t('saveTemplate')} onPress={() => {
