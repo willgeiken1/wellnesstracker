@@ -36,7 +36,7 @@ function fixtureRepo(owner: string) {
   const listeners = new Set<() => void>();
   let pending = owner === OWNER_A ? [{ row: syntheticRow(), revision: '100:fixture' }] : [];
   return {
-    owner, syncTables: () => syncTables(), pending: () => pending, conflicts: () => [],
+    owner, syncFlags: {syncedV1Columns:false}, syncTables: () => syncTables(), pending: () => pending, conflicts: () => [],
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     ack: jest.fn(() => { pending = []; listeners.forEach(l => l()); }),
     wipe: jest.fn(() => {pending=[];listeners.forEach(l=>l());}), hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,

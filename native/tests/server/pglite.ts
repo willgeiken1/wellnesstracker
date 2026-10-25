@@ -2,6 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { OWNER_A, OWNER_B } from '../../fixtures/sync';
 import { syncedTables, canonicalRow, fromWire, type Table, type Row } from '../../src/data/rows';
+import { DEFAULT_SYNC_FLAGS, type SyncFlags } from '../../src/data/sync/flags';
 import type { Transport } from '../../src/data/sync/engine';
 export async function serverDatabase() {
   const db = new PGlite();
@@ -24,8 +25,9 @@ export async function asUser<T>(db: PGlite, owner: string, operation: (tx: Param
     return operation(tx);
   });
 }
-export function testTransport(db: PGlite, owner: string) {
+export function testTransport(db: PGlite, owner: string, syncFlags: SyncFlags = DEFAULT_SYNC_FLAGS) {
   return {
+    syncFlags,
     owner,
     async push(rows: Row[]) {
       const result=await asUser(db,owner,tx => tx.query<{sync_push:Row[]}>('SELECT public.sync_push($1::jsonb)',[JSON.stringify(rows)]));

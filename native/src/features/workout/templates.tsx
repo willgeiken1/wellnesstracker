@@ -13,6 +13,7 @@ import { layout, Panel } from './primitives';
 import { ExercisePicker } from './picker';
 import { PlansPanel } from '../plans/panel';
 import { PlanStore } from '../plans/store';
+import { Cardio } from '../cardio/screen';
 export function Workouts() {
   const {
       store
@@ -82,7 +83,7 @@ export function Workouts() {
           id: s.id
         }
       })} />)}</>}
-    {segment === 'cardio' && <ThemedText muted>{t('cardioLater')}</ThemedText>}
+    {segment === 'cardio' && (store ? <Cardio key={store.repo.owner} repository={store.repo} /> : <ThemedText>{t('localError')}</ThemedText>)}
     <Button label={t('backHome')} variant="secondary" onPress={() => router.navigate('/')} />
   </Screen>;
 }

@@ -57,8 +57,8 @@ test('failed push retries after restart; no cross-account or demo transport; int
   local.sqlite.close(); restarted.close();
 });
 test('all synced tables pull independently and cursors never use device time', async () => {
-  const local=await localDatabase();
-  const transport=testTransport(db,OWNER_A);
+  const local=await localDatabase(':memory:',{syncedV1Columns:true});
+  const transport=testTransport(db,OWNER_A,{syncedV1Columns:true});
   for (const table of syncedTables.filter(t=>t!=='purges')) await transport.push([{...syntheticRow(table),updated_at:500}]);
   await asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'2026-10-01','2026-10-01',0,'UTC')",[syntheticRow().id]));
   const engine=new SyncEngine(local.repo,transport,1);

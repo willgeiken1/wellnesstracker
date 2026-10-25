@@ -25,7 +25,7 @@ const examples: [Table,Row['data']][] = [
 ];
 test.each(examples)('%s new values round-trip through SQLite and server; LWW, nulls and tombstone wipe',async(table,data)=>{
  await fc.assert(fc.asyncProperty(fc.integer({min:101,max:500}),async stamp=>{
-  const local=await localDatabase();const transport=testTransport(db,OWNER_A);const original=row(table,data,stamp);
+  const local=await localDatabase(':memory:',{syncedV1Columns:true});const transport=testTransport(db,OWNER_A,{syncedV1Columns:true});const original=row(table,data,stamp);
   try {
    local.repo.putLocal(original);const [accepted]=await transport.push([local.repo.pending()[0].row]);
    expect(accepted).toEqual(canonicalRow(original));
@@ -49,21 +49,21 @@ test.each(['weigh_ins','measurements','sessions','cardio_sessions','food_entries
  for(const day of ['2026-1-01','2026-10-1','2026-10-01junk','x2026-10-01','2026/10/01']) {
   const bad=row(table,{[key]:day,...(table==='weigh_ins'?{source:'app'}:{})});
   expect(()=>validateRow(bad)).toThrow();
-  await expect(testTransport(db,OWNER_A).push([bad])).rejects.toThrow();
+  await expect(testTransport(db,OWNER_A,{syncedV1Columns:true}).push([bad])).rejects.toThrow();
  }
  const good=row(table,{[key]:'2026-10-01',...(table==='weigh_ins'?{source:'app'}:{})});
- await testTransport(db,OWNER_A).push([good,{...good,updated_at:101,deleted_at:101,data:table==='weigh_ins'?{source:'app'}:{}}]);
+ await testTransport(db,OWNER_A,{syncedV1Columns:true}).push([good,{...good,updated_at:101,deleted_at:101,data:table==='weigh_ins'?{source:'app'}:{}}]);
 });
 test('purge blocks stale and never-synced rows, keeps post-cutoff edits, retries do nothing and isolates owners',async()=>{
- const t=testTransport(db,OWNER_A);const old=row('sessions',{day:'2026-10-04'});const edited=row('sessions',{day:'2026-10-04'},101);
- await t.push([old,edited]);await testTransport(db,OWNER_B).push([{...old,owner_id:OWNER_B}]);
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true});const old=row('sessions',{day:'2026-10-04'});const edited=row('sessions',{day:'2026-10-04'},101);
+ await t.push([old,edited]);await testTransport(db,OWNER_B,{syncedV1Columns:true}).push([{...old,owner_id:OWNER_B}]);
  const key=id();await purge(key);
  const before=(await db.query('SELECT * FROM public.purges WHERE id=$1',[key])).rows;
  await purge(key,999);
  expect((await db.query('SELECT * FROM public.purges WHERE id=$1',[key])).rows).toEqual(before);
  for(const incoming of [old,row('sessions',{day:'2026-10-04'})]) expect((await t.push([incoming]))[0].deleted_at).not.toBeNull();
  expect((await t.pull('sessions','0',10000)).find(r=>r.row.id===edited.id)?.row.deleted_at).toBeNull();
- expect((await testTransport(db,OWNER_B).pull('sessions','0',10000)).find(r=>r.row.id===old.id)?.row.deleted_at).toBeNull();
+ expect((await testTransport(db,OWNER_B,{syncedV1Columns:true}).pull('sessions','0',10000)).find(r=>r.row.id===old.id)?.row.deleted_at).toBeNull();
 });
 test('purge wins exact +5 minute clock tie without changing clamp-to-now',async()=>{
  await asUser(db,OWNER_A,async tx=>{
@@ -76,14 +76,14 @@ test('purge wins exact +5 minute clock tie without changing clamp-to-now',async(
  });
 });
 test('purge children through sessions, including late offline children after parent payload wipe',async()=>{
- const t=testTransport(db,OWNER_A);const session=row('sessions',{day:'2026-10-04'});const entry=row('entries',{session_id:session.id});const set=row('sets',{entry_id:entry.id});
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true});const session=row('sessions',{day:'2026-10-04'});const entry=row('entries',{session_id:session.id});const set=row('sets',{entry_id:entry.id});
  await t.push([session,entry,set]);await purge();
  for(const original of [session,entry,set]) expect((await t.pull(original.table,'0',10000)).find(r=>r.row.id===original.id)?.row.deleted_at).not.toBeNull();
  const lateEntry=row('entries',{session_id:session.id});expect((await t.push([lateEntry]))[0].deleted_at).not.toBeNull();
  expect((await t.push([row('sets',{entry_id:lateEntry.id})]))[0].deleted_at).not.toBeNull();
 });
 test('pulled purges erase unsynced local payloads, children first, and persist for later arrivals',async()=>{
- const local=await localDatabase();
+ const local=await localDatabase(':memory:',{syncedV1Columns:true});
  try {
   const session=row('sessions',{day:'2026-10-04'});const entry=row('entries',{session_id:session.id});const set=row('sets',{entry_id:entry.id});const keep=row('sessions',{day:'2026-10-04'},101);
   for(const r of [session,entry,set,keep])local.repo.putLocal(r);
@@ -114,7 +114,7 @@ test('F4 executable final block refuses user_id on a guarded table',async()=>{
 test('offline workout child-first push cannot leave live children after the session is rejected by a purge',async()=>{
  await purge();
  const session=row('sessions',{day:'2026-10-04'});const entry=row('entries',{session_id:session.id});const set=row('sets',{entry_id:entry.id});
- const t=testTransport(db,OWNER_A);
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true});
  await t.push([set,entry,session]);
  for(const r of [session,entry,set])expect((await t.pull(r.table,'0',10000)).find(p=>p.row.id===r.id)?.row.deleted_at).not.toBeNull();
 });
@@ -126,7 +126,7 @@ test('every row-sync table denies service_role truncate, trigger installation an
 });
 
 test('an older writer preserves columns absent from its schema but can explicitly clear a known value',async()=>{
- const t=testTransport(db,OWNER_A),original=row('sets',{tag:'warmup',reps:8});
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true}),original=row('sets',{tag:'warmup',reps:8});
  await t.push([original]);
  const [older]=await t.push([{...original,updated_at:101,data:{reps:9}}]);
  expect(older.data).toMatchObject({tag:'warmup',reps:9});
@@ -137,7 +137,7 @@ test('an older writer preserves columns absent from its schema but can explicitl
 test('child cutoff is independent of post-cutoff parent edits even in child-first batches',async()=>{
  await purge();
  const session=row('sessions',{day:'2026-10-04'},101),entry=row('entries',{session_id:session.id}),set=row('sets',{entry_id:entry.id});
- const t=testTransport(db,OWNER_A);await t.push([set,entry,session]);
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true});await t.push([set,entry,session]);
  expect((await t.pull('sessions','0',10000)).find(p=>p.row.id===session.id)?.row.deleted_at).toBeNull();
  for(const r of [entry,set])expect((await t.pull(r.table,'0',10000)).find(p=>p.row.id===r.id)?.row.deleted_at).not.toBeNull();
  const lateSet=row('sets',{entry_id:entry.id});expect((await t.push([lateSet]))[0].deleted_at).not.toBeNull();
@@ -150,9 +150,9 @@ test('different purge ranges cannot share the tombstone provenance version',asyn
   await tx.query("SELECT public.sync_purge_range($1,'2026-09-01','2026-09-30',1000,'UTC')",[september]);
  })).rejects.toMatchObject({code:'23505'});
  // The failed transaction leaves neither range partially applied.
- expect((await testTransport(db,OWNER_A).pull('purges','0',1000))).toEqual([]);
+ expect((await testTransport(db,OWNER_A,{syncedV1Columns:true}).pull('purges','0',1000))).toEqual([]);
  await purge(october);
- const t=testTransport(db,OWNER_A),session=row('sessions',{day:'2026-10-04'});
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true}),session=row('sessions',{day:'2026-10-04'});
  await t.push([session]);
  expect((await t.push([row('entries',{session_id:session.id},500)]))[0].deleted_at).toBeNull();
 });
@@ -160,7 +160,7 @@ test('different purge ranges cannot share the tombstone provenance version',asyn
 test('child-first RPC acknowledgments reflect the final stored tombstones',async()=>{
  await purge();
  const session=row('sessions',{day:'2026-10-04'}),entry=row('entries',{session_id:session.id}),set=row('sets',{entry_id:entry.id});
- const accepted=await testTransport(db,OWNER_A).push([set,entry,session]);
+ const accepted=await testTransport(db,OWNER_A,{syncedV1Columns:true}).push([set,entry,session]);
  expect(accepted.every(r=>r.deleted_at!==null)).toBe(true);
  expect(accepted.every(r=>Object.values(r.data).every(value=>value===null))).toBe(true);
 });
@@ -169,7 +169,7 @@ test('property: purge cutoff rejects stale and never-synced dated rows and retai
  let dayIndex=0;
  await fc.assert(fc.asyncProperty(fc.integer({min:100,max:10000}),fc.nat(10000),async(cutoff,offset)=>{
   const day=`2026-08-${String(++dayIndex).padStart(2,'0')}`;
-  const t=testTransport(db,OWNER_A),stale=row('sessions',{day},offset%(cutoff+1));
+  const t=testTransport(db,OWNER_A,{syncedV1Columns:true}),stale=row('sessions',{day},offset%(cutoff+1));
   await t.push([stale]);
   await asUser(db,OWNER_A,tx=>tx.query('SELECT public.sync_purge_range($1,$2::date,$2::date,$3,$4)',[id(),day,cutoff,'UTC']));
   for(const incoming of [stale,row('sessions',{day},offset%(cutoff+1))]) {
@@ -185,12 +185,12 @@ const rangeData = (table: Table, inside=true): Row['data'] => table==='photos'
  ? {captured_at:Date.parse(inside?'2026-11-01T04:30:00Z':'2026-11-01T06:00:00Z'),file_name:'fixture.jpg'}
  : {day:inside?'2026-10-31':'2026-11-01',...(table==='weigh_ins'?{source:'app'}:{})};
 test.each(purgeTables)('%s RPC sweep and late-write backstop cover the range only',async table=>{
- const t=testTransport(db,OWNER_A);
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true});
  const inside=row(table,rangeData(table)),outside=row(table,rangeData(table,false)),edited=row(table,rangeData(table),101);
  await t.push([inside,outside,edited]);
- await testTransport(db,OWNER_B).push([{...inside,owner_id:OWNER_B}]);await purge();
- expect((await testTransport(db,OWNER_B).pull(table,'0',1000))[0].row.deleted_at).toBeNull();
- expect(await testTransport(db,OWNER_B).pull('purges','0',1000)).toEqual([]);
+ await testTransport(db,OWNER_B,{syncedV1Columns:true}).push([{...inside,owner_id:OWNER_B}]);await purge();
+ expect((await testTransport(db,OWNER_B,{syncedV1Columns:true}).pull(table,'0',1000))[0].row.deleted_at).toBeNull();
+ expect(await testTransport(db,OWNER_B,{syncedV1Columns:true}).pull('purges','0',1000)).toEqual([]);
  const swept=(await t.pull(table,'0',1000)).find(r=>r.row.id===inside.id)!.row;
  expect(swept.deleted_at).not.toBeNull();
  expect(Object.entries(swept.data).every(([k,v])=>k==='source'?v==='app':v===null)).toBe(true);
@@ -202,7 +202,7 @@ test.each(purgeTables)('%s RPC sweep and late-write backstop cover the range onl
  expect((await t.pull(table,'0',1000)).find(r=>r.row.id===direct.id)!.row.deleted_at).not.toBeNull();
 });
 test.each(purgeTables)('%s local purge sweeps queued rows and protects later arrivals',async table=>{
- const local=await localDatabase();
+ const local=await localDatabase(':memory:',{syncedV1Columns:true});
  try {
   const inside=row(table,rangeData(table)),outside=row(table,rangeData(table,false));
   local.repo.putLocal(inside);local.repo.putLocal(outside);
@@ -216,18 +216,18 @@ test.each(purgeTables)('%s local purge sweeps queued rows and protects later arr
 });
 test('purges reject RPC inserts and tombstones; guard rejects even with accidental grants',async()=>{
  const marker=row('purges',{from_day:'2000-01-01',to_day:'2099-12-31',cutoff_ms:Number.MAX_SAFE_INTEGER,tz:'UTC'});
- await expect(testTransport(db,OWNER_A).push([marker])).rejects.toThrow(/pull-only/);
+ await expect(testTransport(db,OWNER_A,{syncedV1Columns:true}).push([marker])).rejects.toThrow(/pull-only/);
  const key=id();await purge(key);
- await expect(testTransport(db,OWNER_A).push([{...marker,id:key,updated_at:900,deleted_at:900}])).rejects.toThrow(/pull-only/);
+ await expect(testTransport(db,OWNER_A,{syncedV1Columns:true}).push([{...marker,id:key,updated_at:900,deleted_at:900}])).rejects.toThrow(/pull-only/);
  await db.exec('GRANT INSERT, UPDATE ON public.purges TO authenticated');
  try {
   await expect(asUser(db,OWNER_A,tx=>tx.query('INSERT INTO public.purges(owner_id,id,updated_at,device_id) VALUES($1,$2,100,$3)',[OWNER_A,marker.id,marker.device_id]))).rejects.toThrow(/pull-only/);
   await expect(asUser(db,OWNER_A,tx=>tx.query('UPDATE public.purges SET deleted_at=1 WHERE id=$1',[key]))).rejects.toThrow(/pull-only/);
  }finally{await db.exec('REVOKE INSERT, UPDATE ON public.purges FROM authenticated');}
- expect((await testTransport(db,OWNER_A).pull('purges','0',100))[0].row.deleted_at).toBeNull();
+ expect((await testTransport(db,OWNER_A,{syncedV1Columns:true}).pull('purges','0',100))[0].row.deleted_at).toBeNull();
 });
 test('purges are pull-only locally, including stale outbox entries and serialization',async()=>{
- const local=await localDatabase();
+ const local=await localDatabase(':memory:',{syncedV1Columns:true});
  try {
   const marker=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz:'UTC'},500);
   expect(()=>local.repo.putLocal(marker)).toThrow();expect(()=>local.repo.save('purges',marker.data)).toThrow();
@@ -286,11 +286,11 @@ test.each([-62135596800001,253402300800000,-1e15,1e15,-8640000000000001,86400000
  const bad=row('photos',{captured_at});
  expect(()=>validateRow(bad)).toThrow('Invalid sync row.');
  await purge();
- await expect(testTransport(db,OWNER_A).push([bad])).rejects.toMatchObject({code:'23514',constraint:'photos_captured_at_range'});
+ await expect(testTransport(db,OWNER_A,{syncedV1Columns:true}).push([bad])).rejects.toMatchObject({code:'23514',constraint:'photos_captured_at_range'});
  await expect(asUser(db,OWNER_A,tx=>tx.query('INSERT INTO public.photos(owner_id,id,updated_at,device_id,captured_at) VALUES($1,$2,100,$3,$4)',[OWNER_A,id(),bad.device_id,captured_at]))).rejects.toMatchObject({code:'23514',constraint:'photos_captured_at_range'});
 });
 test('photo range endpoints and ordinary instants are accepted and do not break purge RPC',async()=>{
- const t=testTransport(db,OWNER_A);
+ const t=testTransport(db,OWNER_A,{syncedV1Columns:true});
  const photos=[-62135596800000,253402300799999,0,Date.parse('2026-10-12T12:00:00Z')].map(captured_at=>row('photos',{captured_at}));
  for(const photo of photos)expect(()=>validateRow(photo)).not.toThrow();
  await t.push(photos);await purge();
@@ -303,7 +303,7 @@ test.each(invalidTimezones)('purge timezone %s is rejected by client and RPC',as
  await expect(asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'2026-10-01','2026-10-31',100,$2)",[id(),tz]))).rejects.toThrow('bad purge');
 });
 test.each(invalidTimezones)('pulls continue past an unusable %s marker and apply later valid markers',async tz=>{
- const local=await localDatabase();
+ const local=await localDatabase(':memory:',{syncedV1Columns:true});
  try {
   const photo=row('photos',rangeData('photos'));
   local.repo.putLocal(photo);local.repo.ack(local.repo.pending());
@@ -312,7 +312,7 @@ test.each(invalidTimezones)('pulls continue past an unusable %s marker and apply
   // Exercise wire decoding too: incompatible markers still persist and advance cursors.
   const wire=(r:Row,seq:string)=>fromWire('purges',{...r,...r.data,data:undefined,server_seq:seq});
   const later=row('sessions',{day:'2026-11-02'});
-  const engine=new SyncEngine(local.repo,{owner:OWNER_A,push:async()=>[],pull:async(table,after)=>{
+  const engine=new SyncEngine(local.repo,{owner:OWNER_A,syncFlags:{syncedV1Columns:true},push:async()=>[],pull:async(table,after)=>{
    if(table==='purges')return after==='0'?[wire(bad,'1')]:after==='1'?[wire(good,'2')]:[];
    return table==='sessions' && after==='0'?[{row:later,server_seq:'3'}]:[];
   }},1);
@@ -324,7 +324,7 @@ test.each(invalidTimezones)('pulls continue past an unusable %s marker and apply
  }finally{local.sqlite.close();}
 });
 test('photo matching catches formatter failures from legacy data and continues applying later pages',async()=>{
- const local=await localDatabase();
+ const local=await localDatabase(':memory:',{syncedV1Columns:true});
  try {
   const photo=row('photos',{captured_at:1e16});
   const marker=row('purges',{from_day:'2026-10-01',to_day:'2026-10-31',cutoff_ms:100,tz:'UTC'},500);
@@ -341,7 +341,7 @@ test('photo matching catches formatter failures from legacy data and continues a
 });
 
 test.each(['healthkit','health_connect'])('unsupported purge timezone still erases local %s weigh-ins and sessions',async source=>{
- const local=await localDatabase();
+ const local=await localDatabase(':memory:',{syncedV1Columns:true});
  try {
   const weight=row('weigh_ins',{day:'2026-10-04',source,weight_kg:70});
   const session=row('sessions',{day:'2026-10-04',name:'Synthetic session'});
@@ -367,7 +367,7 @@ test('matchesPurge catches an out-of-Date-range timestamp without a mocked forma
 });
 
 test.each(['SQL, DMY','German, DMY'])('purge dates remain ISO under DateStyle %s, including stale photo writes',async style=>{
- const transport=testTransport(db,OWNER_A);
+ const transport=testTransport(db,OWNER_A,{syncedV1Columns:true});
  const session=row('sessions',{day:'2026-10-04'});
  const photo=row('photos',{captured_at:Date.parse('2026-10-04T12:00:00Z')});
  await transport.push([session,photo]);
@@ -383,7 +383,7 @@ test('client and server match a photo in a zero-padded year before 1000',async()
  const photo=row('photos',{captured_at:Date.parse('0001-01-01T12:00:00Z')});
  const marker=row('purges',{from_day:'0001-01-01',to_day:'0001-01-01',cutoff_ms:100,tz:'UTC'},500);
  expect(matchesPurge(photo,marker,()=>undefined)).toBe(true);
- const transport=testTransport(db,OWNER_A);
+ const transport=testTransport(db,OWNER_A,{syncedV1Columns:true});
  await transport.push([photo]);
  await asUser(db,OWNER_A,tx=>tx.query("SELECT public.sync_purge_range($1,'0001-01-01','0001-01-01',100,'UTC')",[id()]));
  expect((await transport.pull('photos','0',100)).find(r=>r.row.id===photo.id)!.row.deleted_at).not.toBeNull();
