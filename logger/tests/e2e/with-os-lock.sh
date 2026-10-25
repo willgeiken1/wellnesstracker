@@ -13,7 +13,7 @@ IFS=$' \t\n'
 # sudo-rs ignores a bare --preserve-env. Re-apply only what the smoke run
 # needs. LD_PRELOAD, LD_LIBRARY_PATH, BASH_ENV, ENV, IFS, SHELLOPTS, and
 # BASH_FUNC_* must not cross the boundary. Neither may SUDO_*: sudo sets
-# those, and a caller's SUDO_UID=0 would make setpriv stay root.
+# those, and a caller's SUDO_UID=0 or SUDO_GID=0 would make setpriv stay root.
 copy_var() {
   local name=$1
   if [[ -v $name ]]; then
@@ -116,7 +116,7 @@ if ! command -v setpriv >/dev/null 2>&1; then
   echo "OS network lock unavailable: setpriv is not installed, so the tests cannot drop root. Refusing to run unprotected." >&2
   exit 1
 fi
-if [[ "${SUDO_UID}" == "0" ]]; then
+if [[ "${SUDO_UID}" == "0" || "${SUDO_GID}" == "0" ]]; then
   echo "OS network lock failed: refusing to run the command as root." >&2
   exit 1
 fi

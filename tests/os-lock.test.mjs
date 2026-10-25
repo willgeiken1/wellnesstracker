@@ -30,7 +30,9 @@ const probe = [
   "    'netns': os.environ.get('INSIGHT_NETNS'),",
   "    'lock_home': os.environ.get('INSIGHT_LOCK_HOME', ''),",
   "    'uid': os.getuid(),",
+  "    'gid': os.getgid(),",
   "    'sudo_uid': os.environ.get('SUDO_UID'),",
+  "    'sudo_gid': os.environ.get('SUDO_GID'),",
   "    'external': external,",
   "    'path': os.environ.get('PATH', ''),",
   "    'ld_preload': os.environ.get('LD_PRELOAD'),",
@@ -80,8 +82,11 @@ test("OS lock restores an allowlist and stays on loopback", () => {
   assert.equal(got.netns, "1");
   assert.equal(got.lock_home, "");
   assert.equal(got.uid, process.getuid());
+  assert.equal(got.gid, process.getgid());
   assert.notEqual(got.uid, 0);
+  assert.notEqual(got.gid, 0);
   assert.notEqual(got.sudo_uid, "0");
+  assert.notEqual(got.sudo_gid, "0");
   assert.match(got.external, /^closed:/);
   const nodeDir = dirname(process.execPath);
   assert.ok(got.path.split(delimiter).includes(nodeDir), `PATH lost ${nodeDir}: ${got.path}`);
@@ -93,6 +98,28 @@ test("OS lock restores an allowlist and stays on loopback", () => {
   assert.notEqual(got.shellopts, "nounset");
   assert.equal(got.bash_func, false);
   assert.deepEqual(readdirSync(scratch), ["bash-env.sh"]);
+});
+
+test("OS lock refuses a root uid or gid before the network probe", () => {
+  const home = process.env.HOME;
+  const cases = [
+    { SUDO_UID: "0", SUDO_GID: String(process.getgid()) },
+    { SUDO_UID: String(process.getuid()), SUDO_GID: "0" },
+  ];
+  for (const creds of cases) {
+    const result = spawnSync("bash", [lock, "true"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        INSIGHT_NETNS: "1",
+        INSIGHT_LOCK_HOME: home,
+        ...creds,
+      },
+    });
+    assert.notEqual(result.status, 0, JSON.stringify(creds));
+    assert.match(result.stderr, /refusing to run the command as root/);
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /OS lock active/);
+  }
 });
 
 test("OS lock refuses an empty HOME before entering the namespace", () => {
