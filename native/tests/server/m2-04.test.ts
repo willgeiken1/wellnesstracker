@@ -287,6 +287,91 @@ test.each(examples.filter(([table])=>hasGatedColumns(table)))('%s OFF pending ed
  }finally{local.sqlite.close();}
 });
 
+
+test('steady-state ON edits after a completed replay preserve the cursor and create no marker across restart',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const engine=new SyncEngine(enabled,transport);
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  await transport.push([row]);await engine.sync();
+  expect(engine.status).toBe('idle');
+  enabled.applyPage('sets',[{row,server_seq:'5'}],'5');
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:9},row.id,300);
+  expect(restarted.cursor('sets')).toBe('5');
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,`dormant-v1:sets:${row.id}`)).toBeUndefined();
+  expect(restarted.pending()[0].row.data).toMatchObject({reps:9,tag:'warmup'});
+ }finally{engine.close();local.sqlite.close();await server.close();}
+});
+
+
+test('interrupted paginated ON replay stays needed until the final empty page',async()=>{
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+ const interrupted=new SyncEngine(enabled,{...transport,pull:async(table,after,limit)=>{
+  if(table==='sets'&&after==='1')throw new Error('Synthetic interruption');
+  return transport.pull(table,after,limit);
+ }},1);
+ let resumed: SyncEngine | undefined;
+ try {
+  await transport.push([row]);await interrupted.sync();
+  expect(interrupted.status).toBe('offline');expect(enabled.cursor('sets')).toBe('1');
+  interrupted.close();
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:9},row.id,300);
+  expect(restarted.cursor('sets')).toBe('0');
+  resumed=new SyncEngine(restarted,transport,1);await resumed.sync();
+  expect(resumed.status).toBe('idle');expect(restarted.pending()).toEqual([]);
+  const cursor=restarted.cursor('sets');expect(BigInt(cursor)).toBeGreaterThan(0n);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:10},row.id,400);
+  expect(restarted.cursor('sets')).toBe(cursor);
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,`dormant-v1:sets:${row.id}`)).toBeUndefined();
+ }finally{interrupted.close();resumed?.close();local.sqlite.close();await server.close();}
+});
+
+test('unchanged gated value re-saved before the first ON replay takes the server value',async()=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.applyPage('sets',[{row:{...row,updated_at:200,data:{reps:9,tag:'drop'}},server_seq:'2'}],'2');
+  enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:10,tag:'warmup'},row.id,300);
+  enabled.applyPage('sets',[{row:{...row,updated_at:200,data:{reps:9,tag:'drop'}},server_seq:'2'}],'2');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'drop'});
+ }finally{local.sqlite.close();}
+});
+
+test.each(['{broken', '{"tag":true}', 'null', '"tag"', ''])('invalid dormant marker %p refills all gated fields',async(marker)=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  local.repo.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.save('sets',{reps:10},row.id,300);
+  local.sqlite.prepare('UPDATE sync_state SET value=? WHERE owner_id=? AND key=?').run(marker,OWNER_A,`dormant-v1:sets:${row.id}`);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'warmup'});
+ }finally{local.sqlite.close();}
+});
+
+test('dormant marker arrays refill only gated fields',async()=>{
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  local.repo.applyPage('sets',[{row,server_seq:'1'}],'1');
+  local.repo.save('sets',{reps:10},row.id,300);
+  local.sqlite.prepare('UPDATE sync_state SET value=? WHERE owner_id=? AND key=?').run('["tag","reps",null,42]',OWNER_A,`dormant-v1:sets:${row.id}`);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1');
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'warmup'});
+ }finally{local.sqlite.close();}
+});
+
 test('ON explicit null and OFF tombstone are not overwritten by dormant refill',async()=>{
  const local=await localDatabase();
  try {

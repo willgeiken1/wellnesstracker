@@ -134,7 +134,9 @@ export class Repository {
         row = this.write(row);
         if (hasGatedColumns(row.table)) {
           if (!this.syncFlags.syncedV1Columns) {
+            // OFF nulls every gated column, so replacing a JSON marker with '1' is correct.
             this.setState(this.dormantKey(row.table,row.id),'1');
+            this.setState(this.replayKey(row.table),'needed');
             // Even a previously enabled cursor must replay this server row.
             this.setState(`cursor:v1:${row.table}`,'0');
           }
@@ -143,8 +145,10 @@ export class Repository {
             // ON edit already owns its changed fields, including explicit nulls.
             const dormant = this.dormantFields(row.table,row.id);
             const pending = this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${row.table} AND row_id=${row.id}`);
+            // Field-level merge: re-saving an unchanged gated value does not author it;
+            // during the first ON replay it still takes the server value.
             const refill = previous && row.deleted_at === null
-              ? (dormant ?? (pending ? [] : gatedColumns(row.table)))
+              ? (dormant ?? (!pending && this.needsV1Replay(row.table) ? gatedColumns(row.table) : []))
                 .filter(key => !Object.hasOwn(input.data,key) || row.data[key] === previous.data[key])
               : [];
             if (refill.length) {
@@ -240,14 +244,26 @@ export class Repository {
   private dormantFields(table: Table, id: string): readonly string[] | undefined {
     const value = this.state(this.dormantKey(table,id));
     // Existing OFF markers mean every gated column needs reconciliation.
-    return value === '1' ? gatedColumns(table) : value ? JSON.parse(value) as string[] : undefined;
+    if (value === undefined) return undefined;
+    const gated = gatedColumns(table);
+    if (value === '1') return gated;
+    try {
+      const fields: unknown = JSON.parse(value);
+      return Array.isArray(fields) ? fields.filter((key): key is string => typeof key === 'string' && gated.includes(key)) : gated;
+    } catch { return gated; }
   }
   private clearDormant(table: Table, id: string) {
     this.db.run(sql`DELETE FROM sync_state WHERE owner_id=${this.owner} AND key=${this.dormantKey(table,id)}`);
   }
+  private replayKey(table: Table) { return `replay:v1:${table}`; }
+  private needsV1Replay(table: Table) {
+    // Missing completion records include legacy OFF history and retained values.
+    return this.state(this.replayKey(table)) !== 'complete';
+  }
   private cursorKey(table: Table) { return `cursor:${this.syncFlags.syncedV1Columns && hasGatedColumns(table) ? 'v1:' : ''}${table}`; }
   cursor(table: Table) { return this.safe(() => this.state(this.cursorKey(table)) ?? '0'); }
-  applyPage(table: Table, page: ServerRow[], cursor: string) {
+  /** complete is supplied by the engine only after exhausting the table replay. */
+  applyPage(table: Table, page: ServerRow[], cursor: string, complete = false) {
     this.outsideAtomic();
     this.safe(() => this.db.transaction(() => {
       this.table(table);
@@ -279,6 +295,12 @@ export class Repository {
       this.applyPurges();
       this.setState('clock', String(clock));
       this.setState(this.cursorKey(table),cursor);
+      if (hasGatedColumns(table)) {
+        if (!this.syncFlags.syncedV1Columns) {
+          this.setState(this.replayKey(table),'needed');
+          this.setState(`cursor:v1:${table}`,'0');
+        } else if (complete) this.setState(this.replayKey(table),'complete');
+      }
     }));
     this.notify();
   }
