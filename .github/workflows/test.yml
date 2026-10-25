@@ -168,15 +168,58 @@ jobs:
 
       # This job does not grant actions: write, so a cache save can be denied.
       # Restoring a hit still helps. A denied save must not fail the smoke run.
+      # Playwright 1.63 extracts both the Ubuntu 24.04 and 26.04 WebKit builds
+      # into webkit-<revision>. runner.os is Linux for both, so a 24.04 cache
+      # hit makes `playwright install` skip the 26.04 zip. That binary needs
+      # libicudata.so.74, which 26.04 does not ship. Key on the distro.
+      - name: Read distro version
+        id: distro
+        run: |
+          set -euo pipefail
+          version_id=$(. /etc/os-release && printf '%s' "$VERSION_ID")
+          echo "version_id=${version_id}" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         continue-on-error: true
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-1.63.0
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.distro.outputs.version_id }}-playwright-1.63.0
 
+      # libWPEWebKit and libbacktrace ship inside the bundle. The headless
+      # wrapper sets LD_LIBRARY_PATH to minibrowser-wpe/lib and sys/lib before
+      # exec. ldd without that path reports them missing. An ldd error is a
+      # failure; do not append "|| true".
       - name: Install WebKit
-        run: npx playwright install --with-deps webkit
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps webkit
+          exe=$(node --input-type=commonjs -e "const {webkit}=require('playwright'); process.stdout.write(webkit.executablePath())")
+          root=$(dirname "$exe")
+          wrap="$root/minibrowser-wpe/MiniBrowser"
+          bin="$root/minibrowser-wpe/bin/MiniBrowser"
+          test -x "$wrap"
+          test -f "$bin"
+          export_line=$(awk '/^export LD_LIBRARY_PATH=/ { print; exit }' "$wrap")
+          if [[ -z "$export_line" ]]; then
+            echo "WebKit bundle wrapper does not set LD_LIBRARY_PATH: $wrap" >&2
+            exit 1
+          fi
+          if ! ldd_out=$(
+            set -euo pipefail
+            MYDIR=$(cd "$(dirname "$wrap")" && pwd)
+            eval "$export_line"
+            ldd "$bin"
+          ); then
+            echo "ldd failed for $bin" >&2
+            exit 1
+          fi
+          missing=$(printf '%s\n' "$ldd_out" | awk '/not found/ { print }')
+          if [[ -n "$missing" ]]; then
+            echo "WebKit is missing shared libraries after install --with-deps:" >&2
+            printf '%s\n' "$missing" >&2
+            exit 1
+          fi
 
       - name: Warn if supabase-js pin drifted from latest 2.x
         run: node logger/tests/e2e/check-supabase-pin.mjs
