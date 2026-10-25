@@ -3,7 +3,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { columns, syncedTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
-import { DEFAULT_SYNC_FLAGS, hasGatedColumns, hydrateSyncRow, mergeSyncRow, projectSyncRow, syncTables, type SyncFlags } from './sync/flags';
+import { DEFAULT_SYNC_FLAGS, gatedColumns, hasGatedColumns, hydrateSyncRow, mergeSyncRow, projectSyncRow, syncTables, type SyncFlags } from './sync/flags';
 
 type Physical = Record<string, Scalar>;
 // Repositories sharing a database handle must share transaction guards.
@@ -138,7 +138,20 @@ export class Repository {
             // Even a previously enabled cursor must replay this server row.
             this.setState(`cursor:v1:${row.table}`,'0');
           }
-          else this.clearDormant(row.table,row.id);
+          else {
+            // Preserve unauthored columns through edits before the replay. A pending
+            // ON edit already owns its changed fields, including explicit nulls.
+            const dormant = this.dormantFields(row.table,row.id);
+            const pending = this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${row.table} AND row_id=${row.id}`);
+            const refill = previous && row.deleted_at === null
+              ? (dormant ?? (pending ? [] : gatedColumns(row.table)))
+                .filter(key => !Object.hasOwn(input.data,key) || row.data[key] === previous.data[key])
+              : [];
+            if (refill.length) {
+              this.setState(this.dormantKey(row.table,row.id),JSON.stringify(refill));
+              this.setState(`cursor:v1:${row.table}`,'0');
+            } else this.clearDormant(row.table,row.id);
+          }
         }
         this.applyPurges();
         const clock = Math.max(Number(this.state('clock') ?? 0), row.updated_at);
@@ -224,6 +237,11 @@ export class Repository {
     this.notify();
   }
   private dormantKey(table: Table, id: string) { return `dormant-v1:${table}:${id}`; }
+  private dormantFields(table: Table, id: string): readonly string[] | undefined {
+    const value = this.state(this.dormantKey(table,id));
+    // Existing OFF markers mean every gated column needs reconciliation.
+    return value === '1' ? gatedColumns(table) : value ? JSON.parse(value) as string[] : undefined;
+  }
   private clearDormant(table: Table, id: string) {
     this.db.run(sql`DELETE FROM sync_state WHERE owner_id=${this.owner} AND key=${this.dormantKey(table,id)}`);
   }
@@ -247,14 +265,13 @@ export class Repository {
         }
         if (this.db.get(sql`SELECT 1 FROM sync_conflicts WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)) continue;
         const order = local ? compareRows(row,local) : 1;
-        // OFF edits did not author v1 fields. Refill even a newer pending base edit
-        // from the server; ON edits clear the marker so intentional v1 nulls survive.
-        const dormant = this.syncFlags.syncedV1Columns && this.state(this.dormantKey(table,row.id)) === '1';
+        // Refill only unauthored gated fields, even for a newer pending base edit.
+        const dormant = this.syncFlags.syncedV1Columns ? this.dormantFields(table,row.id) : undefined;
         const hydrate = local && this.syncFlags.syncedV1Columns && (dormant ||
           (order === 0 && !this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)));
         if (order > 0) this.write(canonicalPulledRow(mergeSyncRow(row,local,this.syncFlags)));
         else if (hydrate) {
-          const hydrated = hydrateSyncRow(row,local!);
+          const hydrated = hydrateSyncRow(row,local!,dormant);
           if (hydrated) this.write(canonicalPulledRow(hydrated));
         }
         if (dormant) this.clearDormant(table,row.id);

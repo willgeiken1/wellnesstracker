@@ -11,6 +11,7 @@ const additions: Partial<Record<Table, readonly string[]>> = {
  food_entries:['fiber_g','sugar_g','sodium_mg'], saved_foods:['fiber_g','sugar_g','sodium_mg'],
 };
 const addedTables: readonly Table[] = ['custom_exercises','plans','pauses'];
+export function gatedColumns(table: Table): readonly string[] { return additions[table] ?? []; }
 export function hasGatedColumns(table: Table) { return Object.hasOwn(additions,table); }
 export function syncTables(flags: SyncFlags = DEFAULT_SYNC_FLAGS): Table[] {
  return syncedTables.filter(table=>flags.syncedV1Columns || !addedTables.includes(table));
@@ -31,9 +32,8 @@ export function mergeSyncRow(row: Row, local: Row | undefined, flags: SyncFlags)
   row.deleted_at !== null ? null : local?.data[key]??null])),...projected.data}};
 }
 
-/** An enabled replay may fill only previously hidden columns at the same LWW version. */
-export function hydrateSyncRow(row: Row, local: Row): Row | undefined {
- const fields = additions[row.table];
+/** Replay fills unauthored gated columns without changing the local row revision. */
+export function hydrateSyncRow(row: Row, local: Row, fields = additions[row.table]): Row | undefined {
  if (!fields || row.deleted_at !== null || local.deleted_at !== null) return;
  return {...local,data:{...local.data,...Object.fromEntries(fields.map(key=>[key,row.data[key]??null]))}};
 }
