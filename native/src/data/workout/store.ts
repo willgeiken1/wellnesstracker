@@ -21,6 +21,7 @@ export interface TimerState {
   duration: number;
   minimized: boolean;
   ended: boolean;
+  restChanged?: boolean;
 }
 export interface TemplateExercise {
   id?: string;
@@ -77,15 +78,14 @@ export class WorkoutStore {
     });
   }
   isUnilateral(entryId: string) {
-    const name = String(this.repo.get('entries', entryId)?.data.exercise).toLowerCase();
-    return this.repo.localGet<boolean>(`unilateral:${name}`) === true || this.sets(entryId).some(s => s.data.left_reps != null && s.data.right_reps != null);
+    return this.repo.localGet<boolean>(`unilateral:${entryId}`) === true || this.sets(entryId).some(s => s.data.left_reps != null && s.data.right_reps != null);
   }
   setUnilateral(entryId: string, enabled: boolean) {
-    const name = String(this.repo.get('entries', entryId)?.data.exercise).toLowerCase();
-    this.repo.localSave(`unilateral:${name}`, enabled);
+    this.repo.localSave(`unilateral:${entryId}`, enabled);
   }
   skipped(entryId: string) { return this.repo.localGet<boolean>(`skipped:${entryId}`) === true; }
   skipExercise(entryId: string, skipped = true) {
+    if (skipped && this.sets(entryId).length > 0) throw Error('Cannot skip completed sets.');
     this.repo.atomic(() => {
       this.repo.localSave(`skipped:${entryId}`, skipped);
       if (skipped && this.timer()?.entryId === entryId) this.skipTimer();
@@ -136,7 +136,9 @@ export class WorkoutStore {
       const prior = this.templateExercises(routine.id);
       for (const e of prior) if (!exercises.some(x => x.id === e.id)) this.repo.remove('routine_exercises', e.id);
       exercises.forEach((e, position) => {
-        if (e.restSeconds !== undefined || e.restStyle !== undefined) this.setRest(e.exercise, {seconds: e.restSeconds ?? this.rest(e.exercise).seconds, style: e.restStyle ?? this.rest(e.exercise).style});
+        const currentRest = this.rest(e.exercise);
+        const rest = {seconds: e.restSeconds ?? currentRest.seconds, style: e.restStyle ?? currentRest.style};
+        if (rest.seconds !== currentRest.seconds || rest.style !== currentRest.style) this.setRest(e.exercise, rest);
         this.repo.save('routine_exercises', {
         routine_id: routine.id,
         exercise: e.exercise.trim(),
@@ -341,7 +343,7 @@ export class WorkoutStore {
     const right = {weight: toKg(Number(d.rightWeight), this.unit()), reps: Number(d.rightReps)};
     const weak = unilateral && right.weight * (1 + right.reps / 30) < left.weight * (1 + left.reps / 30) ? right : left;
     return { entry_id: entryId, position: index, weight_kg: weak.weight, reps: weak.reps,
-      entered_value: fromKg(weak.weight, this.unit()), entered_unit: this.unit(),
+      entered_value: unilateral ? fromKg(weak.weight, this.unit()) : Number(d.weight), entered_unit: this.unit(),
       ...(unilateral ? {left_weight_kg:left.weight,left_reps:left.reps,left_entered_value:Number(d.weight),left_entered_unit:this.unit(),
         right_weight_kg:right.weight,right_reps:right.reps,right_entered_value:Number(d.rightWeight),right_entered_unit:this.unit()} : {}),
       ...(this.repo.syncFlags?.syncedV1Columns ? {tag: d.tag ?? (d.warmup ? 'warmup' : null)} : {}) };
@@ -361,6 +363,7 @@ export class WorkoutStore {
       } else {
         if (!validateSet(d.weight, d.reps, this.unit()).valid) throw Error('Invalid set.');
         d.setId = this.writeSet(entryId, index, d).id;
+        this.persistTimerRest();
         const entry = this.repo.get('entries', entryId)!;
         const seconds = this.rest(String(entry.data.exercise)).seconds;
         this.repo.localSave('timer', {
@@ -423,6 +426,7 @@ export class WorkoutStore {
     return this.repo.localGet<TimerState | null>('timer');
   }
   updateTimer(patch: Partial<TimerState>) {
+    if (patch.ended) this.persistTimerRest();
     const t = this.timer();
     if (t) this.repo.localSave('timer', {
       ...t,
@@ -437,12 +441,24 @@ export class WorkoutStore {
     this.updateTimer({
       endAt: Math.max(now, Math.max(now, t.endAt) + delta * 1000),
       duration,
-      ended: false
+      ended: false,
+      restChanged: true
     });
-    const e = this.repo.get('entries', t.entryId);
-    if (e) this.setRest(String(e.data.exercise), {...this.rest(String(e.data.exercise)), seconds: Math.min(3600, duration)});
+  }
+  private persistTimerRest() {
+    const timer = this.timer();
+    if (!timer?.restChanged) return;
+    this.repo.atomic(() => {
+      const entry = this.repo.get('entries', timer.entryId);
+      if (entry) {
+        const name = String(entry.data.exercise);
+        this.setRest(name, {...this.rest(name), seconds: Math.min(3600, timer.duration)});
+      }
+      this.repo.localSave('timer', {...timer, restChanged: false});
+    });
   }
   skipTimer() {
+    this.persistTimerRest();
     this.repo.localSave('timer', null);
   }
   finish(id: string, input: {

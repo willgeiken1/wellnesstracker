@@ -53,16 +53,24 @@ test('unilateral validates both sides and uses the lower e1RM side after round t
     finally { b.sqlite.close(); }
   } finally { a.sqlite.close(); }
 });
-test('skip excludes every statistic and training input while retaining completed sets', async () => {
-  const a = await setup();
+test.each([false, true])('skip is pending-only and completed sets remain counted across devices, flag %s', async enabled => {
+  const a = await setup(enabled);
   try {
-    const s = a.store.start(), e = a.store.addExercise(s.id, 'Bench Press'); log(a.store, e.id); a.store.skipExercise(e.id);
+    const s = a.store.start(), e = a.store.addExercise(s.id, 'Bench Press');
+    a.store.skipExercise(e.id);
+    expect(a.store.skipped(e.id)).toBe(true);
+    expect(() => log(a.store, e.id)).toThrow();
+    a.store.skipExercise(e.id, false);
+    log(a.store, e.id);
+    expect(() => a.store.skipExercise(e.id)).toThrow();
+    expect(a.store.skipped(e.id)).toBe(false);
     const now = Number(s.data.started_at); a.store.finish(s.id, { startedAt: now, finishedAt: now, notes: '' });
-    expect(a.store.sets(e.id)).toHaveLength(1);
-    expect(a.store.summary(s.id)).toMatchObject({ count: 0, volume: 0, prs: [] });
-    expect(a.store.weekly()).toEqual({}); expect(a.store.milestones()).toEqual([]);
-    expect(a.store.trainingHistory()).toEqual([]); expect(a.store.working(e)).toEqual([]);
-    a.store.skipExercise(e.id, false); expect(a.store.summary(s.id).count).toBe(1);
+    const b = await roundTrip(a.repo, enabled);
+    try {
+      expect(a.store.summary(s.id).count).toBe(1);
+      expect(b.store.summary(s.id).count).toBe(1);
+      expect(a.store.trainingHistory()).toHaveLength(1);
+    } finally { b.sqlite.close(); }
   } finally { a.sqlite.close(); }
 });
 test.each(['swap', 'replace'] as const)('%s retains original completed sets and moves pending work', async mode => {
@@ -127,17 +135,67 @@ test('replacement moves all unfinished work even when completed sets are sparse'
     expect(a.store.drafts(replacement.id)).toHaveLength(2);
   } finally { a.sqlite.close(); }
 });
-test('a skipped PR is absent from milestones and future progression', async () => {
-  const a = await setup(true), now = Date.now()-120000;
+test.each([false, true])('unilateral is isolated from same-name bilateral entries in current and past sessions, flag %s', async enabled => {
+  const a = await setup(enabled), now = Date.now() - 120000;
   try {
-    const prior = a.store.start(undefined,now), first = a.store.addExercise(prior.id,'Bench Press'); log(a.store,first.id);
-    a.store.finish(prior.id,{startedAt:now,finishedAt:now+1000,notes:''});
-    const s = a.store.start(undefined,now+2000), e = a.store.addExercise(s.id,'Bench Press');
-    a.store.editDraft(e.id,0,{weight:'200',reps:'8'}); a.store.toggleDone(e.id,0);
-    a.store.finish(s.id,{startedAt:now+2000,finishedAt:now+3000,notes:''});
-    expect(a.store.summary(s.id).prs).toHaveLength(1);
-    a.store.skipExercise(e.id); expect(a.store.summary(s.id).prs).toEqual([]); expect(a.store.milestones()).toEqual([]);
-    const next = a.store.addExercise(a.store.start(undefined,now+4000).id,'Bench Press');
-    expect(a.store.previous(next)[0].id).toBe(a.store.sets(first.id)[0].id);
+    const prior = a.store.start(undefined, now), past = a.store.addExercise(prior.id, 'Dumbbell Row'); log(a.store, past.id);
+    a.store.finish(prior.id, {startedAt: now, finishedAt: now + 1000, notes: ''});
+    const session = a.store.start(undefined, now + 2000), current = a.store.addExercise(session.id, 'Dumbbell Row'); log(a.store, current.id);
+    const unilateral = a.store.addExercise(session.id, 'Dumbbell Row'); a.store.setUnilateral(unilateral.id, true);
+    expect(new WorkoutStore(a.repo).isUnilateral(unilateral.id)).toBe(true);
+    for (const e of [past, current]) {
+      expect(a.store.isUnilateral(e.id)).toBe(false);
+      a.store.editDraft(e.id, 0, {tag: 'drop', reps: '10'});
+      a.store.toggleDone(e.id, 0); a.store.toggleDone(e.id, 0);
+      expect(a.store.sets(e.id)[0].data).toMatchObject({reps: 10, right_reps: null});
+    }
+  } finally { a.sqlite.close(); }
+});
+test.each([false, true])('template save leaves untouched rest inherited and only persists changed rows, flag %s', async enabled => {
+  const a = await setup(enabled);
+  try {
+    const exercises = ['Bench Press', 'Dumbbell Row'].map(exercise => ({exercise, target_sets: 3, target_reps: 8}));
+    const routine = a.store.saveTemplate('Synthetic routine', exercises);
+    const rows = a.store.templateExercises(routine.id).map(e => ({...exercises.find(x => x.exercise === e.data.exercise)!, id: e.id}));
+    const setRest = jest.spyOn(a.store, 'setRest'), save = jest.spyOn(a.repo, 'save');
+    a.store.saveTemplate('Renamed routine', rows, routine.id);
+    expect(setRest).not.toHaveBeenCalled();
+    expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(0);
+    expect(a.repo.localGet('rest:bench press')).toBeUndefined();
+    // Editor may submit the currently selected default without changing it.
+    a.store.saveTemplate('Renamed routine', rows.map(e => ({...e, restSeconds: 90, restStyle: 'unwind' as const})), routine.id);
+    expect(setRest).not.toHaveBeenCalled();
+    a.store.saveTemplate('Renamed routine', rows.map((e, i) => i === 1 ? {...e, restSeconds: 120, restStyle: 'converge' as const} : e), routine.id);
+    expect(setRest).toHaveBeenCalledTimes(1);
+    expect(a.repo.localGet('rest:bench press')).toBeUndefined();
+    expect(a.store.rest('Dumbbell Row')).toEqual({seconds: 120, style: 'converge'});
+    if (enabled) expect(JSON.parse(String(a.repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': 120});
+  } finally { a.sqlite.close(); }
+});
+test.each(['expiry', 'next set', 'dismiss'] as const)('timer adjustments persist once on %s, including after store recreation', async boundary => {
+  const a = await setup(true);
+  try {
+    const e = a.store.addExercise(a.store.start().id, 'Bench Press'); log(a.store, e.id);
+    const save = jest.spyOn(a.repo, 'save');
+    a.store.adjustTimer(15); a.store.adjustTimer(15); a.store.adjustTimer(-15);
+    expect(a.store.timer()?.duration).toBe(105);
+    expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(0);
+    const store = new WorkoutStore(a.repo);
+    if (boundary === 'expiry') { store.updateTimer({ended: true, minimized: true}); store.updateTimer({ended: true}); }
+    else if (boundary === 'next set') { store.editDraft(e.id, 1, {weight: '100', reps: '8'}); store.toggleDone(e.id, 1); }
+    else { store.skipTimer(); store.skipTimer(); }
+    expect(store.rest('Bench Press').seconds).toBe(105);
+    expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(1);
+    if (boundary === 'next set') expect(store.timer()?.duration).toBe(105);
+  } finally { a.sqlite.close(); }
+});
+test('bilateral entered_value preserves the typed number on creation and weight edit', async () => {
+  const a = await setup();
+  try {
+    const e = a.store.addExercise(a.store.start().id, 'Bench Press');
+    a.store.editDraft(e.id, 0, {weight: '2.9', reps: '8'}); a.store.toggleDone(e.id, 0);
+    expect(a.store.sets(e.id)[0].data.entered_value).toBe(2.9);
+    a.store.editDraft(e.id, 0, {weight: '3.3'});
+    expect(a.store.sets(e.id)[0].data.entered_value).toBe(3.3);
   } finally { a.sqlite.close(); }
 });

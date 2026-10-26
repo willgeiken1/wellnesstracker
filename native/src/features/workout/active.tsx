@@ -245,7 +245,8 @@ function Logger({
         else if (next) edit(cursor.entryId, next.index, next.field);
         else {
           const i = entries.findIndex((e) => e.id === cursor.entryId);
-          if (i + 1 < entries.length) edit(entries[i + 1].id, 0, "weight");
+          const nextEntry = entries.slice(i + 1).find(e => !store.skipped(e.id));
+          if (nextEntry) edit(nextEntry.id, 0, "weight");
           else setCursor(null);
         }
         setError(null);
@@ -531,7 +532,7 @@ function Logger({
                 {store.skipped(e.id) && <ThemedText>{t('skippedExercise')}</ThemedText>}
               {options === e.id && <View style={layout.stack}>
                 <Button label={t('cancel')} variant="secondary" onPress={() => setOptions(null)} />
-                <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
+                <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} disabled={!store.skipped(e.id) && store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
                 {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => {store.updateTimer({minimized:true}); setReplacement({entryId:e.id,mode}); setPicker(true);}} />)}
                 <Button label={t(store.isUnilateral(e.id) ? 'bilateral' : 'unilateral')} disabled={store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.setUnilateral(e.id, !store.isUnilateral(e.id)))} />
                 <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />

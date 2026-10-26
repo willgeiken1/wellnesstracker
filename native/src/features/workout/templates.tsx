@@ -114,9 +114,7 @@ function Editor({
       id: e.id,
       exercise: String(e.data.exercise),
       target_sets: Number(e.data.target_sets) || 3,
-      target_reps: Number(e.data.target_reps) || 8,
-      restSeconds: store.rest(String(e.data.exercise)).seconds,
-      restStyle: store.rest(String(e.data.exercise)).style
+      target_reps: Number(e.data.target_reps) || 8
     })) : []),
     [picker, setPicker] = useState(false),
     [error, setError] = useState(false);
