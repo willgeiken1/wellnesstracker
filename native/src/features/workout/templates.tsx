@@ -151,7 +151,7 @@ function Editor({
         setError(true);
       }
     }} />
-    {picker && <ExercisePicker onClose={() => setPicker(false)} onPick={exercise => {
+    {picker && <ExercisePicker store={store} onClose={() => setPicker(false)} onPick={exercise => {
       setExercises(es => [...es, {
         exercise,
         target_sets: 3,

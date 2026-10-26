@@ -1,3 +1,4 @@
+import { PlateSettings } from './plate-settings';
 import { View } from 'react-native';
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
@@ -19,6 +20,7 @@ export function WorkoutSettings() {
         ...settings?.data,
         rest_seconds: seconds
       }, settings?.id)} />)}</View>
+    <PlateSettings store={store} />
     <ThemedText>{t('restStyle')}</ThemedText><View style={layout.row}>{(['unwind', 'converge'] as const).map(style => <Button key={style} label={t(style)} variant="secondary" selected={store.defaultRestStyle() === style} onPress={() => store.setDefaultRestStyle(style)} />)}</View>
     <Button label={store.hapticsEnabled() ? t('disableHaptics') : t('enableHaptics')} variant="secondary" onPress={() => store.toggleHaptics()} />
   </Screen>;
