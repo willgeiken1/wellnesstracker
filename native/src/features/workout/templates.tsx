@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
@@ -10,6 +10,8 @@ import { pluralize, t } from '@/i18n/en';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
 import { layout, Panel } from './primitives';
+import { SupersetControls } from './superset-controls';
+import { RepRangeInput } from './rep-range-input';
 import { RestOptions } from './rest-options';
 import { ExercisePicker } from './picker';
 import { PlansPanel } from '../plans/panel';
@@ -109,9 +111,11 @@ function Editor({
   const {
     colors
   } = useTheme();
+  const groupSequence = useRef(0);
   const [name, setName] = useState(id ? String(store.repo.get('routines', id)?.data.name ?? '') : ''),
     [exercises, setExercises] = useState<TemplateExercise[]>(id ? store.templateExercises(id).map(e => ({
       id: e.id,
+      rep_min:e.data.rep_min as number | null, rep_max:e.data.rep_max as number | null, superset_group:e.data.superset_group as string | null,
       exercise: String(e.data.exercise),
       target_sets: Number(e.data.target_sets) || 3,
       target_reps: Number(e.data.target_reps) || 8
@@ -140,7 +144,13 @@ function Editor({
             ...v,
             [field]: text === '' ? NaN : Number(text)
           } : v))} /></View>)}
-    </View><RestOptions value={{seconds:e.restSeconds ?? store.rest(e.exercise).seconds, style:e.restStyle ?? store.rest(e.exercise).style}} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,restSeconds:value.seconds,restStyle:value.style} : v))} /><View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => move(i, -1)} /><Button label={t('moveDown')} variant="secondary" onPress={() => move(i, 1)} /><Button label={t('remove')} variant="secondary" onPress={() => setExercises(es => es.filter((_, j) => j !== i))} /></View></Panel>)}
+    </View><RepRangeInput exercise={e.exercise} value={e} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,...value} : v))} />
+    <SupersetControls currentId={String(i)} items={exercises.map((v,j) => ({id:String(j),name:v.exercise,group:v.superset_group ?? null}))} onUnlink={() => setExercises(es => es.map(v => v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} onLink={ids => setExercises(es => {
+      const group = `superset:${Date.now()}:${++groupSequence.current}`;
+      const oldGroups = new Set(es.filter((_,j) => ids.includes(String(j))).map(v => v.superset_group).filter(Boolean));
+      return es.map((v,j) => ({...v,superset_group:ids.includes(String(j)) ? group : oldGroups.has(v.superset_group) ? null : v.superset_group}));
+    })} />
+    <RestOptions value={{seconds:e.restSeconds ?? store.rest(e.exercise).seconds, style:e.restStyle ?? store.rest(e.exercise).style}} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,restSeconds:value.seconds,restStyle:value.style} : v))} /><View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => move(i, -1)} /><Button label={t('moveDown')} variant="secondary" onPress={() => move(i, 1)} /><Button label={t('remove')} variant="secondary" onPress={() => setExercises(es => es.filter((_, j) => j !== i).map(v => v.superset_group && es.filter(x => x.superset_group === v.superset_group).length === 2 && v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} /></View></Panel>)}
     {error && <ThemedText accessibilityRole="alert">{t('invalidTemplate')}</ThemedText>}
     <Button label={t('addExercise')} variant="secondary" onPress={() => setPicker(true)} />
     <Button label={t('saveTemplate')} onPress={() => {

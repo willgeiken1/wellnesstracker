@@ -26,6 +26,7 @@ import {
 } from "./primitives";
 import { Keypad, type Cursor } from "./keypad";
 import { ExercisePicker } from "./picker";
+import { SupersetControls } from "./superset-controls";
 import { RestOptions } from "./rest-options";
 import { SetRow } from "./set-row";
 import { RestTimer } from "./timer";
@@ -242,6 +243,12 @@ function Logger({
         );
         if (store.isUnilateral(cursor.entryId) && cursor.field === 'reps' && !cursor.side) edit(cursor.entryId, cursor.index, 'weight', 'right');
         else if (cursor.side && cursor.field === 'weight') edit(cursor.entryId, cursor.index, 'reps', 'right');
+        else if (store.supersetGroup(entries.find(e => e.id === cursor.entryId)! ) && cursor.field === 'reps') {
+          const order = store.loggerOrder(session.id), position = order.findIndex(slot => slot.entryId === cursor.entryId && slot.index === cursor.index);
+          const slot = order.slice(position+1).find(slot => !store.drafts(slot.entryId)[slot.index].setId);
+          if (slot) edit(slot.entryId,slot.index,'weight');
+          else setCursor(null);
+        }
         else if (next) edit(cursor.entryId, next.index, next.field);
         else {
           const i = entries.findIndex((e) => e.id === cursor.entryId);
@@ -298,7 +305,14 @@ function Logger({
           store.editDraft(entry.id, index, {
             weight: effective.weight,
           });
-        if (store.toggleDone(entry.id, index)) tick(store.repo);
+        if (store.toggleDone(entry.id, index)) {
+          tick(store.repo);
+          if (store.supersetGroup(entry)) {
+            const next = store.nextSet(session.id);
+            if (next) edit(next.entryId,next.index,'weight');
+            else setCursor(null);
+          }
+        }
       });
     if (!d.setId && check.warning)
       Alert.alert(t("checkSet"), t(check.warning), [
@@ -535,12 +549,14 @@ function Logger({
                 <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} disabled={!store.skipped(e.id) && store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
                 {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => {store.updateTimer({minimized:true}); setReplacement({entryId:e.id,mode}); setPicker(true);}} />)}
                 <Button label={t(store.isUnilateral(e.id) ? 'bilateral' : 'unilateral')} disabled={store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.setUnilateral(e.id, !store.isUnilateral(e.id)))} />
+                <SupersetControls currentId={e.id} items={entries.filter(entry => !store.skipped(entry.id)).map(entry => ({id:entry.id,name:String(entry.data.exercise),group:store.supersetGroup(entry)}))} onLink={ids => run(() => store.linkSuperset(ids))} onUnlink={() => run(() => store.unlinkSuperset(e.id))} />
                 <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />
                 <Button label={t('addSet')} variant="secondary" onPress={() => run(() => store.addSet(e.id))} />
                 <Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, -1))} />
                 <Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, 1))} />
                 <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),onPress:() => run(() => store.removeExercise(e.id))}])} />
               </View>}
+              {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
               {!collapsed && !store.skipped(e.id) && (
                 <>
                   <View style={layout.row}>
@@ -615,7 +631,7 @@ function Logger({
                               : ""
                           }
                           hint={weightHint(e, i)}
-                          repsHint={String(store.repo.localGet<number>(`target:${e.id}`) ?? previous.find((s) => Number(s.data.position) === i)?.data.reps ?? "")}
+                          repsHint={String(store.repRange(e) ? store.suggestion(e).target ?? "" : store.repo.localGet<number>(`target:${e.id}`) ?? previous.find((s) => Number(s.data.position) === i)?.data.reps ?? "")}
                           onEdit={(field) => edit(e.id, i, field)}
                           onDone={() => mark(e, i)}
                           onRemove={() =>
