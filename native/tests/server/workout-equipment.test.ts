@@ -80,7 +80,7 @@ test('OFF reads no dormant v1 preferences from a previous ON run', async () => {
     expect(off.list('machine_notes')[0].data).toMatchObject({ text: 'Seat 3', step: null, bar_weight: null, unit_override: null });
   } finally { sqlite.close(); }
 });
-test.each(['lb', 'kg'] as const)('exercise setup defaults to +10 lb / +5 kg until explicitly set (%s)', async unit => {
+test.each(['lb', 'kg'] as const)('barbell suggestion uses equipment default step (+5 lb / +2.5 kg) when no step is saved (%s)', async unit => {
   const { db, sqlite } = await localDatabase();
   const repo = new Repository(db, OWNER_A, DEVICE_A, randomUUID);
   try {
@@ -91,7 +91,7 @@ test.each(['lb', 'kg'] as const)('exercise setup defaults to +10 lb / +5 kg unti
     store.toggleDone(entry.id, 0);
     store.finish(first.id, { startedAt: start, finishedAt: Date.now(), notes: '' });
     const next = store.addExercise(store.start().id, 'Bench Press');
-    expect(store.suggestion(next).weight).toBe(unit === 'lb' ? 110 : 105);
+    expect(store.suggestion(next).weight).toBe(unit === 'lb' ? 105 : 102.5);
   } finally { sqlite.close(); }
 });
 test('decimal plate sizes are validated at two decimal places without floating-point rejection', async () => {

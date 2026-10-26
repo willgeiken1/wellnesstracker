@@ -19,7 +19,7 @@ export class WorkoutPreferences {
       ...(row?.data.unit_override === 'kg' || row?.data.unit_override === 'lb' ? { unit_override: row.data.unit_override } : {}) };
   }
   unit(name: string, fallback: Unit): Unit { return this.machine(name).unit_override ?? fallback; }
-  increment(name: string, unit: Unit) { return this.machine(name).step ?? (unit === 'lb' ? 10 : 5); }
+  increment(name: string, _unit: Unit): number | undefined { return this.machine(name).step; }
   saveMachine(name: string, note: MachineNote, fallback: Unit = 'lb') {
     if ((note.step !== undefined && (!Number.isFinite(note.step) || note.step <= 0 || note.step > 1000)) || (note.bar_weight !== undefined && (!Number.isFinite(note.bar_weight) || note.bar_weight < 0 || note.bar_weight > 1000))) throw Error('Invalid setup.');
     const oldUnit = this.unit(name, fallback), nextUnit = note.unit_override ?? fallback;

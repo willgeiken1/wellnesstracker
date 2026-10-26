@@ -1,5 +1,7 @@
 import { exerciseLibrary } from '../src/core/workout/library';
 import { filterExercises, validCustomExercise } from '../src/core/workout/exercise-rules';
+import { WorkoutStore } from '../src/data/workout/store';
+import { memoryRepository } from './workout-repository';
 import { plates, step, suggestion } from '../src/core/workout/rules';
 
 test.each([
@@ -33,6 +35,36 @@ test('filters combine with typo search and recent-first ordering', () => {
 test('picker matches the PWA transposed-letter cable query', () => {
   expect(filterExercises(exerciseLibrary, 'cabel').some(e => e.name === 'Cable Fly')).toBe(true);
 });
-test('an explicit Step applies to a custom lift with Other equipment', () => {
-  expect(suggestion([{ weight: 100, reps: 8, done: true }], 'other', 'lb', 8, 7).weight).toBe(107);
+test.each(['bodyweight', 'other'] as const)('%s ignores a saved Step', equipment => {
+  expect(step(equipment, 'lb', 10)).toBe(0);
+  expect(step(equipment, 'kg', 5)).toBe(0);
+  expect(suggestion([{ weight: 0, reps: 8, done: true }], equipment, 'lb', 8, 10))
+    .toMatchObject({ weight: 0, jump: false });
+});
+test.each([
+  ['barbell', 'lb', 5],
+  ['barbell', 'kg', 2.5],
+  ['dumbbell', 'lb', 5],
+  ['dumbbell', 'kg', 2.5],
+  ['machine', 'lb', 10],
+  ['machine', 'kg', 5],
+  ['cable', 'lb', 10],
+  ['cable', 'kg', 5],
+] as const)('%s defaults to %s Step %s without a saved Step', (equipment, unit, expected) => {
+  const preferences = new WorkoutStore(memoryRepository()).preferences();
+  const saved = preferences.increment('Fixture lift', unit);
+  expect(saved).toBeUndefined();
+  expect(step(equipment, unit, saved)).toBe(expected);
+});
+test.each(['Leg Extension', 'Bench Press'])('%s honours a saved Step in store suggestions', name => {
+  const store = new WorkoutStore(memoryRepository());
+  const start = Date.now() - 120000, prior = store.start(undefined, start);
+  const entry = store.addExercise(prior.id, name, 1);
+  store.editDraft(entry.id, 0, { weight: '100', reps: '8' });
+  store.toggleDone(entry.id, 0);
+  store.finish(prior.id, { startedAt: start, finishedAt: start + 60000, notes: '' });
+  store.preferences().saveMachine(name, { text: '', step: 7 });
+  expect(store.preferences().increment(name, 'lb')).toBe(7);
+  expect(store.suggestion(store.addExercise(store.start().id, name)))
+    .toMatchObject({ weight: 107, jump: true });
 });

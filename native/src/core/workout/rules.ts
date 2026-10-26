@@ -20,8 +20,8 @@ export function displayWeight(kg: number, unit: Unit) {
   return Math.round(fromKg(kg, unit) / quantum) * quantum;
 }
 export function step(equipment: Equipment, unit: Unit, stack?: number) {
-  if (stack !== undefined && Number.isFinite(stack) && stack > 0) return stack;
   if (equipment === 'bodyweight' || equipment === 'other') return 0;
+  if (stack !== undefined && Number.isFinite(stack) && stack > 0) return stack;
   return equipment === 'machine' || equipment === 'cable' ? stack ?? (unit === 'lb' ? 10 : 5) : unit === 'lb' ? 5 : 2.5;
 }
 const working = (sets: WorkingSet[]) => sets.filter(s => s.done && !s.warmup);
