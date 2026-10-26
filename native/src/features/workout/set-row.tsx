@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Button } from "@/components/button";
 import { PanResponder, Pressable, View } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { useTheme } from "@/design/theme-provider";
@@ -15,8 +17,12 @@ export function SetRow({
   onEdit,
   onDone,
   onRemove,
+  onTag,
+  side,
 }: {
   exerciseIndex?: number;
+  side?: "left" | "right";
+  onTag?: (tag: Draft["tag"]) => void;
   exercise: string;
   index: number;
   draft: Draft;
@@ -28,7 +34,8 @@ export function SetRow({
   onRemove: () => void;
 }) {
   const { colors } = useTheme();
-  const label = `${exercise}, ${t("set")} ${index + 1}`;
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const label = `${exercise}, ${t("set")} ${index + 1}${side ? `, ${t(side === "left" ? "leftSide" : "rightSide")}` : ""}`;
   const pan = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) =>
       g.dx > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
@@ -37,8 +44,10 @@ export function SetRow({
     },
   });
   return (
+    <>
+    {side && <ThemedText muted variant="caption">{t(side === 'left' ? 'leftSide' : 'rightSide')}</ThemedText>}
     <View
-      testID={`set-row-${exerciseIndex}-${index}`}
+      testID={`set-row-${exerciseIndex}-${index}${side === "right" ? "-right" : ""}`}
       {...pan.panHandlers}
       style={[
         layout.row,
@@ -84,7 +93,7 @@ export function SetRow({
       </ThemedText>
       {(["weight", "reps"] as const).map((field) => (
         <Pressable
-          testID={`set-${exerciseIndex}-${index}-${field}`}
+          testID={`set-${exerciseIndex}-${index}${side === "right" ? "-right" : ""}-${field}`}
           key={field}
           accessibilityRole="button"
           accessibilityLabel={`${label}, ${t(field)}, ${draft[field] || t("blank")}`}
@@ -107,7 +116,7 @@ export function SetRow({
         </Pressable>
       ))}
       <Pressable
-        testID={`set-${exerciseIndex}-${index}-done`}
+        testID={`set-${exerciseIndex}-${index}${side === "right" ? "-right" : ""}-done`}
         accessibilityRole="checkbox"
         accessibilityLabel={`${label}, ${t("done")}`}
         accessibilityState={{
@@ -132,5 +141,16 @@ export function SetRow({
         />
       </Pressable>
     </View>
+    {onTag && <Pressable accessibilityRole="button"
+      accessibilityLabel={`${label}, ${t('setTag')}${draft.tag ? `, ${t(draft.tag)}` : ''}`}
+      accessibilityState={{expanded:tagsOpen}}
+      onPress={() => setTagsOpen(!tagsOpen)}
+      style={{minHeight:44, justifyContent:'center'}}>
+      <ThemedText muted variant="caption">{draft.tag ? t(draft.tag) : t('setTag')}</ThemedText>
+    </Pressable>}
+    {tagsOpen && onTag && <View style={[layout.row, {flexWrap:'wrap'}]}>
+      {(['warmup','failure','drop'] as const).map(tag => <Button key={tag} label={t(tag)} selected={draft.tag === tag} variant="secondary" onPress={() => {onTag(draft.tag === tag ? null : tag); setTagsOpen(false);}} />)}
+      <Button label={t('clearTag')} variant="secondary" onPress={() => {onTag(null); setTagsOpen(false);}} />
+    </View>}</>
   );
 }

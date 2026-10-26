@@ -16,6 +16,7 @@ import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
 import { Eyebrow, Line, Sheet, layout } from "./primitives";
 export interface Cursor {
+  side?: "right";
   entryId: string;
   index: number;
   field: "weight" | "reps";

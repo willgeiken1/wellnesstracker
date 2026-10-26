@@ -21,7 +21,7 @@ export function WorkoutSettings() {
         rest_seconds: seconds
       }, settings?.id)} />)}</View>
     <PlateSettings store={store} />
-    <ThemedText>{t('restStyle')}</ThemedText><View style={layout.row}>{(['unwind', 'converge'] as const).map(style => <Button key={style} label={t(style)} variant="secondary" selected={(store.repo.localGet('restStyle') ?? 'unwind') === style} onPress={() => store.repo.localSave('restStyle', style)} />)}</View>
-    <Button label={store.repo.localGet('haptics') === false ? t('enableHaptics') : t('disableHaptics')} variant="secondary" onPress={() => store.repo.localSave('haptics', store.repo.localGet('haptics') === false)} />
+    <ThemedText>{t('restStyle')}</ThemedText><View style={layout.row}>{(['unwind', 'converge'] as const).map(style => <Button key={style} label={t(style)} variant="secondary" selected={store.defaultRestStyle() === style} onPress={() => store.setDefaultRestStyle(style)} />)}</View>
+    <Button label={store.hapticsEnabled() ? t('disableHaptics') : t('enableHaptics')} variant="secondary" onPress={() => store.toggleHaptics()} />
   </Screen>;
 }

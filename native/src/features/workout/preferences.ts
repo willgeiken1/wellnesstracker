@@ -28,9 +28,16 @@ export class WorkoutPreferences {
       this.repo.save('machine_notes', { exercise: name, text: note.text, ...(this.enabled ? { step: note.step ?? null, bar_weight: note.bar_weight ?? null, unit_override: note.unit_override ?? null } : {}) }, row?.id);
       if (!this.enabled) this.repo.localSave(`machineSetup:${name.toLowerCase()}`, note);
       if (oldUnit !== nextUnit) for (const entry of this.repo.list('entries').filter(e => String(e.data.exercise).toLowerCase() === name.toLowerCase())) {
-        const drafts = this.repo.localGet<{ weight: string; reps: string; setId?: string }[]>(`draft:${entry.id}`);
-        if (drafts) this.repo.localSave(`draft:${entry.id}`, drafts.map(d => ({ ...d, weight: d.weight ? String(displayWeight(toKg(Number(d.weight), oldUnit), nextUnit)) : '' })));
-        for (let i = 0; i < (drafts?.length ?? 0); i++) this.repo.localSave(`input:${entry.id}:${i}:weight`, null);
+        const drafts = this.repo.localGet<{ weight: string; rightWeight?: string; reps: string; setId?: string }[]>(`draft:${entry.id}`);
+        if (drafts) this.repo.localSave(`draft:${entry.id}`, drafts.map(d => ({
+          ...d,
+          weight: d.weight ? String(displayWeight(toKg(Number(d.weight), oldUnit), nextUnit)) : '',
+          ...(d.rightWeight !== undefined ? { rightWeight: d.rightWeight ? String(displayWeight(toKg(Number(d.rightWeight), oldUnit), nextUnit)) : '' } : {})
+        })));
+        for (let i = 0; i < (drafts?.length ?? 0); i++) {
+          this.repo.localSave(`input:${entry.id}:${i}:weight`, null);
+          this.repo.localSave(`input:${entry.id}:${i}:right:weight`, null);
+        }
       }
     });
   }

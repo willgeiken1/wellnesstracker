@@ -123,7 +123,7 @@ export function RestTimer({
   }, [store, endAt, ended, reduceMotion, minimized, presentation]);
   if (!timer || hidden) return null;
   const seconds = Math.min(timer.duration, remainingSeconds(timer.endAt, now)),
-    style = store.repo.localGet<"unwind" | "converge">("restStyle") ?? "unwind";
+    style = store.rest(String(store.repo.get("entries", timer.entryId)?.data.exercise)).style;
   const entry = store.repo.get("entries", timer.entryId),
     drafts = store.drafts(timer.entryId),
     next = drafts.findIndex((d) => !d.setId);

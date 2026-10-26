@@ -103,3 +103,25 @@ test('decimal plate sizes are validated at two decimal places without floating-p
     expect(() => p.savePlates('kg', [1.001])).toThrow();
   } finally { sqlite.close(); }
 });
+
+test.each([false, true])('unit changes convert both unilateral drafts and preserve completed side kg (%s)', async enabled => {
+  const { db, sqlite } = await localDatabase(':memory:', { syncedV1Columns: enabled });
+  const repo = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: enabled });
+  try {
+    const store = new WorkoutStore(repo), p = store.preferences();
+    p.saveMachine('Dumbbell Row', { text: 'Seat 2', unit_override: 'kg' });
+    const e = store.addExercise(store.start().id, 'Dumbbell Row');
+    store.setUnilateral(e.id, true);
+    store.editDraft(e.id, 0, { weight: '50', reps: '8', rightWeight: '40', rightReps: '6', tag: 'drop' });
+    store.toggleDone(e.id, 0);
+    expect(store.sets(e.id)[0].data).toMatchObject({ left_weight_kg: 50, right_weight_kg: 40, entered_unit: 'kg' });
+    store.editDraft(e.id, 1, { weight: '50', reps: '8', rightWeight: '40', rightReps: '6' });
+    repo.localSave(`input:${e.id}:1:right:weight`, '41');
+    p.saveMachine('Dumbbell Row', { text: 'Seat 2', unit_override: 'lb' });
+    expect(store.drafts(e.id)[1]).toMatchObject({ weight: '110', rightWeight: '88', rightReps: '6' });
+    expect(repo.localGet(`input:${e.id}:1:right:weight`)).toBeNull();
+    store.editDraft(e.id, 0, { tag: 'warmup', rightReps: '7' });
+    expect(store.sets(e.id)[0].data).toMatchObject({ left_weight_kg: 50, right_weight_kg: 40, right_reps: 7, entered_unit: 'kg' });
+    expect(store.working(e)[0].warmup).toBe(true);
+  } finally { sqlite.close(); }
+});

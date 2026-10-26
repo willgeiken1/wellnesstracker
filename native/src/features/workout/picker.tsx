@@ -9,14 +9,14 @@ import type { WorkoutStore } from '@/data/workout/store';
 import { muscleLabel, t } from '@/i18n/en';
 import { Sheet, layout } from './primitives';
 import { EquipmentChoices, MuscleChoices } from './exercise-choices';
-export function ExercisePicker({ onPick, onClose, store }: { onPick: (name: string) => void; onClose: () => void; store?: WorkoutStore }) {
+export function ExercisePicker({ onPick, onClose, store, label = t('addExercise') }: { onPick: (name: string) => void; onClose: () => void; store?: WorkoutStore; label?: string }) {
   const [query, setQuery] = useState(''), [muscle, setMuscle] = useState(''), [equipment, setEquipment] = useState(''), [creating, setCreating] = useState(false);
   const results = useRef<FlatList<Exercise>>(null);
   const { colors } = useTheme();
   const library = store?.preferences().library() ?? exerciseLibrary;
   const pick = (name: string) => { Keyboard.dismiss(); onPick(name); };
   const matches = filterExercises(library, query, muscle, equipment, store?.preferences().recent());
-  return <Sheet expanded label={t('addExercise')} onClose={onClose}>
+  return <Sheet expanded label={label} onClose={onClose}>
     {creating && store ? <CustomForm name={query.trim()} store={store} onPick={pick} onCancel={() => setCreating(false)} /> : <>
       <TextInput testID="exercise-picker-search" accessibilityLabel={t('searchExercise')} placeholder={t('searchExercise')} placeholderTextColor={colors['text-muted']} value={query} onChangeText={text => { setQuery(text); results.current?.scrollToOffset({ offset: 0, animated: false }); }} style={[layout.input, { color: colors.text, backgroundColor: colors['surface-2'] }]} />
       <MuscleChoices all filter value={muscle ? [muscle] : []} onChange={setMuscle} />
