@@ -20,7 +20,7 @@ import { useAuth } from '../src/auth/provider';
 import { clock } from '../src/features/workout/primitives';
 import { displayWeight, rounded, nextField } from '../src/core/workout/rules';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), useIsFocused: () => true, router: { canDismiss: () => false, replace: jest.fn() } }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: jest.fn(() => ({})), useIsFocused: () => true, router: { canDismiss: () => false, replace: jest.fn(), back: jest.fn() } }));
 jest.mock('../src/features/workout/haptics', () => ({
   tick: jest.fn(),
   restBuzz: jest.fn(),
@@ -521,9 +521,9 @@ test('exercise options can cancel and reopen, then add a set', async () => {
   await render(<ActiveWorkout />, { wrapper });
   const open = () => fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Exercise options' }));
   await open();
-  await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.style === 'cancel')?.onPress?.(); });
+  await fireEvent.press(screen.getByRole('button', {name:'Cancel'}));
   await open();
-  await act(() => { alert.mock.calls.at(-1)![2]!.find(b => b.text === 'Add set')!.onPress!(); });
+  await fireEvent.press(screen.getByRole('button', {name:'Add set'}));
   expect(store.drafts(entry.id)).toHaveLength(4);
   alert.mockRestore();
 });
@@ -686,4 +686,106 @@ test.each([false, true])('PR buzz respects haptics disabled with Reduce Motion %
   store.repo.localSave('haptics', false);
   await render(<WorkoutSummary store={store} id={fixture.sessionId} />, { wrapper });
   expect(signatureBuzz).not.toHaveBeenCalled();
+});
+
+test('M2-06 clearable tag picker updates a draft set accessibly', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), s = store.start(), e = store.addExercise(s.id, 'Bench Press');
+  activeRepository(repo); await render(<ActiveWorkout />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Set 1, Set tag'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Warm-up'}));
+  expect(store.drafts(e.id)[0].tag).toBe('warmup');
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Set 1, Set tag, Warm-up'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Clear tag'}));
+  expect(store.drafts(e.id)[0].tag).toBeNull();
+});
+test('M2-06 unilateral entry, per-exercise rest, skip and replace controls', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), s = store.start(), e = store.addExercise(s.id, 'Bench Press');
+  activeRepository(repo); await render(<ActiveWorkout />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Exercise options'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Log left and right separately'}));
+  expect(screen.getByRole('button', {name: 'Bench Press, Set 1, Right, Weight, blank'})).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', {name: '120 seconds'}));
+  await fireEvent.press(screen.getByRole('button', {name: 'Converge'}));
+  expect(store.rest('Bench Press')).toEqual({seconds:120,style:'converge'});
+  await fireEvent.press(screen.getByRole('button', {name: 'Skip exercise'}));
+  expect(store.skipped(e.id)).toBe(true);
+  expect(screen.queryByTestId('set-0-0-done')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', {name: 'Replace exercise'}));
+  await fireEvent.changeText(screen.getByTestId('exercise-picker-search'), 'Dumbbell Row');
+  await fireEvent.press(screen.getByTestId('exercise-picker-result-0'));
+  expect(store.entries(s.id).some(e => e.data.exercise === 'Dumbbell Row')).toBe(true);
+});
+test('M2-06 right-side keypad logs independently and requires both sides', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), e = store.addExercise(store.start().id,'Bench Press');
+  store.setUnilateral(e.id,true); store.editDraft(e.id,0,{weight:'100',reps:'8'});
+  activeRepository(repo); await render(<ActiveWorkout/>,{wrapper});
+  await fireEvent.press(screen.getByRole('button',{name:'Bench Press, Set 1, Right, Weight, blank'}));
+  await fireEvent.press(screen.getByRole('button',{name:'8'}));
+  await fireEvent.press(screen.getByRole('button',{name:'0'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Next: Reps'}));
+  await fireEvent.press(screen.getByRole('button',{name:'6'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Next: Set'}));
+  await fireEvent(screen.getByTestId('workout-sheet-host'),'requestClose');
+  await fireEvent.press(screen.getByTestId('set-0-0-right-done'));
+  expect(store.drafts(e.id)[0]).toMatchObject({weight:'100',reps:'8',rightWeight:'80',rightReps:'6'});
+  expect(store.working(e)[0].reps).toBe(6);
+});
+test.each([false,true])('M2-06 haptics switch writes only phone-local state, flag %s', async enabled => {
+  const { WorkoutSettings } = require('../src/features/workout/settings') as typeof import('../src/features/workout/settings');
+  const repo = memoryRepository(); Object.defineProperty(repo,'syncFlags',{value:{syncedV1Columns:enabled}});
+  activeRepository(repo); const save = jest.spyOn(repo,'save');
+  await render(<WorkoutSettings/>,{wrapper});
+  await fireEvent.press(screen.getByRole('button',{name:'Disable workout haptics'}));
+  expect(repo.localGet('haptics')).toBe(false);
+  await fireEvent.press(screen.getByRole('button',{name:'Enable workout haptics'}));
+  expect(repo.localGet('haptics')).toBe(true); expect(save).not.toHaveBeenCalled();
+});
+
+test('completed entries disable Skip exercise', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), e = store.addExercise(store.start().id, 'Bench Press');
+  store.editDraft(e.id, 0, {weight: '100', reps: '8'}); store.toggleDone(e.id, 0); store.skipTimer();
+  activeRepository(repo); await render(<ActiveWorkout />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Exercise options'}));
+  expect(screen.getByRole('button', {name: 'Skip exercise'})).toBeDisabled();
+});
+test('keypad auto-advance skips skipped entries and closes when only skipped entries remain', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start();
+  const first = store.addExercise(session.id, 'Bench Press', 1);
+  const skipped = store.addExercise(session.id, 'Squat', 1);
+  const next = store.addExercise(session.id, 'Dumbbell Row', 1);
+  const last = store.addExercise(session.id, 'Deadlift', 1);
+  store.skipExercise(skipped.id); store.skipExercise(last.id);
+  store.editDraft(first.id, 0, {weight: '100', reps: '8'});
+  activeRepository(repo); await render(<ActiveWorkout />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name: 'Bench Press, Set 1, Reps, 8'}));
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  await fireEvent.press(screen.getByTestId('keypad-key-7'));
+  expect(store.drafts(next.id)[0].weight).toBe('7');
+  expect(store.drafts(skipped.id)[0].weight).toBe('');
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  expect(screen.queryByTestId('keypad-sheet')).toBeNull();
+});
+
+test('template editor saves name/target edits without rest overrides, and only saves changed rest rows', async () => {
+  const { TemplateEditor } = require('../src/features/workout/templates') as typeof import('../src/features/workout/templates');
+  const { useLocalSearchParams } = require('expo-router');
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  Object.defineProperty(repo, 'syncFlags', {value: {syncedV1Columns: true}});
+  const routine = store.saveTemplate('Synthetic routine', ['Bench Press', 'Dumbbell Row'].map(exercise => ({exercise, target_sets: 3, target_reps: 8})));
+  useLocalSearchParams.mockReturnValue({id: routine.id});
+  const save = jest.spyOn(repo, 'save');
+  try {
+    activeRepository(repo); await render(<TemplateEditor />, {wrapper});
+    await fireEvent.changeText(screen.getByLabelText('Template name'), 'Renamed routine');
+    await fireEvent.changeText(screen.getByLabelText('Bench Press Target sets'), '4');
+    await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
+    expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(0);
+    expect(repo.localGet('rest:bench press')).toBeUndefined();
+    await fireEvent.press(screen.getAllByRole('button', {name: '120 seconds'})[1]);
+    await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
+    expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(1);
+    expect(JSON.parse(String(repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': 120});
+    expect(repo.localGet('rest:bench press')).toBeUndefined();
+  } finally { useLocalSearchParams.mockReturnValue({}); }
 });
