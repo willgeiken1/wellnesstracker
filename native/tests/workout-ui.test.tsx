@@ -509,7 +509,7 @@ test('suggestion card exposes a stable automation target', async () => {
   store.addExercise(store.start().id, 'Close-Grip Bench Press');
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  expect(screen.getByTestId('suggestion-card')).toHaveTextContent(/140 lb/);
+  expect(screen.getByTestId('suggestion-card')).toHaveTextContent(/145 lb/);
 });
 
 

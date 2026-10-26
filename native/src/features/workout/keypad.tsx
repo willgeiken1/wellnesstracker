@@ -26,6 +26,9 @@ export function Keypad({
   field,
   unit,
   equipment,
+  setupStep,
+  barWeight,
+  plateSet,
   value,
   previous,
   onChange,
@@ -37,6 +40,9 @@ export function Keypad({
   field: "weight" | "reps";
   unit: Unit;
   equipment: Equipment;
+  setupStep?: number;
+  barWeight?: number;
+  plateSet?: number[];
   value: string;
   previous: string;
   onChange: (value: string) => void;
@@ -57,8 +63,8 @@ export function Keypad({
     setLimitHint(false);
     setWheel(false);
   }
-  const increment = field === "reps" ? 1 : step(equipment, unit),
-    p = plates(Number(value), unit);
+  const increment = field === "reps" ? 1 : step(equipment, unit, setupStep),
+    p = plates(Number(value), unit, barWeight, plateSet);
   const change = (next: string) => {
     if (!validKeypadValue(next, field === "weight", unit)) {
       setLimitHint(true);
@@ -180,7 +186,7 @@ export function Keypad({
                   </ThemedText>{" "}
                   {plateLine || "—"}{" "}
                   {t("onBar")
-                    .replace("{weight}", unit === "lb" ? "45" : "20")
+                    .replace("{weight}", String(p.bar))
                     .replace("{unit}", unit)}
                 </ThemedText>
               </View>

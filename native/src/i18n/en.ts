@@ -1,4 +1,37 @@
 export const en = {
+  machineSetup: "Machine setup",
+  machineNotes: "Seat / pad / pin notes",
+  setupStep: "Step ({unit})",
+  barWeight: "Bar weight ({unit})",
+  exerciseUnit: "Exercise unit: {unit}",
+  defaultUnit: "Use profile unit",
+  saveSetup: "Save setup",
+  invalidSetup: "Enter a positive Step and a non-negative bar weight.",
+  gymPlates: "Gym plate set",
+  gymPlatesHelp: "Enter available plate sizes, separated by commas. Each size can be used in pairs. Leave blank for a bar only.",
+  availablePlates: "Available plates ({unit})",
+  savePlates: "Save plates ({unit})",
+  invalidPlates: "Enter positive plate sizes separated by commas.",
+  preferenceSaved: "Saved",
+  mainMuscle: "Main muscle: {muscle}",
+  helperMuscle: "Helper muscle: {muscle}",
+  muscleFilter: "Muscle: {muscle}",
+  equipmentChoice: "Equipment: {equipment}",
+  allMuscles: "All muscles",
+  allEquipment: "All equipment",
+  customMuscles: "Main muscle (required)",
+  customEquipment: "Equipment (required)",
+  customHelpers: "Helper muscles (optional)",
+  saveExercise: "Save exercise",
+  customExerciseError: "Choose a main muscle and equipment, and use a unique exercise name.",
+  muscle_chest: "Chest", muscle_quads: "Quads", muscle_hamstrings: "Hamstrings",
+  muscle_glutes: "Glutes", muscle_calves: "Calves", muscle_abs: "Abs",
+  muscle_obliques: "Obliques", muscle_biceps: "Biceps", muscle_triceps: "Triceps",
+  muscle_forearms: "Forearms", muscle_frontDelts: "Front delts", muscle_sideDelts: "Side delts",
+  muscle_rearDelts: "Rear delts", muscle_traps: "Traps", muscle_lats: "Lats",
+  muscle_upperBack: "Upper back", muscle_lowerBack: "Lower back",
+  muscle_abductors: "Abductors", muscle_adductors: "Adductors",
+
   plans: "Plans",
   editPlan: "Edit plan",
   savePlan: "Save plan",
@@ -242,3 +275,5 @@ export function pluralize(count: number, noun: 'set' | 'rep' | 'exercise' | 'tok
 export function workingSetsPhrase(count: number) {
   return count === 1 ? 'on your 1 working set' : count === 2 ? 'on both sets' : `on all ${count} working sets`;
 }
+
+export function muscleLabel(muscle: string) { return en[`muscle_${muscle}` as keyof typeof en] ?? muscle; }

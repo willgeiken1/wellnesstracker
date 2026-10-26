@@ -2,7 +2,7 @@ import { t } from '../../i18n/en';
 import { Repository } from '../repository';
 import type { Row } from '../rows';
 import { compareRows } from '../rows';
-import { exerciseFor } from '../../core/workout/library';
+import { WorkoutPreferences } from '../../features/workout/preferences';
 import { attribute, cardKey, detectPR, displayWeight, fromKg, localDay, shouldShowCard, suggestion, toKg, validateDate, validateSet, weekOf, type Unit, type WorkingSet } from '../../core/workout/rules';
 export interface Draft {
   weight: string;
@@ -28,9 +28,12 @@ export interface TemplateExercise {
 const order = (rows: Row[]) => rows.sort((a, b) => Number(a.data.position) - Number(b.data.position) || a.id.localeCompare(b.id));
 export class WorkoutStore {
   constructor(readonly repo: Repository, readonly viewRevision = 0) {}
-  unit(): Unit {
-    return this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
+  unit(entryId?: string): Unit {
+    const fallback = this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
+    const entry = entryId ? this.repo.get('entries', entryId) : undefined;
+    return entry ? this.preferences().unit(String(entry.data.exercise), fallback) : fallback;
   }
+  preferences() { return new WorkoutPreferences(this.repo); }
   templates() {
     return order(this.repo.list('routines'));
   }
@@ -168,7 +171,7 @@ export class WorkoutStore {
       result[i] = {
         ...result[i],
         setId: s.id,
-        weight: String(displayWeight(Number(s.data.weight_kg), this.unit())),
+        weight: String(displayWeight(Number(s.data.weight_kg), this.unit(entryId))),
         reps: String(s.data.reps)
       };
     });
@@ -187,16 +190,16 @@ export class WorkoutStore {
     };
     this.repo.atomic(() => {
       if (d.setId) {
-        const v = validateSet(drafts[index].weight, drafts[index].reps, this.unit());
+        const v = validateSet(drafts[index].weight, drafts[index].reps, this.unit(entryId));
         if (!v.valid) throw Error('Invalid set.');
         const previous = this.repo.get('sets', d.setId)!;
         this.repo.save('sets', {
           ...previous.data,
           reps: Number(drafts[index].reps),
           ...(patch.weight !== undefined ? {
-            weight_kg: toKg(Number(patch.weight), this.unit()),
+            weight_kg: toKg(Number(patch.weight), this.unit(entryId)),
             entered_value: Number(patch.weight),
-            entered_unit: this.unit()
+            entered_unit: this.unit(entryId)
           } : {})
         }, d.setId);
       }
@@ -235,9 +238,9 @@ export class WorkoutStore {
     return this.repo.save('sets', {
       entry_id: entryId,
       position: index,
-      weight_kg: toKg(Number(d.weight), this.unit()),
+      weight_kg: toKg(Number(d.weight), this.unit(entryId)),
       entered_value: Number(d.weight),
-      entered_unit: this.unit(),
+      entered_unit: this.unit(entryId),
       reps: Number(d.reps)
     }, id);
   }
@@ -251,7 +254,7 @@ export class WorkoutStore {
         this.repo.remove('sets', d.setId);
         d.setId = undefined;
       } else {
-        if (!validateSet(d.weight, d.reps, this.unit()).valid) throw Error('Invalid set.');
+        if (!validateSet(d.weight, d.reps, this.unit(entryId)).valid) throw Error('Invalid set.');
         d.setId = this.writeSet(entryId, index, d).id;
         const entry = this.repo.get('entries', entryId)!;
         const seconds = this.repo.localGet<number>(`rest:${String(entry.data.exercise).toLowerCase()}`) ?? Number(this.repo.list('settings').sort(compareRows).at(-1)?.data.rest_seconds ?? 90);
@@ -293,22 +296,22 @@ export class WorkoutStore {
     }));
   }
   suggestion(entry: Row) {
-    const unit = this.unit(),
-      equipment = exerciseFor(String(entry.data.exercise)).equipment;
+    const unit = this.unit(entry.id),
+      equipment = this.preferences().exercise(String(entry.data.exercise)).equipment;
     const previous = this.previous(entry).map(s => ({
       weight: displayWeight(Number(s.data.weight_kg), unit),
       reps: Number(s.data.reps),
       done: true,
       warmup: this.repo.localGet<Draft[]>(`draft:${String(s.data.entry_id)}`)?.[Number(s.data.position)]?.warmup
     }));
-    return suggestion(previous, equipment, unit, this.repo.localGet<number>(`target:${entry.id}`));
+    return suggestion(previous, equipment, unit, this.repo.localGet<number>(`target:${entry.id}`), this.preferences().increment(String(entry.data.exercise), unit));
   }
   showCard(entry: Row) {
-    return shouldShowCard(String(entry.data.exercise), this.suggestion(entry), this.unit(), this.repo.localGet<string[]>('suggestions') ?? []);
+    return shouldShowCard(String(entry.data.exercise), this.suggestion(entry), this.unit(entry.id), this.repo.localGet<string[]>('suggestions') ?? []);
   }
   markCard(entry: Row) {
     const s = this.suggestion(entry);
-    if (s.weight !== null) this.repo.localSave('suggestions', [...new Set([...(this.repo.localGet<string[]>('suggestions') ?? []), cardKey(String(entry.data.exercise), s.weight, this.unit())])]);
+    if (s.weight !== null) this.repo.localSave('suggestions', [...new Set([...(this.repo.localGet<string[]>('suggestions') ?? []), cardKey(String(entry.data.exercise), s.weight, this.unit(entry.id))])]);
   }
   timer() {
     return this.repo.localGet<TimerState | null>('timer');
@@ -406,7 +409,7 @@ export class WorkoutStore {
     for (const s of this.history()) {
       const week = weekOf(new Date(`${String(s.data.day)}T12:00:00`)),
         totals = attribute(this.entries(s.id).map(e => {
-          const ex = exerciseFor(String(e.data.exercise));
+          const ex = this.preferences().exercise(String(e.data.exercise));
           return {
             ...ex,
             sets: this.working(e)

@@ -7,7 +7,7 @@ import { Button } from "@/components/button";
 import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
-import { exerciseFor } from "@/core/workout/library";
+import { MachineSetup } from "./machine-setup";
 import { displayWeight, nextField, validateSet } from "@/core/workout/rules";
 import type { Row } from "@/data/rows";
 import type { WorkoutStore } from "@/data/workout/store";
@@ -151,7 +151,7 @@ function Logger({
     if (sg.jump && sg.weight !== null) return String(sg.weight);
     if (previous)
       return String(
-        displayWeight(Number(previous.data.weight_kg), store.unit()),
+        displayWeight(Number(previous.data.weight_kg), store.unit(entry.id)),
       );
     // A session without a matching history hint carries the preceding set's weight only.
     const preceding = store
@@ -204,7 +204,7 @@ function Logger({
       !validateSet(
         cursor.field === "weight" ? value : d.weight,
         cursor.field === "reps" ? value : d.reps,
-        store.unit(),
+        store.unit(cursor.entryId),
       ).valid
     ) {
       setError(t("invalidSet"));
@@ -251,7 +251,7 @@ function Logger({
     const check = validateSet(
       cursor.field === "weight" ? value : d.weight,
       cursor.field === "reps" ? value : d.reps,
-      store.unit(),
+      store.unit(cursor.entryId),
       baseline ? Number(baseline.data.weight_kg) : undefined,
     );
     if (d.setId && value !== d[cursor.field] && check.warning)
@@ -276,7 +276,7 @@ function Logger({
     const check = validateSet(
       effective.weight,
       effective.reps,
-      store.unit(),
+      store.unit(entry.id),
       store.previous(entry)[index]
         ? Number(store.previous(entry)[index].data.weight_kg)
         : undefined,
@@ -498,8 +498,8 @@ function Logger({
                   </ThemedText>
                   <ThemedText muted style={{ fontSize: 13, lineHeight: 16 }}>
                     {collapsed
-                      ? `${pluralize(completed, "set")} · ${Math.round(store.sets(e.id).reduce((sum, set) => sum + displayWeight(Number(set.data.weight_kg), store.unit()) * Number(set.data.reps), 0)).toLocaleString()} ${store.unit()}${complete ? "" : ` · ${pluralize(ds.length - completed, "left")}`}`
-                      : `${exerciseIndex > firstPending && !completed ? t("upNext") : equipmentLabel(exerciseFor(String(e.data.exercise)).equipment)} · ${pluralize(ds.length, "set")}`}
+                      ? `${pluralize(completed, "set")} · ${Math.round(store.sets(e.id).reduce((sum, set) => sum + displayWeight(Number(set.data.weight_kg), store.unit(e.id)) * Number(set.data.reps), 0)).toLocaleString()} ${store.unit(e.id)}${complete ? "" : ` · ${pluralize(ds.length - completed, "left")}`}`
+                      : `${exerciseIndex > firstPending && !completed ? t("upNext") : equipmentLabel(store.preferences().exercise(String(e.data.exercise)).equipment)} · ${pluralize(ds.length, "set")}`}
                   </ThemedText>
                 </Pressable>
                 {compact && (
@@ -563,6 +563,7 @@ function Logger({
               </View>
               {!collapsed && (
                 <>
+                  <MachineSetup store={store} name={String(e.data.exercise)} />
                   <View style={layout.row}>
                     <ThemedText
                       muted
@@ -596,7 +597,7 @@ function Logger({
                         textAlign: "center",
                       }}
                     >
-                      {store.unit().toUpperCase()}
+                      {store.unit(e.id).toUpperCase()}
                     </ThemedText>
                     <ThemedText
                       muted
@@ -629,7 +630,7 @@ function Logger({
                           draft={d}
                           previous={
                             previous.find((s) => Number(s.data.position) === i)
-                              ? `${displayWeight(Number(previous.find((s) => Number(s.data.position) === i)!.data.weight_kg), store.unit())} × ${previous.find((s) => Number(s.data.position) === i)!.data.reps}`
+                              ? `${displayWeight(Number(previous.find((s) => Number(s.data.position) === i)!.data.weight_kg), store.unit(e.id))} × ${previous.find((s) => Number(s.data.position) === i)!.data.reps}`
                               : ""
                           }
                           hint={weightHint(e, i)}
@@ -701,6 +702,7 @@ function Logger({
         />
         {picker && (
           <ExercisePicker
+            store={store}
             onClose={() => setPicker(false)}
             onPick={(name) =>
               run(() => {
@@ -715,12 +717,15 @@ function Logger({
             inputId={`${cursor.entryId}:${cursor.index}:${cursor.field}`}
             label={`${current.data.exercise} · ${t("set")} ${cursor.index + 1} · ${t(cursor.field)}`}
             field={cursor.field}
-            unit={store.unit()}
-            equipment={exerciseFor(String(current.data.exercise)).equipment}
+            unit={store.unit(current.id)}
+            setupStep={store.preferences().increment(String(current.data.exercise), store.unit(current.id))}
+            barWeight={store.preferences().machine(String(current.data.exercise)).bar_weight}
+            plateSet={store.preferences().plateSet(store.unit(current.id))}
+            equipment={store.preferences().exercise(String(current.data.exercise)).equipment}
             value={value}
             previous={
               store.previous(current)[cursor.index]
-                ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit())} × ${store.previous(current)[cursor.index].data.reps}`
+                ? `${displayWeight(Number(store.previous(current)[cursor.index].data.weight_kg), store.unit(current.id))} × ${store.previous(current)[cursor.index].data.reps}`
                 : ""
             }
             onChange={input}
@@ -767,7 +772,7 @@ function JumpCard({ store, entry }: { store: WorkoutStore; entry: Row }) {
   if (!visible || !sg.jump) return null;
   const lead = t("jumpLead")
     .replace("{weight}", String(sg.weight))
-    .replace("{unit}", store.unit());
+    .replace("{unit}", store.unit(entry.id));
   const explanation = t("jumpExplanation")
     .replace("Try {weight} {unit}. ", "")
     .replace("{reps}", pluralize(sg.target ?? 0, "rep"))
