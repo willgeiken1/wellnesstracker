@@ -513,6 +513,23 @@ test('suggestion card exposes a stable automation target', async () => {
 });
 
 
+test('bodyweight has no Try weight suggestion even with a saved Step', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), start = Date.now() - 120000;
+  const prior = store.start(undefined, start), entry = store.addExercise(prior.id, 'Pull-Up', 1);
+  store.editDraft(entry.id, 0, { weight: '0', reps: '8' });
+  store.toggleDone(entry.id, 0);
+  store.finish(prior.id, { startedAt: start, finishedAt: Date.now() - 60000, notes: '' });
+  store.preferences().saveMachine('Pull-Up', { text: '', step: 10 });
+  const current = store.addExercise(store.start().id, 'Pull-Up');
+  expect(store.suggestion(current)).toMatchObject({ weight: 0, jump: false });
+  expect(store.showCard(current)).toBe(false);
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  expect(screen.queryByTestId('suggestion-card')).toBeNull();
+  expect(screen.queryByText(/Try \d.*(?:lb|kg)/)).toBeNull();
+});
+
+
 test('exercise options can cancel and reopen, then add a set', async () => {
   const repo = memoryRepository(), store = new WorkoutStore(repo);
   const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');

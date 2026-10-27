@@ -21,6 +21,7 @@ export function displayWeight(kg: number, unit: Unit) {
 }
 export function step(equipment: Equipment, unit: Unit, stack?: number) {
   if (equipment === 'bodyweight' || equipment === 'other') return 0;
+  if (stack !== undefined && Number.isFinite(stack) && stack > 0) return stack;
   return equipment === 'machine' || equipment === 'cable' ? stack ?? (unit === 'lb' ? 10 : 5) : unit === 'lb' ? 5 : 2.5;
 }
 const working = (sets: WorkingSet[]) => sets.filter(s => s.done && !s.warmup);
@@ -156,22 +157,30 @@ export function weekOf(d: Date) {
   start.setDate(start.getDate() - (start.getDay() + 6) % 7);
   return localDay(start);
 }
-export function plates(weight: number, unit: Unit) {
-  const bar = unit === 'lb' ? 45 : 20,
-    sizes = unit === 'lb' ? [45, 35, 25, 10, 5, 2.5] : [25, 20, 15, 10, 5, 2.5, 1.25];
+export const defaultPlates = (unit: Unit) => unit === 'lb' ? [45, 35, 25, 10, 5, 2.5] : [25, 20, 15, 10, 5, 2.5, 1.25];
+export function plates(weight: number, unit: Unit, bar = unit === 'lb' ? 45 : 20, available = defaultPlates(unit)) {
+  const sizes = [...new Set(available)].filter(p => Number.isFinite(p) && p > 0 && p <= 1000).sort((a, b) => b - a);
   // Reject legacy/invalid drafts before constructing a plate list.
-  if (!Number.isFinite(weight) || weight < 0 || toKg(weight, unit) > 1000) return { bar, plates: [], remainder: 0 };
-  let remainder = (weight - bar) / 2;
-  const result: number[] = [];
-  for (const plate of sizes) while (remainder + 1e-8 >= plate && result.length < 1000) {
-    result.push(plate);
-    remainder -= plate;
+  if (!Number.isFinite(weight) || !Number.isFinite(bar) || bar < 0 || weight < 0 || toKg(weight, unit) > 1000) return { bar, plates: [], remainder: 0 };
+  const target = Math.round((weight - bar) * 50);
+  if (target < 0) return { bar, plates: [], remainder: rounded((weight - bar) / 2) };
+  // Integer hundredths avoid decimal drift and support non-standard plate sets.
+  const choice = new Int32Array(target + 1).fill(-1);
+  choice[0] = 0;
+  for (let amount = 1; amount <= target; amount++) {
+    for (const size of sizes) {
+      const ticks = Math.round(size * 100);
+      if (ticks > 0 && ticks <= amount && choice[amount - ticks] !== -1) {
+        choice[amount] = ticks;
+        break;
+      }
+    }
   }
-  return {
-    bar,
-    plates: result,
-    remainder: rounded(remainder)
-  };
+  let reached = target;
+  while (reached > 0 && choice[reached] === -1) reached--;
+  const result: number[] = [];
+  for (let amount = reached; amount > 0; amount -= choice[amount]) result.push(choice[amount] / 100);
+  return { bar, plates: result.sort((a, b) => b - a), remainder: rounded((target - reached) / 100) };
 }
 /** Allows an unfinished decimal while keeping keypad edits inside the entry limits. */
 export function validKeypadValue(value: string, decimal: boolean, unit: Unit) {

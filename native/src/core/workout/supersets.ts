@@ -17,10 +17,10 @@ export function loggerOrder(entries: RotationEntry[]) {
   }
   return slots;
 }
-export function rangeSuggestion(previous: WorkingSet[], equipment: Equipment, unit: Unit, range: RepRange) {
+export function rangeSuggestion(previous: WorkingSet[], equipment: Equipment, unit: Unit, range: RepRange, stack?: number) {
   const sets = previous.filter(s => s.done && !s.warmup), last = sets.at(-1);
-  if (!last) return {...suggestion([],equipment,unit,range.min), target:range.min};
-  const increment = step(equipment,unit), hit = sets.every(s => s.reps >= range.max), jump = hit && increment > 0;
+  if (!last) return {...suggestion([],equipment,unit,range.min,stack), target:range.min};
+  const increment = step(equipment,unit,stack), hit = sets.every(s => s.reps >= range.max), jump = hit && increment > 0;
   return {weight:rounded(last.weight+(jump ? increment : 0)), previous:last.weight, jump,
     target:jump ? range.min : Math.min(range.max,Math.max(range.min,Math.min(...sets.map(s => s.reps))+1)),count:sets.length};
 }
