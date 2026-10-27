@@ -1,0 +1,31 @@
+# Age-gate smoke flow for a synthetic configured development build.
+# Do not run against a signed-in installation.
+# Full 3-screen success and sample carry-over are covered with synthetic clients
+# in Jest; this flow intentionally never submits credentials to a service.
+appId: com.insightwellness.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Look around first"
+- tapOn: "Get started"
+- assertVisible: "Step 2 of 3"
+- tapOn: "Date of birth (YYYY-MM-DD)"
+- inputText: "2020-01-01"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "onboarding-create-account"
+- tapOn:
+    id: "onboarding-create-account"
+- assertVisible: "Ages 13+"
+- assertNotVisible: "Create account"
+- tapOn: "Back to Welcome"
+- assertVisible: "Look around first"
+- tapOn: "Get started"
+- tapOn: "Date of birth (YYYY-MM-DD)"
+- inputText: "2000-01-01"
+- hideKeyboard
+- assertVisible: "Step 2 of 3"
+- scrollUntilVisible:
+    element: "Email"
+- assertVisible: "Email"

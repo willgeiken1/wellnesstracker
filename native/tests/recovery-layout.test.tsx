@@ -1,6 +1,9 @@
-import { render } from '@testing-library/react-native';
+import { router } from 'expo-router';
+import { memoryRepository } from './workout-repository';
+import { act, render, fireEvent } from '@testing-library/react-native';
 import RootLayout from '../src/app/_layout';
 import { AuthContext, type AuthState } from '../src/auth/provider';
+jest.mock('expo-router',()=>{const actual=jest.requireActual('expo-router');const Stack=({children}:{children:React.ReactNode})=>children;Stack.Screen=()=>null;Stack.Protected=({children,guard}:{children:React.ReactNode;guard:boolean})=>guard?children:null;return {...actual,Stack,router:{...actual.router,replace:jest.fn()}};});
 jest.mock('expo-font',()=>({useFonts:()=>[true,null]}));
 jest.mock('../src/auth/provider',()=>{
  const actual=jest.requireActual('../src/auth/provider');
@@ -25,4 +28,31 @@ test('production root shows boot recovery with private routes and technical erro
  expect(view.queryByText('Local data is unavailable.')).toBeNull();
  expect(view.queryByText('DatabaseMigrationError')).toBeNull();
  expect(view.queryByRole('button',{name:'Start freestyle'})).toBeNull();
+});
+
+
+test.each([null,'2000-01-01'])('new-device sign-in waits for server profile and skips onboarding even with DOB %s',async dob=>{
+ jest.mocked(router.replace).mockClear();const repository=memoryRepository();
+ const auth:AuthState={session:{user:{id:'synthetic'}} as AuthState['session'],demo:false,ready:true,configured:true,configError:null,repository,pending:0,conflicts:0,syncStatus:'idle',initialPullComplete:false,lookAround:jest.fn(),signIn:jest.fn(),createAccount:jest.fn(),signOut:jest.fn(),syncNow:jest.fn()};
+ const view=await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);
+ expect(router.replace).not.toHaveBeenCalled();
+ await act(async()=>{repository.save('profile',{name:'Server synthetic',weight_unit:'kg',height_m:1.8,dob});});
+ await view.rerender(<AuthContext.Provider value={{...auth,initialPullComplete:true}}><RootLayout/></AuthContext.Provider>);
+ expect(router.replace).not.toHaveBeenCalled();expect(repository.list('profile')).toHaveLength(1);
+ expect(repository.list('profile')[0].data).toMatchObject({name:'Server synthetic',weight_unit:'kg',height_m:1.8});
+ expect(repository.list('food_targets')).toEqual([]);expect(repository.list('weigh_ins')).toEqual([]);
+});
+test('redirect is re-evaluated after a successful pull for an account without a profile',async()=>{
+ jest.mocked(router.replace).mockClear();const repository=memoryRepository();
+ const auth:AuthState={session:{user:{id:'synthetic'}} as AuthState['session'],demo:false,ready:true,configured:true,configError:null,repository,pending:0,conflicts:0,syncStatus:'idle',initialPullComplete:false,lookAround:jest.fn(),signIn:jest.fn(),createAccount:jest.fn(),signOut:jest.fn(),syncNow:jest.fn()};
+ const view=await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);expect(router.replace).not.toHaveBeenCalled();
+ await view.rerender(<AuthContext.Provider value={{...auth,initialPullComplete:true}}><RootLayout/></AuthContext.Provider>);expect(router.replace).toHaveBeenCalledWith('/onboarding');
+});
+
+test('root surfaces a retry after demo transfer failure while account remains available',async()=>{
+ const retryDemoTransfer=jest.fn();
+ const auth:AuthState={session:null,demo:false,ready:false,configured:true,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',demoTransferError:true,retryDemoTransfer,lookAround:jest.fn(),signIn:jest.fn(),createAccount:jest.fn(),signOut:jest.fn(),syncNow:jest.fn()};
+ const view=await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);
+ expect(view.getByRole('alert')).toHaveTextContent(/Your account is ready/);
+ await fireEvent.press(view.getByRole('button',{name:'Try again'}));expect(retryDemoTransfer).toHaveBeenCalled();
 });

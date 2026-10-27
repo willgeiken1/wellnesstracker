@@ -20,6 +20,7 @@ jest.mock('expo-keep-awake', () => ({ useKeepAwake: jest.fn() }));
 jest.mock('../src/features/workout/haptics', () => ({tick: jest.fn(), restBuzz: jest.fn(), signatureBuzz: jest.fn()}));
 
 const routes = {
+  'sign-in': () => null,
   _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
   '(tabs)/index': () => <Text>Home</Text>,
   'dev/logger-fixture': LoggerFixtureRoute,

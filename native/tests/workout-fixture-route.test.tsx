@@ -101,3 +101,15 @@ test("a repository revision before navigation cannot seed a second fixture", asy
   expect(repo.list("sessions")).toHaveLength(count);
   expect(router.replace).not.toHaveBeenCalled();
 });
+
+test('all generated logger sample rows are excluded from demo account carry-over',async()=>{
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const {db,repo,sqlite}=await localDatabase();
+ const demo=new Repository(db,'demo',DEVICE_A,randomUUID);
+ const food=demo.save('food_entries',{name:'Synthetic user entry',day:'2026-10-27'});
+ createLoggerFixture(new WorkoutStore(demo),{isDev:true,demo:true,signedIn:false},'summary');
+ expect(demo.list('sessions').length).toBeGreaterThan(1);
+ promoteDemo(demo,repo);
+ expect(repo.list('sessions')).toEqual([]);expect(repo.list('sets')).toEqual([]);
+ expect(repo.get('food_entries',food.id)).toBeDefined();expect(repo.pending()).toHaveLength(1);sqlite.close();
+});

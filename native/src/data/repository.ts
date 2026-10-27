@@ -171,6 +171,13 @@ export class Repository {
       });
     });
   }
+  /** Demo carry-over only; caller owns the shared database transaction. */
+  clearDemoForTransfer() {
+    if (this.owner !== 'demo' || !this.batch.depth) throw new Error('Demo transfer transaction required.');
+    for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
+      this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
+    }
+  }
   /** Atomic account departure, including local-only caches and flagged outbox rows. */
   wipe() {
     this.outsideAtomic();

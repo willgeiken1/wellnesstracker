@@ -20,13 +20,15 @@ jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), cle
 jest.mock('../src/auth/sign-out-storage',()=>({signOutStorage:{read:jest.fn(async()=>null),write:jest.fn(async()=>{}),remove:jest.fn(async()=>{})}}));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../fixtures/demo', () => ({ seedDemo: jest.fn() }));
+jest.mock('../src/features/onboarding/demo-transfer',()=>({assertDemoTransferSafe:jest.fn(),promoteDemo:jest.fn()}));
 const mockTransportCreated=jest.fn();
+const mockPull=jest.fn(async(..._args:unknown[])=>[] as unknown[]);
 const mockPush = jest.fn<Promise<void>, []>();
 jest.mock('../src/data/sync/supabase', () => ({ SupabaseTransport: class {
   owner: string;
   constructor(_client: unknown, owner: string) { this.owner=owner;mockTransportCreated(owner); }
   push() { return mockPush(); }
-  async pull() { return []; }
+  async pull(...args:unknown[]) { return mockPull(...args); }
 }}));
 jest.mock('expo-network', () => ({ addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })) }));
 
@@ -60,7 +62,7 @@ const storedItems=new Map<string,string>();
 const ownerKey='insight.last-signed-in-owner.v1';
 let observed: AuthState;
 function Probe() { observed = useAuth(); return null; }
-beforeEach(() => { storedItems.clear();jest.mocked(SecureStore.getItemAsync).mockReset().mockImplementation(async key=>storedItems.get(key)??null);jest.mocked(SecureStore.setItemAsync).mockReset().mockImplementation(async(key,value)=>{storedItems.set(key,value);});jest.mocked(SecureStore.deleteItemAsync).mockReset().mockImplementation(async key=>{storedItems.delete(key);}); mockTransportCreated.mockClear(); jest.mocked(signOutStorage.read).mockReset();jest.mocked(signOutStorage.read).mockResolvedValue(null);jest.mocked(signOutStorage.write).mockReset();jest.mocked(signOutStorage.write).mockResolvedValue();jest.mocked(signOutStorage.remove).mockReset();jest.mocked(signOutStorage.remove).mockResolvedValue();jest.mocked(getAuthClient).mockReset();jest.mocked(getAuthClient).mockReturnValue(null);jest.mocked(clearLocalSession).mockReset();jest.mocked(clearLocalSession).mockResolvedValue(); jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({remove:jest.fn()})); mockPush.mockReset(); mockPush.mockResolvedValue(undefined); });
+beforeEach(() => { storedItems.clear();jest.mocked(SecureStore.getItemAsync).mockReset().mockImplementation(async key=>storedItems.get(key)??null);jest.mocked(SecureStore.setItemAsync).mockReset().mockImplementation(async(key,value)=>{storedItems.set(key,value);});jest.mocked(SecureStore.deleteItemAsync).mockReset().mockImplementation(async key=>{storedItems.delete(key);}); mockPull.mockReset().mockResolvedValue([]);mockTransportCreated.mockClear(); jest.mocked(signOutStorage.read).mockReset();jest.mocked(signOutStorage.read).mockResolvedValue(null);jest.mocked(signOutStorage.write).mockReset();jest.mocked(signOutStorage.write).mockResolvedValue();jest.mocked(signOutStorage.remove).mockReset();jest.mocked(signOutStorage.remove).mockResolvedValue();jest.mocked(getAuthClient).mockReset();jest.mocked(getAuthClient).mockReturnValue(null);jest.mocked(clearLocalSession).mockReset();jest.mocked(clearLocalSession).mockResolvedValue(); jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({remove:jest.fn()})); mockPush.mockReset(); mockPush.mockResolvedValue(undefined); });
 
 test('restores session, reacts to AppState, switches A to B during upload and isolates pending rows', async () => {
   const a = fixtureRepo(OWNER_A), b = fixtureRepo(OWNER_B), guest = fixtureRepo('guest');
@@ -614,4 +616,72 @@ test.each(['demo','guest','not-an-owner'])('boot-error rejects a stored syntheti
  const view=await render(<AuthProvider client={clientFixture().client}><Probe/></AuthProvider>);
  await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
  expect(observed.bootExportOwner?.()).toBeNull();expect(SecureStore.setItemAsync).not.toHaveBeenCalled();await view.unmount();
+});
+
+test('createAccount rejects under-13 and missing DOB before auth or local writes',async()=>{
+ const guest=fixtureRepo('guest');const fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>guest,wipeAll:jest.fn()});
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{
+   expect(await observed.createAccount('synthetic@example.test','synthetic-password','2020-01-01')).toBe('invalidProfile');
+   expect(await observed.createAccount('synthetic@example.test','synthetic-password')).toBe('invalidProfile');
+   expect(await observed.createAccount('synthetic@example.test','synthetic-password','2000-01-01')).toBe('invalidProfile');
+ });
+ expect(fixture.auth.signUp).not.toHaveBeenCalled();expect(guest.pending()).toHaveLength(0);
+});
+
+test('confirmation-only signup cannot promote demo into a later different account',async()=>{
+ const {memoryRepository}=require('./workout-repository') as typeof import('./workout-repository');
+ const repos=new Map<string,Repository>();const repo=(owner:string)=>{if(!repos.has(owner))repos.set(owner,Object.assign(memoryRepository(),{owner,syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>[],conflicts:()=>[],cursor:()=> '0',applyPage:jest.fn()}));return repos.get(owner)!;};
+ const fixture=clientFixture(null);repo('device').localSave('demoUpgradePending',true);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:repo,wipeAll:jest.fn()});
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ jest.mocked(promoteDemo).mockReset();
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.demo).toBe(true));
+ await act(async()=>{expect(await observed.createAccount('fixture@example.test','synthetic-password','2000-01-01')).toBe('confirmEmail');});
+ await act(async()=>{fixture.emit(session(OWNER_B));});await waitFor(()=>expect(observed.initialPullComplete).toBe(true));
+ expect(promoteDemo).not.toHaveBeenCalled();expect(repo('device').localGet('demoUpgradePending')).toBe(false);
+});
+
+test('demo transfer waits for pull; failure leaves the account usable and demo recoverable with retry',async()=>{
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),account=fixtureRepo(OWNER_A);
+ const fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='demo'?demo:owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const promotion=jest.mocked(promoteDemo);promotion.mockReset().mockImplementationOnce(()=>{throw new Error('Synthetic transfer failure');});
+ fixture.auth.signInWithPassword.mockImplementation(async()=>({data:{session:session(OWNER_A)},error:null}));
+ const pull=deferred<unknown[]>();mockPull.mockImplementationOnce(()=>pull.promise);
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.demo).toBe(true));
+ await act(async()=>{await observed.signIn('fixture@example.test','synthetic-password');fixture.emit(session(OWNER_A));});
+ await waitFor(()=>expect(observed.repository).toBe(account));expect(promotion).not.toHaveBeenCalled();expect(observed.initialPullComplete).toBe(false);
+ await act(async()=>{pull.resolve([]);});await waitFor(()=>expect(observed.demoTransferError).toBe(true));
+ expect(observed.ready).toBe(true);expect(observed.repository).toBe(account);expect(demo.wipe).not.toHaveBeenCalled();
+ await act(async()=>{observed.retryDemoTransfer?.();});await waitFor(()=>expect(promotion).toHaveBeenCalledTimes(2));expect(observed.demoTransferError).toBe(false);
+ await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(2);promotion.mockReset();
+});
+
+test('abandoned in-flight demo sign-in cannot promote into another account',async()=>{
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),account=fixtureRepo(OWNER_B),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='demo'?demo:owner===OWNER_B?account:guest,wipeAll:jest.fn()});
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');jest.mocked(promoteDemo).mockReset();
+ const result=deferred<{error:null;data:{session:Session}}>();fixture.auth.signInWithPassword.mockImplementation(()=>result.promise);
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.demo).toBe(true));
+ let request!:Promise<string|null>;await act(async()=>{request=observed.signIn('fixture@example.test','synthetic');});
+ await act(async()=>{observed.cancelAuthFlow?.();fixture.emit(session(OWNER_B));result.resolve({error:null,data:{session:session(OWNER_A)}});await request;});
+ await waitFor(()=>expect(observed.initialPullComplete).toBe(true));expect(promoteDemo).not.toHaveBeenCalled();
+});
+
+test('unknown legacy demo provenance stops before any account request and preserves demo',async()=>{
+ const {assertDemoTransferSafe}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const check=jest.mocked(assertDemoTransferSafe);check.mockImplementation(()=>{throw new Error('Synthetic unknown provenance');});
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='demo'?demo:guest,wipeAll:jest.fn()});
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.repository).toBe(demo));
+ await act(async()=>{expect(await observed.createAccount('synthetic@example.test','synthetic-password','2000-01-01')).toBe('demoCarryUnavailable');});
+ expect(fixture.auth.signUp).not.toHaveBeenCalled();expect(demo.wipe).not.toHaveBeenCalled();expect(observed.demo).toBe(true);check.mockReset();
 });
