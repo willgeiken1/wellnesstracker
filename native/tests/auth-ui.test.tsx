@@ -17,7 +17,7 @@ test('unset config offers demo and explains disabled authentication',async()=>{
  await fireEvent.press(screen.getByRole('button',{name:'Look around first'}));expect(auth.lookAround).toHaveBeenCalled();
 });
 test('create validates email, minimum password length and confirmation inline before client calls',async()=>{
- const auth=state();await wrap(<AuthForm create/>,auth);
+ const auth=state();await wrap(<AuthForm create dob="2000-01-01"/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Create account'}));expect(auth.createAccount).not.toHaveBeenCalled();
  await fireEvent.changeText(screen.getByLabelText('Email'),'fixture@example.test');
  await fireEvent.changeText(screen.getByLabelText('Password'),'short');
@@ -26,7 +26,7 @@ test('create validates email, minimum password length and confirmation inline be
  await fireEvent.changeText(screen.getByLabelText('Confirm password'),'different');
  await fireEvent.press(screen.getByRole('button',{name:'Create account'}));expect(screen.getByRole('alert')).toHaveTextContent('Passwords must match.');
  await fireEvent.changeText(screen.getByLabelText('Confirm password'),'fixture-password');
- await fireEvent.press(screen.getByRole('button',{name:'Create account'}));expect(auth.createAccount).toHaveBeenCalledWith('fixture@example.test','fixture-password');
+ await fireEvent.press(screen.getByRole('button',{name:'Create account'}));expect(auth.createAccount).toHaveBeenCalledWith('fixture@example.test','fixture-password','2000-01-01');
 });
 test('sign-in maps raw client failure to generic safe error',async()=>{
  const auth={...state(),signIn:jest.fn(async()=> 'authFailed')};await wrap(<AuthForm/>,auth);

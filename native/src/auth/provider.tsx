@@ -13,6 +13,8 @@ import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
+import { ageOn } from '../features/onboarding/model';
+import { assertDemoTransferSafe, promoteDemo } from '../features/onboarding/demo-transfer';
 // Clear the hint for every resumed departure phase, before recovery can wipe/remove its marker.
 const bootSignOutStorage: typeof signOutStorage={
   async read(){const marker=await signOutStorage.read();if(marker)await lastOwnerStorage.clear();return marker;},
@@ -26,7 +28,7 @@ export interface AuthState {
   bootExportOwner?(): string | null;
   recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
-  createAccount(email: string,password: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  createAccount(email: string,password: string,dob?: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
 }
 export const AuthContext = createContext<AuthState | null>(null);
 export function useAuth() { const value=useContext(AuthContext);if(!value)throw new Error('AuthProvider is required.');return value; }
@@ -103,6 +105,13 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       if(!active)return;
       const repo=database.forOwner(owner);
       if(owner==='demo')seedDemo(repo);
+      if(!['demo','guest'].includes(owner)) {
+        const device=database.forOwner('device');
+        if(device.localGet?.('demoUpgradePending')) {
+          promoteDemo(database.forOwner('demo'),repo);
+          device.localSave('demoUpgradePending',false);
+        }
+      }
       setRepository(repo);setDataError(false);
     }).catch(()=>{if(active)setDataError(true);});
     return ()=>{active=false;};
@@ -149,11 +158,30 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     lookAround:()=>{if(bootReady&&!departingOwner.current&&!departureLocked.current)setDemo(true);},
     signIn:async(email,password)=>{
       if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
-      try{const {error}=await client.auth.signInWithPassword({email,password});return error?'authFailed':null;}catch{return 'authFailed';}
+      try{
+        if(demo){
+          const database=await openLocalDatabase();
+          try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}
+          database.forOwner('device').localSave('demoUpgradePending',true);
+        }
+        const {error}=await client.auth.signInWithPassword({email,password});
+        if(error&&demo)(await openLocalDatabase()).forOwner('device').localSave('demoUpgradePending',false);
+        return error?'authFailed':null;
+      }catch{return 'authFailed';}
     },
-    createAccount:async(email,password)=>{
+    createAccount:async(email,password,dob)=>{
+      const age=ageOn(dob??'');if(age===null||age<13)return 'invalidProfile';
       if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
-      try{const {data,error}=await client.auth.signUp({email,password});return error?'authFailed':data.session?null:'confirmEmail';}catch{return 'authFailed';}
+      try{
+        if(demo){
+          const database=await openLocalDatabase();
+          try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}
+          database.forOwner('device').localSave('demoUpgradePending',true);
+        }
+        const {data,error}=await client.auth.signUp({email,password});
+        if(error&&demo)(await openLocalDatabase()).forOwner('device').localSave('demoUpgradePending',false);
+        return error?'authFailed':data.session?null:'confirmEmail';
+      }catch{return 'authFailed';}
     },
     signOut:async(discardUnsynced=false)=>{
       if(departurePending&&retryDeparture.current)return retryDeparture.current();

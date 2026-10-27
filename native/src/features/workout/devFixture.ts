@@ -1,3 +1,4 @@
+import { syncedTables } from "@/data/rows";
 import type { WorkoutStore } from "@/data/workout/store";
 
 export type LoggerFixtureState = "logger" | "keypad" | "rest" | "summary";
@@ -33,6 +34,8 @@ export function createLoggerFixture(
     return null;
   return store.repo.atomic(() => {
     const repo = store.repo;
+    const untracked = !!repo.localGet("loggerFixture") && !repo.localGet("demoFixtureSamplesTracked");
+    const before = new Set(syncedTables.flatMap(table => repo.list(table, true)).map(row => row.id));
     const cached = repo.localGet<{ sessionId: string; benchId: string }>(
       "loggerFixture",
     );
@@ -153,6 +156,10 @@ export function createLoggerFixture(
     });
     if (state === "summary")
       store.finish(s.id, { startedAt, finishedAt: now, notes: "" }, now);
+    // Sample identity must survive later edits and never be promoted to an account.
+    const generated = syncedTables.flatMap(table => repo.list(table, true)).filter(row => !before.has(row.id)).map(row => row.id);
+    repo.localSave("demoSamples", [...new Set([...(repo.localGet<string[]>("demoSamples") ?? []), ...generated])]);
+    repo.localSave("demoFixtureSamplesTracked", !untracked);
     return { sessionId: s.id, benchId: bench.id, state };
   });
 }

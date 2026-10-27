@@ -20,6 +20,7 @@ jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), cle
 jest.mock('../src/auth/sign-out-storage',()=>({signOutStorage:{read:jest.fn(async()=>null),write:jest.fn(async()=>{}),remove:jest.fn(async()=>{})}}));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../fixtures/demo', () => ({ seedDemo: jest.fn() }));
+jest.mock('../src/features/onboarding/demo-transfer',()=>({assertDemoTransferSafe:jest.fn(),promoteDemo:jest.fn()}));
 const mockTransportCreated=jest.fn();
 const mockPush = jest.fn<Promise<void>, []>();
 jest.mock('../src/data/sync/supabase', () => ({ SupabaseTransport: class {
@@ -614,4 +615,46 @@ test.each(['demo','guest','not-an-owner'])('boot-error rejects a stored syntheti
  const view=await render(<AuthProvider client={clientFixture().client}><Probe/></AuthProvider>);
  await waitFor(()=>expect(observed.recovery).toBe('boot-error'));
  expect(observed.bootExportOwner?.()).toBeNull();expect(SecureStore.setItemAsync).not.toHaveBeenCalled();await view.unmount();
+});
+
+test('createAccount rejects under-13 and missing DOB before auth or local writes',async()=>{
+ const guest=fixtureRepo('guest');const fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>guest,wipeAll:jest.fn()});
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{
+   expect(await observed.createAccount('synthetic@example.test','synthetic-password','2020-01-01')).toBe('invalidProfile');
+   expect(await observed.createAccount('synthetic@example.test','synthetic-password')).toBe('invalidProfile');
+ });
+ expect(fixture.auth.signUp).not.toHaveBeenCalled();expect(guest.pending()).toHaveLength(0);
+});
+
+test('demo upgrade promotion completes before the account transport is created',async()=>{
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),account=fixtureRepo(OWNER_A);
+ let pendingUpgrade=false;
+ const device={localGet:()=>pendingUpgrade,localSave:(_key:string,value:boolean)=>{pendingUpgrade=value;}} as unknown as Repository;
+ const fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='device'?device:owner==='demo'?demo:owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const promotion=jest.mocked(promoteDemo);promotion.mockImplementation(()=>{expect(mockTransportCreated).not.toHaveBeenCalled();});
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.ready).toBe(true));await act(async()=>{observed.lookAround();});
+ await waitFor(()=>expect(observed.repository).toBe(demo));
+ await act(async()=>{await observed.createAccount('synthetic@example.test','synthetic-password','2000-01-01');});
+ expect(pendingUpgrade).toBe(true);
+ await act(async()=>{fixture.emit(session(OWNER_A));});
+ await waitFor(()=>expect(observed.repository).toBe(account));
+ expect(promotion).toHaveBeenCalledWith(demo,account);expect(pendingUpgrade).toBe(false);expect(mockTransportCreated).toHaveBeenCalledWith(OWNER_A);
+ promotion.mockReset();
+});
+
+test('unknown legacy demo provenance stops before any account request and preserves demo',async()=>{
+ const {assertDemoTransferSafe}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const check=jest.mocked(assertDemoTransferSafe);check.mockImplementation(()=>{throw new Error('Synthetic unknown provenance');});
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='demo'?demo:guest,wipeAll:jest.fn()});
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.repository).toBe(demo));
+ await act(async()=>{expect(await observed.createAccount('synthetic@example.test','synthetic-password','2000-01-01')).toBe('demoCarryUnavailable');});
+ expect(fixture.auth.signUp).not.toHaveBeenCalled();expect(demo.wipe).not.toHaveBeenCalled();expect(observed.demo).toBe(true);check.mockReset();
 });
