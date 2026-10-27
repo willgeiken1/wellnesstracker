@@ -260,6 +260,12 @@ export class Repository {
     // Missing completion records include legacy OFF history and retained values.
     return this.state(this.replayKey(table)) !== 'complete';
   }
+  /** OFF preferences must see a complete ON pull before choosing synced row ids.
+   * Local-only owners never pull and never enqueue uploads. */
+  canPromotePreferences(table: 'machine_notes' | 'settings' | 'custom_exercises') {
+    return this.syncFlags.syncedV1Columns && (this.owner === 'guest' || this.owner === 'demo' ||
+      this.safe(() => this.state(this.replayKey(table)) === 'complete'));
+  }
   private cursorKey(table: Table) { return `cursor:${this.syncFlags.syncedV1Columns && hasGatedColumns(table) ? 'v1:' : ''}${table}`; }
   cursor(table: Table) { return this.safe(() => this.state(this.cursorKey(table)) ?? '0'); }
   /** complete is supplied by the engine only after exhausting the table replay. */
@@ -302,7 +308,7 @@ export class Repository {
       this.applyPurges();
       this.setState('clock', String(clock));
       this.setState(this.cursorKey(table),cursor);
-      if (hasGatedColumns(table)) {
+      if (hasGatedColumns(table) || table === 'custom_exercises') {
         if (!this.syncFlags.syncedV1Columns) {
           this.setState(this.replayKey(table),'needed');
           this.setState(`cursor:v1:${table}`,'0');

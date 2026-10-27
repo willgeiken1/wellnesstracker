@@ -12,6 +12,8 @@ export function memoryRepository() {
   };
   return {
     owner: "demo",
+    // The in-memory UI fixture is a local-only demo owner; no pull is required.
+    canPromotePreferences: () => true,
     getRevision: () => revision,
     subscribe: (f: () => void) => {
       listeners.add(f);

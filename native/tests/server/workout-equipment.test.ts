@@ -138,6 +138,7 @@ test('OFF preferences promote through repository writes on ON reads, survive res
     legacy.savePlates('lb', []);
     legacy.saveCustom(custom);
     const enabled = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+    completePreferenceReplay(enabled);
     const p = new WorkoutPreferences(enabled);
     expect(p.library()).toContainEqual(custom);
     expect(p.machine(custom.name)).toEqual({ text: 'Seat 3', step: 7, bar_weight: 15, unit_override: 'kg' });
@@ -174,6 +175,7 @@ test('ON promotion keeps existing custom rows and consumes legacy duplicates onc
   try {
     off.saveCustom({ name: 'Fixture lift', main: 'quads', helpers: [], equipment: 'machine' });
     const row = enabled.save('custom_exercises', { name: 'fixture LIFT', main_muscle: 'glutes', helpers: '[]', equipment: 'cable' });
+    completePreferenceReplay(enabled);
     const p = new WorkoutPreferences(enabled);
     expect(p.customs()).toEqual([{ name: 'fixture LIFT', main: 'glutes', helpers: [], equipment: 'cable' }]);
     enabled.remove('custom_exercises', row.id);
@@ -190,6 +192,7 @@ test('ON plate save promotes the other local unit and preserves existing setting
   try {
     off.savePlates('kg', [20]);
     const settings = on.save('settings', { plate_set: JSON.stringify({ lb: [45] }), rest_style: 'countdown' });
+    completePreferenceReplay(on);
     const p = new WorkoutPreferences(on);
     p.savePlates('lb', [25]);
     expect(p.plateSet('kg')).toEqual([20]);
@@ -208,6 +211,7 @@ test.each(['machine', 'plates', 'customs'] as const)('%s promotion rolls back ro
     off.saveMachine('Fixture lift', { text: 'Seat 3', step: 7 });
     off.savePlates('kg', [20]);
     off.saveCustom({ name: 'Fixture lift', main: 'quads', helpers: [], equipment: 'machine' });
+    completePreferenceReplay(on);
     const key = kind === 'machine' ? 'machineSetup:fixture lift' : kind === 'plates' ? 'gymPlates' : 'customLifts';
     const table = kind === 'machine' ? 'machine_notes' : kind === 'plates' ? 'settings' : 'custom_exercises';
     const before = on.list(table), pending = on.pending(), local = on.localGet(key);
@@ -222,5 +226,109 @@ test.each(['machine', 'plates', 'customs'] as const)('%s promotion rolls back ro
     expect(on.localGet(key)).toBeNull();
     expect(on.list(table)).toHaveLength(1);
     expect(on.pending().some(item => item.row.table === table)).toBe(true);
+  } finally { sqlite.close(); }
+});
+
+
+test('sparse local machine promotion preserves pulled gated fields and server text', async () => {
+  const { db, sqlite } = await localDatabase();
+  const on = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+  try {
+    const row = on.save('machine_notes', { exercise: 'Fixture lift', text: 'Server seat', step: 7, bar_weight: 15, unit_override: 'kg' });
+    on.applyPage('machine_notes', [], '0', true);
+    on.localSave('machineSetup:fixture lift', { text: 'Local seat' });
+    expect(new WorkoutPreferences(on).machine('Fixture lift')).toEqual({ text: 'Server seat', step: 7, bar_weight: 15, unit_override: 'kg' });
+    expect(on.get('machine_notes', row.id)?.data).toMatchObject({ step: 7, bar_weight: 15, unit_override: 'kg' });
+    expect(on.pending().find(p => p.row.id === row.id)?.row.data).toMatchObject({ step: 7, bar_weight: 15, unit_override: 'kg' });
+    expect(on.localGet('machineSetup:fixture lift')).toBeNull();
+  } finally { sqlite.close(); }
+});
+
+// These are table-completion events from the local pull boundary, never network calls.
+function completePreferenceReplay(repo: Repository) {
+  for (const table of ['custom_exercises', 'machine_notes', 'settings'] as const) repo.applyPage(table, [], repo.cursor(table), true);
+}
+
+test('promotion waits for each completed replay and merges device A rows on device B', async () => {
+  const a = await localDatabase(), b = await localDatabase();
+  const custom = { name: 'Fixture shared lift', main: 'quads', helpers: [], equipment: 'machine' as const };
+  const deviceB = '20000000-0000-4000-8000-000000000002';
+  try {
+    for (const [database, device] of [[a, DEVICE_A], [b, deviceB]] as const) {
+      const off = new Repository(database.db, OWNER_A, device, randomUUID);
+      off.localSave('customLifts', [custom]);
+      off.localSave(`machineSetup:${custom.name.toLowerCase()}`, { text: 'Local seat', step: 7 });
+      off.localSave('gymPlates', { kg: [20] });
+    }
+    const onA = new Repository(a.db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+    const onB = new Repository(b.db, OWNER_A, deviceB, randomUUID, { syncedV1Columns: true });
+    const pa = new WorkoutPreferences(onA), pb = new WorkoutPreferences(onB);
+    // ON offline reads retain OFF values, but must not author synced rows yet.
+    for (const p of [pa, pb]) {
+      expect(p.customs()).toEqual([custom]);
+      expect(p.machine(custom.name).step).toBe(7);
+      expect(p.plateSet('kg')).toEqual([20]);
+      expect(p.repo.pending()).toEqual([]);
+      expect(p.repo.localGet('customLifts')).toEqual([custom]);
+      expect(p.repo.localGet('gymPlates')).toEqual({ kg: [20] });
+      expect(p.repo.localGet(`machineSetup:${custom.name.toLowerCase()}`)).toMatchObject({ step: 7 });
+    }
+    completePreferenceReplay(onA);
+    pa.customs(); pa.machine(custom.name); pa.plateSet('kg');
+    expect(onA.pending()).toHaveLength(3);
+    for (const table of ['custom_exercises', 'machine_notes', 'settings'] as const) {
+      const row = onA.list(table)[0];
+      onB.applyPage(table, [{ row, server_seq: '1' }], '1', false);
+      pb.customs(); pb.machine(custom.name); pb.plateSet('kg');
+      expect(onB.pending()).toEqual([]);
+      // Reaching a page is insufficient: only exhausting this table releases promotion.
+      onB.applyPage(table, [], '1', true);
+      if (table === 'custom_exercises') pb.customs();
+      if (table === 'machine_notes') pb.machine(custom.name);
+      if (table === 'settings') pb.plateSet('kg');
+      expect(onB.list(table).map(r => r.id)).toEqual([row.id]);
+      // Ack only simulates pushing the local revision; nothing leaves SQLite.
+      onB.ack(onB.pending());
+    }
+    expect(onB.localGet('customLifts')).toBeNull();
+    expect(onB.localGet('gymPlates')).toBeNull();
+    expect(onB.localGet(`machineSetup:${custom.name.toLowerCase()}`)).toBeNull();
+  } finally { a.sqlite.close(); b.sqlite.close(); }
+});
+
+test('custom promotion fills missing definition fields without overwriting server choices', async () => {
+  const { db, sqlite } = await localDatabase();
+  const on = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+  try {
+    const local = { name: 'Fixture lift', main: 'quads', helpers: ['glutes'], equipment: 'machine' as const };
+    on.localSave('customLifts', [local]);
+    const row = on.save('custom_exercises', { name: 'fixture LIFT', main_muscle: 'chest', helpers: null, equipment: null });
+    completePreferenceReplay(on);
+    expect(new WorkoutPreferences(on).customs()).toEqual([{ ...local, name: 'fixture LIFT', main: 'chest' }]);
+    expect(on.list('custom_exercises').map(r => r.id)).toEqual([row.id]);
+    expect(on.localGet('customLifts')).toBeNull();
+    on.remove('custom_exercises', row.id);
+    expect(new WorkoutPreferences(on).customs()).toEqual([]);
+    expect(on.get('custom_exercises', row.id)?.deleted_at).not.toBeNull();
+  } finally { sqlite.close(); }
+});
+
+test('library load promotes never-opened machine setups only after replay completes', async () => {
+  const { db, sqlite } = await localDatabase();
+  const on = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+  try {
+    on.localSave('machineSetup:fixture unopened', { text: 'Seat 3', step: 7 });
+    const p = new WorkoutPreferences(on);
+    p.library();
+    expect(on.list('machine_notes')).toEqual([]);
+    expect(on.localGet('machineSetup:fixture unopened')).toMatchObject({ step: 7 });
+    completePreferenceReplay(on);
+    p.library();
+    expect(on.list('machine_notes')).toHaveLength(1);
+    expect(on.list('machine_notes')[0].data).toMatchObject({ exercise: 'fixture unopened', text: 'Seat 3', step: 7 });
+    expect(on.localGet('machineSetup:fixture unopened')).toBeNull();
+    const pending = on.pending();
+    p.library();
+    expect(on.pending()).toEqual(pending);
   } finally { sqlite.close(); }
 });
