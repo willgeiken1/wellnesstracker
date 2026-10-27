@@ -146,14 +146,19 @@ export class Repository {
             const dormant = this.dormantFields(row.table,row.id);
             const pending = this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${row.table} AND row_id=${row.id}`);
             // Field-level merge: re-saving an unchanged gated value does not author it;
-            // during the first ON replay it still takes the server value.
+            // during an ON replay after upgrade or any later OFF period it still takes the server value.
             const refill = previous && row.deleted_at === null
               ? (dormant ?? (!pending && this.needsV1Replay(row.table) ? gatedColumns(row.table) : []))
                 .filter(key => !Object.hasOwn(input.data,key) || row.data[key] === previous.data[key])
               : [];
             if (refill.length) {
               this.setState(this.dormantKey(row.table,row.id),JSON.stringify(refill));
-              this.setState(`cursor:v1:${row.table}`,'0');
+              // Existing markers are already covered by the in-progress replay.
+              // A newly marked row may be behind its cursor and must restart it.
+              if (!dormant || !this.needsV1Replay(row.table)) {
+                this.setState(`cursor:v1:${row.table}`,'0');
+                this.setState(this.replayKey(row.table),'needed');
+              }
             } else this.clearDormant(row.table,row.id);
           }
         }
@@ -249,7 +254,8 @@ export class Repository {
     if (value === '1') return gated;
     try {
       const fields: unknown = JSON.parse(value);
-      return Array.isArray(fields) ? fields.filter((key): key is string => typeof key === 'string' && gated.includes(key)) : gated;
+      const valid = Array.isArray(fields) ? fields.filter((key): key is string => typeof key === 'string' && gated.includes(key)) : [];
+      return valid.length ? valid : gated;
     } catch { return gated; }
   }
   private clearDormant(table: Table, id: string) {
@@ -257,24 +263,25 @@ export class Repository {
   }
   private replayKey(table: Table) { return `replay:v1:${table}`; }
   private needsV1Replay(table: Table) {
-    // Missing completion records include legacy OFF history and retained values.
+    // Missing records conservatively require one full replay after upgrade, even
+    // for existing ON users: absence cannot distinguish legacy OFF history.
     return this.state(this.replayKey(table)) !== 'complete';
   }
-  /** OFF preferences must see a complete ON pull before choosing synced row ids.
+  /** OFF local values must see a complete ON pull before promotion.
    * Local-only owners never pull and never enqueue uploads. */
-  canPromotePreferences(table: 'machine_notes' | 'settings' | 'custom_exercises') {
+  canPromotePreferences(table: 'machine_notes' | 'settings' | 'custom_exercises' | 'routine_exercises' | 'entries') {
     return this.syncFlags.syncedV1Columns && (this.owner === 'guest' || this.owner === 'demo' ||
       this.safe(() => this.state(this.replayKey(table)) === 'complete'));
   }
   private cursorKey(table: Table) { return `cursor:${this.syncFlags.syncedV1Columns && hasGatedColumns(table) ? 'v1:' : ''}${table}`; }
   cursor(table: Table) { return this.safe(() => this.state(this.cursorKey(table)) ?? '0'); }
   /** complete is supplied by the engine only after exhausting the table replay. */
-  applyPage(table: Table, page: ServerRow[], cursor: string, complete = false) {
+  applyPage(table: Table, page: ServerRow[], cursor: string, complete = false, after = this.cursor(table)) {
     this.outsideAtomic();
     this.safe(() => this.db.transaction(() => {
       this.table(table);
       if (!this.syncTables().includes(table)) throw new Error('Sync feature disabled.');
-      if (!/^\d+$/.test(cursor) || BigInt(cursor) < BigInt(this.cursor(table))) throw new Error('Invalid cursor.');
+      if (!/^\d+$/.test(after) || !/^\d+$/.test(cursor) || BigInt(cursor) < BigInt(after)) throw new Error('Invalid cursor.');
       let clock = Number(this.state('clock') ?? 0);
       for (const remote of page) {
         const row = projectSyncRow(remote.row,this.syncFlags);
@@ -307,6 +314,9 @@ export class Repository {
       }
       this.applyPurges();
       this.setState('clock', String(clock));
+      // An edit/OFF pull may have reset progress while this page was in flight.
+      // Its rows remain useful, but it cannot advance or complete that replay.
+      if (this.cursor(table) !== after) return;
       this.setState(this.cursorKey(table),cursor);
       if (hasGatedColumns(table) || table === 'custom_exercises') {
         if (!this.syncFlags.syncedV1Columns) {

@@ -521,3 +521,75 @@ test('ON edit while a replay page is in flight preserves server gated values thr
   expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')?.value).toBe('complete');
  } finally { engine.close();local.sqlite.close();await server.close(); }
 });
+
+test('missing replay record requires upgrade replay and stale final page cannot overwrite an ON edit reset', async () => {
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'drop'}};
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')).toBeUndefined();
+  enabled.applyPage('sets',[{row,server_seq:'5'}],'5');
+  enabled.save('sets',{...row.data,reps:9},row.id,300);
+  expect(enabled.cursor('sets')).toBe('0');
+  enabled.applyPage('sets',[],'5',true,'5');
+  expect(enabled.cursor('sets')).toBe('0');
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')?.value).not.toBe('complete');
+  enabled.applyPage('sets',[{row,server_seq:'5'}],'5',true,'0');
+  expect(enabled.cursor('sets')).toBe('5');
+ } finally {local.sqlite.close();}
+});
+
+test('repeat ON edits to a still dormant row keep replay page progress', async () => {
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'drop'}};
+  local.repo.putLocal(row);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[],'5');
+  enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:9},row.id,300);
+  enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:10},row.id,301);
+  expect(enabled.cursor('sets')).toBe('5');
+  enabled.applyPage('sets',[{row,server_seq:'6'}],'6',true);
+  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:'drop'});
+ } finally {local.sqlite.close();}
+});
+
+test('non-gated-only dormant marker refills all gated columns', async () => {
+ const local=await localDatabase();
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'drop'}};
+  local.repo.putLocal(row);
+  local.sqlite.prepare('UPDATE sync_state SET value=? WHERE owner_id=? AND key=?').run('["x"]',OWNER_A,`dormant-v1:sets:${row.id}`);
+  const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1',true);
+  expect(enabled.get('sets',row.id)!.data.tag).toBe('drop');
+ } finally {local.sqlite.close();}
+});
+
+test('engine retries a reset final page before pushing the ON edit', async () => {
+ const local=await localDatabase();
+ const row={...syntheticRow('sets'),data:{reps:8,tag:'drop'}};
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+ const pulls:string[]=[],pushed:unknown[]=[];
+ let edited=false;
+ const engine=new SyncEngine(enabled,{
+  owner:OWNER_A,syncFlags:on,
+  pull:async(table,after)=>{
+   if(table!=='sets')return [];
+   pulls.push(after);
+   if(!edited) {
+    edited=true;
+    enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:9},row.id,300);
+    return [];
+   }
+   return after==='0'?[{row,server_seq:'5'}]:[];
+  },
+  push:async rows=>{pushed.push(...rows);expect(pulls).toEqual(['5','0','5']);},
+ },1);
+ try {
+  enabled.applyPage('sets',[{row,server_seq:'5'}],'5');
+  await engine.sync();
+  expect(engine.status).toBe('idle');
+  expect(pushed).toMatchObject([{data:{reps:9,tag:'drop'}}]);
+ } finally {engine.close();local.sqlite.close();}
+});
