@@ -68,3 +68,17 @@ test.each(['Leg Extension', 'Bench Press'])('%s honours a saved Step in store su
   expect(store.suggestion(store.addExercise(store.start().id, name)))
     .toMatchObject({ weight: 107, jump: true });
 });
+
+test('short dip query cannot fuzzy-match Hip exercises', () => {
+  expect(filterExercises(exerciseLibrary, 'dip').some(e => /\bhip\b/i.test(e.name))).toBe(false);
+  expect(filterExercises(exerciseLibrary, 'dip').some(e => /dip/i.test(e.name))).toBe(true);
+});
+test('custom names are capped at 100 trimmed characters at validation and save', () => {
+  const exercise = {name:'X'.repeat(100),main:'quads',helpers:[],equipment:'machine' as const};
+  expect(validCustomExercise({...exercise,name:` ${exercise.name} `})).toBe(true);
+  expect(validCustomExercise({...exercise,name:'X'.repeat(101)})).toBe(false);
+  const preferences = new WorkoutStore(memoryRepository()).preferences();
+  expect(() => preferences.saveCustom({...exercise,name:'X'.repeat(101)})).toThrow('Invalid exercise.');
+  preferences.saveCustom(exercise);
+  expect(preferences.customs()[0].name).toHaveLength(100);
+});

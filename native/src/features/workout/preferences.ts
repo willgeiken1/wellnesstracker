@@ -41,22 +41,26 @@ export class WorkoutPreferences {
     this.promoteMachine(name);
     const row = this.noteRow(name);
     if (!this.enabled) return { ...this.repo.localGet<MachineNote>(`machineSetup:${name.toLowerCase()}`), text: String(row?.data.text ?? '') };
+    const local = !this.repo.canPromotePreferences('machine_notes') ? this.repo.localGet<MachineNote>(`machineSetup:${name.toLowerCase()}`) : undefined;
     return { ...(Number(row?.data.step) > 0 ? { step: Number(row!.data.step) } : {}),
       ...(row?.data.bar_weight != null ? { bar_weight: Number(row.data.bar_weight) } : {}),
       ...(row?.data.unit_override === 'kg' || row?.data.unit_override === 'lb' ? { unit_override: row.data.unit_override } : {}),
-      ...(!this.repo.canPromotePreferences('machine_notes') ? this.repo.localGet<MachineNote>(`machineSetup:${name.toLowerCase()}`) : {}),
-      text: String(row?.data.text ?? '') };
+      ...local,
+      text: String(row?.data.text ?? local?.text ?? '') };
   }
   unit(name: string, fallback: Unit): Unit { return this.machine(name).unit_override ?? fallback; }
   increment(name: string, _unit: Unit): number | undefined { return this.machine(name).step; }
   saveMachine(name: string, note: MachineNote, fallback: Unit = 'lb') {
     if ((note.step !== undefined && (!Number.isFinite(note.step) || note.step <= 0 || note.step > 1000)) || (note.bar_weight !== undefined && (!Number.isFinite(note.bar_weight) || note.bar_weight < 0 || note.bar_weight > 1000))) throw Error('Invalid setup.');
+    // Pin numeric bar setups to their saved unit so a profile change cannot reinterpret them.
+    if (note.bar_weight !== undefined && !note.unit_override) note = { ...note, unit_override: fallback };
     const oldUnit = this.unit(name, fallback), nextUnit = note.unit_override ?? fallback;
+    const active = this.repo.list('sessions').filter(s => s.data.finished_at === null).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at))[0];
     this.repo.atomic(() => {
       const row = this.noteRow(name);
       this.repo.save('machine_notes', { exercise: name, text: note.text, ...(this.enabled ? { step: note.step ?? null, bar_weight: note.bar_weight ?? null, unit_override: note.unit_override ?? null } : {}) }, row?.id);
       if (!this.enabled) this.repo.localSave(`machineSetup:${name.toLowerCase()}`, note);
-      if (oldUnit !== nextUnit) for (const entry of this.repo.list('entries').filter(e => String(e.data.exercise).toLowerCase() === name.toLowerCase())) {
+      if (oldUnit !== nextUnit) for (const entry of this.repo.list('entries').filter(e => active && e.data.session_id === active.id && String(e.data.exercise).toLowerCase() === name.toLowerCase())) {
         const drafts = this.repo.localGet<{ weight: string; rightWeight?: string; reps: string; setId?: string }[]>(`draft:${entry.id}`);
         if (drafts) this.repo.localSave(`draft:${entry.id}`, drafts.map(d => ({
           ...d,
@@ -109,14 +113,18 @@ export class WorkoutPreferences {
     return this.repo.canPromotePreferences('custom_exercises') ? synced : [...synced, ...(local ?? []).filter(e => validCustomExercise(e) && !synced.some(s => s.name.toLowerCase() === e.name.toLowerCase()))];
   }
   library() {
+    const library = [...exerciseLibrary, ...this.customs().filter(c => !exerciseLibrary.some(e => e.name.toLowerCase() === c.name.toLowerCase()))];
     // Consume known OFF setups even when their exercise is never opened. Retrying
     // library reads after replay/failure is safe: each successful key is consumed atomically.
     if (this.enabled && this.repo.canPromotePreferences('machine_notes')) {
       for (const [key, value] of Object.entries(this.repo.localSnapshot())) {
-        if (value && key.startsWith('machineSetup:')) this.promoteMachine(key.slice('machineSetup:'.length));
+        if (value && key.startsWith('machineSetup:')) {
+          const name = key.slice('machineSetup:'.length);
+          this.promoteMachine(library.find(e => e.name.toLowerCase() === name)?.name ?? name);
+        }
       }
     }
-    return [...exerciseLibrary, ...this.customs().filter(c => !exerciseLibrary.some(e => e.name.toLowerCase() === c.name.toLowerCase()))];
+    return library;
   }
   exercise(name: string) { return this.customs().find(e => e.name.toLowerCase() === name.toLowerCase()) ?? exerciseFor(name); }
   saveCustom(exercise: Exercise) {

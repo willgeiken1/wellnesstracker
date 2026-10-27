@@ -308,6 +308,8 @@ export class Repository {
       this.applyPurges();
       this.setState('clock', String(clock));
       this.setState(this.cursorKey(table),cursor);
+      // custom_exercises is ON-only in syncTables: its OFF arm is unreachable;
+      // the shared completion path still marks its ON replay for preference promotion.
       if (hasGatedColumns(table) || table === 'custom_exercises') {
         if (!this.syncFlags.syncedV1Columns) {
           this.setState(this.replayKey(table),'needed');

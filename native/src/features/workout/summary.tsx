@@ -305,14 +305,14 @@ export function WorkoutSummary({
                 </ThemedText>
               </View>
               <ThemedText style={{ fontSize: 19, fontWeight: "600" }}>
-                {pr.exercise} {displayWeight(pr.displayWeight, store.unit())} ×{" "}
+                {pr.exercise} {displayWeight(pr.displayWeight, pr.unit)} ×{" "}
                 {pr.bestReps}
               </ThemedText>
               <ThemedText muted style={{ fontSize: 13, lineHeight: 17 }}>
                 {t("est1RM")}{" "}
                 <ThemedText style={{ fontSize: 13, fontWeight: "600" }}>
-                  ≈ {Math.round(fromKg(pr.bestE1rm, store.unit()))}{" "}
-                  {store.unit()}
+                  ≈ {Math.round(fromKg(pr.bestE1rm, pr.unit))}{" "}
+                  {pr.unit}
                 </ThemedText>
                 {pr.previousE1rm > 0
                   ? `, ${t("previousBest")
@@ -320,11 +320,11 @@ export function WorkoutSummary({
                         "{weight}",
                         String(
                           Math.round(
-                            fromKg(pr.bestE1rm - pr.previousE1rm, store.unit()),
+                            fromKg(pr.bestE1rm - pr.previousE1rm, pr.unit),
                           ),
                         ),
                       )
-                      .replace("{unit}", store.unit())}`
+                      .replace("{unit}", pr.unit)}`
                   : ""}
               </ThemedText>
             </View>
@@ -385,7 +385,7 @@ export function WorkoutSummary({
               {data.prs
                 .map(
                   (pr) =>
-                    `${pr.exercise} ${t("summit")}, ${displayWeight(pr.displayWeight, store.unit())} × ${pr.bestReps}`,
+                    `${pr.exercise} ${t("summit")}, ${displayWeight(pr.displayWeight, pr.unit)} × ${pr.bestReps}`,
                 )
                 .join(", ")}
             </ThemedText>

@@ -26,9 +26,10 @@ export class PlanStore {
     if (plan.days.some(d=>!this.repo.list('routines').some(r=>r.id===d.routineId))) throw Error('Invalid plan day.');
     this.repo.atomic(()=>{
       let id=this.definition().id;
-      if (this.repo.syncFlags?.syncedV1Columns) id=this.repo.save('plans',{
-        mode:plan.mode,days_per_week:plan.daysPerWeek
-      },this.config()?.id).id;
+      if (this.repo.syncFlags?.syncedV1Columns) {
+        id=this.repo.save('plans',{mode:plan.mode,days_per_week:plan.daysPerWeek},this.config()?.id).id;
+        for (const row of this.repo.list('plans')) if (row.id !== id) this.repo.remove('plans',row.id);
+      }
       this.repo.localSave(key,{id,days:plan.days} satisfies Definition);
     });
   }

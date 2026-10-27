@@ -22,8 +22,10 @@ function SetupEditor({ store, name, onClose }: { store: WorkoutStore; name: stri
   const inputStyle = [layout.input, { color: colors.text, backgroundColor: colors['surface-2'] }];
   function changeUnit(next: Unit | undefined) {
     const nextUnit = next ?? store.unit();
-    if (step) setStep(String(rounded(fromKg(toKg(Number(step), unit), nextUnit))));
-    if (bar) setBar(String(rounded(fromKg(toKg(Number(bar), unit), nextUnit))));
+    const convert = (value: string) => /^\d+(?:\.\d{1,2})?$/.test(value.trim()) && Number.isFinite(Number(value))
+      ? String(rounded(fromKg(toKg(Number(value), unit), nextUnit))) : '';
+    setStep(convert(step));
+    setBar(convert(bar));
     setOverride(next);
   }
   return <Sheet expanded label={`${name} · ${t('machineSetup')}`} onClose={onClose}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={layout.stack}>
