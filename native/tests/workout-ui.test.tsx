@@ -802,7 +802,7 @@ test('template editor saves name/target edits without rest overrides, and only s
     await fireEvent.press(screen.getAllByRole('button', {name: '120 seconds'})[1]);
     await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
     expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(1);
-    expect(JSON.parse(String(repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': 120});
+    expect(JSON.parse(String(repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': {seconds:120,style:'unwind'}});
     expect(repo.localGet('rest:bench press')).toBeUndefined();
   } finally { useLocalSearchParams.mockReturnValue({}); }
 });
