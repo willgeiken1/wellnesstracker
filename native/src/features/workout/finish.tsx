@@ -32,9 +32,9 @@ export function FinishSheet({
   const {
     colors
   } = useTheme();
-  const [end] = useState(() => Date.now()),
+  const [end] = useState(() => session.data.finished_at != null ? Number(session.data.finished_at) : store.pastMode(session.id) ? Number(session.data.started_at) : Date.now()),
     [start, setStart] = useState(formatLocalDateTime(Number(session.data.started_at))),
-    [duration, setDuration] = useState(() => String(Math.max(0, Math.floor((end - Number(session.data.started_at)) / 1000)))),
+    [duration, setDuration] = useState(() => String(Math.max(0, (session.data.finished_at != null ? (end - Number(session.data.started_at)) / 1000 : Math.floor((end - Number(session.data.started_at)) / 1000))))),
     [notes, setNotes] = useState(String(session.data.notes ?? '')),
     [name, setName] = useState(String(session.data.name ?? '')),
     [saveTemplate, setSaveTemplate] = useState(false),
