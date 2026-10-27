@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Button } from '../../components/button';
 import { SegmentedControl } from '../../components/segmented-control';
 import { ThemedText } from '../../components/themed-text';
@@ -11,11 +11,11 @@ import { Panel } from '../workout/primitives';
 import { useWorkoutStore } from '../workout/use-workout';
 import { BodyChart } from './chart';
 import { WeightEntry } from './entry';
-import { dailyWeights, inRange, lastWeight, saveWeighIn, trendWeights, weeklyChange, type BodyRange } from './model';
+import { deleteWeighIn, dailyWeights, inRange, lastWeight, saveWeighIn, trendWeights, weeklyChange, type BodyRange } from './model';
 export function Body({repository}:{repository:Repository}) {
   const facade=useWorkoutStore(repository);
   const repo=facade.repo,unit=readProfile(repo).unit;
-  const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false);
+  const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false),[deleteFailed,setDeleteFailed]=useState(false);
   const rows=repo.list('weigh_ins').filter(r=>String(r.data.day)<=today());
   const trend=trendWeights(dailyWeights(rows)),visible=inRange(trend,range),last=trend.at(-1),change=weeklyChange(trend);
   const lastKg=lastWeight(rows);
@@ -34,5 +34,13 @@ export function Body({repository}:{repository:Repository}) {
       <BodyChart key={range} points={visible} raw={raw} unit={unit}/>
       <ThemedText muted variant="caption">{t('bodyAverageHint')}</ThemedText>
     </Panel>
+    {deleteFailed&&<ThemedText accessibilityRole="alert">{t('bodyDeleteFailed')}</ThemedText>}
+    {rows.filter(row=>row.data.source==='app').map(row=><Panel key={row.id}>
+      <ThemedText numeric>{String(row.data.day)} · {fromKg(Number(row.data.weight_kg),unit).toFixed(1)} {unit}</ThemedText>
+      <Button testID={`body-delete-${row.id}`} variant="destructive" label={t('bodyDelete')} onPress={()=>Alert.alert(t('bodyDeleteConfirm'),undefined,[
+        {text:t('cancel'),style:'cancel'},
+        {text:t('bodyDelete'),style:'destructive',onPress:()=>{try{deleteWeighIn(repo,row.id);setDeleteFailed(false);setSaved(false);}catch{setDeleteFailed(true);}}},
+      ])}/>
+    </Panel>)}
   </View>;
 }

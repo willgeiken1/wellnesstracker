@@ -1,6 +1,11 @@
 export const en = {
   demoTransferFailed: "Your account is ready, but demo entries could not be moved. They are still on this device. Try again to move them.",
   bodyLog: 'Log weigh-in',
+  bodyDelete: 'Delete weigh-in',
+  bodyDeleteConfirm: 'Delete this weigh-in?',
+  bodyDeleteFailed: 'Could not delete this weigh-in. Try again.',
+  bodyUnusual: 'This looks unusual - save anyway?',
+  bodySaveAnyway: 'Save anyway',
   bodySave: 'Save weigh-in',
   bodyEmpty: 'Log a weigh-in to start your trend.',
   bodyWeightInput: 'Weight ({unit})',

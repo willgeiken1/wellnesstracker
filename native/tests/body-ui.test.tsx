@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Alert } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { Body } from '../src/features/body/screen';
 import { memoryRepository } from './workout-repository';
@@ -71,4 +71,38 @@ test('nonfinite keypad values cannot open a broken wheel or save',async()=>{
  await fireEvent.changeText(screen.getByLabelText('Weight (kg)'),'9'.repeat(400));
  await fireEvent.press(screen.getByRole('button',{name:'Use weight wheel'}));
  expect(screen.getByRole('alert')).toBeTruthy();expect(screen.getByLabelText('Weight (kg)')).toBeTruthy();expect(repo.list('weigh_ins')).toHaveLength(0);
+});
+
+test('unusual save waits for confirmation, cancel keeps input, confirm saves',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});saveWeighIn(repo,80,'kg');
+ await render(<Body repository={repo}/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Enter weight with keypad'}));
+ await fireEvent.changeText(screen.getByLabelText('Weight (kg)'),'100');
+ await fireEvent.press(screen.getByRole('button',{name:'Save weigh-in'}));
+ expect(repo.list('weigh_ins')).toHaveLength(1);
+ const buttons=alert.mock.calls.at(-1)![2]!;
+ await act(()=>{buttons.find(b=>b.style==='cancel')?.onPress?.();});
+ expect(screen.getByLabelText('Weight (kg)').props.value).toBe('100');
+ await fireEvent.press(screen.getByRole('button',{name:'Save weigh-in'}));
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.text==='Save anyway')!.onPress!();});
+ expect(repo.list('weigh_ins')).toHaveLength(2);
+ expect(repo.list('weigh_ins')[1].data.weight_kg).toBe(100);
+ alert.mockRestore();
+});
+test('delete confirmation cancels safely and removes only the selected entry',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
+ const first=saveWeighIn(repo,80,'kg'),keep=saveWeighIn(repo,82,'kg');
+ await render(<Body repository={repo}/>,{wrapper});
+ await fireEvent.press(screen.getByTestId(`body-delete-${first.id}`));
+ expect(repo.list('weigh_ins')).toHaveLength(2);
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.style==='cancel')?.onPress?.();});
+ expect(repo.list('weigh_ins')).toHaveLength(2);
+ await fireEvent.press(screen.getByTestId(`body-delete-${first.id}`));
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.style==='destructive')!.onPress!();});
+ expect(repo.list('weigh_ins')).toEqual([keep]);
+ expect(screen.getByText('Trend: 82.0 kg')).toBeTruthy();
+ alert.mockRestore();
 });
