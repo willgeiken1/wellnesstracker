@@ -59,7 +59,9 @@ export class SyncEngine {
       }
       more=page.length===this.pageSize;
       // Completion is known only after the final (possibly empty) page.
-      this.repository.applyPage(table,page,cursor,!more);
+      this.repository.applyPage(table,page,cursor,!more,after);
+      // A reset during the final page still requires another pull before push.
+      more ||= this.repository.cursor(table) !== cursor;
     }
   }
   private async run() {

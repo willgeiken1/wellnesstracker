@@ -180,3 +180,33 @@ test('skipping an unfinished partner closes the current round and uses remaining
     expect(a.store.nextSet(session.id)).toEqual({entryId:first.id,index:1});
   } finally {a.sqlite.close();}
 });
+
+test('OFF workout options survive ON reads and promote only after each table replay completes', async () => {
+ const a=await setup();
+ try {
+  const routine=a.store.saveTemplate('Synthetic flip',['Bench Press','Squat'].map(exercise=>({exercise,target_sets:2,target_reps:8,rep_min:8,rep_max:10,superset_group:'pair'})));
+  const session=a.store.start(routine.id), entry=a.store.entries(session.id)[0];
+  a.repo.ack(a.repo.pending());
+  const repo=new Repository(a.db,OWNER_A,DEVICE_A,randomUUID,{syncedV1Columns:true}), store=new WorkoutStore(repo);
+  const exercise=a.repo.list('routine_exercises')[0];
+  expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:8,rep_max:10,superset_group:'pair'});
+  expect(store.supersetGroup(entry)).toBe('pair');
+  expect(store.repRange(entry)).toEqual({min:8,max:10});
+  expect(repo.pending()).toEqual([]);
+  repo.applyPage('routine_exercises',[],'0',false);
+  store.templateExercises(routine.id);
+  expect(repo.pending()).toEqual([]);
+  repo.applyPage('routine_exercises',[],'0',true);
+  store.templateExercises(routine.id);
+  expect(repo.get('routine_exercises',exercise.id)!.data).toMatchObject({rep_min:8,rep_max:10,superset_group:'pair'});
+  expect(repo.get('entries',entry.id)!.data.superset_group).toBeNull();
+  repo.applyPage('entries',[],'0',true);
+  expect(store.supersetGroup(entry)).toBe('pair');
+  expect(repo.pending().find(p=>p.row.id===entry.id)!.row.data.superset_group).toBe('pair');
+  expect(repo.localGet(`exerciseOptions:entries:${entry.id}`)).toBeNull();
+  repo.save('entries',{...repo.get('entries',entry.id)!.data,superset_group:'later'},entry.id);
+  expect(new WorkoutStore(repo).supersetGroup(entry)).toBe('later');
+  // Entry ranges have no wire columns; retain their exact session snapshot locally.
+  expect(new WorkoutStore(repo).repRange(entry)).toEqual({min:8,max:10});
+ } finally {a.sqlite.close();}
+});

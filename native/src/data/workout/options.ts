@@ -6,7 +6,22 @@ export interface ExerciseOptions { rep_min?: number | null; rep_max?: number | n
 export class WorkoutOptions {
   constructor(private repo: Repository) {}
   read(row: Row): Required<ExerciseOptions> {
-    const data = this.repo.syncFlags?.syncedV1Columns ? (this.repo.get(row.table,row.id)?.data ?? row.data) : this.repo.localGet<ExerciseOptions>(`exerciseOptions:${row.table}:${row.id}`);
+    const key = `exerciseOptions:${row.table}:${row.id}`;
+    const local = this.repo.localGet<ExerciseOptions | null>(key);
+    const current = this.repo.get(row.table,row.id);
+    let data = local;
+    if (this.repo.syncFlags?.syncedV1Columns) {
+      data = {...(current?.data ?? row.data),...local};
+      if (local && current && current.deleted_at === null &&
+          (row.table === 'routine_exercises' || row.table === 'entries') && this.repo.canPromotePreferences(row.table)) {
+        this.repo.atomic(() => {
+          this.repo.save(row.table,{...current.data,superset_group:local.superset_group ?? null,
+            ...(row.table === 'routine_exercises' ? {rep_min:local.rep_min ?? null,rep_max:local.rep_max ?? null} : {})},row.id);
+          this.repo.localSave(key,null);
+        });
+        data = this.repo.get(row.table,row.id)!.data;
+      }
+    }
     const range = repRange(data?.rep_min,data?.rep_max);
     return {rep_min:range?.min ?? null,rep_max:range?.max ?? null,superset_group:typeof data?.superset_group === 'string' && data.superset_group ? data.superset_group : null};
   }
@@ -16,10 +31,13 @@ export class WorkoutOptions {
       const data = {...row.data,superset_group:next.superset_group};
       this.repo.save(row.table,row.table === 'routine_exercises' ? {...data,rep_min:next.rep_min,rep_max:next.rep_max} : data,row.id);
     }
-    this.repo.localSave(`exerciseOptions:${row.table}:${row.id}`,next);
+    // ON writes already own their wire values; do not leave a stale promotion.
+    this.repo.localSave(`exerciseOptions:${row.table}:${row.id}`,this.repo.syncFlags?.syncedV1Columns ? null : next);
   }
   range(entry: Row) {
     const local = this.repo.localGet<{min:number;max:number} | null>(`repRange:${entry.id}`);
+    // Entries have no range columns. Keep the owner-local session snapshot,
+    // including explicit null after replacement, across flag changes.
     if (local !== undefined) return local;
     // Synced entries have no range columns: resolve via their originating routine.
     const session = this.repo.get('sessions',String(entry.data.session_id));
