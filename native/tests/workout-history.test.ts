@@ -100,3 +100,33 @@ test('saving a past workout preserves the active workout rest timer', () => {
   store.toggleDone(entry.id,0); store.toggleDone(entry.id,0);
   expect(store.timer()).toEqual(timer);
 });
+
+test('finished swaps stay session-only while replacements update the routine and reset exercise options', () => {
+  const store = new WorkoutStore(memoryRepository());
+  const routine = store.saveTemplate('Synthetic routine', [{exercise:'Bench Press',target_sets:1,target_reps:8,rep_min:6,rep_max:10}]);
+  const session = store.start(routine.id, now - 86400000);
+  const entry = store.entries(session.id)[0];
+  const routineEntry = store.templateExercises(routine.id)[0];
+  store.setUnilateral(entry.id,true);
+  store.editDraft(entry.id,0,{weight:'100',reps:'8',rightWeight:'90',rightReps:'8'});
+  store.toggleDone(entry.id,0);
+  store.finish(session.id,{startedAt:now-86400000,finishedAt:now-86400000+60000,notes:''});
+  const setId = store.sets(entry.id)[0].id;
+  store.replaceExercise(entry.id,'Squat','swap');
+  expect(store.templateExercises(routine.id)[0].data.exercise).toBe('Bench Press');
+  expect(store.repo.localGet(`routineUnilateral:${routineEntry.id}`)).toBe(true);
+  expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:6,rep_max:10});
+  expect(store.isUnilateral(entry.id)).toBe(true); // Completed side values retain their attribution.
+  expect(store.repo.localGet(`unilateral:${entry.id}`)).toBe(false);
+  expect(store.repRange(store.entries(session.id)[0])).toBeNull();
+  expect(store.repo.localGet(`routineExercise:${entry.id}`)).toBe(routineEntry.id);
+  store.replaceExercise(entry.id,'Deadlift','replace');
+  expect(store.templateExercises(routine.id)[0].data.exercise).toBe('Deadlift');
+  expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:null,rep_max:null});
+  expect(store.repo.localGet(`routineUnilateral:${routineEntry.id}`)).toBe(false);
+  expect(store.entries(session.id)).toHaveLength(1);
+  expect(store.sets(entry.id)[0].id).toBe(setId);
+  expect(store.entries(session.id)[0].data.exercise).toBe('Deadlift');
+  expect(store.summary(session.id).count).toBe(1);
+  expect(store.edited(session.id)).toBe(true);
+});

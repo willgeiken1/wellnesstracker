@@ -334,6 +334,11 @@ function Logger({
       ]);
     else save();
   }
+  const confirmRemoveSet = (entryId: string, index: number) =>
+    Alert.alert(t('removeSet'), undefined, [
+      {text:t('cancel'), style:'cancel'},
+      {text:t('remove'), style:'destructive', onPress:() => run(() => store.removeSet(entryId,index))},
+    ]);
   const current = cursor
     ? entries.find((e) => e.id === cursor.entryId)
     : undefined;
@@ -561,7 +566,7 @@ function Logger({
                 <Button label={t('addSet')} variant="secondary" onPress={() => run(() => store.addSet(e.id))} />
                 <Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, -1))} />
                 <Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, 1))} />
-                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),onPress:() => run(() => store.removeExercise(e.id))}])} />
+                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),style:'destructive',onPress:() => run(() => store.removeExercise(e.id))}])} />
               </View>}
               {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
               {!collapsed && !store.skipped(e.id) && (
@@ -642,21 +647,9 @@ function Logger({
                           repsHint={String(store.repRange(e) ? store.suggestion(e).target ?? "" : store.repo.localGet<number>(`target:${e.id}`) ?? previous.find((s) => Number(s.data.position) === i)?.data.reps ?? "")}
                           onEdit={(field) => edit(e.id, i, field)}
                           onDone={() => mark(e, i)}
-                          onRemove={() =>
-                            Alert.alert(t("removeSet"), undefined, [
-                              {
-                                text: t("cancel"),
-                                style: "cancel",
-                              },
-                              {
-                                text: t("remove"),
-                                onPress: () =>
-                                  run(() => store.removeSet(e.id, i)),
-                              },
-                            ])
-                          }
+                          onRemove={() => confirmRemoveSet(e.id,i)}
                         />
-                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => run(() => store.removeSet(e.id,i))} />}
+                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => confirmRemoveSet(e.id,i)} />}
                         {i ===
                           Math.max(
                             0,

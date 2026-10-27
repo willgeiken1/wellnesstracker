@@ -134,20 +134,24 @@ export class WorkoutStore {
   replaceExercise(entryId: string, name: string, mode: 'swap' | 'replace' = 'replace') {
     const entry = this.repo.get('entries', entryId);
     if (!entry || !name.trim() || !['swap','replace'].includes(mode)) throw Error('Invalid exercise.');
-    if (this.repo.get('sessions', String(entry.data.session_id))?.data.finished_at !== null) {
-      this.beginEditing(String(entry.data.session_id));
-      return this.repo.atomic(() => {
-        const updated = this.repo.save('entries', {...entry.data, exercise:name.trim()}, entryId);
-        this.recompute();
-        return updated;
-      });
-    }
+    this.beginEditing(String(entry.data.session_id));
     return this.repo.atomic(() => {
       const routine = this.routineExercise(entry);
       if (mode === 'replace' && routine) {
         const updated = this.repo.save('routine_exercises', {...routine.data, exercise: name.trim()}, routine.id);
         this.exerciseOptions().write(updated, {rep_min:null, rep_max:null});
         this.repo.localSave(`routineUnilateral:${routine.id}`, false);
+      }
+      if (this.repo.get('sessions', String(entry.data.session_id))?.data.finished_at != null) {
+        // History corrections reattribute completed sets in place. Swap only edits
+        // this session; Replace also updates the originating routine above.
+        const updated = this.repo.save('entries', {...entry.data, exercise:name.trim()}, entryId);
+        this.repo.localSave(`unilateral:${entryId}`, false);
+        this.repo.localSave(`repRange:${entryId}`, null);
+        this.repo.localSave(`routineExercise:${entryId}`, routine?.id ?? null);
+        this.repo.localSave(`skipped:${entryId}`, false);
+        this.recompute();
+        return updated;
       }
       const drafts = this.drafts(entryId), completed = drafts.filter(d => d.setId), pending = drafts.filter(d => !d.setId);
       if (!completed.length) {
@@ -269,7 +273,7 @@ export class WorkoutStore {
   }
   beginEditing(id: string) {
     const session = this.repo.get('sessions', id);
-    if (session && session.data.finished_at !== null && this.repo.localGet(`originalWorkout:${id}`) === undefined)
+    if (session && session.data.finished_at !== null && this.repo.localGet(`pastWorkout:${id}`) !== true && this.repo.localGet(`originalWorkout:${id}`) === undefined)
       this.repo.localSave(`originalWorkout:${id}`, this.content(id));
   }
   edited(id: string) {
@@ -282,7 +286,7 @@ export class WorkoutStore {
   startPast(day: string) {
     const stamp = new Date(`${day}T12:00:00`).getTime();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(stamp) || localDay(new Date(stamp)) !== day || day >= localDay(new Date())) throw Error('Invalid past day.');
-    const existing = this.repo.list('sessions').find(s => s.data.finished_at === null && s.data.day === day && this.pastMode(s.id));
+    const existing = this.repo.list('sessions').find(s => s.data.day === day && this.repo.localGet(`pastWorkout:${s.id}`) === true);
     return existing ?? this.start(undefined, stamp, true);
   }
   active() {
@@ -304,8 +308,10 @@ export class WorkoutStore {
         name: routine?.data.name ?? null,
         day: localDay(new Date(now)),
         started_at: now,
-        finished_at: null,
-        duration_ms: null,
+        // Past-day logging is historical from the first synced write. Even an
+        // abandoned draft must never become a running session on another device.
+        finished_at: past ? now : null,
+        duration_ms: past ? 0 : null,
         notes: null
       });
       if (past) this.repo.localSave(`pastWorkout:${s.id}`, true);
@@ -612,7 +618,7 @@ export class WorkoutStore {
   }, now = Date.now()) {
     const s = this.repo.get('sessions', id);
     if (!s || s.deleted_at !== null || !validateDate(input.startedAt, now) || !validateDate(input.finishedAt, now) || input.finishedAt < input.startedAt) throw Error('Invalid date.');
-    const wasFinished = s.data.finished_at !== null;
+    const wasFinished = s.data.finished_at !== null && this.repo.localGet(`pastWorkout:${id}`) !== true;
     this.beginEditing(id);
     this.repo.atomic(() => {
       // Freeze the unit used by local drafts before this session becomes history.
@@ -637,6 +643,7 @@ export class WorkoutStore {
       });
       if (this.timer()?.sessionId === id) this.skipTimer();
       this.recompute();
+      this.repo.localSave(`pastWorkout:${id}`, false);
       if (!wasFinished) this.repo.localSave(`originalWorkout:${id}`, this.content(id));
     });
   }

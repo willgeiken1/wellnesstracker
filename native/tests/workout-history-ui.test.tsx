@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
-import { AccessibilityInfo } from 'react-native';
+import { Alert, AccessibilityInfo } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { memoryRepository } from './workout-repository';
@@ -86,4 +86,54 @@ test('opening a past date creates a preset logger without starting a clock inter
  expect(store.timer()).toBeFalsy();
  expect(interval).not.toHaveBeenCalled();
  interval.mockRestore();
+});
+
+for (const side of ['left','right'] as const) test(`history ${side} set deletion requires confirmation and supports cancel`, async () => {
+ const {store,session,entry} = fixture();
+ store.setUnilateral(entry.id,true);
+ jest.mocked(useAuth).mockReturnValue({repository:store.repo,pending:0,syncStatus:'idle'} as ReturnType<typeof useAuth>);
+ jest.mocked(useLocalSearchParams).mockReturnValue({id:session.id});
+ const alert = jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ await render(<ActiveWorkout/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Expand exercise'}));
+ const remove = screen.getAllByRole('button',{name:/Remove set/})[side === 'left' ? 0 : 1];
+ await fireEvent(remove,'longPress');
+ expect(alert).toHaveBeenLastCalledWith('Remove set',undefined,expect.any(Array));
+ expect(store.sets(entry.id)).toHaveLength(1);
+ const buttons = alert.mock.calls.at(-1)![2]!;
+ expect(buttons.find(b=>b.style==='cancel')).toBeTruthy();
+ await act(()=>buttons.find(b=>b.style==='cancel')?.onPress?.());
+ expect(store.sets(entry.id)).toHaveLength(1);
+ await act(()=>buttons.find(b=>b.text==='Remove')?.onPress?.());
+ expect(store.sets(entry.id)).toHaveLength(0);
+ alert.mockRestore();
+});
+test('history exercise deletion requires confirmation and supports cancel', async () => {
+ const {store,session,entry} = fixture();
+ jest.mocked(useAuth).mockReturnValue({repository:store.repo,pending:0,syncStatus:'idle'} as ReturnType<typeof useAuth>);
+ jest.mocked(useLocalSearchParams).mockReturnValue({id:session.id});
+ const alert = jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ await render(<ActiveWorkout/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Expand exercise'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Bench Press, Exercise options'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Remove exercise'}));
+ expect(alert).toHaveBeenCalled();
+ expect(store.entries(session.id)).toHaveLength(1);
+ const buttons = alert.mock.calls.at(-1)![2]!;
+ expect(buttons.find(b=>b.style==='cancel')).toBeTruthy();
+ await act(()=>buttons.find(b=>b.style==='cancel')?.onPress?.());
+ expect(store.entries(session.id)).toHaveLength(1);
+ await act(()=>buttons.find(b=>b.text==='Remove')?.onPress?.());
+ expect(store.entries(session.id)).toHaveLength(0);
+ expect(store.sets(entry.id)).toHaveLength(0);
+ alert.mockRestore();
+});
+test('a pulled past workout finish sheet keeps its synced zero duration', async () => {
+ const store = new WorkoutStore(memoryRepository());
+ const session = store.startPast('2026-10-01');
+ store.repo.localSave(`pastWorkout:${session.id}`,false);
+ await render(<FinishSheet store={store} session={session} onClose={()=>{}}/>,{wrapper});
+ expect(screen.getByLabelText('Duration in seconds')).toHaveProp('value','0');
+ await fireEvent.press(screen.getByTestId('save-workout'));
+ expect(store.repo.get('sessions',session.id)?.data.duration_ms).toBe(0);
 });
