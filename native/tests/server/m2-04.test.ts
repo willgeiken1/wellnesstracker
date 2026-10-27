@@ -7,7 +7,7 @@ import { Repository } from '../../src/data/repository';
 import { SyncEngine } from '../../src/data/sync/engine';
 import { canonicalRow } from '../../src/data/rows';
 import { syncFields, syncTables, projectSyncRow, mergeSyncRow, hasGatedColumns, DEFAULT_SYNC_FLAGS } from '../../src/data/sync/flags';
-import { OWNER_A, DEVICE_A, syntheticRow } from '../../fixtures/sync';
+import { OWNER_A, OWNER_B, DEVICE_A, syntheticRow } from '../../fixtures/sync';
 import { localDatabase, sqliteClient } from './sqlite';
 import { serverDatabase, testTransport } from './pglite';
 import { syncedV1Examples as examples } from '../../fixtures/synced-v1';
@@ -297,6 +297,7 @@ test('steady-state ON edits after a completed replay preserve the cursor and cre
   const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
   await transport.push([row]);await engine.sync();
   expect(engine.status).toBe('idle');
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')?.value).toBe('complete');
   enabled.applyPage('sets',[{row,server_seq:'5'}],'5');
   const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
   restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:9},row.id,300);
@@ -318,14 +319,17 @@ test('interrupted paginated ON replay stays needed until the final empty page',a
  }},1);
  let resumed: SyncEngine | undefined;
  try {
+  local.repo.applyPage('sets',[],'0');
   await transport.push([row]);await interrupted.sync();
   expect(interrupted.status).toBe('offline');expect(enabled.cursor('sets')).toBe('1');
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')?.value).toBe('needed');
   interrupted.close();
   const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
   restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:9},row.id,300);
   expect(restarted.cursor('sets')).toBe('0');
   resumed=new SyncEngine(restarted,transport,1);await resumed.sync();
   expect(resumed.status).toBe('idle');expect(restarted.pending()).toEqual([]);
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')?.value).toBe('complete');
   const cursor=restarted.cursor('sets');expect(BigInt(cursor)).toBeGreaterThan(0n);
   restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:10},row.id,400);
   expect(restarted.cursor('sets')).toBe(cursor);
@@ -437,4 +441,83 @@ test('pre-replay ON edits reconcile only unchanged gated columns across repeated
   restarted.applyPage('machine_notes',[{row:{...row,updated_at:200,data:{step:7,bar_weight:30,unit_override:'lb'}},server_seq:'2'}],'2');
   expect(restarted.pending()[0].row).toMatchObject({updated_at:301,data:{step:10,bar_weight:30,unit_override:null,exercise:'Fixture lift'}});
  }finally{local.sqlite.close();}
+});
+
+
+test('pending ON edit survives OFF newer-row merge then ON edit before replay without uploading stale gated values', async () => {
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+ const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
+ const engine=new SyncEngine(enabled,transport);
+ try {
+  const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+  await transport.push([row]);await engine.sync();
+  enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:9},row.id,200);
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,`dormant-v1:sets:${row.id}`)).toBeUndefined();
+  const remote={...row,device_id:DEVICE_B,updated_at:300,data:{reps:10,tag:'drop'}};
+  await transport.push([remote]);
+  const page=await transport.pull('sets','0',100);
+  off.applyPage('sets',page,page.at(-1)!.server_seq);
+  expect(off.get('sets',row.id)?.data).toMatchObject({reps:10,tag:'warmup'});
+  expect(enabled.pending()).toHaveLength(1);
+  const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+  restarted.save('sets',{...restarted.get('sets',row.id)!.data,reps:11},row.id,400);
+  const resumed=new SyncEngine(restarted,transport);
+  try {
+   await resumed.sync();expect(resumed.status).toBe('idle');
+   expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:11,tag:'drop'});
+   expect(restarted.pending()).toEqual([]);
+  } finally { resumed.close(); }
+ } finally { engine.close();local.sqlite.close();await server.close(); }
+});
+
+test('OFF pulls reset completed replay across OFF ON OFF ON cycles, isolated for two owners', async () => {
+ const local=await localDatabase();
+ const state=(owner:string)=>local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(owner,'replay:v1:sets')?.value;
+ try {
+  const a=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+  const b=new Repository(local.db,OWNER_B,DEVICE_A,()=>syntheticRow().id,on);
+  a.applyPage('sets',[],'5',true);b.applyPage('sets',[],'8',true);
+  expect(state(OWNER_A)).toBe('complete');expect(state(OWNER_B)).toBe('complete');
+  const off=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id);
+  for(const cursor of ['1','2']) {
+   // Empty OFF pulls must also invalidate the previous ON completion.
+   off.applyPage('sets',[],cursor,true);
+   expect(state(OWNER_A)).toBe('needed');expect(a.cursor('sets')).toBe('0');
+   expect(state(OWNER_B)).toBe('complete');expect(b.cursor('sets')).toBe('8');
+   const restarted=new Repository(local.db,OWNER_A,DEVICE_A,()=>syntheticRow().id,on);
+   restarted.applyPage('sets',[],'5',true);
+   expect(state(OWNER_A)).toBe('complete');
+  }
+  new Repository(local.db,OWNER_B,DEVICE_A,()=>syntheticRow().id).save('sets',{reps:9},syntheticRow().id,300);
+  expect(state(OWNER_B)).toBe('needed');expect(b.cursor('sets')).toBe('0');
+  expect(state(OWNER_A)).toBe('complete');expect(a.cursor('sets')).toBe('5');
+ } finally { local.sqlite.close(); }
+});
+
+test('ON edit while a replay page is in flight preserves server gated values through final empty page', async () => {
+ const server=await serverDatabase(),local=await localDatabase();
+ const transport=testTransport(server,OWNER_A,on);
+ const row={...syntheticRow('sets'),data:{reps:8,tag:'warmup'}};
+ const remote={...row,updated_at:200,device_id:DEVICE_B,data:{reps:9,tag:'drop'}};
+ const enabled=new Repository(local.db,OWNER_A,DEVICE_A,()=>row.id,on);
+ let edited=false;
+ const engine=new SyncEngine(enabled,{...transport,pull:async(table,after,limit)=>{
+  const page=await transport.pull(table,after,limit);
+  if(table==='sets'&&after==='1'&&!edited) {
+   edited=true;
+   enabled.save('sets',{...enabled.get('sets',row.id)!.data,reps:10},row.id,300);
+  }
+  return page;
+ }},1);
+ try {
+  enabled.applyPage('sets',[{row,server_seq:'1'}],'1',true);
+  await transport.push([remote]);
+  local.repo.applyPage('sets',await transport.pull('sets','0',100),'1');
+  await engine.sync();expect(engine.status).toBe('idle');expect(edited).toBe(true);
+  expect((await transport.pull('sets','0',100))[0].row.data).toMatchObject({reps:10,tag:'drop'});
+  expect(enabled.pending()).toEqual([]);
+  expect(local.sqlite.prepare('SELECT value FROM sync_state WHERE owner_id=? AND key=?').get(OWNER_A,'replay:v1:sets')?.value).toBe('complete');
+ } finally { engine.close();local.sqlite.close();await server.close(); }
 });

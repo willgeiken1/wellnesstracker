@@ -285,7 +285,14 @@ export class Repository {
         const dormant = this.syncFlags.syncedV1Columns ? this.dormantFields(table,row.id) : undefined;
         const hydrate = local && this.syncFlags.syncedV1Columns && (dormant ||
           (order === 0 && !this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)));
-        if (order > 0) this.write(canonicalPulledRow(mergeSyncRow(row,local,this.syncFlags)));
+        if (order > 0) {
+          this.write(canonicalPulledRow(mergeSyncRow(row,local,this.syncFlags)));
+          // An OFF merge retains local gated values even when the server base
+          // wins. Mark them regardless of an older ON revision in the outbox.
+          if (!this.syncFlags.syncedV1Columns && hasGatedColumns(table) && row.deleted_at === null) {
+            this.setState(this.dormantKey(table,row.id),'1');
+          }
+        }
         else if (hydrate) {
           const hydrated = hydrateSyncRow(row,local!,dormant);
           if (hydrated) this.write(canonicalPulledRow(hydrated));

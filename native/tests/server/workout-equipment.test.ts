@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Repository } from '../../src/data/repository';
-import { OWNER_A, DEVICE_A } from '../../fixtures/sync';
+import { OWNER_A, OWNER_B, DEVICE_A } from '../../fixtures/sync';
 import { localDatabase } from './sqlite';
 import { WorkoutStore } from '../../src/data/workout/store';
 import { WorkoutPreferences } from '../../src/features/workout/preferences';
@@ -123,5 +123,104 @@ test.each([false, true])('unit changes convert both unilateral drafts and preser
     store.editDraft(e.id, 0, { tag: 'warmup', rightReps: '7' });
     expect(store.sets(e.id)[0].data).toMatchObject({ left_weight_kg: 50, right_weight_kg: 40, right_reps: 7, entered_unit: 'kg' });
     expect(store.working(e)[0].warmup).toBe(true);
+  } finally { sqlite.close(); }
+});
+
+
+test('OFF preferences promote through repository writes on ON reads, survive restart and do not repeat', async () => {
+  const { db, sqlite } = await localDatabase();
+  const off = new Repository(db, OWNER_A, DEVICE_A, randomUUID);
+  const custom = { name: 'Fixture promotion lift', main: 'quads', helpers: ['glutes'], equipment: 'barbell' as const };
+  try {
+    const legacy = new WorkoutPreferences(off);
+    legacy.saveMachine(custom.name, { text: 'Seat 3', step: 7, bar_weight: 15, unit_override: 'kg' });
+    legacy.savePlates('kg', [20, 2.5]);
+    legacy.savePlates('lb', []);
+    legacy.saveCustom(custom);
+    const enabled = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+    const p = new WorkoutPreferences(enabled);
+    expect(p.library()).toContainEqual(custom);
+    expect(p.machine(custom.name)).toEqual({ text: 'Seat 3', step: 7, bar_weight: 15, unit_override: 'kg' });
+    expect(p.plateSet('kg')).toEqual([20, 2.5]);
+    expect(p.plateSet('lb')).toEqual([]);
+    expect(enabled.pending().map(x => x.row.table).sort()).toEqual(['custom_exercises', 'machine_notes', 'settings']);
+    expect(enabled.list('machine_notes')[0].data).toMatchObject({ step: 7, bar_weight: 15, unit_override: 'kg' });
+    expect(JSON.parse(String(enabled.list('settings')[0].data.plate_set))).toEqual({ kg: [20, 2.5], lb: [] });
+    p.saveMachine(custom.name, { ...p.machine(custom.name), step: 9 });
+    p.savePlates('kg', [10]);
+    const restarted = new WorkoutPreferences(new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true }));
+    expect(restarted.machine(custom.name).step).toBe(9);
+    expect(restarted.plateSet('kg')).toEqual([10]);
+    expect(restarted.library().filter(e => e.name === custom.name)).toEqual([custom]);
+    expect(() => restarted.saveCustom(custom)).toThrow('Duplicate exercise.');
+    expect(enabled.list('machine_notes')).toHaveLength(1);
+    expect(enabled.list('settings')).toHaveLength(1);
+    expect(enabled.list('custom_exercises')).toHaveLength(1);
+    const other = new WorkoutPreferences(new Repository(db, OWNER_B, DEVICE_A, randomUUID, { syncedV1Columns: true }));
+    expect(other.customs()).toEqual([]);
+    expect(other.machine(custom.name)).toEqual({ text: '' });
+    // A later OFF period writes new local values that must be promoted again.
+    legacy.saveMachine(custom.name, { text: 'Seat 4', step: 11 });
+    legacy.savePlates('kg', [5]);
+    expect(restarted.machine(custom.name)).toEqual({ text: 'Seat 4', step: 11 });
+    expect(restarted.plateSet('kg')).toEqual([5]);
+  } finally { sqlite.close(); }
+});
+
+test('ON promotion keeps existing custom rows and consumes legacy duplicates once', async () => {
+  const { db, sqlite } = await localDatabase();
+  const off = new WorkoutPreferences(new Repository(db, OWNER_A, DEVICE_A, randomUUID));
+  const enabled = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+  try {
+    off.saveCustom({ name: 'Fixture lift', main: 'quads', helpers: [], equipment: 'machine' });
+    const row = enabled.save('custom_exercises', { name: 'fixture LIFT', main_muscle: 'glutes', helpers: '[]', equipment: 'cable' });
+    const p = new WorkoutPreferences(enabled);
+    expect(p.customs()).toEqual([{ name: 'fixture LIFT', main: 'glutes', helpers: [], equipment: 'cable' }]);
+    enabled.remove('custom_exercises', row.id);
+    expect(new WorkoutPreferences(enabled).customs()).toEqual([]);
+    expect(enabled.list('custom_exercises', true)).toHaveLength(1);
+  } finally { sqlite.close(); }
+});
+
+
+test('ON plate save promotes the other local unit and preserves existing settings', async () => {
+  const { db, sqlite } = await localDatabase();
+  const off = new WorkoutPreferences(new Repository(db, OWNER_A, DEVICE_A, randomUUID));
+  const on = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+  try {
+    off.savePlates('kg', [20]);
+    const settings = on.save('settings', { plate_set: JSON.stringify({ lb: [45] }), rest_style: 'countdown' });
+    const p = new WorkoutPreferences(on);
+    p.savePlates('lb', [25]);
+    expect(p.plateSet('kg')).toEqual([20]);
+    expect(p.plateSet('lb')).toEqual([25]);
+    expect(on.list('settings')).toHaveLength(1);
+    expect(on.get('settings', settings.id)?.data.rest_style).toBe('countdown');
+  } finally { sqlite.close(); }
+});
+
+test.each(['machine', 'plates', 'customs'] as const)('%s promotion rolls back row, outbox and consumption together on failure, then retries', async kind => {
+  const { db, sqlite } = await localDatabase();
+  const off = new WorkoutPreferences(new Repository(db, OWNER_A, DEVICE_A, randomUUID));
+  const on = new Repository(db, OWNER_A, DEVICE_A, randomUUID, { syncedV1Columns: true });
+  const p = new WorkoutPreferences(on);
+  try {
+    off.saveMachine('Fixture lift', { text: 'Seat 3', step: 7 });
+    off.savePlates('kg', [20]);
+    off.saveCustom({ name: 'Fixture lift', main: 'quads', helpers: [], equipment: 'machine' });
+    const key = kind === 'machine' ? 'machineSetup:fixture lift' : kind === 'plates' ? 'gymPlates' : 'customLifts';
+    const table = kind === 'machine' ? 'machine_notes' : kind === 'plates' ? 'settings' : 'custom_exercises';
+    const before = on.list(table), pending = on.pending(), local = on.localGet(key);
+    const read = () => kind === 'machine' ? p.machine('Fixture lift') : kind === 'plates' ? p.plateSet('kg') : p.customs();
+    sqlite.exec(`CREATE TRIGGER deny_promotion BEFORE UPDATE ON workout_local WHEN OLD.key='${key}' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END`);
+    expect(read).toThrow('Local data is unavailable.');
+    expect(on.list(table)).toEqual(before);
+    expect(on.pending()).toEqual(pending);
+    expect(on.localGet(key)).toEqual(local);
+    sqlite.exec('DROP TRIGGER deny_promotion');
+    expect(read).not.toThrow();
+    expect(on.localGet(key)).toBeNull();
+    expect(on.list(table)).toHaveLength(1);
+    expect(on.pending().some(item => item.row.table === table)).toBe(true);
   } finally { sqlite.close(); }
 });
