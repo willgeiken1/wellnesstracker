@@ -113,6 +113,7 @@ export class WorkoutStore {
       const drafts = this.drafts(entryId), completed = drafts.filter(d => d.setId), pending = drafts.filter(d => !d.setId);
       if (!completed.length) {
         const updated = this.repo.save('entries', {...entry.data, exercise: name.trim()}, entryId);
+        this.repo.localSave(`repRange:${entryId}`, null);
         this.repo.localSave(`draft:${entryId}`, pending.map(() => ({weight:'',reps:''})));
         this.repo.localSave(`skipped:${entryId}`, false);
         return updated;
@@ -128,6 +129,12 @@ export class WorkoutStore {
       const entries = this.entries(String(entry.data.session_id)).filter(e => e.id !== replacement.id);
       entries.splice(entries.findIndex(e => e.id === entryId) + 1, 0, replacement);
       entries.forEach((e, position) => this.repo.save('entries', {...e.data, position}, e.id));
+      const group = this.supersetGroup(entry);
+      if (group) {
+        // Transfer the rotation slot; completed history keeps its exercise but leaves the group.
+        this.exerciseOptions().write(this.repo.get('entries',replacement.id)!, {superset_group:group});
+        this.exerciseOptions().write(this.repo.get('entries',entryId)!, {superset_group:null});
+      }
       if (this.timer()?.entryId === entryId) this.skipTimer();
       return replacement;
     });

@@ -12,6 +12,63 @@ function log(store: WorkoutStore, entryId: string, index: number, reps = 10, war
   store.editDraft(entryId, index, {weight:'100', reps:String(reps), tag:warmup ? 'warmup' : null});
   store.toggleDone(entryId,index,1000);
 }
+for (const enabled of [false,true]) for (const mode of ['swap','replace'] as const) {
+  test(`${mode} without completed sets clears the inherited range and preserves the group (v1 ${enabled})`, async () => {
+    const a = await setup(enabled);
+    try {
+      const routine = a.store.saveTemplate('Synthetic pair',['Bench Press','Dumbbell Row'].map(exercise => ({exercise,target_sets:2,target_reps:8,rep_min:8,rep_max:10,superset_group:'pair'})));
+      const session = a.store.start(routine.id), [original,partner] = a.store.entries(session.id);
+      expect(a.store.repRange(original)).toEqual({min:8,max:10});
+      const replacement = a.store.replaceExercise(original.id,'Romanian Deadlift',mode);
+      const reloaded = new WorkoutStore(a.repo);
+      expect(replacement.id).toBe(original.id);
+      expect(replacement.data.exercise).toBe('Romanian Deadlift');
+      expect(reloaded.repRange(replacement)).toBeNull();
+      expect(reloaded.supersetGroup(replacement)).toBe('pair');
+      expect(reloaded.supersetGroup(partner)).toBe('pair');
+      expect(reloaded.loggerOrder(session.id)).toEqual([
+        {entryId:replacement.id,index:0},{entryId:partner.id,index:0},
+        {entryId:replacement.id,index:1},{entryId:partner.id,index:1}
+      ]);
+    } finally {a.sqlite.close();}
+  });
+  test(`${mode} with completed sets transfers the group to the replacement and unlinks the stub (v1 ${enabled})`, async () => {
+    const a = await setup(enabled);
+    try {
+      const routine = a.store.saveTemplate('Synthetic pair',['Bench Press','Dumbbell Row'].map(exercise => ({exercise,target_sets:3,target_reps:8,rep_min:8,rep_max:10,superset_group:'pair'})));
+      const session = a.store.start(routine.id), [original,partner] = a.store.entries(session.id);
+      log(a.store,original.id,0);
+      const savedSet = a.store.sets(original.id)[0].id;
+      const replacement = a.store.replaceExercise(original.id,'Romanian Deadlift',mode);
+      const reloaded = new WorkoutStore(a.repo), stub = a.repo.get('entries',original.id)!;
+      expect(replacement.id).not.toBe(original.id);
+      expect(stub.data.exercise).toBe('Bench Press');
+      expect(reloaded.sets(stub.id).map(s => s.id)).toEqual([savedSet]);
+      expect(reloaded.supersetGroup(stub)).toBeNull();
+      expect(reloaded.supersetGroup(replacement)).toBe('pair');
+      expect(reloaded.supersetGroup(partner)).toBe('pair');
+      expect(reloaded.repRange(replacement)).toBeNull();
+      expect(reloaded.loggerOrder(session.id)).toEqual([
+        {entryId:stub.id,index:0},
+        {entryId:replacement.id,index:0},{entryId:partner.id,index:0},
+        {entryId:replacement.id,index:1},{entryId:partner.id,index:1},
+        {entryId:partner.id,index:2}
+      ]);
+    } finally {a.sqlite.close();}
+  });
+}
+test.each([false,true])('custom machine Step feeds range progression (v1 %s)', async enabled => {
+  const a = await setup(enabled), now = Date.now()-10000;
+  try {
+    a.store.preferences().saveMachine('Leg Extension',{text:'Synthetic setup',step:2});
+    const routine = a.store.saveTemplate('Synthetic progression',[{exercise:'Leg Extension',target_sets:2,target_reps:8,rep_min:8,rep_max:10}]);
+    const old = a.store.start(routine.id,now), entry = a.store.entries(old.id)[0];
+    log(a.store,entry.id,0); log(a.store,entry.id,1);
+    a.store.finish(old.id,{startedAt:now,finishedAt:now+1000,notes:''});
+    const session = a.store.start(routine.id,now+2000), next = a.store.entries(session.id)[0];
+    expect(a.store.suggestion(next)).toMatchObject({weight:102,jump:true,target:8});
+  } finally {a.sqlite.close();}
+});
 test.each([{counts:[2,1]}, {counts:[2,1,3]}])('round order and longest rest for unequal sets $counts', async ({counts}) => {
   const a = await setup();
   try {
