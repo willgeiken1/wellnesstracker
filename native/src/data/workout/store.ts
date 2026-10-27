@@ -4,6 +4,7 @@ import { t } from '../../i18n/en';
 import { Repository } from '../repository';
 import type { Row } from '../rows';
 import { compareRows } from '../rows';
+// Preference storage still lives under features; moving it into data is a separate layering cleanup.
 import { WorkoutPreferences } from '../../features/workout/preferences';
 import { attribute, cardKey, detectPR, displayWeight, fromKg, localDay, shouldShowCard, suggestion, toKg, validateDate, validateSet, weekOf, type Unit, type WorkingSet } from '../../core/workout/rules';
 export interface Draft {
@@ -39,7 +40,13 @@ export class WorkoutStore {
   unit(entryId?: string): Unit {
     const fallback = this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
     const entry = entryId ? this.repo.get('entries', entryId) : undefined;
-    return entry ? this.preferences().unit(String(entry.data.exercise), fallback) : fallback;
+    if (!entry) return fallback;
+    if (entry.data.session_id !== this.active()?.id) {
+      // Historical edits retain their saved input unit, independent of today's setup.
+      const saved = this.repo.localGet<Unit>(`entryUnit:${entry.id}`) ?? this.sets(entry.id)[0]?.data.entered_unit;
+      return saved === 'kg' || saved === 'lb' ? saved : fallback;
+    }
+    return this.preferences().unit(String(entry.data.exercise), fallback);
   }
   preferences() { return new WorkoutPreferences(this.repo); }
   hapticsEnabled() { return this.repo.localGet<boolean>('haptics') !== false; }
@@ -119,6 +126,7 @@ export class WorkoutStore {
         return updated;
       }
       const replacement = this.addExercise(String(entry.data.session_id), name, Math.max(1,pending.length));
+      this.repo.localSave(`repRange:${replacement.id}`, null);
       this.repo.localSave(`draft:${replacement.id}`, pending.length ? pending.map(() => ({weight:'',reps:''})) : [{weight:'',reps:''}]);
       // Compact completed rows without changing their IDs or exercise attribution.
       completed.forEach((draft, position) => {
@@ -531,6 +539,8 @@ export class WorkoutStore {
     const s = this.repo.get('sessions', id);
     if (!s || s.deleted_at !== null || !validateDate(input.startedAt, now) || !validateDate(input.finishedAt, now) || input.finishedAt < input.startedAt) throw Error('Invalid date.');
     this.repo.atomic(() => {
+      // Freeze the unit used by local drafts before this session becomes history.
+      if (s.data.finished_at === null) for (const entry of this.entries(id)) this.repo.localSave(`entryUnit:${entry.id}`, this.unit(entry.id));
       this.repo.save('sessions', {
         ...s.data,
         name: input.name?.trim() || s.data.name || t('workoutName'),
@@ -565,6 +575,7 @@ export class WorkoutStore {
         best = current.filter(s => s.done && !s.warmup && s.reps >= 1).sort((a, b) => b.weight * (1 + b.reps / 30) - a.weight * (1 + a.reps / 30))[0];
       return {
         exercise: name,
+        unit: this.unit(matches[0].id),
         previousE1rm: Math.max(0, ...prior.filter(s => s.done && !s.warmup && s.reps >= 1).map(s => s.weight * (1 + s.reps / 30))),
         bestReps: best?.reps ?? 0,
         displayWeight: best?.weight ?? 0,
@@ -574,6 +585,7 @@ export class WorkoutStore {
     return {
       session: s,
       count: sets.length,
+      // Aggregate volume uses the profile unit; summing per-exercise lb and kg would be misleading.
       volume: sets.reduce((n, s) => {
         const volume = s.data.left_weight_kg != null && s.data.right_weight_kg != null
           ? fromKg(Number(s.data.left_weight_kg), this.unit()) * Number(s.data.left_reps) + fromKg(Number(s.data.right_weight_kg), this.unit()) * Number(s.data.right_reps)

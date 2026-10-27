@@ -9,7 +9,7 @@ import type { WorkoutStore } from '../../data/workout/store';
 import { t } from '../../i18n/en';
 import { Panel, layout } from '../workout/primitives';
 import { PlanStore } from './store';
-import type { Plan } from './schedule';
+import { FixedWeekdaysError, type Plan } from './schedule';
 const weekdayKeys = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const;
 function Choice({label, checked, onPress}:{label:string;checked:boolean;onPress:()=>void}) {
   return <Pressable accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{checked}}
@@ -41,7 +41,7 @@ export function PlansPanel({store}:{store:WorkoutStore}) {
 function PlanEditor({store,initial,onClose}:{store:WorkoutStore;initial:Plan;onClose:()=>void}) {
   const {colors}=useTheme();
   const [mode,setMode]=useState(initial.mode),[target,setTarget]=useState(String(initial.daysPerWeek)),
-    [days,setDays]=useState(initial.days),[error,setError]=useState(false);
+    [days,setDays]=useState(initial.days),[error,setError]=useState<'invalidPlan' | 'fixedWeekdaysRequired' | 'workoutSaveError' | null>(null);
   const enabled=store.repo.syncFlags?.syncedV1Columns;
   return <>
     {enabled ? <>
@@ -61,12 +61,14 @@ function PlanEditor({store,initial,onClose}:{store:WorkoutStore;initial:Plan;onC
           onPress={()=>setDays(current=>current.map(d=>d.routineId===r.id?{...d,weekdays:d.weekdays.includes(index)?d.weekdays.filter(w=>w!==index):[...d.weekdays,index]}:d))}/>)}
       </View>;
     })}
-    {error && <ThemedText accessibilityRole="alert">{t('invalidPlan')}</ThemedText>}
+    {error && <ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
     <Button label={t('savePlan')} onPress={()=>{
       try {
         const ordered=store.templates().flatMap(r=>days.filter(d=>d.routineId===r.id));
         new PlanStore(store.repo).save({mode,daysPerWeek:Number(target),days:ordered});onClose();
-      } catch {setError(true);}
+      } catch (error) {
+        setError(error instanceof FixedWeekdaysError ? 'fixedWeekdaysRequired' : error instanceof Error && error.message === 'Invalid plan.' ? 'invalidPlan' : 'workoutSaveError');
+      }
     }}/>
     <Button label={t('cancel')} variant="secondary" onPress={onClose}/>
   </>;

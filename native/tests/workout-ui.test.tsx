@@ -850,3 +850,17 @@ test('M2-07 template range and superset controls save and reload', async () => {
     expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:null,rep_max:null,superset_group:null});
   } finally {useLocalSearchParams.mockReturnValue({});}
 });
+
+test('summary PR load, estimate and milestone shelf use the exercise unit', async () => {
+  const store = new WorkoutStore(memoryRepository()), start = Date.now()-10000;
+  store.preferences().saveMachine('Bench Press',{text:'',unit_override:'kg'});
+  for (const [index,weight] of ['100','105'].entries()) {
+    const session = store.start(undefined,start+index*2000), entry = store.addExercise(session.id,'Bench Press',1);
+    store.editDraft(entry.id,0,{weight,reps:'8'}); store.toggleDone(entry.id,0);
+    store.finish(session.id,{startedAt:start+index*2000,finishedAt:start+index*2000+1000,notes:''});
+  }
+  await render(<WorkoutSummary store={store} id={store.history()[0].id} />, {wrapper});
+  expect(screen.getByText('Bench Press 105 × 8')).toBeTruthy();
+  expect(screen.getByText(/≈ 133 kg/)).toBeTruthy();
+  expect(screen.getByText('Bench Press summit, 105 × 8')).toBeTruthy();
+});

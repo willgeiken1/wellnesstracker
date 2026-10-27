@@ -29,7 +29,8 @@ test('invalid target stays in editor with catalog validation message',async()=>{
  await fireEvent.press(screen.getByRole('button',{name:'Edit plan'}));
  await fireEvent.changeText(screen.getByLabelText('Days per week'),'8');
  await fireEvent.press(screen.getByRole('button',{name:'Save plan'}));
- expect(screen.getByRole('alert')).toHaveTextContent(/Choose 1–7 whole days and assign each weekday to at most one plan day\./);
+ expect(screen.getByRole('alert')).toHaveTextContent('Choose 1–7 whole days and assign each weekday to at most one plan day.');
+ expect(screen.getByRole('alert')).not.toHaveTextContent('In Fixed mode');
 });
 test('fixed routine without weekdays stays in the editor with an accessible error',async()=>{
  const repo=memoryRepository();Object.defineProperty(repo,'syncFlags',{value:{syncedV1Columns:true}});
@@ -62,4 +63,15 @@ test('starting a member routine from the routine list also advances only after f
  const session=workout.active()!,now=Number(session.data.started_at);
  workout.finish(session.id,{startedAt:now,finishedAt:now,notes:''});
  expect(plans.nextIndex()).toBe(1);
+});
+
+ test('unexpected plan save failures show the save error without Fixed advice',async()=>{
+ const repo=memoryRepository();
+ await render(<ThemeProvider><PlansPanel store={new WorkoutStore(repo)}/></ThemeProvider>);
+ await fireEvent.press(screen.getByRole('button',{name:'Edit plan'}));
+ const save=jest.spyOn(PlanStore.prototype,'save').mockImplementation(()=>{throw Error('Invalid plan day.');});
+ await fireEvent.press(screen.getByRole('button',{name:'Save plan'}));
+ expect(screen.getByRole('alert')).toHaveTextContent('Could not save this change. Please try again.');
+ expect(screen.getByRole('alert')).not.toHaveTextContent('In Fixed mode');
+ save.mockRestore();
 });

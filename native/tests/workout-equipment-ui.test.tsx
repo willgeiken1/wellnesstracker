@@ -80,3 +80,14 @@ test('saved machine notes remain visible beside the sets without opening the edi
   await render(<MachineSetup store={store} name="Fixture" />, { wrapper });
   expect(screen.getByText('Seat 5, pad 2, pin 3')).toBeTruthy();
 });
+
+test('switching setup units clears invalid numeric fields before display', async () => {
+  const store = new WorkoutStore(memoryRepository());
+  await render(<MachineSetup store={store} name="Fixture" />, {wrapper});
+  await fireEvent.press(screen.getByRole('button',{name:'Machine setup'}));
+  await fireEvent.changeText(screen.getByLabelText('Step (lb)'), 'abc');
+  await fireEvent.changeText(screen.getByLabelText('Bar weight (lb)'), 'Infinity');
+  await fireEvent.press(screen.getByRole('button',{name:'Exercise unit: kg'}));
+  expect(screen.getByLabelText('Step (kg)').props.value).toBe('');
+  expect(screen.getByLabelText('Bar weight (kg)').props.value).toBe('');
+});

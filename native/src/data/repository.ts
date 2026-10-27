@@ -318,6 +318,8 @@ export class Repository {
       // Its rows remain useful, but it cannot advance or complete that replay.
       if (this.cursor(table) !== after) return;
       this.setState(this.cursorKey(table),cursor);
+      // custom_exercises is ON-only in syncTables: its OFF arm is unreachable;
+      // the shared completion path still marks its ON replay for preference promotion.
       if (hasGatedColumns(table) || table === 'custom_exercises') {
         if (!this.syncFlags.syncedV1Columns) {
           this.setState(this.replayKey(table),'needed');
