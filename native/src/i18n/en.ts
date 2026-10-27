@@ -1,7 +1,8 @@
 export const en = {
+  demoTransferFailed: "Your account is ready, but demo entries could not be moved. They are still on this device. Try again to move them.",
   demoCarryUnavailable: "This older demo has unmarked samples and cannot be carried over safely yet. Your demo entries are still on this device. No account request was sent.",
   aboutYou: "About you",
-  onboardingStep: "Step {step} of 3",
+  onboardingStep: "Step {step} of {total}",
   birthDate: "Date of birth (YYYY-MM-DD)",
   profileName: "Name (optional)",
   profileUnits: "Units",

@@ -108,3 +108,39 @@ test('a user set added to a sample exercise keeps a valid exercise/session witho
  expect(repo.get('sessions',String(parent.data.session_id))).toBeDefined();
  expect(repo.get('entries',entry.id)).toBeUndefined();expect(repo.get('sets',sampleSet.id)).toBeUndefined();sqlite.close();
 });
+
+test.each([null,'2000-01-01'])('existing profile (dob %s) survives stale onboarding without duplicate or starter rows',async dob=>{
+ const {repo,sqlite}=await localDatabase();
+ const original=repo.save('profile',{name:'Existing synthetic',weight_unit:'lb',height_m:1.65,dob});
+ const before={...original.data};
+ finishOnboarding(repo,input,'fullBody',estimateTargets(input,'2026-10-27'),'2026-10-27');
+ expect(repo.list('profile')).toHaveLength(1);expect(repo.list('profile')[0].data).toEqual(before);
+ expect(repo.list('food_targets')).toEqual([]);expect(repo.list('weigh_ins')).toEqual([]);expect(repo.list('routines')).toEqual([]);
+ saveProfile(repo,{...input,weight:''},'2026-10-27');expect(repo.list('profile')).toHaveLength(1);expect(repo.list('profile')[0].id).toBe(original.id);sqlite.close();
+});
+test('existing account singleton tables and profile extras win demo promotion',async()=>{
+ const {repo,db,sqlite}=await localDatabase();const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+ repo.save('profile',{name:'Account synthetic',weight_unit:'lb',height_m:1.7});
+ const profile=repo.list('profile')[0];
+ repo.save('food_targets',{day:'2026-10-27',energy_kj:8000});const targets=repo.list('food_targets')[0];
+ repo.save('weigh_ins',{day:'2026-10-27',weight_kg:70,source:'app'});const weight=repo.list('weigh_ins')[0];
+ demo.save('profile',{name:'Demo synthetic',weight_unit:'kg'});demo.save('food_targets',{day:'2026-10-27',energy_kj:9000});demo.save('weigh_ins',{day:'2026-10-27',weight_kg:80,source:'app'});
+ repo.localSave('profileExtras',{activity:'active'});demo.localSave('profileExtras',{activity:'light'});
+ promoteDemo(demo,repo);
+ expect(repo.list('profile')).toEqual([profile]);expect(repo.list('food_targets')).toEqual([targets]);expect(repo.list('weigh_ins')).toEqual([weight]);expect(repo.localGet('profileExtras')).toEqual({activity:'active'});sqlite.close();
+});
+
+test.each([null,'2000-01-01'])('first sync loads existing server profile (DOB %s) before stale completion can create anything',async dob=>{
+ const {SyncEngine}=await import('../../src/data/sync/engine');const {syntheticRow}=await import('../../fixtures/sync');
+ const {repo,sqlite}=await localDatabase();
+ const server={...syntheticRow('profile'),data:{name:'Server synthetic',weight_unit:'lb',height_m:1.65,dob}};
+ let release!:()=>void;const wait=new Promise<void>(resolve=>{release=resolve;});
+ const push=jest.fn(async()=>{});
+ const engine=new SyncEngine(repo,{owner:repo.owner,push,pull:async(table,after)=>{await wait;return table==='profile'&&after==='0'?[{row:server,server_seq:'1'}]:[];}});
+ const flight=engine.sync();expect(engine.initialPullComplete).toBe(false);expect(repo.list('profile')).toEqual([]);
+ release();await flight;expect(engine.initialPullComplete).toBe(true);expect(engine.pullRevision).toBe(1);
+ finishOnboarding(repo,input,'fullBody',estimateTargets(input),'2026-10-27');
+ expect(repo.list('profile')).toHaveLength(1);expect(repo.list('profile')[0].data).toEqual(server.data);
+ expect(repo.list('food_targets')).toEqual([]);expect(repo.list('weigh_ins')).toEqual([]);expect(repo.pending()).toEqual([]);expect(push).not.toHaveBeenCalled();
+ await engine.sync();expect(engine.pullRevision).toBe(2);engine.close();sqlite.close();
+});

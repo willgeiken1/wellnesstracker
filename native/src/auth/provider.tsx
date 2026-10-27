@@ -22,6 +22,9 @@ const bootSignOutStorage: typeof signOutStorage={
 };
 export interface AuthState {
   phoneOnly?: boolean;
+  initialPullComplete?: boolean; syncPullRevision?:number;
+  demoTransferError?: boolean; retryDemoTransfer?():void;
+  blockOnboarding?():void; cancelAuthFlow?():void;
   session: Session | null; demo: boolean; ready: boolean; configured: boolean; configError: string | null;
   repository: Repository | null; pending: number; conflicts: number; syncStatus: SyncStatus;
   prepareSignOut?(): Promise<void>;
@@ -50,6 +53,9 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const client=clientState.client;
   const [session,setSession]=useState<Session|null>(null), [demo,setDemo]=useState(false), [authReady,setAuthReady]=useState(false);
   const [repository,setRepository]=useState<Repository|null>(null),[dataError,setDataError]=useState(false);
+  const ageBlocked=useRef(false),authRequest=useRef(0),authInFlight=useRef(false);
+  const [demoTarget,setDemoTarget]=useState<string|null>(null),[demoTransferError,setDemoTransferError]=useState(false);
+  const [transferAttempt,setTransferAttempt]=useState(0);
   const activeSession=useRef<Session|null>(null);
   const bootOwner=useRef<string|null>(null);
   useEffect(()=>{
@@ -103,15 +109,11 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     if(!bootReady)return;
     void openLocalDatabase().then(database=>{
       if(!active)return;
+      setDemoTarget(target=>target&&target!==owner?null:target);setDemoTransferError(false);
+      const device=database.forOwner('device');
+      if(device.localGet?.('demoUpgradePending'))device.localSave('demoUpgradePending',false);
       const repo=database.forOwner(owner);
       if(owner==='demo')seedDemo(repo);
-      if(!['demo','guest'].includes(owner)) {
-        const device=database.forOwner('device');
-        if(device.localGet?.('demoUpgradePending')) {
-          promoteDemo(database.forOwner('demo'),repo);
-          device.localSave('demoUpgradePending',false);
-        }
-      }
       setRepository(repo);setDataError(false);
     }).catch(()=>{if(active)setDataError(true);});
     return ()=>{active=false;};
@@ -122,6 +124,8 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const engine=useMemo(()=>!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[currentRepo,client,userId,departurePending]);
   const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
   const conflicts=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.conflicts().length??0);
+  const initialPullComplete=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.initialPullComplete??false);
+  const syncPullRevision=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.pullRevision??0);
   const syncStatus=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.status??'idle');
   useEffect(()=>{
     if(!engine)return;
@@ -134,7 +138,43 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     void triggers.foreground();
     return ()=>{app.remove();network.remove();triggers.stop();};
   },[engine]);
-  const value: AuthState={bootExportOwner:()=>departureLocked.current||departingOwner.current?null:recovery==='boot-error'?bootOwner.current:realOwnerId(activeSession.current?.user.id),prepareSignOut:()=>{
+  // Demo rows remain isolated until the destination's first successful pull.
+  useEffect(()=>{
+    let active=true;
+    if(!currentRepo||demoTarget!==owner||!initialPullComplete||demoTransferError)return;
+    const request=authRequest.current;
+    void openLocalDatabase().then(database=>{
+      if(!active||request!==authRequest.current||activeSession.current?.user.id!==owner)return;
+      try {promoteDemo(database.forOwner('demo'),currentRepo);setDemoTarget(null);setDemoTransferError(false);}
+      catch {setDemoTransferError(true);}
+    }).catch(()=>{if(active)setDemoTransferError(true);});
+    return ()=>{active=false;};
+  },[currentRepo,demoTarget,owner,initialPullComplete,demoTransferError,transferAttempt]);
+  const authenticate=async(email:string,password:string,dob?:string,create=false):Promise<string|null>=>{
+    if(create){const age=ageOn(dob??'');if(ageBlocked.current||age===null||age<13){if(age!==null&&age<13)ageBlocked.current=true;return 'invalidProfile';}}
+    if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
+    const request=++authRequest.current;authInFlight.current=true;setDemoTarget(null);setDemoTransferError(false);
+    try {
+      if(demo){const database=await openLocalDatabase();try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}}
+      const {data,error}=create?await client.auth.signUp({email,password}):await client.auth.signInWithPassword({email,password});
+      if(request!==authRequest.current)return 'authFailed';
+      if(error)return 'authFailed';
+      // A confirmation-only signup has no transfer intent. No durable device-wide flag.
+      const target=data?.session?.user;
+      if(demo&&target&&(!activeSession.current||activeSession.current.user.id===target.id)&&target.email?.trim().toLowerCase()===email.trim().toLowerCase())setDemoTarget(target.id);
+      return create&&!data?.session?'confirmEmail':null;
+    }catch{return 'authFailed';}
+    finally {if(request===authRequest.current)authInFlight.current=false;}
+  };
+  const cancelAuthFlow=useCallback(()=>{
+    // Successful auth can unmount the form before the request promise resolves.
+    if(authInFlight.current&&!activeSession.current){authRequest.current++;authInFlight.current=false;setDemoTarget(null);}
+  },[]);
+  const value: AuthState={initialPullComplete,syncPullRevision,demoTransferError,
+    retryDemoTransfer:()=>{if(demoTarget===owner){setDemoTransferError(false);setTransferAttempt(n=>n+1);}},
+    blockOnboarding:()=>{ageBlocked.current=true;},
+    cancelAuthFlow,
+    bootExportOwner:()=>departureLocked.current||departingOwner.current?null:recovery==='boot-error'?bootOwner.current:realOwnerId(activeSession.current?.user.id),prepareSignOut:()=>{
       const flight=syncBeforeSignOut(()=>engine?.sync()??Promise.resolve());
       preparedSync.current={engine,flight};return flight;
     },recovery,bootErrorClass:bootClass,bootRetryNeedsConfirmation,retryBoot:(confirmed=false)=>{
@@ -156,34 +196,10 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       finally {escapeInFlight.current=false;}
     },session,demo,ready:bootReady&&authReady&&!!currentRepo&&!departurePending,configured:!!client,configError:clientState.error ?? (dataError?'Local data is unavailable.':null),repository:currentRepo,pending,conflicts,syncStatus,
     lookAround:()=>{if(bootReady&&!departingOwner.current&&!departureLocked.current)setDemo(true);},
-    signIn:async(email,password)=>{
-      if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
-      try{
-        if(demo){
-          const database=await openLocalDatabase();
-          try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}
-          database.forOwner('device').localSave('demoUpgradePending',true);
-        }
-        const {error}=await client.auth.signInWithPassword({email,password});
-        if(error&&demo)(await openLocalDatabase()).forOwner('device').localSave('demoUpgradePending',false);
-        return error?'authFailed':null;
-      }catch{return 'authFailed';}
-    },
-    createAccount:async(email,password,dob)=>{
-      const age=ageOn(dob??'');if(age===null||age<13)return 'invalidProfile';
-      if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
-      try{
-        if(demo){
-          const database=await openLocalDatabase();
-          try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}
-          database.forOwner('device').localSave('demoUpgradePending',true);
-        }
-        const {data,error}=await client.auth.signUp({email,password});
-        if(error&&demo)(await openLocalDatabase()).forOwner('device').localSave('demoUpgradePending',false);
-        return error?'authFailed':data.session?null:'confirmEmail';
-      }catch{return 'authFailed';}
-    },
+    signIn:(email,password)=>authenticate(email,password),
+    createAccount:(email,password,dob)=>authenticate(email,password,dob,true),
     signOut:async(discardUnsynced=false)=>{
+      authRequest.current++;authInFlight.current=false;if(demoTarget)setDemoTarget(null);if(demoTransferError)setDemoTransferError(false);
       if(departurePending&&retryDeparture.current)return retryDeparture.current();
       const prepared=preparedSync.current;preparedSync.current=null;
       if(!departurePending)await (prepared?.engine===engine?prepared.flight:syncBeforeSignOut(()=>engine?.sync()??Promise.resolve()));

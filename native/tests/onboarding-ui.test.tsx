@@ -7,7 +7,7 @@ import { t } from '../src/i18n/en';
 jest.mock('expo-router',()=>({router:{push:jest.fn(),replace:jest.fn()}}));
 jest.mock('../src/auth/client',()=>({getAuthClient:()=>null}));
 jest.mock('../src/data/database',()=>({openLocalDatabase:jest.fn()}));
-const state=():AuthState=>({session:null,demo:false,ready:true,configured:true,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',lookAround:jest.fn(),signIn:jest.fn(async()=>null),createAccount:jest.fn(async()=>null),signOut:jest.fn(async()=>{}),syncNow:jest.fn(async()=>{})});
+const state=():AuthState=>({initialPullComplete:true,session:null,demo:false,ready:true,configured:true,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',lookAround:jest.fn(),signIn:jest.fn(async()=>null),createAccount:jest.fn(async()=>null),signOut:jest.fn(async()=>{}),syncNow:jest.fn(async()=>{})});
 async function wrap(auth=state()){await render(<AuthContext.Provider value={auth}><OnboardingDraftProvider><ThemeProvider><Onboarding/></ThemeProvider></OnboardingDraftProvider></AuthContext.Provider>);return auth;}
 test('under 13 shows kind rejection before account creation or any repository writes',async()=>{
  const auth=await wrap();await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2020-01-01');
@@ -70,4 +70,14 @@ test('Settings profile edits persist, preserve historical rows, and never requir
  expect(repository.list('profile')[0].data).toMatchObject({name:'Synthetic name',weight_unit:'lb',height_m:1.8});
  expect(repository.list('weigh_ins')).toEqual([history]);
  expect(repository.localGet('profileExtras')).toMatchObject({activity:'active'});
+});
+
+test('under-13 block survives Back and route remount in the same onboarding session',async()=>{
+ const auth=state();
+ const Route=({show}:{show:boolean})=><AuthContext.Provider value={auth}><OnboardingDraftProvider><ThemeProvider>{show&&<Onboarding/>}</ThemeProvider></OnboardingDraftProvider></AuthContext.Provider>;
+ const view=await render(<Route show/>);
+ await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2020-01-01');await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
+ await fireEvent.press(screen.getByRole('button',{name:t('backWelcome')}));
+ await view.rerender(<Route show={false}/>);await view.rerender(<Route show/>);
+ expect(screen.getByText(t('ages13Title'))).toBeTruthy();expect(screen.queryByLabelText(t('birthDate'))).toBeNull();expect(auth.createAccount).not.toHaveBeenCalled();
 });

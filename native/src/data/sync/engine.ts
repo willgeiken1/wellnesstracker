@@ -11,6 +11,8 @@ export interface Transport {
 export type SyncStatus = 'idle' | 'syncing' | 'offline';
 export class SyncEngine {
   status: SyncStatus = 'idle';
+  initialPullComplete = false;
+  pullRevision = 0;
   private active = true;
   private flight?: Promise<void>;
   private requested = false;
@@ -80,7 +82,7 @@ export class SyncEngine {
         await this.pushBatch(batch);
       }
       for (const table of this.repository.syncTables().filter(t=>t!=='purges')) await this.pullTable(table);
-      if (this.active) this.setStatus('idle');
+      if (this.active) { this.initialPullComplete=true; this.pullRevision++; this.setStatus('idle'); }
     } catch { if (this.active) this.setStatus('offline'); }
   }
   close() { this.active=false; this.listeners.clear(); }

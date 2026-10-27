@@ -5,6 +5,7 @@ import { useFonts } from 'expo-font';
 import { Lexend_500Medium } from '@expo-google-fonts/lexend/500Medium';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '@/design/theme-provider';
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { AuthProvider, useAuth } from '../auth/provider';
 import { LocalDataRecovery } from '../auth/screens';
@@ -39,11 +40,12 @@ function Application() {
   const auth = useAuth();
   useEffect(()=>{
     // Resume an interrupted first setup (including email confirmation on restart).
-    if(auth.ready&&auth.session&&auth.repository&&!auth.repository.list('profile').some(row=>row.data.dob))router.replace('/onboarding');
-  },[auth.ready,auth.session,auth.repository]);
+    if(auth.ready&&auth.session&&auth.repository&&auth.initialPullComplete&&auth.repository.list('profile').length===0)router.replace('/onboarding');
+  },[auth.ready,auth.session,auth.repository,auth.initialPullComplete,auth.syncPullRevision]);
   return <ThemeProvider key={auth.session?.user.id ?? (auth.demo ? 'demo' : 'guest')} repository={auth.repository}>
     {auth.recovery!=='boot-error' && auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
     <LocalDataRecovery />
+    {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
   </ThemeProvider>;
 }

@@ -1,9 +1,9 @@
 import { BootRecovery } from './boot-recovery';
 import { DepartureFailure } from './sign-out';
-import { useRef, useState, type ReactNode } from 'react';
-import { ageOn } from '../features/onboarding/model';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ageOn, onboardingProgress } from '../features/onboarding/model';
 import { PreferenceFields } from '../features/onboarding/fields';
-import { saveDevicePreferences } from '../features/onboarding/device-preferences';
+import { useDevicePreferences } from '../features/onboarding/device-preferences';
 import { TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../components/screen';
@@ -17,7 +17,7 @@ import { syncBeforeSignOut } from './sign-out-sync';
 export function Welcome() {
   const auth=useAuth();
   return <Screen topInset title={t('authWelcome')}>
-    <ThemedText>{t('onboardingStep').replace('{step}','1')}</ThemedText>
+    <ThemedText>{onboardingProgress(1)}</ThemedText>
     {!auth.configured && <ThemedText accessibilityRole="alert">{t('authUnavailable')}</ThemedText>}
     {auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
     <Button label={t('getStarted')} disabled={!auth.configured} onPress={()=>router.push('/onboarding')}/>
@@ -27,7 +27,9 @@ export function Welcome() {
 }
 export function AuthForm({create=false,dob,progress,onCreated,embedded=false,beforeSubmit}: {create?:boolean;dob?:string;progress?:ReactNode;onCreated?:()=>void;embedded?:boolean;beforeSubmit?:()=>boolean}) {
   const auth=useAuth(),{colors}=useTheme();
-  const [prefs,setPrefs]=useState({crashReports:true,analytics:false});
+  const cancelFlow=auth.cancelAuthFlow;
+  useEffect(()=>()=>cancelFlow?.(),[cancelFlow]);
+  const preferences=useDevicePreferences();
   const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState('');
   const [error,setError]=useState<MessageKey|null>(null),[busy,setBusy]=useState(false);
   const submit=async()=>{
@@ -44,7 +46,7 @@ export function AuthForm({create=false,dob,progress,onCreated,embedded=false,bef
       setPassword('');setConfirm('');
       if(result)setError(['authUnavailable','confirmEmail','invalidProfile','demoCarryUnavailable'].includes(result)?result as MessageKey:'authFailed');
       else if(create){if(onCreated)onCreated();else router.replace('/onboarding');}
-      else {await saveDevicePreferences(prefs);}
+      else {await preferences.save();}
     }catch{setError('authFailed');}finally{setBusy(false);}
   };
   const style={color:colors.text,backgroundColor:colors['surface-2'],borderRadius:8,minHeight:touchTarget,padding:12,fontSize:16};
@@ -57,7 +59,7 @@ export function AuthForm({create=false,dob,progress,onCreated,embedded=false,bef
       value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={create?'new-password':'current-password'} textContentType={create?'newPassword':'password'} editable={!busy}/>
     {create&&<TextInput accessibilityLabel={t('confirmPassword')} placeholder={t('confirmPassword')} placeholderTextColor={colors['text-muted']} style={style}
       value={confirm} onChangeText={setConfirm} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" editable={!busy}/>}
-    {!create&&<PreferenceFields value={prefs} onChange={setPrefs}/>}
+    {!create&&<PreferenceFields value={preferences.value} onChange={preferences.onChange}/>}
     {error&&<ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
     <Button testID={create?'onboarding-create-account':'auth-sign-in'} label={t(busy?'working':create?'createAccount':'signIn')} disabled={busy||!auth.configured} onPress={()=>{void submit();}}/>
     {!embedded&&<Button label={t('backWelcome')} variant="secondary" onPress={()=>router.replace('/auth')}/>}

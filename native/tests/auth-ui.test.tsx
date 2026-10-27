@@ -140,3 +140,14 @@ test.each([0,3,undefined])('erase confirmation uses the exact warning for unsync
  expect(alert.mock.calls[0][1]).toBe(count===0?t('eraseAllBody'):`${t('eraseAllBody')} ${count===undefined?t('eraseAllUnsynced'):signOutUnsynced(count)}`);
  expect(auth.recoverLocalData).not.toHaveBeenCalled();
 });
+
+test('later sign-in preserves an earlier device analytics opt-in when preferences are untouched',async()=>{
+ const {memoryRepository}=require('./workout-repository') as typeof import('./workout-repository');
+ const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
+ const device=memoryRepository();device.localSave('devicePreferences',{crashReports:false,analytics:true});
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>device,wipeAll:jest.fn()});
+ await wrap(<AuthForm/>);
+ await fireEvent.changeText(screen.getByLabelText('Email'),'fixture@example.test');await fireEvent.changeText(screen.getByLabelText('Password'),'synthetic');
+ await fireEvent.press(screen.getByRole('button',{name:'Sign in'}));
+ expect(device.localGet('devicePreferences')).toEqual({crashReports:false,analytics:true});
+});

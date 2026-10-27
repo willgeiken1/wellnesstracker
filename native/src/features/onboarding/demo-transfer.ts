@@ -15,6 +15,8 @@ export function promoteDemo(source:Repository,destination:Repository) {
   if(source.owner!=='demo'||['demo','guest','device'].includes(destination.owner))throw new Error('Invalid demo transfer.');
   assertDemoTransferSafe(source);
   const samples=source.localGet<string[]>('demoSamples');
+  const existingProfile=destination.list('profile').length>0;
+  const skip=new Set(['profile','food_targets','weigh_ins'].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
   const rows=syncedTables.filter(table=>table!=='purges').flatMap(table=>source.list(table));
   const excluded=new Set(rows.filter(row=>samples?.includes(row.id)||sampleRow(row)).map(row=>row.id));
   destination.atomic(()=>{
@@ -25,7 +27,7 @@ export function promoteDemo(source:Repository,destination:Repository) {
       if(!id){id=destination.save('sessions',{name:t('carriedWorkout'),day:today(),origin:'empty'}).id;replacements.set(parent,id);}
       return id;
     };
-    const userRows=rows.filter(row=>!excluded.has(row.id));
+    const userRows=rows.filter(row=>!excluded.has(row.id)&&!skip.has(row.table));
     const userIds=new Set(userRows.map(row=>row.id));
     const routines=new Map<string,string>();
     for(const row of userRows.filter(row=>row.table==='routine_exercises'&&excluded.has(String(row.data.routine_id)))) {
@@ -55,7 +57,7 @@ export function promoteDemo(source:Repository,destination:Repository) {
       // Preserve stable user identities and their references; never copy sample IDs.
       if(!destination.get(row.table,row.id))destination.save(row.table,data,row.id);
     }
-    const extra=source.localGet('profileExtras');if(extra)destination.localSave('profileExtras',extra);
+    const extra=source.localGet('profileExtras');if(extra&&!existingProfile)destination.localSave('profileExtras',extra);
     // Preserve local custom definitions while the v1 flag is OFF. Existing
     // account definitions win name collisions; these values stay off the wire.
     const customs=source.localGet<{name:string}[]>('customLifts');

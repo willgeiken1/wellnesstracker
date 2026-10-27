@@ -67,7 +67,8 @@ export function saveProfile(repo:Repository,input:ProfileInput,day=today()) {
 export function finishOnboarding(repo:Repository,input:ProfileInput,template:'empty'|'fullBody',targets:Targets|null,day=today()) {
   if(!validProfile(input,day))throw new Error('Invalid profile.');
   if(targets&&Object.values(targets).some(v=>!Number.isFinite(v)||v<0))throw new Error('Invalid targets.');
-  if(repo.localGet('onboardingComplete'))return;
+  // A stale onboarding route must never replace a pulled/legacy account profile.
+  if(repo.localGet('onboardingComplete')||repo.list('profile').length)return;
   repo.atomic(()=>{
     saveProfile(repo,input,day);
     if(template==='fullBody') {
@@ -82,3 +83,5 @@ export function finishOnboarding(repo:Repository,input:ProfileInput,template:'em
     repo.localSave('onboardingComplete',true);
   });
 }
+
+export function onboardingProgress(step:number) { return t('onboardingStep').replace('{step}',String(step)).replace('{total}',String(ONBOARDING_STEPS.length)); }
