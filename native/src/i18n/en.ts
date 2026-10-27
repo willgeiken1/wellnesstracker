@@ -1,4 +1,17 @@
 export const en = {
+  editWorkout: "Edit workout",
+  edited: "Edited",
+  editedWorkout: "Workout edited",
+  logPastWorkout: "Log a past workout",
+  logDayWorkout: "Log workout for this day",
+  dayWorkouts: "Workouts for {day}",
+  viewDayWorkouts: "View workouts for {day}",
+  noDayWorkouts: "No workouts on this day.",
+  workoutWeek: "Workout week",
+  workoutDay: "Workout date (YYYY-MM-DD)",
+  openWorkoutDay: "Open day",
+  invalidWorkoutDay: "Choose a valid past date.",
+
   linkSuperset: "Link superset for {name}",
   unlinkSuperset: "Unlink superset for {name}",
   supersetMembers: "Superset: {names}",

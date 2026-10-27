@@ -237,6 +237,7 @@ export function WorkoutSummary({
         <ContourThumbnail />
         <View style={{ flex: 1, gap: 5 }}>
           <Eyebrow>{t("workoutComplete")}</Eyebrow>
+          {store.edited(id) && <ThemedText muted variant="caption" accessibilityLabel={t("editedWorkout")}>{t("edited")}</ThemedText>}
           <ThemedText variant="title" style={{ fontSize: 26 }}>
             {String(s.data.name ?? t("workoutName"))}
           </ThemedText>
@@ -392,11 +393,16 @@ export function WorkoutSummary({
           </ThemedText>
         )}
       </Panel>
+      {store.entries(id).filter(e => !store.skipped(e.id)).map(e => <Panel key={e.id}>
+        <ThemedText>{String(e.data.exercise)}</ThemedText>
+        {store.sets(e.id).map(set => <ThemedText numeric key={set.id}>{displayWeight(Number(set.data.weight_kg), store.unit(e.id))} {store.unit(e.id)} × {String(set.data.reps)}</ThemedText>)}
+      </Panel>)}
       {!!s.data.notes && (
         <Panel>
           <ThemedText>{String(s.data.notes)}</ThemedText>
         </Panel>
       )}
+      <Button label={t("editWorkout")} variant="secondary" onPress={() => {store.beginEditing(id); router.push({pathname:"/workout", params:{id}});}} />
       <View style={{ flex: 1 }} />
       <Pill testID="summary-done" label={t("done")} onPress={close} />
     </Screen>
