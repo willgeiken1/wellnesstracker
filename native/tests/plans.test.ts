@@ -67,3 +67,42 @@ test('editing an older finish timestamp or start date cannot reorder rotation',(
  workout.finish(a.id,{startedAt:now+4000,finishedAt:now+5000,notes:'corrected date'});
  expect(plans.nextIndex()).toBe(0);
 });
+test.each([false,true])('saving a replacement keeps one current definition with flag %s',enabled=>{
+ const {repo,plans,days}=setup(enabled);
+ plans.save({mode:'rotation',daysPerWeek:3,days});
+ new PlanStore(repo).save({mode:'fixed',daysPerWeek:2,days:[days[1]]});
+ expect(plans.read().days).toEqual([days[1]]);
+ expect(new PlanStore(repo).read().days).toEqual([days[1]]);
+ expect(repo.list('plans')).toHaveLength(enabled?1:0);
+ expect(()=>plans.startDay(days[0].routineId)).toThrow('Plan day unavailable.');
+});
+test('missing planned calendar days leaves the next routine until finish, then advances and wraps',()=>{
+ jest.useFakeTimers();
+ try {
+  jest.setSystemTime(new Date('2026-10-26T12:00:00Z'));
+  const {repo,plans,workout,days}=setup();
+  plans.save({mode:'rotation',daysPerWeek:3,days});
+  expect(plans.week('2026-10-26')[0]).toEqual({date:'2026-10-26',routineId:days[0].routineId});
+  // Monday and Wednesday pass without a workout finish or a skip row.
+  jest.setSystemTime(new Date('2026-10-30T12:00:00Z'));
+  const reopened=new PlanStore(repo);
+  expect(reopened.nextIndex()).toBe(0);
+  expect(reopened.read().days[reopened.nextIndex()].routineId).toBe(days[0].routineId);
+  expect(reopened.week('2026-11-02')[0]).toEqual({date:'2026-11-02',routineId:days[0].routineId});
+  for (const [routineId,next] of [[days[0].routineId,1],[days[1].routineId,0]] as const) {
+   const now=Date.now(),session=reopened.startDay(routineId,now);
+   workout.finish(session.id,{startedAt:now,finishedAt:now,notes:''});
+   expect(reopened.nextIndex()).toBe(next);
+   expect(reopened.week('2026-11-02')[0].routineId).toBe(days[next].routineId);
+  }
+ } finally {jest.useRealTimers();}
+});
+test('fixed days require a weekday before any storage changes; rotation days do not',()=>{
+ const {plans,repo,days}=setup();
+ const unassigned=[{...days[0],weekdays:[]}];
+ expect(()=>plans.save({mode:'fixed',daysPerWeek:3,days:unassigned})).toThrow('Invalid plan.');
+ expect(repo.localSnapshot()).toEqual({});
+ expect(repo.list('plans')).toEqual([]);
+ plans.save({mode:'rotation',daysPerWeek:3,days:unassigned});
+ expect(plans.read().days).toEqual(unassigned);
+});

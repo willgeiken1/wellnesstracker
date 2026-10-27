@@ -73,7 +73,7 @@ export const en = {
   planWeekdayLabel: "{name}: {weekday}",
   startPlanDay: "Start plan day: {name}",
   planEmpty: "Choose routines as plan days. Their order follows your routines.",
-  invalidPlan: "Choose 1–7 whole days and assign each weekday to at most one plan day.",
+  invalidPlan: "Choose 1–7 whole days and assign each weekday to at most one plan day. In Fixed mode, choose at least one weekday for each plan day.",
   monday: "Monday",
   tuesday: "Tuesday",
   wednesday: "Wednesday",

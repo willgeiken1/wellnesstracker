@@ -4,7 +4,8 @@ import { WorkoutStore } from '../../data/workout/store';
 import { type Plan, type PlanDay, plannedWeek, validatePlan } from './schedule';
 interface Definition { id?: string; days: PlanDay[] }
 const key = 'plans:definition';
-/** Membership and weekday assignments stay owner-local until a schema decision.
+/** IN-M209-1/2: One current definition; membership and weekday assignments
+ * stay owner-local. Only mode and days_per_week may enter synced plan rows.
  * The v1 config table is never read or written while its flag is off. */
 export class PlanStore {
   constructor(readonly repo: Repository) {}
