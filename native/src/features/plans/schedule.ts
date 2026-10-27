@@ -6,11 +6,13 @@ export function validatePlan(plan: Plan) {
   if (!['rotation','fixed'].includes(plan.mode) || !validDaysPerWeek(plan.daysPerWeek) ||
       new Set(plan.days.map(d => d.routineId)).size !== plan.days.length ||
       plan.days.some(d => !d.routineId) || weekdays.some(d => !Number.isInteger(d) || d < 0 || d > 6) ||
+      (plan.mode === 'fixed' && plan.days.some(d => d.weekdays.length === 0)) ||
       new Set(weekdays).size !== weekdays.length) throw Error('Invalid plan.');
 }
 /** Monday=0. UTC is calendar arithmetic only: no elapsed local hours or DST offsets.
  * Rotation evenly spaces a prospective target from the supplied current cursor.
- * A forecast never advances the actual cursor; fixed dates ignore the target. */
+ * A forecast never advances the actual cursor, including on missed dates;
+ * only a finished plan workout advances it. Fixed dates ignore the target. */
 export function plannedWeek(monday: string, plan: Plan, cursor = 0): {date:string;routineId:string}[] {
   validatePlan(plan);
   const start = new Date(`${monday}T00:00:00Z`);

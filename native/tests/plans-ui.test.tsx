@@ -29,7 +29,19 @@ test('invalid target stays in editor with catalog validation message',async()=>{
  await fireEvent.press(screen.getByRole('button',{name:'Edit plan'}));
  await fireEvent.changeText(screen.getByLabelText('Days per week'),'8');
  await fireEvent.press(screen.getByRole('button',{name:'Save plan'}));
- expect(screen.getByRole('alert')).toHaveTextContent('Choose 1–7 whole days and assign each weekday to at most one plan day.');
+ expect(screen.getByRole('alert')).toHaveTextContent(/Choose 1–7 whole days and assign each weekday to at most one plan day\./);
+});
+test('fixed routine without weekdays stays in the editor with an accessible error',async()=>{
+ const repo=memoryRepository();Object.defineProperty(repo,'syncFlags',{value:{syncedV1Columns:true}});
+ const workout=new WorkoutStore(repo);workout.saveTemplate('Synthetic A',[]);
+ await render(<ThemeProvider><PlansPanel store={workout}/></ThemeProvider>);
+ await fireEvent.press(screen.getByRole('button',{name:'Edit plan'}));
+ await fireEvent.press(screen.getByRole('tab',{name:'Fixed weekdays'}));
+ await fireEvent.press(screen.getByRole('checkbox',{name:'Plan day: Synthetic A'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Save plan'}));
+ expect(screen.getByRole('alert')).toHaveTextContent(/In Fixed mode, choose at least one weekday for each plan day\./);
+ expect(screen.getByRole('button',{name:'Save plan'})).toBeTruthy();
+ expect(new PlanStore(repo).read().days).toEqual([]);
 });
 test('flag off shows defaults and no editable mode or target',async()=>{
  await render(<ThemeProvider><PlansPanel store={new WorkoutStore(memoryRepository())}/></ThemeProvider>);
