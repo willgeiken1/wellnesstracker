@@ -35,11 +35,14 @@ test('filters combine with typo search and recent-first ordering', () => {
 test('picker matches the PWA transposed-letter cable query', () => {
   expect(filterExercises(exerciseLibrary, 'cabel').some(e => e.name === 'Cable Fly')).toBe(true);
 });
-test.each(['bodyweight', 'other'] as const)('%s ignores a saved Step', equipment => {
-  expect(step(equipment, 'lb', 10)).toBe(0);
-  expect(step(equipment, 'kg', 5)).toBe(0);
+test.each(['bodyweight', 'other'] as const)('%s saved Step follows equipment policy (IN-M206-4)', equipment => {
+  const usesStep = equipment === 'other';
+  expect(step(equipment, 'lb', 10)).toBe(usesStep ? 10 : 0);
+  expect(step(equipment, 'kg', 5)).toBe(usesStep ? 5 : 0);
+  expect(step(equipment, 'lb')).toBe(0);
+  expect(step(equipment, 'kg')).toBe(0);
   expect(suggestion([{ weight: 0, reps: 8, done: true }], equipment, 'lb', 8, 10))
-    .toMatchObject({ weight: 0, jump: false });
+    .toMatchObject({ weight: usesStep ? 10 : 0, jump: usesStep });
 });
 test.each([
   ['barbell', 'lb', 5],
