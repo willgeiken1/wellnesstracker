@@ -806,3 +806,47 @@ test('template editor saves name/target edits without rest overrides, and only s
     expect(repo.localGet('rest:bench press')).toBeUndefined();
   } finally { useLocalSearchParams.mockReturnValue({}); }
 });
+
+test('M2-07 live superset links partners and advances to the next exercise in the round', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start();
+  const a = store.addExercise(session.id,'Bench Press',2), b = store.addExercise(session.id,'Dumbbell Row',1);
+  store.editDraft(a.id,0,{weight:'100',reps:'8'});
+  activeRepository(repo); await render(<ActiveWorkout/>,{wrapper});
+  await fireEvent.press(screen.getByRole('button',{name:'Bench Press, Exercise options'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Link superset for Bench Press'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Include Dumbbell Row in superset'}));
+  await fireEvent.press(screen.getByRole('button',{name:'Save superset'}));
+  expect(store.supersetGroup(a)).toBe(store.supersetGroup(b));
+  await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
+  await fireEvent.press(screen.getByTestId('set-0-0-done'));
+  expect(store.timer()).toBeNull();
+  await fireEvent.press(screen.getByTestId('keypad-key-7'));
+  expect(store.drafts(b.id)[0].weight).toBe('7');
+  expect(store.drafts(a.id)[1].weight).toBe('');
+});
+
+test('M2-07 template range and superset controls save and reload', async () => {
+  const { TemplateEditor } = require('../src/features/workout/templates') as typeof import('../src/features/workout/templates');
+  const { useLocalSearchParams } = require('expo-router');
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const routine = store.saveTemplate('Synthetic supersets',['Bench Press','Dumbbell Row'].map(exercise => ({exercise,target_sets:2,target_reps:8})));
+  useLocalSearchParams.mockReturnValue({id:routine.id});
+  try {
+    activeRepository(repo); const view = await render(<TemplateEditor/>,{wrapper});
+    await fireEvent.changeText(screen.getByLabelText('Bench Press, Minimum reps'),'8');
+    await fireEvent.changeText(screen.getByLabelText('Bench Press, Maximum reps'),'10');
+    await fireEvent.press(screen.getByRole('button',{name:'Link superset for Bench Press'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Include Dumbbell Row in superset'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save superset'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save template'}));
+    const rows = store.templateExercises(routine.id);
+    expect(rows[0].data).toMatchObject({rep_min:8,rep_max:10});
+    expect(rows[0].data.superset_group).toBe(rows[1].data.superset_group);
+    await view.unmount(); await render(<TemplateEditor/>,{wrapper});
+    expect(screen.getByLabelText('Bench Press, Minimum reps').props.value).toBe('8');
+    await fireEvent.press(screen.getByRole('button',{name:'Unlink superset for Bench Press'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Clear rep range for Bench Press'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save template'}));
+    expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:null,rep_max:null,superset_group:null});
+  } finally {useLocalSearchParams.mockReturnValue({});}
+});

@@ -1,3 +1,5 @@
+import { loggerOrder, rangeSuggestion, repRange } from '../../core/workout/supersets';
+import { WorkoutOptions, type ExerciseOptions } from './options';
 import { t } from '../../i18n/en';
 import { Repository } from '../repository';
 import type { Row } from '../rows';
@@ -23,7 +25,7 @@ export interface TimerState {
   ended: boolean;
   restChanged?: boolean;
 }
-export interface TemplateExercise {
+export interface TemplateExercise extends ExerciseOptions {
   id?: string;
   exercise: string;
   target_sets: number;
@@ -92,6 +94,14 @@ export class WorkoutStore {
     this.repo.atomic(() => {
       this.repo.localSave(`skipped:${entryId}`, skipped);
       if (skipped && this.timer()?.entryId === entryId) this.skipTimer();
+      const entry = this.repo.get('entries',entryId);
+      if (skipped && entry && this.supersetGroup(entry) && !this.timer()) {
+        const order = this.loggerOrder(String(entry.data.session_id));
+        const pending = order.findIndex(slot => !this.drafts(slot.entryId)[slot.index].setId);
+        const prior = order.slice(0,pending < 0 ? order.length : pending).at(-1);
+        const anchor = prior && this.repo.get('entries',prior.entryId);
+        if (prior && anchor && this.supersetGroup(anchor) === this.supersetGroup(entry)) this.startRest(anchor,prior.index,this.drafts(anchor.id)[prior.index].setId!);
+      }
       this.recompute();
     });
   }
@@ -103,6 +113,7 @@ export class WorkoutStore {
       const drafts = this.drafts(entryId), completed = drafts.filter(d => d.setId), pending = drafts.filter(d => !d.setId);
       if (!completed.length) {
         const updated = this.repo.save('entries', {...entry.data, exercise: name.trim()}, entryId);
+        this.repo.localSave(`repRange:${entryId}`, null);
         this.repo.localSave(`draft:${entryId}`, pending.map(() => ({weight:'',reps:''})));
         this.repo.localSave(`skipped:${entryId}`, false);
         return updated;
@@ -118,18 +129,51 @@ export class WorkoutStore {
       const entries = this.entries(String(entry.data.session_id)).filter(e => e.id !== replacement.id);
       entries.splice(entries.findIndex(e => e.id === entryId) + 1, 0, replacement);
       entries.forEach((e, position) => this.repo.save('entries', {...e.data, position}, e.id));
+      const group = this.supersetGroup(entry);
+      if (group) {
+        // Transfer the rotation slot; completed history keeps its exercise but leaves the group.
+        this.exerciseOptions().write(this.repo.get('entries',replacement.id)!, {superset_group:group});
+        this.exerciseOptions().write(this.repo.get('entries',entryId)!, {superset_group:null});
+      }
       if (this.timer()?.entryId === entryId) this.skipTimer();
       return replacement;
     });
   }
+  private exerciseOptions() { return new WorkoutOptions(this.repo); }
+  supersetGroup(entry: Row) { return this.exerciseOptions().read(entry).superset_group; }
+  repRange(entry: Row) { return this.exerciseOptions().range(entry); }
+  linkSuperset(ids: string[]) {
+    const entries = ids.map(id => this.repo.get('entries',id));
+    if (ids.length < 2 || ids.length > 3 || new Set(ids).size !== ids.length || entries.some(e => !e || e.deleted_at !== null) || new Set(entries.map(e => e?.data.session_id)).size !== 1) throw Error('Invalid superset.');
+    this.repo.atomic(() => {
+      entries.forEach(e => this.unlinkSuperset(e!.id));
+      entries.forEach(e => this.exerciseOptions().write(this.repo.get('entries',e!.id)!, {superset_group:ids[0]}));
+      this.skipTimer();
+    });
+  }
+  unlinkSuperset(id: string) {
+    const entry = this.repo.get('entries',id), group = entry && this.supersetGroup(entry);
+    if (!entry || !group) return;
+    this.repo.atomic(() => {
+      this.entries(String(entry.data.session_id)).filter(e => this.supersetGroup(e) === group).forEach(e => this.exerciseOptions().write(e,{superset_group:null}));
+      this.skipTimer();
+    });
+  }
+  loggerOrder(sessionId: string) {
+    return loggerOrder(this.entries(sessionId).filter(e => !this.skipped(e.id)).map(e => ({id:e.id,group:this.supersetGroup(e),count:this.drafts(e.id).length})));
+  }
+  nextSet(sessionId: string) { return this.loggerOrder(sessionId).find(s => !this.drafts(s.entryId)[s.index]?.setId); }
   templates() {
     return order(this.repo.list('routines'));
   }
-  templateExercises(id: string) {
-    return order(this.repo.list('routine_exercises').filter(e => e.data.routine_id === id));
+  templateExercises(id: string): Row[] {
+    return order(this.repo.list('routine_exercises').filter(e => e.data.routine_id === id)).map(e => ({...e,data:{...e.data,...this.exerciseOptions().read(e)}}));
   }
   saveTemplate(name: string, exercises: TemplateExercise[], id?: string) {
     if (!name.trim() || exercises.some(e => !e.exercise.trim() || !Number.isInteger(e.target_sets) || e.target_sets < 1 || e.target_sets > 100 || !Number.isInteger(e.target_reps) || e.target_reps < 0 || e.target_reps > 100)) throw Error('Invalid template.');
+    if (exercises.some(e => (e.rep_min != null || e.rep_max != null) && !repRange(e.rep_min,e.rep_max))) throw Error('Invalid rep range.');
+    const groups = exercises.map(e => e.superset_group).filter((g): g is string => !!g);
+    if ([...new Set(groups)].some(g => groups.filter(v => v === g).length < 2 || groups.filter(v => v === g).length > 3)) throw Error('Invalid superset.');
     return this.repo.atomic(() => {
       const current = id ? this.repo.get('routines', id) : undefined;
       const routine = this.repo.save('routines', {
@@ -142,13 +186,14 @@ export class WorkoutStore {
         const currentRest = this.rest(e.exercise);
         const rest = {seconds: e.restSeconds ?? currentRest.seconds, style: e.restStyle ?? currentRest.style};
         if (rest.seconds !== currentRest.seconds || rest.style !== currentRest.style) this.setRest(e.exercise, rest);
-        this.repo.save('routine_exercises', {
+        const row = this.repo.save('routine_exercises', {
         routine_id: routine.id,
         exercise: e.exercise.trim(),
         target_sets: e.target_sets,
         target_reps: e.target_reps,
         position
-      }, e.id); });
+      }, e.id);
+        this.exerciseOptions().write(row,{rep_min:e.rep_min ?? null,rep_max:e.rep_max ?? null,superset_group:e.superset_group ?? null}); });
       return routine;
     });
   }
@@ -199,6 +244,8 @@ export class WorkoutStore {
       for (const e of routine ? this.templateExercises(routine.id) : []) {
         const entry = this.addExercise(s.id, String(e.data.exercise), Number(e.data.target_sets) || 3);
         this.repo.localSave(`target:${entry.id}`, Number(e.data.target_reps));
+        this.exerciseOptions().write(entry,{superset_group:e.data.superset_group as string | null});
+        this.repo.localSave(`repRange:${entry.id}`,repRange(e.data.rep_min,e.data.rep_max));
       }
       return s;
     });
@@ -233,6 +280,8 @@ export class WorkoutStore {
   }
   removeExercise(id: string) {
     this.repo.atomic(() => {
+      const entry = this.repo.get('entries',id), group = entry && this.supersetGroup(entry);
+      if (entry && group && this.entries(String(entry.data.session_id)).filter(e => this.supersetGroup(e) === group).length === 2) this.unlinkSuperset(id);
       for (const s of this.sets(id)) this.repo.remove('sets', s.id);
       this.repo.remove('entries', id);
       this.repo.localSave(`draft:${id}`, []);
@@ -354,6 +403,20 @@ export class WorkoutStore {
   private writeSet(entryId: string, index: number, d: Draft, id?: string) {
     return this.repo.save('sets', this.setData(entryId, index, d), id);
   }
+  private startRest(entry: Row, index: number, setId: string, now = Date.now()) {
+    const group = this.supersetGroup(entry);
+    const members = this.entries(String(entry.data.session_id)).filter(e => !this.skipped(e.id) && (group ? this.supersetGroup(e) === group : e.id === entry.id));
+    const roundDone = members.every(e => index >= this.drafts(e.id).length || !!this.drafts(e.id)[index].setId);
+    if (!roundDone) {
+      this.repo.localSave('timer', null);
+      return;
+    }
+    const seconds = Math.max(...members.map(e => this.rest(String(e.data.exercise)).seconds));
+    this.repo.localSave('timer', {
+      sessionId: String(entry.data.session_id), setId, entryId: entry.id,
+      endAt: now + seconds * 1000, duration: seconds, minimized: false, ended: false
+    } satisfies TimerState);
+  }
   toggleDone(entryId: string, index: number, now = Date.now()) {
     return this.repo.atomic(() => {
       const drafts = this.drafts(entryId),
@@ -368,16 +431,7 @@ export class WorkoutStore {
         d.setId = this.writeSet(entryId, index, d).id;
         this.persistTimerRest();
         const entry = this.repo.get('entries', entryId)!;
-        const seconds = this.rest(String(entry.data.exercise)).seconds;
-        this.repo.localSave('timer', {
-          sessionId: String(entry.data.session_id),
-          setId: d.setId,
-          entryId,
-          endAt: now + Math.max(15, seconds) * 1000,
-          duration: Math.max(15, seconds),
-          minimized: false,
-          ended: false
-        } satisfies TimerState);
+        this.startRest(entry,index,d.setId,now);
       }
       this.repo.localSave(`draft:${entryId}`, drafts);
       const sessionId = this.repo.get('entries', entryId)?.data.session_id;
@@ -416,7 +470,10 @@ export class WorkoutStore {
       done: true,
       warmup: this.repo.syncFlags?.syncedV1Columns ? s.data.tag === 'warmup' : this.repo.localGet<Draft[]>(`draft:${String(s.data.entry_id)}`)?.[Number(s.data.position)]?.warmup
     }));
-    return suggestion(previous, equipment, unit, this.repo.localGet<number>(`target:${entry.id}`), this.preferences().increment(String(entry.data.exercise), unit));
+    const increment = this.preferences().increment(String(entry.data.exercise), unit);
+    const range = this.repRange(entry);
+    if (range) return rangeSuggestion(previous,equipment,unit,range,increment);
+    return suggestion(previous, equipment, unit, this.repo.localGet<number>(`target:${entry.id}`), increment);
   }
   showCard(entry: Row) {
     return shouldShowCard(String(entry.data.exercise), this.suggestion(entry), this.unit(entry.id), this.repo.localGet<string[]>('suggestions') ?? []);
@@ -486,7 +543,8 @@ export class WorkoutStore {
       if (input.saveTemplate && s.data.origin === 'empty') this.saveTemplate(input.name?.trim() || t('workoutName'), this.entries(id).map(e => ({
         exercise: String(e.data.exercise),
         target_sets: this.drafts(e.id).length || 1,
-        target_reps: Number(this.drafts(e.id).find(d => d.setId)?.reps) || 8
+        target_reps: Number(this.drafts(e.id).find(d => d.setId)?.reps) || 8,
+        superset_group:this.supersetGroup(e), rep_min:this.repRange(e)?.min, rep_max:this.repRange(e)?.max
       })));
       this.repo.localSave(`sessionMeta:${id}`, {
         timezoneOffset: new Date(input.startedAt).getTimezoneOffset()
