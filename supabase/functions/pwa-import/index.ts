@@ -14,6 +14,41 @@ const headers = {
 };
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers });
+// Limits bound normalization and the raw archive; errors never include payloads.
+const MAX_REQUEST_BYTES = 64 * 1024;
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+const emptyPlan: ImportPlan = {
+  version: 1,
+  rows: [],
+  issues: [],
+  unmapped: [],
+  legacy: {},
+};
+class ImportTooLarge extends Error {}
+async function requestBody(req: Request) {
+  if (Number(req.headers.get("Content-Length")) > MAX_REQUEST_BYTES)
+    throw new ImportTooLarge();
+  const reader = req.body?.getReader();
+  if (!reader) throw Error();
+  const decoder = new TextDecoder();
+  let bytes = 0,
+    text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        throw new ImportTooLarge();
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return JSON.parse(text + decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+}
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return reply({});
   if (req.method !== "POST") return reply({ error: "POST required." }, 405);
@@ -35,12 +70,20 @@ Deno.serve(async (req) => {
       error: authError,
     } = await client.auth.getUser(authorization.slice(7));
     if (authError || !user) return reply({ error: "Sign in required." }, 401);
-    const body = await req.json();
+    const body = await requestBody(req);
     if (!["preview", "commit"].includes(body.action))
       return reply({ error: "Invalid action." }, 400);
-    const { data, error } = await client.rpc("native_pwa_snapshot");
+    const { data, error } = await client.rpc("native_pwa_snapshot", {
+      refresh_expired: body.action === "preview",
+    });
+    if (error?.message === "Import too large") throw new ImportTooLarge();
     if (error) throw Error();
-    if (data.completed) return reply({ plan: data.plan, completed: true });
+    if (data.completed) return reply({ plan: emptyPlan, completed: true });
+    if (
+      new TextEncoder().encode(JSON.stringify(data.snapshot)).byteLength >
+      MAX_IMPORT_BYTES
+    )
+      throw new ImportTooLarge();
     const mapping = body.mapping ?? {};
     if (
       typeof mapping !== "object" ||
@@ -53,6 +96,7 @@ Deno.serve(async (req) => {
       pwaExerciseBank,
       mapping,
     );
+    plan.previewId = data.preview_id;
     for (const photo of data.snapshot.photos) {
       // Metadata only. No storage request and no OAuth/token access.
       if (
@@ -80,6 +124,11 @@ Deno.serve(async (req) => {
     if (body.action === "commit") {
       if (body.confirmed !== true)
         return reply({ error: "Preview confirmation required." }, 400);
+      if (body.expected_preview !== data.preview_id)
+        return reply(
+          { error: "Import preview changed. Preview again before confirming." },
+          409,
+        );
       const rows = plan.rows.map((row) => ({
         ...row,
         owner_id: user.id,
@@ -94,21 +143,26 @@ Deno.serve(async (req) => {
               )
             : row.data,
       }));
-      const { error } = await client.rpc("native_pwa_commit", {
+      const { data: won, error } = await client.rpc("native_pwa_commit", {
         import_plan: plan,
+        expected_preview: body.expected_preview,
         rows,
       });
       if (error) throw Error();
-      // Another device may have committed a different mapping while this request
-      // waited for the owner lock. Every caller must use the winning plan.
-      const { data: committed, error: readError } = await client.rpc(
-        "native_pwa_snapshot",
-      );
-      if (readError || !committed?.completed || !committed.plan) throw Error();
-      return reply({ plan: committed.plan, completed: true });
+      // Raw archives are erased atomically in SQL. Only the winner returns its
+      // in-memory plan. Retries/other devices receive rows through normal sync.
+      return reply({ plan: won ? plan : emptyPlan, completed: true });
     }
     return reply({ plan, completed: false });
-  } catch {
+  } catch (error) {
+    if (error instanceof ImportTooLarge)
+      return reply(
+        {
+          error:
+            "Import too large. Maximum backup size is 5 MiB; request limit is 64 KiB.",
+        },
+        413,
+      );
     return reply(
       { error: "Import unavailable. Your original backup is unchanged." },
       503,

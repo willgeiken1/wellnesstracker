@@ -22,7 +22,7 @@ jest.mock("../src/features/importer/files", () => ({
 }));
 jest.mock("../src/auth/client", () => ({ getAuthClient: () => null }));
 jest.mock("../src/data/database", () => ({ openLocalDatabase: jest.fn() }));
-async function wrap() {
+async function wrap(overrides: Partial<AuthState> = {}) {
   const repository = memoryRepository();
   Object.defineProperty(repository, "device", {
     value: "20000000-0000-4000-8000-000000000001",
@@ -42,6 +42,7 @@ async function wrap() {
     createAccount: jest.fn(),
     signOut: jest.fn(),
     syncNow: jest.fn(async () => {}),
+    ...overrides,
   };
   await render(
     <AuthContext.Provider value={state}>
@@ -116,4 +117,17 @@ test("exercise mapping remains editable while typing and updates the preview whe
   expect(
     screen.getByRole("button", { name: t("importMerge") }),
   ).not.toBeDisabled();
+});
+
+test("account confirmation sends the UUID from the reviewed preview", async () => {
+  const previewId = "10000000-0000-4000-8000-000000000019";
+  const legacyImport = jest.fn(async () => ({version: 1 as const, rows: [], issues: [], unmapped: [], legacy: {}, previewId}));
+  const alert = jest.spyOn(Alert,"alert").mockImplementation(() => {});
+  try {
+    await wrap({session: {user:{id:"demo"}} as AuthState["session"], legacyImport});
+    await fireEvent.press(screen.getByRole("button", {name:t("importAccount")}));
+    await fireEvent.press(screen.getByRole("button", {name:t("importMerge")}));
+    await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+    expect(legacyImport).toHaveBeenLastCalledWith("commit", {}, previewId);
+  } finally { alert.mockRestore(); }
 });

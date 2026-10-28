@@ -22,7 +22,7 @@ const bootSignOutStorage: typeof signOutStorage={
   write:marker=>signOutStorage.write(marker),remove:()=>signOutStorage.remove(),
 };
 export interface AuthState {
-  legacyImport?(action:'preview'|'commit', mapping?:Record<string,string>):Promise<ImportPlan>;
+  legacyImport?(action:'preview'|'commit', mapping?:Record<string,string>, previewId?:string):Promise<ImportPlan>;
   phoneOnly?: boolean;
   initialPullComplete?: boolean; syncPullRevision?:number;
   demoTransferError?: boolean; retryDemoTransfer?():void;
@@ -176,9 +176,9 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     // Successful auth can unmount the form before the request promise resolves.
     if(authInFlight.current&&!activeSession.current){authRequest.current++;authInFlight.current=false;setDemoTarget(null);}
   },[]);
-  const legacyImport=useCallback(async(action:'preview'|'commit',mapping:Record<string,string>={}):Promise<ImportPlan>=>{
+  const legacyImport=useCallback(async(action:'preview'|'commit',mapping:Record<string,string>={},previewId?:string):Promise<ImportPlan>=>{
     if(!client||!currentRepo||!userId||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
-    const {data,error}=await client.functions.invoke('pwa-import',{body:{action,mapping,confirmed:action==='commit'}});
+    const {data,error}=await client.functions.invoke('pwa-import',{body:{action,mapping,expected_preview:previewId,confirmed:action==='commit'}});
     if(error||!data?.plan||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
     return data.plan as ImportPlan;
   },[client,currentRepo,userId]);

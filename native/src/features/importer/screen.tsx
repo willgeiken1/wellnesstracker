@@ -171,7 +171,7 @@ function ImportBody() {
       let p = preview;
       if (server) {
         if (!auth.legacyImport) throw Error();
-        const imported = await auth.legacyImport("commit", mapping);
+        const imported = await auth.legacyImport("commit", mapping, preview.plan.previewId);
         if (currentOwner.current !== repo.owner) throw Error();
         p = previewImport(repo, imported);
       }

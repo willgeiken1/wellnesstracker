@@ -157,8 +157,11 @@ test("account mismatch refuses import and a failed write rolls the entire import
     expect(() =>
       commitImport(l.repo, { ...v, owner: "other" }, true),
     ).toThrow();
-    const write = jest.spyOn(l.repo, "save").mockImplementationOnce(() => {
-      throw Error("synthetic write failure");
+    const save = l.repo.save.bind(l.repo);
+    let writes = 0;
+    const write = jest.spyOn(l.repo, "save").mockImplementation((...args) => {
+      if (++writes === 3) throw Error("synthetic partial write failure");
+      return save(...args);
     });
     expect(() => commitImport(l.repo, v, true)).toThrow();
     write.mockRestore();

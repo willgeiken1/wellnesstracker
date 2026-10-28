@@ -12,6 +12,8 @@ export interface ImportIssue {
   raw: unknown;
 }
 export interface ImportPlan {
+  /** Server preview identity; absent for local file imports. */
+  previewId?: string;
   version: 1;
   rows: ImportRow[];
   issues: ImportIssue[];
