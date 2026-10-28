@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput } from 'react-native';
+import { Alert, Pressable, ScrollView, TextInput } from 'react-native';
 import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
+import { toKg } from '../../core/workout/rules';
 import { t } from '../../i18n/en';
 import type { Unit } from '../onboarding/model';
 import { layout, Panel } from '../workout/primitives';
+import { unusualWeight } from './model';
 export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;unit:Unit;onSave:(value:number)=>void;onClose:()=>void}) {
   const {colors,reduceMotion}=useTheme();
   const [value,setValue]=useState(initial===null?'':initial.toFixed(1));
@@ -35,7 +37,10 @@ export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;u
     {error&&<ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
     <Button label={t('bodySave')} onPress={()=>{
       if(!/^\d+(\.\d+)?$/.test(value)||!Number.isFinite(Number(value))||Number(value)<=0){setError('bodyInvalid');return;}
-      try{onSave(Number(value));}catch{setError('bodySaveFailed');}
+      const save=()=>{try{onSave(Number(value));}catch{setError('bodySaveFailed');}};
+      if(unusualWeight(Number(value),unit,initial===null?null:toKg(initial,unit))) {
+        Alert.alert(t('bodyUnusual'),undefined,[{text:t('cancel'),style:'cancel'},{text:t('bodySaveAnyway'),onPress:save}]);
+      } else save();
     }}/>
     <Button variant="secondary" label={t('cancel')} onPress={onClose}/>
   </Panel>;

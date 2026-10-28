@@ -3,13 +3,13 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { ThemedText } from './themed-text';
 export const touchTarget = Platform.OS === 'ios' ? tokens.touch.ios : tokens.touch.android;
-export function Button({ label, onPress, variant = 'primary', selected, disabled = false, busy = false, testID }: {
-  testID?: string; label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'destructive'; selected?: boolean; disabled?: boolean; busy?: boolean;
+export function Button({ label, onPress, variant = 'primary', selected, disabled = false, busy = false, testID, accessibilityLabel }: {
+  accessibilityLabel?: string; testID?: string; label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'destructive'; selected?: boolean; disabled?: boolean; busy?: boolean;
 }) {
   const { colors } = useTheme();
   const backgroundColor = variant === 'primary' ? colors.accent : variant === 'destructive' ? colors.danger : colors['surface-2'];
   const color = variant === 'primary' ? colors['on-accent'] : variant === 'destructive' ? colors['on-danger'] : colors.text;
-  return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label}
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
     accessibilityState={{ disabled, busy, ...(selected === undefined ? {} : { selected }) }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => [styles.button, { backgroundColor, opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}>
     {busy && <ActivityIndicator accessibilityRole="progressbar" color={color}/> }

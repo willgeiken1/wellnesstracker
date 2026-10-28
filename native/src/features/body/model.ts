@@ -58,3 +58,15 @@ export function saveWeighIn(repo: Repository, value: number, unit: Unit, day = t
   if(!Number.isFinite(value) || value<=0 || !['kg','lb'].includes(unit) || !Number.isFinite(dayStamp(day)))throw new Error('Invalid weigh-in.');
   return repo.save('weigh_ins',{day,weight_kg:toKg(value,unit),entered_value:value,entered_unit:unit,source:'app'});
 }
+
+/** Broad warning bounds, not a save restriction. Compare canonical kg in both units. */
+export function unusualWeight(value: number, unit: Unit, lastKg: number | null) {
+  const kg = toKg(value,unit);
+  return kg < 30 - 1e-9 || kg > 300 + 1e-9 || (lastKg !== null && Math.abs(kg-lastKg) > lastKg*0.1 + 1e-9);
+}
+export function deleteWeighIn(repo: Repository, id: string): boolean {
+  const row = repo.get('weigh_ins',id);
+  if(!row || row.owner_id !== repo.owner || row.deleted_at !== null || row.data.source !== 'app')return false;
+  repo.remove('weigh_ins',id);
+  return true;
+}

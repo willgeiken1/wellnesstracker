@@ -19,6 +19,7 @@ export function promoteDemo(source:Repository,destination:Repository) {
   const skip=new Set(['profile','food_targets','weigh_ins'].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
   const rows=syncedTables.filter(table=>table!=='purges').flatMap(table=>source.list(table));
   const excluded=new Set(rows.filter(row=>samples?.includes(row.id)||sampleRow(row)).map(row=>row.id));
+  const weighInsSkipped=skip.has('weigh_ins')&&rows.some(row=>row.table==='weigh_ins'&&!excluded.has(row.id));
   destination.atomic(()=>{
     const replacements=new Map<string,string>();
     const entries=new Map<string,string>();
@@ -74,5 +75,6 @@ export function promoteDemo(source:Repository,destination:Repository) {
     // wipe() cannot run in atomic(); replace with the narrow transfer eraser.
     source.clearDemoForTransfer();
   });
+  return {weighInsSkipped};
 }
 
