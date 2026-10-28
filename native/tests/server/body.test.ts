@@ -60,3 +60,54 @@ test.each(['lb','kg'] as const)('demo transfer preserves %s preference and remov
   expect(demo.localSnapshot()).toEqual({});expect(demo.pending()).toEqual([]);
  } finally {sqlite.close();}
 });
+
+test('existing lb account beats a newer kg demo profile and demo storage is fully erased',async()=>{
+ const {seedDemo}=await import('../../fixtures/demo');
+ const {promoteDemo}=await import('../../src/features/onboarding/demo-transfer');
+ const {syncedTables}=await import('../../src/data/rows');
+ const {db,repo,sqlite}=await localDatabase();
+ try {
+  const account=repo.save('profile',{weight_unit:'lb'});
+  const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+  const newer=demo.save('profile',{weight_unit:'kg'});
+  expect(newer.updated_at).toBeGreaterThan(account.updated_at);
+  saveWeighIn(demo,80,'kg','2026-10-27');
+  promoteDemo(demo,repo);
+  expect(readProfile(repo).unit).toBe('lb');
+  for(const table of syncedTables)expect(demo.list(table,true)).toEqual([]);
+  expect(demo.localSnapshot()).toEqual({});
+ } finally {sqlite.close();}
+});
+
+test('delete refuses Health imports and deleted rows, and successfully deletes an lb entry',async()=>{
+ const {db,repo:fixture,sqlite}=await localDatabase();
+ const repo=new Repository(db,fixture.owner,fixture.device,randomUUID);
+ try {
+  const {syntheticRow}=await import('../../fixtures/sync');
+  const health={...syntheticRow('weigh_ins'),data:{day:'2026-10-27',weight_kg:80,source:'healthkit'}};
+  repo.putLocal(health);
+  const before=repo.pending();
+  expect(deleteWeighIn(repo,health.id)).toBe(false);
+  expect(repo.get('weigh_ins',health.id)?.deleted_at).toBeNull();expect(repo.pending()).toEqual(before);
+  const row=saveWeighIn(repo,180,'lb','2026-10-27');
+  expect(deleteWeighIn(repo,row.id)).toBe(true);
+  expect(repo.get('weigh_ins',row.id)?.deleted_at).not.toBeNull();
+  const pending=repo.pending();
+  expect(deleteWeighIn(repo,row.id)).toBe(false);expect(repo.pending()).toEqual(pending);
+ } finally {sqlite.close();}
+});
+
+test.each([false,true])('promotion reports skipped user weigh-ins only when account has readings (%s)',async existing=>{
+ const {seedDemo}=await import('../../fixtures/demo');
+ const {promoteDemo}=await import('../../src/features/onboarding/demo-transfer');
+ const {db,repo,sqlite}=await localDatabase();
+ try {
+  const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+  if(existing)repo.save('weigh_ins',{day:'2026-10-27',weight_kg:70,source:'app'});
+  const user=saveWeighIn(demo,80,'kg','2026-10-27');
+  expect(promoteDemo(demo,repo)).toEqual({weighInsSkipped:existing});
+  expect(!!repo.get('weigh_ins',user.id)).toBe(!existing);
+  expect(demo.list('weigh_ins',true)).toEqual([]);
+  expect(promoteDemo(demo,repo)).toEqual({weighInsSkipped:false});
+ } finally {sqlite.close();}
+});
