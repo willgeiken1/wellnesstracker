@@ -45,7 +45,7 @@ export function testTransport(db: PGlite, owner: string, syncFlags: SyncFlags = 
 }
 
 /** CI migration chain first; row-sync drafts are installed separately afterwards. */
-export async function migratedDatabase(rowSyncFirst = false) {
+export async function migratedDatabase(rowSyncFirst = false, beforeImporter?: (db: PGlite) => Promise<void>) {
   const db = new PGlite();
   try {
     // Match the Node tests job's Supabase stubs, without row-sync/0001 or 0002.
@@ -76,6 +76,7 @@ export async function migratedDatabase(rowSyncFirst = false) {
     }
     const directory = join(__dirname, "../../../supabase/migrations");
     for (const file of readdirSync(directory).filter((f) => f.endsWith(".sql")).sort()) {
+      if (file === "20261027190000_pwa_import.sql") await beforeImporter?.(db);
       await db.exec(readFileSync(join(directory, file), "utf8"));
     }
     return db;

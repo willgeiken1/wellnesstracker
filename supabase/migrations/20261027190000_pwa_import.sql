@@ -11,6 +11,25 @@ ALTER TABLE public.native_pwa_imports ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.native_pwa_imports FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.native_pwa_imports TO authenticated;
 CREATE POLICY own_import ON public.native_pwa_imports FOR SELECT TO authenticated USING(owner_id=auth.uid());
+-- Durable range/cutoff receipts are independent of short-lived raw previews.
+CREATE TABLE public.native_pwa_purges (
+ owner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+ from_day text NOT NULL, to_day text NOT NULL, cutoff_ms bigint NOT NULL,
+ tz text NOT NULL DEFAULT 'UTC',
+ CHECK (from_day <= to_day), CHECK (cutoff_ms BETWEEN 0 AND 9007199254740991)
+);
+CREATE INDEX native_pwa_purges_owner ON public.native_pwa_purges(owner_id);
+ALTER TABLE public.native_pwa_purges ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.native_pwa_purges FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.native_pwa_purges TO authenticated;
+CREATE POLICY own_purge ON public.native_pwa_purges FOR SELECT TO authenticated USING(owner_id=auth.uid());
+-- Preserve markers written before the importer was installed.
+DO $$ BEGIN
+ IF pg_catalog.to_regclass('public.purges') IS NOT NULL THEN
+  INSERT INTO public.native_pwa_purges SELECT owner_id,from_day,to_day,cutoff_ms,tz
+   FROM public.purges WHERE deleted_at IS NULL AND cutoff_ms IS NOT NULL;
+ END IF;
+END $$;
 -- Freeze once under the SAME owner lock as sync_push. No two-way blob bridge.
 CREATE FUNCTION public.native_pwa_snapshot(refresh_expired boolean DEFAULT true) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE owner uuid:=auth.uid(); result jsonb; blob jsonb; photo_rows jsonb;
@@ -18,7 +37,7 @@ BEGIN
  IF owner IS NULL THEN RAISE EXCEPTION 'Sign in required'; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner::text,0));
  -- Sweep on every preview/commit lookup, including other owners' abandoned archives.
- -- Completed receipts (including range-purge markers) must never expire.
+ -- Successful import receipts never expire; purge receipts live separately.
  DELETE FROM public.native_pwa_imports WHERE NOT completed AND created_at < now()-interval '15 minutes';
  IF NOT EXISTS(SELECT 1 FROM public.native_pwa_imports WHERE owner_id=owner) THEN
   -- Commit reads an existing preview only; it must not freeze a new snapshot.
@@ -31,8 +50,8 @@ BEGIN
   blob:=jsonb_set(blob,'{sessions}',coalesce(blob->'sessions','[]'::jsonb));
   SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'path',path,'taken_at',taken_at,'day',day,'pose',pose)),'[]'::jsonb)
    INTO photo_rows FROM public.progress_photos WHERE user_id=owner;
-  IF octet_length(jsonb_build_object('blob',blob,'photos',photo_rows)::text)>5242880 THEN RAISE EXCEPTION 'Import too large'; END IF;
-  INSERT INTO public.native_pwa_imports(owner_id,snapshot) VALUES(owner,jsonb_build_object('blob',blob,'photos',photo_rows));
+  IF octet_length(jsonb_build_object('blob',blob,'photos',photo_rows,'purges',coalesce((SELECT jsonb_agg(jsonb_build_object('from_day',from_day,'to_day',to_day,'cutoff_ms',cutoff_ms,'tz',tz)) FROM public.native_pwa_purges WHERE owner_id=owner),'[]'::jsonb))::text)>5242880 THEN RAISE EXCEPTION 'Import too large'; END IF;
+  INSERT INTO public.native_pwa_imports(owner_id,snapshot) VALUES(owner,jsonb_build_object('blob',blob,'photos',photo_rows,'purges',coalesce((SELECT jsonb_agg(jsonb_build_object('from_day',from_day,'to_day',to_day,'cutoff_ms',cutoff_ms,'tz',tz)) FROM public.native_pwa_purges WHERE owner_id=owner),'[]'::jsonb)));
  END IF;
  SELECT jsonb_build_object('snapshot',snapshot,'completed',completed,'plan',plan,'preview_id',preview_id) INTO result FROM public.native_pwa_imports WHERE owner_id=owner;
  RETURN result;
@@ -40,7 +59,7 @@ END $$;
 -- Edge normalizes the frozen snapshot. Existing rows/tombstones always win.
 -- All batches and the completion marker commit or roll back together.
 CREATE FUNCTION public.native_pwa_commit(import_plan jsonb, rows jsonb, expected_preview uuid) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE owner uuid:=auth.uid(); item jsonb; present boolean; has_home boolean; has_profile boolean; has_settings boolean; batch jsonb:='[]'; t text;
+DECLARE owner uuid:=auth.uid(); item jsonb; present boolean; has_home boolean; has_profile boolean; has_settings boolean; batch jsonb:='[]'; t text; source_time bigint; skipped text[]:=ARRAY[]::text[];
 BEGIN
  IF owner IS NULL THEN RAISE EXCEPTION 'Sign in required'; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner::text,0));
@@ -50,6 +69,27 @@ BEGIN
  IF (SELECT completed FROM public.native_pwa_imports WHERE owner_id=owner) THEN RETURN false; END IF;
  IF expected_preview IS DISTINCT FROM (SELECT preview_id FROM public.native_pwa_imports WHERE owner_id=owner) THEN RETURN NULL; END IF;
  IF jsonb_typeof(rows) IS DISTINCT FROM 'array' OR jsonb_typeof(import_plan) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'Invalid import'; END IF;
+ -- Resolve descendants before writing, including direct child-first batches.
+ WITH RECURSIVE candidates AS (
+  SELECT value AS item,
+   CASE WHEN coalesce((value->>'source_created_at')::bigint,0)
+     BETWEEN 0 AND (extract(epoch FROM clock_timestamp())*1000)::bigint+60000
+    THEN coalesce((value->>'source_created_at')::bigint,0) ELSE 0 END AS created_ms
+  FROM jsonb_array_elements(rows)
+ ), blocked(id) AS (
+  SELECT c.item->>'id' FROM candidates c
+  WHERE EXISTS(SELECT 1 FROM public.native_pwa_purges p
+   WHERE p.owner_id=owner AND c.created_ms<=p.cutoff_ms
+    AND ((c.item->>'table' IN ('sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days')
+      AND c.item->'data'->>'day' BETWEEN p.from_day AND p.to_day)
+     OR (c.item->>'table'='photos' AND pg_catalog.to_char(
+       (pg_catalog.to_timestamp((c.item->'data'->>'captured_at')::double precision/1000)
+         AT TIME ZONE p.tz)::date,'YYYY-MM-DD') BETWEEN p.from_day AND p.to_day)))
+  UNION
+  SELECT c.item->>'id' FROM candidates c JOIN blocked b
+   ON coalesce(c.item->'data'->>'session_id',c.item->'data'->>'entry_id')=b.id
+   WHERE c.item->>'table' IN ('entries','sets')
+ ) SELECT coalesce(array_agg(id),ARRAY[]::text[]) INTO skipped FROM blocked;
  SELECT EXISTS(SELECT 1 FROM public.home_layout WHERE owner_id=owner) INTO has_home;
  SELECT EXISTS(SELECT 1 FROM public.profile WHERE owner_id=owner) INTO has_profile;
  SELECT EXISTS(SELECT 1 FROM public.settings WHERE owner_id=owner) INTO has_settings;
@@ -57,6 +97,11 @@ BEGIN
   t:=item->>'table';
   IF t NOT IN ('profile','weigh_ins','measurements','routines','routine_exercises','sessions','entries','sets','cardio_sessions','food_entries','saved_foods','food_targets','meals','goals','plan_days','machine_notes','home_layout','settings','photos') OR (item->>'owner_id')::uuid IS DISTINCT FROM owner THEN RAISE EXCEPTION 'Invalid import row'; END IF;
   IF jsonb_typeof(item->'data') IS DISTINCT FROM 'object' OR (item->'data') ?| ARRAY['owner_id','id','device_id','updated_at','deleted_at','server_seq'] THEN RAISE EXCEPTION 'Invalid import row identity'; END IF;
+  source_time:=coalesce((item->>'source_created_at')::bigint,0);
+  IF source_time < 0 OR source_time > (extract(epoch FROM clock_timestamp())*1000)::bigint+60000 THEN source_time:=0; END IF;
+  IF item->>'id'=ANY(skipped) THEN CONTINUE; END IF;
+  -- Keep source creation time for the existing row-sync range/cutoff guard.
+  item:=jsonb_set(item-'source_created_at','{updated_at}',to_jsonb(greatest(1,source_time)));
   IF (t='home_layout' AND has_home) OR (t='profile' AND has_profile) OR (t='settings' AND has_settings) THEN CONTINUE; END IF;
   EXECUTE format('SELECT EXISTS(SELECT 1 FROM public.%I WHERE owner_id=$1 AND id=$2)',t) INTO present USING owner,(item->>'id')::uuid;
   IF present THEN CONTINUE; END IF;
@@ -79,9 +124,11 @@ BEGIN
  -- Row-sync may be installed before the importer migration.
  IF pg_catalog.to_regclass('public.native_pwa_imports') IS NULL THEN RETURN NEW; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text,0));
- INSERT INTO public.native_pwa_imports(owner_id,snapshot,plan,completed)
- VALUES(NEW.owner_id,'{}'::jsonb,NULL,true)
- ON CONFLICT(owner_id) DO UPDATE SET snapshot='{}'::jsonb,plan=NULL,completed=true;
+ IF NEW.deleted_at IS NULL AND NEW.cutoff_ms IS NOT NULL THEN
+  INSERT INTO public.native_pwa_purges(owner_id,from_day,to_day,cutoff_ms,tz)
+   VALUES(NEW.owner_id,NEW.from_day,NEW.to_day,NEW.cutoff_ms,NEW.tz);
+  DELETE FROM public.native_pwa_imports WHERE owner_id=NEW.owner_id;
+ END IF;
  RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION public.native_pwa_invalidate_on_purge() FROM PUBLIC,anon,authenticated,service_role;
@@ -108,6 +155,7 @@ begin
 
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_user::text,0));
   DELETE FROM public.native_pwa_imports WHERE owner_id=p_user;
+  DELETE FROM public.native_pwa_purges WHERE owner_id=p_user;
 
   if to_regclass('public.shared_items') is not null then
     delete from public.reports
@@ -162,11 +210,10 @@ begin
   end if;
 
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_user::text,0));
-  -- JSON archives have no reliable date column. Discard the entire archive and
-  -- retain a completion marker so old PWA data cannot be frozen/imported again.
-  INSERT INTO public.native_pwa_imports(owner_id,snapshot,plan,completed)
-    VALUES(p_user,'{}'::jsonb,NULL,true)
-    ON CONFLICT(owner_id) DO UPDATE SET snapshot='{}'::jsonb,plan=NULL,completed=true;
+  -- Invalidate the preview, retaining only range/cutoff metadata for later imports.
+  INSERT INTO public.native_pwa_purges(owner_id,from_day,to_day,cutoff_ms)
+    VALUES(p_user,p_from::text,p_to::text,(extract(epoch FROM clock_timestamp())*1000)::bigint);
+  DELETE FROM public.native_pwa_imports WHERE owner_id=p_user;
 
   for r in
     select c.table_name

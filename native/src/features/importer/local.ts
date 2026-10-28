@@ -45,8 +45,10 @@ export function previewImport(
   for (const row of plan.rows) {
     if (!allowed.includes(row.table as Table))
       throw new Error("Invalid import table.");
+    const syncRow = { ...row };
+    delete syncRow.source_created_at;
     validateRow({
-      ...row,
+      ...syncRow,
       owner_id: repo.owner,
       device_id: repo.device,
       updated_at: 1,

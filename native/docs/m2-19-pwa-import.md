@@ -21,7 +21,7 @@ Receiving file shares uses SDK 58 expo-sharing CNG configuration. The iOS share 
 
 The free-iPhone inspection copies the shared pure importer into the matching temporary repository layout so Metro can resolve its watch folder. The full inspection exports iOS and scans configuration, bundles, and source maps for backend/telemetry imports and synthetic canaries.
 
-Both legacy privacy RPCs now handle `native_pwa_imports` under the same owner lock as snapshot/commit. Account deletion explicitly deletes the archive before auth deletion. Range deletion clears the entire archive (JSON has no reliable date columns) and preserves a completion marker, including when purge precedes preview. A native `purges` marker triggers the same invalidation. This conservatively disables further account-blob import after a range purge so an unchanged legacy source cannot restore deleted data. Existing social cleanup remains intact.
+Both legacy privacy RPCs now handle `native_pwa_imports` under the same owner lock as snapshot/commit. Account deletion explicitly deletes the archive before auth deletion. Range deletion clears the entire archive and records the purged range and cutoff separately, including when purge precedes preview. A native `purges` marker triggers the same invalidation. Fix round 3 supersedes the former permanent completion marker: later imports exclude pre-cutoff rows in those ranges while allowing other rows. Existing social cleanup remains intact.
 
 Direct authenticated RPC calls remain supported because the edge uses the user's JWT and a publishable key. SQL validates owner identity and rejects nested identity overrides before any existing-row/singleton skip; `sync_push` validates accepted row fields. No service-role client was introduced. This follows the authorization and empty search-path guidance in [Supabase's database-function documentation](https://supabase.com/docs/guides/database/functions).
 
@@ -29,7 +29,7 @@ The edge caps streamed request bodies at 64 KiB (including missing/false Content
 
 ## Fix round 1b — migration-chain compatibility
 
-The native `purges` table is created by the separate row-sync draft, not by any file in `supabase/migrations`. The importer migration now installs its native purge trigger only when that table exists. The legacy `purge_user_range_rows` and `delete_user_rows` RPCs continue to erase the snapshot and raw plan without requiring row-sync tables. A PGlite regression loads every migration in filename order with CI's Supabase stubs, exercises both privacy RPCs, and verifies that purges before or after a preview prevent refreezing/importing the archive.
+The native `purges` table is created by the separate row-sync draft, not by any file in `supabase/migrations`. The importer migration now installs its native purge trigger only when that table exists. The legacy `purge_user_range_rows` and `delete_user_rows` RPCs continue to erase the snapshot and raw plan without requiring row-sync tables. A PGlite regression loads every migration in filename order with CI's Supabase stubs, exercises both privacy RPCs, and verifies that purges before or after a preview invalidate the archive while permitting a fresh preview with durable range receipts.
 
 Loading the migration chain alone does not enable row import: the reviewed rollout must install row-sync 0001/0002 before runtime import use. Fix round 2 installs the purge trigger in either SQL order. This continuation run on will-worker changes source and tests only.
 
@@ -40,7 +40,7 @@ The importer migration replaces the same trigger if row-sync was installed first
 both orders work, and the CI Supabase migration chain remains independent of row-sync.
 The fresh-install RPC tests run the entire Supabase chain before row-sync 0001/0002
 and assert the trigger exists before testing native range purge invalidation.
-Range purge still marks the import completed, including before any preview (R2-4).
+The former R2-4 permanent completion behavior is superseded by Fix round 3 below.
 
 `native_pwa_snapshot(true)` previews and freezes a snapshot; `false` only reads an
 existing preview for commit and returns SQL NULL when none is available. Both
@@ -50,3 +50,29 @@ missing/expired/replaced preview so the sweep persists instead of rolling back
 with an exception. The edge maps that conflict (and prior SQL preview errors) to
 HTTP 409; native displays the localized Preview again message in an accessible
 alert. No scheduled jobs or remote setup are required. Row-sync remains required before runtime import use.
+
+
+## Fix round 3 — range purge permits later import
+
+Per Will (Oct 28, 7:15 AM CT), a range purge must not permanently block PWA
+import. Both purge entry points now append owner-scoped range/cutoff receipts to
+`native_pwa_purges` and delete the old preview/completion receipt under the same
+owner lock. A fresh preview gets a new UUID; a stale confirmation cannot commit.
+Receipts survive preview expiry and successful import. Account deletion clears
+both archives and range receipts. Either SQL install order remains supported;
+existing native purge markers are copied when the importer is installed later.
+
+The shared normalizer filters dated domains before retaining legacy payloads,
+including session entries/sets, food, cardio, weigh-ins, measurements and planned
+days. The edge filters photo metadata with each native purge's timezone. SQL
+also enforces range/cutoff filtering on commit. Separate purges retain their own
+ranges and cutoffs. Out-of-range rows and rows created after the applicable
+cutoff import normally. Creation timestamps take precedence over modification
+timestamps; missing or invalid creation evidence is conservatively treated as
+pre-cutoff. Session descendants inherit their parent's creation timestamp.
+Accepted imports pass that source timestamp to the existing row-sync purge
+guard rather than assigning every imported row timestamp 1.
+
+No UI strings or animations are added. `syncedV1Columns` remains false. Tests
+use invented fixtures, PGlite and mocked edge clients only. No remote database,
+login, deployment or telemetry is involved.

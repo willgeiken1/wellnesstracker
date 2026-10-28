@@ -801,9 +801,11 @@ BEGIN
  -- Row-sync may be installed before the importer migration.
  IF pg_catalog.to_regclass('public.native_pwa_imports') IS NULL THEN RETURN NEW; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text,0));
- INSERT INTO public.native_pwa_imports(owner_id,snapshot,plan,completed)
- VALUES(NEW.owner_id,'{}'::jsonb,NULL,true)
- ON CONFLICT(owner_id) DO UPDATE SET snapshot='{}'::jsonb,plan=NULL,completed=true;
+ IF NEW.deleted_at IS NULL AND NEW.cutoff_ms IS NOT NULL THEN
+  INSERT INTO public.native_pwa_purges(owner_id,from_day,to_day,cutoff_ms,tz)
+   VALUES(NEW.owner_id,NEW.from_day,NEW.to_day,NEW.cutoff_ms,NEW.tz);
+  DELETE FROM public.native_pwa_imports WHERE owner_id=NEW.owner_id;
+ END IF;
  RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION public.native_pwa_invalidate_on_purge() FROM PUBLIC,anon,authenticated,service_role;

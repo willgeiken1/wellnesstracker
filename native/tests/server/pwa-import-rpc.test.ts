@@ -182,8 +182,8 @@ test("range purge wipes snapshot and raw plan, blocks resurrection, isolates own
         [OWNER_A],
       )
     ).rows[0],
-  ).toEqual({ snapshot: {}, plan: null, completed: true });
-  expect((await commitRows()).rows[0].v).toBe(false);
+  ).toBeUndefined();
+  expect((await commitRows()).rows[0].v).toBeNull();
   expect((await db.query("SELECT * FROM public.sessions")).rows).toHaveLength(
     0,
   );
@@ -310,7 +310,7 @@ test("native row-range purge also invalidates pending raw archives", async () =>
       [importId("native-purge")],
     ),
   );
-  expect((await commitRows()).rows[0].v).toBe(false);
+  expect((await commitRows()).rows[0].v).toBeNull();
   expect(
     (
       await db.query(
@@ -318,7 +318,7 @@ test("native row-range purge also invalidates pending raw archives", async () =>
         [OWNER_A],
       )
     ).rows[0],
-  ).toEqual({ snapshot: {}, plan: null });
+  ).toBeUndefined();
 });
 test("oversized snapshot is refused before any raw archive is saved", async () => {
   await db.query("UPDATE public.user_data SET data=$1 WHERE user_id=$2", [
@@ -357,5 +357,54 @@ test.each(["preview", "commit", "stale commit"])("%s sweeps abandoned archives a
   await db.query("SELECT public.purge_user_range_rows($1,'2026-01-02','2026-01-02')", [OWNER_B]);
   await db.query("UPDATE public.native_pwa_imports SET created_at=now()-interval '16 minutes' WHERE owner_id=$1", [OWNER_B]);
   await snapshot();
-  expect((await snapshot(OWNER_B)).rows[0].v).toMatchObject({ completed: true, snapshot: {}, plan: null });
+  expect((await snapshot(OWNER_B)).rows[0].v.completed).toBe(false);
+});
+
+// A recent modification must not resurrect a row whose creation preceded purge.
+test.each(["legacy", "native", "legacy child-first"])("%s purge permits a later import while excluding only old in-range rows", async kind => {
+  const cutoff = Date.now() - 10000;
+  const fixture = { version: 2, workouts: [], sessions: [
+    { id: "old", date: "2026-01-02", createdAt: cutoff - 1, mod: cutoff + 1, entries: [{ exercise: "Bench Press", sets: [{ r: 8 }] }] },
+    { id: "outside", date: "2026-01-03", createdAt: cutoff - 1, entries: [] },
+    { id: "new", date: "2026-01-02", createdAt: Date.now() + 1000, entries: [{ exercise: "Bench Press", sets: [{ r: 8 }] }] },
+  ] };
+  await snapshot();
+  const oldToken = (await snapshot()).rows[0].v.preview_id;
+  if (kind === "native") await asUser(db, OWNER_A, tx => tx.query(
+    "SELECT public.sync_purge_range($1,'2026-01-02','2026-01-02',$2,'UTC')", [importId("range"), cutoff]));
+  else await db.query("SELECT public.purge_user_range_rows($1,'2026-01-02','2026-01-02')", [OWNER_A]);
+  await db.query("UPDATE public.user_data SET data=$1 WHERE user_id=$2", [JSON.stringify(fixture), OWNER_A]);
+  const fresh = (await snapshot()).rows[0].v;
+  expect(fresh.completed).toBe(false);
+  expect(fresh.preview_id).not.toBe(oldToken);
+  const converted = normalizePwa(fixture, pwaExerciseBank);
+  const batch = converted.rows.map(r => ({ ...r, owner_id: OWNER_A, device_id: DEVICE_A, updated_at: 1, deleted_at: null }));
+  expect((await commitRows(kind === "legacy child-first" ? [...batch].reverse() : batch)).rows[0].v).toBe(true);
+  expect((await db.query("SELECT day FROM public.sessions WHERE deleted_at IS NULL ORDER BY day")).rows)
+    .toEqual([{day:"2026-01-02"}, {day:"2026-01-03"}]);
+  expect((await db.query("SELECT * FROM public.entries WHERE deleted_at IS NULL")).rows).toHaveLength(1);
+  expect((await db.query("SELECT * FROM public.sets WHERE deleted_at IS NULL")).rows).toHaveLength(1);
+});
+
+test("two purges retain separate ranges/cutoffs across preview expiry and completion", async () => {
+  const cutoff = Date.now() - 10000;
+  for (const [from, to, delta] of [["2026-01-02", "2026-01-03", 0], ["2026-01-03", "2026-01-04", 1000]] as const) {
+    await asUser(db, OWNER_A, tx => tx.query(
+      "SELECT public.sync_purge_range($1,$2,$3,$4,'UTC')", [importId(from), from, to, cutoff + delta]));
+  }
+  await snapshot();
+  await db.query("UPDATE public.native_pwa_imports SET created_at=now()-interval '16 minutes'");
+  const fresh = (await snapshot()).rows[0].v;
+  expect(fresh.completed).toBe(false);
+  const session = rows().find(r => r.table === "sessions")!;
+  const batch = [
+    ["2026-01-02", cutoff], ["2026-01-02", cutoff + 1],
+    ["2026-01-03", cutoff + 1], ["2026-01-03", cutoff + 1001],
+    ["2026-01-05", 1],
+  ].map(([day, created], i) => ({...session, id: importId("double:"+i), source_created_at: created as number, data: {...session.data, day: day as string}}));
+  expect((await commitRows(batch)).rows[0].v).toBe(true);
+  expect((await db.query("SELECT day FROM public.sessions WHERE deleted_at IS NULL ORDER BY day")).rows)
+    .toEqual([{day:"2026-01-02"},{day:"2026-01-03"},{day:"2026-01-05"}]);
+  await db.query("SELECT public.purge_user_range_rows($1,'2026-01-05','2026-01-05')", [OWNER_A]);
+  expect((await snapshot()).rows[0].v.completed).toBe(false);
 });

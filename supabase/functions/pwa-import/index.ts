@@ -98,6 +98,7 @@ Deno.serve(async (req) => {
       data.snapshot.blob,
       pwaExerciseBank,
       mapping,
+      data.snapshot.purges ?? [],
     );
     plan.previewId = data.preview_id;
     for (const photo of data.snapshot.photos) {
@@ -108,6 +109,11 @@ Deno.serve(async (req) => {
       )
         throw Error();
       const captured = Date.parse(photo.taken_at);
+      const day = typeof photo.day === "string" ? photo.day : Number.isFinite(captured) ? new Date(captured).toISOString().slice(0, 10) : "";
+      if ((data.snapshot.purges ?? []).some((p: {from_day: string; to_day: string; cutoff_ms: number; tz: string}) => {
+        const localDay = Number.isFinite(captured) ? new Intl.DateTimeFormat("en-CA", {timeZone: p.tz, year: "numeric", month: "2-digit", day: "2-digit"}).format(new Date(captured)) : day;
+        return localDay >= p.from_day && localDay <= p.to_day && (!Number.isFinite(captured) || captured <= p.cutoff_ms);
+      })) continue;
       const photoId = importId("pwa:photo:" + photo.id);
       plan.legacy[photoId] = photo;
       plan.issues.push({
@@ -117,6 +123,7 @@ Deno.serve(async (req) => {
       });
       plan.rows.push({
         table: "photos",
+        source_created_at: Number.isFinite(captured) ? captured : 0,
         id: photoId,
         data: {
           file_name: photo.path,
@@ -136,7 +143,7 @@ Deno.serve(async (req) => {
         ...row,
         owner_id: user.id,
         device_id: "00000000-0000-4000-8000-000000000019",
-        updated_at: 1,
+        updated_at: Math.max(1, row.source_created_at ?? 0),
         deleted_at: null,
         // syncedV1Columns remains OFF: preserve extra values in the plan for local restore.
         data:

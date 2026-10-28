@@ -1,7 +1,15 @@
 /** Pure, network-free legacy conversion, shared by native and the edge function.
  * No Oura cache, check-ins, device consent, credentials or lock settings enter this plan. */
 export type Value = string | number | null;
+export interface PwaPurge {
+  from_day: string;
+  to_day: string;
+  cutoff_ms: number;
+  tz: string;
+}
 export interface ImportRow {
+  /** Original creation time, inherited by session children; never import time. */
+  source_created_at?: number;
   table: string;
   id: string;
   data: Record<string, Value>;
@@ -165,6 +173,7 @@ export function normalizePwa(
   input: unknown,
   bank: string[],
   mapping: Record<string, string> = {},
+  serverPurges: PwaPurge[] = [],
 ): ImportPlan {
   const root = obj(input);
   if (!Array.isArray(root.sessions)) throw new Error("Invalid backup.");
@@ -287,7 +296,9 @@ export function normalizePwa(
       prior = used.get(id);
     if (prior) throw new Error("Duplicate import identity.");
     used.set(id, key);
-    plan.rows.push({ table, id, data });
+    const parent = plan.rows.find(r => r.id === (data.session_id ?? data.entry_id));
+    const created = parent?.source_created_at ?? sourceCreatedAt(raw);
+    plan.rows.push({ table, id, data, ...(created ? { source_created_at: created } : {}) });
     plan.legacy[id] = raw;
     // Retain full legacy payload for fields with no native representation, locally only.
     const validScalar =
@@ -312,8 +323,19 @@ export function normalizePwa(
       : typeof v === "string" && Number.isFinite(Date.parse(v))
         ? Date.parse(v)
         : 0;
+  const sourceCreatedAt = (raw: unknown): number => {
+    const r = obj(raw);
+    // Prefer creation evidence over subsequent modifications. Old rows without
+    // timestamps are conservatively pre-cutoff; import time is never evidence.
+    const value = stamp(r.createdAt ?? r.startedAt ?? r.loggedAt ?? r.at);
+    return Number.isSafeInteger(value) && value > 0 && value <= Date.now() + 60000 ? value : 0;
+  };
   const purged = (day: unknown, raw: unknown, path: string) => {
     if (typeof day !== "string") return false;
+    if (serverPurges.some(p => day >= p.from_day && day <= p.to_day && sourceCreatedAt(raw) <= p.cutoff_ms)) {
+      issue(path, "deleted-by-range", { day });
+      return true;
+    }
     const r = obj(raw);
     const stamps = [
       "mod",
@@ -693,6 +715,7 @@ export function normalizePwa(
       issue("cardio." + key, "legacy-field", v);
   for (const [day, v] of Object.entries(obj(root.plan))) {
     const key = "plan:" + day;
+    if (purged(day, { at: obj(root.planAt)[day] }, key)) continue;
     const routine = routines.get(str(v));
     if (!routine) issue(key, "missing-routine", v);
     add(
@@ -701,6 +724,8 @@ export function normalizePwa(
       { day: date(day, key), routine_id: routine ?? null, status: "planned" },
       v,
     );
+    const created = sourceCreatedAt({ at: obj(root.planAt)[day] });
+    if (created) plan.rows[plan.rows.length - 1].source_created_at = created;
   }
   const goals = obj(root.goals);
   if (goals.sessionsPerWeek != null)
