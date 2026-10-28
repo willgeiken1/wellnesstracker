@@ -20,12 +20,14 @@ export function SyncRecovery({repository}: {repository: Repository | null}) {
     const timer=setInterval(refresh,60_000);
     return ()=>{unsubscribe?.();foreground.remove();clearInterval(timer);};
   },[repository]);
+  // Number by key so reordering the recovery list does not change its labels.
+  const copyNumbers = new Map(versions.map(version=>version.key).sort().map((key,index)=>[key,index+1]));
   return <>
     {versions.length>0&&<>
       <ThemedText muted accessibilityLiveRegion="polite">{t('changedOtherPhone')}</ThemedText>
       <ThemedText muted>{t('restoreVersionHelp')}</ThemedText>
       {versions.map(version=><Button key={version.key}
-        label={restoreVersionLabel(version.row)}
+        label={restoreVersionLabel(version.row,copyNumbers.get(version.key)!)}
         variant="secondary" onPress={()=>{
           try {
             if(!repository?.restoreLosingVersion(version.key)){setVersions(repository?.losingVersions()??[]);setFailed(true);}

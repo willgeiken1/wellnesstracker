@@ -1,4 +1,31 @@
 export const en = {
+  foodPrevious: 'Previous food day', foodNext: 'Next food day', foodCalendar: 'Open food calendar',
+  foodPreviousMonth: 'Previous food month', foodNextMonth: 'Next food month', foodLast14: 'Last 14 days',
+  foodBurned: 'Burned: —', foodDay: 'Food for {day}', foodSaveDay: 'Save to {day}',
+  foodSnap: 'Snap', foodDescribe: 'Describe', foodScan: 'Scan', foodManual: 'Manual', foodSaved: 'Saved',
+  foodLater: '{method} arrives in a later step.', foodFan: 'More food logging options',
+  foodName: 'Food name', foodCalories: 'Calories (kcal)', foodProtein: 'Protein (g)', foodCarbs: 'Carbs (g)', foodFat: 'Fat (g)',
+  foodFiber: 'Fiber (g)', foodSugar: 'Sugar (g)', foodSodium: 'Sodium (mg)', foodAmount: 'Serving weight (g, optional)',
+  foodPortions: 'Portion multiplier', foodInvalid: 'Enter a name and non-negative numbers; portions must be positive. Future days are blocked.',
+  foodFailure: 'Could not save this change. Your input is kept; try again.',
+  foodEdit: 'Edit {name}', foodDelete: 'Delete {name}', foodDeleted: 'Food deleted.', foodUndo: 'Undo delete',
+  foodUndoUnavailable: 'This food changed after deletion; Undo is no longer available.',
+  foodEarly: 'Before 4 AM: logging to {day}.', foodUseToday: 'Use today instead', foodUsePrevious: 'Use previous day instead',
+  foodRename: 'Rename {name}', foodMealName: 'Meal name', foodSaveMeal: 'Save meal name', foodAddMeal: 'Add meal',
+  foodChooseMeal: 'Log to meal', foodEmptyMeal: 'No food logged.', foodCopy: 'Copy yesterday to {name}',
+  foodSaveCombo: 'Save {name} as combo', foodComboName: 'Combo name', foodComboSave: 'Save combo',
+  foodRecent: 'Recent (up to 25)', foodFavorites: 'Favorites', foodCombos: 'Meal combos', foodNoSaved: 'No foods here yet.',
+  foodFavorite: 'Favorite {name}', foodUnfavorite: 'Unfavorite {name}', foodKeep: 'Save {name} for later', foodLogSaved: 'Log {name}',
+  foodTargetsSet: 'Set food targets', foodTargetsEdit: 'Edit food targets', foodTargetCalories: 'Target calories (kcal)',
+  foodTargetProtein: 'Target protein (g)', foodTargetCarbs: 'Target carbs (g)', foodTargetFat: 'Target fat (g)',
+  foodTargetsSave: 'Save targets', foodTargetsAuto: 'Use estimated targets', foodTargetsManual: 'Daily targets (manual)',
+  foodActivityEstimate: 'Activity: {level} (est.)', foodUnknown: 'Blank nutrients are unknown; totals include known values only.',
+  foodRing: '{calories} kcal of {target}; protein {protein} g, carbs {carbs} g, fat {fat} g',
+  foodEnergy: '{value} kcal', foodTargetSummary: 'Target: {calories} kcal · Protein {protein} g · Carbs {carbs} g · Fat {fat} g',
+  foodEstimatedLegend: 'Dashed arcs indicate AI estimates.',
+
+  foodBreakfast: 'Breakfast', foodLunch: 'Lunch', foodDinner: 'Dinner', foodSnacks: 'Snacks',
+
   atlas_pecUpper: "Upper chest", atlasScientific_pecUpper: "Pectoralis major, clavicular head",
   atlas_pecLower: "Chest (mid/lower)", atlasScientific_pecLower: "Pectoralis major, sternocostal head",
   atlas_deltAnt: "Anterior deltoid", atlasScientific_deltAnt: "Deltoideus, anterior",
@@ -57,10 +84,7 @@ export const en = {
   atlasLegend: "Volume: pale blue (below target), blue (in target), deep blue (above target). Highlight fades with time since training. Exact values are in the list.",
 
   demoTransferFailed: "Your account is ready, but demo entries could not be moved. They are still on this device. Try again to move them.",
-  foodPrevious: 'Previous food day', foodNext: 'Next food day', foodCalendar: 'Open food calendar',
-  foodPreviousMonth: 'Previous food month', foodNextMonth: 'Next food month', foodLast14: 'Last 14 days',
-  foodBurned: 'Burned: —', foodDay: 'Food for {day}', foodSaveDay: 'Save to {day}',
-  foodSnap: 'Snap', foodDescribe: 'Describe', barcodeTitle: 'Scan food barcode',
+  barcodeTitle: 'Scan food barcode',
   barcodePrivacy: 'Only the barcode is sent to Open Food Facts. Cached foods work offline.',
   barcodeCamera: 'Open barcode camera', barcodeSettings: 'Open camera settings',
   barcodeDenied: 'Camera unavailable. You can type the barcode or enter food manually.',
@@ -77,29 +101,6 @@ export const en = {
   barcodeChoose: 'Use this food', barcodeAgain: 'Look up another barcode',
   barcodeManual: 'Enter food manually', barcodeAI: 'AI photo',
   barcodeAILater: 'AI photo is not available yet. You can enter food manually now.',
-  foodScan: 'Scan', foodManual: 'Manual', foodSaved: 'Saved',
-  foodLater: '{method} arrives in a later step.', foodFan: 'More food logging options',
-  foodName: 'Food name', foodCalories: 'Calories (kcal)', foodProtein: 'Protein (g)', foodCarbs: 'Carbs (g)', foodFat: 'Fat (g)',
-  foodFiber: 'Fiber (g)', foodSugar: 'Sugar (g)', foodSodium: 'Sodium (mg)', foodAmount: 'Serving weight (g, optional)',
-  foodPortions: 'Portion multiplier', foodInvalid: 'Enter a name and non-negative numbers; portions must be positive. Future days are blocked.',
-  foodFailure: 'Could not save this change. Your input is kept; try again.',
-  foodEdit: 'Edit {name}', foodDelete: 'Delete {name}', foodDeleted: 'Food deleted.', foodUndo: 'Undo delete',
-  foodUndoUnavailable: 'This food changed after deletion; Undo is no longer available.',
-  foodEarly: 'Before 4 AM: logging to {day}.', foodUseToday: 'Use today instead', foodUsePrevious: 'Use previous day instead',
-  foodRename: 'Rename {name}', foodMealName: 'Meal name', foodSaveMeal: 'Save meal name', foodAddMeal: 'Add meal',
-  foodChooseMeal: 'Log to meal', foodEmptyMeal: 'No food logged.', foodCopy: 'Copy yesterday to {name}',
-  foodSaveCombo: 'Save {name} as combo', foodComboName: 'Combo name', foodComboSave: 'Save combo',
-  foodRecent: 'Recent (up to 25)', foodFavorites: 'Favorites', foodCombos: 'Meal combos', foodNoSaved: 'No foods here yet.',
-  foodFavorite: 'Favorite {name}', foodUnfavorite: 'Unfavorite {name}', foodKeep: 'Save {name} for later', foodLogSaved: 'Log {name}',
-  foodTargetsSet: 'Set food targets', foodTargetsEdit: 'Edit food targets', foodTargetCalories: 'Target calories (kcal)',
-  foodTargetProtein: 'Target protein (g)', foodTargetCarbs: 'Target carbs (g)', foodTargetFat: 'Target fat (g)',
-  foodTargetsSave: 'Save targets', foodTargetsAuto: 'Use estimated targets', foodTargetsManual: 'Daily targets (manual)',
-  foodActivityEstimate: 'Activity: {level} (est.)', foodUnknown: 'Blank nutrients are unknown; totals include known values only.',
-  foodRing: '{calories} kcal of {target}; protein {protein} g, carbs {carbs} g, fat {fat} g',
-  foodEnergy: '{value} kcal', foodTargetSummary: 'Target: {calories} kcal · Protein {protein} g · Carbs {carbs} g · Fat {fat} g',
-  foodEstimatedLegend: 'Dashed arcs indicate AI estimates.',
-
-  foodBreakfast: 'Breakfast', foodLunch: 'Lunch', foodDinner: 'Dinner', foodSnacks: 'Snacks',
 
   bodyLog: 'Log weigh-in',
   bodyDelete: 'Delete weigh-in',
@@ -447,7 +448,7 @@ export const en = {
   demoMode: 'Demo mode · synthetic examples only', leaveDemo: 'Leave demo', signOut: 'Sign out',
   changedOtherPhone: 'Changed on your other phone',
   restoreVersionHelp: 'Previous versions stay on this phone for 7 days. Restoring creates a new change to sync.',
-  restorePreviousVersion: 'Restore previous {table} item {item} from {date} UTC',
+  restorePreviousVersion: 'Restore previous {table} copy {copy} from {date}',
   recoveryTable_profile: 'Profile',
   recoveryTable_weigh_ins: 'Weight entry',
   recoveryTable_measurements: 'Measurement',
@@ -527,11 +528,11 @@ export function workingSetsPhrase(count: number) {
 
 export function muscleLabel(muscle: string) { return en[`muscle_${muscle}` as keyof typeof en] ?? muscle; }
 
-/** Use identifiers rather than row values in the recovery controls. */
-export function restoreVersionLabel(row: import('../data/rows').Row): string {
+/** Local time and a short copy number identify controls without exposing row values or IDs. */
+export function restoreVersionLabel(row: import('../data/rows').Row, copy: number): string {
   const date = new Date(row.updated_at).toLocaleString('en-US', {
-    month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', timeZone:'UTC',
+    month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit',
   });
   return t('restorePreviousVersion').replace('{table}',t(`recoveryTable_${row.table}`))
-    .replace('{item}',row.id).replace('{date}',date);
+    .replace('{copy}',String(copy)).replace('{date}',date);
 }
