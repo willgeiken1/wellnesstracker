@@ -1,3 +1,5 @@
+-- owner_id row-sync tables are removed only by auth.users ON DELETE CASCADE
+-- during a hard GoTrue delete; delete_user_rows intentionally skips them.
 -- Account deletion and date-range deletion.
 -- Safe to run more than once. The edge functions call these with the service key.
 -- delete_user_rows removes every public table that has a user_id column, plus

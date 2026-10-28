@@ -23,6 +23,18 @@ export function serverKey(): string {
 
 export const admin: SupabaseClient = createClient(Deno.env.get("SUPABASE_URL")!, serverKey(), { auth: { persistSession: false } });
 
+// Called only after requireUser has verified the original Authorization header.
+// Never substitute the admin key: auth.uid() must remain the requesting user.
+export function userClient(req: Request): SupabaseClient {
+  const key = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
+  const authorization = req.headers.get("Authorization");
+  if (!key || !authorization) throw new Error("User client configuration unavailable.");
+  return createClient(Deno.env.get("SUPABASE_URL")!, key, {
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function requireUser(req: Request) {
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!token) return null;

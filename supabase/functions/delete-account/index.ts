@@ -1,5 +1,7 @@
 // delete-account: permanently deletes the signed-in user.
 // Body: { "confirm": "DELETE" }
+// owner_id row-sync tables are removed only by auth.users ON DELETE CASCADE
+// during a hard GoTrue delete; delete_user_rows intentionally skips them.
 // Removes storage files, every public table row with their user_id
 // (user_data, oura_days, oura_connections, oura_tokens, oura_oauth_states,
 // progress_photos, ai_usage), and every social row (social_settings,
@@ -11,6 +13,8 @@
 // gone succeeds. Deploy with JWT verification OFF. No extra secrets; uses
 // the service key.
 import { admin, cors, json, requireUser, userStillExists, wipeStoragePrefix } from "../_shared/http.ts";
+
+import { rowSyncTables } from "../_shared/row-sync.ts";
 
 const KNOWN = [
   "user_data",
@@ -44,10 +48,9 @@ async function deleteKnown(userId: string) {
   for (const table of KNOWN) {
     const columns = OWNED_BY[table] ?? ["user_id"];
     for (const column of columns) {
-      const { error } = await admin.from(table).delete().eq(column, userId);
-      if (error && !/does not exist|schema cache|could not find the table/i.test(error.message || "")) {
-        console.error("delete", table, column, error.message);
-      }
+      // Best effort compatibility sweep; delete_user_rows remains the required path.
+      // Never log raw deletion errors or user identifiers.
+      await admin.from(table).delete().eq(column, userId);
     }
   }
 }
@@ -68,7 +71,6 @@ Deno.serve(async (req) => {
 
     const { error: rpcErr } = await admin.rpc("delete_user_rows", { p_user: user.id });
     if (rpcErr && !/could not find the function|does not exist/i.test(rpcErr.message || "")) {
-      console.error("delete_user_rows", rpcErr.message);
       return json({ error: "Couldn't finish deleting stored data. Try again." }, 500);
     }
 
@@ -84,9 +86,15 @@ Deno.serve(async (req) => {
     await wipeStoragePrefix(user.id);
     if (await userStillExists(user.id)) return json({ error: "Account deletion didn't finish. Try again." }, 500);
 
+    // Admin exact counts are required: a user-scoped client would hide leftovers.
+    // This also runs on already-deleted retries; never repair with a direct DELETE.
+    for (const table of rowSyncTables) {
+      const { count, error } = await admin.from(table)
+        .select("id", { count: "exact", head: true }).eq("owner_id", user.id);
+      if (error || count !== 0) return json({ error: "Account deletion verification failed." }, 500);
+    }
     return json({ ok: true });
-  } catch (e) {
-    console.error(e);
+  } catch {
     return json({ error: "Couldn't delete the account. Try again." }, 500);
   }
 });

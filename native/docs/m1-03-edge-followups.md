@@ -1,11 +1,11 @@
 # M1-03 edge follow-ups — draft, not deployed
 
-M1-03 / O-7 drafts `native/server/row-sync/0002_v1_columns.sql`. Nothing under
-`supabase/` was changed. These changes must be reviewed with 0001 + 0002 before
-M1-04; merging this draft alone does not repair the deployed purge endpoint.
+M1-03 / O-7 drafts `native/server/row-sync/0002_v1_columns.sql`. M1-03 changed
+nothing under `supabase/`; M1-04 adds the undeployed edge follow-ups below.
+Review these changes alongside 0001 + 0002 in M1-04; merging this draft alone does not repair the deployed purge endpoint.
 Risk: HIGH (sync/privacy); Quinn review and Will's explicit go required.
 
-## F1: purge-range must call the row-sync RPC as the requesting user
+## F1: user-scoped range purge (implemented in the M1-04 draft)
 
 In `supabase/functions/_shared/range.ts` (the range-purge implementation used by
 `purge-range`), keep the existing verified-user authentication, legacy SQL purge,
@@ -49,7 +49,7 @@ DELETE row-sync tables. Goals and food_targets are settings, not dated logs.
 No health values, dates, payloads, auth headers or RPC errors may enter analytics,
 AI, telemetry or logs. Existing client loopback/production guards stay in force.
 
-## F3: delete-account must assert zero native rows after GoTrue deletion
+## F3: zero native rows after GoTrue deletion (implemented in the M1-04 draft)
 
 In `supabase/functions/delete-account/index.ts`, after the hard
 `auth.admin.deleteUser(id)` and final Storage sweep, before returning success,
@@ -88,27 +88,50 @@ CASCADE during a hard GoTrue delete; delete_user_rows intentionally skips them.*
 The dynamic user_id legacy loops must never include guarded row-sync tables.
 These are follow-up edits only; M1-03 does not modify those deploy-on-merge files.
 
-## M1-04 [dry-run] acceptance, synthetic A and B only
+## M1-04 dry-run evidence and remaining human gates
 
-- Apply the reviewed exact 0001 + 0002 revision to disposable local Supabase,
-  with all existing legacy migrations. Record checksums and ledger, then test
-  PostgREST bigint text casts and actual JWT RPC invocation.
-- Call purge-range with A's real local GoTrue JWT. Verify native + legacy +
-  Storage cutoff behaviour, stale/never-synced/future-clock pushes, post-cutoff
-  edits, stable-ID retry, offline outbox wiping and B isolation. A service-role
-  RPC call must not be used as a workaround for the ownership guard.
-- Create live rows and tombstones in all 23 row-sync tables for A and B, hard
-  delete A through real GoTrue, and assert exact zero A rows while B is unchanged.
-  This proves the nested trigger depth/auth-parent visibility assumption that
-  PGlite's auth stub cannot prove. Verify the new edge zero-row assertion fails
-  closed on an injected nonzero count or query error, and on retries.
-- Record the actual `sync_purge_range` function owner and its role's
-  `rolbypassrls` (do not assume the owner is `postgres`); recheck explicit
-  owner filters and synthetic A/B isolation under that definer identity. Verify
-  authenticated/anon grants, service_role TRUNCATE/TRIGGER/REFERENCES revokes,
-  FORCE RLS, and RPC invoker/search_path settings on the real local roles.
-- Verify local simulator/emulator launch and screenshots when an environment is
-  available. None of these application, GoTrue, edge or device checks ran here.
+M1-04 implements F1/F3 in the edge sources as a draft; nothing was deployed.
+The source migrations 0001/0002 are unchanged. See
+[`row-sync/README.md`](../server/row-sync/README.md#apply-tracking-f6) for the
+atomic wrapper, rollback, four-file SHA-256 manifest, local dry-run command,
+coordinator apply ledger and human apply checklist.
 
-Open question for Will: Should a range purge also remove edits made after the
-delete time? (Current design keeps the PWA cutoff semantics: no.)
+- Automated: fresh in-memory PGlite with the existing minimal auth/users/API-role
+  stubs applies the wrapper, checks all 23 tables/policies/grants/triggers/indexes,
+  proves A/B isolation under the purge definer, and tests repeat apply failure,
+  atomic failure in 0002, exact rollback and successful reapply.
+- Automated F3: auth.users parent deletion removes synthetic A's live rows and
+  tombstones across every row table, including A's live purge marker, leaving B
+  unchanged. PGlite records purge owner postgres with rolbypassrls=true.
+- Automated edge gates: mocked Deno entrypoints, Supabase clients and Storage;
+  no real HTTP. The range endpoint uses the verified Authorization header and
+  a separate public-key client, with no owner argument to the native RPC.
+  Hard account deletion verifies exact admin HEAD counts of every native table,
+  including already-deleted retries, before returning success.
+- Pending human gates: **GoTrue cascade**, **real REVOKE grantor** and **PostgREST
+  bigint casting** in a separately approved disposable full local stack. Also
+  real local JWT/Storage integration, timezone boundaries and offline sync smoke
+  tests. PGlite and mocks do not prove these integrations. Quinn PASS and Will's
+  exact-revision HIGH-risk go are still required; there is no apply authorization.
+
+### Draft range request contract
+
+`{from,to,deletedAt,purgeRequestId?,tz?}`: canonical inclusive YYYY-MM-DD dates
+within the endpoint's existing bounds; deletedAt (or legacy at) is the original
+safe nonnegative integer millisecond cutoff. New callers supply a stable UUID v4
+purgeRequestId and IANA timezone. Existing PWA callers without those fields use
+UTC and a deterministic UUID derived from user/range/original cutoff/timezone.
+Requests lacking an original cutoff fail validation; never invent a cutoff on a
+retry. Preserve the request ID, range, timezone and cutoff across all retries;
+never reuse the ID for a different request.
+
+The endpoint first creates/reuses the native marker via the user-JWT RPC, then
+reads that owner's immutable marker under RLS. Its persisted cutoff (including
+the SQL now cap) is reused for the legacy Storage/blob paths. This prevents a
+future cutoff being renormalized to a newer time on retry. Any RPC/marker/legacy/
+Storage/blob failure returns failure, without raw errors or data in logs.
+A marker-version conflict must retry with the same inputs in a fresh transaction.
+Native and legacy operations cannot commit atomically together; a partial failure
+must be retried, and success is returned only after all required paths finish.
+The existing dynamic user_id SQL deletion intentionally skips owner_id row tables;
+only hard auth.users cascades physically remove those rows.
