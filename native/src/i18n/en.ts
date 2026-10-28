@@ -403,7 +403,7 @@ export const en = {
   demoMode: 'Demo mode · synthetic examples only', leaveDemo: 'Leave demo', signOut: 'Sign out',
   changedOtherPhone: 'Changed on your other phone',
   restoreVersionHelp: 'Previous versions stay on this phone for 7 days. Restoring creates a new change to sync.',
-  restorePreviousVersion: 'Restore previous {table} item {item} from {date} UTC',
+  restorePreviousVersion: 'Restore previous {table} copy {copy} from {date}',
   recoveryTable_profile: 'Profile',
   recoveryTable_weigh_ins: 'Weight entry',
   recoveryTable_measurements: 'Measurement',
@@ -483,11 +483,11 @@ export function workingSetsPhrase(count: number) {
 
 export function muscleLabel(muscle: string) { return en[`muscle_${muscle}` as keyof typeof en] ?? muscle; }
 
-/** Use identifiers rather than row values in the recovery controls. */
-export function restoreVersionLabel(row: import('../data/rows').Row): string {
+/** Local time and a short copy number identify controls without exposing row values or IDs. */
+export function restoreVersionLabel(row: import('../data/rows').Row, copy: number): string {
   const date = new Date(row.updated_at).toLocaleString('en-US', {
-    month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', timeZone:'UTC',
+    month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit',
   });
   return t('restorePreviousVersion').replace('{table}',t(`recoveryTable_${row.table}`))
-    .replace('{item}',row.id).replace('{date}',date);
+    .replace('{copy}',String(copy)).replace('{date}',date);
 }

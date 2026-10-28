@@ -278,17 +278,20 @@ export class Repository {
           this.dropLosingVersion(item.key);
         }
       }
-      // Expiry records capture time, unlike the losing edit's author timestamp.
-      retained.sort((a,b) => b.expiresAt-a.expiresAt || b.row.updated_at-a.row.updated_at || a.key.localeCompare(b.key));
-      for (const value of retained.splice(MAX_LOSING_VERSIONS)) this.dropLosingVersion(value.key);
-      return retained;
+      return this.trimLosingVersions(retained);
     });
+  }
+  private trimLosingVersions(retained: LosingVersion[]): LosingVersion[] {
+    // Expiry records capture time, unlike the losing edit's author timestamp.
+    retained.sort((a,b) => b.expiresAt-a.expiresAt || b.row.updated_at-a.row.updated_at || a.key.localeCompare(b.key));
+    for (const value of retained.splice(MAX_LOSING_VERSIONS)) this.dropLosingVersion(value.key);
+    return retained;
   }
   private dropLosingVersion(key: string) {
     this.db.run(sql`DELETE FROM sync_state WHERE owner_id=${this.owner} AND key=${key}`);
   }
   private retainLosingVersion(local: Row, remote: Row) {
-    this.losingVersions();
+    const retained = this.losingVersions();
     // A synced local row is ordinary history, even if another phone replaces it.
     const pending = this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${local.table} AND row_id=${local.id} AND revision=${revision(local)}`);
     // Deletions/purges must never leave a restorable copy behind.
@@ -297,15 +300,22 @@ export class Repository {
         Object.entries(projectSyncRow(local,this.syncFlags).data).every(([key,value]) => value === (remote.data[key] ?? null))) return;
     const key = losingVersionKey(local);
     // A replay cannot extend the seven-day deadline.
-    if (!this.state(key)) this.setState(key,JSON.stringify({row:local,winningRevision:revision(remote),expiresAt:Date.now()+LOSING_VERSION_TTL_MS}));
-    this.losingVersions();
+    if (!this.state(key)) {
+      const saved = {key,row:local,winningRevision:revision(remote),expiresAt:Date.now()+LOSING_VERSION_TTL_MS};
+      this.setState(key,JSON.stringify(saved));
+      this.trimLosingVersions([...retained,saved]);
+    }
   }
   /** Restore is an explicit new local edit, so normal LWW and outbox rules still apply. */
   restoreLosingVersion(key: string, now = Date.now()): boolean {
     const saved = this.losingVersions(now).find(version => version.key === key);
     if (!saved || saved.row.owner_id !== this.owner || !this.syncTables().includes(saved.row.table)) return false;
     const current = this.get(saved.row.table,saved.row.id);
-    if (!current || current.deleted_at !== null || revision(current) !== saved.winningRevision) return false;
+    if (!current || current.deleted_at !== null || revision(current) !== saved.winningRevision) {
+      this.dropLosingVersion(key);
+      this.notify();
+      return false;
+    }
     this.atomic(() => {
       this.save(saved.row.table,saved.row.data,saved.row.id,now);
       this.dropLosingVersion(key);
