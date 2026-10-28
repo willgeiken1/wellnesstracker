@@ -6,6 +6,7 @@
 // is exactly "{userId}/{file}" for this caller. Any other path is skipped.
 // The caller's progress_photos rows are still deleted.
 import { addPurge, photoDue, resolveCutoff, stripRange } from "./strip.ts";
+import { rowSyncNotSetUp } from "./row-sync.ts";
 
 type Bag = Record<string, any>;
 
@@ -37,40 +38,47 @@ async function legacyPurgeId(userId: string, from: string, to: string, cutoff: n
 export async function deleteRange(admin: Bag, userId: string, body: Bag, now = Date.now(), nativeClient?: Bag): Promise<{ status: number; body: Bag }> {
   const from = body.from;
   const to = body.to;
-  const requestedCutoff = body.deletedAt ?? body.at;
+  const requestedCutoff = body.deletedAt !== undefined ? body.deletedAt : body.at !== undefined ? body.at : now;
   const tz = body.tz === undefined ? "UTC" : body.tz;
   const requestId = body.purgeRequestId;
-  if (nativeClient) {
-    let validTimezone = typeof tz === "string" && !/^(posix\/|right\/|posixrules$|Factory$)/i.test(tz);
-    try { if (validTimezone) new Intl.DateTimeFormat("en-US", { timeZone: tz }).format(0); } catch { validTimezone = false; }
-    if (!validTimezone || !Number.isSafeInteger(requestedCutoff) || requestedCutoff < 0 ||
-      (requestId !== undefined && (typeof requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)))) {
-      return { status: 400, body: { error: "Invalid purge request. Keep the original request ID and cutoff when retrying." } };
-    }
+  let validTimezone = typeof tz === "string" && !/^(posix\/|right\/|posixrules$|Factory$)/i.test(tz);
+  try { if (validTimezone) new Intl.DateTimeFormat("en-US", { timeZone: tz }).format(0); } catch { validTimezone = false; }
+  if (!validTimezone || !Number.isSafeInteger(requestedCutoff) || requestedCutoff < 0 ||
+    (requestId !== undefined && (typeof requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)))) {
+    return { status: 400, body: { error: "Invalid purge request. Keep the original request ID and cutoff when retrying." } };
   }
 
   const { data: row, error: readErr } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
   if (readErr) return { status: 500, body: { error: "Couldn't update the account copy. Try again." } };
   const raw = (row && row.data) || {};
   let cutoff = resolveCutoff(raw, from, to, requestedCutoff, now);
+  let rowSync = nativeClient ? "complete" : "disabled";
   if (nativeClient) {
     const purgeId = requestId ?? await legacyPurgeId(userId, from, to, requestedCutoff, tz);
     const { error } = await nativeClient.rpc("sync_purge_range", {
       p_id: purgeId, p_from: from, p_to: to, p_cutoff_ms: requestedCutoff, p_tz: tz,
     });
     // Includes marker-version conflicts: retry a fresh transaction with the same ID/cutoff.
-    if (error) return { status: 500, body: { error: "Range deletion failed. Try again." } };
-    // The persisted marker is authoritative, including the server's now cap.
-    // Reading it makes future-cutoff retries use the SAME cutoff on both paths.
-    const { data: marker, error: markerError } = await nativeClient.from("purges")
-      .select("from_day,to_day,cutoff_ms,tz").eq("id", purgeId).single();
-    const storedCutoff = marker?.cutoff_ms;
-    if (markerError || !marker || marker.from_day !== from || marker.to_day !== to || marker.tz !== tz ||
-      (typeof storedCutoff !== "number" && typeof storedCutoff !== "string") ||
-      !Number.isSafeInteger(Number(storedCutoff)) || Number(storedCutoff) < 0 || Number(storedCutoff) > requestedCutoff) {
+    if (rowSyncNotSetUp(error)) {
+      rowSync = "not_set_up";
+    } else if (error) {
       return { status: 500, body: { error: "Range deletion failed. Try again." } };
+    } else {
+      // The persisted marker is authoritative, including the server's now cap.
+      // Reading it makes future-cutoff retries use the SAME cutoff on both paths.
+      const { data: marker, error: markerError } = await nativeClient.from("purges")
+        .select("from_day,to_day,cutoff_ms,tz").eq("id", purgeId).single();
+      const storedCutoff = marker?.cutoff_ms;
+      if (rowSyncNotSetUp(markerError)) {
+        rowSync = "not_set_up";
+      } else if (markerError || !marker || marker.from_day !== from || marker.to_day !== to || marker.tz !== tz ||
+        (typeof storedCutoff !== "number" && typeof storedCutoff !== "string") ||
+        !Number.isSafeInteger(Number(storedCutoff)) || Number(storedCutoff) < 0 || Number(storedCutoff) > requestedCutoff) {
+        return { status: 500, body: { error: "Range deletion failed. Try again." } };
+      } else {
+        cutoff = Number(storedCutoff);
+      }
     }
-    cutoff = Number(storedCutoff);
   }
 
   const { data: photos, error: photoErr } = await admin.from("progress_photos").select("id, path, taken_at").eq("user_id", userId).gte("day", from).lte("day", to);
@@ -116,5 +124,5 @@ export async function deleteRange(admin: Bag, userId: string, body: Bag, now = D
   });
   if (writeErr) return { status: 500, body: { error: "Couldn't update the account copy. Try again." } };
 
-  return { status: 200, body: { ok: true, from, to } };
+  return { status: 200, body: { ok: true, from, to, rowSync } };
 }

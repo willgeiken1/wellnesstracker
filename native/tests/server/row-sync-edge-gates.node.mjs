@@ -19,14 +19,15 @@ function mockAdmin(options={}) {
   const calls=[]; let stored={};
   const admin = {
     from(table) {
+      let selecting = false;
       const q = {
-        select(...args) {calls.push(['select',table,...args]);return q;},
+        select(...args) {selecting = true;calls.push(['select',table,...args]);return q;},
         eq(column,value) {calls.push(['eq',table,column,value]);return q;},
         gte(){return q;},lte(){return q;},in(){return q;},
         delete(){calls.push(['delete',table]);return q;},
         async maybeSingle(){return {data:{data:structuredClone(stored)},error:null};},
         async upsert(row){stored=structuredClone(row.data);calls.push(['upsert',structuredClone(row)]);return {error:options.writeError?{message:'private'}:null};},
-        then(resolve){return Promise.resolve({data:[],count:options.count??0,error:options.countError?{message:'private'}:null}).then(resolve);},
+        then(resolve){return Promise.resolve(selecting && options.selectResult ? options.selectResult(table) : {data:[],count:options.count??0,error:selecting ? (options.countError ? {message:'private'} : options.schemaError ?? null) : (options.cleanupError ? {message:'private',code:'synthetic'} : null)}).then(resolve);},
       };return q;
     },
     async rpc(name,args){calls.push(['admin-rpc',name,args]);return {error:options.legacyError?{message:'private'}:null};},
@@ -49,7 +50,7 @@ function endpoint(path, admin, native, options={}) {
       assert.equal(table,'purges'); let key;
       return {select(columns){assert.equal(columns,'from_day,to_day,cutoff_ms,tz');return this;},
         eq(column,value){assert.equal(column,'id');key=value;return this;},
-        async single(){return options.markerFailure ? {data:null,error:{message:"private"}} : {data:markers.get(key),error:null};}};
+        async single(){return options.markerSchemaError ? {data:null,error:{code:options.markerSchemaError,message:"private"}} : options.markerFailure ? {data:null,error:{message:"private"}} : {data:markers.get(key),error:null};}};
     },
   };
   load(path, {
@@ -58,7 +59,7 @@ function endpoint(path, admin, native, options={}) {
       wipeStoragePrefix:async()=>{},userStillExists:async()=>false},
     '../_shared/range.ts':{deleteRange},
     '../_shared/row-sync.ts': requireTsRowSync(),
-  }, {Deno:{serve:fn=>{handler=fn;}}});
+  }, {Deno:{env:{get:name=>{assert.equal(name,'ROW_SYNC_ENABLED');return 'flag' in options ? options.flag : 'true';}},serve:fn=>{handler=fn;}}});
   return data=>handler(new Request('http://localhost/',{method:'POST',headers:{Authorization:'Bearer synthetic','Content-Type':'application/json'},body:JSON.stringify(data)}));
 }
 function requireTsRowSync() {return load('../../../supabase/functions/_shared/row-sync.ts',{});}
@@ -155,4 +156,87 @@ test('native marker read failure is fail-closed before legacy writes',async()=>{
   const response=await handle(body);assert.equal(response.status,500);
   assert.ok(!(await response.text()).includes('private'));
   assert.ok(!calls.some(c=>c[0]==='upsert'||c[0]==='admin-rpc'));
+});
+
+// Deployment compatibility: all fixtures and errors are synthetic.
+test('row sync is disabled unless the server flag is exactly true', async()=>{
+  for (const flag of [undefined, 'false', '1', 'TRUE']) {
+    for (const path of ['purge-range', 'delete-account']) {
+      const {admin,calls}=mockAdmin();
+      const handle=endpoint(`../../../supabase/functions/${path}/index.ts`,admin,{rpc:async()=>{throw Error('native RPC must not run');}},{flag});
+      const response=await handle(path==='purge-range'?body:{confirm:'DELETE'});
+      assert.equal(response.status,200);assert.equal((await response.json()).rowSync,'disabled');
+      assert.ok(!calls.some(c=>c[0]==='select' && c[3]?.head));
+      if(path==='purge-range') assert.ok(calls.some(c=>c[0]==='upsert'));
+    }
+  }
+});
+test('missing native RPC/schema skips only row sync and completes legacy purge',async()=>{
+  for(const code of ['42883','42P01','PGRST202','PGRST205']) {
+    const {admin,calls}=mockAdmin();
+    const handle=endpoint('../../../supabase/functions/purge-range/index.ts',admin,{rpc:async()=>({error:{code,message:'private'}})});
+    const response=await handle(body);assert.equal(response.status,200);
+    assert.equal((await response.json()).rowSync,'not_set_up');
+    assert.ok(calls.some(c=>c[0]==='upsert'));
+    assert.ok(calls.some(c=>c[0]==='admin-rpc'&&c[1]==='purge_user_range_rows'));
+  }
+});
+test('missing row tables after auth deletion return not_set_up',async()=>{
+  for(const code of ['42883','42P01','PGRST202','PGRST205']) {
+    const {admin,calls}=mockAdmin({schemaError:{code,message:'private'}});
+    const handle=endpoint('../../../supabase/functions/delete-account/index.ts',admin,{});
+    const response=await handle({confirm:'DELETE'});assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),{ok:true,rowSync:'not_set_up',cleanupErrors:0});
+    assert.ok(calls.some(c=>c[0]==='deleteUser'));
+  }
+});
+test('available row schema reports complete for both endpoints',async()=>{
+  for(const path of ['purge-range','delete-account']) {
+    const {admin}=mockAdmin();const handle=endpoint(`../../../supabase/functions/${path}/index.ts`,admin,{rpc:async()=>({error:null})});
+    const response=await handle(path==='purge-range'?body:{confirm:'DELETE'});
+    assert.equal(response.status,200);assert.equal((await response.json()).rowSync,'complete');
+  }
+});
+test('legacy from/to payload defaults cutoff to server now',async()=>{
+  for(const flag of [undefined,'true']) {
+    const {admin,calls}=mockAdmin();const rpc=[];const before=Date.now();
+    const handle=endpoint('../../../supabase/functions/purge-range/index.ts',admin,{rpc:async(name,args)=>{rpc.push(args);return {error:null};}},{flag});
+    const response=await handle({from:body.from,to:body.to});assert.equal(response.status,200);
+    const cutoff=calls.find(c=>c[0]==='upsert')[1].data.purges[0].deletedAt;
+    assert.ok(cutoff>=before && cutoff<=Date.now());
+    if(flag==='true') assert.equal(rpc[0].p_cutoff_ms,cutoff);
+  }
+});
+test('cleanup errors are reported only as a numeric aggregate',async()=>{
+  for(const cleanupError of [false,true]) {
+    const {admin}=mockAdmin({cleanupError});const handle=endpoint('../../../supabase/functions/delete-account/index.ts',admin,{});
+    const response=await handle({confirm:'DELETE'});assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),{ok:true,rowSync:'complete',cleanupErrors:cleanupError?34:0});
+  }
+});
+
+test('missing marker schema completes legacy purge with not_set_up status',async()=>{
+  for(const code of ['42P01','PGRST205']) {
+    const {admin,calls}=mockAdmin();
+    const handle=endpoint('../../../supabase/functions/purge-range/index.ts',admin,{rpc:async()=>({error:null})},{markerSchemaError:code});
+    const response=await handle(body);assert.equal(response.status,200);
+    assert.equal((await response.json()).rowSync,'not_set_up');
+    assert.ok(calls.some(c=>c[0]==='upsert'));
+  }
+});
+test('missing tables do not skip verification of tables that exist',async()=>{
+  for(const result of [{count:1,error:null},{count:null,error:{code:'42501',message:'private'}}]) {
+    const {admin,calls}=mockAdmin({selectResult:table=>table==='purges'?result:{count:null,error:{code:'42P01',message:'private'}}});
+    const handle=endpoint('../../../supabase/functions/delete-account/index.ts',admin,{});
+    const response=await handle({confirm:'DELETE'});assert.equal(response.status,500);
+    assert.deepEqual(await response.json(),{error:'Account deletion verification failed.'});
+    assert.equal(calls.filter(c=>c[0]==='select').length,23);
+  }
+});
+test('explicit invalid cutoff is rejected even with row sync disabled',async()=>{
+  for(const deletedAt of [null,'invalid',-1,1.5]) {
+    const {admin,calls}=mockAdmin();
+    const handle=endpoint('../../../supabase/functions/purge-range/index.ts',admin,{}, {flag:undefined});
+    assert.equal((await handle({...body,deletedAt})).status,400);assert.deepEqual(calls,[]);
+  }
 });

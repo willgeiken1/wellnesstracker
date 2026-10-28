@@ -24,3 +24,8 @@ export const rowSyncTables = [
   "pauses",
   "purges",
 ] as const;
+
+// Only absent schema is optional during rollout. Permission/network failures remain errors.
+export function rowSyncNotSetUp(error: { code?: string } | null | undefined): boolean {
+  return !!error?.code && ["42883", "42P01", "PGRST202", "PGRST205"].includes(error.code);
+}

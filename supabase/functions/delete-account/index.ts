@@ -14,7 +14,7 @@
 // the service key.
 import { admin, cors, json, requireUser, userStillExists, wipeStoragePrefix } from "../_shared/http.ts";
 
-import { rowSyncTables } from "../_shared/row-sync.ts";
+import { rowSyncNotSetUp, rowSyncTables } from "../_shared/row-sync.ts";
 
 const KNOWN = [
   "user_data",
@@ -45,14 +45,17 @@ const OWNED_BY: Record<string, string[]> = {
 };
 
 async function deleteKnown(userId: string) {
+  let errors = 0;
   for (const table of KNOWN) {
     const columns = OWNED_BY[table] ?? ["user_id"];
     for (const column of columns) {
       // Best effort compatibility sweep; delete_user_rows remains the required path.
       // Never log raw deletion errors or user identifiers.
-      await admin.from(table).delete().eq(column, userId);
+      const { error } = await admin.from(table).delete().eq(column, userId);
+      if (error) errors++;
     }
   }
+  return errors;
 }
 
 Deno.serve(async (req) => {
@@ -67,7 +70,7 @@ Deno.serve(async (req) => {
 
     // Storage first so a retry can still find the folder if the auth user lingers.
     await wipeStoragePrefix(user.id);
-    await deleteKnown(user.id);
+    let cleanupErrors = await deleteKnown(user.id);
 
     const { error: rpcErr } = await admin.rpc("delete_user_rows", { p_user: user.id });
     if (rpcErr && !/could not find the function|does not exist/i.test(rpcErr.message || "")) {
@@ -82,18 +85,27 @@ Deno.serve(async (req) => {
     }
 
     // One more pass in case a row was written between the deletes and the auth removal.
-    await deleteKnown(user.id);
+    cleanupErrors += await deleteKnown(user.id);
     await wipeStoragePrefix(user.id);
     if (await userStillExists(user.id)) return json({ error: "Account deletion didn't finish. Try again." }, 500);
 
+    // ROW_SYNC_ENABLED is opt-in until the row-sync schema is deployed.
     // Admin exact counts are required: a user-scoped client would hide leftovers.
     // This also runs on already-deleted retries; never repair with a direct DELETE.
-    for (const table of rowSyncTables) {
-      const { count, error } = await admin.from(table)
-        .select("id", { count: "exact", head: true }).eq("owner_id", user.id);
-      if (error || count !== 0) return json({ error: "Account deletion verification failed." }, 500);
+    let rowSync = "disabled";
+    if (Deno.env.get("ROW_SYNC_ENABLED") === "true") {
+      rowSync = "complete";
+      for (const table of rowSyncTables) {
+        const { count, error } = await admin.from(table)
+          .select("id", { count: "exact", head: true }).eq("owner_id", user.id);
+        if (rowSyncNotSetUp(error)) {
+          rowSync = "not_set_up";
+          continue;
+        }
+        if (error || count !== 0) return json({ error: "Account deletion verification failed." }, 500);
+      }
     }
-    return json({ ok: true });
+    return json({ ok: true, rowSync, cleanupErrors });
   } catch {
     return json({ error: "Couldn't delete the account. Try again." }, 500);
   }
