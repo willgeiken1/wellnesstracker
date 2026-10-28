@@ -40,15 +40,15 @@
     false
   ],
   [
-    "h​rv 45",
+    "h\u200brv 45",
     false
   ],
   [
-    "mo‮od and rice",
+    "mo\u202eod and rice",
     false
   ],
   [
-    "ｓｔｒｅｓｓ 9",
+    "\uff53\uff54\uff52\uff45\uff53\uff53 9",
     false
   ],
   [
@@ -76,11 +76,103 @@
     false
   ],
   [
-    "ѕtrеѕѕ tea",
+    "\u0455tr\u0435\u0455\u0455 tea",
     false
   ],
   [
-    "mооd bar",
+    "m\u043e\u043ed bar",
     false
+  ],
+  [
+    "weightloss shake",
+    false
+  ],
+  [
+    "weight-loss shake",
+    false
+  ],
+  [
+    "Weightloss bar",
+    false
+  ],
+  [
+    "bodyweight bar",
+    false
+  ],
+  [
+    "we\u200bightloss shake",
+    false
+  ],
+  [
+    "w-e-i-g-h-t shake",
+    false
+  ],
+  [
+    "we1ghtloss shake",
+    false
+  ],
+  [
+    "m\u00f8\u00f8d",
+    false
+  ],
+  [
+    "M\u00d8\u00d8D",
+    false
+  ],
+  [
+    "\ua731\u1d1b\u0280\u1d07\ua731\ua731",
+    false
+  ],
+  [
+    "\u1d0d\u1d0f\u1d0f\u1d05",
+    false
+  ],
+  [
+    "str3ss",
+    false
+  ],
+  [
+    "m00d",
+    false
+  ],
+  [
+    "5tre55",
+    false
+  ],
+  [
+    "weigh\u1d1bloss shake",
+    false
+  ],
+  [
+    "Moo Daeng",
+    false
+  ],
+  [
+    "ham, oodles",
+    false
+  ],
+  [
+    "weight gainer",
+    true
+  ],
+  [
+    "weight gainers shake",
+    true
+  ],
+  [
+    "Weight Watchers bar",
+    true
+  ],
+  [
+    "rice 150 g",
+    true
+  ],
+  [
+    "3 eggs and 1 toast",
+    true
+  ],
+  [
+    "salmon 105 g",
+    true
   ]
 ]

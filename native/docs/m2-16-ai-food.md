@@ -37,3 +37,14 @@ The phone and server shared food guards now block stress/mood substrings after c
 The exact server wire allowlists are `food-photo`: `image`, `localDate`, `timeZone`; `food-describe`: `text`, `localDate`, `timeZone`. The internal model payload has a separate allowlist. Tests assert the exact wire keys. A structured `code: limit` exhausts the daily budget; an unclassified HTTP 429 or `rate_limit` shows a temporary retry message and retains only that attempt's reservation. Unmount cancels the current Describe and suppresses late screen updates without claiming consent was revoked.
 
 The picker checks consent before permissions/opening and after rendering. Newly encoded JPEGs also pass an APP1 (EXIF/XMP) segment remover; synthetic byte-level and picker-pipeline tests verify that metadata is absent while scan bytes survive. Physical-device encoder validation remains pending.
+
+
+## Fix round 2 — PR #110
+
+base: main. Risk: HIGH. Continues head `be3d833` in the supplied detached worktree; changes remain uncommitted.
+
+R2-2: both food guards now check for remaining `weight` substrings after removing the weight gainer(s)/weight watchers food phrases, folding lookalikes and stripping separators. Compound names such as weightloss and bodyweight fail closed. R2-4: the shared fold includes ø/Ø, Latin small caps and simple leetspeak for guarded substrings without changing numeric quantity checks. Shared fixtures use Unicode escapes and exercise request text and model food names. Moo Daeng and ham, oodles remain blocked by separator stripping; Will's tradeoff decision remains pending.
+
+R2-3: only real failures increment the photo queue's three-failure counter. Temporary rate limits, cancellations and consent aborts do not increment it. Transport quota reservations remain conservative and separate from that counter. The entry screen retains a stable service instance and cancels only that instance's active request on unmount; a runtime background drain continues. Consent revocation still aborts repository-wide requests and clears queued media.
+
+No server deployment, live provider call, login, telemetry, sync flag change, commit or push was performed.

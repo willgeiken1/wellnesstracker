@@ -438,12 +438,14 @@ function foodAiNormalize(value: string): string {
     .replace(/\p{M}/gu, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
-    // Common Cyrillic/Greek lookalikes in sensitive labels.
-    .replace(/[аα]/g, "a").replace(/[еε]/g, "e")
-    .replace(/[оο]/g, "o").replace(/[рρ]/g, "p")
-    .replace(/[сϲ]/g, "c").replace(/[ѕ]/g, "s")
-    .replace(/[тτ]/g, "t").replace(/[мμ]/g, "m")
-    .replace(/[ԁ]/g, "d");
+    // Common Cyrillic/Greek lookalikes and Latin small caps in sensitive labels.
+    .replace(/[аα]/g, "a").replace(/[еεᴇ]/g, "e")
+    .replace(/[оοøᴏ]/g, "o").replace(/[рρ]/g, "p")
+    .replace(/[сϲ]/g, "c").replace(/[ѕꜱ]/g, "s")
+    .replace(/[тτᴛ]/g, "t").replace(/[мμᴍ]/g, "m")
+    .replace(/[ԁᴅ]/g, "d")
+    .replace(/ʀ/g, "r").replace(/ɪ/g, "i")
+    .replace(/ɢ/g, "g").replace(/ʜ/g, "h");
 }
 
 function foodAiSplit(normalized: string): string[] {
@@ -521,7 +523,15 @@ const FOOD_TEXT_HEALTH = [
 
 function foodAiTextForbidden(value: string): boolean {
   const normalized = foodAiNormalize(value);
-  if (/stress|mood/.test(normalized.replace(/[^a-z0-9]/g, ""))) return true;
+  // Fold leetspeak only for guarded substrings; preserve quantities for mass checks.
+  // Try both readings of 1. Remove permitted food phrases before joining separators.
+  for (const one of ["i", "l"]) {
+    const folded = normalized.replace(/3/g, "e").replace(/0/g, "o")
+      .replace(/1/g, one).replace(/5/g, "s");
+    if (/stress|mood/.test(folded.replace(/[^a-z0-9]/g, ""))) return true;
+    const withoutWeightFoods = foodAiSplit(folded).join(" ").replace(FOOD_TEXT_WEIGHT_FOODS, " ");
+    if (withoutWeightFoods.replace(/[^a-z0-9]/g, "").includes("weight")) return true;
+  }
   if (foodAiForbiddenTokens(foodAiSplit(normalized), false)) return true;
   const packed = dropPackageSizes(normalized);
   if (bodyMass(packed)) return true;

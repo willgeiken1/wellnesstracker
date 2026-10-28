@@ -184,3 +184,30 @@ test("unmount during Describe aborts and discards a late result", async () => {
  await act(async()=>{finish(response);});
  expect(repo.list("food_entries")).toEqual([]); expect(aiState(repo).ready).toEqual([]);
 });
+
+
+test("unmount while choosing a photo leaves a background drain running", async () => {
+  const repo = memoryRepository();
+  setConsent(repo, true);
+  let pick!: (value: { jpeg: string }) => void;
+  jest.mocked(pickMealPhoto).mockImplementationOnce(() => new Promise(resolve => { pick = resolve; }));
+  const view = await render(<FoodAiEntry repo={repo} mode="snap" day="2026-10-27" meal="meal" onClose={jest.fn()} onManual={jest.fn()} />, { wrapper });
+  await fireEvent.press(view.getByRole("button", { name: "Choose meal photo" }));
+  let finish!: (value: unknown) => void;
+  let signal!: AbortSignal;
+  const client = jest.fn((_payload: unknown, requestSignal: AbortSignal) => {
+    signal = requestSignal;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const background = new FoodAiService(repo, client);
+  let pending!: Promise<void>;
+  await act(() => {
+    background.enqueue({ jpeg: "YWJj" }, "2026-10-27", "meal");
+    pending = background.drain();
+  });
+  await view.unmount();
+  expect(signal.aborted).toBe(false);
+  await act(async () => { pick({ jpeg: "YWJj" }); finish(response); await pending; });
+  expect(aiState(repo).ready).toHaveLength(1);
+  expect(aiState(repo).queue).toEqual([]);
+});

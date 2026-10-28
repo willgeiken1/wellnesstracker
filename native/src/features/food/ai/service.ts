@@ -226,6 +226,10 @@ export function stopFoodAiRequests(repo: Repository) {
 }
 const active = new WeakMap<Repository, AbortController>();
 export class FoodAiService {
+  private controller: AbortController | null = null;
+  cancel() {
+    this.controller?.abort();
+  }
   constructor(
     readonly repo: Repository,
     private client: FoodAiClient | null = null,
@@ -258,6 +262,7 @@ export class FoodAiService {
     // Queue worker and Describe share a single in-flight request per repository.
     if (active.has(this.repo)) throw new Error(t("foodAiBusy"));
     active.set(this.repo, controller);
+    this.controller = controller;
     try {
       this.reserve(jpeg ? "photos" : "descriptions");
       // A local-save subscriber can revoke consent while quota is reserved.
@@ -291,6 +296,7 @@ export class FoodAiService {
       throw error;
     } finally {
       if (active.get(this.repo) === controller) active.delete(this.repo);
+      if (this.controller === controller) this.controller = null;
     }
   }
   describe(text: string) {
@@ -369,7 +375,6 @@ export class FoodAiService {
         }));
         continue;
       }
-      update(this.repo, s => ({...s, queue: s.queue.map(j => j.id === job.id ? {...j, attempts:j.attempts + 1} : j)}));
       try {
         const items = await this.send(
           "Identify the foods on this plate.",
@@ -391,13 +396,16 @@ export class FoodAiService {
         }));
       } catch (error) {
         if (error instanceof FoodAiDailyLimitError) continue;
+        if (error instanceof FoodAiRateLimitError || error instanceof FoodAiCancelledError ||
+            (error instanceof Error && error.message === t("foodAiConsentRequired"))) return;
         update(this.repo, s => {
           const current = s.queue.find(j => j.id === job.id);
           if (!current) return s; // Consent revocation already removed it.
-          if (current.attempts >= 3) return {...s,
+          const attempts = current.attempts + 1;
+          if (attempts >= 3) return {...s,
             queue:s.queue.filter(j => j.id !== job.id),
             fallback:[...s.fallback, {id:job.id, day:job.day, meal:job.meal, thumbnail:s.thumbnails ? job.thumbnail : undefined}]};
-          return {...s, queue:s.queue.map(j => j.id === job.id ? {...j, nextAttemptAt:this.now() + 30000 * 2 ** (j.attempts - 1)} : j)};
+          return {...s, queue:s.queue.map(j => j.id === job.id ? {...j, attempts, nextAttemptAt:this.now() + 30000 * 2 ** (attempts - 1)} : j)};
         });
         return;
       }

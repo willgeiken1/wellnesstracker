@@ -5,9 +5,13 @@ import {
 } from "../src/features/food/ai/guard";
 import {
   mealPayload,
+  parseEstimates,
   FoodAiService,
   setConsent,
   aiState,
+  FoodAiRateLimitError,
+  FoodAiCancelledError,
+  stopFoodAiRequests,
 } from "../src/features/food/ai/service";
 import { memoryRepository } from "./workout-repository";
 const response = [
@@ -26,6 +30,12 @@ test.each(vectors)("shared guard: %s", async (text, allowed) => {
   else await expect(callFoodModel(payload, client)).rejects.toThrow();
   expect(client).toHaveBeenCalledTimes(allowed ? 1 : 0);
 });
+test.each(vectors)("model food-name guard: %s", (name, allowed) => {
+  const parse = () => parseEstimates([{ ...response[0], name }]);
+  if (allowed) expect(parse).not.toThrow();
+  else expect(parse).toThrow();
+});
+
 test("unknown nested and top-level health values fail closed before client", () => {
   for (const extra of [
     { oura: 978654 },
@@ -233,3 +243,42 @@ test("revocation by a quota-write subscriber still sends nothing", async () => {
   now += 24*60*60*1000; await service.drain();
   expect(client).not.toHaveBeenCalled(); expect(JSON.stringify(repo.localGet("foodAi"))).not.toContain("YWJj");
  });
+
+
+test.each([FoodAiRateLimitError, FoodAiCancelledError])("%p does not consume photo failure attempts", async (ErrorType) => {
+  const repo = memoryRepository();
+  setConsent(repo, true);
+  const client = jest.fn(async () => { throw new ErrorType(); });
+  const service = new FoodAiService(repo, client);
+  service.enqueue({ jpeg: "YWJj" }, "2026-10-28", "meal");
+  for (let i = 0; i < 3; i++) await service.drain();
+  expect(client).toHaveBeenCalledTimes(3);
+  expect(aiState(repo).queue[0].attempts).toBe(0);
+  expect(aiState(repo).fallback).toEqual([]);
+});
+
+test("aborting a drain preserves its failure count; consent abort clears the job", async () => {
+  const repo = memoryRepository();
+  setConsent(repo, true);
+  let finish!: (value: unknown) => void;
+  const client = jest.fn(() => new Promise(resolve => { finish = resolve; }));
+  const service = new FoodAiService(repo, client);
+  service.enqueue({ jpeg: "YWJj" }, "2026-10-28", "meal");
+  const pending = service.drain();
+  stopFoodAiRequests(repo);
+  finish(response);
+  await pending;
+  expect(aiState(repo).queue[0].attempts).toBe(0);
+  const saved: number[] = [];
+  const unsubscribe = repo.subscribe(() => {
+    saved.push(...aiState(repo).queue.map(job => job.attempts));
+  });
+  const revoked = service.drain();
+  setConsent(repo, false);
+  finish(response);
+  await revoked;
+  unsubscribe();
+  expect(saved.every(attempts => attempts === 0)).toBe(true);
+  expect(aiState(repo).queue).toEqual([]);
+  expect(aiState(repo).ready).toEqual([]);
+});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { Button } from "../../../components/button";
 import { ThemedText } from "../../../components/themed-text";
@@ -11,7 +11,6 @@ import {
   FoodAiService,
   logEstimates,
   setConsent,
-  stopFoodAiRequests,
   type Estimate,
 } from "./service";
 import { FoodAiConsent } from "./privacy";
@@ -38,7 +37,7 @@ export function FoodAiEntry({
   "use no memo";
   useFoodRevision(repo);
   const client = useFoodAiClient(repo),
-    service = new FoodAiService(repo, client);
+    service = useMemo(() => new FoodAiService(repo, client), [repo, client]);
   const [text, setText] = useState(""),
     [status, setStatus] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
@@ -50,9 +49,9 @@ export function FoodAiEntry({
     mounted.current = true;
     return () => {
       mounted.current = false;
-      if (inFlight.current) stopFoodAiRequests(repo);
+      service.cancel();
     };
-  }, [repo]);
+  }, [service]);
   const run = async (action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
