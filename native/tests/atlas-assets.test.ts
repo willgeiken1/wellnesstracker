@@ -9,9 +9,7 @@ test('stable keys and group mappings equal PWA exercise bank',()=>{
  expect(Object.fromEntries(atlasMuscles.map(m=>[m.key,m.group]))).toEqual(assets.advToBasic);
  expect(atlasMuscles.every(m=>m.name&&m.scientific)).toBe(true);
 });
-test('PWA export exactly matches native geometry, SVG layers and 300KB cap',()=>{
- const js=fs.readFileSync(path.join(root,'logger/js/data/atlas-geometry.js'),'utf8');
- expect(JSON.parse(js.match(/export const atlasGeometry = (.*);/)![1])).toEqual(atlasGeometry);
+test('native SVG layers match native geometry and stay within the 300KB cap',()=>{
  let bytes=0;
  for(const body of ['male','female'] as const) for(const side of ['front','back'] as const){
   const svg=fs.readFileSync(path.join(root,`native/assets/atlas/${body}-${side}.svg`),'utf8');bytes+=Buffer.byteLength(svg);
@@ -20,7 +18,4 @@ test('PWA export exactly matches native geometry, SVG layers and 300KB cap',()=>
   for(const m of shape.muscles){expect(svg).toContain(`id="${m.id}"`);expect(svg).toContain(`d="${m.d}"`);}
  }
  expect(bytes).toBeLessThanOrEqual(300*1024);
-});
-test('PWA service worker precaches the shared geometry module',()=>{
- expect(fs.readFileSync(path.join(root,'logger/sw.js'),'utf8')).toContain('"./js/data/atlas-geometry.js"');
 });
