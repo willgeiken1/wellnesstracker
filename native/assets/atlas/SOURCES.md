@@ -12,8 +12,9 @@
   Dark-mode #263746, #5685a2 and #8dbbd6 are **original adaptations**, not
   ColorBrewer values. No artwork copied. Attribution is shown in About → Licenses.
 
-`geometry.json` is the canonical vertex/path source. Native reads it directly;
-`logger/js/data/atlas-geometry.js` exports the same object for the live PWA.
+`geometry.json` is the canonical vertex/path source. Native reads it directly.
+The PWA diagram swap was removed in fix round 2 per Will
+(2026-10-28, 7:15 AM CT): the body map is native-only.
 The four SVG files are plain exports of the skin and muscle layers, one compound
 Path per key, both lateral halves in that path. Tests enforce export equality
 and the combined 300 KB SVG cap. Update these exports together.

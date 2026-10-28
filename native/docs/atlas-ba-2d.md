@@ -8,7 +8,7 @@ are copied exactly from the existing 44-key PWA bank for that future work.
 
 - `assets/atlas/geometry.json`: original polygon vertices and compound paths,
   front/back and male/female; skin and muscle layers. Both lateral halves use
-  one path ID. Four standalone SVG exports plus a browser ES module export.
+  one path ID. Four standalone SVG exports for the native atlas.
 - `features/atlas/volume.ts`: pure rolling seven-day weighted counts, target
   ranges, session-dependent linear recency fade, sequential blue fills and
   nonduplicating basic rollups. See `assets/atlas/SOURCES.md` for attribution.
@@ -21,8 +21,8 @@ are copied exactly from the existing 44-key PWA bank for that future work.
   readers start in list mode. Static rendering respects Reduce Motion.
 - Insights refreshes recency once per minute and on foreground, cleaning up
   timers and listeners. `/muscle/[key]` is an explicitly labeled detail stub.
-- Live PWA advanced atlas consumes the same geometry; the worker caches its
-  new module. Its existing volume policy and basic atlas are unchanged.
+- The body map is native-only per Will (2026-10-28, 7:15 AM CT). Fix round 2
+  removed the PWA diagram swap; `logger/` matches main, with no worker bump.
 
 ## Review and validation
 
@@ -45,8 +45,8 @@ those remain failures. The focused live-atlas/worker/bank suite passed 39 tests.
 
 ## Fix round 1 (PR #111)
 
-The PWA split (blocker 1) and threshold comparison (F5) await Will's decision.
-The existing PWA diagram swap is unchanged in this round.
+At fix round 1, the PWA split (blocker 1) and threshold comparison (F5)
+awaited Will's decision. Fix round 2 below records the native-only decision.
 
 Native map paths now expose selected accessibility state through a small
 react-native-svg 15.16 adapter: the library's normal extraction forwards labels
@@ -76,3 +76,11 @@ Fix round 1 validation: CI-pinned Node 24.21.0, required typecheck → Expo lint
 projects (390.334 seconds). Focused atlas/routes checks passed 34 tests and the
 shell accessibility sweep passed 9 tests. Expo dependency compatibility passed;
 Expo Doctor passed 20/20 checks. PWA paths have no working-tree changes.
+
+## Fix round 2 (PR #111)
+
+Per Will (2026-10-28, 7:15 AM CT), the body map is native-only. The PWA
+diagram swap and its root test were removed; `logger/`, `sw.js` and root
+`tests/` match `origin/main` exactly. There is no service-worker cache bump.
+Quinn F5 (PWA versus native threshold) no longer applies. Native implementation,
+strings, accessibility and Reduce Motion behavior are unchanged.
