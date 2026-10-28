@@ -1,5 +1,5 @@
 import { bodyGolden, bodyGoldenTrend } from '../fixtures/body';
-import { dailyWeights, trendWeights, weeklyChange, inRange, saveWeighIn, lastWeight } from '../src/features/body/model';
+import { dailyWeights, trendWeights, weeklyChange, inRange, saveWeighIn, lastWeight, unusualWeight } from '../src/features/body/model';
 import { fromKg, toKg } from '../src/core/workout/rules';
 import { readProfile, saveProfile } from '../src/features/onboarding/model';
 import { memoryRepository } from './workout-repository';
@@ -46,4 +46,12 @@ test('EWMA stays flat for a constant series and counts calendar days across DST'
  const points=[{day:'2026-03-07',kg:80,count:1},{day:'2026-03-09',kg:82,count:1}];
  expect(trendWeights(points)[1].trendKg).toBeCloseTo(80+2*(1-(9/11)**2),12);
  expect(trendWeights(points.map(p=>({...p,kg:80}))).map(p=>p.trendKg)).toEqual([80,80]);
+});
+
+test.each([
+ [29.9,null,true],[30,null,false],[300,null,false],[300.1,null,true],
+ [80,null,false],[88,80,false],[88.01,80,true],[72,80,false],[71.99,80,true],
+] as [number,number|null,boolean][])('unusual kg %s versus %s requires confirmation: %s',(kg,last,expected)=>{
+ expect(unusualWeight(kg,'kg',last)).toBe(expected);
+ expect(unusualWeight(fromKg(kg,'lb'),'lb',last)).toBe(expected);
 });
