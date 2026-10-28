@@ -523,14 +523,16 @@ const FOOD_TEXT_HEALTH = [
 
 function foodAiTextForbidden(value: string): boolean {
   const normalized = foodAiNormalize(value);
-  // Fold leetspeak only for guarded substrings; preserve quantities for mass checks.
+  // Fold leetspeak only for guarded terms; preserve quantities for mass checks.
   // Try both readings of 1. Remove permitted food phrases before joining separators.
   for (const one of ["i", "l"]) {
     const folded = normalized.replace(/3/g, "e").replace(/0/g, "o")
       .replace(/1/g, one).replace(/5/g, "s");
-    if (/stress|mood/.test(folded.replace(/[^a-z0-9]/g, ""))) return true;
+    // Word boundaries keep food names intact; retain explicit blocked variants.
+    if (/\bs[^a-z0-9]*t[^a-z0-9]*r[^a-z0-9]*e[^a-z0-9]*s[^a-z0-9]*s(?:ed|less)?\b|\bm[^a-z0-9]*o[^a-z0-9]*o[^a-z0-9]*d(?:boost)?\b/.test(folded)) return true;
     const withoutWeightFoods = foodAiSplit(folded).join(" ").replace(FOOD_TEXT_WEIGHT_FOODS, " ");
-    if (withoutWeightFoods.replace(/[^a-z0-9]/g, "").includes("weight")) return true;
+    // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
+    if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;
   }
   if (foodAiForbiddenTokens(foodAiSplit(normalized), false)) return true;
   const packed = dropPackageSizes(normalized);

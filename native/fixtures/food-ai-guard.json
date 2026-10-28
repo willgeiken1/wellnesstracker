@@ -145,11 +145,11 @@
   ],
   [
     "Moo Daeng",
-    false
+    true
   ],
   [
     "ham, oodles",
-    false
+    true
   ],
   [
     "weight gainer",
@@ -174,5 +174,17 @@
   [
     "salmon 105 g",
     true
+  ],
+  [
+    "raw eight oysters",
+    true
+  ],
+  [
+    "stressed",
+    false
+  ],
+  [
+    "moodboost",
+    false
   ]
 ]
