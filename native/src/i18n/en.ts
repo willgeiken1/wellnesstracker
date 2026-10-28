@@ -314,8 +314,31 @@ export const en = {
   demoMode: 'Demo mode · synthetic examples only', leaveDemo: 'Leave demo', signOut: 'Sign out',
   changedOtherPhone: 'Changed on your other phone',
   restoreVersionHelp: 'Previous versions stay on this phone for 7 days. Restoring creates a new change to sync.',
-  restorePreviousVersion: 'Restore previous version {number}',
-  restoreVersionFailed: 'This version could not be restored. It may have expired or been deleted.',
+  restorePreviousVersion: 'Restore previous {table} item {item} from {date} UTC',
+  recoveryTable_profile: 'Profile',
+  recoveryTable_weigh_ins: 'Weight entry',
+  recoveryTable_measurements: 'Measurement',
+  recoveryTable_routines: 'Routine',
+  recoveryTable_routine_exercises: 'Routine exercise',
+  recoveryTable_sessions: 'Workout session',
+  recoveryTable_entries: 'Workout exercise',
+  recoveryTable_sets: 'Workout set',
+  recoveryTable_cardio_sessions: 'Cardio session',
+  recoveryTable_food_targets: 'Food target',
+  recoveryTable_food_entries: 'Food entry',
+  recoveryTable_saved_foods: 'Saved food',
+  recoveryTable_meals: 'Meal',
+  recoveryTable_goals: 'Goal',
+  recoveryTable_plan_days: 'Planned day',
+  recoveryTable_machine_notes: 'Machine note',
+  recoveryTable_home_layout: 'Home layout',
+  recoveryTable_settings: 'Settings',
+  recoveryTable_photos: 'Photo',
+  recoveryTable_custom_exercises: 'Custom exercise',
+  recoveryTable_plans: 'Plan',
+  recoveryTable_pauses: 'Pause',
+  recoveryTable_purges: 'Deletion range',
+  restoreVersionFailed: 'This version could not be restored. It may have expired, been deleted, or changed again.',
   signOutWait: 'Wait', signOutAnyway: 'Sign out anyway',
   signOutConfirm: 'Sign out of this account?', signOutBody: 'This account’s data will be erased from this phone.', signOutUnsynced_one: '{count} unsynced change will be lost, including changes that need review.', signOutUnsynced_other: '{count} unsynced changes will be lost, including changes that need review.',
   cancel: 'Cancel', syncConflictStatus: 'Some changes need review', syncConflicts: 'sync conflicts · review needed', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncBusy: 'Syncing…', pending: 'pending',
@@ -370,3 +393,12 @@ export function workingSetsPhrase(count: number) {
 }
 
 export function muscleLabel(muscle: string) { return en[`muscle_${muscle}` as keyof typeof en] ?? muscle; }
+
+/** Use identifiers rather than row values in the recovery controls. */
+export function restoreVersionLabel(row: import('../data/rows').Row): string {
+  const date = new Date(row.updated_at).toLocaleString('en-US', {
+    month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', timeZone:'UTC',
+  });
+  return t('restorePreviousVersion').replace('{table}',t(`recoveryTable_${row.table}`))
+    .replace('{item}',row.id).replace('{date}',date);
+}

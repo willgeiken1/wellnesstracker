@@ -4,7 +4,7 @@ import type { Repository } from '../data/repository';
 import type { LosingVersion } from '../data/losing-version';
 import { Button } from '../components/button';
 import { ThemedText } from '../components/themed-text';
-import { t } from '../i18n/en';
+import { restoreVersionLabel, t } from '../i18n/en';
 
 /** Recovery payloads stay in SQLite; the view shows no row values or telemetry. */
 export function SyncRecovery({repository}: {repository: Repository | null}) {
@@ -24,8 +24,8 @@ export function SyncRecovery({repository}: {repository: Repository | null}) {
     {versions.length>0&&<>
       <ThemedText muted accessibilityLiveRegion="polite">{t('changedOtherPhone')}</ThemedText>
       <ThemedText muted>{t('restoreVersionHelp')}</ThemedText>
-      {versions.map((version,index)=><Button key={version.key}
-        label={t('restorePreviousVersion').replace('{number}',String(index+1))}
+      {versions.map(version=><Button key={version.key}
+        label={restoreVersionLabel(version.row)}
         variant="secondary" onPress={()=>{
           try {
             if(!repository?.restoreLosingVersion(version.key)){setVersions(repository?.losingVersions()??[]);setFailed(true);}
