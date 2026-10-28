@@ -568,6 +568,8 @@ function foodAiTextForbidden(value: string): boolean {
   // The stress/mood check also runs on a lowercase copy with no camelCase
   // split, so "MoOdy" is not cut into "mo ody".
   const lowered = foodAiNormalize(value, false);
+  // Preserve digit separators before folding them into letters (st1ress, m0ood).
+  if (separatedStressMood(normalized) || separatedStressMood(lowered)) return true;
   for (const one of ["i", "l"]) {
     const fold = (text: string) => text.replace(/3/g, "e").replace(/0/g, "o")
       .replace(/1/g, one).replace(/5/g, "s");

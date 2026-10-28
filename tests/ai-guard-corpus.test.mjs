@@ -89,18 +89,22 @@ const REGRESSION = [
 ];
 
 const MUST_SEND = [
-  "weight gainer shake, 2 scoops",
+  "weight gainer",
+  "weight watchers",
+  "  Weight Gainer  ",
+  " WEIGHT WATCHERS\t",
   "two eggs and toast",
   "heart of palm",
   "chicken 200 g",
-  "weight gainer 1 lb tub",
-  "weight gainer 2.5 lb tub",
-  "weight gainer 12 lb tub",
-  "weight gainer 5 kg bag",
   "brisket 8 hr 30 min",
 ];
 
 const MUST_BLOCK = [
+  "weight gainer shake, 2 scoops",
+  "weight gainer 1 lb tub",
+  "weight gainer 2.5 lb tub",
+  "weight gainer 12 lb tub",
+  "weight gainer 5 kg bag",
   "stress relief tea",
   "Stress Less smoothie",
   "mood booster smoothie",
@@ -122,12 +126,12 @@ const QUINN_UNICODE_BLOCK = [
   ["wei", "ght 180 lb"], ["sle", "ep score 82"], ["H", "RV 45"], ["glu", "cose 140"], ["met", "formin with eggs"], ["rest", "ing hr 62"],
 ].flatMap(([a, b]) => QUINN_X.map((c) => a + c + b));
 const QUINN_ALIAS_BLOCK = ["bw 180 lb", "bw 82 kg", "resting hr 62", "eggs, resting hr 62", "restingHR 62"];
-const QUINN_SENT = ["weight gainer 1 lb tub"];
+const QUINN_SENT = ["weight gainer", "weight watchers"];
 
-// Current behavior, pinned. Every body-data row blocks.
+// Exact whole-name exceptions only. Every extended name and body-data row blocks.
 const PINNED = [
-  ["weight gainer shake", true],
-  ["weight gainer 2 scoops", true],
+  ["weight gainer shake", false],
+  ["weight gainer 2 scoops", false],
   ["Two eggs and toast", true],
   ["weight 180 lb", false],
   ["resting hr", false],
@@ -155,11 +159,19 @@ const PINNED = [
   ["weight gainer 13st", false],
 ];
 
-// Tub cap reads a decimal only when a point or comma was typed, with at most 2 digits after it.
-// The anywhere body-mass rule counts stone but not a bare st, and reads 82,5 as 82.5.
-// Combining marks are dropped, so an accent inside a blocked word does not split it.
-// Joined terms split across 3 tokens. Up to 3 words between a food name and a body unit.
+// Extended weight names block regardless of package sizes or joining words.
+// Other mass, street, Unicode, and joined-term rules retain their coverage.
 const KILL_ROWS = [
+  "weight gainer 2.5 lb tub",
+  "weight gainer 2.50 lb tub",
+  "weight gainer with chicken breast",
+  "weight watchers lasagna with toast",
+  "weight gainer shake and 1 lb steak",
+  "weight gainer 3 lb tub, brisket 20 lb",
+  "weight gainer toast",
+  "weight watchers chicken breast",
+  "weight gainer 4 lb tub, 2 st louis ribs",
+  "weight gainer 2,5 lb tub",
   "weight gainer 5 180 lb tub",
   "weight gainer 0.180 lb tub",
   "rest-ing hr",
@@ -178,27 +190,17 @@ const KILL_ROWS = [
   "weíght 180",
 ];
 const KEEP_SENDING = [
-  "weight gainer 2.5 lb tub",
-  "weight gainer 2.50 lb tub",
-  "weight gainer with chicken breast",
-  "weight watchers lasagna with toast",
   "my 21st birthday cake",
   "brisket 10 lb",
-  "weight gainer shake and 1 lb steak",
-  "weight gainer 3 lb tub, brisket 20 lb",
-  "weight gainer toast",
-  "weight watchers chicken breast",
   "6 st louis ribs",
   "12 st. louis ribs",
   "pizza on 86 st",
   "bagel from 5 st",
-  "weight gainer 4 lb tub, 2 st louis ribs",
   "29 kg",
-  "weight gainer 2,5 lb tub",
   "jalapeño poppers and crème brûlée",
 ];
 
-test("Quinn's repro rows block, and the 1 lb tub is sent", async () => {
+test("Quinn's repro rows block, and exact food names send", async () => {
   assert.equal(QUINN_BLOCK.length, 11);
   assert.equal(QUINN_UNICODE_BLOCK.length, 18);
   for (const text of [...QUINN_BLOCK, ...QUINN_UNICODE_BLOCK, ...QUINN_ALIAS_BLOCK]) assert.equal(await sends(text), false, JSON.stringify(text));
@@ -209,7 +211,7 @@ test("pinned extras keep their current behavior", async () => {
   for (const [text, sent] of PINNED) assert.equal(await sends(text), sent, JSON.stringify(text));
 });
 
-test("tub decimals, joined terms, word gaps, comma decimals, st, and combining marks", async () => {
+test("extended weight names block; ordinary foods, street names, and accents send", async () => {
   for (const text of KILL_ROWS) assert.equal(await sends(text), false, JSON.stringify(text));
   for (const text of KEEP_SENDING) assert.equal(await sends(text), true, text);
 });
@@ -324,7 +326,7 @@ function corpus(seed, n) {
 const PINNED_SEEDS = [42, 31337];
 
 for (const label of ["pinned 42", "pinned 31337", "random"]) {
-  test(`seeded corpus (${label}): 2000 bypasses block and the paired foods send`, async () => {
+  test(`seeded corpus (${label}): 2000 bypasses block and paired foods follow the exact-name rule`, async () => {
     const seed = label === "random"
       ? Number(process.env.FOOD_GUARD_SEED) || Math.floor(Math.random() * 2 ** 32)
       : PINNED_SEEDS[label === "pinned 42" ? 0 : 1];
@@ -332,9 +334,16 @@ for (const label of ["pinned 42", "pinned 31337", "random"]) {
     const leaked = [];
     for (const text of bypass) if (await sends(text)) leaked.push(text);
     const falsePositives = [];
-    for (const text of food) if (!(await sends(text))) falsePositives.push(text);
+    const extendedWeightNames = [];
+    for (const text of food) {
+      // Generated weight phrases always have prefixes/suffixes; exact exceptions
+      // are exercised separately above. Do not infer expectations from the guard.
+      if (text.toLowerCase().includes("weight")) extendedWeightNames.push(text);
+      else if (!(await sends(text))) falsePositives.push(text);
+    }
+    for (const text of extendedWeightNames) assert.equal(await sends(text), false, text);
     const rate = ((falsePositives.length / food.length) * 100).toFixed(2);
-    console.log(`food-guard corpus seed=${seed} bypass=${bypass.length} leaked=${leaked.length} food=${food.length} false_positives=${falsePositives.length} (${rate}%)`);
+    console.log(`food-guard corpus seed=${seed} bypass=${bypass.length} leaked=${leaked.length} food=${food.length} extended_weight_blocks=${extendedWeightNames.length} false_positives=${falsePositives.length} (${rate}%)`);
     assert.deepEqual(leaked.slice(0, 5), [], `seed ${seed}: ${leaked.length} bypasses reached the model`);
     assert.deepEqual(falsePositives.slice(0, 5), [], `seed ${seed}: false-positive rate ${rate}%`);
   });
