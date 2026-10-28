@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FOOD_MODEL_ID } from "../supabase/functions/_shared/food-model.js";
 import { describeEstimateSchema, readDescribeEstimate } from "../supabase/functions/_shared/food-output.js";
-import { FOOD_AI_ALLOWED_KEYS, FoodAiPayloadError, callFoodModel } from "../supabase/functions/_shared/strip.ts";
+import { FOOD_AI_ALLOWED_KEYS, FoodAiPayloadError, assertFoodAiPayload, callFoodModel } from "../supabase/functions/_shared/strip.ts";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const SENTINEL = 987654;
@@ -100,8 +100,10 @@ test("a health word inside the meal text throws and the client is not called", a
 
 test("food names with health-ish words reach the describe model", async () => {
   for (const text of [
-    "weight gainer shake",
-    "Weight Gainer shake, 2 scoops",
+    "weight gainer",
+    "weight watchers",
+    "  Weight Gainer  ",
+    " WEIGHT WATCHERS\t",
     "protein shake",
     "keto bar",
     "diet soda",
@@ -109,9 +111,6 @@ test("food names with health-ish words reach the describe model", async () => {
     "low sugar yogurt",
     "glucose syrup on pancakes",
     "rice, weighed 200 g",
-    "Weight Watchers frozen lasagna",
-    "weight gainers shake",
-    "WeightGainer 2 scoops",
   ]) {
     let calls = 0;
     await callFoodModel(describePayload(text), async () => { calls += 1; return { ok: true }; });
@@ -148,6 +147,13 @@ test("vitals, labs, Oura metrics, diagnoses, and medications stay blocked in mea
 test("weight outside a known food name still blocks, including full-width input", async () => {
   for (const text of [
     "weight was roughly 180",
+    "weight gainer 1 lb tub",
+    "diet weight gainer",
+    "weight gainer shake",
+    "Weight Gainer shake, 2 scoops",
+    "Weight Watchers frozen lasagna",
+    "weight gainers shake",
+    "WeightGainer 2 scoops",
     "180 lbs weight",
     "weight one eighty",
     "weight １８２ lb",
@@ -175,9 +181,9 @@ test("zero-width characters cannot split a blocked word", async () => {
   for (const text of ["wei\u200Bght 182", "H\u200CRV 45 and eggs", "o\u2060ura day, toast", "sle\uFEFFep score 80"]) {
     await expectBlocked(describePayload(text));
   }
-  let calls = 0;
-  await callFoodModel(describePayload("weight\u200B gainer shake"), async () => { calls += 1; });
-  assert.equal(calls, 1);
+  for (const text of ["weight\u200B gainer shake", "weight\u200B gainer", "weíght gainer"]) {
+    await expectBlocked(describePayload(text));
+  }
 });
 
 test("an assistant message is rejected, not scanned like user meal text", async () => {
@@ -396,4 +402,60 @@ test("zod bounds, extra fields, and a rounded negative macro", () => {
     notes: "ok",
     extra: true,
   })), null);
+});
+
+test("digits remain separators in stress/mood spellings before leetspeak folding", async () => {
+  for (const text of ["m0ood", "st1ress", "m5ood", "m0o0o0d", "s1t1r1e1s1s", "st0ressfree", "9m o o d", "m o o d9", "pasta _m_o_o_d_", "m-o-o-dswing", "st ressball"]) {
+    await expectBlocked(describePayload(text));
+    await expectBlocked(photoPayload(text));
+  }
+});
+
+test("literal mood substrings and joined MooDaeng names stay blocked", async () => {
+  for (const text of ["mood", "goodmood bowl", "MoOdy", "MooDaeng", "moodaeng", "MooDaeng curry"]) {
+    await expectBlocked(describePayload(text));
+  }
+  for (const text of ["Moo Daeng", "ham, oodles", "raw eight oysters"]) {
+    let calls = 0;
+    await callFoodModel(describePayload(text), async () => { calls += 1; });
+    assert.equal(calls, 1, text);
+  }
+});
+
+test("shared guard vectors gate describe and photo clients behind the meal marker", async () => {
+  const vectors = JSON.parse(read("../native/fixtures/food-ai-guard.json"));
+  for (const [text, allowed] of vectors) {
+    for (const payload of [describePayload(`The meal: ${text}`), photoPayload(`The meal: ${text}`)]) {
+      if (!allowed) await expectBlocked(payload);
+      else {
+        let calls = 0;
+        await callFoodModel(payload, () => { calls += 1; });
+        assert.equal(calls, 1, text);
+      }
+    }
+  }
+});
+
+test("every partition of mood/stress suffix spellings blocks before the client", async () => {
+  const suffixes = ["", "y", "ier", "iest", "ily", "iness", "ish", "s", "ed", "es", "ful", "less", "ing", "or", "ors", "boost", "swing", "swings", "ball", "free"];
+  for (const term of ["mood", "stress"]) {
+    for (const suffix of suffixes) {
+      const word = term + suffix;
+      for (let mask = 0; mask < 2 ** (word.length - 1); mask++) {
+        const text = [...word].map((letter, i) => (i && (mask & (1 << (i - 1))) ? "-" : "") + letter).join("");
+        await expectBlocked(describePayload(`The meal: ${text} bowl`));
+      }
+    }
+  }
+});
+
+test("8000-character mixed stress/mood digit runs finish under 50 ms", () => {
+  for (const prefix of ["m", "5"]) {
+    const payload = describePayload(prefix + "0".repeat(7999));
+    const start = performance.now();
+    assertFoodAiPayload(payload);
+    const elapsed = performance.now() - start;
+    console.log(`strip guard ${prefix} digit run: ${elapsed.toFixed(3)} ms`);
+    assert.ok(elapsed < 50, `${prefix} digit run took ${elapsed.toFixed(3)} ms`);
+  }
 });

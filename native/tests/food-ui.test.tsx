@@ -29,9 +29,9 @@ test('past day selected explicitly, future blocked, missing stats inline target 
  for(const [label,value] of [['Target calories (kcal)','2000'],['Target protein (g)','100'],['Target carbs (g)','250'],['Target fat (g)','67']])await fireEvent.changeText(screen.getByLabelText(label),value);
  await fireEvent.press(screen.getByRole('button',{name:'Save targets'}));expect(repo.list('food_targets')).toHaveLength(1);
 });
-test('placeholders do not request cameras or services, calendar excludes future',async()=>{
+test('Snap asks consent before camera or services, calendar excludes future',async()=>{
  await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});
- await fireEvent.press(screen.getByRole('button',{name:'Snap'}));expect(screen.getByText('Snap arrives in a later step.')).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Snap'}));expect(screen.getByText('Use AI for this meal?')).toBeTruthy();await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
  await fireEvent.press(screen.getByRole('button',{name:'Open food calendar'}));expect(screen.getByRole('button',{name:'2026-10-28'})).toBeDisabled();
 });
 test('saved foods, favorites, combos, copy yesterday, rename/add meals persist through UI',async()=>{

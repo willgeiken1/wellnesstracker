@@ -6,6 +6,7 @@ export function createPhoneBackup(repo: Repository): string {
   return repo.atomic(() => JSON.stringify({
     format: 'insight-phone-only', version: 1, exportedAt: new Date().toISOString(),
     rows: Object.fromEntries(syncedTables.map(table => [table, repo.list(table, true)])),
-    local: Object.fromEntries(Object.entries(repo.localSnapshot()).filter(([key])=>!key.startsWith('barcode:'))),
+    // AI photos, thumbnails, and barcode caches stay on this device.
+    local: Object.fromEntries(Object.entries(repo.localSnapshot()).filter(([key]) => key !== 'foodAi' && !key.startsWith('barcode:'))),
   }));
 }

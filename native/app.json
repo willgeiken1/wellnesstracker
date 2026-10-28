@@ -64,6 +64,14 @@
       "expo-sharing",
       "expo-status-bar",
       [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Insight Daily to take a meal photo you choose for an estimate.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow Insight Daily to scan food barcodes when you choose Scan.",
