@@ -21,7 +21,13 @@ export async function filterBootExport(copy: Pick<SQLiteDatabase, 'execAsync' | 
     const columns = await copy.getAllAsync<{ name: string }>(`PRAGMA table_info(${identifier(name)})`);
     const ownerColumn = columns.find(column => column.name.toLowerCase() === 'owner_id');
     if (!ownerColumn) await copy.execAsync(`DROP TABLE ${identifier(name)}`);
-    else await copy.runAsync(`DELETE FROM ${identifier(name)} WHERE ${identifier(ownerColumn.name)} IS NULL OR ${identifier(ownerColumn.name)} != ?`, owner);
+    else {
+      await copy.runAsync(`DELETE FROM ${identifier(name)} WHERE ${identifier(ownerColumn.name)} IS NULL OR ${identifier(ownerColumn.name)} != ?`, owner);
+      // Recovery history is device-only, including explicit boot database exports.
+      if (name === 'sync_state' && columns.some(column => column.name === 'key')) {
+        await copy.runAsync("DELETE FROM sync_state WHERE key LIKE 'losing:%'");
+      }
+    }
   }
   // Serialization must not retain deleted owners/Oura bytes in free pages.
   await copy.execAsync('VACUUM;');
