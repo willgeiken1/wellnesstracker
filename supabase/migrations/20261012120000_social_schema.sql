@@ -1,5 +1,3 @@
--- owner_id row-sync tables are removed only by auth.users ON DELETE CASCADE
--- during a hard GoTrue delete; delete_user_rows intentionally skips them.
 -- Friends-only social schema. Safe to run more than once.
 --
 -- Social is off until a person turns it on. Each share is an explicit row,
