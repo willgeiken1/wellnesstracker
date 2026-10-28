@@ -15,7 +15,7 @@ beforeAll(async () => {
  INSERT INTO public.oura_connections VALUES('${OWNER_A}',true);`);
   await db.query("INSERT INTO public.user_data VALUES($1,$2)", [
     OWNER_A,
-    JSON.stringify(legacyV2),
+    JSON.stringify({ ...legacyV2, restSeconds: 90 }),
   ]);
   await db.exec(
     readFileSync(
@@ -53,6 +53,7 @@ const rows = () =>
   }));
 test("snapshot owner-isolated, frozen once, omits checkins and device settings", async () => {
   const first = (await snapshot()).rows[0].v;
+  expect(first.snapshot.blob).toMatchObject({ restSeconds: 90 });
   expect(JSON.stringify(first)).not.toMatch(
     /ignored-fixture|analytics|appLock/,
   );

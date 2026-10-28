@@ -21,7 +21,7 @@ BEGIN
   blob:=coalesce(blob,'{"version":2,"sessions":[],"workouts":[]}'::jsonb);
   -- Freeze only supported account domains; consent, check-ins and Oura never leave this RPC.
   SELECT coalesce(jsonb_object_agg(key,value),'{}'::jsonb) INTO blob FROM jsonb_each(blob)
-   WHERE key IN ('version','sessions','workouts','templates','profile','food','cardio','measurements','goals','plan','planAt','machineNotes','layout','deleted','purges');
+   WHERE key IN ('version','restSeconds','sessions','workouts','templates','profile','food','cardio','measurements','goals','plan','planAt','machineNotes','layout','deleted','purges');
   blob:=jsonb_set(blob,'{sessions}',coalesce(blob->'sessions','[]'::jsonb));
   SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'path',path,'taken_at',taken_at,'day',day,'pose',pose)),'[]'::jsonb)
    INTO photo_rows FROM public.progress_photos WHERE user_id=owner;

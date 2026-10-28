@@ -375,3 +375,23 @@ test("merge keeps existing singleton settings while preserving the imported orig
     l.sqlite.close();
   }
 });
+
+test("demo import does not recreate Home widgets after account layout deletion", async () => {
+  const { Repository } = await import("../../src/data/repository");
+  const { seedDemo } = await import("../../fixtures/demo");
+  const { promoteDemo } = await import("../../src/features/onboarding/demo-transfer");
+  const l = await localDatabase();
+  try {
+    const source = new Repository(l.db, "demo", l.repo.device,
+      () => "40000000-0000-4000-8000-000000000099");
+    seedDemo(source);
+    commitImport(source, previewImport(source, normalizePwa(legacyV2, bank)), true);
+    const home = l.repo.save("home_layout", { widget: "native-first", position: 0, hidden: 0 });
+    l.repo.remove("home_layout", home.id);
+    promoteDemo(source, l.repo);
+    expect(l.repo.list("home_layout")).toHaveLength(0);
+    expect(l.repo.list("home_layout", true)).toHaveLength(1);
+  } finally {
+    l.sqlite.close();
+  }
+});

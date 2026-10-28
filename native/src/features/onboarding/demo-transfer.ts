@@ -18,7 +18,8 @@ export function promoteDemo(source:Repository,destination:Repository) {
   const samples=source.localGet<string[]>('demoSamples');
   const existingProfile=destination.list('profile').length>0;
   const existingHome=destination.list('home_layout',true).length>0;
-  const skip=new Set(['profile','food_targets','weigh_ins',...(source.localGet('pwaHomeImported')&&existingHome?['home_layout']:[])].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
+  const skip=new Set<string>(['profile','food_targets','weigh_ins'].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
+  if(source.localGet('pwaHomeImported')&&existingHome)skip.add('home_layout');
   const rows=syncedTables.filter(table=>table!=='purges').flatMap(table=>source.list(table));
   const excluded=new Set(rows.filter(row=>samples?.includes(row.id)||sampleRow(row)).map(row=>row.id));
   destination.atomic(()=>{
