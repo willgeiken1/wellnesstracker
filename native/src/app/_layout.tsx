@@ -1,3 +1,4 @@
+import { FoodAiRuntime } from '../features/food/ai/runtime';
 import { useEffect } from 'react';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -49,6 +50,7 @@ function Application() {
     <LocalDataRecovery />
     <LegacyImportPrompt />
     <SharedImportEntry />
+    <FoodAiRuntime repo={auth.ready ? auth.repository : null} />
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
   </ThemeProvider>;

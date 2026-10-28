@@ -75,7 +75,7 @@ test.each([
   await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
   expect(result.getPathname()).toBe('/');
 });
-test('Food opens its log stub and returns Home', async () => {
+test('Food without a repository opens logging and returns Home', async () => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: 'Food' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
