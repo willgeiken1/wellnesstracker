@@ -9,6 +9,7 @@ import { Field } from '../onboarding/fields';
 import { Panel } from '../workout/primitives';
 import { useFoodRevision } from './use-food-revision';
 import { FoodAction } from './action';
+import { FoodScanner } from './scanner';
 import { FoodEntry } from './entry';
 import { FoodTargets } from './targets';
 import { FoodCalendar } from './calendar';
@@ -17,6 +18,7 @@ import { allFavorites, attributedDay, combos, copyYesterday, deleteFood, favorit
 export function FoodScreen({repository,initialManual=false}:{repository:Repository;initialManual?:boolean}) {
  // Repository reads are mutable method calls; do not memoize derived values by object identity.
  'use no memo';
+ const [scanning,setScanning]=useState(false);
  const revision=useFoodRevision(repository),repo=repository;
  const [day,setDay]=useState(()=>attributedDay()),[calendar,setCalendar]=useState(false),[fan,setFan]=useState(false);
  const mealList=meals(repo),[selectedMeal,setSelectedMeal]=useState(mealList[0].id);
@@ -26,7 +28,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>setUndo(null),8000);return ()=>clearTimeout(timer);},[undo]);
  const rows=repo.list('food_entries').filter(r=>r.data.day===day),total=totals(rows),targets=foodTargets(repo,day);
  const early=attributedDay()!==today();
- const chooseDay=(value:string)=>{setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
+ const chooseDay=(value:string)=>{setDay(value);setCalendar(false);setScanning(false);setEntry(null);setUndo(null);setStatus(null);};
  const run=(action:()=>void)=>{try{action();setStatus(null);}catch{setStatus(t('foodFailure'));}};
  const log=(food:Food)=>run(()=>{saveFood(repo,day,selectedMeal,food);setLibrary(false);});
  return <View style={{gap:16}}>
@@ -42,15 +44,16 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   <Panel><FoodTargets key={day} repo={repo} day={day} revision={revision}/></Panel>
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>
    {(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><View key={method} style={{flexGrow:1}}><Button label={t(method)} variant="secondary" onPress={()=>{
-    if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else if(method==='foodSaved'){setLibrary(!library);setEntry(null);}else setStatus(t('foodLater').replace('{method}',t(method)));
+    setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else if(method==='foodSaved'){setLibrary(!library);setEntry(null);}else setStatus(t('foodLater').replace('{method}',t(method)));
    }}/></View>)}
   </View>
   <FoodAction label={t('foodFan')} onPress={()=>setFan(!fan)}>{fan?'−':'+'}</FoodAction>
-  {fan&&<View style={{gap:4}}>{(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{setFan(false);if(method==='foodManual')setEntry({meal:selectedMeal});else if(method==='foodSaved')setLibrary(true);else setStatus(t('foodLater').replace('{method}',t(method)));}}/>)}</View>}
+  {fan&&<View style={{gap:4}}>{(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{setFan(false);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodManual')setEntry({meal:selectedMeal});else if(method==='foodSaved')setLibrary(true);else setStatus(t('foodLater').replace('{method}',t(method)));}}/>)}</View>}
   <ThemedText>{t('foodChooseMeal')}</ThemedText>
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>{mealList.map(meal=><Button key={meal.id} label={meal.name} selected={selectedMeal===meal.id} variant="secondary" onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
   {undo&&<Panel><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Panel>}
+  {scanning&&<Panel><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Panel>}
   {entry&&<Panel><FoodEntry key={entry.id??'new'} initial={entry.initial} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{saveFood(repo,day,entry.meal,food,multiple,entry.id);setEntry(null);}}/></Panel>}
   {library&&<Panel>
    {([{title:'foodSaved',foods:repo.list('saved_foods').map((r):Food=>({...r.data,saved_food_id:r.id,amount_g:r.data.serving_g??null}))},{title:'foodRecent',foods:recentFoods(repo)},{title:'foodFavorites',foods:allFavorites(repo,selectedMeal)}] as const).map(section=><View key={section.title} style={{gap:6}}><ThemedText variant="headline">{t(section.title)}</ThemedText>{!section.foods.length&&<ThemedText muted>{t('foodNoSaved')}</ThemedText>}{section.foods.map((food,i)=><Button key={i} variant="secondary" label={t('foodLogSaved').replace('{name}',String(food['name']))} onPress={()=>log(food)}/>)}</View>)}
@@ -62,7 +65,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    <Button label={t('foodRename').replace('{name}',meal.name)} variant="secondary" onPress={()=>setRename({id:meal.id,name:meal.name})}/>
    {rows.filter(row=>row.data.meal_id===meal.id).map(row=><View key={row.id} style={{gap:6}}>
     <ThemedText>{String(row.data.name)}</ThemedText><ThemedText>{t('foodEnergy').replace('{value}',row.data.energy_kj==null?'—':String(Math.round(Number(row.data.energy_kj)/4.184)))}</ThemedText>
-    <Button label={t('foodEdit').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>{setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
+    <Button label={t('foodEdit').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>{setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
     <Button label={t('foodDelete').replace('{name}',String(row.data.name))} variant="destructive" onPress={()=>run(()=>setUndo(deleteFood(repo,row.id)))}/>
     <Button label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
     <Button label={t('foodKeep').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>{saveReusable(repo,row.data);})}/>

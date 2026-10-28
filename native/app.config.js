@@ -3,7 +3,7 @@ const base = require('./app.json').expo;
 const safePlugins = new Set([
   'expo-router', './plugins/withStripLocalNetworkingRelease', 'expo-splash-screen',
   'expo-build-properties', 'expo-dev-client', './plugins/withDevSchemeDebugOnly',
-  'expo-font', 'expo-sqlite', 'expo-secure-store', 'expo-sharing', 'expo-status-bar',
+  'expo-camera', 'expo-font', 'expo-sqlite', 'expo-secure-store', 'expo-sharing', 'expo-status-bar',
 ]);
 module.exports = ({ config }) => {
   if (process.env.APP_VARIANT !== 'freeiphone') return config;

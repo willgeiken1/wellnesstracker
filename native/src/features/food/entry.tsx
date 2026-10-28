@@ -7,7 +7,7 @@ import { portion, type Food } from './model';
 export function FoodEntry({initial,day,onSave,onClose}:{initial?:Food;day:string;onSave:(food:Food,multiple:number)=>void;onClose:()=>void}) {
   const keys=['name','energy_kj','protein_g','carbs_g','fat_g','amount_g'] as const;
   const labels=['foodName','foodCalories','foodProtein','foodCarbs','foodFat','foodAmount'] as const;
-  const [values,setValues]=useState(()=>Object.fromEntries(keys.map(k=>[k,initial?.[k]==null?'':k==='energy_kj'?String(Number(initial[k])/4.184):String(initial[k])])));
+  const [values,setValues]=useState(()=>Object.fromEntries(keys.map(k=>[k,initial?.[k]==null?'':k==='energy_kj'?String(Math.round(Number(initial[k])/4.184*1000000)/1000000):String(initial[k])])));
   const [multiple,setMultiple]=useState('1'),[error,setError]=useState<'foodInvalid'|'foodFailure'|null>(null);
   return <>
     {keys.map((key,i)=><Field key={key} label={t(labels[i])} numeric={key!=='name'} value={values[key]} onChange={value=>setValues({...values,[key]:value})}/>)}
