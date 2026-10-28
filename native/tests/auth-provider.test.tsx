@@ -1,3 +1,4 @@
+import { ImportPreviewConflict } from '../src/features/importer/errors';
 import { act, render, waitFor, fireEvent } from '@testing-library/react-native';
 import { Account, LocalDataRecovery } from '../src/auth/screens';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -684,4 +685,16 @@ test('unknown legacy demo provenance stops before any account request and preser
  await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.repository).toBe(demo));
  await act(async()=>{expect(await observed.createAccount('synthetic@example.test','synthetic-password','2000-01-01')).toBe('demoCarryUnavailable');});
  expect(fixture.auth.signUp).not.toHaveBeenCalled();expect(demo.wipe).not.toHaveBeenCalled();expect(observed.demo).toBe(true);check.mockReset();
+});
+
+test('account importer maps edge 409 to preview conflict without exposing response payloads', async () => {
+  const repo = fixtureRepo(OWNER_A);
+  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:()=>repo});
+  const fixture = clientFixture();
+  const invoke = jest.fn(async () => ({data:null,error:{context:{status:409},message:'private fixture'}}));
+  Object.defineProperty(fixture.client, 'functions', {value:{invoke}});
+  const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.repository).toBe(repo));
+  await expect(observed.legacyImport?.('commit', {}, OWNER_A)).rejects.toBeInstanceOf(ImportPreviewConflict);
+  await view.unmount();
 });

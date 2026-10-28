@@ -1,4 +1,4 @@
--- DRAFT ONLY. NOT APPLIED. Requires native/server/row-sync/0001 and 0002 first.
+-- DRAFT ONLY. NOT APPLIED. Row import requires native/server/row-sync/0001 and 0002.
 -- HIGH: reviewed rollout ordering is required before any deployment.
 BEGIN;
 CREATE TABLE public.native_pwa_imports (
@@ -12,15 +12,17 @@ REVOKE ALL ON public.native_pwa_imports FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.native_pwa_imports TO authenticated;
 CREATE POLICY own_import ON public.native_pwa_imports FOR SELECT TO authenticated USING(owner_id=auth.uid());
 -- Freeze once under the SAME owner lock as sync_push. No two-way blob bridge.
-CREATE FUNCTION public.native_pwa_snapshot(refresh_expired boolean DEFAULT false) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+CREATE FUNCTION public.native_pwa_snapshot(refresh_expired boolean DEFAULT true) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE owner uuid:=auth.uid(); result jsonb; blob jsonb; photo_rows jsonb;
 BEGIN
  IF owner IS NULL THEN RAISE EXCEPTION 'Sign in required'; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner::text,0));
- IF refresh_expired THEN
-  DELETE FROM public.native_pwa_imports WHERE owner_id=owner AND NOT completed AND created_at < now()-interval '15 minutes';
- END IF;
+ -- Sweep on every preview/commit lookup, including other owners' abandoned archives.
+ -- Completed receipts (including range-purge markers) must never expire.
+ DELETE FROM public.native_pwa_imports WHERE NOT completed AND created_at < now()-interval '15 minutes';
  IF NOT EXISTS(SELECT 1 FROM public.native_pwa_imports WHERE owner_id=owner) THEN
+  -- Commit reads an existing preview only; it must not freeze a new snapshot.
+  IF NOT refresh_expired THEN RETURN NULL; END IF;
   SELECT data INTO blob FROM public.user_data WHERE user_id=owner;
   blob:=coalesce(blob,'{"version":2,"sessions":[],"workouts":[]}'::jsonb);
   -- Freeze only supported account domains; consent, check-ins and Oura never leave this RPC.
@@ -42,10 +44,11 @@ DECLARE owner uuid:=auth.uid(); item jsonb; present boolean; has_home boolean; h
 BEGIN
  IF owner IS NULL THEN RAISE EXCEPTION 'Sign in required'; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner::text,0));
- IF NOT EXISTS(SELECT 1 FROM public.native_pwa_imports WHERE owner_id=owner) THEN RAISE EXCEPTION 'Preview required'; END IF;
+ -- NULL is a preview conflict receipt, allowing the expiry sweep to commit.
+ DELETE FROM public.native_pwa_imports WHERE NOT completed AND created_at < now()-interval '15 minutes';
+ IF NOT EXISTS(SELECT 1 FROM public.native_pwa_imports WHERE owner_id=owner) THEN RETURN NULL; END IF;
  IF (SELECT completed FROM public.native_pwa_imports WHERE owner_id=owner) THEN RETURN false; END IF;
- IF (SELECT created_at < now()-interval '15 minutes' FROM public.native_pwa_imports WHERE owner_id=owner) THEN RAISE EXCEPTION 'Import preview expired'; END IF;
- IF expected_preview IS DISTINCT FROM (SELECT preview_id FROM public.native_pwa_imports WHERE owner_id=owner) THEN RAISE EXCEPTION 'Import preview changed'; END IF;
+ IF expected_preview IS DISTINCT FROM (SELECT preview_id FROM public.native_pwa_imports WHERE owner_id=owner) THEN RETURN NULL; END IF;
  IF jsonb_typeof(rows) IS DISTINCT FROM 'array' OR jsonb_typeof(import_plan) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'Invalid import'; END IF;
  SELECT EXISTS(SELECT 1 FROM public.home_layout WHERE owner_id=owner) INTO has_home;
  SELECT EXISTS(SELECT 1 FROM public.profile WHERE owner_id=owner) INTO has_profile;
@@ -67,12 +70,14 @@ END $$;
 REVOKE ALL ON FUNCTION public.native_pwa_snapshot(boolean),public.native_pwa_commit(jsonb,jsonb,uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.native_pwa_snapshot(boolean),public.native_pwa_commit(jsonb,jsonb,uuid) TO authenticated;
 
--- Optional native integration: row-sync/0002 creates purges outside this
--- migration chain. Legacy range/account deletion uses the privacy RPCs below.
--- When row-sync is installed, invalidate under sync_purge_range's owner lock.
-CREATE FUNCTION public.native_pwa_invalidate_on_purge() RETURNS trigger
+-- Either install order is supported. Row-sync/0002 also installs this function
+-- and always creates the trigger when it creates purges. Legacy privacy RPCs
+-- below work without row-sync. Invalidation uses sync_purge_range's owner lock.
+CREATE OR REPLACE FUNCTION public.native_pwa_invalidate_on_purge() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
+ -- Row-sync may be installed before the importer migration.
+ IF pg_catalog.to_regclass('public.native_pwa_imports') IS NULL THEN RETURN NEW; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text,0));
  INSERT INTO public.native_pwa_imports(owner_id,snapshot,plan,completed)
  VALUES(NEW.owner_id,'{}'::jsonb,NULL,true)
@@ -82,7 +87,7 @@ END $$;
 REVOKE ALL ON FUNCTION public.native_pwa_invalidate_on_purge() FROM PUBLIC,anon,authenticated,service_role;
 DO $$ BEGIN
  IF pg_catalog.to_regclass('public.purges') IS NOT NULL THEN
-  CREATE TRIGGER native_pwa_purge AFTER INSERT ON public.purges
+  CREATE OR REPLACE TRIGGER native_pwa_purge AFTER INSERT ON public.purges
    FOR EACH ROW EXECUTE FUNCTION public.native_pwa_invalidate_on_purge();
  END IF;
 END $$;

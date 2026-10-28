@@ -168,3 +168,21 @@ test("preview carries its UUID back to the client for later confirmation", async
   const response = await request(JSON.stringify({ action: "preview" }));
   expect((await response.json()).plan.previewId).toBe(OWNER_A);
 });
+
+test.each(["Import preview expired", "Import preview changed", "Preview required"])("SQL %s maps to a safe 409", async message => {
+  const { request, rpc } = edge();
+  rpc.mockResolvedValueOnce({data:{snapshot:{blob:legacyV2,photos:[]},completed:false,preview_id:OWNER_A},error:null} as never);
+  rpc.mockResolvedValueOnce({data:null,error:{message}} as never);
+  const response = await request(JSON.stringify({action:"commit",confirmed:true,expected_preview:OWNER_A}));
+  expect(response.status).toBe(409);
+  expect((await response.json()).error).toMatch(/Preview again/);
+});
+
+test.each(["lookup", "commit"])("missing or expired preview at %s maps to 409", async stage => {
+  const { request, rpc } = edge();
+  if (stage === "commit") rpc.mockResolvedValueOnce({data:{snapshot:{blob:legacyV2,photos:[]},completed:false,preview_id:OWNER_A},error:null} as never);
+  rpc.mockResolvedValueOnce({data:null,error:null} as never);
+  const response = await request(JSON.stringify({action:"commit",confirmed:true,expected_preview:OWNER_A}));
+  expect(response.status).toBe(409);
+  expect((await response.json()).error).toMatch(/Preview again/);
+});

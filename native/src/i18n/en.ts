@@ -26,6 +26,7 @@ export const en = {
   importError: 'Import did not finish. Check the file and exercise mappings, then preview again to retry. Your original backup is kept.',
   importDone: 'Backup imported.',
   importPreview: 'Preview import',
+  importPreviewAgain: 'Your import preview expired or changed. Preview again before confirming.',
   importCounts: '{rows} rows found; {existing} already present; {flags} review flags; {removed} rows to replace.',
   importTableCount: '{table}: {count}',
   importFlags: 'Unusual rows are kept with review flags. Legacy details that do not fit a native field stay on this device for review.',

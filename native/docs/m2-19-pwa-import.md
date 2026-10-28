@@ -13,7 +13,7 @@ Photos are metadata only. `downloadImportedPhoto` is a viewer-facing lazy callba
 
 ## Deployment dependency — not performed
 
-`supabase/migrations/20261027190000_pwa_import.sql` depends on the unapplied row-sync schema in `native/server/row-sync/0001_row_sync.sql` and `0002_v1_columns.sql`, plus the existing PWA `user_data` and `progress_photos` tables. Those row-sync drafts are not copied into this migration. A reviewed rollout must establish those prerequisites before the import migration/function. Applying or deploying anything is outside this task; no Supabase CLI was run.
+`supabase/migrations/20261027190000_pwa_import.sql` depends on the unapplied row-sync schema in `native/server/row-sync/0001_row_sync.sql` and `0002_v1_columns.sql`, plus the existing PWA `user_data` and `progress_photos` tables. Those row-sync drafts are not copied into this migration. A reviewed rollout must establish those prerequisites before runtime import use. Fix round 2 supports either SQL install order. Applying or deploying anything is outside this task; no Supabase CLI was run.
 
 Receiving file shares uses SDK 58 expo-sharing CNG configuration. The iOS share extension uses group.com.insightwellness.app; the free-iPhone variant disables that extension. Simulator/Pixel cold/warm share launch and the new document picker need a regenerated development build. No native ios/android files are edited. Reduce Motion uses the existing root Stack configuration; this feature adds no animation.
 
@@ -31,4 +31,22 @@ The edge caps streamed request bodies at 64 KiB (including missing/false Content
 
 The native `purges` table is created by the separate row-sync draft, not by any file in `supabase/migrations`. The importer migration now installs its native purge trigger only when that table exists. The legacy `purge_user_range_rows` and `delete_user_rows` RPCs continue to erase the snapshot and raw plan without requiring row-sync tables. A PGlite regression loads every migration in filename order with CI's Supabase stubs, exercises both privacy RPCs, and verifies that purges before or after a preview prevent refreezing/importing the archive.
 
-Loading the migration chain alone does not enable row import: the reviewed rollout must still install row-sync 0001/0002 first so the importer can use `sync_push` and the native tables, and the native purge trigger is installed. This continuation run on will-worker changes source and tests only.
+Loading the migration chain alone does not enable row import: the reviewed rollout must install row-sync 0001/0002 before runtime import use. Fix round 2 installs the purge trigger in either SQL order. This continuation run on will-worker changes source and tests only.
+
+## Fix round 2 — install order, preview conflicts and expiry sweep
+
+Row-sync 0002 now creates the native purge trigger when it creates `public.purges`.
+The importer migration replaces the same trigger if row-sync was installed first;
+both orders work, and the CI Supabase migration chain remains independent of row-sync.
+The fresh-install RPC tests run the entire Supabase chain before row-sync 0001/0002
+and assert the trigger exists before testing native range purge invalidation.
+Range purge still marks the import completed, including before any preview (R2-4).
+
+`native_pwa_snapshot(true)` previews and freezes a snapshot; `false` only reads an
+existing preview for commit and returns SQL NULL when none is available. Both
+snapshot lookup and commit delete incomplete snapshots older than 15 minutes
+across owners. Completed receipts never expire. Commit returns SQL NULL for a
+missing/expired/replaced preview so the sweep persists instead of rolling back
+with an exception. The edge maps that conflict (and prior SQL preview errors) to
+HTTP 409; native displays the localized Preview again message in an accessible
+alert. No scheduled jobs or remote setup are required. Row-sync remains required before runtime import use.

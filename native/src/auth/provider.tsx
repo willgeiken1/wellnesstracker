@@ -1,3 +1,4 @@
+import { ImportPreviewConflict } from '../features/importer/errors';
 import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
@@ -179,6 +180,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const legacyImport=useCallback(async(action:'preview'|'commit',mapping:Record<string,string>={},previewId?:string):Promise<ImportPlan>=>{
     if(!client||!currentRepo||!userId||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
     const {data,error}=await client.functions.invoke('pwa-import',{body:{action,mapping,expected_preview:previewId,confirmed:action==='commit'}});
+    if(error?.context?.status===409)throw new ImportPreviewConflict();
     if(error||!data?.plan||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
     return data.plan as ImportPlan;
   },[client,currentRepo,userId]);

@@ -25,6 +25,7 @@ import {
   type ImportPlan,
 } from "./local";
 import { pickBackup, readBackup } from "./files";
+import { ImportPreviewConflict } from "./errors";
 const t = (key: MessageKey, values: Record<string, string | number> = {}) =>
   message(key).replace(/\{(\w+)\}/g, (token, key) =>
     String(values[key] ?? token),
@@ -48,6 +49,7 @@ function ImportBody() {
     [server, setServer] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
+    [previewConflict, setPreviewConflict] = useState(false),
     [done, setDone] = useState(false);
   const currentOwner = useRef(repo?.owner);
   useEffect(() => {
@@ -130,9 +132,11 @@ function ImportBody() {
     if (busy) return;
     setBusy(true);
     setError(false);
+    setPreviewConflict(false);
     try {
       await task();
-    } catch {
+    } catch (cause) {
+      setPreviewConflict(cause instanceof ImportPreviewConflict);
       setError(true);
     } finally {
       setBusy(false);
@@ -223,7 +227,7 @@ function ImportBody() {
         )}
         {!auth.session && <ThemedText>{t("importSignedOut")}</ThemedText>}
         {(error || derived.error) && (
-          <ThemedText accessibilityRole="alert">{t("importError")}</ThemedText>
+          <ThemedText accessibilityRole="alert">{t(previewConflict ? "importPreviewAgain" : "importError")}</ThemedText>
         )}
         {invalidMapping && (
           <ThemedText accessibilityRole="alert">

@@ -1,3 +1,4 @@
+import { ImportPreviewConflict } from '../src/features/importer/errors';
 import { Alert } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { ImportScreen } from "../src/features/importer/screen";
@@ -129,5 +130,21 @@ test("account confirmation sends the UUID from the reviewed preview", async () =
     await fireEvent.press(screen.getByRole("button", {name:t("importMerge")}));
     await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
     expect(legacyImport).toHaveBeenLastCalledWith("commit", {}, previewId);
+  } finally { alert.mockRestore(); }
+});
+
+test("expired account preview shows an accessible Preview again message", async () => {
+  const legacyImport = jest.fn(async (action: string) => {
+    if (action === "commit") throw new ImportPreviewConflict();
+    return {version: 1 as const, rows: [], issues: [], unmapped: [], legacy: {}, previewId: "fixture"};
+  });
+  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  try {
+    await wrap({session: {user:{id:"demo"}} as AuthState["session"], legacyImport});
+    await fireEvent.press(screen.getByRole("button", {name:t("importAccount")}));
+    await fireEvent.press(screen.getByRole("button", {name:t("importMerge")}));
+    await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+    expect(screen.getByRole("alert")).toHaveTextContent(t("importPreviewAgain"));
+    expect(screen.queryByText(t("importDone"))).toBeNull();
   } finally { alert.mockRestore(); }
 });

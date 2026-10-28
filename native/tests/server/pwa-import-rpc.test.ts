@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
-import { serverDatabase, asUser } from "./pglite";
+import { migratedDatabase, asUser } from "./pglite";
 import { OWNER_A, OWNER_B, DEVICE_A } from "../../fixtures/sync";
 import { legacyV2 } from "../../fixtures/pwa-import";
 import {
@@ -11,36 +11,16 @@ import {
 import { pwaExerciseBank } from "../../../supabase/functions/_shared/pwa-bank";
 let db: PGlite;
 beforeEach(async () => {
-  db = await serverDatabase();
-  await db.exec(`CREATE TABLE public.user_data(user_id uuid PRIMARY KEY REFERENCES auth.users(id),data jsonb);
- CREATE TABLE public.progress_photos(id text,user_id uuid,path text,taken_at timestamptz,day date,pose text);
- CREATE TABLE public.oura_connections(user_id uuid PRIMARY KEY, connected boolean);
- INSERT INTO public.oura_connections VALUES('${OWNER_A}',true);`);
-  await db.query("INSERT INTO public.user_data VALUES($1,$2)", [
-    OWNER_A,
-    JSON.stringify({ ...legacyV2, restSeconds: 90 }),
+  db = await migratedDatabase();
+  // Real fresh install: all Supabase migrations, then the separate row-sync drafts.
+  for (const file of ["0001_row_sync.sql", "0002_v1_columns.sql"]) {
+    await db.exec(readFileSync(join(__dirname, "../../server/row-sync", file), "utf8"));
+  }
+  await db.query("INSERT INTO auth.users VALUES ($1), ($2)", [OWNER_A, OWNER_B]);
+  await db.query("INSERT INTO public.user_data(user_id,data) VALUES($1,$2)", [
+    OWNER_A, JSON.stringify({ ...legacyV2, restSeconds: 90 }),
   ]);
-  const social = readFileSync(
-    join(
-      __dirname,
-      "../../../supabase/migrations/20261012120000_social_schema.sql",
-    ),
-    "utf8",
-  );
-  await db.exec(
-    social.slice(
-      social.indexOf("create or replace function public.delete_user_rows"),
-    ),
-  );
-  await db.exec(
-    readFileSync(
-      join(
-        __dirname,
-        "../../../supabase/migrations/20261027190000_pwa_import.sql",
-      ),
-      "utf8",
-    ),
-  );
+  await db.query("INSERT INTO public.oura_connections(user_id) VALUES($1)", [OWNER_A]);
 });
 afterEach(async () => {
   await db?.close();
@@ -94,6 +74,7 @@ test("snapshot owner-isolated, frozen once, omits checkins and device settings",
   ).rejects.toThrow();
 });
 test("failed batch rolls back all rows and leaves completion unset", async () => {
+  await snapshot();
   const bad = [...rows(), { ...rows()[0], table: "not_allowed" }];
   await expect(
     asUser(db, OWNER_A, (tx) =>
@@ -152,13 +133,14 @@ test("commit is one transaction, twice adds nothing and Oura stays connected", a
   ).toEqual({ snapshot: {}, plan: null });
   expect(
     (
-      await db.query<{ connected: boolean }>(
-        "SELECT connected FROM public.oura_connections",
+      await db.query<{ user_id: string }>(
+        "SELECT user_id FROM public.oura_connections",
       )
-    ).rows[0].connected,
-  ).toBe(true);
+    ).rows[0].user_id,
+  ).toBe(OWNER_A);
 });
 test("RPCs reject signed-out execution and cross-owner rows", async () => {
+  await snapshot(OWNER_B);
   await expect(
     db.transaction(async (tx) => {
       await tx.exec("SET LOCAL ROLE anon");
@@ -219,7 +201,7 @@ test("account delete explicitly clears archives before auth deletion", async () 
       )
     ).rows,
   ).toHaveLength(0);
-  await expect(commitRows()).rejects.toThrow("Preview required");
+  expect((await commitRows()).rows[0].v).toBeNull();
   expect((await snapshot(OWNER_B)).rows[0].v.completed).toBe(false);
 });
 test("commit refuses snapshots older than fifteen minutes", async () => {
@@ -228,7 +210,7 @@ test("commit refuses snapshots older than fifteen minutes", async () => {
     "UPDATE public.native_pwa_imports SET created_at=now()-interval '16 minutes' WHERE owner_id=$1",
     [OWNER_A],
   );
-  await expect(commitRows()).rejects.toThrow(/expired/i);
+  expect((await commitRows()).rows[0].v).toBeNull();
   expect((await db.query("SELECT * FROM public.sessions")).rows).toHaveLength(
     0,
   );
@@ -302,15 +284,14 @@ test("explicit re-preview replaces an expired archive and refuses its old token"
   await asUser(db, OWNER_A, (tx) =>
     tx.query("SELECT public.native_pwa_snapshot(true)"),
   );
-  await expect(
-    asUser(db, OWNER_A, (tx) =>
-      tx.query("SELECT public.native_pwa_commit($1,$2,$3)", [
+  const stale = await asUser(db, OWNER_A, (tx) =>
+      tx.query<{v: boolean | null}>("SELECT public.native_pwa_commit($1,$2,$3) AS v", [
         JSON.stringify(plan()),
         JSON.stringify(rows()),
         old,
       ]),
-    ),
-  ).rejects.toThrow("preview changed");
+  );
+  expect(stale.rows[0].v).toBeNull();
   expect((await snapshot()).rows[0].v.snapshot.blob).toEqual({
     version: 2,
     sessions: [],
@@ -319,6 +300,9 @@ test("explicit re-preview replaces an expired archive and refuses its old token"
 });
 
 test("native row-range purge also invalidates pending raw archives", async () => {
+  expect((await db.query(`SELECT tgname FROM pg_trigger
+    WHERE tgrelid='public.purges'::regclass AND tgname='native_pwa_purge' AND NOT tgisinternal`)).rows)
+    .toEqual([{ tgname: "native_pwa_purge" }]);
   await snapshot();
   await asUser(db, OWNER_A, (tx) =>
     tx.query(
@@ -348,4 +332,30 @@ test("oversized snapshot is refused before any raw archive is saved", async () =
   expect(
     (await db.query("SELECT * FROM public.native_pwa_imports")).rows,
   ).toHaveLength(0);
+});
+
+test("commit lookup without preview never freezes a new archive", async () => {
+  const result = await asUser(db, OWNER_A, tx => tx.query<{v: unknown}>(
+    "SELECT public.native_pwa_snapshot(false) AS v"));
+  expect(result.rows[0].v).toBeNull();
+  expect((await db.query("SELECT * FROM public.native_pwa_imports")).rows).toEqual([]);
+  expect((await commitRows()).rows[0].v).toBeNull();
+  expect((await db.query("SELECT * FROM public.native_pwa_imports")).rows).toEqual([]);
+});
+
+test.each(["preview", "commit", "stale commit"])("%s sweeps abandoned archives across owners and retains completion markers", async action => {
+  await snapshot();
+  await snapshot(OWNER_B);
+  await db.query("UPDATE public.native_pwa_imports SET created_at=now()-interval '16 minutes' WHERE owner_id=$1", [OWNER_B]);
+  if (action === "preview") await snapshot();
+  else if (action === "commit") await commitRows();
+  else {
+    await db.query("UPDATE public.native_pwa_imports SET created_at=now()-interval '16 minutes' WHERE owner_id=$1", [OWNER_A]);
+    expect((await commitRows()).rows[0].v).toBeNull();
+  }
+  expect((await db.query("SELECT * FROM public.native_pwa_imports WHERE owner_id=$1", [OWNER_B])).rows).toEqual([]);
+  await db.query("SELECT public.purge_user_range_rows($1,'2026-01-02','2026-01-02')", [OWNER_B]);
+  await db.query("UPDATE public.native_pwa_imports SET created_at=now()-interval '16 minutes' WHERE owner_id=$1", [OWNER_B]);
+  await snapshot();
+  expect((await snapshot(OWNER_B)).rows[0].v).toMatchObject({ completed: true, snapshot: {}, plan: null });
 });

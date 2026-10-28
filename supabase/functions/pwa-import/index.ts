@@ -25,6 +25,8 @@ const emptyPlan: ImportPlan = {
   legacy: {},
 };
 class ImportTooLarge extends Error {}
+class PreviewConflict extends Error {}
+const previewErrors = new Set(["Preview required", "Import preview expired", "Import preview changed"]);
 async function requestBody(req: Request) {
   if (Number(req.headers.get("Content-Length")) > MAX_REQUEST_BYTES)
     throw new ImportTooLarge();
@@ -77,6 +79,7 @@ Deno.serve(async (req) => {
       refresh_expired: body.action === "preview",
     });
     if (error?.message === "Import too large") throw new ImportTooLarge();
+    if (previewErrors.has(error?.message ?? "") || (!error && data === null)) throw new PreviewConflict();
     if (error) throw Error();
     if (data.completed) return reply({ plan: emptyPlan, completed: true });
     if (
@@ -148,6 +151,7 @@ Deno.serve(async (req) => {
         expected_preview: body.expected_preview,
         rows,
       });
+      if (previewErrors.has(error?.message ?? "") || (!error && won === null)) throw new PreviewConflict();
       if (error) throw Error();
       // Raw archives are erased atomically in SQL. Only the winner returns its
       // in-memory plan. Retries/other devices receive rows through normal sync.
@@ -155,6 +159,8 @@ Deno.serve(async (req) => {
     }
     return reply({ plan, completed: false });
   } catch (error) {
+    if (error instanceof PreviewConflict)
+      return reply({ error: "Import preview expired or changed. Preview again before confirming." }, 409);
     if (error instanceof ImportTooLarge)
       return reply(
         {
