@@ -2,6 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { OWNER_A, OWNER_B } from "../../fixtures/sync";
+import { asUser } from "./pglite";
 
 test("CI migration chain loads without native row-sync tables and privacy RPCs erase import archives", async () => {
   const db = new PGlite();
@@ -43,9 +44,24 @@ test("CI migration chain loads without native row-sync tables and privacy RPCs e
       .toEqual([{ snapshot: {}, plan: null, completed: true }]);
     expect((await db.query("SELECT completed FROM public.native_pwa_imports WHERE owner_id=$1", [OWNER_B])).rows)
       .toEqual([{ completed: false }]);
+    await asUser(db, OWNER_A, async (tx) => {
+      const receipt = await tx.query<{ v: { completed: boolean; snapshot: unknown; plan: unknown } }>(
+        "SELECT public.native_pwa_snapshot(true) AS v",
+      );
+      expect(receipt.rows[0].v).toMatchObject({ completed: true, snapshot: {}, plan: null });
+      expect((await tx.query("SELECT public.native_pwa_commit('{}','[]',NULL) AS imported")).rows)
+        .toEqual([{ imported: false }]);
+    });
     await db.query("SELECT public.delete_user_rows($1)", [OWNER_B]);
     expect((await db.query("SELECT * FROM public.native_pwa_imports WHERE owner_id=$1", [OWNER_B])).rows)
       .toEqual([]);
+    // A purge before any preview must also prevent refreezing the legacy blob.
+    await db.query("SELECT public.purge_user_range_rows($1,'2026-01-02','2026-01-02')", [OWNER_B]);
+    await asUser(db, OWNER_B, async (tx) => {
+      expect((await tx.query<{ v: { completed: boolean; snapshot: unknown; plan: unknown } }>(
+        "SELECT public.native_pwa_snapshot(true) AS v",
+      )).rows[0].v).toMatchObject({ completed: true, snapshot: {}, plan: null });
+    });
   } finally {
     await db.close();
   }

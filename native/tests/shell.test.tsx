@@ -1,6 +1,6 @@
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
+import { Dimensions, PixelRatio, StyleSheet, Text, View } from 'react-native';
 import type { TestInstance } from 'test-renderer';
 import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
@@ -13,14 +13,15 @@ import Appearance from '../src/features/settings/appearance';
 import AppTabs from '../src/components/app-tabs';
 
 // The native host is unavailable in Jest. Keep the real tab declarations and labels.
+// Keep components outside the hoisted factory: React Compiler can add module imports.
+function mockNativeTabs({ children }: any) { return <View>{children}</View>; }
+function mockTrigger({ children, accessibilityLabel }: any) { return <View accessibilityLabel={accessibilityLabel}>{children}</View>; }
+function mockLabel({ children }: any) { return <Text>{children}</Text>; }
+function mockIcon() { return null; }
 jest.mock('expo-router/native-tabs', () => {
-  const { View, Text } = require('react-native');
-  const NativeTabs = ({ children }: any) => <View>{children}</View>;
-  const Trigger = ({ children, accessibilityLabel }: any) => <View accessibilityLabel={accessibilityLabel}>{children}</View>;
-  Trigger.Label = ({ children }: any) => <Text>{children}</Text>;
-  Trigger.Icon = () => null;
-  NativeTabs.Trigger = Trigger;
-  return { NativeTabs };
+  return { NativeTabs: Object.assign(mockNativeTabs, {
+    Trigger: Object.assign(mockTrigger, { Label: mockLabel, Icon: mockIcon }),
+  }) };
 });
 function ThemeProbe() {
   const { mode, accent, colors } = useTheme();

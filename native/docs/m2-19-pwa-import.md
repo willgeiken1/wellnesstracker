@@ -26,3 +26,9 @@ Both legacy privacy RPCs now handle `native_pwa_imports` under the same owner lo
 Direct authenticated RPC calls remain supported because the edge uses the user's JWT and a publishable key. SQL validates owner identity and rejects nested identity overrides before any existing-row/singleton skip; `sync_push` validates accepted row fields. No service-role client was introduced. This follows the authorization and empty search-path guidance in [Supabase's database-function documentation](https://supabase.com/docs/guides/database/functions).
 
 The edge caps streamed request bodies at 64 KiB (including missing/false Content-Length) and snapshots at 5 MiB, returning HTTP 413 with a payload-free error. SQL also refuses oversized snapshots before saving them. Tests use synthetic fixtures, PGlite/SQLite, and an entirely mocked edge client, including failure after a 100-row SQL batch and after two SQLite writes, then retry and duplicate-commit checks. No remote SQL/function apply or deployment is performed; blocker 1 remains outside scope.
+
+## Fix round 1b — migration-chain compatibility
+
+The native `purges` table is created by the separate row-sync draft, not by any file in `supabase/migrations`. The importer migration now installs its native purge trigger only when that table exists. The legacy `purge_user_range_rows` and `delete_user_rows` RPCs continue to erase the snapshot and raw plan without requiring row-sync tables. A PGlite regression loads every migration in filename order with CI's Supabase stubs, exercises both privacy RPCs, and verifies that purges before or after a preview prevent refreezing/importing the archive.
+
+Loading the migration chain alone does not enable row import: the reviewed rollout must still install row-sync 0001/0002 first so the importer can use `sync_push` and the native tables, and the native purge trigger is installed. This continuation run on will-worker changes source and tests only.
