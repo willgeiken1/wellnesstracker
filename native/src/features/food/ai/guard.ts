@@ -127,10 +127,36 @@ const FOOD_TEXT_HEALTH = [
   /\b(?:medications?|meds|prescri\w*|metformin|insulin|ozempic|wegovy|mounjaro|zepbound|semaglutide|tirzepatide|statins?|atorvastatin|lisinopril|levothyroxine)\b/,
 ];
 
-/* Contiguous stress/mood anywhere, or the letters split by separators when
-   they end the word or carry a known suffix ("m-o-o-dy", "st ressful"). A bare
-   trailing word such as "Moo Daeng" is not a suffix and still passes. */
-const FOOD_TEXT_STRESS_MOOD = /stress|mood|\bs[^a-z0-9]*t[^a-z0-9]*r[^a-z0-9]*e[^a-z0-9]*s[^a-z0-9]*s(?:ed|es|ful|less|ing|or|ors|s|y)?\b|\bm[^a-z0-9]*o[^a-z0-9]*o[^a-z0-9]*d(?:boost|y|ier|iest|iness|ily|ish|s)?\b/;
+/* Contiguous stress/mood anywhere, plus separated spellings. Words are letter
+   runs, so digits and underscores are separators and never count as word
+   characters. Fragments from one word start are joined; the join blocks when
+   it STARTS WITH stress or mood ("m-o-o-dswing", "st ressball", "9m o o d").
+   A join that ends exactly on the term blocks too. With trailing letters it
+   blocks only if every earlier fragment is 1-2 letters, so a whole word such
+   as "Moo Daeng" still passes. */
+const FOOD_TEXT_STRESS_MOOD = /stress|mood/;
+const FOOD_TEXT_STRESS_MOOD_TERMS = ["stress", "mood"];
+
+function separatedStressMood(text: string): boolean {
+  const words = text.split(/[^a-z]+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    for (const term of FOOD_TEXT_STRESS_MOOD_TERMS) {
+      let joined = "";
+      let shortRun = true;
+      for (let j = i; j < words.length; j++) {
+        joined += words[j];
+        if (joined.length < term.length) {
+          if (!term.startsWith(joined)) break;
+          if (words[j].length > 2) shortRun = false;
+          continue;
+        }
+        if (j > i && joined.startsWith(term) && (joined.length === term.length || shortRun)) return true;
+        break;
+      }
+    }
+  }
+  return false;
+}
 
 function foodAiTextForbidden(value: string): boolean {
   const normalized = foodAiNormalize(value);
@@ -147,6 +173,9 @@ function foodAiTextForbidden(value: string): boolean {
     // Match contiguous stress/mood substrings after folding. Bound separated
     // letters to whole words so food names such as "Moo Daeng" still pass.
     if (FOOD_TEXT_STRESS_MOOD.test(folded) || FOOD_TEXT_STRESS_MOOD.test(loweredFolded)) return true;
+    if (separatedStressMood(folded) || separatedStressMood(loweredFolded)) return true;
+    // "weigh7" and "weigh+" are weight; "weigh 7oz" and "steak 7oz" stay separate.
+    if (/weigh[7+]/.test(lowered)) return true;
     const withoutWeightFoods = foodAiSplit(folded).join(" ").replace(FOOD_TEXT_WEIGHT_FOODS, " ");
     // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;

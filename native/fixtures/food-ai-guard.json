@@ -40,15 +40,15 @@
     false
   ],
   [
-    "h\u200brv 45",
+    "h​rv 45",
     false
   ],
   [
-    "mo\u202eod and rice",
+    "mo‮od and rice",
     false
   ],
   [
-    "\uff53\uff54\uff52\uff45\uff53\uff53 9",
+    "ｓｔｒｅｓｓ 9",
     false
   ],
   [
@@ -76,11 +76,11 @@
     false
   ],
   [
-    "\u0455tr\u0435\u0455\u0455 tea",
+    "ѕtrеѕѕ tea",
     false
   ],
   [
-    "m\u043e\u043ed bar",
+    "mооd bar",
     false
   ],
   [
@@ -100,7 +100,7 @@
     false
   ],
   [
-    "we\u200bightloss shake",
+    "we​ightloss shake",
     false
   ],
   [
@@ -112,19 +112,19 @@
     false
   ],
   [
-    "m\u00f8\u00f8d",
+    "møød",
     false
   ],
   [
-    "M\u00d8\u00d8D",
+    "MØØD",
     false
   ],
   [
-    "\ua731\u1d1b\u0280\u1d07\ua731\ua731",
+    "ꜱᴛʀᴇꜱꜱ",
     false
   ],
   [
-    "\u1d0d\u1d0f\u1d0f\u1d05",
+    "ᴍᴏᴏᴅ",
     false
   ],
   [
@@ -140,7 +140,7 @@
     false
   ],
   [
-    "weigh\u1d1bloss shake",
+    "weighᴛloss shake",
     false
   ],
   [
@@ -244,7 +244,7 @@
     false
   ],
   [
-    "Stre\u00df",
+    "Streß",
     false
   ],
   [
@@ -256,11 +256,43 @@
     false
   ],
   [
-    "moo\u0111",
+    "moođ",
     false
   ],
   [
-    "st\u0433ess",
+    "stгess",
+    false
+  ],
+  [
+    "pasta _m_o_o_d_",
+    false
+  ],
+  [
+    "9m o o d",
+    false
+  ],
+  [
+    "m o o d9",
+    false
+  ],
+  [
+    "st-ressfree",
+    false
+  ],
+  [
+    "mo-odswings",
+    false
+  ],
+  [
+    "m-o-o-dswing",
+    false
+  ],
+  [
+    "st ressball",
+    false
+  ],
+  [
+    "my weigh7 is 82",
     false
   ]
 ]
