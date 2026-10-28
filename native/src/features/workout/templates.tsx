@@ -16,6 +16,7 @@ import { RestOptions } from './rest-options';
 import { ExercisePicker } from './picker';
 import { PlansPanel } from '../plans/panel';
 import { PlanStore } from '../plans/store';
+import { PastDayChoice } from './days';
 import { Cardio } from '../cardio/screen';
 export function Workouts() {
   const {
@@ -80,7 +81,7 @@ export function Workouts() {
         setUndo(null);
       })} />}
     </>}
-    {segment === 'history' && <>{store?.history().length === 0 && <ThemedText muted>{t('historyEmpty')}</ThemedText>}{store?.history().map(s => <Button key={s.id} label={`${s.data.name ?? t('workoutName')} · ${s.data.day}`} variant="secondary" onPress={() => router.push({
+    {segment === 'history' && <><PastDayChoice />{store?.history().length === 0 && <ThemedText muted>{t('historyEmpty')}</ThemedText>}{store?.history().map(s => <Button key={s.id} label={`${s.data.name ?? t('workoutName')} · ${s.data.day}${store.edited(s.id) ? ` · ${t('edited')}` : ''}`} variant="secondary" onPress={() => router.push({
         pathname: '/workout/summary',
         params: {
           id: s.id

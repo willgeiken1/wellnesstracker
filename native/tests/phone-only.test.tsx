@@ -51,7 +51,10 @@ test('JSON backup includes guest data and local logger state without account/dem
   const repo = Object.assign(memoryRepository(), { owner: 'guest' });
   repo.save('sessions', { name: 'Synthetic workout' }, 'synthetic-session');
   repo.localSave('active', { session: 'synthetic-session' });
+  repo.localSave('barcode:v1:00000000', {synthetic:true});
+  repo.localSave('barcode:v2', {synthetic:true});
   const backup = JSON.parse(createPhoneBackup(repo));
+  expect(Object.keys(backup.local).some(key=>key.startsWith('barcode:'))).toBe(false);
   expect(backup.format).toBe('insight-phone-only');
   expect(backup.version).toBe(1);
   expect(backup.rows.sessions[0].data.name).toBe('Synthetic workout');

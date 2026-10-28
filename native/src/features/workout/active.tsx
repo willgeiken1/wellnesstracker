@@ -34,10 +34,13 @@ import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
-    { routine } = useLocalSearchParams<{
+    { routine, id, day } = useLocalSearchParams<{
+      id?: string;
+      day?: string;
       routine?: string;
     }>(),
     [error, setError] = useState(false),
+    [pastId, setPastId] = useState<string | null>(null),
     started = useRef(false);
   useEffect(() => {
     let active = true;
@@ -45,7 +48,9 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       if (!active || !store || started.current) return;
       started.current = true;
       try {
-        store.start(routine);
+        if (id) store.beginEditing(id);
+        else if (day) setPastId(store.startPast(day).id);
+        else store.start(routine);
       } catch {
         setError(true);
       }
@@ -53,8 +58,8 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     return () => {
       active = false;
     };
-  }, [store, routine]);
-  const session = store?.active();
+  }, [store, routine, id, day]);
+  const session = id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
   return store && session ? (
     <Logger
       key={session.id}
@@ -92,6 +97,7 @@ function Logger({
   pending: number;
   status: "idle" | "syncing" | "offline";
 }) {
+  const past = store.pastMode(session.id);
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -123,11 +129,12 @@ function Logger({
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState<string[]>([]);
   useEffect(() => {
+    if (past) return;
     const timer = setInterval(() => {
       if (AppState.currentState === "active") setNow(Date.now());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [past]);
   const entries = store.entries(session.id),
     drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
@@ -327,6 +334,11 @@ function Logger({
       ]);
     else save();
   }
+  const confirmRemoveSet = (entryId: string, index: number) =>
+    Alert.alert(t('removeSet'), undefined, [
+      {text:t('cancel'), style:'cancel'},
+      {text:t('remove'), style:'destructive', onPress:() => run(() => store.removeSet(entryId,index))},
+    ]);
   const current = cursor
     ? entries.find((e) => e.id === cursor.entryId)
     : undefined;
@@ -381,7 +393,7 @@ function Logger({
             testID="finish-button"
             label={t("finish")}
             onPress={() => {
-              store.updateTimer({
+              if (!past) store.updateTimer({
                 minimized: true,
               });
               setFinish(true);
@@ -400,10 +412,10 @@ function Logger({
           ]}
         >
           <View style={[layout.row, { gap: 6 }]}>
-            <Line name="clock" size={16} color={colors["text-muted"]} />
+            {!past && <Line name="clock" size={16} color={colors["text-muted"]} />}
             <ThemedText muted style={{ fontSize: 13 }}>
               <ThemedText muted style={{ fontWeight: "700", fontSize: 13 }}>
-                {clock((now - Number(session.data.started_at)) / 1000)}
+                {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
               </ThemedText>{" "}
               · {t("set")} {Math.min(done + 1, total)} {t("of")} {total}
             </ThemedText>
@@ -547,14 +559,14 @@ function Logger({
               {options === e.id && <View style={layout.stack}>
                 <Button label={t('cancel')} variant="secondary" onPress={() => setOptions(null)} />
                 <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} disabled={!store.skipped(e.id) && store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
-                {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => {store.updateTimer({minimized:true}); setReplacement({entryId:e.id,mode}); setPicker(true);}} />)}
+                {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => {if (!past) store.updateTimer({minimized:true}); setReplacement({entryId:e.id,mode}); setPicker(true);}} />)}
                 <Button label={t(store.isUnilateral(e.id) ? 'bilateral' : 'unilateral')} disabled={store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.setUnilateral(e.id, !store.isUnilateral(e.id)))} />
                 <SupersetControls currentId={e.id} items={entries.filter(entry => !store.skipped(entry.id)).map(entry => ({id:entry.id,name:String(entry.data.exercise),group:store.supersetGroup(entry)}))} onLink={ids => run(() => store.linkSuperset(ids))} onUnlink={() => run(() => store.unlinkSuperset(e.id))} />
-                <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />
+                {!past && <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />}
                 <Button label={t('addSet')} variant="secondary" onPress={() => run(() => store.addSet(e.id))} />
                 <Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, -1))} />
                 <Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, 1))} />
-                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),onPress:() => run(() => store.removeExercise(e.id))}])} />
+                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),style:'destructive',onPress:() => run(() => store.removeExercise(e.id))}])} />
               </View>}
               {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
               {!collapsed && !store.skipped(e.id) && (
@@ -635,21 +647,9 @@ function Logger({
                           repsHint={String(store.repRange(e) ? store.suggestion(e).target ?? "" : store.repo.localGet<number>(`target:${e.id}`) ?? previous.find((s) => Number(s.data.position) === i)?.data.reps ?? "")}
                           onEdit={(field) => edit(e.id, i, field)}
                           onDone={() => mark(e, i)}
-                          onRemove={() =>
-                            Alert.alert(t("removeSet"), undefined, [
-                              {
-                                text: t("cancel"),
-                                style: "cancel",
-                              },
-                              {
-                                text: t("remove"),
-                                onPress: () =>
-                                  run(() => store.removeSet(e.id, i)),
-                              },
-                            ])
-                          }
+                          onRemove={() => confirmRemoveSet(e.id,i)}
                         />
-                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => run(() => store.removeSet(e.id,i))} />}
+                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => confirmRemoveSet(e.id,i)} />}
                         {i ===
                           Math.max(
                             0,
@@ -668,7 +668,7 @@ function Logger({
           label={t("addExercise")}
           variant="secondary"
           onPress={() => {
-            store.updateTimer({
+            if (!past) store.updateTimer({
               minimized: true,
             });
             setReplacement(null);
@@ -676,30 +676,30 @@ function Logger({
           }}
         />
       </ScrollView>
-      <RestTimer
+      {!past && <RestTimer
         store={store}
         presentation="mini"
         hidden={!focused || !!cursor || finish || picker}
-      />
+      />}
       <SheetHost
         visible={
           focused && (picker ||
           !!cursor ||
           finish ||
-          (!!store.timer() && !store.timer()!.minimized))
+          (!past && !!store.timer() && !store.timer()!.minimized))
         }
         onClose={() => {
           if (picker) setPicker(false);
           else if (cursor) setCursor(null);
           else if (finish) setFinish(false);
-          else store.updateTimer({ minimized: true });
+          else if (!past) store.updateTimer({ minimized: true });
         }}
       >
-        <RestTimer
+        {!past && <RestTimer
           store={store}
           presentation="sheet"
           hidden={!focused || !!cursor || finish || picker}
-        />
+        />}
         {picker && (
           <ExercisePicker
             store={store}

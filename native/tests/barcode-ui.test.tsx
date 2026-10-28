@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import { AppState, Linking } from 'react-native';
 import { FoodScreen } from '../src/features/food/screen';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
@@ -21,7 +21,7 @@ test('permission is just in time; denied camera retains manual code and food ent
  await fireEvent.press(screen.getByRole('button',{name:'Enter food manually'}));expect(screen.getByLabelText('Food name')).toBeTruthy();expect(mockHttp).not.toHaveBeenCalled();
 });
 test('fan Scan opens camera; torch and barcode callback; cached serving selection reaches editable entry',async()=>{
- const repo=memoryRepository();repo.localSave('barcode:v1:'+code,{food:{name:'Synthetic cereal',energy_kj:418.4,protein_g:0,carbs_g:0,fat_g:0,amount_g:100},servingGrams:40});
+ const repo=memoryRepository();repo.localSave('barcode:v2',{[code]:{fetchedAt:Date.now(),product:{food:{name:'Synthetic cereal',energy_kj:418.4,protein_g:0,carbs_g:0,fat_g:0,amount_g:100},servingGrams:40}}});
  await render(<FoodScreen repository={repo}/>,{wrapper});
  await fireEvent.press(screen.getByRole('button',{name:'More food logging options'}));await fireEvent.press(screen.getByRole('button',{name:'+ Scan'}));
  mockRequest.mockResolvedValue({granted:true});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
@@ -32,16 +32,16 @@ test('fan Scan opens camera; torch and barcode callback; cached serving selectio
  await fireEvent.press(screen.getByRole('button',{name:'Use this food'}));expect(screen.getByLabelText('Calories (kcal)')).toHaveDisplayValue('50');
  expect(mockHttp).not.toHaveBeenCalled();
 });
-test('not-found offers manual or AI placeholder and never sends a photo',async()=>{
- mockHttp.mockResolvedValue({ok:true,status:200,json:async()=>({status:0})});
+test('not-found offers manual entry and hides unavailable AI photo',async()=>{
+ mockHttp.mockResolvedValue({ok:true,status:200,body:{getReader:()=>{let done=false;return {read:async()=>done?{done:true}:(done=true,{done:false,value:new TextEncoder().encode('{"status":0}')}),cancel:jest.fn(),releaseLock:jest.fn()};}}});
  await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
  await fireEvent.changeText(screen.getByLabelText('Barcode number'),code);await fireEvent.press(screen.getByRole('button',{name:'Look up barcode'}));
- expect(screen.getByText('Food not found. Enter it manually or try AI photo.')).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'AI photo'}));expect(screen.getByText('AI photo is not available yet. You can enter food manually now.')).toBeTruthy();expect(mockHttp).toHaveBeenCalledTimes(1);
+ expect(screen.getByText('Food not found. Enter it manually.')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'AI photo'})).toBeNull();expect(mockHttp).toHaveBeenCalledTimes(1);
 });
 
 test('macro calories are opt-in and cancel never logs food',async()=>{
- const repo=memoryRepository();repo.localSave('barcode:v1:'+code,{food:{name:'Synthetic cereal',energy_kj:418.4,protein_g:10,carbs_g:0,fat_g:0,amount_g:100},servingGrams:null});
+ const repo=memoryRepository();repo.localSave('barcode:v2',{[code]:{fetchedAt:Date.now(),product:{food:{name:'Synthetic cereal',energy_kj:418.4,protein_g:10,carbs_g:0,fat_g:0,amount_g:100},servingGrams:null}}});
  await render(<FoodScreen repository={repo}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
  await fireEvent.changeText(screen.getByLabelText('Barcode number'),code);await fireEvent.press(screen.getByRole('button',{name:'Look up barcode'}));
  await fireEvent.press(screen.getByRole('button',{name:'Use macro-based calories'}));
@@ -75,8 +75,41 @@ test('failed lookup can retry and duplicate scanner callbacks send only one requ
  expect(mockHttp).toHaveBeenCalledTimes(1);
  await act(()=>reject(new Error('offline')));
  expect(screen.getByText('Could not look up this barcode. Check the code or connection and try again.')).toBeTruthy();
- mockHttp.mockResolvedValue({ok:true,status:200,json:async()=>({status:0})});
+ mockHttp.mockResolvedValue({ok:true,status:200,body:{getReader:()=>{let done=false;return {read:async()=>done?{done:true}:(done=true,{done:false,value:new TextEncoder().encode('{"status":0}')}),cancel:jest.fn(),releaseLock:jest.fn()};}}});
  await fireEvent.press(screen.getByRole('button',{name:'Look up barcode'}));
  expect(mockHttp).toHaveBeenCalledTimes(2);
- expect(screen.getByText('Food not found. Enter it manually or try AI photo.')).toBeTruthy();
+ expect(screen.getByText('Food not found. Enter it manually.')).toBeTruthy();
+});
+
+test('denied camera offers system Settings',async()=>{
+ const settings=jest.spyOn(Linking,'openSettings').mockResolvedValue();
+ await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
+ mockRequest.mockResolvedValue({granted:false,canAskAgain:false});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Open camera settings'}));expect(settings).toHaveBeenCalledTimes(1);settings.mockRestore();
+});
+test('queued scan after cached lookup settles is ignored; nutrients survive save',async()=>{
+ const repo=memoryRepository();repo.localSave('barcode:v2',{[code]:{fetchedAt:Date.now(),product:{food:{name:'Synthetic cereal',amount_g:100,energy_kj:418.4,protein_g:1,carbs_g:2,fat_g:1,fiber_g:4,sugar_g:5,sodium_mg:200},servingGrams:50}}});
+ await render(<FoodScreen repository={repo}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
+ mockRequest.mockResolvedValue({granted:true});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
+ const scan=mockCameraProps.onBarcodeScanned;await act(async()=>{await scan({data:code,type:'ean13'});});
+ const get=jest.spyOn(repo,'localGet');await act(async()=>{await scan({data:code,type:'ean13'});});expect(get).not.toHaveBeenCalled();
+ await fireEvent.press(screen.getByRole('button',{name:'Use this food'}));
+ expect(screen.getByLabelText('Fiber (g)')).toHaveDisplayValue('2');
+ await fireEvent.press(screen.getByRole('button',{name:/Save to/}));
+ expect(repo.list('food_entries')[0].data).toMatchObject({fiber_g:2,sugar_g:2.5,sodium_mg:100});
+});
+test('unmount aborts lookup and prevents cache writes',async()=>{
+ const repo=memoryRepository();let signal:AbortSignal;
+ mockHttp.mockImplementation((_url,options)=>{signal=options.signal;return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('cancelled')),{once:true}));});
+ const view=await render(<FoodScreen repository={repo}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
+ await fireEvent.changeText(screen.getByLabelText('Barcode number'),code);await fireEvent.press(screen.getByRole('button',{name:'Look up barcode'}));
+ await view.unmount();expect(signal!.aborted).toBe(true);expect(repo.localSnapshot()).toEqual({});
+});
+
+test('UPC-E scan requests expanded UPC-A',async()=>{
+ mockHttp.mockResolvedValue({status:404,ok:false});
+ await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
+ mockRequest.mockResolvedValue({granted:true});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
+ await act(async()=>{await mockCameraProps.onBarcodeScanned({data:'01234505',type:'upc_e'});});
+ expect(mockHttp.mock.calls[0][0]).toContain('/012000003455.json?fields=');
 });

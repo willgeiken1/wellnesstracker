@@ -18,6 +18,8 @@ test('SQLite JSON snapshot includes tombstones, drafts, timer, weekly/milestone 
       for (const table of syncedTables) if (table !== 'purges') repo.putLocal({ ...syntheticRow(table), owner_id: owner });
       for (const key of ['draft:fixture-entry', 'timer', 'weekly', 'milestones']) repo.localSave(key, { syntheticOwner: owner });
     }
+    guest.localSave('barcode:v1:00000000',{synthetic:true});
+    guest.localSave('barcode:v2',{synthetic:true});
     guest.remove('sets', syntheticRow('sets').id, 200);
     const backup = JSON.parse(createPhoneBackup(guest));
     expect(backup.rows.sets[0].deleted_at).toBe(200);
