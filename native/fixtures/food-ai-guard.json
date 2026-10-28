@@ -433,7 +433,7 @@
   ],
   [
     "moo dish",
-    false
+    true
   ],
   [
     "moo ds",
@@ -441,11 +441,11 @@
   ],
   [
     "moo ded",
-    false
+    true
   ],
   [
     "moo des",
-    false
+    true
   ],
   [
     "moo dful",
@@ -457,7 +457,7 @@
   ],
   [
     "moo ding",
-    false
+    true
   ],
   [
     "moo dor",
@@ -622,5 +622,33 @@
   [
     "Moo-Daeng",
     true
+  ],
+  [
+    "m0o0d",
+    false
+  ],
+  [
+    "m0o5d",
+    false
+  ],
+  [
+    "st0r3ss",
+    false
+  ],
+  [
+    "5t0re55",
+    false
+  ],
+  [
+    "we1gh7",
+    false
+  ],
+  [
+    "w31gh7",
+    false
+  ],
+  [
+    "moody-ish",
+    false
   ]
 ]

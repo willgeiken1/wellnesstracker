@@ -517,6 +517,9 @@ const FOOD_TEXT_HEALTH = [
    whole terms plus known suffixes regardless of fragment lengths. Short
    fragments keep the broader prefix rule; "Moo Daeng" still passes. */
 const FOOD_TEXT_STRESS_MOOD = /stress|mood/;
+// Match each letter's fold independently, while digits may also be separators.
+// Spaces stay word breaks; the mood ending must be a whole term or known suffix.
+const FOOD_TEXT_STRESS_MOOD_MIXED = /m[^a-z\s]*[o0][^a-z\s]*[o0][^a-z\s]*d(?=$|[^a-z]|y|ier|iest|ily|iness|ish|s|ed|es|ful|less|ing|or|boost|swing|ball|free)|[s5$][^a-z\s]*[t7+][^a-z\s]*r[^a-z\s]*[e3][^a-z\s]*[s5$][^a-z\s]*[s5$]/;
 const FOOD_TEXT_STRESS_MOOD_TERMS = ["stress", "mood"];
 const FOOD_TEXT_STRESS_MOOD_SUFFIXES = [
   "", "y", "ier", "iest", "ily", "iness", "ish", "s", "ed", "es", "ful", "less",
@@ -529,9 +532,16 @@ function foldStressMood(text: string): string {
 }
 
 function separatedStressMood(text: string): boolean {
-  const words = text.split(/[^a-z]+/).filter(Boolean);
+  const fragments = [...text.matchAll(/[a-z]+/g)];
+  const words = fragments.map(([word]) => word);
   for (let i = 0; i < words.length; i++) {
     for (const term of FOOD_TEXT_STRESS_MOOD_TERMS) {
+      // A space before an ordinary word is not a mood suffix ("moo dish").
+      // Keep punctuation-separated mood spellings and all stress suffixes.
+      const ordinaryMooWord = term === "mood" && words[i] === "moo"
+        && ["dish", "ded", "des", "ding"].includes(words[i + 1])
+        && /^\s+$/.test(text.slice(fragments[i].index + 3, fragments[i + 1].index));
+      if (ordinaryMooWord) continue;
       let joined = "";
       let shortRun = true;
       for (let j = i; j < words.length; j++) {
@@ -562,6 +572,7 @@ function foodAiTextForbidden(value: string): boolean {
   // The stress/mood check also runs on a lowercase copy with no camelCase
   // split, so "MoOdy" is not cut into "mo ody".
   const lowered = foodAiNormalize(value, false);
+  if (FOOD_TEXT_STRESS_MOOD_MIXED.test(lowered)) return true;
   for (const text of [normalized, lowered]) {
     // Keep separator readings, then fold symbols while digits stay separated
     // (st1ress, m0ood, $tre0ss), then apply the full restricted fold.
@@ -575,7 +586,7 @@ function foodAiTextForbidden(value: string): boolean {
       .replace(/1/g, one).replace(/5/g, "s");
     const folded = fold(normalized);
     // "weigh7" and "weigh+" are weight; "weigh 7oz" and "steak 7oz" stay separate.
-    if (/weigh[7+]/.test(lowered)) return true;
+    if (/weigh[7+]/.test(fold(lowered))) return true;
     const withoutWeightFoods = dropWeightFoods(foodAiSplit(folded).join(" "));
     // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;
