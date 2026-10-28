@@ -67,8 +67,9 @@ END $$;
 REVOKE ALL ON FUNCTION public.native_pwa_snapshot(boolean),public.native_pwa_commit(jsonb,jsonb,uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.native_pwa_snapshot(boolean),public.native_pwa_commit(jsonb,jsonb,uuid) TO authenticated;
 
--- Native range deletion uses purges markers rather than the legacy privacy RPC.
--- It must invalidate the same archive while holding sync_purge_range's owner lock.
+-- Optional native integration: row-sync/0002 creates purges outside this
+-- migration chain. Legacy range/account deletion uses the privacy RPCs below.
+-- When row-sync is installed, invalidate under sync_purge_range's owner lock.
 CREATE FUNCTION public.native_pwa_invalidate_on_purge() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
@@ -79,8 +80,12 @@ BEGIN
  RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION public.native_pwa_invalidate_on_purge() FROM PUBLIC,anon,authenticated,service_role;
-CREATE TRIGGER native_pwa_purge AFTER INSERT ON public.purges
- FOR EACH ROW EXECUTE FUNCTION public.native_pwa_invalidate_on_purge();
+DO $$ BEGIN
+ IF pg_catalog.to_regclass('public.purges') IS NOT NULL THEN
+  CREATE TRIGGER native_pwa_purge AFTER INSERT ON public.purges
+   FOR EACH ROW EXECUTE FUNCTION public.native_pwa_invalidate_on_purge();
+ END IF;
+END $$;
 
 -- Extend existing privacy entry points; no SQL or functions applied here.
 create or replace function public.delete_user_rows(p_user uuid)
