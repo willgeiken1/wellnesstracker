@@ -4,7 +4,7 @@ import { OWNER_A, OWNER_B } from '../../fixtures/sync';
 import { syncedTables, canonicalRow, fromWire, type Table, type Row } from '../../src/data/rows';
 import { DEFAULT_SYNC_FLAGS, type SyncFlags } from '../../src/data/sync/flags';
 import type { Transport } from '../../src/data/sync/engine';
-export async function serverDatabase() {
+export async function serverDatabase(applySql?: string) {
   const db = new PGlite();
   await db.exec(`CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
@@ -12,10 +12,13 @@ export async function serverDatabase() {
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
-    INSERT INTO auth.users VALUES ('${OWNER_A}'), ('${OWNER_B}');`);
-  await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0001_row_sync.sql'),'utf8'));
-  await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0002_v1_columns.sql'),'utf8'));
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;`);
+  if (applySql) await db.exec(applySql);
+  else {
+    await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0001_row_sync.sql'),'utf8'));
+    await db.exec(readFileSync(require('node:path').join(__dirname,'../../server/row-sync/0002_v1_columns.sql'),'utf8'));
+  }
+  await db.exec(`INSERT INTO auth.users VALUES ('${OWNER_A}'), ('${OWNER_B}');`);
   return db;
 }
 export async function asUser<T>(db: PGlite, owner: string, operation: (tx: Parameters<Parameters<PGlite['transaction']>[0]>[0]) => Promise<T>): Promise<T> {
