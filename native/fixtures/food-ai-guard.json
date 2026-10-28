@@ -1,0 +1,58 @@
+[
+  [
+    "two eggs and toast",
+    true
+  ],
+  [
+    "rice weighed 150 g",
+    true
+  ],
+  [
+    "weight gainer shake",
+    true
+  ],
+  [
+    "stress and oats",
+    false
+  ],
+  [
+    "mood 4 toast",
+    false
+  ],
+  [
+    "Oura readiness 84 rice",
+    false
+  ],
+  [
+    "sleep_score 81",
+    false
+  ],
+  [
+    "heart rate 55",
+    false
+  ],
+  [
+    "body weight 82 kg",
+    false
+  ],
+  [
+    "blood glucose 90",
+    false
+  ],
+  [
+    "h\u200brv 45",
+    false
+  ],
+  [
+    "mo\u202eod and rice",
+    false
+  ],
+  [
+    "\uff53\uff54\uff52\uff45\uff53\uff53 9",
+    false
+  ],
+  [
+    "temperatureDeviation 0.2",
+    false
+  ]
+]

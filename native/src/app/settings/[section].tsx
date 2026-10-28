@@ -1,3 +1,4 @@
+import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Card } from '@/components/card';
@@ -13,6 +14,7 @@ export default function SettingPlaceholder() {
   const { section } = useLocalSearchParams<{ section: string }>();
   const title = section === 'licenses' ? t('licenses') : t(settingsSections.find(item => item.route === section)?.label ?? 'settings');
   if (Constants.expoConfig?.extra?.phoneOnly === true && ['health', 'notifications'].includes(section)) return <Screen title={title}><ThemedText>Not in this build.</ThemedText></Screen>;
+  if (section === 'privacy') return <FoodPrivacyScreen/>;
   if (section === 'profile') return <Profile/>;
   if (section === 'workout') return <WorkoutSettings/>;
   return <><Stack.Screen options={{ title }} /><Screen><EmptyState title={title}

@@ -4,6 +4,7 @@ import { act, render, fireEvent } from '@testing-library/react-native';
 import RootLayout from '../src/app/_layout';
 import { AuthContext, type AuthState } from '../src/auth/provider';
 jest.mock('expo-router',()=>{const actual=jest.requireActual('expo-router');const Stack=({children}:{children:React.ReactNode})=>children;Stack.Screen=()=>null;Stack.Protected=({children,guard}:{children:React.ReactNode;guard:boolean})=>guard?children:null;return {...actual,Stack,router:{...actual.router,replace:jest.fn()}};});
+jest.mock('expo-network',()=>({getNetworkStateAsync:jest.fn(async()=>({isConnected:false,isInternetReachable:false})),addNetworkStateListener:jest.fn(()=>({remove:jest.fn()}))}));
 jest.mock('expo-font',()=>({useFonts:()=>[true,null]}));
 jest.mock('../src/auth/provider',()=>{
  const actual=jest.requireActual('../src/auth/provider');
