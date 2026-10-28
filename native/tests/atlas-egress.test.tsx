@@ -55,3 +55,23 @@ test('synthetic local log read and every atlas interaction make zero requests or
   for(const log of logs)expect(log).not.toHaveBeenCalled();
  }finally{fetchSpy.mockRestore();if(priorXHR) Object.defineProperty(globalThis,'XMLHttpRequest',priorXHR);else Reflect.deleteProperty(globalThis,'XMLHttpRequest');logs.forEach(log=>log.mockRestore());}
 });
+
+/** There is currently no native telemetry integration. Unlike the PWA, native
+ * cannot record /muscle/<key>, params, screen names or navigation breadcrumbs.
+ * Adding an SDK must replace this gate with tested global scrubbing first. */
+test('native has no Sentry/PostHog SDK or navigation recording hook that can capture muscle routes',()=>{
+ const pkg=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../package.json'),'utf8'));
+ expect(Object.keys({...pkg.dependencies,...pkg.devDependencies}).filter(name=>/sentry|posthog/i.test(name))).toEqual([]);
+ function inspect(dir:string){
+  for(const item of fs.readdirSync(dir,{withFileTypes:true})){
+   const file=path.join(dir,item.name);
+   if(item.isDirectory())inspect(file);
+   else if(/\.tsx?$/.test(file)){
+    const source=fs.readFileSync(file,'utf8');
+    expect(source).not.toMatch(/(?:from\s*|import\s*\(|require\s*\()\s*['"][^'"]*(?:sentry|posthog)/i);
+    expect(source).not.toMatch(/\b(?:Sentry|PostHog|posthog)\s*\.|\b(?:onStateChange|onNavigationStateChange|registerNavigationContainer|captureScreen|usePostHog)\b/);
+   }
+  }
+ }
+ inspect(path.resolve(__dirname,'../src'));
+});

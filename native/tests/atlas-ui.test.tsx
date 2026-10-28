@@ -77,3 +77,25 @@ test('screen readers start in the complete list without needing to navigate SVG'
   expect(screen.queryAllByTestId(/^atlas-path-/)).toHaveLength(0);
  }finally{enabled.mockRestore();}
 });
+
+test('map hit layer expands touch areas without obscuring precise paths and exposes selection',async()=>{
+ await render(<BodyAtlas sessions={sessions} now={now} compact/>,{wrapper});
+ const hits=screen.getAllByTestId(/^atlas-hit-/);
+ expect(hits).toHaveLength(20);
+ for(const hit of hits){
+  expect(hit.props.strokeWidth).toBeGreaterThanOrEqual(44);
+  // Assert the native SVG props after react-native-svg extraction.
+  expect(hit.props.vectorEffect).toBe(1); // non-scaling-stroke enum
+  expect(hit.props.stroke).toEqual({type:0,payload:RN.processColor('transparent')});
+ }
+ await fireEvent.press(screen.getByTestId('atlas-hit-deltAnt'));
+ expect(screen.getByTestId('atlas-path-deltAnt').props.accessibilityState).toEqual({selected:true});
+ expect(screen.getByTestId('atlas-path-pecUpper').props.accessibilityState).toEqual({selected:false});
+ expect(screen.getByText(/list for precise selection/)).toBeTruthy();
+});
+test.each([[24,'1 day ago'],[48,'2 days ago'],[200,'not in the last 7 days']] as const)('last trained %s hours uses a sensible label',async(hours,label)=>{
+ await render(<BodyAtlas sessions={[{at:now-hours*3600000,exercises:[{main:'chest',helpers:[],sets:1}]}]} now={now}/>,{wrapper});
+ await fireEvent.press(screen.getByTestId('atlas-path-pecUpper'));
+ expect(screen.getByText(new RegExp(label))).toBeTruthy();
+ expect(screen.queryByText(/200 hours ago/)).toBeNull();
+});

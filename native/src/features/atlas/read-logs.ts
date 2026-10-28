@@ -19,7 +19,7 @@ function definitions(store: WorkoutStore): Exercise[] {
 export function atlasSessions(store: WorkoutStore | null): AtlasSession[] {
  if (!store) return [];
  const custom=definitions(store);
- return store.history().map(session=>({at:Number(session.data.finished_at),
+ return store.history().filter(session=>typeof session.data.finished_at==='number' && Number.isFinite(session.data.finished_at)).map(session=>({at:Number(session.data.finished_at),
   exercises:store.entries(session.id).map(entry=>{
    const name=String(entry.data.exercise);
    const exercise=custom.find(e=>e.name.toLowerCase()===name.toLowerCase())??exerciseFor(name);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { router } from 'expo-router';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -13,6 +13,8 @@ export default function Page() {
  const {store}=useWorkout();
  const [now,setNow]=useState(Date.now);
  const [section,setSection]=useState('trends');
+ // useWorkout returns a new facade on repository revisions, including history edits.
+ const sessions=useMemo(()=>atlasSessions(store),[store]);
  useEffect(()=>{
   const timer=setInterval(()=>setNow(Date.now()),60000);
   const sub=AppState.addEventListener('change',state=>{if(state==='active') setNow(Date.now());});
@@ -20,7 +22,7 @@ export default function Page() {
  },[]);
  return <Screen title={t('insights')} tabHeader>
   <SegmentedControl label={t('segments')} options={(['trends','recovery','weekly'] as const).map(value=>({value,label:t(value)}))} value={section} onChange={setSection}/>
-  {section==='trends'?<BodyAtlas sessions={atlasSessions(store)} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>:<EmptyState title={t(section==='recovery'?'recovery':'weekly')} action={{label:t('backHome'),onPress:()=>router.navigate('/')}}/>}
+  {section==='trends'?<BodyAtlas sessions={sessions} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>:<EmptyState title={t(section==='recovery'?'recovery':'weekly')} action={{label:t('backHome'),onPress:()=>router.navigate('/')}}/>}
   {section==='trends'&&<Button label={t('backHome')} variant="secondary" onPress={()=>router.navigate('/')}/>}
  </Screen>;
 }

@@ -32,3 +32,23 @@ test('custom lifts attribute locally and rendering never calls the promoting pre
  expect(save).not.toHaveBeenCalled();expect(localSave).not.toHaveBeenCalled();
  prefs.mockRestore();save.mockRestore();localSave.mockRestore();
 });
+
+test('atlasSessions counts only done, positive-rep, non-warmup sets',()=>{
+ const store=new WorkoutStore(memoryRepository()),at=Date.UTC(2026,9,28);
+ const session=store.start(undefined,at);
+ store.addExercise(session.id,'Bench Press',4);
+ jest.spyOn(store,'working').mockReturnValue([
+  {done:true,warmup:false,reps:8}, {done:true,warmup:true,reps:8},
+  {done:true,warmup:false,reps:0}, {done:false,warmup:false,reps:8},
+ ] as ReturnType<WorkoutStore['working']>);
+ store.finish(session.id,{startedAt:at,finishedAt:at+60000,notes:''});
+ expect(atlasSessions(store)).toEqual([{at:at+60000,exercises:[{main:'chest',helpers:expect.any(Array),sets:1}]}]);
+});
+test.each([null,undefined,NaN,''])('atlasSessions skips unfinished or invalid finished_at %s',finished=>{
+ const store=new WorkoutStore(memoryRepository());
+ const session=store.start(undefined,Date.UTC(2026,9,28));
+ const data: Record<string,number|string|null>={...session.data};
+ if(finished===undefined)delete data.finished_at;else data.finished_at=finished;
+ jest.spyOn(store,'history').mockReturnValue([{...session,data}]);
+ expect(atlasSessions(store)).toEqual([]);
+});

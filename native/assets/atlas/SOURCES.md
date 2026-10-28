@@ -6,8 +6,11 @@
 - Stable keys and basic-group mapping: existing repository
   `logger/js/data/body.js` (`ASSETS.advToBasic`, 44 keys). Labels derive from its
   `advGroups`; scientific labels are anatomical terminology in `src/i18n/en.ts`.
-- Sequential blue palette: ColorBrewer Blues color values, Apache-2.0
-  (https://github.com/axismaps/colorbrewer/blob/master/LICENCE.txt). No artwork copied.
+- Light sequential blue palette (#deebf7, #9ecae1, #4292c6, #08519c) and
+  dark-mode #c6dbef: ColorBrewer **Blues**, Cynthia Brewer, Penn State,
+  **Apache-2.0** (https://github.com/axismaps/colorbrewer/blob/master/LICENCE.txt).
+  Dark-mode #263746, #5685a2 and #8dbbd6 are **original adaptations**, not
+  ColorBrewer values. No artwork copied. Attribution is shown in About → Licenses.
 
 `geometry.json` is the canonical vertex/path source. Native reads it directly;
 `logger/js/data/atlas-geometry.js` exports the same object for the live PWA.

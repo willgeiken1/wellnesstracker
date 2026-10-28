@@ -64,8 +64,17 @@ test.each([
     expect(pressables.length).toBeGreaterThan(0);
     for (const node of pressables) {
       if (node.type === 'RNSVGPath') {
-        // react-native-svg Path forwards accessible/label, but does not support role.
+        if (node.props.testID?.startsWith('atlas-hit-')) {
+          // Invisible duplicates expand touch areas; only the visible path is
+          // an accessibility element. The complete list is the precise path.
+          expect(node.props.accessible).not.toBe(true);
+          expect(node.props.strokeWidth).toBeGreaterThanOrEqual(44);
+          expect(screen.getByRole('button', { name: 'Muscle list' })).toBeTruthy();
+          continue;
+        }
         expect(node.props.accessible).toBe(true);
+        expect(node.props.accessibilityRole).toBe('button');
+        expect(typeof node.props.accessibilityState.selected).toBe('boolean');
         expect(screen.getByRole('button', { name: 'Muscle list' })).toBeTruthy();
       } else expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
       expect((node.props.accessibilityLabel ?? textContent(node)).trim().length).toBeGreaterThan(0);

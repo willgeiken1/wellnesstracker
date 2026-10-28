@@ -32,7 +32,8 @@ export function heatmap(sessions: AtlasSession[], now: number): MuscleVolume[] {
 export function rollup(values: MuscleVolume[]) {
  return Object.fromEntries(values.map(v=>[v.group,v.sets]));
 }
-/** ColorBrewer sequential Blues; luminance, exact numbers, and outlines carry meaning.
+/** ColorBrewer Blues with original dark adaptations (see assets/atlas/SOURCES.md).
+ * Luminance, exact numbers, and outlines carry meaning.
  * Recency is an overlay; volume remains visible after the overlay fades. */
 export function heatFill(v: MuscleVolume, dark: boolean) {
  const scale=dark?['#263746','#5685a2','#8dbbd6','#c6dbef']:['#deebf7','#9ecae1','#4292c6','#08519c'];

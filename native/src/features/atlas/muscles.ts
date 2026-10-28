@@ -4,3 +4,5 @@ export const atlasMuscles = source.map(m => ({...m,
  name: en[`atlas_${m.key}` as keyof typeof en],
  scientific: en[`atlasScientific_${m.key}` as keyof typeof en],
 }));
+
+export const muscleByKey = new Map(atlasMuscles.map(m=>[m.key,m]));

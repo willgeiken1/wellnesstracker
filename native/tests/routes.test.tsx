@@ -18,6 +18,7 @@ import WorkoutLayout from '../src/app/workout/_layout';
 import Workout from '../src/app/workout/index';
 import Start from '../src/app/workout/start';
 import FoodLog from '../src/app/food/log';
+import MusclePage from '../src/app/muscle/[key]';
 
 // Exercise real routing with the JS fallback; native tab declarations are covered separately.
 const routes = {
@@ -28,7 +29,7 @@ const routes = {
   'settings/_layout': SettingsLayout, 'settings/index': Settings,
   'settings/appearance': Appearance, 'settings/[section]': Section,
   'workout/_layout': WorkoutLayout, 'workout/index': Workout, 'workout/start': Start,
-  'food/log': FoodLog,
+  'food/log': FoodLog, 'muscle/[key]': MusclePage,
 };
 
 test('Home opens the workout modal and provides a working exit', async () => {
@@ -98,4 +99,14 @@ test.each(['/', '/settings', '/settings/appearance'])('rendered shell at %s labe
     expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
     expect((node.props.accessibilityLabel ?? text(node)).trim().length).toBeGreaterThan(0);
   }
+});
+
+test('Licenses credits the ColorBrewer Blues palette',async()=>{
+ await renderRouter(routes,{initialUrl:'/settings/licenses'});
+ expect(screen.getByText(/ColorBrewer Blues.*Cynthia Brewer.*Penn State.*Apache-2.0/)).toBeTruthy();
+});
+test('unknown muscle route offers a friendly not-found message',async()=>{
+ await renderRouter(routes,{initialUrl:'/muscle/unknown'});
+ expect(screen.getByText('Muscle not found. Choose a muscle from the map or list.')).toBeTruthy();
+ expect(screen.queryByText('More muscle details are coming in a later version.')).toBeNull();
 });
