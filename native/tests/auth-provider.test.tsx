@@ -401,9 +401,9 @@ test('screen and provider share one pre-sync: warning and confirmed departure fi
  try {
   await fireEvent.press(view.getByRole('button',{name:'Sign out'}));
   await act(async()=>{jest.advanceTimersByTime(9999);});expect(alert).not.toHaveBeenCalled();
-  await act(async()=>{jest.advanceTimersByTime(1);});expect(alert).toHaveBeenCalledTimes(1);
+  await act(async()=>{jest.advanceTimersByTime(1);});expect(view.getByRole('button',{name:'Sign out anyway'})).toBeTruthy();
   expect(Date.now()-started).toBeLessThanOrEqual(10000);
-  await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
+  await fireEvent.press(view.getByRole('button',{name:'Sign out anyway'}));
   expect(a.wipe).toHaveBeenCalledTimes(1);expect(observed.session).toBeNull();
   expect(sync).toHaveBeenCalledTimes(1);expect(Date.now()-started).toBeLessThanOrEqual(10000);
  } finally {sync.mockRestore();alert.mockRestore();await view.unmount();jest.useRealTimers();}

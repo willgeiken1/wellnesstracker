@@ -1,3 +1,4 @@
+import { MAX_LOSING_VERSIONS, LOSING_VERSION_TTL_MS, losingVersionKey, type LosingVersion } from './losing-version';
 import { matchesPurge, purgeTombstone } from './purges';
 import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
@@ -238,12 +239,14 @@ export class Repository {
         const local = this.get(item.row.table,item.row.id);
         // Only replace the exact sent revision. Edits committed during upload survive.
         if (remote && local && revision(local) === item.revision) {
+          this.retainLosingVersion(local,remote);
           this.write(canonicalRow(mergeSyncRow(remote,local,this.syncFlags)));
           correctedClock ||= remote.updated_at < local.updated_at;
           this.setState('clock',String(Math.max(Number(this.state('clock') ?? 0),remote.updated_at)));
         }
         this.db.run(sql`DELETE FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${item.row.table} AND row_id=${item.row.id} AND revision=${item.revision}`);
       }
+      this.applyPurges();
       if (correctedClock) {
         // Every other local revision (including unsent edits) still contributes.
         const clock = Math.max(0, ...syncedTables.map(name => Number(this.db.get<{stamp:number}>(sql`SELECT max(updated_at) AS stamp FROM ${this.table(name)} WHERE owner_id=${this.owner}`)?.stamp ?? 0)));
@@ -251,6 +254,63 @@ export class Repository {
       }
     }));
     this.notify();
+  }
+  /** Lazy expiry also physically removes stale payloads whenever sync/recovery is used. */
+  losingVersions(now = Date.now()): LosingVersion[] {
+    return this.safe(() => {
+      const versions = this.db.all<{key:string;value:string}>(sql`SELECT key,value FROM sync_state WHERE owner_id=${this.owner} AND key LIKE 'losing:%' ORDER BY key`);
+      const retained: LosingVersion[] = [];
+      for (const item of versions) {
+        try {
+          const value = JSON.parse(item.value) as LosingVersion;
+          validateRow(value?.row);
+          if (value.row.owner_id !== this.owner || value.row.device_id !== this.device ||
+              value.row.deleted_at !== null || value.row.table === 'purges' ||
+              item.key !== losingVersionKey(value.row) ||
+              !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= now ||
+              typeof value.winningRevision !== 'string') throw new Error('Invalid recovery copy.');
+          const [stamp, device, extra] = value.winningRevision.split(':');
+          if (extra !== undefined || String(Number(stamp)) !== stamp) throw new Error('Invalid winning revision.');
+          validateRow({...value.row,updated_at:Number(stamp),device_id:device});
+          retained.push({...value,key:item.key});
+        } catch {
+          // Isolate corrupt/legacy entries so sync and deletion can still commit.
+          this.dropLosingVersion(item.key);
+        }
+      }
+      // Expiry records capture time, unlike the losing edit's author timestamp.
+      retained.sort((a,b) => b.expiresAt-a.expiresAt || b.row.updated_at-a.row.updated_at || a.key.localeCompare(b.key));
+      for (const value of retained.splice(MAX_LOSING_VERSIONS)) this.dropLosingVersion(value.key);
+      return retained;
+    });
+  }
+  private dropLosingVersion(key: string) {
+    this.db.run(sql`DELETE FROM sync_state WHERE owner_id=${this.owner} AND key=${key}`);
+  }
+  private retainLosingVersion(local: Row, remote: Row) {
+    this.losingVersions();
+    // A synced local row is ordinary history, even if another phone replaces it.
+    const pending = this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${local.table} AND row_id=${local.id} AND revision=${revision(local)}`);
+    // Deletions/purges must never leave a restorable copy behind.
+    if (!pending || local.deleted_at !== null || remote.deleted_at !== null || local.table === 'purges' ||
+        local.device_id !== this.device || remote.device_id === this.device ||
+        Object.entries(projectSyncRow(local,this.syncFlags).data).every(([key,value]) => value === (remote.data[key] ?? null))) return;
+    const key = losingVersionKey(local);
+    // A replay cannot extend the seven-day deadline.
+    if (!this.state(key)) this.setState(key,JSON.stringify({row:local,winningRevision:revision(remote),expiresAt:Date.now()+LOSING_VERSION_TTL_MS}));
+    this.losingVersions();
+  }
+  /** Restore is an explicit new local edit, so normal LWW and outbox rules still apply. */
+  restoreLosingVersion(key: string, now = Date.now()): boolean {
+    const saved = this.losingVersions(now).find(version => version.key === key);
+    if (!saved || saved.row.owner_id !== this.owner || !this.syncTables().includes(saved.row.table)) return false;
+    const current = this.get(saved.row.table,saved.row.id);
+    if (!current || current.deleted_at !== null || revision(current) !== saved.winningRevision) return false;
+    this.atomic(() => {
+      this.save(saved.row.table,saved.row.data,saved.row.id,now);
+      this.dropLosingVersion(key);
+    });
+    return true;
   }
   private dormantKey(table: Table, id: string) { return `dormant-v1:${table}:${id}`; }
   private dormantFields(table: Table, id: string): readonly string[] | undefined {
@@ -306,6 +366,8 @@ export class Repository {
         const hydrate = local && this.syncFlags.syncedV1Columns && (dormant ||
           (order === 0 && !this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name=${table} AND row_id=${row.id}`)));
         if (order > 0) {
+          // retainLosingVersion requires this exact local revision in the outbox.
+          if (local) this.retainLosingVersion(local,row);
           this.write(canonicalPulledRow(mergeSyncRow(row,local,this.syncFlags)));
           // An OFF merge retains local gated values even when the server base
           // wins. Mark them regardless of an older ON revision in the outbox.
@@ -339,6 +401,12 @@ export class Repository {
   /** Within the caller's transaction. Children must be wiped before references. */
   private applyPurges() {
     const markers=this.list('purges').sort((a,b)=>compareRows(b,a));
+    for (const saved of this.losingVersions()) {
+      const current = this.get(saved.row.table,saved.row.id);
+      if (current?.deleted_at !== null || markers.some(marker => matchesPurge(saved.row,marker,(table,id)=>this.get(table,id)))) {
+        this.dropLosingVersion(saved.key);
+      }
+    }
     for (const marker of markers) {
       for (const table of ['sets','entries','sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days','photos'] as const) {
         for (const row of this.list(table)) {
