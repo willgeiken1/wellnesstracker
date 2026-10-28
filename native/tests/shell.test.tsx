@@ -16,10 +16,12 @@ import AppTabs from '../src/components/app-tabs';
 
 // The native host is unavailable in Jest. Keep the real tab declarations and labels.
 jest.mock('expo-router/native-tabs', () => {
+  const React = require('react');
   const { View, Text } = require('react-native');
-  const NativeTabs = ({ children }: any) => <View>{children}</View>;
-  const Trigger = ({ children, accessibilityLabel }: any) => <View accessibilityLabel={accessibilityLabel}>{children}</View>;
-  Trigger.Label = ({ children }: any) => <Text>{children}</Text>;
+  // Keep mock factories self-contained under Jest hoisting and React Compiler.
+  const NativeTabs = ({ children }: any) => React.createElement(View, null, children);
+  const Trigger = ({ children, accessibilityLabel }: any) => React.createElement(View, { accessibilityLabel }, children);
+  Trigger.Label = ({ children }: any) => React.createElement(Text, null, children);
   Trigger.Icon = () => null;
   NativeTabs.Trigger = Trigger;
   return { NativeTabs };

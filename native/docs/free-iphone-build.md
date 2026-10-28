@@ -136,8 +136,10 @@ immediately after renewal. After any clean prebuild, reselect the Personal Team.
 - [ ] **App lock:** record **blocked/not implemented** for app-level biometric/PIN
   lock in this checkout. Separately test ordinary iPhone lock/unlock persistence;
   that does not establish an app privacy lock.
-- [ ] **Barcode:** record **blocked/not implemented**; food logging is a placeholder
-  and no scanner/camera module is installed. Do not mark barcode as passed.
+- [ ] **Barcode (M2-14):** rebuild with Expo Camera, choose Food → Scan → Open
+  barcode camera, and check permission denial/manual entry, scanning and torch.
+  Verify serving selection and a cached code lookup in Airplane Mode. Device QA
+  remains unverified until these checks are recorded.
 - [ ] **Capabilities:** Health/Notifications show “Not in this build”; no permission
   prompt/crash. Inspect signing has no unsupported entitlements or extension.
 - [ ] **Backup/renewal:** verify saved JSON, renew in place and confirm logs remain.

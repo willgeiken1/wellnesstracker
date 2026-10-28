@@ -19,7 +19,7 @@ export const en = {
   barcodeUseLabel: 'Use label calories', barcodeUseMacros: 'Use macro-based calories',
   barcodeChoose: 'Use this food', barcodeAgain: 'Look up another barcode',
   barcodeManual: 'Enter food manually', barcodeAI: 'AI photo',
-  barcodeAILater: 'AI photo arrives in M2-16. You can enter food manually now.',
+  barcodeAILater: 'AI photo is not available yet. You can enter food manually now.',
   foodScan: 'Scan', foodManual: 'Manual', foodSaved: 'Saved',
   foodLater: '{method} arrives in a later step.', foodFan: 'More food logging options',
   foodName: 'Food name', foodCalories: 'Calories (kcal)', foodProtein: 'Protein (g)', foodCarbs: 'Carbs (g)', foodFat: 'Fat (g)',

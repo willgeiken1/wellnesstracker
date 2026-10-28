@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { AppState } from 'react-native';
 import { FoodScreen } from '../src/features/food/screen';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
 const mockRequest=jest.fn();let mockGranted=false;
 let mockCameraProps:Record<string,any>={};
 jest.mock('expo-camera',()=>({useCameraPermissions:()=>[{granted:mockGranted},mockRequest],CameraView:(props:Record<string,any>)=>{mockCameraProps=props;return null;}}));
-jest.mock('@react-native-picker/picker',()=>{const {View}=require('react-native');const Picker=(props:any)=><View {...props}/>;Picker.Item=()=>null;return {Picker};});
+jest.mock('@react-native-picker/picker',()=>{const React=require('react');const {View}=require('react-native');const Picker=(props:any)=>React.createElement(View,props);Picker.Item=()=>null;return {Picker};});
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
 const code='0000000000017';
 const originalFetch=global.fetch;
@@ -36,7 +37,7 @@ test('not-found offers manual or AI placeholder and never sends a photo',async()
  await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
  await fireEvent.changeText(screen.getByLabelText('Barcode number'),code);await fireEvent.press(screen.getByRole('button',{name:'Look up barcode'}));
  expect(screen.getByText('Food not found. Enter it manually or try AI photo.')).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'AI photo'}));expect(screen.getByText('AI photo arrives in M2-16. You can enter food manually now.')).toBeTruthy();expect(mockHttp).toHaveBeenCalledTimes(1);
+ await fireEvent.press(screen.getByRole('button',{name:'AI photo'}));expect(screen.getByText('AI photo is not available yet. You can enter food manually now.')).toBeTruthy();expect(mockHttp).toHaveBeenCalledTimes(1);
 });
 
 test('macro calories are opt-in and cancel never logs food',async()=>{
@@ -47,4 +48,35 @@ test('macro calories are opt-in and cancel never logs food',async()=>{
  expect(screen.getByText('Using macro-based calories. You can switch back to the label value.')).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Use this food'}));expect(screen.getByLabelText('Calories (kcal)')).toHaveDisplayValue('40');
  await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));expect(repo.list('food_entries')).toHaveLength(0);
+});
+
+test('backgrounding releases the camera and resets the torch',async()=>{
+ const listener=AppState.addEventListener as jest.Mock;
+ await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
+ mockRequest.mockResolvedValue({granted:true});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Turn torch on'}));
+ const onChange=listener.mock.calls.filter(([event])=>event==='change').at(-1)![1];
+ await act(()=>onChange('background'));
+ expect(screen.queryByRole('button',{name:'Turn torch off'})).toBeNull();
+ await act(()=>onChange('active'));
+ await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
+ expect(mockCameraProps.enableTorch).toBe(false);
+});
+
+test('failed lookup can retry and duplicate scanner callbacks send only one request',async()=>{
+ let reject!:(error:Error)=>void;
+ mockHttp.mockImplementationOnce(()=>new Promise((_,fail)=>{reject=fail;}));
+ await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
+ mockRequest.mockResolvedValue({granted:true});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
+ const scan=mockCameraProps.onBarcodeScanned;
+ await act(()=>{scan({data:code});scan({data:code});});
+ expect(mockHttp).toHaveBeenCalledTimes(1);
+ await act(()=>reject(new Error('offline')));
+ expect(screen.getByText('Could not look up this barcode. Check the code or connection and try again.')).toBeTruthy();
+ mockHttp.mockResolvedValue({ok:true,status:200,json:async()=>({status:0})});
+ await fireEvent.press(screen.getByRole('button',{name:'Look up barcode'}));
+ expect(mockHttp).toHaveBeenCalledTimes(2);
+ expect(screen.getByText('Food not found. Enter it manually or try AI photo.')).toBeTruthy();
 });

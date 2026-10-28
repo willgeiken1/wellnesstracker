@@ -44,3 +44,20 @@ test('missing nutrients stay unknown and volume servings are not treated as gram
  expect(result!.servingGrams).toBeNull();expect(result!.food.energy_kj).toBeNull();expect(result!.food.protein_g).toBeNull();
  expect(calorieMismatch(result!.food).mismatch).toBe(false);
 });
+
+test.each(['40', '40.5'])('OFF numeric-string gram serving %s is available in the dropdown',async quantity=>{
+ const http=jest.fn().mockResolvedValue({ok:true,status:200,json:async()=>({status:1,product:{...product,serving_quantity:quantity}})});
+ const result=await lookupBarcode(memoryRepository(),code,http);
+ expect(result!.servingGrams).toBe(Number(quantity));
+ expect(scannedPortion(result!,result!.servingGrams!,false).amount_g).toBe(Number(quantity));
+});
+
+test.each(['', ' ', '40 ml', 'Infinity', '-1', '0', '0x28'])('invalid serving quantity %s stays unknown',async quantity=>{
+ const http=jest.fn().mockResolvedValue({ok:true,status:200,json:async()=>({status:1,product:{...product,serving_quantity:quantity}})});
+ expect((await lookupBarcode(memoryRepository(),code,http))!.servingGrams).toBeNull();
+});
+
+test('explicit volume unit is never overridden by contradictory serving text',async()=>{
+ const http=jest.fn().mockResolvedValue({ok:true,status:200,json:async()=>({status:1,product:{...product,serving_quantity_unit:'ml'}})});
+ expect((await lookupBarcode(memoryRepository(),code,http))!.servingGrams).toBeNull();
+});

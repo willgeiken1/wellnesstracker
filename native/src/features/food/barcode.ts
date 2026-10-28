@@ -25,8 +25,11 @@ function parseProduct(value:unknown):ScannedFood|null {
   const food:Food={name:p.product_name.slice(0,200),amount_g:100,energy_kj:kcal===null?number('energy_100g'):kcal*4.184,
     protein_g:number('proteins_100g'),carbs_g:number('carbohydrates_100g'),fat_g:number('fat_100g'),fiber_g:number('fiber_100g'),sugar_g:number('sugars_100g'),sodium_mg:sodium===null?null:sodium*1000};
   // Never interpret a volume serving as grams. Only explicit gram quantities are supported.
-  const grams=typeof p.serving_quantity==='number'&&p.serving_quantity>0&&Number.isFinite(p.serving_quantity)&&
-    (p.serving_quantity_unit==='g'||(typeof p.serving_size==='string'&&/^\s*\d+(?:\.\d+)?\s*g\s*$/i.test(p.serving_size)))?p.serving_quantity:null;
+  // OFF's schema permits a numeric string for the normalized quantity.
+  const quantity=typeof p.serving_quantity==='string'&&/^\d+(?:\.\d+)?$/.test(p.serving_quantity.trim())
+    ?Number(p.serving_quantity):p.serving_quantity;
+  const grams=typeof quantity==='number'&&quantity>0&&Number.isFinite(quantity)&&
+    (p.serving_quantity_unit==='g'||(p.serving_quantity_unit==null&&typeof p.serving_size==='string'&&/^\s*\d+(?:\.\d+)?\s*g\s*$/i.test(p.serving_size)))?quantity:null;
   return {food,servingGrams:grams};
 }
 export async function lookupBarcode(repo:Repository,code:string,http:typeof expoFetch=expoFetch):Promise<ScannedFood|null> {
