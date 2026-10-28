@@ -9,7 +9,7 @@
   ],
   [
     "weight gainer shake",
-    true
+    false
   ],
   [
     "stress and oats",
@@ -157,11 +157,11 @@
   ],
   [
     "weight gainers shake",
-    true
+    false
   ],
   [
     "Weight Watchers bar",
-    true
+    false
   ],
   [
     "rice 150 g",
@@ -294,5 +294,37 @@
   [
     "my weigh7 is 82",
     false
+  ],
+  [
+    "diet weight gainer",
+    false
+  ],
+  [
+    "weight gainers",
+    false
+  ],
+  [
+    "weight watchers meal",
+    false
+  ],
+  [
+    "weight gainer",
+    true
+  ],
+  [
+    "weight watchers",
+    true
+  ],
+  [
+    "  Weight Gainer  ",
+    true
+  ],
+  [
+    "WEIGHT WATCHERS",
+    true
+  ],
+  [
+    " weight watchers",
+    true
   ]
 ]

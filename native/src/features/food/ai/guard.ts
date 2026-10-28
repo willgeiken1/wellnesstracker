@@ -81,8 +81,11 @@ function foodAiForbidden(value: string): boolean {
 const FILLER = "(?: (?:is|was|of|at|in|about|around|roughly|approx|approximately|like|maybe|now|today))*";
 const BODY_UNIT = "(?:lbs?|pounds?|kgs?|kilos?|kilograms?|st|stones?)";
 
-/* "weight" passes only inside these food names. Anywhere else it still blocks. */
+/* "weight" passes only when the whole item name is exactly one of these food
+   names (after trim and lowercase). Any other text containing them blocks. */
 const FOOD_TEXT_WEIGHT_FOODS = /\bweight (?:gainers?|watchers)\b/g;
+const FOOD_TEXT_MEAL_MARKER = "The meal: ";
+const FOOD_TEXT_WEIGHT_FOOD_EXACT = /^weight (?:gainer|watchers)$/;
 /* A body unit after a food name reads as a body weight, attached (82kg, 13st)
    or not. Up to three words may sit between them, but not across a list
    separator or a joining word, so "weight gainer tub, brisket 20 lb" and
@@ -159,6 +162,11 @@ function separatedStressMood(text: string): boolean {
 }
 
 function foodAiTextForbidden(value: string): boolean {
+  // The item name is whatever follows the first "The meal: " marker, or the whole text.
+  const markerAt = value.indexOf(FOOD_TEXT_MEAL_MARKER);
+  const itemName = markerAt < 0 ? value : value.slice(markerAt + FOOD_TEXT_MEAL_MARKER.length);
+  const exactWeightFood = FOOD_TEXT_WEIGHT_FOOD_EXACT.test(itemName.trim().toLowerCase());
+  const dropWeightFoods = (text: string) => exactWeightFood ? text.replace(FOOD_TEXT_WEIGHT_FOODS, " ") : text;
   const normalized = foodAiNormalize(value);
   // Fold leetspeak only for guarded terms; preserve quantities for mass checks.
   // Try both readings of 1. Remove permitted food phrases before joining separators.
@@ -176,7 +184,7 @@ function foodAiTextForbidden(value: string): boolean {
     if (separatedStressMood(folded) || separatedStressMood(loweredFolded)) return true;
     // "weigh7" and "weigh+" are weight; "weigh 7oz" and "steak 7oz" stay separate.
     if (/weigh[7+]/.test(lowered)) return true;
-    const withoutWeightFoods = foodAiSplit(folded).join(" ").replace(FOOD_TEXT_WEIGHT_FOODS, " ");
+    const withoutWeightFoods = dropWeightFoods(foodAiSplit(folded).join(" "));
     // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;
   }
@@ -185,7 +193,7 @@ function foodAiTextForbidden(value: string): boolean {
   if (bodyMass(packed)) return true;
   if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(packed)) return true;
   const words = foodAiSplit(packed).join(" ");
-  const tokens = words.replace(FOOD_TEXT_WEIGHT_FOODS, " ").split(" ").filter(Boolean);
+  const tokens = dropWeightFoods(words).split(" ").filter(Boolean);
   if (FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens)) return true;
   const stripped = tokens.join(" ");
   return FOOD_TEXT_HEALTH.some((re) => re.test(stripped));
