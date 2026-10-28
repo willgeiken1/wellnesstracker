@@ -91,3 +91,18 @@ test('switching setup units clears invalid numeric fields before display', async
   expect(screen.getByLabelText('Step (kg)').props.value).toBe('');
   expect(screen.getByLabelText('Bar weight (kg)').props.value).toBe('');
 });
+
+test('custom Other uses the accessible setup Step for keypad plus and minus', async () => {
+  const store = new WorkoutStore(memoryRepository()), name = 'Synthetic weighted Other';
+  store.preferences().saveCustom({name, main:'quads', helpers:[], equipment:'other'});
+  const view = await render(<MachineSetup store={store} name={name} />, {wrapper});
+  await fireEvent.press(screen.getByRole('button', {name:'Machine setup'}));
+  await fireEvent.changeText(screen.getByLabelText('Step (lb)'), '2.5');
+  await fireEvent.press(screen.getByRole('button', {name:'Save setup'}));
+  const change = jest.fn(), preferences = store.preferences();
+  await view.rerender(<Keypad label={name} field="weight" equipment={preferences.exercise(name).equipment} unit="lb" value="100" previous="" setupStep={preferences.increment(name,'lb')} onChange={change} onNext={() => {}} onClose={() => {}} />);
+  await fireEvent.press(screen.getByRole('button', {name:'+2.5'}));
+  expect(change).toHaveBeenLastCalledWith('102.5');
+  await fireEvent.press(screen.getByRole('button', {name:'−2.5'}));
+  expect(change).toHaveBeenLastCalledWith('97.5');
+});

@@ -40,19 +40,47 @@
     false
   ],
   [
-    "h\u200brv 45",
+    "h​rv 45",
     false
   ],
   [
-    "mo\u202eod and rice",
+    "mo‮od and rice",
     false
   ],
   [
-    "\uff53\uff54\uff52\uff45\uff53\uff53 9",
+    "ｓｔｒｅｓｓ 9",
     false
   ],
   [
     "temperatureDeviation 0.2",
+    false
+  ],
+  [
+    "stressed cookies",
+    false
+  ],
+  [
+    "Stressless bar",
+    false
+  ],
+  [
+    "moodboost latte",
+    false
+  ],
+  [
+    "s-t-r-e-s-s tea",
+    false
+  ],
+  [
+    "sTrEsS tea",
+    false
+  ],
+  [
+    "ѕtrеѕѕ tea",
+    false
+  ],
+  [
+    "mооd bar",
     false
   ]
 ]

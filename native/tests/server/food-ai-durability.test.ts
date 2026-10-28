@@ -33,6 +33,7 @@ test("offline queue and quota survive loss of every handle, drain after disk reo
       device = first.repo.device;
     const repo = new Repository(first.db, owner, device, randomUUID);
     setConsent(repo, true);
+    setThumbnails(repo, true);
     new FoodAiService(repo).enqueue(
       { jpeg: "YWJj", thumbnail: "dGh1bWI=" },
       "2026-10-27",

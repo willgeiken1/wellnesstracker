@@ -15,6 +15,9 @@ export interface Photo {
   thumbnail?: string;
 }
 interface Job extends Photo {
+  expiresAt: number;
+  attempts: number;
+  nextAttemptAt: number;
   id: number;
   day: string;
   meal: string;
@@ -28,6 +31,7 @@ interface Ready {
 }
 export interface AiState {
   consent: boolean;
+  consentVersion: number;
   generation: number;
   thumbnails: boolean;
   sequence: number;
@@ -38,13 +42,33 @@ export interface AiState {
   entries: Record<string, { confirmed: boolean; thumbnail?: string }>;
   reviewed: string[];
 }
+export const FOOD_AI_CONSENT_VERSION = 1;
+export const PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
 const key = "foodAi";
+function entriesWithoutThumbnails(entries: AiState["entries"]): AiState["entries"] {
+  return Object.fromEntries(
+    Object.entries(entries).map(([id, item]) => [id, { confirmed: item.confirmed }]),
+  );
+}
 export function aiState(repo: Repository): AiState {
-  return (
-    repo.localGet<AiState>(key) ?? {
+  const stored = repo.localGet<AiState>(key);
+  if (stored && stored.consentVersion !== FOOD_AI_CONSENT_VERSION) {
+    return {
+      ...stored,
       consent: false,
+      thumbnails: false,
+      queue: [],
+      ready: [],
+      fallback: [],
+      entries: entriesWithoutThumbnails(stored.entries),
+    };
+  }
+  return (
+    stored ?? {
+      consent: false,
+      consentVersion: FOOD_AI_CONSENT_VERSION,
       generation: 0,
-      thumbnails: true,
+      thumbnails: false,
       sequence: 0,
       usage: { day: "", photos: 0, descriptions: 0 },
       queue: [],
@@ -55,6 +79,18 @@ export function aiState(repo: Repository): AiState {
     }
   );
 }
+/** Sweep on startup, resume, enqueue and while the runtime is mounted, even offline. */
+export function expireFoodAiPhotos(repo: Repository, now = Date.now()) {
+  const stored = repo.localGet<AiState>(key);
+  if (!stored) return;
+  if (stored.consentVersion !== FOOD_AI_CONSENT_VERSION) {
+    repo.localSave(key, {...aiState(repo), consentVersion: FOOD_AI_CONSENT_VERSION, generation: stored.generation + 1});
+    active.get(repo)?.abort();
+    return;
+  }
+  const queue = stored.queue.filter(j => Number.isFinite(j.expiresAt) && j.expiresAt > now);
+  if (queue.length !== stored.queue.length) repo.localSave(key, {...stored, queue});
+}
 function update(repo: Repository, change: (s: AiState) => AiState) {
   repo.localSave(key, change(aiState(repo)));
 }
@@ -62,6 +98,8 @@ export function setConsent(repo: Repository, consent: boolean) {
   update(repo, (s) => ({
     ...s,
     consent,
+    consentVersion: FOOD_AI_CONSENT_VERSION,
+    entries: consent ? s.entries : entriesWithoutThumbnails(s.entries),
     generation: s.generation + 1,
     queue: [],
     ready: [],
@@ -99,6 +137,12 @@ export class FoodAiDailyLimitError extends Error {
   constructor(readonly kind: "photos" | "descriptions") {
     super(t("foodAiLimit"));
   }
+}
+export class FoodAiRateLimitError extends Error {
+  constructor() { super(t("foodAiRateLimit")); }
+}
+export class FoodAiCancelledError extends Error {
+  constructor() { super(t("foodAiCancelled")); }
 }
 export type FoodAiClient = (
   payload: unknown,
@@ -186,6 +230,7 @@ export class FoodAiService {
     readonly repo: Repository,
     private client: FoodAiClient | null = null,
     private clock: () => string = today,
+    private now: () => number = Date.now,
   ) {}
   private permission() {
     const s = aiState(this.repo);
@@ -224,6 +269,7 @@ export class FoodAiService {
       )
         throw new Error(t("foodAiConsentRequired"));
       const result = await this.client(payload, controller.signal);
+      if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();
       if (
         controller.signal.aborted ||
         !aiState(this.repo).consent ||
@@ -232,6 +278,7 @@ export class FoodAiService {
         throw new Error(t("foodAiConsentRequired"));
       return parseEstimates(result);
     } catch (error) {
+      if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();
       if (error instanceof FoodAiDailyLimitError) {
         update(this.repo, (s) => ({
           ...s,
@@ -253,6 +300,7 @@ export class FoodAiService {
   }
   enqueue(photo: Photo, day: string, meal: string) {
     this.permission();
+    expireFoodAiPhotos(this.repo, this.now());
     if (
       !photo.jpeg ||
       photo.jpeg.length > 2_000_000 ||
@@ -288,6 +336,9 @@ export class FoodAiService {
             day,
             meal,
             jpeg: photo.jpeg,
+            expiresAt: this.now() + PHOTO_TTL_MS,
+            attempts: 0,
+            nextAttemptAt: 0,
             thumbnail: s.thumbnails ? photo.thumbnail : undefined,
           },
         ],
@@ -295,10 +346,13 @@ export class FoodAiService {
     });
   }
   async drain() {
+    expireFoodAiPhotos(this.repo, this.now());
     if (!this.client || active.has(this.repo)) return;
     while (aiState(this.repo).queue.length && aiState(this.repo).consent) {
       const job = aiState(this.repo).queue[0],
         s = aiState(this.repo);
+      if (job.expiresAt <= this.now()) { expireFoodAiPhotos(this.repo, this.now()); continue; }
+      if (job.nextAttemptAt > this.now()) return;
       if (s.usage.day === this.clock() && s.usage.photos >= 10) {
         update(this.repo, (s) => ({
           ...s,
@@ -315,6 +369,7 @@ export class FoodAiService {
         }));
         continue;
       }
+      update(this.repo, s => ({...s, queue: s.queue.map(j => j.id === job.id ? {...j, attempts:j.attempts + 1} : j)}));
       try {
         const items = await this.send(
           "Identify the foods on this plate.",
@@ -336,8 +391,16 @@ export class FoodAiService {
         }));
       } catch (error) {
         if (error instanceof FoodAiDailyLimitError) continue;
+        update(this.repo, s => {
+          const current = s.queue.find(j => j.id === job.id);
+          if (!current) return s; // Consent revocation already removed it.
+          if (current.attempts >= 3) return {...s,
+            queue:s.queue.filter(j => j.id !== job.id),
+            fallback:[...s.fallback, {id:job.id, day:job.day, meal:job.meal, thumbnail:s.thumbnails ? job.thumbnail : undefined}]};
+          return {...s, queue:s.queue.map(j => j.id === job.id ? {...j, nextAttemptAt:this.now() + 30000 * 2 ** (j.attempts - 1)} : j)};
+        });
         return;
-      } // Keep the durable job. Retry on the next connection/resume.
+      }
     }
   }
 }

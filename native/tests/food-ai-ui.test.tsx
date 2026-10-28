@@ -2,6 +2,7 @@ import { AccessibilityInfo } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/design/theme-provider";
 import { FoodScreen } from "../src/features/food/screen";
+import { FoodAiEntry } from "../src/features/food/ai/entry";
 import { FoodAiPrivacy } from "../src/features/food/ai/privacy";
 import { FoodAiClientProvider } from "../src/features/food/ai/runtime";
 import {
@@ -168,4 +169,18 @@ test("Reduce Motion reveals every item immediately and valid food grams confirm 
     screen.getByRole("button", { name: "Confirmed · Synthetic rice" }),
   ).toBeTruthy();
   motion.mockRestore();
+});
+
+test("unmount during Describe aborts and discards a late result", async () => {
+ jest.spyOn(AccessibilityInfo,"isReduceMotionEnabled").mockResolvedValue(false);
+ const repo = memoryRepository(); setConsent(repo,true);
+ let finish!: (v:unknown)=>void; let signal!:AbortSignal;
+ const client = jest.fn((_payload:unknown,s:AbortSignal) => { signal=s; return new Promise(resolve=>{finish=resolve;}); });
+ const view = await render(<FoodAiClientProvider client={client}><FoodAiEntry repo={repo} mode="describe" day="2026-10-27" meal="meal" onClose={jest.fn()} onManual={jest.fn()}/></FoodAiClientProvider>,{wrapper});
+ await fireEvent.changeText(view.getByLabelText("Describe the foods and portions"),"rice");
+ // The press handler starts the request without awaiting its network promise.
+ await fireEvent.press(view.getByRole("button",{name:"Estimate meal"}));
+ await view.unmount(); expect(signal.aborted).toBe(true);
+ await act(async()=>{finish(response);});
+ expect(repo.list("food_entries")).toEqual([]); expect(aiState(repo).ready).toEqual([]);
 });

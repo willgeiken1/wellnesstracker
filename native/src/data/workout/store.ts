@@ -52,19 +52,22 @@ export class WorkoutStore {
   hapticsEnabled() { return this.repo.localGet<boolean>('haptics') !== false; }
   toggleHaptics() { this.repo.localSave('haptics', !this.hapticsEnabled()); }
   private settings() { return this.repo.list('settings').sort(compareRows).at(-1); }
-  private restMap(): Record<string, number> {
+  private restMap(): Record<string, unknown> {
     if (!this.repo.syncFlags?.syncedV1Columns) return {};
     try {
       const value: unknown = JSON.parse(String(this.settings()?.data.rest_per_exercise ?? '{}'));
-      return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, number> : {};
+      return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
     } catch { return {}; }
   }
   rest(name: string) {
     const key = name.trim().toLowerCase();
     const stored = this.repo.syncFlags?.syncedV1Columns ? this.restMap()[key] : this.repo.localGet<number>(`rest:${key}`);
-    const seconds = Number(stored ?? this.settings()?.data.rest_seconds ?? 90);
+    // v1 JSON supports legacy numeric durations and M2-06b {seconds, style} values.
+    const options = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored as {seconds?: unknown; style?: unknown} : undefined;
+    const seconds = Number(options ? options.seconds : stored ?? this.settings()?.data.rest_seconds ?? 90);
+    const style = this.repo.syncFlags?.syncedV1Columns ? options?.style : this.repo.localGet(`restStyle:${key}`);
     return { seconds: Number.isInteger(seconds) && seconds >= 15 && seconds <= 3600 ? seconds : 90,
-      style: this.repo.localGet<'unwind' | 'converge'>(`restStyle:${key}`) ?? this.defaultRestStyle() };
+      style: style === 'unwind' || style === 'converge' ? style : this.defaultRestStyle() };
   }
   defaultRestStyle(): 'unwind' | 'converge' {
     const style = this.repo.syncFlags?.syncedV1Columns ? this.settings()?.data.rest_style : this.repo.localGet('restStyle');
@@ -81,22 +84,37 @@ export class WorkoutStore {
     this.repo.atomic(() => {
       if (this.repo.syncFlags?.syncedV1Columns) {
         const row = this.settings();
-        this.repo.save('settings', { ...row?.data, rest_per_exercise: JSON.stringify({...this.restMap(), [key]: rest.seconds}) }, row?.id);
+        this.repo.save('settings', { ...row?.data, rest_per_exercise: JSON.stringify({...this.restMap(), [key]: rest}) }, row?.id);
       }
       // Keep a phone-local fallback when a later launch turns the v1 flag off.
       this.repo.localSave(`rest:${key}`, rest.seconds);
-      // No per-exercise style column exists in v1; never overload the wire map.
+      // OFF launches retain their phone-local preference; ON reads prefer the synced map.
       this.repo.localSave(`restStyle:${key}`, rest.style);
     });
   }
   isUnilateral(entryId: string) {
     return this.repo.localGet<boolean>(`unilateral:${entryId}`) === true || this.sets(entryId).some(s => s.data.left_reps != null && s.data.right_reps != null);
   }
+  /** Owner-local identity avoids guessing after session reordering or a swap.
+   * Older/pulled sessions can resolve only an unambiguous original routine row. */
+  private routineExercise(entry: Row) {
+    const session = this.repo.get('sessions', String(entry.data.session_id));
+    const linked = this.repo.localGet<string | null>(`routineExercise:${entry.id}`);
+    const candidates = this.templateExercises(String(session?.data.routine_id)).filter(e =>
+      linked !== undefined ? e.id === linked : e.data.exercise === entry.data.exercise);
+    return linked !== undefined ? candidates[0] : candidates.length === 1 ? candidates[0] : undefined;
+  }
   setUnilateral(entryId: string, enabled: boolean) {
-    this.repo.localSave(`unilateral:${entryId}`, enabled);
+    this.repo.atomic(() => {
+      this.repo.localSave(`unilateral:${entryId}`, enabled);
+      const entry = this.repo.get('entries', entryId);
+      const routine = entry && this.routineExercise(entry);
+      if (routine && routine.data.exercise === entry!.data.exercise) this.repo.localSave(`routineUnilateral:${routine.id}`, enabled);
+    });
   }
   skipped(entryId: string) { return this.repo.localGet<boolean>(`skipped:${entryId}`) === true; }
   skipExercise(entryId: string, skipped = true) {
+    this.beginEditing(String(this.repo.get('entries', entryId)?.data.session_id));
     if (skipped && this.sets(entryId).length > 0) throw Error('Cannot skip completed sets.');
     this.repo.atomic(() => {
       this.repo.localSave(`skipped:${entryId}`, skipped);
@@ -116,16 +134,37 @@ export class WorkoutStore {
   replaceExercise(entryId: string, name: string, mode: 'swap' | 'replace' = 'replace') {
     const entry = this.repo.get('entries', entryId);
     if (!entry || !name.trim() || !['swap','replace'].includes(mode)) throw Error('Invalid exercise.');
+    this.beginEditing(String(entry.data.session_id));
     return this.repo.atomic(() => {
+      const routine = this.routineExercise(entry);
+      if (mode === 'replace' && routine) {
+        const updated = this.repo.save('routine_exercises', {...routine.data, exercise: name.trim()}, routine.id);
+        this.exerciseOptions().write(updated, {rep_min:null, rep_max:null});
+        this.repo.localSave(`routineUnilateral:${routine.id}`, false);
+      }
+      if (this.repo.get('sessions', String(entry.data.session_id))?.data.finished_at != null) {
+        // History corrections reattribute completed sets in place. Swap only edits
+        // this session; Replace also updates the originating routine above.
+        const updated = this.repo.save('entries', {...entry.data, exercise:name.trim()}, entryId);
+        this.repo.localSave(`unilateral:${entryId}`, false);
+        this.repo.localSave(`repRange:${entryId}`, null);
+        this.repo.localSave(`routineExercise:${entryId}`, routine?.id ?? null);
+        this.repo.localSave(`skipped:${entryId}`, false);
+        this.recompute();
+        return updated;
+      }
       const drafts = this.drafts(entryId), completed = drafts.filter(d => d.setId), pending = drafts.filter(d => !d.setId);
       if (!completed.length) {
         const updated = this.repo.save('entries', {...entry.data, exercise: name.trim()}, entryId);
+        this.repo.localSave(`unilateral:${entryId}`, false);
         this.repo.localSave(`repRange:${entryId}`, null);
         this.repo.localSave(`draft:${entryId}`, pending.map(() => ({weight:'',reps:''})));
         this.repo.localSave(`skipped:${entryId}`, false);
         return updated;
       }
       const replacement = this.addExercise(String(entry.data.session_id), name, Math.max(1,pending.length));
+      this.repo.localSave(`routineExercise:${replacement.id}`, routine?.id ?? null);
+      this.repo.localSave(`routineExercise:${entryId}`, null);
       this.repo.localSave(`repRange:${replacement.id}`, null);
       this.repo.localSave(`draft:${replacement.id}`, pending.length ? pending.map(() => ({weight:'',reps:''})) : [{weight:'',reps:''}]);
       // Compact completed rows without changing their IDs or exercise attribution.
@@ -156,7 +195,7 @@ export class WorkoutStore {
     this.repo.atomic(() => {
       entries.forEach(e => this.unlinkSuperset(e!.id));
       entries.forEach(e => this.exerciseOptions().write(this.repo.get('entries',e!.id)!, {superset_group:ids[0]}));
-      this.skipTimer();
+      if (this.timer()?.sessionId === entries[0]!.data.session_id) this.skipTimer();
     });
   }
   unlinkSuperset(id: string) {
@@ -164,7 +203,7 @@ export class WorkoutStore {
     if (!entry || !group) return;
     this.repo.atomic(() => {
       this.entries(String(entry.data.session_id)).filter(e => this.supersetGroup(e) === group).forEach(e => this.exerciseOptions().write(e,{superset_group:null}));
-      this.skipTimer();
+      if (this.timer()?.sessionId === entry.data.session_id) this.skipTimer();
     });
   }
   loggerOrder(sessionId: string) {
@@ -191,6 +230,8 @@ export class WorkoutStore {
       const prior = this.templateExercises(routine.id);
       for (const e of prior) if (!exercises.some(x => x.id === e.id)) this.repo.remove('routine_exercises', e.id);
       exercises.forEach((e, position) => {
+        const previous = prior.find(row => row.id === e.id);
+        if (previous && previous.data.exercise !== e.exercise.trim()) this.repo.localSave(`routineUnilateral:${previous.id}`, false);
         const currentRest = this.rest(e.exercise);
         const rest = {seconds: e.restSeconds ?? currentRest.seconds, style: e.restStyle ?? currentRest.style};
         if (rest.seconds !== currentRest.seconds || rest.style !== currentRest.style) this.setRest(e.exercise, rest);
@@ -223,15 +264,40 @@ export class WorkoutStore {
       position
     }, r.id)));
   }
+  /** Local baseline only: no new columns or sync behavior. Ignore draft/UI-only changes. */
+  private content(id: string) {
+    const s = this.repo.get('sessions', id);
+    return JSON.stringify({session:s?.data, entries:this.entries(id).map(e => ({
+      data:e.data, skipped:this.skipped(e.id), sets:this.sets(e.id).map(s => ({...s.data, tag:this.repo.syncFlags?.syncedV1Columns ? s.data.tag ?? null : this.drafts(e.id)[Number(s.data.position)]?.tag ?? (this.drafts(e.id)[Number(s.data.position)]?.warmup ? 'warmup' : null)}))
+    }))});
+  }
+  beginEditing(id: string) {
+    const session = this.repo.get('sessions', id);
+    if (session && session.data.finished_at !== null && this.repo.localGet(`pastWorkout:${id}`) !== true && this.repo.localGet(`originalWorkout:${id}`) === undefined)
+      this.repo.localSave(`originalWorkout:${id}`, this.content(id));
+  }
+  edited(id: string) {
+    const original = this.repo.localGet<string>(`originalWorkout:${id}`);
+    return original !== undefined && original !== this.content(id);
+  }
+  pastMode(id: string) {
+    return this.repo.localGet<boolean>(`pastWorkout:${id}`) === true || this.repo.get('sessions', id)?.data.finished_at != null;
+  }
+  startPast(day: string) {
+    const stamp = new Date(`${day}T12:00:00`).getTime();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(stamp) || localDay(new Date(stamp)) !== day || day >= localDay(new Date())) throw Error('Invalid past day.');
+    const existing = this.repo.list('sessions').find(s => s.data.day === day && this.repo.localGet(`pastWorkout:${s.id}`) === true);
+    return existing ?? this.start(undefined, stamp, true);
+  }
   active() {
-    return this.repo.list('sessions').filter(s => s.data.finished_at === null).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at))[0];
+    return this.repo.list('sessions').filter(s => s.data.finished_at === null && !this.pastMode(s.id)).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at))[0];
   }
   history() {
     return this.repo.list('sessions').filter(s => s.data.finished_at !== null).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at));
   }
-  start(routineId?: string, now = Date.now()) {
+  start(routineId?: string, now = Date.now(), past = false) {
     const active = this.active();
-    if (active) return active;
+    if (active && !past) return active;
     if (!validateDate(now)) throw Error('Invalid date.');
     const routine = routineId ? this.repo.get('routines', routineId) : undefined;
     if (routineId && (!routine || routine.deleted_at !== null)) throw Error('Template unavailable.');
@@ -242,15 +308,20 @@ export class WorkoutStore {
         name: routine?.data.name ?? null,
         day: localDay(new Date(now)),
         started_at: now,
-        finished_at: null,
-        duration_ms: null,
+        // Past-day logging is historical from the first synced write. Even an
+        // abandoned draft must never become a running session on another device.
+        finished_at: past ? now : null,
+        duration_ms: past ? 0 : null,
         notes: null
       });
+      if (past) this.repo.localSave(`pastWorkout:${s.id}`, true);
       this.repo.localSave(`sessionMeta:${s.id}`, {
         timezoneOffset: new Date(now).getTimezoneOffset()
       });
       for (const e of routine ? this.templateExercises(routine.id) : []) {
         const entry = this.addExercise(s.id, String(e.data.exercise), Number(e.data.target_sets) || 3);
+        this.repo.localSave(`routineExercise:${entry.id}`, e.id);
+        this.repo.localSave(`unilateral:${entry.id}`, this.repo.localGet<boolean>(`routineUnilateral:${e.id}`) === true);
         this.repo.localSave(`target:${entry.id}`, Number(e.data.target_reps));
         this.exerciseOptions().write(entry,{superset_group:e.data.superset_group as string | null});
         this.repo.localSave(`repRange:${entry.id}`,repRange(e.data.rep_min,e.data.rep_max));
@@ -265,6 +336,7 @@ export class WorkoutStore {
     return order(this.repo.list('sets').filter(s => s.data.entry_id === entryId));
   }
   addExercise(sessionId: string, name: string, count = 3) {
+    this.beginEditing(sessionId);
     if (!name.trim()) throw Error('Invalid exercise.');
     return this.repo.atomic(() => {
       const e = this.repo.save('entries', {
@@ -284,9 +356,11 @@ export class WorkoutStore {
   }
   moveEntry(id: string, direction: number) {
     const entry = this.repo.get('entries', id);
+    if (entry) this.beginEditing(String(entry.data.session_id));
     if (entry) this.reorder('entries', this.entries(String(entry.data.session_id)), id, direction);
   }
   removeExercise(id: string) {
+    this.beginEditing(String(this.repo.get('entries', id)?.data.session_id));
     this.repo.atomic(() => {
       const entry = this.repo.get('entries',id), group = entry && this.supersetGroup(entry);
       if (entry && group && this.entries(String(entry.data.session_id)).filter(e => this.supersetGroup(e) === group).length === 2) this.unlinkSuperset(id);
@@ -333,6 +407,7 @@ export class WorkoutStore {
     } : d);
   }
   editDraft(entryId: string, index: number, patch: Partial<Pick<Draft, 'weight' | 'reps' | 'warmup' | 'tag' | 'rightWeight' | 'rightReps'>>) {
+    this.beginEditing(String(this.repo.get('entries', entryId)?.data.session_id));
     const drafts = this.drafts(entryId),
       d = drafts[index];
     if (!d) return;
@@ -377,6 +452,7 @@ export class WorkoutStore {
     }]);
   }
   removeSet(entryId: string, index: number) {
+    this.beginEditing(String(this.repo.get('entries', entryId)?.data.session_id));
     this.repo.atomic(() => {
       const drafts = this.drafts(entryId),
         [removed] = drafts.splice(index, 1);
@@ -412,6 +488,7 @@ export class WorkoutStore {
     return this.repo.save('sets', this.setData(entryId, index, d), id);
   }
   private startRest(entry: Row, index: number, setId: string, now = Date.now()) {
+    if (this.pastMode(String(entry.data.session_id))) return;
     const group = this.supersetGroup(entry);
     const members = this.entries(String(entry.data.session_id)).filter(e => !this.skipped(e.id) && (group ? this.supersetGroup(e) === group : e.id === entry.id));
     const roundDone = members.every(e => index >= this.drafts(e.id).length || !!this.drafts(e.id)[index].setId);
@@ -426,6 +503,7 @@ export class WorkoutStore {
     } satisfies TimerState);
   }
   toggleDone(entryId: string, index: number, now = Date.now()) {
+    this.beginEditing(String(this.repo.get('entries', entryId)?.data.session_id));
     return this.repo.atomic(() => {
       const drafts = this.drafts(entryId),
         d = drafts[index];
@@ -437,14 +515,16 @@ export class WorkoutStore {
       } else {
         if (!validateSet(d.weight, d.reps, this.unit(entryId)).valid) throw Error('Invalid set.');
         d.setId = this.writeSet(entryId, index, d).id;
-        this.persistTimerRest();
         const entry = this.repo.get('entries', entryId)!;
-        this.startRest(entry,index,d.setId,now);
+        if (!this.pastMode(String(entry.data.session_id))) {
+          this.persistTimerRest();
+          this.startRest(entry,index,d.setId,now);
+        }
       }
       this.repo.localSave(`draft:${entryId}`, drafts);
       const sessionId = this.repo.get('entries', entryId)?.data.session_id;
       if (sessionId && this.repo.get('sessions', String(sessionId))?.data.finished_at !== null) {
-        this.skipTimer();
+        if (this.timer()?.sessionId === sessionId) this.skipTimer();
         this.recompute();
       }
       return !!d.setId;
@@ -538,6 +618,8 @@ export class WorkoutStore {
   }, now = Date.now()) {
     const s = this.repo.get('sessions', id);
     if (!s || s.deleted_at !== null || !validateDate(input.startedAt, now) || !validateDate(input.finishedAt, now) || input.finishedAt < input.startedAt) throw Error('Invalid date.');
+    const wasFinished = s.data.finished_at !== null && this.repo.localGet(`pastWorkout:${id}`) !== true;
+    this.beginEditing(id);
     this.repo.atomic(() => {
       // Freeze the unit used by local drafts before this session becomes history.
       if (s.data.finished_at === null) for (const entry of this.entries(id)) this.repo.localSave(`entryUnit:${entry.id}`, this.unit(entry.id));
@@ -559,8 +641,10 @@ export class WorkoutStore {
       this.repo.localSave(`sessionMeta:${id}`, {
         timezoneOffset: new Date(input.startedAt).getTimezoneOffset()
       });
-      this.skipTimer();
+      if (this.timer()?.sessionId === id) this.skipTimer();
       this.recompute();
+      this.repo.localSave(`pastWorkout:${id}`, false);
+      if (!wasFinished) this.repo.localSave(`originalWorkout:${id}`, this.content(id));
     });
   }
   summary(id: string) {

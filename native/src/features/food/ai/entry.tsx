@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { Button } from "../../../components/button";
 import { ThemedText } from "../../../components/themed-text";
@@ -11,6 +11,7 @@ import {
   FoodAiService,
   logEstimates,
   setConsent,
+  stopFoodAiRequests,
   type Estimate,
 } from "./service";
 import { FoodAiConsent } from "./privacy";
@@ -36,7 +37,7 @@ export function FoodAiEntry({
 }) {
   "use no memo";
   useFoodRevision(repo);
-  const client = useFoodAiClient(),
+  const client = useFoodAiClient(repo),
     service = new FoodAiService(repo, client);
   const [text, setText] = useState(""),
     [status, setStatus] = useState<string | null>(null),
@@ -44,6 +45,14 @@ export function FoodAiEntry({
     [consent, setSheet] = useState(!aiState(repo).consent),
     [items, setItems] = useState<Estimate[] | null>(null);
   const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (inFlight.current) stopFoodAiRequests(repo);
+    };
+  }, [repo]);
   const run = async (action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -52,8 +61,11 @@ export function FoodAiEntry({
     try {
       await action();
     } catch (error) {
+      if (!mounted.current) return;
       const safe = [
         "foodAiLimit",
+        "foodAiRateLimit",
+        "foodAiCancelled",
         "foodAiBusy",
         "foodAiQueueFull",
         "foodAiBlocked",
@@ -70,24 +82,25 @@ export function FoodAiEntry({
       );
     } finally {
       inFlight.current = false;
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
   const s = aiState(repo);
   const photo = (camera: boolean) =>
     void run(async () => {
       const generation = aiState(repo).generation;
-      const result = await pickMealPhoto(camera);
+      if (!aiState(repo).consent) throw new Error(t("foodAiConsentRequired"));
+      const result = await pickMealPhoto(camera, () => mounted.current && aiState(repo).consent && generation === aiState(repo).generation);
       if (!result) {
-        setStatus(null);
+        if (mounted.current) setStatus(null);
         return;
       }
-      if (!aiState(repo).consent || generation !== aiState(repo).generation)
+      if (!mounted.current || !aiState(repo).consent || generation !== aiState(repo).generation)
         return;
       service.enqueue(result, day, meal);
       setStatus(t("foodAiQueued"));
       await drainIfOnline(service);
-      setStatus(null);
+      if (mounted.current) setStatus(null);
     });
   if (consent)
     return (
@@ -136,6 +149,7 @@ export function FoodAiEntry({
                 onPress={() =>
                   void run(async () => {
                     const result = await service.describe(text);
+                    if (!mounted.current) return;
                     setItems(result);
                     setStatus(null);
                   })
@@ -173,7 +187,7 @@ export function FoodAiEntry({
             onPress={() =>
               void run(async () => {
                 await drainIfOnline(service);
-                setStatus(null);
+                if (mounted.current) setStatus(null);
               })
             }
           />

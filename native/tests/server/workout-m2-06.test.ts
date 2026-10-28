@@ -83,7 +83,7 @@ test.each(['swap', 'replace'] as const)('%s retains original completed sets and 
     expect(a.store.drafts(replacement.id)).toHaveLength(2); expect(a.store.summary(s.id).count).toBe(1);
   } finally { a.sqlite.close(); }
 });
-test.each([false, true])('rest round trip gated (%s); per-exercise style and haptics local', async enabled => {
+test.each([false, true])('rest round trip gated (%s); per-exercise style synced and haptics local', async enabled => {
   const a = await setup(enabled);
   try {
     const s = a.store.start(), e = a.store.addExercise(s.id, 'Bench Press'); a.repo.localSave('haptics', false);
@@ -91,7 +91,7 @@ test.each([false, true])('rest round trip gated (%s); per-exercise style and hap
     expect(a.store.rest('Bench Press')).toEqual({seconds: 120, style: 'converge'});
     log(a.store, e.id); expect(a.store.timer()?.duration).toBe(120);
     const b = await roundTrip(a.repo, enabled);
-    try { expect(b.store.rest('Bench Press').seconds).toBe(enabled ? 120 : 90); expect(b.store.rest('Bench Press').style).toBe('unwind'); expect(b.repo.localGet('haptics')).toBeUndefined(); }
+    try { expect(b.store.rest('Bench Press').seconds).toBe(enabled ? 120 : 90); expect(b.store.rest('Bench Press').style).toBe(enabled ? 'converge' : 'unwind'); expect(b.repo.localGet('haptics')).toBeUndefined(); }
     finally { b.sqlite.close(); }
     if (!enabled) expect(a.repo.list('settings')).toEqual([]);
     expect(a.repo.list('settings').some(r => r.data.haptics != null)).toBe(false);
@@ -169,7 +169,7 @@ test.each([false, true])('template save leaves untouched rest inherited and only
     expect(setRest).toHaveBeenCalledTimes(1);
     expect(a.repo.localGet('rest:bench press')).toBeUndefined();
     expect(a.store.rest('Dumbbell Row')).toEqual({seconds: 120, style: 'converge'});
-    if (enabled) expect(JSON.parse(String(a.repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': 120});
+    if (enabled) expect(JSON.parse(String(a.repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': {seconds:120,style:'converge'}});
   } finally { a.sqlite.close(); }
 });
 test.each(['expiry', 'next set', 'dismiss'] as const)('timer adjustments persist once on %s, including after store recreation', async boundary => {

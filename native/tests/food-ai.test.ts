@@ -198,3 +198,38 @@ test("revocation by a quota-write subscriber still sends nothing", async () => {
   ).rejects.toThrow();
   expect(client).not.toHaveBeenCalled();
 });
+
+ test("model names containing stress or mood fail closed", () => {
+  const { parseEstimates } = require("../src/features/food/ai/service");
+  for (const name of ["stressed cookies", "Stressless bar", "moodboost latte", "s-t-r-e-s-s", "ѕtrеѕѕ tea", "mооd bar"])
+    expect(() => parseEstimates([{...response[0], name}])).toThrow();
+ });
+ test("failed photos back off and fall back after three attempts", async () => {
+  const repo = memoryRepository(); setConsent(repo, true);
+  let now = Date.now(); const client = jest.fn(async () => { throw new Error("synthetic failure"); });
+  const service = new FoodAiService(repo, client, () => "2026-10-28", () => now);
+  service.enqueue({jpeg:"YWJj"}, "2026-10-28", "meal");
+  await service.drain(); await service.drain();
+  expect(client).toHaveBeenCalledTimes(1);
+  now += 30000; await service.drain(); await service.drain();
+  expect(client).toHaveBeenCalledTimes(2);
+  now += 60000; await service.drain();
+  expect(client).toHaveBeenCalledTimes(3);
+  expect(aiState(repo).queue).toEqual([]); expect(aiState(repo).fallback).toHaveLength(1);
+ });
+ test("thumbnail default, consent version and revocation remove stored thumbnail bytes", () => {
+  const repo = memoryRepository(); expect(aiState(repo).thumbnails).toBe(false);
+  setConsent(repo, true); expect(aiState(repo).consentVersion).toBe(1);
+  repo.localSave("foodAi", {...aiState(repo), entries:{synthetic:{confirmed:true,thumbnail:"dGh1bWI="}}});
+  setConsent(repo,false); expect(JSON.stringify(aiState(repo))).not.toContain("dGh1bWI=");
+  repo.localSave("foodAi", {...aiState(repo), consent:true, consentVersion:0});
+  expect(aiState(repo).consent).toBe(false);
+ });
+ test("expired photos are removed before any retry", async () => {
+  const repo = memoryRepository(); setConsent(repo,true);
+  let now = Date.now(); const client = jest.fn(async () => response);
+  const service = new FoodAiService(repo,client,()=>"2026-10-28",()=>now);
+  service.enqueue({jpeg:"YWJj"},"2026-10-28","meal");
+  now += 24*60*60*1000; await service.drain();
+  expect(client).not.toHaveBeenCalled(); expect(JSON.stringify(repo.localGet("foodAi"))).not.toContain("YWJj");
+ });

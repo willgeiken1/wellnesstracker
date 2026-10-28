@@ -42,7 +42,13 @@ function foodAiNormalize(value: string): string {
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase();
+    .toLowerCase()
+    // Common Cyrillic/Greek lookalikes in sensitive labels.
+    .replace(/[аα]/g, "a").replace(/[еε]/g, "e")
+    .replace(/[оο]/g, "o").replace(/[рρ]/g, "p")
+    .replace(/[сϲ]/g, "c").replace(/[ѕ]/g, "s")
+    .replace(/[тτ]/g, "t").replace(/[мμ]/g, "m")
+    .replace(/[ԁ]/g, "d");
 }
 
 function foodAiSplit(normalized: string): string[] {
@@ -120,6 +126,7 @@ const FOOD_TEXT_HEALTH = [
 
 function foodAiTextForbidden(value: string): boolean {
   const normalized = foodAiNormalize(value);
+  if (/stress|mood/.test(normalized.replace(/[^a-z0-9]/g, ""))) return true;
   if (foodAiForbiddenTokens(foodAiSplit(normalized), false)) return true;
   const packed = dropPackageSizes(normalized);
   if (bodyMass(packed)) return true;
