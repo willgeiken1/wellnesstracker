@@ -63,7 +63,11 @@ test.each([
       typeof node.props.onResponderRelease === 'function');
     expect(pressables.length).toBeGreaterThan(0);
     for (const node of pressables) {
-      expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
+      if (node.type === 'RNSVGPath') {
+        // react-native-svg Path forwards accessible/label, but does not support role.
+        expect(node.props.accessible).toBe(true);
+        expect(screen.getByRole('button', { name: 'Muscle list' })).toBeTruthy();
+      } else expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
       expect((node.props.accessibilityLabel ?? textContent(node)).trim().length).toBeGreaterThan(0);
     }
     const texts = result.container.queryAll(node => node.type === 'Text');

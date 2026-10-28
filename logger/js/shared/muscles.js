@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { atlasGeometry } from "../data/atlas-geometry.js";
 
 /* Muscle maps, exercise bank, and page headers. */
 /* ================= Muscles: basic + advanced, diagrams, exercise bank ================= */
@@ -64,22 +65,12 @@ function hatchDefs(uid) {
 app.hatchDefs = hatchDefs;
 
 function advBodySVG(sex, side, sets) {
-  const F = app.ASSETS.advBody[sex][side], uid = "ab" + (++app.svgSeq);
-  const lvl = (m) => { const n = sets.get(m) || 0; return n >= 6 ? " hit" : n > 0 ? " hit-lo" : ""; };
-  const half = F.els.map(([t, m, d, ci]) =>
-    t === "b" ? `<path class="base" d="${d}"/>`
-    : t === "s" ? `<path class="skin" d="${d}"/>`
-    : t === "m" ? `<path class="mus${lvl(m)}" data-m="${m}" d="${d}"/>`
-    : t === "c" ? `<path class="mus${lvl(m)}" data-m="${m}" clip-path="url(#${uid}c${ci})" d="${d}"/>`
-    : t === "o" ? `<path class="ol" d="${d}"/>`
-    : `<path class="deep${lvl(m)}" data-m="${m}" d="${d}"/>`).join("");
-  const mid = side === "front" ? `<path class="line" d="M100,119 L100,216"/>` : `<path class="line" d="M100,50 L100,230"/>`;
-  return `<svg viewBox="2 6 196 404" class="body" role="img" aria-label="${side === "front" ? "Front" : "Back"} of body, detailed muscles">
-    <defs>${F.clips.map((d, i) => `<clipPath id="${uid}c${i}"><path d="${d}"/></clipPath>`).join("")}${app.hatchDefs(uid)}</defs>
-    <style>#${uid} .deep.hit-lo{fill:url(#${uid}hl)} #${uid} .deep.hit{fill:url(#${uid}hd)}</style>
-    <g id="${uid}"><g>${half}</g><g transform="translate(200,0) scale(-1,1)">${half}</g>
-    <path class="detail" d="${F.detail}"/><path class="detail" transform="translate(200,0) scale(-1,1)" d="${F.detail}"/>
-    ${mid}<path class="skin" d="${F.head}"/></g></svg>`;
+  const shape = atlasGeometry[sex === "female" ? "female" : "male"][side];
+  const paths = shape.muscles.map(({ id, d }) => {
+    const n = sets.get(id) || 0;
+    return `<path id="${id}" data-m="${id}" class="mus${n >= 6 ? " hit" : n > 0 ? " hit-lo" : ""}" d="${d}"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 200 440" class="body" role="img" aria-label="${side === "front" ? "Front" : "Back"} of body, detailed muscles"><g class="atlas-skin"><path class="skin" d="${shape.skin}"/></g><g class="atlas-muscles">${paths}</g></svg>`;
 }
 app.advBodySVG = advBodySVG;
 
