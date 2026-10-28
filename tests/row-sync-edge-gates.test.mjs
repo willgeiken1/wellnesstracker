@@ -124,11 +124,12 @@ test('F3 fails closed on remaining rows, missing counts or count errors',async()
 });
 test('user client factory forwards verified Authorization with only public configuration',()=>{
   const clients=[];
-  const http=load('../supabase/functions/_shared/http.ts',{'npm:@supabase/supabase-js@2':{createClient:(url,key,options)=>{const client={url,key,options};clients.push(client);return client;}}}, {Deno:{env:{get:name=>({SUPABASE_URL:'http://localhost:54321',SUPABASE_ANON_KEY:'synthetic-public',SUPABASE_SERVICE_ROLE_KEY:'synthetic-server'}[name])}}});
+  const http=load('../supabase/functions/_shared/http.ts',{'npm:@supabase/supabase-js@2':{createClient:(url,key,options)=>{const client={url,key,options};clients.push(client);return client;}}}, {Deno:{env:{get:name=>({SUPABASE_URL:'http://localhost:54321',SUPABASE_ANON_KEY:'synthetic-public',SUPABASE_SECRET_KEYS:JSON.stringify({default:'synthetic-server'})}[name])}}});
   const client=http.userClient(new Request('http://localhost/',{headers:{Authorization:'Bearer synthetic'}}));
   assert.equal(client.key,'synthetic-public');assert.equal(client.options.global.headers.Authorization,'Bearer synthetic');
   assert.equal(client.options.auth.persistSession,false);assert.equal(client.options.auth.autoRefreshToken,false);
   assert.notEqual(client,clients[0]);
+  assert.equal(clients[0].key,'synthetic-server');assert.notEqual(client.key,clients[0].key);
 });
 test('edge table list matches the canonical native catalog',()=>{
   const catalog=readFileSync(new URL('../native/src/data/catalog.ts',import.meta.url),'utf8');
