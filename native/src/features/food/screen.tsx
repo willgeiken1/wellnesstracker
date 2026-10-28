@@ -12,6 +12,7 @@ import { Field } from '../onboarding/fields';
 import { Panel } from '../workout/primitives';
 import { useFoodRevision } from './use-food-revision';
 import { FoodAction } from './action';
+import { FoodScanner } from './scanner';
 import { FoodEntry } from './entry';
 import { FoodTargets } from './targets';
 import { FoodCalendar } from './calendar';
@@ -24,6 +25,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  useEffect(()=>{const app=AppState.addEventListener('change',state=>{if(state==='active')setReviewClock(today()+':'+attributedDay());});return ()=>app.remove();},[]);
  const [fallbackId,setFallbackId]=useState<number|undefined>();
  const [aiMode,setAiMode]=useState<'snap'|'describe'|null>(null);
+ const [scanning,setScanning]=useState(false);
  const revision=useFoodRevision(repository),repo=repository;
  const [day,setDay]=useState(()=>attributedDay()),[calendar,setCalendar]=useState(false),[fan,setFan]=useState(false);
  const mealList=meals(repo),[selectedMeal,setSelectedMeal]=useState(mealList[0].id);
@@ -33,7 +35,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>setUndo(null),8000);return ()=>clearTimeout(timer);},[undo]);
  const rows=repo.list('food_entries').filter(r=>r.data.day===day),total=totals(rows),targets=foodTargets(repo,day);
  const early=attributedDay()!==today();
- const chooseDay=(value:string)=>{setAiMode(null);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
+ const chooseDay=(value:string)=>{setAiMode(null);setScanning(false);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
  const run=(action:()=>void)=>{try{action();setStatus(null);}catch{setStatus(t('foodFailure'));}};
  const log=(food:Food)=>run(()=>{saveFood(repo,day,selectedMeal,food);setLibrary(false);});
  return <View style={{gap:16}}>
@@ -46,20 +48,21 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   {early&&(day===attributedDay()||day===today())&&<><ThemedText>{t('foodEarly').replace('{day}',day)}</ThemedText><Button variant="secondary" label={t(day===today()?'foodUsePrevious':'foodUseToday')} onPress={()=>chooseDay(day===today()?attributedDay():today())}/></>}
   <CalorieRing total={total} target={targets.targets} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/>
   <FoodAiMorningReview key={reviewClock} repo={repo}/>
-  <FoodAiResults repo={repo} onDescribe={id=>{const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>
+  <FoodAiResults repo={repo} onDescribe={id=>{setScanning(false);setEntry(null);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{setScanning(false);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>
   <ThemedText muted>{t('foodBurned')}</ThemedText>
   <Panel><FoodTargets key={day} repo={repo} day={day} revision={revision}/></Panel>
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>
    {(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><View key={method} style={{flexGrow:1}}><Button label={t(method)} variant="secondary" onPress={()=>{
-    if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else if(method==='foodSaved'){setLibrary(!library);setEntry(null);}else setStatus(t('foodLater').replace('{method}',t(method)));
+    setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else if(method==='foodSaved'){setLibrary(!library);setEntry(null);}else setStatus(t('foodLater').replace('{method}',t(method)));
    }}/></View>)}
   </View>
   <FoodAction label={t('foodFan')} onPress={()=>setFan(!fan)}>{fan?'−':'+'}</FoodAction>
-  {fan&&<View style={{gap:4}}>{(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{setFan(false);if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual')setEntry({meal:selectedMeal});else if(method==='foodSaved')setLibrary(true);else setStatus(t('foodLater').replace('{method}',t(method)));}}/>)}</View>}
+  {fan&&<View style={{gap:4}}>{(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual')setEntry({meal:selectedMeal});else if(method==='foodSaved')setLibrary(true);else setStatus(t('foodLater').replace('{method}',t(method)));}}/>)}</View>}
   <ThemedText>{t('foodChooseMeal')}</ThemedText>
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>{mealList.map(meal=><Button key={meal.id} label={meal.name} selected={selectedMeal===meal.id} variant="secondary" onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
   {undo&&<Panel><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Panel>}
+  {scanning&&<Panel><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Panel>}
   {aiMode&&<Panel><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Panel>}
   {entry&&<Panel><FoodEntry key={entry.id??'new'} initial={entry.initial} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{const row=saveFood(repo,day,entry.meal,food,multiple,entry.id);if(fallbackId!==undefined){attachFallback(repo,row.id,fallbackId);setFallbackId(undefined);}if(entry.id&&aiState(repo).entries[entry.id])confirmEstimate(repo,entry.id);setEntry(null);}}/></Panel>}
   {library&&<Panel>
@@ -74,7 +77,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
     <LocalMealThumbnail data={aiState(repo).entries[row.id]?.thumbnail}/>
     {aiState(repo).entries[row.id]?.confirmed===false&&<View style={{borderWidth:1,borderStyle:'dashed',padding:6}}><ThemedText>{t('foodAiPending')}</ThemedText><Button label={t('foodAiConfirm').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>confirmEstimate(repo,row.id)}/></View>}
     <ThemedText>{String(row.data.name)}</ThemedText><ThemedText>{t('foodEnergy').replace('{value}',row.data.energy_kj==null?'—':String(Math.round(Number(row.data.energy_kj)/4.184)))}</ThemedText>
-    <Button label={t('foodEdit').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>{setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
+    <Button label={t('foodEdit').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>{setAiMode(null);setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
     <Button label={t('foodDelete').replace('{name}',String(row.data.name))} variant="destructive" onPress={()=>run(()=>setUndo(deleteFood(repo,row.id)))}/>
     <Button label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
     <Button label={t('foodKeep').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>{saveReusable(repo,row.data);})}/>
