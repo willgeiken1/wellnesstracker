@@ -10,8 +10,9 @@ These are every `*UsageDescription` key emitted by current configuration/plugins
 | --- | --- | --- | --- |
 | `NSLocalNetworkUsageDescription` | `Expo Dev Launcher uses the local network to discover and connect to development servers running on your computer.` | `expo-dev-launcher`; Metro discovery/connection | Debug only. Our build phase removes it in non-debug builds. |
 | `NSFaceIDUsageDescription` | `Allow $(PRODUCT_NAME) to access your Face ID biometric data.` | Default `expo-secure-store` plugin string | Not currently used: session storage does not set `requireAuthentication`. Retained unchanged; confirm at M4-06. Keychain storage itself does not need Face ID permission. |
+| `NSCameraUsageDescription` | `Allow Insight Daily to scan food barcodes when you choose Scan.` | M2-14 `expo-camera` plugin | Barcode scanning only. Requested when the user chooses “Open barcode camera”; manual code entry needs no camera permission. |
 
-No camera, microphone, photo-library, location, tracking, HealthKit read/write or other usage-description keys are configured. Planned Health/notification features do not imply permissions in this build.
+M2-14 adds camera permission; no microphone, photo-library, location, tracking or HealthKit read/write usage-description keys are configured. The camera plugin disables microphone permission and Android audio recording. Planned Health/notification features do not imply permissions in this build.
 
 Related local-network keys are `NSBonjourServices = ["_expo._tcp"]` and, when supplied by the native template/build, `NSAppTransportSecurity.NSAllowsLocalNetworking = true`. They are not purpose strings. `withStripLocalNetworkingRelease` removes both plus the local-network description unless a complete `DEBUG=1` preprocessor token is present (configuration names alone do not grant access). Current introspection emits the Bonjour and description keys, but does not emit `NSAllowsLocalNetworking`. Introspection's `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` comes from the placeholder `Info.plist`; the Release-build plist check is in M4-06.
 
@@ -24,6 +25,7 @@ Android permissions have exact identifier strings rather than app-authored purpo
 | Exact permission string | Builds / source | Feature | Still needed? |
 | --- | --- | --- | --- |
 | `android.permission.INTERNET` | Release + Debug; Expo template, FileSystem, Image | Account/network requests and development Metro | Yes. Normal permission; no runtime prompt. |
+| `android.permission.CAMERA` | Release + Debug; M2-14 Expo Camera | Food barcode scanning | Requested only on “Open barcode camera”; typing a code or entering food manually remains available if denied. |
 | `android.permission.VIBRATE` | Release + Debug; template / Haptics | Workout haptic feedback (`features/workout/haptics.ts`) | Yes. Normal permission. |
 | `android.permission.ACCESS_NETWORK_STATE` | Release + Debug; Network, Image; also dev-launcher Debug | Connectivity listener used by auth/sync and image retry | Yes. Normal permission. |
 | `android.permission.ACCESS_WIFI_STATE` | Release + Debug; Network | Library Wi-Fi/network APIs | Not required by current connectivity-listener usage; declared by the library. Retained unchanged for separate permission review. |
@@ -33,6 +35,6 @@ Android permissions have exact identifier strings rather than app-authored purpo
 | `android.permission.ACCESS_LOCAL_NETWORK` | Debug only; dev client / Metro | Development server discovery/connection | Debug only; not in Release. |
 | `android.permission.CHANGE_WIFI_MULTICAST_STATE` | Debug only; dev-launcher debug manifest | Development server discovery | Debug only; not needed in Release. Normal permission. |
 
-Explicitly blocked in `app.json` (manifest-merger removal entries, **not requested**): `android.permission.SYSTEM_ALERT_WINDOW`, `android.permission.READ_EXTERNAL_STORAGE`, `android.permission.WRITE_EXTERNAL_STORAGE`. FileSystem/Image still declare storage upstream, but the app removes those declarations. No Health Connect, camera, audio, location, notification, exact-alarm or foreground-service permission is currently configured. Re-check the merged manifests when those features or dependencies change.
+Explicitly blocked in `app.json` (manifest-merger removal entries, **not requested**): `android.permission.SYSTEM_ALERT_WINDOW`, `android.permission.READ_EXTERNAL_STORAGE`, `android.permission.WRITE_EXTERNAL_STORAGE`. FileSystem/Image still declare storage upstream, but the app removes those declarations. No Health Connect, audio, location, notification, exact-alarm or foreground-service permission is currently configured. Re-check the merged manifests when those features or dependencies change.
 
 No purpose strings, permissions, entitlements, App Group, HealthKit or push settings were edited in M3-22.

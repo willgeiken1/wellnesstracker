@@ -6,6 +6,6 @@ export function createPhoneBackup(repo: Repository): string {
   return repo.atomic(() => JSON.stringify({
     format: 'insight-phone-only', version: 1, exportedAt: new Date().toISOString(),
     rows: Object.fromEntries(syncedTables.map(table => [table, repo.list(table, true)])),
-    local: repo.localSnapshot(),
+    local: Object.fromEntries(Object.entries(repo.localSnapshot()).filter(([key])=>!key.startsWith('barcode:'))),
   }));
 }
