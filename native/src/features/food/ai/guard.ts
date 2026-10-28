@@ -95,18 +95,6 @@ const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(
   "(?:[^a-z0-9,;.]*|(?: +(?!(?:and|with|plus|then|or)\\b)[a-z]+\\b){1,3} *)" +
   "(?:\\d+(?:[^a-z0-9]{1,2}\\d+)*)?[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?" + BODY_UNIT + "\\b",
 );
-/* A tub, bag, jar, or scoop of up to 12 lb or 5 kg is a package size, not a
-   body weight. This runs before tokens are split so a typed decimal point or
-   comma is still there: "5 180 lb" is not 5.18, and 0.180 is not a size. */
-const FOOD_TEXT_PACKAGE = /\bweight[^a-z0-9]+(gainers?|watchers)[^a-z0-9]+(\d+(?:[.,]\d{1,2})?)[^a-z0-9]{0,2}(lbs?|pounds?|kgs?|kilos?|kilograms?)[^a-z0-9]+(?:tubs?|bags?|jars?|scoops?)\b/g;
-
-function dropPackageSizes(normalized: string): string {
-  return normalized.replace(FOOD_TEXT_PACKAGE, (all, name, size, unit) => {
-    const cap = unit.startsWith("k") ? 5 : 12;
-    return Number(size.replace(",", ".")) <= cap ? `weight ${name}` : all;
-  });
-}
-
 /* A body-sized mass anywhere (30 kg, 60 lb, 5 stone and up) is a body weight.
    A comma can be the decimal point (82,5 kg). A bare st is a street or
    St. Louis here, so only stone counts. */
@@ -130,15 +118,20 @@ const FOOD_TEXT_HEALTH = [
   /\b(?:medications?|meds|prescri\w*|metformin|insulin|ozempic|wegovy|mounjaro|zepbound|semaglutide|tirzepatide|statins?|atorvastatin|lisinopril|levothyroxine)\b/,
 ];
 
-/* Contiguous stress/mood anywhere, plus separated spellings. Words are letter
-   runs, so digits and underscores are separators and never count as word
-   characters. Fragments from one word start are joined; the join blocks when
-   it STARTS WITH stress or mood ("m-o-o-dswing", "st ressball", "9m o o d").
-   A join that ends exactly on the term blocks too. With trailing letters it
-   blocks only if every earlier fragment is 1-2 letters, so a whole word such
-   as "Moo Daeng" still passes. */
+/* Literal stress/mood substrings always block. Across separators, also match
+   whole terms plus known suffixes regardless of fragment lengths. Short
+   fragments keep the broader prefix rule; "Moo Daeng" still passes. */
 const FOOD_TEXT_STRESS_MOOD = /stress|mood/;
 const FOOD_TEXT_STRESS_MOOD_TERMS = ["stress", "mood"];
+const FOOD_TEXT_STRESS_MOOD_SUFFIXES = [
+  "", "y", "ier", "iest", "ily", "iness", "ish", "s", "ed", "es", "ful", "less",
+  "ing", "or", "ors", "boost", "swing", "swings", "ball", "free",
+];
+
+// Only these substitutions are letters; all other digits remain separators.
+function foldStressMood(text: string): string {
+  return text.replace(/0/g, "o").replace(/3/g, "e").replace(/[5$]/g, "s").replace(/[7+]/g, "t");
+}
 
 function separatedStressMood(text: string): boolean {
   const words = text.split(/[^a-z]+/).filter(Boolean);
@@ -154,7 +147,8 @@ function separatedStressMood(text: string): boolean {
           continue;
         }
         if (j > i && joined.startsWith(term) && (joined.length === term.length || shortRun)) return true;
-        break;
+        if (j > i && FOOD_TEXT_STRESS_MOOD_SUFFIXES.some((suffix) => joined === term + suffix)) return true;
+        if (!FOOD_TEXT_STRESS_MOOD_SUFFIXES.some((suffix) => (term + suffix).startsWith(joined))) break;
       }
     }
   }
@@ -168,22 +162,23 @@ function foodAiTextForbidden(value: string): boolean {
   const exactWeightFood = FOOD_TEXT_WEIGHT_FOOD_EXACT.test(itemName.trim().toLowerCase());
   const dropWeightFoods = (text: string) => exactWeightFood ? text.replace(FOOD_TEXT_WEIGHT_FOODS, " ") : text;
   const normalized = foodAiNormalize(value);
-  // Fold leetspeak only for guarded terms; preserve quantities for mass checks.
-  // Try both readings of 1. Remove permitted food phrases before joining separators.
+  // Preserve quantities for mass checks. Stress/mood use a restricted fold;
+  // weight retains both readings of 1 and its exact food-name exceptions.
   // The stress/mood check also runs on a lowercase copy with no camelCase
   // split, so "MoOdy" is not cut into "mo ody".
   const lowered = foodAiNormalize(value, false);
-  // Preserve digit separators before folding them into letters (st1ress, m0ood).
-  if (separatedStressMood(normalized) || separatedStressMood(lowered)) return true;
+  for (const text of [normalized, lowered]) {
+    // Keep separator readings, then fold symbols while digits stay separated
+    // (st1ress, m0ood, $tre0ss), then apply the full restricted fold.
+    const symbolsFolded = text.replace(/\$/g, "s").replace(/\+/g, "t");
+    if (separatedStressMood(text) || separatedStressMood(symbolsFolded)) return true;
+    const folded = foldStressMood(text);
+    if (FOOD_TEXT_STRESS_MOOD.test(folded) || separatedStressMood(folded)) return true;
+  }
   for (const one of ["i", "l"]) {
     const fold = (text: string) => text.replace(/3/g, "e").replace(/0/g, "o")
       .replace(/1/g, one).replace(/5/g, "s");
     const folded = fold(normalized);
-    const loweredFolded = fold(lowered).replace(/\$/g, "s").replace(/[7+]/g, "t");
-    // Match contiguous stress/mood substrings after folding. Bound separated
-    // letters to whole words so food names such as "Moo Daeng" still pass.
-    if (FOOD_TEXT_STRESS_MOOD.test(folded) || FOOD_TEXT_STRESS_MOOD.test(loweredFolded)) return true;
-    if (separatedStressMood(folded) || separatedStressMood(loweredFolded)) return true;
     // "weigh7" and "weigh+" are weight; "weigh 7oz" and "steak 7oz" stay separate.
     if (/weigh[7+]/.test(lowered)) return true;
     const withoutWeightFoods = dropWeightFoods(foodAiSplit(folded).join(" "));
@@ -191,10 +186,9 @@ function foodAiTextForbidden(value: string): boolean {
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;
   }
   if (foodAiForbiddenTokens(foodAiSplit(normalized), false)) return true;
-  const packed = dropPackageSizes(normalized);
-  if (bodyMass(packed)) return true;
-  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(packed)) return true;
-  const words = foodAiSplit(packed).join(" ");
+  if (bodyMass(normalized)) return true;
+  if (FOOD_TEXT_WEIGHT_FOOD_UNIT.test(normalized)) return true;
+  const words = foodAiSplit(normalized).join(" ");
   const tokens = dropWeightFoods(words).split(" ").filter(Boolean);
   if (FOOD_AI_FORBIDDEN.has(tokens.join("")) || foodAiForbiddenTokens(tokens)) return true;
   const stripped = tokens.join(" ");

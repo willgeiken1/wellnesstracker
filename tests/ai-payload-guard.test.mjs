@@ -421,3 +421,30 @@ test("literal mood substrings and joined MooDaeng names stay blocked", async () 
     assert.equal(calls, 1, text);
   }
 });
+
+test("shared guard vectors gate describe and photo clients behind the meal marker", async () => {
+  const vectors = JSON.parse(read("../native/fixtures/food-ai-guard.json"));
+  for (const [text, allowed] of vectors) {
+    for (const payload of [describePayload(`The meal: ${text}`), photoPayload(`The meal: ${text}`)]) {
+      if (!allowed) await expectBlocked(payload);
+      else {
+        let calls = 0;
+        await callFoodModel(payload, () => { calls += 1; });
+        assert.equal(calls, 1, text);
+      }
+    }
+  }
+});
+
+test("every partition of mood/stress suffix spellings blocks before the client", async () => {
+  const suffixes = ["", "y", "ier", "iest", "ily", "iness", "ish", "s", "ed", "es", "ful", "less", "ing", "or", "ors", "boost", "swing", "swings", "ball", "free"];
+  for (const term of ["mood", "stress"]) {
+    for (const suffix of suffixes) {
+      const word = term + suffix;
+      for (let mask = 0; mask < 2 ** (word.length - 1); mask++) {
+        const text = [...word].map((letter, i) => (i && (mask & (1 << (i - 1))) ? "-" : "") + letter).join("");
+        await expectBlocked(describePayload(`The meal: ${text} bowl`));
+      }
+    }
+  }
+});
