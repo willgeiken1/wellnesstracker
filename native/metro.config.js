@@ -1,6 +1,9 @@
 const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
 const config = getDefaultConfig(__dirname);
+// Shared, pure importer also runs in the Supabase edge function.
+config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, '../supabase/functions/_shared')];
+config.resolver.nodeModulesPaths = [path.resolve(__dirname, 'node_modules')];
 if (process.env.APP_VARIANT === 'freeiphone') {
   config.cacheVersion = 'freeiphone-v1';
   config.resolver.resolveRequest = (context, name, platform) => {

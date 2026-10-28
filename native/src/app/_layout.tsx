@@ -12,6 +12,7 @@ import { LocalDataRecovery } from '../auth/screens';
 import { t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
 
+import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
 void SplashScreen.preventAutoHideAsync();
 export function NavigationShell({ access = false, signedIn = false }: {access?: boolean;signedIn?:boolean}) {
   const { colors, mode, reduceMotion, motion } = useTheme();
@@ -31,6 +32,7 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       <Stack.Screen name="workout" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="food/log" options={{ title: t('foodLog') }} />
       </Stack.Protected>
+      <Stack.Screen name="import" options={{ title: t('importTitle') }} />
       <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" options={{ headerShown: false }} /></Stack.Protected>
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>
@@ -45,6 +47,8 @@ function Application() {
   return <ThemeProvider key={auth.session?.user.id ?? (auth.demo ? 'demo' : 'guest')} repository={auth.repository}>
     {auth.recovery!=='boot-error' && auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
     <LocalDataRecovery />
+    <LegacyImportPrompt />
+    <SharedImportEntry />
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
   </ThemeProvider>;
