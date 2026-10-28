@@ -132,7 +132,7 @@ test('sequential edits on two phones create no losing copy or recovery notice',a
  }finally{a.sqlite.close();b.sqlite.close();}
 });
 
-test.each(['remote','local'] as const)('restore refuses to overwrite a later %s edit',async(source)=>{
+test.each(['remote','local'] as const)('restore refuses a later %s edit and immediately drops the stale copy',async(source)=>{
  const local=await localDatabase();
  try {
   const row=collide(local.repo),saved=local.repo.losingVersions()[0];
@@ -143,6 +143,8 @@ test.each(['remote','local'] as const)('restore refuses to overwrite a later %s 
   expect(local.repo.restoreLosingVersion(saved.key)).toBe(false);
   expect(local.repo.get('sessions',row.id)).toMatchObject(later);
   expect(local.repo.pending()).toEqual(pending);
+  expect(local.repo.losingVersions()).toEqual([]);
+  expect(local.sqlite.prepare("SELECT * FROM sync_state WHERE key LIKE 'losing:%'").all()).toEqual([]);
  }finally{local.sqlite.close();}
 });
 
