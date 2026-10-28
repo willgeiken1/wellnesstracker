@@ -133,8 +133,9 @@ function foodAiTextForbidden(value: string): boolean {
   for (const one of ["i", "l"]) {
     const folded = normalized.replace(/3/g, "e").replace(/0/g, "o")
       .replace(/1/g, one).replace(/5/g, "s");
-    // Word boundaries keep food names intact; retain explicit blocked variants.
-    if (/\bs[^a-z0-9]*t[^a-z0-9]*r[^a-z0-9]*e[^a-z0-9]*s[^a-z0-9]*s(?:ed|less)?\b|\bm[^a-z0-9]*o[^a-z0-9]*o[^a-z0-9]*d(?:boost)?\b/.test(folded)) return true;
+    // Match contiguous stress/mood substrings after folding. Bound separated
+    // letters to whole words so food names such as "Moo Daeng" still pass.
+    if (/stress|mood|\bs[^a-z0-9]*t[^a-z0-9]*r[^a-z0-9]*e[^a-z0-9]*s[^a-z0-9]*s(?:ed|less)?\b|\bm[^a-z0-9]*o[^a-z0-9]*o[^a-z0-9]*d(?:boost)?\b/.test(folded)) return true;
     const withoutWeightFoods = foodAiSplit(folded).join(" ").replace(FOOD_TEXT_WEIGHT_FOODS, " ");
     // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;
