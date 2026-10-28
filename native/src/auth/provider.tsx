@@ -1,7 +1,8 @@
 import { ImportPreviewConflict } from '../features/importer/errors';
 import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
+import { t } from '../i18n/en';
 import * as Network from 'expo-network';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { getAuthClient, clearLocalSession } from './client';
@@ -148,7 +149,11 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     const request=authRequest.current;
     void openLocalDatabase().then(database=>{
       if(!active||request!==authRequest.current||activeSession.current?.user.id!==owner)return;
-      try {promoteDemo(database.forOwner('demo'),currentRepo);setDemoTarget(null);setDemoTransferError(false);}
+      try {
+        const result=promoteDemo(database.forOwner('demo'),currentRepo);
+        setDemoTarget(null);setDemoTransferError(false);
+        if(result?.weighInsSkipped)Alert.alert(t('demoWeighInsSkipped'));
+      }
       catch {setDemoTransferError(true);}
     }).catch(()=>{if(active)setDemoTransferError(true);});
     return ()=>{active=false;};

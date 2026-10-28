@@ -402,9 +402,9 @@ test('screen and provider share one pre-sync: warning and confirmed departure fi
  try {
   await fireEvent.press(view.getByRole('button',{name:'Sign out'}));
   await act(async()=>{jest.advanceTimersByTime(9999);});expect(alert).not.toHaveBeenCalled();
-  await act(async()=>{jest.advanceTimersByTime(1);});expect(alert).toHaveBeenCalledTimes(1);
+  await act(async()=>{jest.advanceTimersByTime(1);});expect(view.getByRole('button',{name:'Sign out anyway'})).toBeTruthy();
   expect(Date.now()-started).toBeLessThanOrEqual(10000);
-  await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
+  await fireEvent.press(view.getByRole('button',{name:'Sign out anyway'}));
   expect(a.wipe).toHaveBeenCalledTimes(1);expect(observed.session).toBeNull();
   expect(sync).toHaveBeenCalledTimes(1);expect(Date.now()-started).toBeLessThanOrEqual(10000);
  } finally {sync.mockRestore();alert.mockRestore();await view.unmount();jest.useRealTimers();}
@@ -697,4 +697,22 @@ test('account importer maps edge 409 to preview conflict without exposing respon
   await waitFor(() => expect(observed.repository).toBe(repo));
   await expect(observed.legacyImport?.('commit', {}, OWNER_A)).rejects.toBeInstanceOf(ImportPreviewConflict);
   await view.unmount();
+});
+
+test.each([true,false])('demo promotion shows a notice only for skipped weigh-ins (%s)',async skipped=>{
+ const {Alert}=require('react-native') as typeof import('react-native');
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),account=fixtureRepo(OWNER_A),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='demo'?demo:owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const promotion=jest.mocked(promoteDemo);promotion.mockReset().mockReturnValue({weighInsSkipped:skipped});
+ fixture.auth.signInWithPassword.mockImplementation(async()=>({data:{session:session(OWNER_A)},error:null}));
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.demo).toBe(true));
+ await act(async()=>{await observed.signIn('fixture@example.test','synthetic-password');fixture.emit(session(OWNER_A));});
+ await waitFor(()=>expect(promotion).toHaveBeenCalledTimes(1));
+ if(skipped)expect(alert).toHaveBeenCalledWith('Your account already has weigh-ins, so demo weigh-ins were not moved.');
+ else expect(alert).not.toHaveBeenCalled();
+ await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(1);
+ alert.mockRestore();promotion.mockReset();
 });

@@ -1,0 +1,178 @@
+[
+  {
+    "key": "pecUpper",
+    "group": "chest"
+  },
+  {
+    "key": "pecLower",
+    "group": "chest"
+  },
+  {
+    "key": "deltAnt",
+    "group": "frontDelts"
+  },
+  {
+    "key": "deltLat",
+    "group": "sideDelts"
+  },
+  {
+    "key": "deltPost",
+    "group": "rearDelts"
+  },
+  {
+    "key": "bicepsLong",
+    "group": "biceps"
+  },
+  {
+    "key": "bicepsShort",
+    "group": "biceps"
+  },
+  {
+    "key": "brachialis",
+    "group": "biceps"
+  },
+  {
+    "key": "tricepsLong",
+    "group": "triceps"
+  },
+  {
+    "key": "tricepsLat",
+    "group": "triceps"
+  },
+  {
+    "key": "tricepsMed",
+    "group": "triceps"
+  },
+  {
+    "key": "brachioradialis",
+    "group": "forearms"
+  },
+  {
+    "key": "forearmFlex",
+    "group": "forearms"
+  },
+  {
+    "key": "forearmExt",
+    "group": "forearms"
+  },
+  {
+    "key": "trapsUpper",
+    "group": "traps"
+  },
+  {
+    "key": "trapsMid",
+    "group": "traps"
+  },
+  {
+    "key": "trapsLower",
+    "group": "traps"
+  },
+  {
+    "key": "levator",
+    "group": "traps"
+  },
+  {
+    "key": "rhomboids",
+    "group": "upperBack"
+  },
+  {
+    "key": "infraspinatus",
+    "group": "upperBack"
+  },
+  {
+    "key": "teresMinor",
+    "group": "upperBack"
+  },
+  {
+    "key": "teresMajor",
+    "group": "upperBack"
+  },
+  {
+    "key": "subscapularis",
+    "group": "upperBack"
+  },
+  {
+    "key": "lats",
+    "group": "lats"
+  },
+  {
+    "key": "erectors",
+    "group": "lowerBack"
+  },
+  {
+    "key": "quadLumb",
+    "group": "lowerBack"
+  },
+  {
+    "key": "rectusAbs",
+    "group": "abs"
+  },
+  {
+    "key": "transverseAbs",
+    "group": "abs"
+  },
+  {
+    "key": "obliques",
+    "group": "obliques"
+  },
+  {
+    "key": "serratus",
+    "group": "obliques"
+  },
+  {
+    "key": "hipFlexors",
+    "group": "quads"
+  },
+  {
+    "key": "tfl",
+    "group": "abductors"
+  },
+  {
+    "key": "gluteMax",
+    "group": "glutes"
+  },
+  {
+    "key": "gluteMed",
+    "group": "abductors"
+  },
+  {
+    "key": "gluteMin",
+    "group": "abductors"
+  },
+  {
+    "key": "hipRotators",
+    "group": "glutes"
+  },
+  {
+    "key": "rectusFem",
+    "group": "quads"
+  },
+  {
+    "key": "vastusLat",
+    "group": "quads"
+  },
+  {
+    "key": "vastusMed",
+    "group": "quads"
+  },
+  {
+    "key": "adductors",
+    "group": "adductors"
+  },
+  {
+    "key": "hamstrings",
+    "group": "hamstrings"
+  },
+  {
+    "key": "tibialis",
+    "group": "calves"
+  },
+  {
+    "key": "gastroc",
+    "group": "calves"
+  },
+  {
+    "key": "soleus",
+    "group": "calves"
+  }
+]

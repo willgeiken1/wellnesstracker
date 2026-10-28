@@ -1,10 +1,11 @@
+import { SyncRecovery } from './sync-recovery';
 import { BootRecovery } from './boot-recovery';
 import { DepartureFailure } from './sign-out';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ageOn, onboardingProgress } from '../features/onboarding/model';
 import { PreferenceFields } from '../features/onboarding/fields';
 import { useDevicePreferences } from '../features/onboarding/device-preferences';
-import { TextInput, Alert } from 'react-native';
+import { TextInput, Alert, Modal, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../components/screen';
 import { ThemedText } from '../components/themed-text';
@@ -68,6 +69,8 @@ export function AuthForm({create=false,dob,progress,onCreated,embedded=false,bef
   return embedded?content:<Screen topInset title={t(create?'createAccount':'signIn')}>{content}</Screen>;
 }
 export function Account() {
+  const {colors}=useTheme();
+  const [lossCount,setLossCount]=useState<number|null>(null);
   const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|null>(null),[busy,setBusy]=useState(false);
   const submitting=useRef(false);
   const leave=async(discardUnsynced=false)=>{
@@ -75,7 +78,7 @@ export function Account() {
     submitting.current=true;setBusy(true);
     try { if(discardUnsynced)await auth.signOut(true);else await auth.signOut(); }
     catch(cause) {setError(cause instanceof DepartureFailure?'signOutFailed':'signOutNotStarted');}
-    finally {submitting.current=false;setBusy(false);}
+    finally {submitting.current=false;setBusy(false);setLossCount(null);}
   };
   const signOut=async()=>{
     if(submitting.current)return;
@@ -84,10 +87,7 @@ export function Account() {
       await (auth.prepareSignOut?auth.prepareSignOut():syncBeforeSignOut(auth.syncNow));
       const count=auth.repository?.unsyncedCount()??auth.pending;
       if(count===0) {await auth.signOut();return;}
-      Alert.alert(t('signOutConfirm'),`${t('signOutBody')} ${signOutUnsynced(count)}`,[
-        {text:t('cancel'),style:'cancel'},
-        {text:t('signOut'),style:'destructive',onPress:()=>{void leave(true);}},
-      ]);
+      setLossCount(count);
     } catch(cause) {setError(cause instanceof DepartureFailure?'signOutFailed':'signOutNotStarted');}
     finally {submitting.current=false;setBusy(false);}
   };
@@ -97,10 +97,22 @@ export function Account() {
       <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.pending>0?'syncPending':auth.conflicts>0?'syncConflictStatus':'syncIdle')}</ThemedText>
       {auth.conflicts>0&&<Badge label={`${auth.conflicts} ${t('syncConflicts')}`}/>}
       {auth.pending>0&&<Badge label={`${auth.pending} ${t('pending')}`}/>}
+      <SyncRecovery repository={auth.repository}/>
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
       <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
     </>}
     {error&&<ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
+    <Modal transparent visible={lossCount!==null} animationType="none" onRequestClose={()=>{if(!submitting.current)setLossCount(null);}}>
+      {lossCount!==null&&<View style={{flex:1,justifyContent:'flex-end',backgroundColor:colors.scrim}}>
+        <View accessibilityViewIsModal onAccessibilityEscape={()=>{if(!submitting.current)setLossCount(null);}}
+          style={{backgroundColor:colors.surface,padding:24,paddingBottom:40,gap:16,borderTopLeftRadius:24,borderTopRightRadius:24}}>
+          <ThemedText accessibilityRole="header">{t('signOutConfirm')}</ThemedText>
+          <ThemedText>{t('signOutBody')} {signOutUnsynced(lossCount)}</ThemedText>
+          <Button label={t('signOutWait')} disabled={busy} variant="secondary" onPress={()=>setLossCount(null)}/>
+          <Button label={t('signOutAnyway')} disabled={busy} busy={busy} variant="destructive" onPress={()=>{void leave(true);}}/>
+        </View>
+      </View>}
+    </Modal>
   </Screen>;
 }
 
