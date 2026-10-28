@@ -17,9 +17,19 @@ import AppTabs from '../src/components/app-tabs';
 // The native host is unavailable in Jest. Keep the real tab declarations and labels.
 jest.mock('expo-router/native-tabs', () => {
   const { View, Text } = require('react-native');
-  const NativeTabs = ({ children }: any) => <View>{children}</View>;
-  const Trigger = ({ children, accessibilityLabel }: any) => <View accessibilityLabel={accessibilityLabel}>{children}</View>;
-  Trigger.Label = ({ children }: any) => <Text>{children}</Text>;
+  // Compiler cache helpers live outside this factory and violate Jest's hoist guard.
+  const NativeTabs = ({ children }: any) => {
+    'use no memo';
+    return <View>{children}</View>;
+  };
+  const Trigger = ({ children, accessibilityLabel }: any) => {
+    'use no memo';
+    return <View accessibilityLabel={accessibilityLabel}>{children}</View>;
+  };
+  Trigger.Label = ({ children }: any) => {
+    'use no memo';
+    return <Text>{children}</Text>;
+  };
   Trigger.Icon = () => null;
   NativeTabs.Trigger = Trigger;
   return { NativeTabs };
@@ -65,7 +75,20 @@ test.each([
       typeof node.props.onResponderRelease === 'function');
     expect(pressables.length).toBeGreaterThan(0);
     for (const node of pressables) {
-      expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
+      if (node.type === 'RNSVGPath') {
+        if (node.props.testID?.startsWith('atlas-hit-')) {
+          // Invisible duplicates expand touch areas; only the visible path is
+          // an accessibility element. The complete list is the precise path.
+          expect(node.props.accessible).not.toBe(true);
+          expect(node.props.strokeWidth).toBeGreaterThanOrEqual(44);
+          expect(screen.getByRole('button', { name: 'Muscle list' })).toBeTruthy();
+          continue;
+        }
+        expect(node.props.accessible).toBe(true);
+        expect(node.props.accessibilityRole).toBe('button');
+        expect(typeof node.props.accessibilityState.selected).toBe('boolean');
+        expect(screen.getByRole('button', { name: 'Muscle list' })).toBeTruthy();
+      } else expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
       expect((node.props.accessibilityLabel ?? textContent(node)).trim().length).toBeGreaterThan(0);
     }
     const texts = result.container.queryAll(node => node.type === 'Text');

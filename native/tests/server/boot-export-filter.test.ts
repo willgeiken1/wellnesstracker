@@ -55,3 +55,18 @@ test.each(['sync_outbox','sync_state','sync_conflicts'])('drops %s if it cannot 
   expect(copy.prepare('SELECT name FROM sqlite_schema WHERE type=\'table\'').all()).toEqual([]);
  } finally {copy.close();}
 });
+
+test('device-only losing versions never leave in a boot recovery export',async()=>{
+ const copy=new DatabaseSync(':memory:');
+ copy.exec('CREATE TABLE sync_state (owner_id TEXT, key TEXT, value TEXT)');
+ copy.prepare('INSERT INTO sync_state VALUES (?,?,?)').run(OWNER_A,'losing:sessions:fixture','synthetic-recovery-payload');
+ copy.prepare('INSERT INTO sync_state VALUES (?,?,?)').run(OWNER_A,'cursor:sessions','7');
+ try {
+  await filterBootExport({
+   execAsync:async query=>{copy.exec(query);},
+   getAllAsync:async <T>(query:string)=>copy.prepare(query).all() as T[],
+   runAsync:async(query:string,...params:unknown[])=>{const result=copy.prepare(query).run(...params as string[]);return {changes:Number(result.changes),lastInsertRowId:Number(result.lastInsertRowid)};},
+  },OWNER_A);
+  expect(copy.prepare('SELECT key FROM sync_state').all()).toEqual([{key:'cursor:sessions'}]);
+ }finally{copy.close();}
+});

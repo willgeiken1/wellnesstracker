@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Alert } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { Body } from '../src/features/body/screen';
 import { memoryRepository } from './workout-repository';
@@ -71,4 +71,73 @@ test('nonfinite keypad values cannot open a broken wheel or save',async()=>{
  await fireEvent.changeText(screen.getByLabelText('Weight (kg)'),'9'.repeat(400));
  await fireEvent.press(screen.getByRole('button',{name:'Use weight wheel'}));
  expect(screen.getByRole('alert')).toBeTruthy();expect(screen.getByLabelText('Weight (kg)')).toBeTruthy();expect(repo.list('weigh_ins')).toHaveLength(0);
+});
+
+test('unusual save waits for confirmation, cancel keeps input, confirm saves',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});saveWeighIn(repo,80,'kg');
+ await render(<Body repository={repo}/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Enter weight with keypad'}));
+ await fireEvent.changeText(screen.getByLabelText('Weight (kg)'),'100');
+ await fireEvent.press(screen.getByRole('button',{name:'Save weigh-in'}));
+ expect(repo.list('weigh_ins')).toHaveLength(1);
+ const buttons=alert.mock.calls.at(-1)![2]!;
+ await act(()=>{buttons.find(b=>b.style==='cancel')?.onPress?.();});
+ expect(screen.getByLabelText('Weight (kg)').props.value).toBe('100');
+ await fireEvent.press(screen.getByRole('button',{name:'Save weigh-in'}));
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.text==='Save anyway')!.onPress!();});
+ expect(repo.list('weigh_ins')).toHaveLength(2);
+ expect(repo.list('weigh_ins')[1].data.weight_kg).toBe(100);
+ alert.mockRestore();
+});
+test('delete confirmation cancels safely and removes only the selected entry',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
+ const first=saveWeighIn(repo,80,'kg'),keep=saveWeighIn(repo,82,'kg');
+ await render(<Body repository={repo}/>,{wrapper});
+ await fireEvent.press(screen.getByTestId(`body-delete-${first.id}`));
+ expect(repo.list('weigh_ins')).toHaveLength(2);
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.style==='cancel')?.onPress?.();});
+ expect(repo.list('weigh_ins')).toHaveLength(2);
+ await fireEvent.press(screen.getByTestId(`body-delete-${first.id}`));
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.style==='destructive')!.onPress!();});
+ expect(repo.list('weigh_ins')).toEqual([keep]);
+ expect(screen.getByText('Trend: 82.0 kg')).toBeTruthy();
+ alert.mockRestore();
+});
+
+test('delete buttons identify the date and lb value and confirmation includes the date',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'lb'});
+ saveWeighIn(repo,180,'lb','2026-10-01');
+ await render(<Body repository={repo}/>,{wrapper});
+ await fireEvent.press(screen.getByRole('button',{name:'Delete weigh-in for 2026-10-01, 180.0 lb'}));
+ expect(alert.mock.calls.at(-1)![0]).toBe('Delete weigh-in for 2026-10-01?');
+ await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.style==='destructive')!.onPress!();});
+ expect(repo.list('weigh_ins')).toEqual([]);alert.mockRestore();
+});
+
+test('delete list initially shows the 30 most recent readings and Show all expands it',async()=>{
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
+ // Reverse insertion makes chronology, rather than repository order, observable.
+ for(let day=31;day>=1;day--)saveWeighIn(repo,80,'kg',`2026-08-${String(day).padStart(2,'0')}`);
+ await render(<Body repository={repo}/>,{wrapper});
+ expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})).toHaveLength(30);
+ expect(screen.queryByRole('button',{name:'Delete weigh-in for 2026-08-01, 80.0 kg'})).toBeNull();
+ expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})[0].props.accessibilityLabel).toContain('2026-08-31');
+ await fireEvent.press(screen.getByRole('button',{name:'Show all'}));
+ expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})).toHaveLength(31);
+});
+
+test('a stale delete confirmation shows failure when its row is already deleted',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
+ const row=saveWeighIn(repo,80,'kg');
+ await render(<Body repository={repo}/>,{wrapper});
+ await fireEvent.press(screen.getByTestId(`body-delete-${row.id}`));
+ const confirm=alert.mock.calls.at(-1)![2]!.find(b=>b.style==='destructive')!.onPress!;
+ await act(()=>{repo.remove('weigh_ins',row.id);});
+ await act(()=>{confirm();});
+ expect(screen.getByRole('alert')).toHaveTextContent('Could not delete this weigh-in. Try again.');alert.mockRestore();
 });

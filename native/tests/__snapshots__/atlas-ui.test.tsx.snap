@@ -1,0 +1,1163 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
+[
+  [
+    {
+      "fill": {
+        "payload": 4287478742,
+        "type": 0,
+      },
+      "id": "atlas-path-pecUpper",
+      "opacity": 0.8833333333333333,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4287478742,
+        "type": 0,
+      },
+      "id": "atlas-path-pecLower",
+      "opacity": 0.8833333333333333,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-deltAnt",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-deltLat",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-bicepsLong",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-bicepsShort",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-brachialis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-brachioradialis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-forearmFlex",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-rectusAbs",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-obliques",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-serratus",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-hipFlexors",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-vastusLat",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-rectusFem",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-vastusMed",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-adductors",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-tibialis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-transverseAbs",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-tfl",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+  ],
+  [
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-deltPost",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4283860386,
+        "type": 0,
+      },
+      "id": "atlas-path-tricepsLong",
+      "opacity": 0.825,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4283860386,
+        "type": 0,
+      },
+      "id": "atlas-path-tricepsLat",
+      "opacity": 0.825,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4283860386,
+        "type": 0,
+      },
+      "id": "atlas-path-tricepsMed",
+      "opacity": 0.825,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-forearmExt",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-trapsUpper",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-levator",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-trapsMid",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-rhomboids",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-infraspinatus",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-teresMinor",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-teresMajor",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-subscapularis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-trapsLower",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-lats",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-erectors",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-quadLumb",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-gluteMed",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-gluteMin",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-gluteMax",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-hipRotators",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-hamstrings",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-gastroc",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4280694598,
+        "type": 0,
+      },
+      "id": "atlas-path-soleus",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4279176977,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+  ],
+]
+`;
+
+exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
+[
+  [
+    {
+      "fill": {
+        "payload": 4282553030,
+        "type": 0,
+      },
+      "id": "atlas-path-pecUpper",
+      "opacity": 0.8833333333333333,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4282553030,
+        "type": 0,
+      },
+      "id": "atlas-path-pecLower",
+      "opacity": 0.8833333333333333,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-deltAnt",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-deltLat",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-bicepsLong",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-bicepsShort",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-brachialis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-brachioradialis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-forearmFlex",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-rectusAbs",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-obliques",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-serratus",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-hipFlexors",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-vastusLat",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-rectusFem",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-vastusMed",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-adductors",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-tibialis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-transverseAbs",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-tfl",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+  ],
+  [
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-deltPost",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4288596705,
+        "type": 0,
+      },
+      "id": "atlas-path-tricepsLong",
+      "opacity": 0.825,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4288596705,
+        "type": 0,
+      },
+      "id": "atlas-path-tricepsLat",
+      "opacity": 0.825,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4288596705,
+        "type": 0,
+      },
+      "id": "atlas-path-tricepsMed",
+      "opacity": 0.825,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-forearmExt",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-trapsUpper",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-levator",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-trapsMid",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-rhomboids",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-infraspinatus",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-teresMinor",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-teresMajor",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-subscapularis",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-trapsLower",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-lats",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-erectors",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-quadLumb",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-gluteMed",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-gluteMin",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-gluteMax",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-hipRotators",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-hamstrings",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-gastroc",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+    {
+      "fill": {
+        "payload": 4292799479,
+        "type": 0,
+      },
+      "id": "atlas-path-soleus",
+      "opacity": 0.65,
+      "stroke": {
+        "payload": 4294178033,
+        "type": 0,
+      },
+      "strokeWidth": 0.8,
+    },
+  ],
+]
+`;

@@ -39,7 +39,8 @@ test('Account displays pending status, manual sync, and requires sign-out confir
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
  expect(screen.getByText('3 pending')).toBeTruthy();await fireEvent.press(screen.getByRole('button',{name:'Sync now'}));expect(auth.syncNow).toHaveBeenCalled();
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));expect(auth.signOut).not.toHaveBeenCalled();
- const buttons=alert.mock.calls[0][2]!;await act(async()=>{buttons[1].onPress?.();});expect(auth.signOut).toHaveBeenCalledWith(true);expect(alert.mock.calls[0][1]).toContain('3 unsynced changes will be lost');alert.mockRestore();
+ expect(screen.getByText(/3 unsynced changes will be lost/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out anyway'}));expect(auth.signOut).toHaveBeenCalledWith(true);alert.mockRestore();
 });
 test('sign-in accepts an existing account password shorter than the new-account minimum',async()=>{
  const auth=state();await wrap(<AuthForm/>,auth);
@@ -60,7 +61,7 @@ test.each([0,1,3])('sign-out warning uses current owner count %s after sync',asy
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
  if(count===0){expect(alert).not.toHaveBeenCalled();expect(auth.signOut).toHaveBeenCalledWith();}
- else {expect(auth.signOut).not.toHaveBeenCalled();expect(alert.mock.calls[0][1]).toContain(count===1?'1 unsynced change will be lost':'3 unsynced changes will be lost');}
+ else {expect(auth.signOut).not.toHaveBeenCalled();expect(screen.getByText(new RegExp(count===1?'1 unsynced change will be lost':'3 unsynced changes will be lost'))).toBeTruthy();}
 });
 test('screen waits for sync, prevents double submit, and clears its timeout on early completion',async()=>{
  jest.useFakeTimers();let finish!:()=>void;
@@ -85,16 +86,16 @@ test('sign-out sync times out at 10 seconds and shows loss warning',async()=>{
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
  await act(async()=>{jest.advanceTimersByTime(9999);});expect(alert).not.toHaveBeenCalled();
  await act(async()=>{jest.advanceTimersByTime(1);});
- expect(alert.mock.calls[0][1]).toContain('3 unsynced changes will be lost');expect(auth.signOut).not.toHaveBeenCalled();
- expect(screen.getByRole('button',{name:'Sign out'}).props.accessibilityState).toMatchObject({disabled:false,busy:false});
+ expect(screen.getByText(/3 unsynced changes will be lost/)).toBeTruthy();expect(auth.signOut).not.toHaveBeenCalled();
+ expect(screen.getByRole('button',{name:'Wait'})).toBeTruthy();
 });
 
 test('destructive confirmation double tap starts only one sign-out while in flight',async()=>{
  let finish!:()=>void;const auth={...state(),pending:1,signOut:jest.fn(()=>new Promise<void>(r=>{finish=r;}))};
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
- const confirm=alert.mock.calls[0][2]![1].onPress!;
- await act(async()=>{confirm();confirm();});
+ const confirm=screen.getByRole('button',{name:'Sign out anyway'});
+ await fireEvent.press(confirm);await fireEvent.press(confirm);
  expect(auth.signOut).toHaveBeenCalledTimes(1);await act(async()=>{finish();});
 });
 test('failed departure warns that erasure may have started',async()=>{
@@ -126,7 +127,7 @@ test.each([false,true])('Account selects failure copy by error type after confir
  const auth={...state(),pending:1,signOut:jest.fn(async()=>{throw departure?new DepartureFailure():new Error('synthetic');})};
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});await wrap(<Account/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
- await act(async()=>{alert.mock.calls[0][2]![1].onPress?.();});
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out anyway'}));
  expect(auth.signOut).toHaveBeenCalledWith(true);
  expect(screen.getByRole('alert')).toHaveTextContent(t(departure?'signOutFailed':'signOutNotStarted'));
  expect(screen.queryByText(t(departure?'signOutNotStarted':'signOutFailed'))).toBeNull();
@@ -150,4 +151,14 @@ test('later sign-in preserves an earlier device analytics opt-in when preference
  await fireEvent.changeText(screen.getByLabelText('Email'),'fixture@example.test');await fireEvent.changeText(screen.getByLabelText('Password'),'synthetic');
  await fireEvent.press(screen.getByRole('button',{name:'Sign in'}));
  expect(device.localGet('devicePreferences')).toEqual({crashReports:false,analytics:true});
+});
+
+
+test('Wait dismisses the offline loss sheet and preserves edits',async()=>{
+ const auth={...state(),pending:2,syncStatus:'offline' as const};await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(screen.getByText(/2 unsynced changes will be lost/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Wait'}));
+ expect(screen.queryByRole('button',{name:'Sign out anyway'})).toBeNull();
+ expect(auth.signOut).not.toHaveBeenCalled();
 });

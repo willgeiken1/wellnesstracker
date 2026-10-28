@@ -22,6 +22,6 @@ export default function SettingPlaceholder() {
     {section === 'about' && <Card><ListRow label={t('licenses')}
       onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'licenses' } })} /></Card>}
     {/* TODO: About > Licenses must list full Lexend (OFL 1.1) and RepDB notices before release. */}
-    {section === 'licenses' && <ThemedText>{t('licensesHint')}</ThemedText>}
+    {section === 'licenses' && <><ThemedText>{t('licensesHint')}</ThemedText><ThemedText>{t('atlasPaletteCredit')}</ThemedText></>}
   </Screen></>;
 }
