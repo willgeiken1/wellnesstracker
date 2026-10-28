@@ -282,3 +282,18 @@ test("aborting a drain preserves its failure count; consent abort clears the job
   expect(aiState(repo).queue).toEqual([]);
   expect(aiState(repo).ready).toEqual([]);
 });
+
+test("8000-character mixed stress/mood digit runs finish under 50 ms", () => {
+  for (const prefix of ["m", "5"]) {
+    const payload = {
+      model: "food-model",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: [{ type: "text", text: prefix + "0".repeat(7999) }] }],
+    };
+    const start = performance.now();
+    assertFoodAiPayload(payload);
+    const elapsed = performance.now() - start;
+    console.log(`native guard ${prefix} digit run: ${elapsed.toFixed(3)} ms`);
+    expect(elapsed).toBeLessThan(50);
+  }
+});

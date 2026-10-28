@@ -496,6 +496,8 @@ const FOOD_TEXT_WEIGHT_FOOD_UNIT = new RegExp(
 const FOOD_TEXT_BODY_MASS = /(\d+(?:[.,]\d+)?)[^a-z0-9]{0,3}(?:ish[^a-z0-9]{0,3})?(kgs?|kilos?|kilograms?|lbs?|pounds?|stones?)\b/g;
 
 function bodyMass(normalized: string): boolean {
+  // Without a mass unit, avoid retrying the numeric pattern across long digit runs.
+  if (!/(?:kgs?|kilos?|kilograms?|lbs?|pounds?|stones?)\b/.test(normalized)) return false;
   for (const [, size, unit] of normalized.matchAll(FOOD_TEXT_BODY_MASS)) {
     const cap = unit.startsWith("k") ? 30 : unit.startsWith("st") ? 5 : 60;
     if (Number(size.replace(",", ".")) >= cap) return true;
@@ -519,10 +521,10 @@ const FOOD_TEXT_HEALTH = [
 const FOOD_TEXT_STRESS_MOOD = /stress|mood/;
 // Match each letter's fold independently, while digits may also be separators.
 // Spaces stay word breaks; the mood ending must be a whole term or known suffix.
-const FOOD_TEXT_STRESS_MOOD_MIXED = /m[^a-z\s]*[o0][^a-z\s]*[o0][^a-z\s]*d(?=$|[^a-z]|y|ier|iest|ily|iness|ish|s|ed|es|ful|less|ing|or|boost|swing|ball|free)|[s5$][^a-z\s]*[t7+][^a-z\s]*r[^a-z\s]*[e3][^a-z\s]*[s5$][^a-z\s]*[s5$]/;
+const FOOD_TEXT_STRESS_MOOD_MIXED = /m[^a-z\s]{0,4}[o0][^a-z\s]{0,4}[o0][^a-z\s]{0,4}d(?=$|[^a-z]|y|ier|iest|ily|iness|ish|s|ed|es|ful|less|ing|or|boost|swing|ball|free)|[s5$][^a-z\s]{0,4}[t7+][^a-z\s]{0,4}r[^a-z\s]{0,4}[e3][^a-z\s]{0,4}[s5$][^a-z\s]{0,4}[s5$]/;
 const FOOD_TEXT_STRESS_MOOD_TERMS = ["stress", "mood"];
 const FOOD_TEXT_STRESS_MOOD_SUFFIXES = [
-  "", "y", "ier", "iest", "ily", "iness", "ish", "s", "ed", "es", "ful", "less",
+  "", "y", "ier", "iest", "ily", "iness", "ish", "ished", "s", "ed", "es", "ful", "less",
   "ing", "or", "ors", "boost", "swing", "swings", "ball", "free",
 ];
 
@@ -539,7 +541,7 @@ function separatedStressMood(text: string): boolean {
       // A space before an ordinary word is not a mood suffix ("moo dish").
       // Keep punctuation-separated mood spellings and all stress suffixes.
       const ordinaryMooWord = term === "mood" && words[i] === "moo"
-        && ["dish", "ded", "des", "ding"].includes(words[i + 1])
+        && ["dish", "ding"].includes(words[i + 1])
         && /^\s+$/.test(text.slice(fragments[i].index + 3, fragments[i + 1].index));
       if (ordinaryMooWord) continue;
       let joined = "";
@@ -584,9 +586,10 @@ function foodAiTextForbidden(value: string): boolean {
   for (const one of ["i", "l"]) {
     const fold = (text: string) => text.replace(/3/g, "e").replace(/0/g, "o")
       .replace(/1/g, one).replace(/5/g, "s");
-    const folded = fold(normalized);
+    const foldedLowered = fold(lowered);
+    const folded = normalized === lowered ? foldedLowered : fold(normalized);
     // "weigh7" and "weigh+" are weight; "weigh 7oz" and "steak 7oz" stay separate.
-    if (/weigh[7+]/.test(fold(lowered))) return true;
+    if (/weigh[7+]/.test(foldedLowered)) return true;
     const withoutWeightFoods = dropWeightFoods(foodAiSplit(folded).join(" "));
     // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;

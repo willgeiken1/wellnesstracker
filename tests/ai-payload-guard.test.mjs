@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FOOD_MODEL_ID } from "../supabase/functions/_shared/food-model.js";
 import { describeEstimateSchema, readDescribeEstimate } from "../supabase/functions/_shared/food-output.js";
-import { FOOD_AI_ALLOWED_KEYS, FoodAiPayloadError, callFoodModel } from "../supabase/functions/_shared/strip.ts";
+import { FOOD_AI_ALLOWED_KEYS, FoodAiPayloadError, assertFoodAiPayload, callFoodModel } from "../supabase/functions/_shared/strip.ts";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const SENTINEL = 987654;
@@ -446,5 +446,16 @@ test("every partition of mood/stress suffix spellings blocks before the client",
         await expectBlocked(describePayload(`The meal: ${text} bowl`));
       }
     }
+  }
+});
+
+test("8000-character mixed stress/mood digit runs finish under 50 ms", () => {
+  for (const prefix of ["m", "5"]) {
+    const payload = describePayload(prefix + "0".repeat(7999));
+    const start = performance.now();
+    assertFoodAiPayload(payload);
+    const elapsed = performance.now() - start;
+    console.log(`strip guard ${prefix} digit run: ${elapsed.toFixed(3)} ms`);
+    assert.ok(elapsed < 50, `${prefix} digit run took ${elapsed.toFixed(3)} ms`);
   }
 });

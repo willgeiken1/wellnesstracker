@@ -441,11 +441,11 @@
   ],
   [
     "moo ded",
-    true
+    false
   ],
   [
     "moo des",
-    true
+    false
   ],
   [
     "moo dful",
@@ -649,6 +649,14 @@
   ],
   [
     "moody-ish",
+    false
+  ],
+  [
+    "moo dished",
+    false
+  ],
+  [
+    "moo des s",
     false
   ]
 ]
