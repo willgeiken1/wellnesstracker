@@ -1,3 +1,5 @@
+// Shell-only fixtures have no signed-in repository; feature behavior is covered by body-ui.
+jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';

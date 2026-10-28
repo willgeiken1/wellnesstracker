@@ -685,3 +685,21 @@ test('unknown legacy demo provenance stops before any account request and preser
  await act(async()=>{expect(await observed.createAccount('synthetic@example.test','synthetic-password','2000-01-01')).toBe('demoCarryUnavailable');});
  expect(fixture.auth.signUp).not.toHaveBeenCalled();expect(demo.wipe).not.toHaveBeenCalled();expect(observed.demo).toBe(true);check.mockReset();
 });
+
+test.each([true,false])('demo promotion shows a notice only for skipped weigh-ins (%s)',async skipped=>{
+ const {Alert}=require('react-native') as typeof import('react-native');
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ const guest=fixtureRepo('guest'),demo=fixtureRepo('demo'),account=fixtureRepo(OWNER_A),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner==='demo'?demo:owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
+ const promotion=jest.mocked(promoteDemo);promotion.mockReset().mockReturnValue({weighInsSkipped:skipped});
+ fixture.auth.signInWithPassword.mockImplementation(async()=>({data:{session:session(OWNER_A)},error:null}));
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.demo).toBe(true));
+ await act(async()=>{await observed.signIn('fixture@example.test','synthetic-password');fixture.emit(session(OWNER_A));});
+ await waitFor(()=>expect(promotion).toHaveBeenCalledTimes(1));
+ if(skipped)expect(alert).toHaveBeenCalledWith('Your account already has weigh-ins, so demo weigh-ins were not moved.');
+ else expect(alert).not.toHaveBeenCalled();
+ await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(1);
+ alert.mockRestore();promotion.mockReset();
+});
