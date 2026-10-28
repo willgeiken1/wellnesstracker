@@ -33,7 +33,7 @@ const FOOD_AI_IGNORABLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}]/gu;
 /* Line and paragraph separators are word breaks, never stripped. The second
    strip covers anything NFKC might map to an ignorable. Combining marks are
    dropped after NFD, so "weíght" and "we\u0300ight" read as weight. */
-function foodAiNormalize(value: string): string {
+function foodAiNormalize(value: string, camel = true): string {
   return String(value)
     .replace(/[\u2028\u2029]/g, " ")
     .replace(FOOD_AI_IGNORABLE, "")
@@ -41,8 +41,9 @@ function foodAiNormalize(value: string): string {
     .replace(FOOD_AI_IGNORABLE, "")
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(camel ? /([a-z])([A-Z])/g : /(?!)/g, "$1 $2")
     .toLowerCase()
+    .replace(/ß/g, "ss").replace(/đ/g, "d").replace(/г/g, "r")
     // Common Cyrillic/Greek lookalikes and Latin small caps in sensitive labels.
     .replace(/[аα]/g, "a").replace(/[еεᴇ]/g, "e")
     .replace(/[оοøᴏ]/g, "o").replace(/[рρ]/g, "p")
@@ -126,16 +127,26 @@ const FOOD_TEXT_HEALTH = [
   /\b(?:medications?|meds|prescri\w*|metformin|insulin|ozempic|wegovy|mounjaro|zepbound|semaglutide|tirzepatide|statins?|atorvastatin|lisinopril|levothyroxine)\b/,
 ];
 
+/* Contiguous stress/mood anywhere, or the letters split by separators when
+   they end the word or carry a known suffix ("m-o-o-dy", "st ressful"). A bare
+   trailing word such as "Moo Daeng" is not a suffix and still passes. */
+const FOOD_TEXT_STRESS_MOOD = /stress|mood|\bs[^a-z0-9]*t[^a-z0-9]*r[^a-z0-9]*e[^a-z0-9]*s[^a-z0-9]*s(?:ed|es|ful|less|ing|or|ors|s|y)?\b|\bm[^a-z0-9]*o[^a-z0-9]*o[^a-z0-9]*d(?:boost|y|ier|iest|iness|ily|ish|s)?\b/;
+
 function foodAiTextForbidden(value: string): boolean {
   const normalized = foodAiNormalize(value);
   // Fold leetspeak only for guarded terms; preserve quantities for mass checks.
   // Try both readings of 1. Remove permitted food phrases before joining separators.
+  // The stress/mood check also runs on a lowercase copy with no camelCase
+  // split, so "MoOdy" is not cut into "mo ody".
+  const lowered = foodAiNormalize(value, false);
   for (const one of ["i", "l"]) {
-    const folded = normalized.replace(/3/g, "e").replace(/0/g, "o")
+    const fold = (text: string) => text.replace(/3/g, "e").replace(/0/g, "o")
       .replace(/1/g, one).replace(/5/g, "s");
+    const folded = fold(normalized);
+    const loweredFolded = fold(lowered).replace(/\$/g, "s").replace(/[7+]/g, "t");
     // Match contiguous stress/mood substrings after folding. Bound separated
     // letters to whole words so food names such as "Moo Daeng" still pass.
-    if (/stress|mood|\bs[^a-z0-9]*t[^a-z0-9]*r[^a-z0-9]*e[^a-z0-9]*s[^a-z0-9]*s(?:ed|less)?\b|\bm[^a-z0-9]*o[^a-z0-9]*o[^a-z0-9]*d(?:boost)?\b/.test(folded)) return true;
+    if (FOOD_TEXT_STRESS_MOOD.test(folded) || FOOD_TEXT_STRESS_MOOD.test(loweredFolded)) return true;
     const withoutWeightFoods = foodAiSplit(folded).join(" ").replace(FOOD_TEXT_WEIGHT_FOODS, " ");
     // Keep weight substrings blocked, but do not join the tail of "raw" to "eight".
     if (/weight|\bw *e *i *g *h *t/.test(withoutWeightFoods)) return true;

@@ -1,6 +1,7 @@
 import {
   createFoodEndpointClient,
   createLocalFoodAiClient,
+  FOOD_ENDPOINT_FIELDS,
 } from "../src/features/food/ai/client";
 import {
   mealPayload,
@@ -125,4 +126,17 @@ test.each([null, "rate_limit", "limit"])("HTTP 429 uses the structured code %s, 
  jest.mocked(getAuthClient).mockReturnValueOnce({functions:{invoke}} as unknown as NonNullable<ReturnType<typeof getAuthClient>>);
  await expect(new FoodAiService(repo,createLocalFoodAiClient(repo)).describe("rice")).rejects.toThrow(code === "limit" ? "Daily AI limit" : "Too many requests");
  expect(aiState(repo).usage.descriptions).toBe(code === "limit" ? 20 : 1);
+});
+
+test("wire body keys sent by the client equal the FOOD_ENDPOINT_FIELDS allowlist", async () => {
+  const request = jest.fn(async (_name: string, _body: Record<string, string>) => reply),
+    client = createFoodEndpointClient(request, () => "2026-10-27", () => "UTC", () => true);
+  await client(mealPayload("rice"), new AbortController().signal);
+  await client(mealPayload("rice", "YWJj"), new AbortController().signal);
+  expect(request).toHaveBeenCalledTimes(2);
+  for (const [name, body] of request.mock.calls) {
+    const allowed = FOOD_ENDPOINT_FIELDS[name as keyof typeof FOOD_ENDPOINT_FIELDS];
+    expect(Object.keys(JSON.parse(JSON.stringify(body))).sort()).toEqual([...allowed].sort());
+  }
+  expect(request.mock.calls.map(([name]) => name)).toEqual(["food-describe", "food-photo"]);
 });

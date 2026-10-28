@@ -222,5 +222,45 @@
   [
     "unstressed",
     false
+  ],
+  [
+    "MoOdy",
+    false
+  ],
+  [
+    "StRessful",
+    false
+  ],
+  [
+    "m-o-o-dy",
+    false
+  ],
+  [
+    "mo-ody",
+    false
+  ],
+  [
+    "st ressful",
+    false
+  ],
+  [
+    "Stre\u00df",
+    false
+  ],
+  [
+    "stre$$",
+    false
+  ],
+  [
+    "s7ress",
+    false
+  ],
+  [
+    "moo\u0111",
+    false
+  ],
+  [
+    "st\u0433ess",
+    false
   ]
 ]
