@@ -52,10 +52,10 @@ export function SetRow({
       style={[
         layout.row,
         {
-          paddingVertical: 5,
+          paddingVertical: 0,
           paddingHorizontal: 14,
           marginHorizontal: -14,
-          minHeight: 48,
+          minHeight: 44,
           backgroundColor: draft.setId ? colors["accent-tint"] : undefined,
           borderRadius: 0,
         },
@@ -103,8 +103,8 @@ export function SetRow({
             layout.cell,
             {
               flex: field === "weight" ? 1.15 : 0.95,
-              minWidth: 0,
-              minHeight: 38,
+              minWidth: 44,
+              minHeight: 44,
               borderWidth: 0,
               backgroundColor: draft.setId ? undefined : colors["surface-2"],
             },
@@ -127,9 +127,9 @@ export function SetRow({
         style={[
           layout.cell,
           {
-            width: 38,
-            minWidth: 38,
-            minHeight: 38,
+            width: 44,
+            minWidth: 44,
+            minHeight: 44,
             backgroundColor: draft.setId ? colors.accent : colors["surface-2"],
           },
         ]}

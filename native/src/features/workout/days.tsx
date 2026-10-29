@@ -1,3 +1,4 @@
+import { WorkoutUnavailable } from './view-state';
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -8,7 +9,7 @@ import { localDay, displayWeight } from '@/core/workout/rules';
 import type { WorkoutStore } from '@/data/workout/store';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
-import { layout, Panel } from './primitives';
+import { layout, WorkoutPanel as Panel } from './primitives';
 import { useWorkout } from './use-workout';
 
 export function validPastDay(day: string) {
@@ -59,8 +60,9 @@ export function DaySummary({store,day}: {store:WorkoutStore;day:string}) {
   </Screen>;
 }
 export function WorkoutDay() {
-  const {store} = useWorkout();
+  const {store,auth} = useWorkout();
   const {day} = useLocalSearchParams<{day:string}>();
-  return store && day && (validPastDay(day) || day === localDay(new Date())) ? <DaySummary store={store} day={day}/> :
+  if (!store) return <Screen topInset><WorkoutUnavailable auth={auth}/></Screen>;
+  return day && (validPastDay(day) || day === localDay(new Date())) ? <DaySummary store={store} day={day}/> :
     <Screen topInset><ThemedText>{t('invalidWorkoutDay')}</ThemedText></Screen>;
 }

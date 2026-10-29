@@ -38,7 +38,7 @@ export function FinishSheet({
     [notes, setNotes] = useState(String(session.data.notes ?? '')),
     [name, setName] = useState(String(session.data.name ?? '')),
     [saveTemplate, setSaveTemplate] = useState(false),
-    [error, setError] = useState(false),
+    [error, setError] = useState<'invalid' | 'save' | null>(null),
     [saving, setSaving] = useState(false);
   const inputStyle = [layout.input, {
     color: colors.text,
@@ -53,8 +53,8 @@ export function FinishSheet({
         minHeight: 88
       }]} />
     {session.data.origin === 'empty' && <Button label={t('saveAsTemplate')} selected={saveTemplate} variant="secondary" onPress={() => setSaveTemplate(v => !v)} />}
-    {error && <ThemedText accessibilityRole="alert">{t('invalidFinish')}</ThemedText>}
-    <View><Button testID="save-workout" label={t('saveWorkout')} disabled={saving} onPress={() => {
+    {error && <ThemedText accessibilityRole="alert">{error === 'invalid' ? t('invalidFinish') : 'Could not save this workout.'}</ThemedText>}
+    <View><Button testID="save-workout" label={error ? 'Try again' : t('saveWorkout')} disabled={saving} onPress={() => {
           if (saving) return;
           setSaving(true);
           try {
@@ -74,9 +74,9 @@ export function FinishSheet({
                 id: session.id
               }
             });
-          } catch {
+          } catch (failure) {
             setSaving(false);
-            setError(true);
+            setError(failure instanceof Error && ['Invalid duration.','Invalid date.'].includes(failure.message) ? 'invalid' : 'save');
           }
         }} /></View>
   </ScrollView></Sheet>;

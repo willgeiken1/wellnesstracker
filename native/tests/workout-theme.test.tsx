@@ -93,14 +93,14 @@ test.each(["dark", "light"] as const)(
 );
 
 
-test.each(["dark", "light"] as const)("summary uses %s card and action tokens", async (mode) => {
+test.each(["dark", "light"] as const)("summary uses %s neutral panel and action tokens", async (mode) => {
  const scheme=jest.spyOn(ReactNative,"useColorScheme").mockReturnValue(mode);
  try {
   const store=new WorkoutStore(memoryRepository());
   const fixture=createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},"summary")!;
   const c=createTheme(mode,"sea");
   await render(<ThemeProvider><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
-  for (const id of ["summary-stats","summary-pr","summary-shelf"]) expect(screen.getByTestId(id)).toHaveStyle({backgroundColor:c.surface});
+  for (const id of ["summary-stats","summary-pr","summary-shelf"]) expect(screen.getByTestId(id)).toHaveStyle({backgroundColor:c["surface-2"]});
   expect(screen.getByTestId("summary-done")).toHaveStyle({backgroundColor:c.accent});
   expect(within(screen.getByTestId("summary-done")).getByText("Done")).toHaveStyle({color:c["on-accent"]});
   expect(screen.getByText("7 tokens ›")).toBeTruthy();

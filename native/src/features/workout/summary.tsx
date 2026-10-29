@@ -1,3 +1,4 @@
+import { WorkoutUnavailable } from './view-state';
 import { useEffect } from "react";
 import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -24,21 +25,21 @@ import {
   IconButton,
   Pill,
   Line,
-  Panel,
+  WorkoutPanel as Panel,
   clock,
   layout,
 } from "./primitives";
 import { signatureBuzz } from "./haptics";
 /** Static synthetic artwork; no workout values enter the contour thumbnail. */
-export function ContourThumbnail() {
+export function ContourThumbnail({compact=false}: {compact?:boolean} = {}) {
   const { colors } = useTheme();
   return (
     <View
       style={{
-        width: 112,
-        height: 84,
+        width: compact ? 56 : 112,
+        height: compact ? 44 : 84,
         borderRadius: 14,
-        backgroundColor: colors.surface,
+        backgroundColor: undefined,
         padding: 10,
       }}
     >
@@ -174,14 +175,16 @@ export function summaryDate(start: number, end: number) {
   return `${date} · ${samePeriod ? time(first).replace(/ [AP]M$/, "") : time(first)} ${t("to")} ${time(last)}`;
 }
 export function Summary() {
-  const { store } = useWorkout(),
+  const { store, auth } = useWorkout(),
     { id } = useLocalSearchParams<{
       id: string;
     }>();
-  return store && id && store.repo.get("sessions", id) ? (
+  if (!store) return <Screen topInset><WorkoutUnavailable auth={auth}/></Screen>;
+  return id && store.repo.get("sessions", id) ? (
     <WorkoutSummary store={store} id={id} />
   ) : (
     <Screen topInset>
+      <EmptySummary/>
       <Button
         testID="summary-done"
         label={t("done")}
@@ -413,4 +416,8 @@ export function WorkoutSummary({
       <Pill testID="summary-done" label={t("done")} onPress={close} />
     </Screen>
   );
+}
+
+function EmptySummary() {
+  return <Panel><ThemedText>Your finished workouts show here</ThemedText></Panel>;
 }
