@@ -29,24 +29,24 @@ export function Body({repository}:{repository:Repository}) {
   const lastKg=lastWeight(rows);
   const raw=rows.filter(r=>visible.some(p=>p.day===r.data.day) && typeof r.data.weight_kg==='number' && Number.isFinite(r.data.weight_kg) && r.data.weight_kg>0).map(r=>({day:String(r.data.day),kg:Number(r.data.weight_kg)}));
   return <View style={{gap:16}}>
-    <Button label={last ? t('bodyLog') : 'Add your first weigh-in'} disabled={entry} onPress={()=>{setEntry(true);setSaved(false);}}/>
+    <Button label={last ? t('bodyLog') : t('bodyFirstWeighIn')} disabled={entry} onPress={()=>{setEntry(true);setSaved(false);}}/>
     {entry&&<Host><BottomSheet testID="weight-entry-sheet" isPresented onDismiss={()=>setEntry(false)} containerColor={colors['surface-2']} snapPoints={['full']}><RNHostView><ScrollView style={{flex:1}} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{paddingBottom:32}}><WeightEntry key={unit} initial={lastKg===null?null:fromKg(lastKg,unit)} unit={unit} onClose={()=>setEntry(false)} onSave={value=>{saveWeighIn(repo,value,unit);setEntry(false);setSaved(true);}}/></ScrollView></RNHostView></BottomSheet></Host>}
     {saved&&<ThemedText accessibilityLiveRegion="polite">{t('bodySaved')}</ThemedText>}
     <TonePanel>
       {last?<>
-        <Label>Weight trend</Label>
+        <Label>{t('bodyWeightTrend')}</Label>
         <ThemedText numeric variant="title">{t('bodyTrend').replace('{weight}',fromKg(last.trendKg,unit).toFixed(1)).replace('{unit}',unit)}</ThemedText>
         <ThemedText muted>{t('bodyAsOf').replace('{day}',last.day)}</ThemedText>
         <ThemedText>{change===null?t('bodyWeekEmpty'):t('bodyWeek').replace('{change}',`${change>0?'+':''}${fromKg(change,unit).toFixed(1)}`).replace('{unit}',unit)}</ThemedText>
       </>:<ThemedText>{t('bodyEmpty')}</ThemedText>}
-      <SegmentedControl label={t('bodyRanges')} value={String(range)} options={[{value:'30',label:'1M'},{value:'90',label:'3M'},{value:'365',label:'1Y'},{value:'all',label:'All'}]} onChange={n=>setRange(n==='all'?'all':Number(n) as BodyRange)}/>
+      <SegmentedControl label={t('bodyRanges')} value={String(range)} options={[{value:'30',label:t('bodyRangeMonth')},{value:'90',label:t('bodyRangeQuarter')},{value:'365',label:t('bodyRangeYear')},{value:'all',label:t('bodyRangeAll')}]} onChange={n=>setRange(n==='all'?'all':Number(n) as BodyRange)}/>
       <BodyChart key={range} points={visible} raw={raw} unit={unit}/>
       <ThemedText muted variant="caption">{t('bodyAverageHint')}</ThemedText>
     </TonePanel>
     {deleteFailed&&<ThemedText accessibilityRole="alert">{t('bodyDeleteFailed')}</ThemedText>}
     <Measurements repository={repo} />
-    {lastKg!==null&&<ThemedText numeric>Latest weigh-in: {fromKg(lastKg,unit).toFixed(1)} {unit}</ThemedText>}
-    <Label>Weigh-ins</Label>
+    {lastKg!==null&&<ThemedText numeric>{t('bodyLatest').replace('{weight}', fromKg(lastKg,unit).toFixed(1)).replace('{unit}', unit)}</ThemedText>}
+    <Label>{t('bodyWeighIns')}</Label>
     <View style={{gap:0}}>
     {deleteRows.map(row=><View key={row.id} style={{minHeight:44,paddingVertical:8,borderBottomWidth:0.5,borderBottomColor:colors['text-muted'],gap:8}}>
       <ThemedText numeric>{String(row.data.day)} · {fromKg(Number(row.data.weight_kg),unit).toFixed(1)} {unit}</ThemedText>

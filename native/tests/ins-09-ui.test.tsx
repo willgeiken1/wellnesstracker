@@ -5,6 +5,8 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
 import { PatternPanel } from '../src/features/body/presentation';
 import { saveWeighIn } from '../src/features/body/model';
+import * as messages from '../src/i18n/en';
+import { Dimensions, PixelRatio } from 'react-native';
 import { router } from 'expo-router';
 const mockAuth = { repository: memoryRepository(), ready: true, demo: false, syncStatus: 'idle', syncNow: jest.fn(), retryBoot: jest.fn(), recovery: undefined as string | undefined };
 jest.mock('../src/auth/provider', () => ({ useAuth: () => mockAuth }));
@@ -55,14 +57,14 @@ test('Insights empty trends, recovery no data, atlas segment and weekly empty ar
  await fireEvent.press(screen.getByRole('tab', { name: 'Recovery' })); expect(screen.getAllByText('No data from Health yet')).toHaveLength(4);
  for (const name of ['HRV', 'Sleep', 'Steps']) expect(screen.getByText(name)).toBeTruthy();
  await fireEvent.press(screen.getByRole('tab', { name: 'Muscles' })); expect(screen.getByText('Unchanged atlas')).toBeTruthy();
- await fireEvent.press(screen.getByRole('tab', { name: 'Weekly report' })); expect(screen.getByText('No weekly reports yet')).toBeTruthy();
+ await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' })); expect(screen.getByText('No weekly reports yet')).toBeTruthy();
 });
 test('Insights data puts pattern panels before 14-day charts and shows weekly charts inline', async () => {
  mockAuth.demo = true;
  for (let i = 1; i <= 7; i++) mockAuth.repository.save('sessions', { day: `2026-10-${String(i + 20).padStart(2, '0')}`, name: 'Synthetic workout', started_at: Date.UTC(2026, 9, i + 20, 10), finished_at: Date.UTC(2026, 9, i + 20, 11) });
  await show(Insights); expect(screen.getByText('Example data')).toBeTruthy(); expect(screen.getByText('What affects you')).toBeTruthy(); expect(screen.getAllByText('Correlation, not cause').length).toBeGreaterThan(0);
  expect(screen.getByTestId('pattern-panels')).toBeTruthy(); expect(screen.getByTestId('fourteen-day-charts')).toBeTruthy();
- await fireEvent.press(screen.getByRole('tab', { name: 'Weekly report' })); expect(screen.getAllByTestId('weekly-chart').length).toBeGreaterThan(0);
+ await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' })); expect(screen.getAllByTestId('weekly-chart').length).toBeGreaterThan(0);
 });
 
 test.each([['up', '↑'], ['down', '↓']] as const)('pattern presentation shows the %s effect direction with plain copy and caveat', async (direction, arrow) => {
@@ -77,7 +79,7 @@ test.each([['Progress', Progress], ['Insights', Insights]] as const)('%s keeps l
 });
 test.each([
  ['Progress', Progress, ['Body', 'Photos', 'Goals & PRs']],
- ['Insights', Insights, ['Trends', 'Recovery', 'Weekly report']],
+ ['Insights', Insights, ['Trends', 'Recovery', 'Weekly']],
 ] as const)('%s exposes Back to Home from every segment', async (_, Page, segments) => {
  const navigate = jest.spyOn(router, 'navigate').mockImplementation(() => undefined);
  await show(Page);
@@ -87,4 +89,64 @@ test.each([
   expect(navigate).toHaveBeenLastCalledWith('/');
  }
  expect(navigate).toHaveBeenCalledTimes(segments.length);
+});
+
+// Native picker text is rendered through the shared Expo UI mock.
+test('Insights keeps four short, scalable segment labels at 320pt and fontScale 2', async () => {
+ const getDimensions = Dimensions.get;
+ const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...getDimensions(key), width: 320, fontScale: 2 }));
+ const fontScale = jest.spyOn(PixelRatio, 'getFontScale').mockReturnValue(2);
+ try {
+  await show(Insights);
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  for (const label of ['Trends', 'Recovery', 'Muscles', 'Weekly']) {
+   expect(screen.getByRole('tab', { name: label })).toBeTruthy();
+   expect(label.length).toBeLessThanOrEqual(8);
+   const text = screen.getByText(label);
+   expect(text.props.allowFontScaling).toBe(true);
+   expect(text.props.maxFontSizeMultiplier).toBe(0);
+   expect(text.props.numberOfLines).toBeUndefined();
+  }
+ } finally { dimensions.mockRestore(); fontScale.mockRestore(); }
+});
+
+test('Insights chart VoiceOver labels summarize the range, average and latest values', async () => {
+ jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-29T12:00:00Z'));
+ mockAuth.repository.save('profile', { weight_unit: 'kg' });
+ for (let i = 21; i <= 29; i++) {
+  const day = `2026-10-${i}`;
+  mockAuth.repository.save('sessions', { day, name: 'Synthetic workout', started_at: Date.UTC(2026, 9, i, 10), finished_at: Date.UTC(2026, 9, i, 11) });
+  mockAuth.repository.save('food_entries', { day, energy_kj: (i - 15) * 100 * 4.184 });
+ }
+ await show(Insights);
+ expect(screen.getByLabelText('Logged daily calories, 2026-10-16 to 2026-10-29. Average 1000 kcal on logged days. Latest 1400 kcal on 2026-10-29.')).toBeTruthy();
+ expect(screen.getByLabelText('Daily training volume, 2026-10-16 to 2026-10-29. Average 0 kg × reps. Latest 0 kg × reps on 2026-10-29.')).toBeTruthy();
+ await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' }));
+ expect(screen.getAllByLabelText(/Training volume for week of .* Average 0 kg × reps. Latest 0 kg × reps on/).length).toBeGreaterThan(0);
+});
+
+test('INS-09 copy is read through the existing translation helper', async () => {
+ const translated = new Set<messages.MessageKey>(['insights', 'insightsSections', 'insightsTrendsEmpty',
+  'localOffline', 'insightsHealthEmpty', 'insightsLastNight', 'insightsHrv', 'insightsSleep', 'insightsSteps',
+  'insightsRecoveryHistory', 'insightsWeeklyEmpty', 'insightsWeeklyHint', 'bodyFirstWeighIn',
+  'bodyRangeMonth', 'bodyRangeQuarter', 'bodyRangeYear', 'bodyRangeAll']);
+ const original = messages.t;
+ const translate = jest.spyOn(messages, 't').mockImplementation(key => translated.has(key) ? `[${key}]` : original(key));
+ try {
+  mockAuth.syncStatus = 'offline';
+  const insights = await show(Insights);
+  for (const key of ['insightsTrendsEmpty', 'localOffline']) expect(screen.getByText(`[${key}]`)).toBeTruthy();
+  expect(translate).toHaveBeenCalledWith('insights');
+  expect(screen.getByTestId('native-segmented-picker').props.label).toBe('[insightsSections]');
+  await fireEvent.press(screen.getByRole('tab', { name: 'Recovery' }));
+  expect(screen.getAllByText('[insightsHealthEmpty]')).toHaveLength(4);
+  for (const key of ['insightsLastNight', 'insightsHrv', 'insightsSleep', 'insightsSteps', 'insightsRecoveryHistory']) expect(screen.getByText(`[${key}]`)).toBeTruthy();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' }));
+  expect(screen.getByText('[insightsWeeklyEmpty]')).toBeTruthy();
+  expect(screen.getByText('[insightsWeeklyHint]')).toBeTruthy();
+  await insights.unmount();
+  await show(Progress);
+  expect(screen.getByRole('button', { name: '[bodyFirstWeighIn]' })).toBeTruthy();
+  for (const key of ['bodyRangeMonth', 'bodyRangeQuarter', 'bodyRangeYear', 'bodyRangeAll']) expect(screen.getByRole('tab', { name: `[${key}]` })).toBeTruthy();
+ } finally { translate.mockRestore(); }
 });

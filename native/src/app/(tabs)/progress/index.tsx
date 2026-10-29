@@ -15,7 +15,7 @@ export default function Page() {
  const [selected, setSelected] = useState<'body' | 'photos' | 'goals'>('body');
  return <Screen title={t('progress')} tabHeader>
   {auth.demo && <ExampleTag />}
-  {auth.syncStatus === 'offline' && <ThemedText muted variant="caption">Offline · logs save here and sync when you reconnect.</ThemedText>}
+  {auth.syncStatus === 'offline' && <ThemedText muted variant="caption">{t('localOffline')}</ThemedText>}
   <SegmentedControl label={t('segments')} value={selected} options={(['body', 'photos', 'goals'] as const).map(value => ({ value, label: t(value) }))} onChange={setSelected} />
   {auth.recovery ? <LoadError name="progress" onRetry={() => auth.retryBoot?.()} /> : auth.ready === false || !auth.repository ? <LoadingPanels /> :
    <ReadBoundary key={`${auth.repository.owner}:${selected}`} name="progress"><View>

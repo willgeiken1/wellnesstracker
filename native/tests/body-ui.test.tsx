@@ -142,3 +142,20 @@ test('a stale delete confirmation shows failure when its row is already deleted'
  await act(()=>{confirm();});
  expect(screen.getByRole('alert')).toHaveTextContent('Could not delete this weigh-in. Try again.');alert.mockRestore();
 });
+
+test('All selects the full synthetic history, including points older than one year', async () => {
+ jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-29T12:00:00Z'));
+ const repo = memoryRepository(); repo.save('profile', { weight_unit: 'kg' });
+ for (const day of ['2024-01-01', '2025-05-01', '2026-10-29']) saveWeighIn(repo, 80, 'kg', day);
+ await render(<Body repository={repo} />, { wrapper });
+ expect(screen.getByRole('tab', { name: '1M' })).toBeSelected();
+ expect(screen.getByRole('button', { name: 'Previous trend point' })).toBeDisabled();
+ await fireEvent.press(screen.getByRole('tab', { name: 'All' }));
+ expect(screen.getByRole('tab', { name: 'All' })).toBeSelected();
+ expect(screen.getByRole('tab', { name: '1M' })).not.toBeSelected();
+ await fireEvent.press(screen.getByRole('button', { name: 'Previous trend point' }));
+ expect(screen.getByText(/2025-05-01 · Trend/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button', { name: 'Previous trend point' }));
+ expect(screen.getByText(/2024-01-01 · Trend/)).toBeTruthy();
+ expect(screen.getByRole('button', { name: 'Previous trend point' })).toBeDisabled();
+});

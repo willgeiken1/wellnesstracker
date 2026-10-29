@@ -6,6 +6,8 @@ import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 
+import { t } from '@/i18n/en';
+
 // Current native token names; INS-01 owns the semantic surface/pillar rename.
 export function TonePanel({ children, testID }: PropsWithChildren<{ testID?: string }>) {
  const { colors } = useTheme();
@@ -16,17 +18,17 @@ export function Label({ children }: PropsWithChildren) {
 }
 export function ExampleTag() {
  const { colors } = useTheme();
- return <View style={{ alignSelf: 'flex-start', backgroundColor: colors['surface-2'], borderRadius: tokens.radii.input, paddingHorizontal: tokens.spacing[1], paddingVertical: tokens.spacing[0] }}><Label>Example data</Label></View>;
+ return <View style={{ alignSelf: 'flex-start', backgroundColor: colors['surface-2'], borderRadius: tokens.radii.input, paddingHorizontal: tokens.spacing[1], paddingVertical: tokens.spacing[0] }}><Label>{t('exampleData')}</Label></View>;
 }
 export function LoadingPanels() {
  const [visible, setVisible] = useState(false);
  useEffect(() => { const timer = setTimeout(() => setVisible(true), 300); return () => clearTimeout(timer); }, []);
- return visible ? <View testID="loading-panels" accessibilityLabel="Loading" accessibilityRole="progressbar" style={{ gap: tokens.spacing[3] }}>
+ return visible ? <View testID="loading-panels" accessibilityLabel={t('panelsLoading')} accessibilityRole="progressbar" style={{ gap: tokens.spacing[3] }}>
   {[0, 1].map(key => <TonePanel key={key}><View style={{ height: 120 }} /></TonePanel>)}
  </View> : null;
 }
 export function LoadError({ name, onRetry }: { name: string; onRetry: () => void }) {
- return <View style={{ gap: tokens.spacing[1] }}><ThemedText muted accessibilityRole="alert">Couldn’t load {name}.</ThemedText><Button variant="secondary" label="Try again" onPress={onRetry} /></View>;
+ return <View style={{ gap: tokens.spacing[1] }}><ThemedText muted accessibilityRole="alert">{t('panelsLoadError').replace('{name}', name)}</ThemedText><Button variant="secondary" label={t('tryAgain')} onPress={onRetry} /></View>;
 }
 /** A local render/read failure never exposes its message or payload. */
 export class ReadBoundary extends Component<PropsWithChildren<{ name: string }>, { failed: boolean; attempt: number }> {
@@ -49,7 +51,7 @@ export function Sparkline({ values, label, testID, color }: { values: (number | 
 /** Pattern rendering is independent of any inference or Health data source. */
 export function PatternPanel({ pattern }: { pattern?: { direction: 'up' | 'down'; sentence: string } }) {
  return <TonePanel>
-  <ThemedText>{pattern ? `${pattern.direction === 'up' ? '↑' : '↓'} ${pattern.sentence}` : 'Not enough paired observations to show a pattern yet.'}</ThemedText>
-  <ThemedText muted variant="caption">Correlation, not cause</ThemedText>
+  <ThemedText>{pattern ? `${pattern.direction === 'up' ? '↑' : '↓'} ${pattern.sentence}` : t('patternEmpty')}</ThemedText>
+  <ThemedText muted variant="caption">{t('patternCaveat')}</ThemedText>
  </TonePanel>;
 }

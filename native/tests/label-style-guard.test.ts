@@ -191,7 +191,8 @@ describe("label style guard (INS-03)", () => {
 
   test("ALL-CAPS sweep test of en.ts strings", () => {
     // True acronyms are preserved (e.g. PR for Personal Record)
-    const ALLOWLIST_KEYS = new Set(["prs"]);
+    const ALLOWLIST_KEYS = new Set(["prs", "insightsHrv"]);
+    expect(en.insightsHrv).toBe("HRV"); // Heart rate variability is a true acronym.
     const violations: { key: string; value: string }[] = [];
 
     for (const [key, value] of Object.entries(en)) {
