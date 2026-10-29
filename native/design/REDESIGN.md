@@ -101,7 +101,7 @@ Every PWA extra survives as an optional tray widget. "Default" = on the starting
 | 17 | `cardioMinutes` | Cardio minutes | none | no | panel | PWA extra |
 | 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Insights › Muscles |
 | 19 | `workoutPrint` | Workout print | none | no | panel | Contour fingerprint (D114) |
-| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). **Unblocked for INS-02/INS-05.** |
+| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). **Unblocked for INS-02/INS-05.** Bans and the egress-test gate: see Q-A (§8). |
 | 21 | `steps` | Steps | Apple Health or Oura | no | panel | |
 | 22 | `sleepDuration` | Sleep duration | Apple Health or Oura | no | panel | |
 | 23 | `hrv` | HRV | Apple Health or Oura | no | panel | |
@@ -140,6 +140,7 @@ Fitbit and WHOOP are later services (I9). Their widgets are stubs in the registr
   - [ ] Exactly 2 card surfaces on Home.
   - [ ] The Score ring is in the header on day 1, with "Needs N more days".
   - [ ] Edit dot + one-time glow are wired to INS-02 state, with no modal API.
+  - [ ] INS-02 and INS-05 gate: the `checkIn` tile can't ship until the egress tests (sentry-scrub, usage, describe) include mood, energy and stress as sentinel fields (Q-A).
   - [ ] "No data from Health yet" opens the sheet.
   - [ ] Largest Dynamic Type: no clipping.
   - [ ] Every target ≥ 44 pt.
@@ -340,4 +341,4 @@ Keep the order: **1. map (Home), 2. logger (Train), 3. AI food (Eat: Snap / Desc
 - **Q-B (resolved):** The full Score appears at **7 days** of data; before that, Home shows the "Needs N more days" countdown ring. Not 28 days (I8/Q7).
 - **Q-C:** Water colour per palette (v2 has one shared placeholder that sits close to `recovery` blue).
 - **Q-D:** "Once per session" is defined here as once per process launch, so a foreground return doesn't replay it. Confirm.
-- **Q-E (resolved):** Home's body map is **react-native-body-highlighter** (2D, tappable), Will, Oct 28 2026 8:44 AM CT (via Elliot). decisions.md:296 is stale on this point. Kai's 3D model comes later; the card frame stays the same.
+- **Q-E (resolved):** Home's body map is **react-native-body-highlighter**: library per Will, Oct 28 8:44 AM CT; 2D on Home is an agent decision Will can override. Kai's 3D model comes later; the card frame stays the same.
