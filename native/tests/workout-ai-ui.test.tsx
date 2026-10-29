@@ -1,4 +1,5 @@
 import type { WorkoutAiClient } from '../src/features/workout/ai/client';
+import { createWorkoutEndpointClient } from '../src/features/workout/ai/client';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -21,6 +22,32 @@ function fixture() {
     return { repo, store, session };
 }
 beforeEach(() => jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true));
+test('workout summary keeps the custom exercise name visible after generating and reopening an AI summary', async () => {
+    const { repo, store, session } = fixture();
+    const custom = store.addExercise(session.id, 'My Garage Sled Push', 1);
+    store.editDraft(custom.id, 0, { weight: '100', reps: '8' });
+    store.toggleDone(custom.id, 0);
+    setConsent(repo, true);
+    const request = jest.fn(async () => reply);
+    const client = createWorkoutEndpointClient(request, () => aiState(repo));
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+        <ThemeProvider><WorkoutAiClientContext.Provider value={client}>{children}</WorkoutAiClientContext.Provider></ThemeProvider>;
+    const view = await render(<WorkoutSummary store={store} id={session.id}/>, { wrapper });
+    expect(screen.getByText('My Garage Sled Push')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiGenerate') }));
+    await waitFor(() => expect(screen.getByText(reply.summary)).toBeTruthy());
+    expect(request).toHaveBeenCalledTimes(1);
+    const body = (request.mock.calls as unknown[][])[0][1] as { workout: { exercises: { name: string }[] } };
+    expect(body.workout.exercises.map(exercise => exercise.name)).toEqual(['Bench Press', 'Custom exercise']);
+    expect(screen.getByText('My Garage Sled Push')).toBeTruthy();
+    expect(screen.getByText('Bench Press')).toBeTruthy();
+    await view.unmount();
+    await render(<WorkoutSummary store={store} id={session.id}/>, { wrapper });
+    expect(screen.getByText(reply.summary)).toBeTruthy();
+    expect(screen.getByText('My Garage Sled Push')).toBeTruthy();
+    expect(screen.getByText('Bench Press')).toBeTruthy();
+    expect(request).toHaveBeenCalledTimes(1);
+});
 test('cancel sends nothing; expanded consent appears once, generating and regenerating save History; thumbs are free', async () => {
     const { repo, store, session } = fixture();
     setConsent(repo, true);

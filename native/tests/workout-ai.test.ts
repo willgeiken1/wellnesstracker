@@ -1,4 +1,4 @@
-import { sanitizeWorkoutName } from '../../supabase/functions/_shared/workout-payload';
+import { projectWorkoutFacts, sanitizeWorkoutName } from '../../supabase/functions/_shared/workout-payload';
 import { exerciseLibrary } from '../src/core/workout/library';
 import exerciseNames from '../../supabase/functions/_shared/workout-exercise-names.json';
 import type { WorkoutAiClient } from '../src/features/workout/ai/client';
@@ -18,6 +18,49 @@ function fixture() {
     store.finish(session.id, { startedAt: Number(session.data.started_at), finishedAt: Date.now(), notes: '' });
     return { repo, store, session, entry };
 }
+test('projection, phone guard and endpoint redact only the payload without mutating caller-owned names', async () => {
+    const workout = { exercises: [
+        { name: 'My Garage Sled Push', sets: 1, reps: 8, volume: 100 },
+        { name: 'Bench Press', sets: 2, reps: 16, volume: 200 },
+    ] };
+    const before = JSON.parse(JSON.stringify(workout));
+    const expected = { exercises: [
+        { name: 'Custom exercise', sets: 1, reps: 8, volume: 100 },
+        { name: 'Bench Press', sets: 2, reps: 16, volume: 200 },
+    ] };
+    const facts = projectWorkoutFacts(workout);
+    assertWorkoutPayload(facts);
+    expect(facts).toEqual(expected);
+    expect(workout).toEqual(before);
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => ({ consent: true, generation: 1 }));
+    await client(workout, 'coach', new AbortController().signal);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('workout-summary', expect.objectContaining({ workout: expected }), expect.any(AbortSignal));
+    expect(JSON.stringify(request.mock.calls)).not.toContain('My Garage Sled Push');
+    expect(workout).toEqual(before);
+    expect(workout.exercises[0].name).toBe('My Garage Sled Push');
+});
+test('summary generation leaves the stored workout, entries and sets unchanged while redacting the request', async () => {
+    const { repo, store, session, entry } = fixture();
+    const custom = store.addExercise(session.id, 'My Garage Sled Push', 1);
+    store.editDraft(custom.id, 0, { weight: '100', reps: '8' });
+    store.toggleDone(custom.id, 0);
+    const source = { session, entries: store.entries(session.id), sets: [store.sets(entry.id), store.sets(custom.id)] };
+    const before = JSON.parse(JSON.stringify(source));
+    setConsent(repo, true);
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => aiState(repo));
+    await new WorkoutSummaryService(repo, client).generate(session.id);
+    expect(request).toHaveBeenCalledTimes(1);
+    const body = (request.mock.calls as unknown[][])[0][1] as { workout: { exercises: { name: string }[] } };
+    expect(body.workout.exercises.map(exercise => exercise.name)).toEqual(['Bench Press', 'Custom exercise']);
+    expect(JSON.stringify(body)).not.toContain('My Garage Sled Push');
+    expect(savedWorkoutSummary(repo, session.id)?.summary).toBe(response.summary);
+    expect(source).toEqual(before);
+    expect({ session: repo.get('sessions', session.id), entries: store.entries(session.id), sets: [store.sets(entry.id), store.sets(custom.id)] }).toEqual(before);
+    expect(repo.get('entries', custom.id)?.data.exercise).toBe('My Garage Sled Push');
+});
 test('explicit phone projection ignores sentinel fields on workout, entry, set and profile at the actual endpoint boundary', async () => {
     const { repo, store, session, entry } = fixture();
     // Deliberately contaminate fixture rows beyond the production scalar schema.
