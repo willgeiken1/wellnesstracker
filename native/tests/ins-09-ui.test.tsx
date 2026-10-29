@@ -5,6 +5,7 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
 import { PatternPanel } from '../src/features/body/presentation';
 import { saveWeighIn } from '../src/features/body/model';
+import { router } from 'expo-router';
 const mockAuth = { repository: memoryRepository(), ready: true, demo: false, syncStatus: 'idle', syncNow: jest.fn(), retryBoot: jest.fn(), recovery: undefined as string | undefined };
 jest.mock('../src/auth/provider', () => ({ useAuth: () => mockAuth }));
 jest.mock('../src/features/atlas/body-atlas', () => ({ BodyAtlas: () => {
@@ -54,14 +55,14 @@ test('Insights empty trends, recovery no data, atlas segment and weekly empty ar
  await fireEvent.press(screen.getByRole('tab', { name: 'Recovery' })); expect(screen.getAllByText('No data from Health yet')).toHaveLength(4);
  for (const name of ['HRV', 'Sleep', 'Steps']) expect(screen.getByText(name)).toBeTruthy();
  await fireEvent.press(screen.getByRole('tab', { name: 'Muscles' })); expect(screen.getByText('Unchanged atlas')).toBeTruthy();
- await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' })); expect(screen.getByText('No weekly reports yet')).toBeTruthy();
+ await fireEvent.press(screen.getByRole('tab', { name: 'Weekly report' })); expect(screen.getByText('No weekly reports yet')).toBeTruthy();
 });
 test('Insights data puts pattern panels before 14-day charts and shows weekly charts inline', async () => {
  mockAuth.demo = true;
  for (let i = 1; i <= 7; i++) mockAuth.repository.save('sessions', { day: `2026-10-${String(i + 20).padStart(2, '0')}`, name: 'Synthetic workout', started_at: Date.UTC(2026, 9, i + 20, 10), finished_at: Date.UTC(2026, 9, i + 20, 11) });
  await show(Insights); expect(screen.getByText('Example data')).toBeTruthy(); expect(screen.getByText('What affects you')).toBeTruthy(); expect(screen.getAllByText('Correlation, not cause').length).toBeGreaterThan(0);
  expect(screen.getByTestId('pattern-panels')).toBeTruthy(); expect(screen.getByTestId('fourteen-day-charts')).toBeTruthy();
- await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' })); expect(screen.getAllByTestId('weekly-chart').length).toBeGreaterThan(0);
+ await fireEvent.press(screen.getByRole('tab', { name: 'Weekly report' })); expect(screen.getAllByTestId('weekly-chart').length).toBeGreaterThan(0);
 });
 
 test.each([['up', '↑'], ['down', '↓']] as const)('pattern presentation shows the %s effect direction with plain copy and caveat', async (direction, arrow) => {
@@ -73,4 +74,17 @@ test.each([['Progress', Progress], ['Insights', Insights]] as const)('%s keeps l
  mockAuth.syncStatus = 'offline'; await show(Page);
  expect(screen.getByText('Offline · logs save here and sync when you reconnect.')).toBeTruthy();
  expect(screen.getByRole('tab', { name: Page === Progress ? 'Body' : 'Trends' })).toBeSelected();
+});
+test.each([
+ ['Progress', Progress, ['Body', 'Photos', 'Goals & PRs']],
+ ['Insights', Insights, ['Trends', 'Recovery', 'Weekly report']],
+] as const)('%s exposes Back to Home from every segment', async (_, Page, segments) => {
+ const navigate = jest.spyOn(router, 'navigate').mockImplementation(() => undefined);
+ await show(Page);
+ for (const segment of segments) {
+  await fireEvent.press(screen.getByRole('tab', { name: segment }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
+  expect(navigate).toHaveBeenLastCalledWith('/');
+ }
+ expect(navigate).toHaveBeenCalledTimes(segments.length);
 });
