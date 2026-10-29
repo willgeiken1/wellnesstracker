@@ -1,16 +1,21 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { app } from '../logger/js/runtime.js';
+import { addDays, correlate } from '../logger/js/shared/correlate.js';
+import '../logger/js/pages/insights.js';
+import '../logger/js/shared/weekly.js';
 
 const cssDir = new URL('../logger/css/', import.meta.url);
+// Add new label classes to this selector list so their styles stay covered.
 const labelSelector = /(?:\.brief-k|\.week-k|\.wk-stand\s+b|\.mc-g|\.side-l|\.aff-out|\.hw-k|\.rpe-l|\.tab(?:\b|\[)|\.week-stat\s+span|\.wk-row-t\s+span|\.brief-l)(?![\w-])/;
 
-// Reintroducing uppercase, tracking, or a tiny override must fail even when
+// Reintroducing case transforms, tracking, or a tiny override must fail even when
 // another stylesheet later masks it. Scan every CSS file, including media rules.
 for (const file of readdirSync(cssDir).filter((name) => name.endsWith('.css'))) {
   const css = readFileSync(new URL(file, cssDir), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   test(`${file}: sentence-case labels without tiny or tracked overrides`, () => {
-    assert.doesNotMatch(css, /text-transform\s*:\s*uppercase\b/i, 'labels must use sentence case');
+    assert.doesNotMatch(css, /text-transform\s*:\s*(?:uppercase|capitalize|lowercase)\b/i, 'labels must use sentence case');
     for (const [, selector, declarations] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       if (!labelSelector.test(selector)) continue;
       const context = `${file}: ${selector.trim()}`;
@@ -26,3 +31,41 @@ for (const file of readdirSync(cssDir).filter((name) => name.endsWith('.css'))) 
     }
   });
 }
+
+test('Insights and weekly outcome labels start with a capital letter', () => {
+  const days = {};
+  for (let i = 0; i < 40; i++) {
+    days[addDays('2026-01-05', i)] = {
+      workedOut: i % 2 === 0,
+      ...(i > 0 ? { readiness: i % 2 ? 80 : 60, sleepScore: i % 2 ? 85 : 65 } : {}),
+    };
+  }
+  const rows = correlate({ days });
+  assert.ok(rows.some((r) => r.outcomeLabel === 'readiness'));
+  assert.ok(rows.some((r) => r.outcomeLabel === 'sleep score'));
+  const previous = { ...app };
+  try {
+    Object.assign(app, {
+      state: { demo: true }, ui: { affectsAll: true },
+      correlations: () => rows, correlationSource: () => ({ days }),
+      src: () => ({ oura: days, sessions: [] }),
+      today: () => '2026-01-12', esc: (s) => String(s ?? ''),
+      pl: (n, word) => `${n} ${word}`, fmtDate: (date) => date,
+      pageHead: () => '', demoBanner: () => '', I: { chevL: '' },
+    });
+    for (const [name, html] of [
+      ['Insights', app.affectsHTML()],
+      ['Weekly report', app.weekReportHTML('2026-01-05')],
+    ]) {
+      const labels = [...html.matchAll(/class="aff-out">([^<]*)<\/span>/g)].map((m) => m[1]);
+      assert.ok(labels.length > 0, `${name}: expected outcome labels`);
+      for (const label of labels) assert.match(label, /^[A-Z]/, `${name}: ${label}`);
+      assert.ok(labels.includes('Readiness'), `${name}: Readiness`);
+      assert.ok(labels.includes('Sleep score'), `${name}: Sleep score`);
+    }
+    assert.ok(rows.some((r) => r.outcomeLabel === 'readiness'), 'source labels stay lowercase');
+  } finally {
+    for (const key of Object.keys(app)) if (!(key in previous)) delete app[key];
+    Object.assign(app, previous);
+  }
+});

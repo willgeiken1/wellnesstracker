@@ -468,13 +468,14 @@ function weekFindings(start, end) {
 }
 
 function findingCard(r) {
+  const outcomeLabel = r.outcomeLabel || "";
   const toneName = r.valence === "good" ? "good" : "bad";
   const mark = toneName === "good" ? "Good for you" : UNFAVORABLE_MARK;
   const also = foldedAlso(r);
   const alsoHTML = also ? `<p class="aff-also">${app.esc(also)}</p>` : "";
   const ids = [r && r.factor].concat((r && r.folded || []).map((f) => f && f.factor)).filter(Boolean);
   return `<article class="card aff-card ${toneName}" data-factors="${ids.map((id) => app.esc(id)).join(" ")}">
-    <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
+    <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(outcomeLabel.charAt(0).toUpperCase() + outcomeLabel.slice(1))}</span></div>
     <p class="aff-s">${app.esc(r.lead || r.sentence || "")}</p>
     ${alsoHTML}
   </article>`;
