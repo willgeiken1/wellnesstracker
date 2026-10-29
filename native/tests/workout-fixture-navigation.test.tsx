@@ -61,7 +61,7 @@ test('warm fixture links logger → keypad → rest → summary → logger show 
     if (state === 'summary') {
       expect(screen.getByText('New PR')).toBeTruthy();
       expect(screen.getByText('7 tokens ›')).toBeTruthy();
-      expect(screen.getByText('WORKOUT COMPLETE')).toBeTruthy();
+      expect(screen.getByText('Workout complete')).toBeTruthy();
       expect(screen.getByText('58:12')).toBeTruthy();
       expect(screen.queryByText('AI summary')).toBeNull();
     }

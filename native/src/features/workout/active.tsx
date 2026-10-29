@@ -578,8 +578,8 @@ function Logger({
                       variant="caption"
                       style={{
                         width: 26,
-                        fontSize: 11,
-                        letterSpacing: 0.6,
+                        fontSize: tokens.type.caption,
+                        fontWeight: "600",
                       }}
                     >
                       {t("setHeader")}
@@ -589,8 +589,8 @@ function Logger({
                       variant="caption"
                       style={{
                         flex: 1,
-                        fontSize: 11,
-                        letterSpacing: 0.6,
+                        fontSize: tokens.type.caption,
+                        fontWeight: "600",
                       }}
                     >
                       {t("previous")}
@@ -600,20 +600,20 @@ function Logger({
                       variant="caption"
                       style={{
                         flex: 1,
-                        fontSize: 11,
-                        letterSpacing: 0.6,
+                        fontSize: tokens.type.caption,
+                        fontWeight: "600",
                         textAlign: "center",
                       }}
                     >
-                      {store.unit(e.id).toUpperCase()}
+                      {store.unit(e.id)}
                     </ThemedText>
                     <ThemedText
                       muted
                       variant="caption"
                       style={{
                         flex: 1,
-                        fontSize: 11,
-                        letterSpacing: 0.6,
+                        fontSize: tokens.type.caption,
+                        fontWeight: "600",
                         textAlign: "center",
                       }}
                     >

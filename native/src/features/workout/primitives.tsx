@@ -349,10 +349,10 @@ export function Eyebrow({
   return (
     <ThemedText
       muted
+      variant="caption"
       style={{
-        fontSize: tokens.logger.eyebrow,
-        letterSpacing: 0.8,
-        textTransform: "uppercase",
+        fontSize: tokens.type.caption,
+        fontWeight: "600",
         textAlign: center ? "center" : undefined,
       }}
     >
