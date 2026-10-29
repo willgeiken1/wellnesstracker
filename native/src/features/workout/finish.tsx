@@ -6,9 +6,15 @@ import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
-import { localDay } from '@/core/workout/rules';
+import { localDay, validateDate } from '@/core/workout/rules';
 import { t } from '@/i18n/en';
 import { Sheet, clock, layout } from './primitives';
+class FinishValidationError extends Error {
+  constructor(readonly code: 'invalid-duration' | 'invalid-date') {
+    super(code);
+    this.name = 'FinishValidationError';
+  }
+}
 export function parseLocalDateTime(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(value);
   if (!match) return NaN;
@@ -53,17 +59,20 @@ export function FinishSheet({
         minHeight: 88
       }]} />
     {session.data.origin === 'empty' && <Button label={t('saveAsTemplate')} selected={saveTemplate} variant="secondary" onPress={() => setSaveTemplate(v => !v)} />}
-    {error && <ThemedText accessibilityRole="alert">{error === 'invalid' ? t('invalidFinish') : 'Could not save this workout.'}</ThemedText>}
-    <View><Button testID="save-workout" label={error ? 'Try again' : t('saveWorkout')} disabled={saving} onPress={() => {
+    {error && <ThemedText accessibilityRole="alert">{error === 'invalid' ? t('invalidFinish') : t('workoutFinishSaveError')}</ThemedText>}
+    <View><Button testID="save-workout" label={error ? t('tryAgain') : t('saveWorkout')} disabled={saving} onPress={() => {
           if (saving) return;
           setSaving(true);
           try {
             const startedAt = start === formatLocalDateTime(Number(session.data.started_at)) ? Number(session.data.started_at) : parseLocalDateTime(start),
               seconds = Number(duration);
-            if (!Number.isFinite(seconds) || seconds < 0 || duration.trim() === '') throw Error('Invalid duration.');
+            if (!Number.isFinite(seconds) || seconds < 0 || duration.trim() === '') throw new FinishValidationError('invalid-duration');
+            const finishedAt = startedAt + seconds * 1000;
+            const now = Date.now();
+            if (!validateDate(startedAt, now) || !validateDate(finishedAt, now) || finishedAt < startedAt) throw new FinishValidationError('invalid-date');
             store.finish(session.id, {
               startedAt,
-              finishedAt: startedAt + seconds * 1000,
+              finishedAt,
               notes,
               name,
               saveTemplate
@@ -76,7 +85,7 @@ export function FinishSheet({
             });
           } catch (failure) {
             setSaving(false);
-            setError(failure instanceof Error && ['Invalid duration.','Invalid date.'].includes(failure.message) ? 'invalid' : 'save');
+            setError(failure instanceof FinishValidationError ? 'invalid' : 'save');
           }
         }} /></View>
   </ScrollView></Sheet>;

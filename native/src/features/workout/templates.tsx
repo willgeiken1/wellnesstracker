@@ -54,21 +54,21 @@ export function Workouts() {
   const rows = segment === 'routines' ? routines : segment === 'history' ? history : [];
   const unavailable = !store;
   const header = <View style={{gap:16, paddingBottom:16}}>
-    {auth?.demo && <ThemedText variant="caption" style={{alignSelf:'flex-start',backgroundColor:colors['surface-2'],borderRadius:8,padding:8}}>Example data</ThemedText>}
-    {auth?.syncStatus === 'offline' && <ThemedText muted variant="caption">Offline · logs save here and sync when you reconnect.</ThemedText>}
+    {auth?.demo && <ThemedText variant="caption" style={{alignSelf:'flex-start',backgroundColor:colors['surface-2'],borderRadius:8,padding:8}}>{t('exampleData')}</ThemedText>}
+    {auth?.syncStatus === 'offline' && <ThemedText muted variant="caption">{t('offlineLogs')}</ThemedText>}
     <SegmentedControl label={t('segments')} options={(['routines','history','cardio'] as const).map(value => ({value,label:t(value)}))} value={segment} onChange={setSegment}/>
     {error && <WorkoutError onRetry={() => retry.current()}/>}
     {unavailable ? <WorkoutUnavailable auth={auth}/> : <>
       {store.active() && <Button label={t('resumeWorkout')} onPress={() => router.push('/workout')}/>}
       {segment === 'routines' && <>
-        {next ? <Panel testID="up-next"><ThemedText style={trainStyles.label}>Up next</ThemedText>
+        {next ? <Panel testID="up-next"><ThemedText style={trainStyles.label}>{t('upNext')}</ThemedText>
           <ThemedText style={trainStyles.label}>{String(next.data.name)}</ThemedText>
           <ThemedText muted>{pluralize(store.templateExercises(next.id).length,'exercise')}</ThemedText>
           <Button label={t('startTemplate').replace('{name}',String(next.data.name))} onPress={() => start(next.id)}/>
-        </Panel> : <Panel><Icon name="workouts"/><ThemedText>No routines yet</ThemedText></Panel>}
-        <ThemedText style={trainStyles.label}>Routines</ThemedText>
+        </Panel> : <Panel><Icon name="workouts"/><ThemedText>{t('noRoutinesYet')}</ThemedText></Panel>}
+        <ThemedText style={trainStyles.label}>{t('routines')}</ThemedText>
       </>}
-      {segment === 'history' && <><PastDayChoice/>{!history.length && <Panel><ThemedText>Your finished workouts show here</ThemedText></Panel>}</>}
+      {segment === 'history' && <><PastDayChoice/>{!history.length && <Panel><ThemedText>{t('finishedWorkoutsEmpty')}</ThemedText></Panel>}</>}
       {segment === 'cardio' && <Cardio key={store.repo.owner} repository={store.repo}/>}
     </>}
   </View>;
@@ -85,24 +85,24 @@ export function Workouts() {
           const prior=history[index-1];
           const priorDate=prior ? new Date(`${prior.data.day}T12:00:00`) : null;
           if (priorDate) priorDate.setDate(priorDate.getDate() - (priorDate.getDay()+6)%7);
-          return <View>{(!priorDate || localDay(priorDate) !== week) && <ThemedText style={[trainStyles.label,{paddingVertical:12}]}>Week of {week}</ThemedText>}
+          return <View>{(!priorDate || localDay(priorDate) !== week) && <ThemedText style={[trainStyles.label,{paddingVertical:12}]}>{t('weekOf').replace('{week}',week)}</ThemedText>}
             <TrainRow label={`${name} · ${item.data.day}${store.edited(item.id) ? ` · ${t('edited')}` : ''}`} onPress={() => router.push({pathname:'/workout/summary',params:{id:item.id}})}>
-              <View style={{flex:1}}><ThemedText style={trainStyles.label}>{name}</ThemedText><ThemedText muted>{String(item.data.day)}</ThemedText><ThemedText muted numeric>{Math.round(summary.volume).toLocaleString()} {store.unit()} · {summary.prs.length} PRs</ThemedText></View>
+              <View style={{flex:1}}><ThemedText style={trainStyles.label}>{name}</ThemedText><ThemedText muted>{String(item.data.day)}</ThemedText><ThemedText muted numeric>{Math.round(summary.volume).toLocaleString()} {store.unit()} · {summary.prs.length} {t('historyPrs')}</ThemedText></View>
               <ContourThumbnail compact/>
             </TrainRow></View>;
         }
         const last=history.find(s => s.data.routine_id === item.id);
-        return <RoutineMenu edit={() => router.push({pathname:'/workout/template',params:{id:item.id}})} duplicate={() => run(() => {
+        return <RoutineMenu moveUp={index > 0 ? () => run(() => store.moveTemplate(item.id, -1)) : undefined} moveDown={index < routines.length - 1 ? () => run(() => store.moveTemplate(item.id, 1)) : undefined} edit={() => router.push({pathname:'/workout/template',params:{id:item.id}})} duplicate={() => run(() => {
           const exercises=store.templateExercises(item.id).map(e => ({exercise:String(e.data.exercise),target_sets:Number(e.data.target_sets),target_reps:Number(e.data.target_reps),rep_min:e.data.rep_min as number|null,rep_max:e.data.rep_max as number|null,superset_group:e.data.superset_group as string|null,restSeconds:store.rest(String(e.data.exercise)).seconds,restStyle:store.rest(String(e.data.exercise)).style}));
-          store.saveTemplate(`${name} copy`,exercises);
-        })} remove={() => Alert.alert('Delete routine',name,[{text:t('cancel'),style:'cancel'},{text:t('delete'),style:'destructive',onPress:() => run(() => {const restore=store.deleteTemplate(item.id);setUndo(() => restore);})}])}>
+          store.saveTemplate(t('routineCopy').replace('{name}',name),exercises);
+        })} remove={() => Alert.alert(t('deleteRoutine'),name,[{text:t('cancel'),style:'cancel'},{text:t('delete'),style:'destructive',onPress:() => run(() => {const restore=store.deleteTemplate(item.id);setUndo(() => restore);})}])}>
           {onLongPress => <TrainRow onLongPress={onLongPress} label={`${t('startTemplate').replace('{name}',name)} · ${last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}`} onPress={() => start(item.id)}>
             <Icon name="workouts" color={colors.accent}/><View style={{flex:1}}><ThemedText style={trainStyles.label}>{name}</ThemedText><ThemedText muted variant="caption">{last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}</ThemedText></View><Icon name="chevron" size={20}/>
           </TrainRow>}
         </RoutineMenu>;
       }}
       ListFooterComponent={<View style={{gap:16}}>{!unavailable && segment === 'routines' && <View style={{gap:16}}>
-        <View><TrainRow label="New routine" onPress={() => router.push('/workout/template')}/><TrainRow label="Start empty workout" onPress={() => start()}/></View>
+        <View><TrainRow label={t('newRoutine')} onPress={() => router.push('/workout/template')}/><TrainRow label={t('startEmpty')} onPress={() => start()}/></View>
         {undo && <Button label={t('undoDelete')} variant="secondary" onPress={() => run(() => {undo();setUndo(null);})}/>}
         <Button label={t('editPlan')} variant="secondary" onPress={() => setShowPlan(!showPlan)}/>
         {showPlan && store && <PlansPanel store={store}/>}
@@ -178,9 +178,9 @@ function Editor({
       return es.map((v,j) => ({...v,superset_group:ids.includes(String(j)) ? group : oldGroups.has(v.superset_group) ? null : v.superset_group}));
     })} />
     <RestOptions value={{seconds:e.restSeconds ?? store.rest(e.exercise).seconds, style:e.restStyle ?? store.rest(e.exercise).style}} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,restSeconds:value.seconds,restStyle:value.style} : v))} /><View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => move(i, -1)} /><Button label={t('moveDown')} variant="secondary" onPress={() => move(i, 1)} /><Button label={t('remove')} variant="secondary" onPress={() => setExercises(es => es.filter((_, j) => j !== i).map(v => v.superset_group && es.filter(x => x.superset_group === v.superset_group).length === 2 && v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} /></View></Panel>)}
-    {error && <ThemedText accessibilityRole="alert">{error === 'invalid' ? t('invalidTemplate') : 'Could not save this routine.'}</ThemedText>}
+    {error && <ThemedText accessibilityRole="alert">{error === 'invalid' ? t('invalidTemplate') : t('routineSaveError')}</ThemedText>}
     <Button label={t('addExercise')} variant="secondary" onPress={() => setPicker(true)} />
-    <Button label={error ? 'Try again' : t('saveTemplate')} onPress={() => {
+    <Button label={error ? t('tryAgain') : t('saveTemplate')} onPress={() => {
       try {
         store.saveTemplate(name, exercises, id);
         router.back();

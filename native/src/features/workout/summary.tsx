@@ -39,7 +39,6 @@ export function ContourThumbnail({compact=false}: {compact?:boolean} = {}) {
         width: compact ? 56 : 112,
         height: compact ? 44 : 84,
         borderRadius: 14,
-        backgroundColor: undefined,
         padding: 10,
       }}
     >
@@ -419,5 +418,5 @@ export function WorkoutSummary({
 }
 
 function EmptySummary() {
-  return <Panel><ThemedText>Your finished workouts show here</ThemedText></Panel>;
+  return <Panel><ThemedText>{t("finishedWorkoutsEmpty")}</ThemedText></Panel>;
 }

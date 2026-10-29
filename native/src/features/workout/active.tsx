@@ -798,7 +798,6 @@ function JumpCard({ store, entry }: { store: WorkoutStore; entry: Row }) {
       ]}
       onAccessibilityAction={() => setVisible(false)}
       style={{
-        backgroundColor: undefined,
         paddingVertical: 8,
         borderRadius: 9,
         minHeight: 44,
