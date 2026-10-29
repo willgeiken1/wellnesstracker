@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { act, renderHook } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import {
-  CATALOGUE, DEFAULT_LAYOUT, SERVICES, WIDGETS, addWidget, connectService, createHomeWidgetStore, defaultHomeWidgetState,
-  disconnectService, getWidget, homeItems, homeWidgetStoreFor, isUnlocked, markGlowSeen, moveWidget, openEdit, removeWidget,
+  CATALOGUE, DEFAULT_LAYOUT, HomeWidgetCard, SERVICES, WIDGETS, addWidget, connectService, createHomeWidgetStore, defaultHomeWidgetState,
+  disconnectService, getWidget, homeItems, isAvailable, homeWidgetStoreFor, isUnlocked, markGlowSeen, moveWidget, openEdit, removeWidget,
   shouldGlow, trayItems, type ServiceId, type WidgetId,
 } from '../src/features/home-widgets';
 import { HOME_WIDGETS_KEY, loadHomeWidgets } from '../src/features/home-widgets/storage';
@@ -11,6 +12,12 @@ import { useHomeWidgets } from '../src/features/home-widgets/use-home-widgets';
 import { memoryRepository } from './workout-repository';
 
 const ownedBy = (owner: string) => Object.assign(memoryRepository(), { owner });
+/** Two repository objects over one synthetic storage, as a re-created repository for the same owner would be. */
+const sharedStorage = (owner: string) => {
+  const first = ownedBy(owner);
+  const second = { owner, localGet: first.localGet, localSave: first.localSave };
+  return { first, second };
+};
 const ids = WIDGETS.map(widget => widget.id);
 const trayIds = (state = defaultHomeWidgetState()) => trayItems(state).map(item => item.id);
 const idsFor = (service: ServiceId) => WIDGETS.filter(widget => widget.available && (widget.services as readonly ServiceId[]).includes(service)).map(widget => widget.id);
@@ -84,6 +91,9 @@ describe('layout', () => {
   });
   it('keeps checkIn out of the tray until the egress tests carry mood/energy/stress sentinels (AGENTS.md rule 6)', () => {
     expect(getWidget('checkIn')?.available).toBe(false);
+    expect(WIDGETS.filter(widget => widget.available).map(widget => widget.id)).not.toContain('checkIn');
+    expect(isAvailable('checkIn')).toBe(false);
+    expect(trayItems(connectService(connectService(defaultHomeWidgetState(), 'oura').state, 'appleHealth').state).map(item => item.id)).not.toContain('checkIn');
     expect(trayIds()).not.toContain('checkIn');
     expect(addWidget(defaultHomeWidgetState(), 'checkIn').layout).not.toContain('checkIn');
   });
@@ -177,6 +187,29 @@ describe('disconnect', () => {
       });
     }
     for (const item of home.filter(entry => DEFAULT_LAYOUT.includes(entry.id))) expect(item.disconnected).toBeNull();
+  });
+  it('names Apple Health, not Oura, for an Apple-Health-only user who disconnects (F7)', () => {
+    let state = addWidget(connectService(defaultHomeWidgetState(), 'appleHealth').state, 'steps');
+    state = disconnectService(state, 'appleHealth');
+    expect(homeItems(state).find(item => item.id === 'steps')).toMatchObject({
+      locked: true, disconnected: { service: 'appleHealth', message: 'Apple Health disconnected', action: 'Reconnect' },
+    });
+  });
+  it('keeps the Apple Health target after a reload, and clears it on reconnect (F7)', () => {
+    const repo = memoryRepository();
+    const store = createHomeWidgetStore(repo);
+    store.connectService('appleHealth');
+    store.add('steps');
+    store.disconnectService('appleHealth');
+    const reloaded = createHomeWidgetStore(repo);
+    expect(homeItems(reloaded.getState()).find(item => item.id === 'steps')?.disconnected).toMatchObject({ service: 'appleHealth', message: 'Apple Health disconnected' });
+    reloaded.connectService('appleHealth');
+    expect(homeItems(createHomeWidgetStore(repo).getState()).find(item => item.id === 'steps')).toMatchObject({ locked: false, disconnected: null });
+  });
+  it('targets the service most recently dropped when a user had both (F7)', () => {
+    let state = addWidget(connectService(connectService(defaultHomeWidgetState(), 'oura').state, 'appleHealth').state, 'steps');
+    state = disconnectService(disconnectService(state, 'oura'), 'appleHealth');
+    expect(homeItems(state).find(item => item.id === 'steps')?.disconnected?.service).toBe('appleHealth');
   });
   it('clears the disconnected state on reconnect, keeping the slot', () => {
     let state = addWidget(connectService(defaultHomeWidgetState(), 'oura').state, 'lastNight');
@@ -300,6 +333,19 @@ describe('shared store per owner (B3)', () => {
     expect(homeWidgetStoreFor(a)).toBe(homeWidgetStoreFor(a));
     expect(homeWidgetStoreFor(ownedBy('owner-b'))).not.toBe(homeWidgetStoreFor(a));
   });
+  it('shares one store across repository objects for the same owner, so a removal is not undone (F6)', async () => {
+    const { first, second } = sharedStorage('owner-two-repos');
+    expect(homeWidgetStoreFor(second)).toBe(homeWidgetStoreFor(first));
+    const a = await renderHook(() => useHomeWidgets(first));
+    const b = await renderHook(() => useHomeWidgets(second));
+    await act(async () => { a.result.current.remove('bodyMap'); });
+    await act(async () => { b.result.current.remove('foodRing'); });
+    const layout = ['insightScore', 'todayWorkout'];
+    expect(a.result.current.layout).toEqual(layout);
+    expect(b.result.current.layout).toEqual(layout);
+    expect(loadHomeWidgets(first).layout).toEqual(layout);
+    expect(createHomeWidgetStore(second).getState().layout).toEqual(layout);
+  });
   it('keeps Home and Edit widgets in sync after an edit', async () => {
     const repo = ownedBy('owner-sync');
     const home = await renderHook(() => useHomeWidgets(repo));
@@ -331,6 +377,26 @@ describe('shared store per owner (B3)', () => {
     const item = result.current.home.find(entry => entry.id === 'sleepScore')!;
     await act(async () => { result.current.connectService(item.disconnected!.service); });
     expect(result.current.home.find(entry => entry.id === 'sleepScore')).toMatchObject({ locked: false, disconnected: null });
+  });
+});
+
+describe('disconnected widget on Home (F3)', () => {
+  it('renders grayed out with the service message and a Reconnect action', async () => {
+    let state = addWidget(connectService(defaultHomeWidgetState(), 'oura').state, 'readiness');
+    state = disconnectService(state, 'oura');
+    const items = homeItems(state);
+    const onReconnect = jest.fn();
+    await render(<>{items.filter(item => ['bodyMap', 'readiness'].includes(item.id)).map(item => <HomeWidgetCard key={item.id} item={item} onReconnect={onReconnect} />)}</>);
+    const card = screen.getByTestId('home-widget-readiness');
+    expect(card.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(StyleSheet.flatten(card.props.style).opacity).toBeLessThan(1);
+    expect(screen.getByText('Oura disconnected')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reconnect Readiness' })).toBeTruthy();
+    const connected = screen.getByTestId('home-widget-bodyMap');
+    expect(connected.props.accessibilityState).toMatchObject({ disabled: false });
+    expect(screen.getAllByText('Reconnect')).toHaveLength(1);
+    await fireEvent.press(screen.getByText('Reconnect'));
+    expect(onReconnect).toHaveBeenCalledWith(expect.objectContaining({ id: 'readiness' }));
   });
 });
 

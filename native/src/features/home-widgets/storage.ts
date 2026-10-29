@@ -22,12 +22,14 @@ export function loadHomeWidgets(storage: HomeWidgetStorage | null | undefined): 
   if (!saved || typeof saved !== 'object' || !Array.isArray((saved as {layout?: unknown}).layout)) return defaultHomeWidgetState();
   const raw = saved as Record<string, unknown>;
   const glowSeen = list(raw.glowSeen, isWidgetId);
+  const services = list(raw.services, isServiceId);
   return {
     layout: list(raw.layout, isWidgetId).filter(isAvailable),
-    services: list(raw.services, isServiceId),
+    services,
     editDot: raw.editDot === true,
     glowPending: list(raw.glowPending, isWidgetId).filter(id => !glowSeen.includes(id)),
     glowSeen,
+    disconnected: list(raw.disconnected, isServiceId).filter(service => !services.includes(service)),
   };
 }
 
@@ -59,17 +61,18 @@ export function createHomeWidgetStore(storage: HomeWidgetStorage | null | undefi
 }
 export type HomeWidgetStore = ReturnType<typeof createHomeWidgetStore>;
 
-const stores = new Map<string, { storage: HomeWidgetStorage | null; store: HomeWidgetStore }>();
+const stores = new Map<string, HomeWidgetStore>();
 
 /**
- * One shared store per owner, so Home and Edit widgets see the same state (B3). A new repository instance for the
- * same owner reloads from its saved state; '' holds the signed-out, no-repository store.
+ * One canonical store per owner, so Home and Edit widgets see the same state (B3, F6). A second repository object
+ * for the same owner reuses that store, so two writers never save competing snapshots; '' holds the signed-out,
+ * no-repository store.
  */
 export function homeWidgetStoreFor(storage: HomeWidgetStorage | null | undefined): HomeWidgetStore {
   const owner = storage?.owner ?? '';
   const cached = stores.get(owner);
-  if (cached && cached.storage === (storage ?? null)) return cached.store;
+  if (cached) return cached;
   const store = createHomeWidgetStore(storage);
-  stores.set(owner, { storage: storage ?? null, store });
+  stores.set(owner, store);
   return store;
 }

@@ -10,6 +10,8 @@ export type HomeWidgetState = {
   glowPending: WidgetId[];
   /** Widgets whose glow has shown; they never glow again. */
   glowSeen: WidgetId[];
+  /** Services the user dropped, oldest first; names the Reconnect target. Cleared per service on reconnect. */
+  disconnected: ServiceId[];
 };
 
 export type TrayItem = { id: WidgetId; title: string; locked: boolean; glow: boolean };
@@ -21,7 +23,7 @@ export type HomeItem = { id: WidgetId; title: string; locked: boolean; disconnec
 const SERVICE_NAMES: Record<ServiceId, string> = { oura: 'Oura', appleHealth: 'Apple Health', fitbit: 'Fitbit', whoop: 'WHOOP' };
 
 export const defaultHomeWidgetState = (): HomeWidgetState =>
-  ({ layout: [...DEFAULT_LAYOUT], services: [], editDot: false, glowPending: [], glowSeen: [] });
+  ({ layout: [...DEFAULT_LAYOUT], services: [], editDot: false, glowPending: [], glowSeen: [], disconnected: [] });
 
 /** True when the widget needs no service or any one of its services is connected. */
 export function isUnlocked(state: HomeWidgetState, id: WidgetId) {
@@ -57,13 +59,14 @@ export function connectService(state: HomeWidgetState, service: ServiceId): { st
   const glow = unlocked.filter(id => !state.glowSeen.includes(id) && !state.glowPending.includes(id));
   return {
     unlocked,
-    state: { ...state, services: [...state.services, service], editDot: state.editDot || unlocked.length > 0, glowPending: [...state.glowPending, ...glow] },
+    state: { ...state, services: [...state.services, service], disconnected: state.disconnected.filter(item => item !== service), editDot: state.editDot || unlocked.length > 0, glowPending: [...state.glowPending, ...glow] },
   };
 }
 
 /** Locks the service's widgets again. Layout keeps their slots so they return in place on reconnect. */
 export function disconnectService(state: HomeWidgetState, service: ServiceId): HomeWidgetState {
-  return state.services.includes(service) ? { ...state, services: state.services.filter(item => item !== service) } : state;
+  if (!state.services.includes(service)) return state;
+  return { ...state, services: state.services.filter(item => item !== service), disconnected: [...state.disconnected.filter(item => item !== service), service] };
 }
 
 export const openEdit = (state: HomeWidgetState): HomeWidgetState => state.editDot ? { ...state, editDot: false } : state;
@@ -75,9 +78,13 @@ export function markGlowSeen(state: HomeWidgetState, id: WidgetId): HomeWidgetSt
   return { ...state, glowPending: state.glowPending.filter(item => item !== id), glowSeen: [...state.glowSeen, id] };
 }
 
-/** Reconnect target for a locked widget; Oura first, as §2.5 names it for the Health-or-Oura widgets too. */
-function disconnectedState(services: readonly ServiceId[]): DisconnectedState | null {
-  const service = services.includes('oura') ? 'oura' : services[0];
+/**
+ * Reconnect target for a locked widget: the widget's service the user most recently dropped (F7). With no drop on
+ * record (a never-connected default layout), Oura first, as §2.5 names it.
+ */
+function disconnectedState(state: HomeWidgetState, services: readonly ServiceId[]): DisconnectedState | null {
+  const dropped = [...state.disconnected].reverse().find(item => services.includes(item));
+  const service = dropped ?? (services.includes('oura') ? 'oura' : services[0]);
   return service ? { service, message: `${SERVICE_NAMES[service]} disconnected`, action: 'Reconnect' } : null;
 }
 
@@ -86,7 +93,7 @@ export const homeItems = (state: HomeWidgetState): HomeItem[] => state.layout.fl
   const widget = getWidget(id);
   if (!widget) return [];
   const locked = !isUnlocked(state, id);
-  return [{ id, title: widget.title, locked, disconnected: locked ? disconnectedState(widget.services) : null }];
+  return [{ id, title: widget.title, locked, disconnected: locked ? disconnectedState(state, widget.services) : null }];
 });
 
 /** Every available widget not on Home, in registry order; locked ones show but cannot be added. Unavailable ones are hidden. */
