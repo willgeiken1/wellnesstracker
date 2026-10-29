@@ -75,7 +75,7 @@ Plain facts (Q20). An error states the fact plus one fix (FP71). Specific action
 - On by default for new users. It can be hidden in Settings › Insight Score; hiding it removes both the header ring and the card.
 - **From day 1** the header ring shows a progress ring with the centre label "Needs N more days" (VoiceOver: "Insight Score needs 5 more days of logging", synthetic N). The arc fills with days logged toward the baseline. Once there is enough data, the centre shows the score number.
 - The card mirrors this: the ring, then "Needs N more days" or the score, then 3 pillar rows (training, food, recovery) with pillar colours, then "How it's worked out" → Score detail (visible equations, adjustable weights, a one-line disclaimer: FP41).
-- The baseline length (N's source) belongs to the Score model, not this file. See open question Q-B.
+- The baseline length (N's source) belongs to the Score model, not this file. Threshold is 7 days (Q-B, resolved; I8/Q7).
 
 ### 2.3 Widget catalogue (I9, I9a)
 Every PWA extra survives as an optional tray widget. "Default" = on the starting Home. Ids are the INS-02 registry ids.
@@ -101,7 +101,7 @@ Every PWA extra survives as an optional tray widget. "Default" = on the starting
 | 17 | `cardioMinutes` | Cardio minutes | none | no | panel | PWA extra |
 | 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Insights › Muscles |
 | 19 | `workoutPrint` | Workout print | none | no | panel | Contour fingerprint (D114) |
-| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47) |
+| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). **Unblocked for INS-02/INS-05.** |
 | 21 | `steps` | Steps | Apple Health or Oura | no | panel | |
 | 22 | `sleepDuration` | Sleep duration | Apple Health or Oura | no | panel | |
 | 23 | `hrv` | HRV | Apple Health or Oura | no | panel | |
@@ -336,7 +336,7 @@ Keep the order: **1. map (Home), 2. logger (Train), 3. AI food (Eat: Snap / Desc
 
 ## 8. Open questions for Will (do not resolve in code)
 - **Q-A (resolved):** Check-ins stay in the native app as an optional tray tile (mood, energy, stress) that syncs for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). AGENTS.md §4.6 still reflects Q47 and needs updating to match.
-- **Q-B:** "Needs N more days" threshold. SOURCE-DESIGN says a 28-day baseline; the INS-05 check says "< 7 days". Which is the Score's first-number threshold?
+- **Q-B (resolved):** The full Score appears at **7 days** of data; before that, Home shows the "Needs N more days" countdown ring. Not 28 days (I8/Q7).
 - **Q-C:** Water colour per palette (v2 has one shared placeholder that sits close to `recovery` blue).
 - **Q-D:** "Once per session" is defined here as once per process launch, so a foreground return doesn't replay it. Confirm.
-- **Q-E:** The I9a "body map" on Home: is it Kai's muscle body map (assumed here) or v2's contour "Today map" hills (D27, M3-01)? If it's the contour map, the card frame stays the same and only the content changes.
+- **Q-E (resolved):** Home's body map is **react-native-body-highlighter** (2D, tappable), Will's Oct 28 pick. Kai's 3D model comes later; the card frame stays the same.
