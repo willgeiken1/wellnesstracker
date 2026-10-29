@@ -146,7 +146,7 @@ Most of the rest are green `training` vs green `success`, or orange `food` vs am
 
 ### Summary
 
-Pairs graded per mode: 19 text pairs (4.5:1) and 24 graphics pairs (3:1), 43 per mode, 86 per palette.
+Pairs graded per mode: 15 text pairs (4.5:1) and 24 graphics pairs (3:1), 39 per mode, 78 per palette.
 
 | # | Palette | id | Secret | v2 failing pairs (dark / light) | Proposed failing pairs | Values changed | Near-duplicates flagged |
 |---|---|---|---|---|---|---|---|
@@ -1265,7 +1265,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 ## Checklist
 
 - [x] Palette names match the v2 palettes 1:1 (13). The test reads the REDESIGN.md §5 table.
-- [x] Every graded pair has a contrast value: 43 per mode, 86 per palette, v2 and proposed.
+- [x] Every graded pair has a contrast value: 39 per mode, 78 per palette, v2 and proposed.
 - [x] Failures are listed with fixes, and every proposed pair passes.
 - [x] Each palette has its own water colour, distinct from recovery.
 - [x] Both duplicate-colour notes are resolved.

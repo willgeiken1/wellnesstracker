@@ -169,17 +169,19 @@ export const deltaE = (a: string, b: string) => {
   const [x, y] = [oklab(a), oklab(b)];
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 };
+/** D6 floors are inclusive: a ratio exactly at the floor passes. */
+export const passes = (ratio: number, min: number) => ratio >= min;
 const minContrast = (fg: string, against: string[]) => Math.min(...against.map(bg => contrast(fg, bg)));
 
 /** Smallest HSL-lightness move (hue and saturation kept) that clears `min` against every colour in `against`. */
 const nudge = (hex: string, against: string[], min: number, direction: 1 | -1) => {
-  if (minContrast(hex, against) >= min) return hex;
+  if (passes(minContrast(hex, against), min)) return hex;
   const [h, s, l] = toHsl(hex);
   for (let step = 1; step <= 200; step++) {
     const next = l + direction * step * 0.005;
     if (next < 0 || next > 1) break;
     const candidate = fromHsl(h, s, next);
-    if (minContrast(candidate, against) >= min) return candidate;
+    if (passes(minContrast(candidate, against), min)) return candidate;
   }
   throw new Error(`no lightness of ${hex} reaches ${min}:1`);
 };
@@ -216,7 +218,7 @@ export const scorePairs = (colors: { dark: FullColors; light: FullColors }): Sco
   MODES.flatMap(mode =>
     [...TEXT_PAIRS.map(p => [...p, MIN_TEXT] as const), ...GRAPHIC_PAIRS.map(p => [...p, MIN_GRAPHICS] as const)].map(([fg, bg, min]) => {
       const ratio = contrast(colors[mode][fg], colors[mode][bg]);
-      return { mode, fg, bg, min, ratio, pass: ratio >= min };
+      return { mode, fg, bg, min, ratio, pass: passes(ratio, min) };
     }),
   );
 
@@ -272,12 +274,12 @@ export const proposePalette = (p: Palette): Proposal => {
   };
 
   // A. Text roles and the accent / onAccent pair.
-  for (const mode of MODES) {
+  const fixText = (mode: Mode) => {
     const c = w[mode];
     const onAccentRatio = contrast(c.onAccent, c.accent);
-    if (onAccentRatio < MIN_TEXT) {
+    if (!passes(onAccentRatio, MIN_TEXT)) {
       const candidates = ['#111111', '#FFFFFF', c.bg].sort((a, b) => contrast(b, c.accent) - contrast(a, c.accent));
-      if (contrast(candidates[0], c.accent) >= MIN_TEXT) set(mode, 'onAccent', candidates[0], `onAccent on accent ${fmt(onAccentRatio)}:1 < ${MIN_TEXT}`);
+      if (passes(contrast(candidates[0], c.accent), MIN_TEXT)) set(mode, 'onAccent', candidates[0], `onAccent on accent ${fmt(onAccentRatio)}:1 < ${MIN_TEXT}`);
       else set(mode, 'accent', nudge(c.accent, [c.onAccent], MIN_TEXT, luminance(c.onAccent) < 0.5 ? 1 : -1), `onAccent on accent ${fmt(onAccentRatio)}:1 < ${MIN_TEXT}`);
     }
     for (const role of ['text', 'muted'] as const) {
@@ -285,11 +287,12 @@ export const proposePalette = (p: Palette): Proposal => {
         const d = derive(c, mode);
         const against = [d.bg, d.surface2, d.surface, d.accentSoft];
         const worst = minContrast(c[role], against);
-        if (worst >= MIN_TEXT) break;
+        if (passes(worst, MIN_TEXT)) break;
         set(mode, role, nudge(c[role], against, MIN_TEXT, away(mode)), `${role} worst text pair ${fmt(worst)}:1 < ${MIN_TEXT}`);
       }
     }
-  }
+  };
+  for (const mode of MODES) fixText(mode);
 
   // B. One colour, one meaning: duplicates of the accent move to a new hue (accent keeps the palette's signature), then water.
   for (const role of ['training', 'food'] as const) {
@@ -302,17 +305,27 @@ export const proposePalette = (p: Palette): Proposal => {
   for (const mode of MODES) set(mode, 'water', water.colors[mode], 'shared placeholder; per-palette hue distinct from recovery (Q-C)');
 
   // C. Graphics roles to 3:1 on bg, panel and card; then the derived AI colour to 4.5:1.
-  for (const mode of MODES) {
+  const fixGraphics = (mode: Mode) => {
     for (const role of GRAPHIC_ROLES) {
       const d = derive(w[mode], mode);
       const against = [d.bg, d.surface2, d.surface];
       const worst = minContrast(w[mode][role], against);
-      if (worst < MIN_GRAPHICS) set(mode, role, nudge(w[mode][role], against, MIN_GRAPHICS, away(mode)), `${role} worst graphics pair ${fmt(worst)}:1 < ${MIN_GRAPHICS}`);
+      if (!passes(worst, MIN_GRAPHICS)) set(mode, role, nudge(w[mode][role], against, MIN_GRAPHICS, away(mode)), `${role} worst graphics pair ${fmt(worst)}:1 < ${MIN_GRAPHICS}`);
     }
     const d = derive(w[mode], mode);
     const against = [d.bg, d.surface2, d.surface];
     const worst = minContrast(d.ai, against);
-    if (worst < MIN_TEXT) set(mode, 'ai', nudge(d.ai, against, MIN_TEXT, away(mode)), `ai (accent/sleep mix ${d.ai}) worst text pair ${fmt(worst)}:1 < ${MIN_TEXT}`);
+    if (!passes(worst, MIN_TEXT)) set(mode, 'ai', nudge(d.ai, against, MIN_TEXT, away(mode)), `ai (accent/sleep mix ${d.ai}) worst text pair ${fmt(worst)}:1 < ${MIN_TEXT}`);
+  };
+  // A graphics fix can move the accent, which moves onAccent's backdrop and accentSoft: repeat A and C until nothing changes.
+  for (const mode of MODES) {
+    for (let round = 0; ; round++) {
+      if (round === 5) throw new Error(`${p.id} ${mode}: text and graphics fixes did not settle`);
+      const before = changes.length;
+      fixGraphics(mode);
+      if (changes.length === before) break;
+      fixText(mode);
+    }
   }
   return { dark: derive(w.dark, 'dark'), light: derive(w.light, 'light'), changes };
 };
@@ -345,7 +358,8 @@ const cell = (r: number, min: number) => (r >= min ? fmt(r) : `**${fmt(r)} FAIL*
 export const renderReport = () => {
   const out: string[] = [];
   const rows = PALETTES.map(p => ({ p, v2: v2Colors(p), proposal: proposePalette(p) }));
-  out.push('### Summary', '', 'Pairs graded per mode: 19 text pairs (4.5:1) and 24 graphics pairs (3:1), 43 per mode, 86 per palette.', '');
+  const perMode = TEXT_PAIRS.length + GRAPHIC_PAIRS.length;
+  out.push('### Summary', '', `Pairs graded per mode: ${TEXT_PAIRS.length} text pairs (${MIN_TEXT}:1) and ${GRAPHIC_PAIRS.length} graphics pairs (${MIN_GRAPHICS}:1), ${perMode} per mode, ${perMode * 2} per palette.`, '');
   out.push('| # | Palette | id | Secret | v2 failing pairs (dark / light) | Proposed failing pairs | Values changed | Near-duplicates flagged |', '|---|---|---|---|---|---|---|---|');
   rows.forEach(({ p, v2, proposal }, i) => {
     const before = scorePairs(v2).filter(s => !s.pass);
@@ -376,7 +390,6 @@ export const renderReport = () => {
     out.push('| Foreground on surface | Floor | v2 dark | v2 light | Proposed dark | Proposed light |', '|---|---|---|---|---|---|');
     const before = scorePairs(v2);
     const after = scorePairs(proposal);
-    const perMode = before.length / 2;
     for (let k = 0; k < perMode; k++) {
       const [bd, bl, ad, al] = [before[k], before[k + perMode], after[k], after[k + perMode]];
       out.push(`| ${bd.fg} on ${bd.bg} | ${bd.min} | ${cell(bd.ratio, bd.min)} | ${cell(bl.ratio, bl.min)} | ${cell(ad.ratio, ad.min)} | ${cell(al.ratio, al.min)} |`);
