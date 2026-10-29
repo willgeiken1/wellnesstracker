@@ -101,7 +101,7 @@ Every PWA extra survives as an optional tray widget. "Default" = on the starting
 | 17 | `cardioMinutes` | Cardio minutes | none | no | panel | PWA extra |
 | 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Insights › Muscles |
 | 19 | `workoutPrint` | Workout print | none | no | panel | Contour fingerprint (D114) |
-| 20 | `checkIn` | Check in | none | no | panel | **Blocked (conflict pending Will).** I9 keeps it, and Will's on-record decision is that check-ins sync for signed-in users (PR #60 standing rule). That conflicts with AGENTS.md §4.6 / Q47 FINAL, which forbid check-ins in native. Not built until Will confirms which stands (Q-A) |
+| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47) |
 | 21 | `steps` | Steps | Apple Health or Oura | no | panel | |
 | 22 | `sleepDuration` | Sleep duration | Apple Health or Oura | no | panel | |
 | 23 | `hrv` | HRV | Apple Health or Oura | no | panel | |
@@ -335,7 +335,7 @@ Theme ids are the camelCase palette names in the table (`seaGlassTide` … `holo
 Keep the order: **1. map (Home), 2. logger (Train), 3. AI food (Eat: Snap / Describe)**. The store shots wait for M3-01 (the Home map hero). They're captured with demo/synthetic data only, after INS-12 QA.
 
 ## 8. Open questions for Will (do not resolve in code)
-- **Q-A (blocker for `checkIn`; conflict pending Will's confirmation):** I9 keeps "Check in" as a tray tile, and Will's on-record decision is that **check-ins sync for signed-in users** (PR #60 standing rule). That conflicts with AGENTS.md §4.6 / Q47 FINAL, which forbid check-ins in native. This contract does not resolve the conflict: Elliot takes it to Will before INS-02/INS-05 build the tile. Until Will confirms, the tile stays unbuilt.
+- **Q-A (resolved):** Check-ins stay in the native app as an optional tray tile (mood, energy, stress) that syncs for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). AGENTS.md §4.6 still reflects Q47 and needs updating to match.
 - **Q-B:** "Needs N more days" threshold. SOURCE-DESIGN says a 28-day baseline; the INS-05 check says "< 7 days". Which is the Score's first-number threshold?
 - **Q-C:** Water colour per palette (v2 has one shared placeholder that sits close to `recovery` blue).
 - **Q-D:** "Once per session" is defined here as once per process launch, so a foreground return doesn't replay it. Confirm.
