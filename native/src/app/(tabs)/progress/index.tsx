@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { View } from 'react-native';
+import { router } from 'expo-router';
 import { useAuth } from '@/auth/provider';
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import { Body } from '@/features/body/screen';
@@ -19,5 +21,6 @@ export default function Page() {
    <ReadBoundary key={`${auth.repository.owner}:${selected}`} name="progress"><View>
     {selected === 'body' ? <Body repository={auth.repository} /> : <ProgressCollection repository={auth.repository} section={selected} />}
    </View></ReadBoundary>}
+  <Button label={t('backHome')} variant="secondary" onPress={() => router.navigate('/')} />
  </Screen>;
 }

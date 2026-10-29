@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState, View } from 'react-native';
+import { router } from 'expo-router';
+import { Button } from '@/components/button';
+import { t } from '@/i18n/en';
 import { SegmentedControl } from '@/components/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/screen';
@@ -15,7 +18,7 @@ import type { WorkoutStore } from '@/data/workout/store';
 
 const sections = [
  { value: 'trends', label: 'Trends' }, { value: 'recovery', label: 'Recovery' },
- { value: 'muscles', label: 'Muscles' }, { value: 'weekly', label: 'Weekly' },
+ { value: 'muscles', label: 'Muscles' }, { value: 'weekly', label: 'Weekly report' },
 ];
 export default function Page() {
  const {store, auth}=useWorkout();
@@ -34,6 +37,7 @@ export default function Page() {
    <ReadBoundary key={`${store.repo.owner}:${section}`} name="insights">
     {section === 'muscles' ? <Muscles store={store} now={now} /> : section === 'recovery' ? <Recovery /> : <Reports store={store} section={section} />}
    </ReadBoundary>}
+  <Button label={t('backHome')} variant="secondary" onPress={() => router.navigate('/')} />
  </Screen>;
 }
 function Muscles({store, now}: { store: WorkoutStore; now: number }) {
