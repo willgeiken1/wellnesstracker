@@ -20,6 +20,7 @@ import { useAuth } from '../src/auth/provider';
 import { clock, Eyebrow } from '../src/features/workout/primitives';
 import { tokens } from '../src/design/tokens';
 import { displayWeight, rounded, nextField } from '../src/core/workout/rules';
+import { t } from '../src/i18n/en';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: jest.fn(() => ({})), useIsFocused: () => true, router: { canDismiss: () => false, replace: jest.fn(), back: jest.fn() } }));
 jest.mock('../src/features/workout/haptics', () => ({
@@ -223,6 +224,52 @@ test.each([false, true])('PR signature runs once across remount with Reduce Moti
 function activeRepository(repo: Repository) {
   jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>);
 }
+test('invalid pending set replaces a save failure with validation and no stale retry', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  store.addExercise(store.start().id, 'Bench Press');
+  activeRepository(repo);
+  const add = jest.spyOn(WorkoutStore.prototype, 'addSet').mockImplementationOnce(() => { throw Error('Synthetic save failure'); });
+  try {
+    await render(<ActiveWorkout />, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: `Bench Press, ${t('exerciseOptions')}` }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add set' }));
+    expect(screen.getByRole('button', { name: t('tryAgain') })).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('set-0-0-done'));
+    expect(screen.getByRole('alert')).toHaveTextContent(t('invalidSet'));
+    expect(screen.queryByRole('button', { name: t('tryAgain') })).toBeNull();
+    expect(add).toHaveBeenCalledTimes(1);
+  } finally { add.mockRestore(); }
+});
+test('invalid saved-set edit shows validation without retry', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Bench Press');
+  store.editDraft(entry.id, 0, { weight: '100', reps: '8' });
+  store.toggleDone(entry.id, 0);
+  store.skipTimer();
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Bench Press, Set 1, Reps, 8' }));
+  await fireEvent.press(screen.getByTestId('keypad-key-backspace'));
+  await fireEvent.press(screen.getByTestId('keypad-next'));
+  expect(screen.getByRole('alert')).toHaveTextContent(t('invalidSet'));
+  expect(screen.queryByRole('button', { name: t('tryAgain') })).toBeNull();
+});
+test('save failure retries the failed action and clears the error on success', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const entry = store.addExercise(store.start().id, 'Bench Press');
+  activeRepository(repo);
+  const add = jest.spyOn(WorkoutStore.prototype, 'addSet').mockImplementationOnce(() => { throw Error('Synthetic save failure'); });
+  try {
+    await render(<ActiveWorkout />, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: `Bench Press, ${t('exerciseOptions')}` }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add set' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(t('workoutSaveError'));
+    await fireEvent.press(screen.getByRole('button', { name: t('tryAgain') }));
+    expect(store.drafts(entry.id)).toHaveLength(4);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: t('tryAgain') })).toBeNull();
+  } finally { add.mockRestore(); }
+});
 test('compiled logger opens immediately after start', async () => {
   activeRepository(memoryRepository());
   await render(<ActiveWorkout />, { wrapper });

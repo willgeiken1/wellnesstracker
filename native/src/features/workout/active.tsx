@@ -143,13 +143,14 @@ function Logger({
     drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
     total = drafts.length;
-  const retryAction = useRef<() => void>(() => {});
+  const retryAction = useRef<(() => void) | null>(null);
   function run(action: () => void) {
-    retryAction.current = () => run(action);
     try {
       action();
+      retryAction.current = null;
       setError(null);
     } catch {
+      retryAction.current = () => run(action);
       setError(t("workoutSaveError"));
     }
   }
@@ -225,11 +226,11 @@ function Logger({
         store.unit(cursor.entryId),
       ).valid
     ) {
+      retryAction.current = null;
       setError(t("invalidSet"));
       return;
     }
-    const commit = () => {
-      try {
+    const commit = () => run(() => {
         if (
           value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] &&
           !(
@@ -269,11 +270,7 @@ function Logger({
           if (nextEntry) edit(nextEntry.id, 0, "weight");
           else setCursor(null);
         }
-        setError(null);
-      } catch {
-        setError(t("workoutSaveError"));
-      }
-    };
+    });
     const baseline = store.sets(cursor.entryId).find((s) => s.id === d.setId);
     const check = validateSet(
       cursor.field === "weight" ? value : cursor.side ? d.rightWeight ?? "" : d.weight,
@@ -309,6 +306,7 @@ function Logger({
         : undefined,
     );
     if (!d.setId && !check.valid) {
+      retryAction.current = null;
       setError(t("invalidSet"));
       return;
     }
@@ -462,7 +460,7 @@ function Logger({
           />
         </View>
         {error && (
-          <WorkoutError onRetry={() => retryAction.current()}/>
+          <WorkoutError message={error} onRetry={error === t('workoutSaveError') ? () => retryAction.current?.() : undefined}/>
         )}
       </View>
       <ScrollView

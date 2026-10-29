@@ -9,7 +9,7 @@ import { useAuth } from '../src/auth/provider';
 import { t } from '../src/i18n/en';
 
 jest.mock('../src/auth/provider', () => ({useAuth: jest.fn()}));
-jest.mock('expo-router', () => ({useLocalSearchParams: () => ({}), router: {replace: jest.fn()}}));
+jest.mock('expo-router', () => ({useLocalSearchParams: () => ({}), router: {replace: jest.fn(), push: jest.fn()}}));
 const wrapper = ({children}: {children: React.ReactNode}) => <ThemeProvider>{children}</ThemeProvider>;
 beforeEach(() => jest.clearAllMocks());
 function fixture() {
@@ -43,6 +43,42 @@ test('a single routine has no move actions', async () => {
  await render(<Workouts/>,{wrapper});
  expect(screen.queryByRole('button',{name:'Move up'})).toBeNull();
  expect(screen.queryByRole('button',{name:'Move down'})).toBeNull();
+ expect(screen.getByRole('button',{name:/^Start Synthetic only ·/}).props.accessibilityActions).toEqual([
+  {name:'edit',label:'Edit'}, {name:'duplicate',label:'Duplicate'}, {name:'delete',label:'Delete'},
+ ]);
+});
+test('routine accessibility actions share menu behavior and update valid move boundaries', async () => {
+ const store=fixture();
+ const routines=['A','B','C'].map(name => store.saveTemplate(`Synthetic ${name}`,[]));
+ await render(<Workouts/>,{wrapper});
+ const row=(name:string) => screen.getByRole('button',{name:`Start Synthetic ${name} · Not done yet`});
+ const actions=(name:string) => row(name).props.accessibilityActions.map((action:{name:string}) => action.name);
+ const invoke=async (name:string,actionName:string) => fireEvent(row(name),'accessibilityAction',{nativeEvent:{actionName}});
+ expect(actions('A')).toEqual(['edit','duplicate','moveDown','delete']);
+ expect(actions('B')).toEqual(['edit','duplicate','moveUp','moveDown','delete']);
+ expect(actions('C')).toEqual(['edit','duplicate','moveUp','delete']);
+ expect(row('A').props.accessibilityHint).toBeTruthy();
+ await invoke('B','moveUp');
+ expect(routineOrder()).toEqual(['B','A','C'].map(name => `Start Synthetic ${name} · Not done yet`));
+ expect(actions('B')).not.toContain('moveUp');
+ await invoke('B','moveDown');
+ expect(routineOrder()).toEqual(['A','B','C'].map(name => `Start Synthetic ${name} · Not done yet`));
+ await invoke('A','edit');
+ expect(require('expo-router').router.push).toHaveBeenCalledWith({pathname:'/workout/template',params:{id:routines[0].id}});
+ await invoke('A','duplicate');
+ expect(store.templates().map(routine => routine.data.name)).toContain('Synthetic A copy');
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ try {
+  await invoke('A','delete');
+  const [title,name,buttons]=alert.mock.calls.at(-1)!;
+  expect(title).toBe(t('deleteRoutine'));
+  expect(name).toBe('Synthetic A');
+  expect(store.templates().some(routine => routine.id===routines[0].id)).toBe(true);
+  await act(()=>buttons!.find(button => button.text===t('delete'))!.onPress!());
+  expect(store.templates().some(routine => routine.id===routines[0].id)).toBe(false);
+  await fireEvent.press(screen.getByRole('button',{name:t('undoDelete')}));
+  expect(store.templates().some(routine => routine.id===routines[0].id)).toBe(true);
+ } finally {alert.mockRestore();}
 });
 test.each([
  ['first',false,true],['middle',true,true],['last',true,false],['only',false,false],

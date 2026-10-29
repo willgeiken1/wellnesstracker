@@ -1,7 +1,7 @@
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icon';
 import { localDay } from '@/core/workout/rules';
-import { RoutineMenu } from './routine-menu';
+import { RoutineMenu, type RoutineActions } from './routine-menu';
 import { ContourThumbnail } from './summary';
 import { WorkoutError, WorkoutUnavailable } from './view-state';
 import { useRef, useState } from 'react';
@@ -92,11 +92,12 @@ export function Workouts() {
             </TrainRow></View>;
         }
         const last=history.find(s => s.data.routine_id === item.id);
-        return <RoutineMenu moveUp={index > 0 ? () => run(() => store.moveTemplate(item.id, -1)) : undefined} moveDown={index < routines.length - 1 ? () => run(() => store.moveTemplate(item.id, 1)) : undefined} edit={() => router.push({pathname:'/workout/template',params:{id:item.id}})} duplicate={() => run(() => {
+        const actions: RoutineActions = {moveUp: index > 0 ? () => run(() => store.moveTemplate(item.id, -1)) : undefined, moveDown: index < routines.length - 1 ? () => run(() => store.moveTemplate(item.id, 1)) : undefined, edit: () => router.push({pathname:'/workout/template',params:{id:item.id}}), duplicate: () => run(() => {
           const exercises=store.templateExercises(item.id).map(e => ({exercise:String(e.data.exercise),target_sets:Number(e.data.target_sets),target_reps:Number(e.data.target_reps),rep_min:e.data.rep_min as number|null,rep_max:e.data.rep_max as number|null,superset_group:e.data.superset_group as string|null,restSeconds:store.rest(String(e.data.exercise)).seconds,restStyle:store.rest(String(e.data.exercise)).style}));
           store.saveTemplate(t('routineCopy').replace('{name}',name),exercises);
-        })} remove={() => Alert.alert(t('deleteRoutine'),name,[{text:t('cancel'),style:'cancel'},{text:t('delete'),style:'destructive',onPress:() => run(() => {const restore=store.deleteTemplate(item.id);setUndo(() => restore);})}])}>
-          {onLongPress => <TrainRow onLongPress={onLongPress} label={`${t('startTemplate').replace('{name}',name)} · ${last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}`} onPress={() => start(item.id)}>
+        }), remove: () => Alert.alert(t('deleteRoutine'),name,[{text:t('cancel'),style:'cancel'},{text:t('delete'),style:'destructive',onPress:() => run(() => {const restore=store.deleteTemplate(item.id);setUndo(() => restore);})}])};
+        return <RoutineMenu {...actions}>
+          {onLongPress => <TrainRow routineActions={actions} onLongPress={onLongPress} label={`${t('startTemplate').replace('{name}',name)} · ${last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}`} onPress={() => start(item.id)}>
             <Icon name="workouts" color={colors.accent}/><View style={{flex:1}}><ThemedText style={trainStyles.label}>{name}</ThemedText><ThemedText muted variant="caption">{last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}</ThemedText></View><Icon name="chevron" size={20}/>
           </TrainRow>}
         </RoutineMenu>;
@@ -110,9 +111,18 @@ export function Workouts() {
   </SafeAreaView>;
 }
 const trainStyles = {label:{fontSize:15,fontWeight:'600' as const}};
-function TrainRow({label,onPress,onLongPress,children}: React.PropsWithChildren<{label:string;onPress:() => void;onLongPress?:() => void}>) {
+function TrainRow({label,onPress,onLongPress,routineActions,children}: React.PropsWithChildren<{label:string;onPress:() => void;onLongPress?:() => void;routineActions?:RoutineActions}>) {
  const {colors}=useTheme();
- return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} onLongPress={onLongPress} style={{minHeight:44,padding:12,flexDirection:'row',alignItems:'center',gap:12,backgroundColor:colors['surface-2'],borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:colors.bg}}>
+ const actions = routineActions ? [
+  {name:'edit',label:t('edit'),onPress:routineActions.edit},
+  {name:'duplicate',label:t('duplicate'),onPress:routineActions.duplicate},
+  ...(routineActions.moveUp ? [{name:'moveUp',label:t('moveUp'),onPress:routineActions.moveUp}] : []),
+  ...(routineActions.moveDown ? [{name:'moveDown',label:t('moveDown'),onPress:routineActions.moveDown}] : []),
+  {name:'delete',label:t('delete'),onPress:routineActions.remove},
+ ] : undefined;
+ return <Pressable accessibilityActions={actions?.map(({name,label}) => ({name,label}))}
+  accessibilityHint={routineActions ? t('routineActionsHint') : undefined}
+  onAccessibilityAction={actions ? event => actions.find(action => action.name === event.nativeEvent.actionName)?.onPress() : undefined} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} onLongPress={onLongPress} style={{minHeight:44,padding:12,flexDirection:'row',alignItems:'center',gap:12,backgroundColor:colors['surface-2'],borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:colors.bg}}>
   {children ?? <ThemedText style={trainStyles.label}>{label}</ThemedText>}
  </Pressable>;
 }
@@ -163,7 +173,7 @@ function Editor({
       if (router.canGoBack()) router.back();else router.replace('/workouts');
     }} />
     <TextInput accessibilityLabel={t('templateName')} placeholder={t('templateName')} placeholderTextColor={colors['text-muted']} style={inputStyle} value={name} onChangeText={setName} />
-    {!exercises.length && <ThemedText muted>No exercises yet</ThemedText>}
+    {!exercises.length && <ThemedText muted>{t('noExercisesYet')}</ThemedText>}
     {exercises.map((e, i) => <Panel key={e.id ?? i}><ThemedText variant="headline">{e.exercise}</ThemedText><View style={layout.row}>
       {(['target_sets', 'target_reps'] as const).map(field => <View key={field} style={{
           flex: 1

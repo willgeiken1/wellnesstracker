@@ -14,8 +14,8 @@ export function WorkoutLoading() {
   {[0,1].map(i => <Panel key={i}><View style={{height:44,backgroundColor:colors.surface}}/></Panel>)}
  </View> : null;
 }
-export function WorkoutError({onRetry, message=t('workoutChangeSaveError')}: {onRetry: () => void; message?:string}) {
- return <View style={{gap:8}}><ThemedText muted selectable accessibilityRole="alert">{message}</ThemedText><Button label={t('tryAgain')} variant="secondary" onPress={onRetry}/></View>;
+export function WorkoutError({onRetry, message=t('workoutChangeSaveError')}: {onRetry?: () => void; message?:string}) {
+ return <View style={{gap:8}}><ThemedText muted selectable accessibilityRole="alert">{message}</ThemedText>{onRetry && <Button label={t('tryAgain')} variant="secondary" onPress={onRetry}/>}</View>;
 }
 
 export function WorkoutUnavailable({auth}: {auth?: ReturnType<typeof import('./use-workout').useWorkout>['auth']}) {

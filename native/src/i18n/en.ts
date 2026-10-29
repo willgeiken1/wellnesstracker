@@ -416,6 +416,8 @@ export const en = {
   exampleData: 'Example data',
   offlineLogs: 'Offline · logs save here and sync when you reconnect.',
   noRoutinesYet: 'No routines yet',
+  noExercisesYet: 'No exercises yet',
+  routineActionsHint: 'Use accessibility actions to edit, duplicate, move or delete this routine.',
   finishedWorkoutsEmpty: 'Your finished workouts show here',
   weekOf: 'Week of {week}',
   historyPrs: 'PRs',
