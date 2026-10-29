@@ -1,3 +1,4 @@
+import { SummaryLengthPicker } from './ai/length-picker';
 import { PlateSettings } from './plate-settings';
 import { View } from 'react-native';
 import { Button } from '@/components/button';
@@ -21,6 +22,7 @@ export function WorkoutSettings() {
         rest_seconds: seconds
       }, settings?.id)} />)}</View>
     <PlateSettings store={store} />
+    <SummaryLengthPicker repo={store.repo} />
     <ThemedText>{t('restStyle')}</ThemedText><View style={layout.row}>{(['unwind', 'converge'] as const).map(style => <Button key={style} label={t(style)} variant="secondary" selected={store.defaultRestStyle() === style} onPress={() => store.setDefaultRestStyle(style)} />)}</View>
     <Button label={store.hapticsEnabled() ? t('disableHaptics') : t('enableHaptics')} variant="secondary" onPress={() => store.toggleHaptics()} />
   </Screen>;

@@ -1,0 +1,49 @@
+{
+  "allowed": [
+    "Bench Press",
+    "Cable Row",
+    "Synthetic squat",
+    "Bodyweight Curl",
+    "Body Weight Lunge",
+    "Bodyweight Leg Curl",
+    "Reverse Body Weight Lunge",
+    "Shallow Body Weight Lunge",
+    "Side Lunges (Bodyweight)",
+    "Tricep Bodyweight Extension",
+    "Weighted Plank"
+  ],
+  "blocked": [
+    "mood 917321",
+    "energy 917322",
+    "stress 917323",
+    "Oura 917324",
+    "bodyweight 917325",
+    "heart rate 917326",
+    "HealthKit 917327",
+    "Health Connect 917328",
+    "notes 917329",
+    "m0od 917321",
+    "HR 917326",
+    "sleep 917330",
+    "Bodyweight Curl 917325",
+    "Weighted Plank HR 917326",
+    "h\u0435alth 917327",
+    "\uff45\uff4e\uff45\uff52\uff47\uff59 917322"
+  ],
+  "sentinels": {
+    "mood": 917321,
+    "energy": 917322,
+    "stress": 917323,
+    "oura": {
+      "readiness": 917324
+    },
+    "bodyweight": 917325,
+    "heart_rate": 917326,
+    "healthkit": 917327,
+    "health_connect": 917328,
+    "notes": "917329",
+    "health": {
+      "sleep": 917330
+    }
+  }
+}

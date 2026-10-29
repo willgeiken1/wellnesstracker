@@ -1,0 +1,87 @@
+import type { WorkoutAiClient } from '../src/features/workout/ai/client';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
+import { ThemeProvider } from '../src/design/theme-provider';
+import { WorkoutSummary } from '../src/features/workout/summary';
+import { WorkoutAiCard, WorkoutAiClientContext } from '../src/features/workout/ai/card';
+import { WorkoutStore } from '../src/data/workout/store';
+import { memoryRepository } from './workout-repository';
+import { aiState, setConsent } from '../src/features/food/ai/service';
+import { savedWorkoutSummary } from '../src/features/workout/ai/service';
+import { t } from '../src/i18n/en';
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}), router: { replace: jest.fn(), canDismiss: () => false } }));
+jest.mock('../src/features/workout/haptics', () => ({ signatureBuzz: jest.fn() }));
+const reply = { summary: 'You completed a consistent session. Keep the same focus next time.', remaining: 4, limit: 5 };
+function fixture() {
+    const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start(undefined, Date.now() - 60000);
+    const entry = store.addExercise(session.id, 'Bench Press', 1);
+    store.editDraft(entry.id, 0, { weight: '100', reps: '8' });
+    store.toggleDone(entry.id, 0);
+    store.finish(session.id, { startedAt: Number(session.data.started_at), finishedAt: Date.now(), notes: '' });
+    return { repo, store, session };
+}
+beforeEach(() => jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true));
+test('cancel sends nothing; expanded consent appears once, generating and regenerating save History; thumbs are free', async () => {
+    const { repo, store, session } = fixture();
+    setConsent(repo, true);
+    repo.localSave('foodAi', { ...aiState(repo), consentVersion: 1 });
+    const client = jest.fn(async () => reply);
+    const wrapper = ({ children }: {
+        children: React.ReactNode;
+    }) => <ThemeProvider><WorkoutAiClientContext.Provider value={client}>{children}</WorkoutAiClientContext.Provider></ThemeProvider>;
+    const view = await render(<WorkoutSummary store={store} id={session.id}/>, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiGenerate') }));
+    expect(screen.getByText(t('foodAiConsentBody'))).toBeTruthy();
+    expect(client).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: t('cancel') }));
+    expect(client).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiGenerate') }));
+    await fireEvent.press(screen.getByRole('button', { name: t('foodAiAgree') }));
+    await waitFor(() => expect(screen.getByText(reply.summary)).toBeTruthy());
+    expect(client).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(t('workoutAiTitle'))).toBeTruthy();
+    expect(screen.getByTestId('workout-ai-text')).toHaveStyle({ color: expect.any(String) });
+    expect(screen.getByTestId('workout-ai-card')).toHaveStyle({ backgroundColor: expect.any(String) });
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiThumbsUp') }));
+    expect(savedWorkoutSummary(repo, session.id)?.feedback).toBe('up');
+    expect(client).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiShowFacts') }));
+    expect(screen.getByText(/Bench Press: sets 1, reps 8/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiRegenerate') }));
+    await waitFor(() => expect(client).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(t('foodAiConsentBody'))).toBeNull();
+    await view.unmount();
+    await render(<WorkoutSummary store={store} id={session.id}/>, { wrapper });
+    expect(screen.getByText(reply.summary)).toBeTruthy();
+    expect(client).toHaveBeenCalledTimes(2);
+});
+test('length picker persists and cancellation on unmount discards late output', async () => {
+    const { repo, store, session } = fixture();
+    setConsent(repo, true);
+    let complete!: (r: typeof reply) => void;
+    const client = jest.fn<ReturnType<WorkoutAiClient>, Parameters<WorkoutAiClient>>(() => new Promise<typeof reply>(resolve => { complete = resolve; }));
+    const wrapper = ({ children }: {
+        children: React.ReactNode;
+    }) => <ThemeProvider><WorkoutAiClientContext.Provider value={client}>{children}</WorkoutAiClientContext.Provider></ThemeProvider>;
+    const view = await render(<WorkoutAiCard store={store} id={session.id}/>, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiShort') }));
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiGenerate') }));
+    expect(client.mock.calls[0][1]).toBe('short');
+    expect(screen.getByRole('button', { name: t('workoutAiGenerate') })).toBeDisabled();
+    await view.unmount();
+    complete(reply);
+    await waitFor(() => expect(savedWorkoutSummary(repo, session.id)).toBeUndefined());
+});
+test('provider failure is accessible and offers no automatic retries', async () => {
+    const { repo, store, session } = fixture();
+    setConsent(repo, true);
+    const client = jest.fn(async () => { throw new Error('sensitive upstream message'); });
+    const wrapper = ({ children }: {
+        children: React.ReactNode;
+    }) => <ThemeProvider><WorkoutAiClientContext.Provider value={client}>{children}</WorkoutAiClientContext.Provider></ThemeProvider>;
+    await render(<WorkoutAiCard store={store} id={session.id}/>, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: t('workoutAiGenerate') }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(t('workoutAiFailure')));
+    expect(screen.queryByText(/sensitive upstream/)).toBeNull();
+    expect(client).toHaveBeenCalledTimes(1);
+});
