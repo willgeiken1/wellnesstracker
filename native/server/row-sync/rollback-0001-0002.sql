@@ -1,5 +1,6 @@
 -- Destructive disposable-environment rollback; stop clients and preserve any needed data first.
 -- RESTRICT (no CASCADE) fails closed if unrelated objects depend on this schema.
+-- The native_pwa_purge trigger is dropped with public.purges; its function is dropped after.
 BEGIN;
 DROP FUNCTION public.sync_push(jsonb);
 DROP FUNCTION public.sync_purge_range(uuid,date,date,bigint,text);
@@ -26,6 +27,7 @@ DROP TABLE public.custom_exercises;
 DROP TABLE public.plans;
 DROP TABLE public.pauses;
 DROP TABLE public.purges;
+DROP FUNCTION public.native_pwa_invalidate_on_purge();
 DROP FUNCTION public.row_sync_guard();
 DROP SEQUENCE public.row_sync_seq;
 COMMIT;
