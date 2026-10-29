@@ -110,6 +110,119 @@ test("one user hitting the cap does not block another user", async () => {
   assert.equal(rows, `${userA}:10\n${userB}:1`);
 });
 
+test("workout summary grants the fifth use, refuses the sixth, and reports limit 5", async () => {
+  const user = "11111111-1111-4111-8111-111111111111";
+  const day = "2026-10-08";
+  await psql(`delete from public.ai_usage where user_id = '${user}' and day = '${day}'`);
+
+  assert.deepEqual(await q(`select public.ai_quota_status('${user}', '${day}', 'workout_summary')`), {
+    allowed: true, used: 0, remaining: 5, limit: 5, kind: "workout_summary",
+  });
+  for (let used = 1; used <= 5; used++) {
+    assert.deepEqual(await q(`select public.consume_ai_quota('${user}', '${day}', 'workout_summary')`), {
+      allowed: true, used, remaining: 5 - used, limit: 5, kind: "workout_summary",
+    });
+  }
+  const exhausted = { allowed: false, used: 5, remaining: 0, limit: 5, kind: "workout_summary" };
+  assert.deepEqual(await q(`select public.consume_ai_quota('${user}', '${day}', 'workout_summary')`), exhausted);
+  assert.deepEqual(await q(`select public.ai_quota_status('${user}', '${day}', 'workout_summary')`), exhausted);
+  assert.equal(await psql(`select count from public.ai_usage where user_id = '${user}' and day = '${day}' and kind = 'workout_summary'`), "5");
+});
+
+test("one user exhausting workout summaries leaves another user's five uses intact", async () => {
+  const userA = "11111111-1111-4111-8111-111111111111";
+  const userB = "22222222-2222-4222-8222-222222222222";
+  const day = "2026-10-09";
+  await psql(`delete from public.ai_usage where user_id in ('${userA}', '${userB}') and day = '${day}'`);
+
+  for (let i = 0; i < 5; i++) {
+    assert.equal((await q(`select public.consume_ai_quota('${userA}', '${day}', 'workout_summary')`)).allowed, true);
+  }
+  assert.equal((await q(`select public.consume_ai_quota('${userA}', '${day}', 'workout_summary')`)).allowed, false);
+  assert.deepEqual(await q(`select public.ai_quota_status('${userB}', '${day}', 'workout_summary')`), {
+    allowed: true, used: 0, remaining: 5, limit: 5, kind: "workout_summary",
+  });
+  for (let used = 1; used <= 5; used++) {
+    const other = await q(`select public.consume_ai_quota('${userB}', '${day}', 'workout_summary')`);
+    assert.equal(other.allowed, true);
+    assert.equal(other.used, used);
+    assert.equal(other.remaining, 5 - used);
+  }
+  assert.equal((await q(`select public.consume_ai_quota('${userB}', '${day}', 'workout_summary')`)).allowed, false);
+});
+
+test("workout and food quotas stay independent in either consumption order", async () => {
+  const user = "11111111-1111-4111-8111-111111111111";
+  const limits = { photo: 10, describe: 20, workout_summary: 5 };
+  const scenarios = [
+    { day: "2026-10-10", kinds: ["workout_summary", "photo", "describe"] },
+    { day: "2026-10-11", kinds: ["photo", "describe", "workout_summary"] },
+  ];
+  for (const { day, kinds } of scenarios) {
+    await psql(`delete from public.ai_usage where user_id = '${user}' and day = '${day}'`);
+    for (const kind of kinds) {
+      const limit = limits[kind];
+      assert.deepEqual(await q(`select public.ai_quota_status('${user}', '${day}', '${kind}')`), {
+        allowed: true, used: 0, remaining: limit, limit, kind,
+      });
+      for (let used = 1; used <= limit; used++) {
+        assert.deepEqual(await q(`select public.consume_ai_quota('${user}', '${day}', '${kind}')`), {
+          allowed: true, used, remaining: limit - used, limit, kind,
+        });
+      }
+      assert.equal((await q(`select public.consume_ai_quota('${user}', '${day}', '${kind}')`)).allowed, false);
+    }
+    for (const [kind, limit] of Object.entries(limits)) {
+      assert.deepEqual(await q(`select public.ai_quota_status('${user}', '${day}', '${kind}')`), {
+        allowed: false, used: limit, remaining: 0, limit, kind,
+      });
+    }
+    assert.equal(await psql(`select kind || ':' || count from public.ai_usage where user_id = '${user}' and day = '${day}' order by kind`),
+      "describe:20\nphoto:10\nworkout_summary:5");
+  }
+});
+
+test("parallel workout summary consumes grant exactly five uses", async () => {
+  const user = "11111111-1111-4111-8111-111111111111";
+  const day = "2026-10-12";
+  await psql(`delete from public.ai_usage where user_id = '${user}' and day = '${day}'`);
+
+  const results = await Promise.all(Array.from({ length: 25 }, () =>
+    q(`select public.consume_ai_quota('${user}', '${day}', 'workout_summary')`)
+  ));
+  const granted = results.filter((row) => row.allowed);
+  const refused = results.filter((row) => !row.allowed);
+  assert.equal(granted.length, 5);
+  assert.equal(refused.length, 20);
+  assert.deepEqual(granted.map((row) => row.used).sort((a, b) => a - b), [1, 2, 3, 4, 5]);
+  assert.ok(granted.every((row) => row.limit === 5 && row.remaining === 5 - row.used && row.kind === "workout_summary"));
+  assert.ok(refused.every((row) => row.limit === 5 && row.used === 5 && row.remaining === 0 && row.kind === "workout_summary"));
+  assert.equal(await psql(`select count from public.ai_usage where user_id = '${user}' and day = '${day}' and kind = 'workout_summary'`), "5");
+});
+
+test("releasing a workout summary restores one use and never drops below zero", async () => {
+  const user = "11111111-1111-4111-8111-111111111111";
+  const day = "2026-10-13";
+  await psql(`delete from public.ai_usage where user_id = '${user}' and day = '${day}'`);
+
+  for (let i = 0; i < 5; i++) {
+    await q(`select public.consume_ai_quota('${user}', '${day}', 'workout_summary')`);
+  }
+  assert.deepEqual(await q(`select public.release_ai_quota('${user}', '${day}', 'workout_summary')`), {
+    allowed: true, used: 4, remaining: 1, limit: 5, kind: "workout_summary",
+  });
+  assert.equal((await q(`select public.consume_ai_quota('${user}', '${day}', 'workout_summary')`)).allowed, true);
+  assert.equal((await q(`select public.consume_ai_quota('${user}', '${day}', 'workout_summary')`)).allowed, false);
+  for (let i = 0; i < 7; i++) {
+    const released = await q(`select public.release_ai_quota('${user}', '${day}', 'workout_summary')`);
+    assert.equal(released.used, Math.max(4 - i, 0));
+    assert.equal(released.remaining, 5 - released.used);
+  }
+  assert.deepEqual(await q(`select public.release_ai_quota('${user}', '2026-10-14', 'workout_summary')`), {
+    allowed: true, used: 0, remaining: 5, limit: 5, kind: "workout_summary",
+  });
+});
+
 test("anon and authenticated cannot call the quota functions or touch ai_usage", async () => {
   const user = "11111111-1111-4111-8111-111111111111";
   const day = "2026-10-04";
@@ -118,16 +231,22 @@ test("anon and authenticated cannot call the quota functions or touch ai_usage",
     return psql(sql, { role });
   };
 
-  const okStatus = await asRole("service_role", `select public.ai_quota_status('${user}', '${day}', 'photo')`);
-  assert.equal(JSON.parse(okStatus).limit, 10);
+  for (const [kind, limit] of [["photo", 10], ["describe", 20], ["workout_summary", 5]]) {
+    for (const fn of ["consume_ai_quota", "release_ai_quota", "ai_quota_status"]) {
+      const result = await asRole("service_role", `select public.${fn}('${user}', '2026-10-15', '${kind}')`);
+      assert.equal(JSON.parse(result).limit, limit);
+    }
+  }
 
   for (const role of ["anon", "authenticated"]) {
     for (const fn of ["consume_ai_quota", "release_ai_quota", "ai_quota_status"]) {
-      await assert.rejects(
-        asRole(role, `select public.${fn}('${user}', '${day}', 'photo')`),
-        new RegExp(`permission denied for function ${fn}`),
-        `${role} must not execute ${fn}`
-      );
+      for (const kind of ["photo", "describe", "workout_summary"]) {
+        await assert.rejects(
+          asRole(role, `select public.${fn}('${user}', '${day}', '${kind}')`),
+          new RegExp(`permission denied for function ${fn}`),
+          `${role} must not execute ${fn} for ${kind}`
+        );
+      }
     }
     for (const sql of [
       "select * from public.ai_usage",
