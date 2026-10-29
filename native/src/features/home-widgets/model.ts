@@ -1,4 +1,4 @@
-import { DEFAULT_LAYOUT, WIDGETS, getWidget, type ServiceId, type WidgetId } from './registry';
+import { DEFAULT_LAYOUT, WIDGETS, getWidget, isAvailable, type ServiceId, type WidgetId } from './registry';
 
 /** Local-only Home layout state. Holds widget ids and service names, never health values. */
 export type HomeWidgetState = {
@@ -13,17 +13,21 @@ export type HomeWidgetState = {
 };
 
 export type TrayItem = { id: WidgetId; title: string; locked: boolean; glow: boolean };
+/** A Home layout entry; locked ones keep their slot but Home hides them until a service reconnects. */
+export type HomeItem = { id: WidgetId; title: string; locked: boolean };
 
 export const defaultHomeWidgetState = (): HomeWidgetState =>
   ({ layout: [...DEFAULT_LAYOUT], services: [], editDot: false, glowPending: [], glowSeen: [] });
 
+/** True when the widget needs no service or any one of its services is connected. */
 export function isUnlocked(state: HomeWidgetState, id: WidgetId) {
-  const service = getWidget(id).requiredService;
-  return service === null || state.services.includes(service);
+  const widget = getWidget(id);
+  if (!widget) return false;
+  return widget.services.length === 0 || widget.services.some(service => state.services.includes(service));
 }
 
 export function addWidget(state: HomeWidgetState, id: WidgetId): HomeWidgetState {
-  if (state.layout.includes(id) || !isUnlocked(state, id)) return state;
+  if (state.layout.includes(id) || !isAvailable(id) || !isUnlocked(state, id)) return state;
   return { ...state, layout: [...state.layout, id] };
 }
 
@@ -43,12 +47,19 @@ export function moveWidget(state: HomeWidgetState, from: number, to: number): Ho
 /** Unlocks a service's widgets without adding them to Home; no alerts, just the dot and a one-time glow. */
 export function connectService(state: HomeWidgetState, service: ServiceId): { state: HomeWidgetState; unlocked: WidgetId[] } {
   if (state.services.includes(service)) return { state, unlocked: [] };
-  const unlocked: WidgetId[] = WIDGETS.filter(widget => widget.requiredService === service).map(widget => widget.id);
+  const unlocked: WidgetId[] = WIDGETS
+    .filter(widget => widget.available && (widget.services as readonly ServiceId[]).includes(service) && !isUnlocked(state, widget.id))
+    .map(widget => widget.id);
   const glow = unlocked.filter(id => !state.glowSeen.includes(id) && !state.glowPending.includes(id));
   return {
     unlocked,
     state: { ...state, services: [...state.services, service], editDot: state.editDot || unlocked.length > 0, glowPending: [...state.glowPending, ...glow] },
   };
+}
+
+/** Locks the service's widgets again. Layout keeps their slots so they return in place on reconnect. */
+export function disconnectService(state: HomeWidgetState, service: ServiceId): HomeWidgetState {
+  return state.services.includes(service) ? { ...state, services: state.services.filter(item => item !== service) } : state;
 }
 
 export const openEdit = (state: HomeWidgetState): HomeWidgetState => state.editDot ? { ...state, editDot: false } : state;
@@ -60,7 +71,13 @@ export function markGlowSeen(state: HomeWidgetState, id: WidgetId): HomeWidgetSt
   return { ...state, glowPending: state.glowPending.filter(item => item !== id), glowSeen: [...state.glowSeen, id] };
 }
 
-/** Every widget not on Home, in registry order; locked ones show but cannot be added. */
+/** Home layout in order, with the locked flag; indices match moveWidget. */
+export const homeItems = (state: HomeWidgetState): HomeItem[] => state.layout.flatMap(id => {
+  const widget = getWidget(id);
+  return widget ? [{ id, title: widget.title, locked: !isUnlocked(state, id) }] : [];
+});
+
+/** Every available widget not on Home, in registry order; locked ones show but cannot be added. Unavailable ones are hidden. */
 export const trayItems = (state: HomeWidgetState): TrayItem[] => WIDGETS
-  .filter(widget => !state.layout.includes(widget.id))
+  .filter(widget => widget.available && !state.layout.includes(widget.id))
   .map(widget => ({ id: widget.id, title: widget.title, locked: !isUnlocked(state, widget.id), glow: shouldGlow(state, widget.id) }));

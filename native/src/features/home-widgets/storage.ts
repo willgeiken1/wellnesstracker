@@ -1,9 +1,9 @@
 import type { Repository } from '../../data/repository';
 import {
-  addWidget, connectService, defaultHomeWidgetState, isUnlocked, markGlowSeen, moveWidget, openEdit, removeWidget,
+  addWidget, connectService, defaultHomeWidgetState, disconnectService, markGlowSeen, moveWidget, openEdit, removeWidget,
   type HomeWidgetState,
 } from './model';
-import { isServiceId, isWidgetId, type ServiceId, type WidgetId } from './registry';
+import { isAvailable, isServiceId, isWidgetId, type ServiceId, type WidgetId } from './registry';
 
 /** Owner-scoped local key (workout_local); not in the sync catalog. */
 export const HOME_WIDGETS_KEY = 'homeWidgets';
@@ -12,15 +12,23 @@ export type HomeWidgetStorage = Pick<Repository, 'localGet' | 'localSave'>;
 const unique = <T>(values: T[]) => [...new Set(values)];
 const list = <T>(value: unknown, guard: (item: unknown) => item is T) => Array.isArray(value) ? unique(value.filter(guard)) : [];
 
-/** Reads saved state, dropping unknown ids so a stale or damaged save never breaks Home. */
+/**
+ * Reads saved state, dropping unknown and unavailable ids so a stale or damaged save never breaks Home.
+ * Locked ids keep their layout slot (a disconnected service's widgets return in place on reconnect).
+ */
 export function loadHomeWidgets(storage: HomeWidgetStorage | null | undefined): HomeWidgetState {
   let saved: unknown;
   try { saved = storage?.localGet<unknown>(HOME_WIDGETS_KEY); } catch { saved = undefined; }
   if (!saved || typeof saved !== 'object' || !Array.isArray((saved as {layout?: unknown}).layout)) return defaultHomeWidgetState();
   const raw = saved as Record<string, unknown>;
-  const services = list(raw.services, isServiceId);
-  const state: HomeWidgetState = { layout: [], services, editDot: raw.editDot === true, glowPending: list(raw.glowPending, isWidgetId), glowSeen: list(raw.glowSeen, isWidgetId) };
-  return { ...state, layout: list(raw.layout, isWidgetId).filter(id => isUnlocked(state, id)) };
+  const glowSeen = list(raw.glowSeen, isWidgetId);
+  return {
+    layout: list(raw.layout, isWidgetId).filter(isAvailable),
+    services: list(raw.services, isServiceId),
+    editDot: raw.editDot === true,
+    glowPending: list(raw.glowPending, isWidgetId).filter(id => !glowSeen.includes(id)),
+    glowSeen,
+  };
 }
 
 export function createHomeWidgetStore(storage: HomeWidgetStorage | null | undefined) {
@@ -44,6 +52,7 @@ export function createHomeWidgetStore(storage: HomeWidgetStorage | null | undefi
       commit(result.state);
       return result.unlocked;
     },
+    disconnectService: (service: ServiceId) => commit(disconnectService(state, service)),
     openEdit: () => commit(openEdit(state)),
     markGlowSeen: (id: WidgetId) => commit(markGlowSeen(state, id)),
   };
