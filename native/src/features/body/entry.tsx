@@ -6,7 +6,8 @@ import { useTheme } from '../../design/theme-provider';
 import { toKg } from '../../core/workout/rules';
 import { t } from '../../i18n/en';
 import type { Unit } from '../onboarding/model';
-import { layout, Panel } from '../workout/primitives';
+import { layout } from '../workout/primitives';
+import { TonePanel } from './presentation';
 import { unusualWeight } from './model';
 export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;unit:Unit;onSave:(value:number)=>void;onClose:()=>void}) {
   const {colors,reduceMotion}=useTheme();
@@ -18,7 +19,7 @@ export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;u
   const start=Math.max(0.1,Math.round(base*10)/10-5);
   const initialIndex=Math.round((Math.max(0.1,base)-start)*10);
   const scrollChange=(offset:number)=>change((start+Math.min(100,Math.max(0,Math.round(offset/48)))/10).toFixed(1));
-  return <Panel>
+  return <TonePanel>
     {keypad?<TextInput autoFocus accessibilityLabel={t('bodyWeightInput').replace('{unit}',unit)} keyboardType="decimal-pad" value={value} onChangeText={change} style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']}]} />:<>
       <Pressable accessible onPress={()=>setKeypad(true)} accessibilityRole="adjustable" accessibilityLabel={t('bodyWheel').replace('{unit}',unit)} accessibilityValue={{text:`${value} ${unit}`}}
         accessibilityActions={[{name:'increment',label:t('bodyIncrease')},{name:'decrement',label:t('bodyDecrease')}]}
@@ -43,5 +44,5 @@ export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;u
       } else save();
     }}/>
     <Button variant="secondary" label={t('cancel')} onPress={onClose}/>
-  </Panel>;
+  </TonePanel>;
 }
