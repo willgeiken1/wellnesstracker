@@ -17,7 +17,7 @@
 .sugg > .link-inline { display: inline-flex; align-items: center; min-height: 36px; margin-top: 4px; font-size: 13px; }
 .sugg-quiet { color: var(--muted); font-size: 13px; line-height: 1.4; margin: 0 0 10px; }
 .rpe { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.rpe-l { font-size: 12px; font-weight: 800; letter-spacing: .04em; color: var(--muted); margin-right: 2px; }
+.rpe-l { font-size: 13px; font-weight: 600; letter-spacing: normal; color: var(--muted); margin-right: 2px; }
 .rpe button { min-width: 36px; height: 36px; padding: 0 8px; border-radius: 18px; border: 1.5px solid var(--pill-border); font-size: 14px; font-weight: 700; color: var(--text); background: transparent; }
 .rpe button[aria-pressed="true"] { background: var(--lav); border-color: var(--lav); color: var(--ink); }
 .rpe-hint { color: var(--muted); font-size: 12px; line-height: 1.35; margin: 4px 0 0; }

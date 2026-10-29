@@ -109,7 +109,7 @@ h1, h2, h3, h4 { margin: 0; }
 .page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; }
 
 #tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(5, 1fr); background: rgba(21, 23, 26, .94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--line); padding-bottom: var(--safe-bottom); }
-.tab { height: var(--tabs-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.tab { height: var(--tabs-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .tab svg { width: 24px; height: 24px; }
 .tab[aria-current="page"] { color: var(--green); }
 

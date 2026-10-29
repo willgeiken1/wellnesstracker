@@ -10,7 +10,7 @@
   color: var(--text);
 }
 .hw-size-s { display: grid; align-content: start; gap: 2px; }
-.hw-k { margin: 0; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .01em; }
+.hw-k { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: normal; }
 .hw-v { margin: 4px 0 0; font-family: var(--display); font-weight: 600; font-size: 26px; letter-spacing: -.03em; line-height: 1.05; }
 .hw-sub { margin: 3px 0 0; color: #C9C9CF; font-size: 13px; line-height: 1.4; }
 :root[data-mode="light"] .hw-sub { color: #5A5C60; }
