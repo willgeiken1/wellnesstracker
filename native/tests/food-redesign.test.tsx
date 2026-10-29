@@ -10,13 +10,14 @@ import { WATER_ROW_ENABLED } from '../src/features/food/water-slot';
 
 jest.mock('expo-router',()=>({router:{navigate:jest.fn()}}));
 let mockRepository: ReturnType<typeof memoryRepository> | null;
-jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:mockRepository})}));
+let mockConfigError: string | null;
+jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:mockRepository,configError:mockConfigError})}));
 jest.mock('@expo/ui',()=>{
  const React=require('react'),{View}=require('react-native');
  return {Host:View,RNHostView:View,BottomSheet:({isPresented,children}:any)=>isPresented?React.createElement(View,{testID:'targets-sheet'},children):null};
 });
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
-beforeEach(()=>{jest.useFakeTimers();jest.setSystemTime(new Date('2026-10-27T17:00:00Z'));mockRepository=memoryRepository();});
+beforeEach(()=>{jest.useFakeTimers();jest.setSystemTime(new Date('2026-10-27T17:00:00Z'));mockRepository=memoryRepository();mockConfigError=null;});
 afterEach(()=>jest.useRealTimers());
 for(const [name,Route] of [['Food',Food],['Food log',FoodLog]] as const){
  test(`${name}: loading waits 300 ms and never flashes empty`,async()=>{
@@ -26,6 +27,17 @@ for(const [name,Route] of [['Food',Food],['Food log',FoodLog]] as const){
   await act(()=>jest.advanceTimersByTime(299));expect(screen.queryByTestId('food-skeleton')).toBeNull();
   await act(()=>jest.advanceTimersByTime(1));expect(screen.getByTestId('food-skeleton')).toBeTruthy();
  });
+ for(const [state,message] of [['dataError','Local data is unavailable.'],['configError','Sign-in is unavailable in this build.']] as const){
+  test(`${name}: ${state} shows the provider error without a skeleton`,async()=>{
+   mockRepository=null;mockConfigError=message;
+   await render(<Route/>,{wrapper});
+   expect(screen.getByRole('alert')).toHaveTextContent(message);
+   expect(screen.getByText('Restart the app.')).toBeTruthy();
+   await act(()=>jest.advanceTimersByTime(300));
+   expect(screen.queryByTestId('food-skeleton')).toBeNull();
+   expect(screen.queryByLabelText('Loading food log')).toBeNull();
+  });
+ }
  test(`${name}: empty offers breakfast logging`,async()=>{
   await render(<Route/>,{wrapper});expect(screen.getByText('Nothing logged today')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button',{name:'Log breakfast'}));expect(screen.getByLabelText('Food name')).toBeTruthy();
@@ -39,6 +51,8 @@ for(const [name,Route] of [['Food',Food],['Food log',FoodLog]] as const){
   mockRepository!.save('food_entries',{day:'2026-10-27',meal_id:'fd000000-0000-4000-8000-000000000000',name:'Synthetic oats',energy_kj:418.4});
   await render(<Route/>,{wrapper});expect(screen.getByText('Synthetic oats')).toBeTruthy();
   expect(screen.getByTestId('food-meals')).toBeTruthy();expect(screen.queryByText('Nothing logged today')).toBeNull();
+  expect(screen.getByRole('button',{name:'Options for Breakfast'})).toBeTruthy();
+  expect(screen.getByRole('button',{name:'Details for Synthetic oats'})).toBeTruthy();
  });
 }
 test('targets live in a native sheet, split actions and reserved water slot precede meals',async()=>{

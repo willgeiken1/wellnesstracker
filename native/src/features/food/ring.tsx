@@ -24,9 +24,9 @@ export function CalorieRing({total,target,estimated=false}:{total:Record<Nutrien
     </Svg>
    </View>
    <View style={{flex:1,minWidth:144,gap:8}}>
-    <ThemedText numeric variant="title" style={{fontFamily:undefined}}>{calories} of {goal} kcal</ThemedText>
+    <ThemedText numeric variant="title" style={{fontFamily:undefined}}>{calories} {t('of')} {goal} {t('foodKcal')}</ThemedText>
     {(['protein_g','carbs_g','fat_g'] as const).map((key,i)=><View key={key} style={{gap:4}}>
-     <FoodLabel numeric>{['Protein','Carbs','Fat'][i]} · {value(total[key])}{target?` of ${value(target[key])}`:''} g</FoodLabel>
+     <FoodLabel numeric>{t((['foodProteinLabel','foodCarbsLabel','foodFatLabel'] as const)[i])} · {value(total[key])}{target?` ${t('of')} ${value(target[key])}`:''} g</FoodLabel>
      <View style={{height:4,backgroundColor:colors.bg}}><View testID={`food-macro-${key}`} style={{height:4,width:`${progress(key)*100}%`,backgroundColor:colors.accent}}/></View>
     </View>)}
    </View>
