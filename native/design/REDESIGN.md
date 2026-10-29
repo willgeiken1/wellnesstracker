@@ -178,6 +178,7 @@ Shared across all tabs: large title, `Example data` chip in demo, the offline ba
   - [ ] Meals use a grouped list, no pink slabs.
   - [ ] The water slot is present in the layout spec, flag off, and marked M3.
   - [ ] No food or health values in AI payloads beyond the `strip.ts` allowlist.
+  - [ ] Check-in values (mood, energy, stress) never go into food AI payloads.
 
 ### 3.3 Progress
 - **Layout:** large title "Progress". Segmented `Picker`: Body / Photos / Goals & PRs.
@@ -335,8 +336,8 @@ Theme ids are the camelCase palette names in the table (`seaGlassTide` … `holo
 Keep the order: **1. map (Home), 2. logger (Train), 3. AI food (Eat: Snap / Describe)**. The store shots wait for M3-01 (the Home map hero). They're captured with demo/synthetic data only, after INS-12 QA.
 
 ## 8. Open questions for Will (do not resolve in code)
-- **Q-A (resolved):** Check-ins stay in the native app as an optional tray tile (mood, energy, stress) that syncs for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). AGENTS.md §4.6 still reflects Q47 and needs updating to match.
+- **Q-A (resolved):** Check-ins stay in the native app as an optional tray tile (mood, energy, stress) that syncs for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). Mood, energy and stress never go to AI, Sentry or PostHog (AGENTS.md rules 1 and 6); the crisis card and importer check-in data stay banned. **Before the tile ships**, the egress test must cover the mood, energy and stress fields.
 - **Q-B (resolved):** The full Score appears at **7 days** of data; before that, Home shows the "Needs N more days" countdown ring. Not 28 days (I8/Q7).
 - **Q-C:** Water colour per palette (v2 has one shared placeholder that sits close to `recovery` blue).
 - **Q-D:** "Once per session" is defined here as once per process launch, so a foreground return doesn't replay it. Confirm.
-- **Q-E (resolved):** Home's body map is **react-native-body-highlighter** (2D, tappable), Will's Oct 28 pick. Kai's 3D model comes later; the card frame stays the same.
+- **Q-E (resolved):** Home's body map is **react-native-body-highlighter** (2D, tappable), Will, Oct 28 2026 8:44 AM CT (via Elliot). decisions.md:296 is stale on this point. Kai's 3D model comes later; the card frame stays the same.

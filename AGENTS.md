@@ -38,12 +38,12 @@ Real-iPhone builds with HealthKit, App Groups (widgets / Live Activity snapshots
 Local builds are free. **No paid EAS builds**; free-tier EAS only when the plan says so. Skills link here; do not duplicate this table.
 
 ## 4. Hard rules
-1. **No health data to AI.** Health/HealthKit/Health Connect/Oura values, body weight, and anything derived never go to any AI model, Sentry or PostHog. AI payloads go through the ported `strip.ts` guard (fail-closed allowlist) with tests; the AI workout summary (Q46) sends no health values.
+1. **No health data to AI.** Health/HealthKit/Health Connect/Oura values, body weight, check-in mood, energy and stress values, and anything derived never go to any AI model, Sentry or PostHog. AI payloads go through the ported `strip.ts` guard (fail-closed allowlist) with tests; the AI workout summary (Q46) sends no health values.
 2. **Fixtures only.** Use synthetic/demo data (`native/fixtures/`). Never read, copy, paste or log real user data, real Health data, or production DB rows.
 3. **No secrets.** Never read, print, move or commit keys, tokens, `.env` contents or keychain items. Only the Supabase publishable key and public client DSNs belong in the app, set by Will. Never use the service-role key. Local Supabase (`supabase start`) for sync work. **Never copy or move secrets between the box and the Mac (either direction); Will sets env values on the Mac himself.**
 4. **No spend.** No paid tiers, credits, hosted Supabase branches, or paid builds. Medium reasoning effort; never the top model.
 5. **Safety.** No `danger-full-access`, no force-push, no edits to `main`, no merges, no deleting branches you didn't create.
-6. **Check-ins kept in native (Will, Oct 28 2026 10:16 PM CT, supersedes Q47).** Mood, energy and stress check-ins are an optional Home tray tile that syncs for signed-in users. Sync follows the normal guards (draft PRs, Quinn review, no health data to AI/analytics), and `ROW_SYNC_ENABLED` stays off until Will says otherwise. Q47 (Oct 16, "no check-ins in native") is superseded.
+6. **Check-ins kept in native (Will, Oct 28 2026 10:16 PM CT, supersedes Q47).** Mood, energy and stress check-ins are an optional Home tray tile that syncs for signed-in users. Mood, energy and stress values never go to any AI model, Sentry or PostHog (rule 1). Sync follows the normal guards (draft PRs, Quinn review, no health data to AI/analytics), and `ROW_SYNC_ENABLED` stays off until Will says otherwise. Q47 (Oct 16, "no check-ins in native") is superseded for the tile only. Still banned until Will rules: do not port the crisis card, and the importer ignores check-in data.
 
 ## 5. Workflow
 1. `git worktree add ../wt-native-<topic> -b native/<topic> origin/main` (outside ~/agent-os).
