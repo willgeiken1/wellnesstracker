@@ -1559,5 +1559,23 @@ DO $$ BEGIN
     RAISE EXCEPTION 'row-sync tables must use owner_id; user_id breaks delete_user_rows';
   END IF;
 END $$;
+-- M2-19: install this integration where purges is created, so a fresh install
+-- (Supabase migrations, then row-sync) cannot silently omit invalidation.
+CREATE OR REPLACE FUNCTION public.native_pwa_invalidate_on_purge() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+ -- Row-sync may be installed before the importer migration.
+ IF pg_catalog.to_regclass('public.native_pwa_imports') IS NULL THEN RETURN NEW; END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.owner_id::text,0));
+ IF NEW.deleted_at IS NULL AND NEW.cutoff_ms IS NOT NULL THEN
+  INSERT INTO public.native_pwa_purges(owner_id,from_day,to_day,cutoff_ms,tz)
+   VALUES(NEW.owner_id,NEW.from_day,NEW.to_day,NEW.cutoff_ms,NEW.tz);
+  DELETE FROM public.native_pwa_imports WHERE owner_id=NEW.owner_id;
+ END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.native_pwa_invalidate_on_purge() FROM PUBLIC,anon,authenticated,service_role;
+CREATE OR REPLACE TRIGGER native_pwa_purge AFTER INSERT ON public.purges
+ FOR EACH ROW EXECUTE FUNCTION public.native_pwa_invalidate_on_purge();
 
 COMMIT;

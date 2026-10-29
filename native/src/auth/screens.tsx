@@ -22,6 +22,7 @@ export function Welcome() {
     {!auth.configured && <ThemedText accessibilityRole="alert">{t('authUnavailable')}</ThemedText>}
     {auth.configError && <ThemedText accessibilityRole="alert">{auth.configError}</ThemedText>}
     <Button label={t('getStarted')} disabled={!auth.configured} onPress={()=>router.push('/onboarding')}/>
+    <Button label={t('importChoose')} variant="secondary" onPress={()=>router.push('/import')}/>
     <Button label={t('lookAround')} variant="secondary" onPress={auth.lookAround}/>
     <Button label={t('haveAccount')} disabled={!auth.configured} variant="secondary" onPress={()=>router.push('/auth/sign-in')}/>
   </Screen>;

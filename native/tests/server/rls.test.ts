@@ -81,9 +81,12 @@ test('sequence and function privilege matrix; public functions have explicit sec
    expect((await db.query<{allowed:boolean}>("SELECT has_function_privilege($1,$2,'EXECUTE') AS allowed",[role,signature])).rows[0].allowed).toBe(role==='authenticated'&&signature==='public.sync_push(jsonb)');
   }
  }
+ for (const role of ['anon','authenticated','service_role']) {
+  expect((await db.query<{allowed:boolean}>("SELECT has_function_privilege($1,'public.native_pwa_invalidate_on_purge()','EXECUTE') AS allowed",[role])).rows[0].allowed).toBe(false);
+ }
  const functions=await db.query<{proname:string;prosecdef:boolean;proconfig:string[]}>("SELECT proname,prosecdef,proconfig FROM pg_proc WHERE pronamespace='public'::regnamespace ORDER BY proname");
- expect(functions.rows.map(f=>f.proname)).toEqual(['row_sync_guard','sync_purge_range','sync_push']);
- for(const f of functions.rows){expect(f.prosecdef).toBe(f.proname==='sync_purge_range');expect(f.proconfig).toEqual(['search_path=""']);}
+ expect(functions.rows.map(f=>f.proname)).toEqual(['native_pwa_invalidate_on_purge','row_sync_guard','sync_purge_range','sync_push']);
+ for(const f of functions.rows){expect(f.prosecdef).toBe(['native_pwa_invalidate_on_purge','sync_purge_range'].includes(f.proname));expect(f.proconfig).toEqual(['search_path=""']);}
 });
 test.each(syncedTables.filter(t=>t!=='purges'))('%s rejects anonymous access, owner DELETE and TRUNCATE; server_seq stays server-assigned',async table=>{
  for(const query of [`SELECT * FROM public.${table}`,`INSERT INTO public.${table} DEFAULT VALUES`,`UPDATE public.${table} SET updated_at=1`,`DELETE FROM public.${table}`,`TRUNCATE public.${table}`]) {

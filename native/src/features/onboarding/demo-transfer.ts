@@ -1,3 +1,4 @@
+import { stableJson } from '../../../../supabase/functions/_shared/pwa-import';
 import type { Repository } from '../../data/repository';
 import { syncedTables } from '../../data/rows';
 import { sampleRow } from '../../../fixtures/demo';
@@ -16,7 +17,9 @@ export function promoteDemo(source:Repository,destination:Repository) {
   assertDemoTransferSafe(source);
   const samples=source.localGet<string[]>('demoSamples');
   const existingProfile=destination.list('profile').length>0;
-  const skip=new Set(['profile','food_targets','weigh_ins'].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
+  const existingHome=destination.list('home_layout',true).length>0;
+  const skip=new Set<string>(['profile','food_targets','weigh_ins'].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
+  if(source.localGet('pwaHomeImported')&&existingHome)skip.add('home_layout');
   const rows=syncedTables.filter(table=>table!=='purges').flatMap(table=>source.list(table));
   const excluded=new Set(rows.filter(row=>samples?.includes(row.id)||sampleRow(row)).map(row=>row.id));
   const weighInsSkipped=skip.has('weigh_ins')&&rows.some(row=>row.table==='weigh_ins'&&!excluded.has(row.id));
@@ -72,6 +75,13 @@ export function promoteDemo(source:Repository,destination:Repository) {
     for(const [key,value] of Object.entries(source.localSnapshot())) {
       if(key.split(':').some(part=>userIds.has(part)))destination.localSave(key,value);
     }
+    // File-import archives are user data. Keep review flags and one-time metadata
+    // when an imported backup was opened during Look around first.
+    const importIssues=source.localGet<unknown[]>('pwaImportIssues');
+    if(importIssues){const old=destination.localGet<unknown[]>('pwaImportIssues')??[];destination.localSave('pwaImportIssues',[...new Map([...old,...importIssues].map(i=>[stableJson(i),i])).values()]);}
+    const importIds=source.localGet<string[]>('pwaImportedIds');
+    if(importIds)destination.localSave('pwaImportedIds',[...new Set([...(destination.localGet<string[]>('pwaImportedIds')??[]),...importIds])]);
+    if(source.localGet('pwaHomeImported')){destination.localSave('pwaHomeImported',true);if(!existingHome){const home=source.localGet('pwaHomeV2');if(home)destination.localSave('pwaHomeV2',home);}}
     // wipe() cannot run in atomic(); replace with the narrow transfer eraser.
     source.clearDemoForTransfer();
   });

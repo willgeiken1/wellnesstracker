@@ -1,3 +1,5 @@
+import { ImportPreviewConflict } from '../features/importer/errors';
+import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { Alert, AppState } from 'react-native';
 import { t } from '../i18n/en';
@@ -22,6 +24,7 @@ const bootSignOutStorage: typeof signOutStorage={
   write:marker=>signOutStorage.write(marker),remove:()=>signOutStorage.remove(),
 };
 export interface AuthState {
+  legacyImport?(action:'preview'|'commit', mapping?:Record<string,string>, previewId?:string):Promise<ImportPlan>;
   phoneOnly?: boolean;
   initialPullComplete?: boolean; syncPullRevision?:number;
   demoTransferError?: boolean; retryDemoTransfer?():void;
@@ -155,6 +158,10 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     }).catch(()=>{if(active)setDemoTransferError(true);});
     return ()=>{active=false;};
   },[currentRepo,demoTarget,owner,initialPullComplete,demoTransferError,transferAttempt]);
+  // A file intentionally opened while signed out follows the first account on this device.
+  useEffect(()=>{let active=true;if(!currentRepo||!userId||!initialPullComplete)return;
+    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;const guest=database.forOwner('guest'),plan=guest.localGet<ImportPlan>('pwaPendingAccountPlan');if(!plan)return;currentRepo.atomic(()=>{commitImport(currentRepo,previewImport(currentRepo,plan),true);guest.localSave('pwaPendingAccountPlan',null);});}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
+  },[currentRepo,userId,initialPullComplete]);
   const authenticate=async(email:string,password:string,dob?:string,create=false):Promise<string|null>=>{
     if(create){const age=ageOn(dob??'');if(ageBlocked.current||age===null||age<13){if(age!==null&&age<13)ageBlocked.current=true;return 'invalidProfile';}}
     if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
@@ -175,7 +182,14 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     // Successful auth can unmount the form before the request promise resolves.
     if(authInFlight.current&&!activeSession.current){authRequest.current++;authInFlight.current=false;setDemoTarget(null);}
   },[]);
-  const value: AuthState={initialPullComplete,syncPullRevision,demoTransferError,
+  const legacyImport=useCallback(async(action:'preview'|'commit',mapping:Record<string,string>={},previewId?:string):Promise<ImportPlan>=>{
+    if(!client||!currentRepo||!userId||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
+    const {data,error}=await client.functions.invoke('pwa-import',{body:{action,mapping,expected_preview:previewId,confirmed:action==='commit'}});
+    if(error?.context?.status===409)throw new ImportPreviewConflict();
+    if(error||!data?.plan||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
+    return data.plan as ImportPlan;
+  },[client,currentRepo,userId]);
+  const value: AuthState={legacyImport,initialPullComplete,syncPullRevision,demoTransferError,
     retryDemoTransfer:()=>{if(demoTarget===owner){setDemoTransferError(false);setTransferAttempt(n=>n+1);}},
     blockOnboarding:()=>{ageBlocked.current=true;},
     cancelAuthFlow,

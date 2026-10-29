@@ -200,7 +200,7 @@ function settingsHTML() {
     <p class="hint">Sample data fills Recovery and Insights for exploring. It never mixes with your real workouts or Oura data.</p>
     <div class="group-label">Backup</div>
     <div class="group">
-      <button class="set-row" data-action="export"><span>Export workouts</span><span class="sub">Last: ${lastExp}</span></button>
+      <button class="set-row" data-action="export"><span>Export backup</span><span class="sub">Last: ${lastExp}</span></button>
       <button class="set-row" data-action="import"><span>Restore from a backup</span>${app.I.chevR}</button>
     </div>
     <p class="hint">${app.session ? "Your workouts back up to your account automatically. You can still export a copy any time." : "Workouts are saved on this phone only until you sign in. Export a backup every week or so."}${app.IS_IOS ? " Always open Insight from the Home Screen icon, not a Safari tab, because iOS keeps their data separate." : ""}</p>

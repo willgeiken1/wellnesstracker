@@ -61,7 +61,27 @@
       "expo-font",
       "expo-sqlite",
       "expo-secure-store",
-      "expo-sharing",
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "extensionBundleIdentifier": "com.insightwellness.app.share",
+            "appGroupId": "group.com.insightwellness.app",
+            "activationRule": {
+              "supportsFileWithMaxCount": 1
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "application/json",
+              "text/json",
+              "text/plain"
+            ]
+          }
+        }
+      ],
       "expo-status-bar",
       [
         "expo-image-picker",

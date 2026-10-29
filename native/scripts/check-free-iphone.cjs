@@ -12,6 +12,10 @@ fs.mkdirSync(project);
 for (const entry of ['src', 'assets', 'fixtures', 'plugins', 'scripts', 'app.json', 'app.config.js', 'metro.config.js', 'package.json', 'package-lock.json', 'tsconfig.json']) {
   fs.cpSync(path.join(root, entry), path.join(project, entry), { recursive: true, filter: source => !path.basename(source).startsWith('.env') });
 }
+// Preserve Metro's repository-relative shared pure importer layout.
+fs.cpSync(path.join(root, '../supabase/functions/_shared'), path.join(temp, 'supabase/functions/_shared'), {
+  recursive: true, filter: source => !path.basename(source).startsWith('.env'),
+});
 fs.symlinkSync(path.join(root, 'node_modules'), path.join(project, 'node_modules'), 'dir');
 // Do not inspect or inline any inherited service configuration.
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/SUPABASE|EXPO_PUBLIC_|SENTRY|POSTHOG/.test(key)));
