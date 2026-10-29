@@ -90,6 +90,7 @@ export function Keypad({
     setWheel((w) => !w);
   };
   const repUnit = pluralize(Number(value) || 0, "rep").split(" ")[1];
+  const repLabel = repUnit ? repUnit[0].toUpperCase() + repUnit.slice(1) : "";
   const nextLabel = field === "weight" ? t("nextReps") : t("nextSet");
   const keys = [
     "1",
@@ -136,7 +137,7 @@ export function Keypad({
           >
             {value || "—"}{" "}
             <ThemedText muted>
-              {field === "weight" ? unit : repUnit[0].toUpperCase() + repUnit.slice(1)}
+              {field === "weight" ? unit : repLabel}
             </ThemedText>
           </ThemedText>
           <View

@@ -270,7 +270,13 @@ export function WorkoutSummary({
               <ThemedText numeric style={{ fontSize: 21 }}>
                 {value}
               </ThemedText>
-              <ThemedText muted style={{ fontSize: 12 }}>
+              <ThemedText
+                muted
+                style={{
+                  fontSize: tokens.type.caption,
+                  fontWeight: "600",
+                }}
+              >
                 {label}
               </ThemedText>
             </View>
