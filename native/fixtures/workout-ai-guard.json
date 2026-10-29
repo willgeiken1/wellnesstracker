@@ -1,8 +1,6 @@
 {
   "allowed": [
     "Bench Press",
-    "Cable Row",
-    "Synthetic squat",
     "Bodyweight Curl",
     "Body Weight Lunge",
     "Bodyweight Leg Curl",
@@ -27,8 +25,8 @@
     "sleep 917330",
     "Bodyweight Curl 917325",
     "Weighted Plank HR 917326",
-    "h\u0435alth 917327",
-    "\uff45\uff4e\uff45\uff52\uff47\uff59 917322"
+    "hеalth 917327",
+    "ｅｎｅｒｇｙ 917322"
   ],
   "sentinels": {
     "mood": 917321,
@@ -116,7 +114,7 @@
       "expected": "Custom exercise"
     },
     {
-      "input": "h\u0435alth 72",
+      "input": "hеalth 72",
       "expected": "Custom exercise"
     },
     {
@@ -129,15 +127,79 @@
     },
     {
       "input": "My Curl 72 kg",
-      "expected": "My Curl"
+      "expected": "Custom exercise"
     },
     {
       "input": "Coach's Curl (left) 12",
-      "expected": "Coach's Curl (left)"
+      "expected": "Custom exercise"
     },
     {
       "input": "Custom Row / 12",
-      "expected": "Custom Row"
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Synthetic squat",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Squat i weigh one eighty",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "pulse seventy two",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "weighed eighty kilos",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Squat ⅬⅩⅩⅡ",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Squat LXXII",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "a1c",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "bf 18",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "BMI",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "felt anxious",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "depressed",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "migraine",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "period cramps",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Bench Press heavy",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Bench Press 2",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "Cable Row",
+      "expected": "Custom exercise"
     }
   ]
 }

@@ -1,3 +1,4 @@
+import { sanitizeWorkoutName } from '../../supabase/functions/_shared/workout-payload';
 import { exerciseLibrary } from '../src/core/workout/library';
 import exerciseNames from '../../supabase/functions/_shared/workout-exercise-names.json';
 import type { WorkoutAiClient } from '../src/features/workout/ai/client';
@@ -51,6 +52,8 @@ test.each([...vectors.sanitized, ...vectors.blocked.map(input => ({ input, expec
     const {repo, store, session, entry} = fixture();
     repo.save('entries', {...entry.data, exercise: input}, entry.id);
     expect(buildWorkoutFacts(store, session.id).exercises[0].name).toBe(expected);
+    expect(sanitizeWorkoutName(input)).toBe(expected);
+    expect(sanitizeWorkoutName(sanitizeWorkoutName(input))).toBe(expected);
     setConsent(repo, true);
     const request = jest.fn(async () => response);
     const client = createWorkoutEndpointClient(request, () => aiState(repo));
@@ -61,8 +64,7 @@ test.each([...vectors.sanitized, ...vectors.blocked.map(input => ({ input, expec
     for (const call of request.mock.calls as unknown[][]) {
         const body = call[1] as {workout: {exercises: {name: string}[]}};
         expect(body.workout.exercises[0].name).toBe(expected);
-        const wire = JSON.stringify(body.workout.exercises.map(e => e.name));
-        expect(wire).not.toMatch(/\d|\b(?:kg|lb|lbs|bpm|hr|rhr|bp|mmhg|pulse|weigh|weight|bw|cal|kcal|spo2|temp|glucose)\b/i);
+        expect(JSON.stringify(body)).not.toContain(input);
     }
 });
 test.each(['Bench Press', 'Bodyweight Curl'])('phone preserves bundled name %s in the serialized payload', async name => {
@@ -189,6 +191,27 @@ test('unmounting an idle service does not abort a different service request', as
 
 test('shared AI name allowlist matches the entire bundled exercise catalog exactly', () => {
     expect(exerciseNames).toEqual(exerciseLibrary.map(exercise => exercise.name));
-    for (const name of exerciseNames)
+    for (const name of exerciseNames) {
         expect(() => assertWorkoutPayload({exercises:[{name,sets:1,reps:8,volume:100}]})).not.toThrow();
+        for (const input of [name, name.toLowerCase(), `  ${name}  `]) {
+            expect(sanitizeWorkoutName(input)).toBe(name);
+            expect(sanitizeWorkoutName(sanitizeWorkoutName(input))).toBe(name);
+        }
+    }
+});
+
+test.each(vectors.allowed.flatMap(canonical => [canonical, canonical.toLowerCase(), `  ${canonical}  `].map(input => ({input, canonical}))))('phone canonicalizes $input at both payload boundaries', async ({input, canonical}) => {
+    const {repo, store, session, entry} = fixture();
+    repo.save('entries', {...entry.data, exercise: input}, entry.id);
+    expect(buildWorkoutFacts(store, session.id).exercises[0].name).toBe(canonical);
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => ({consent: true, generation: 1}));
+    await client({exercises:[{name:input,sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal);
+    const body = (request.mock.calls as unknown[][])[0][1] as {workout: {exercises: {name: string}[]}};
+    expect(body.workout.exercises[0].name).toBe(canonical);
+    expect(sanitizeWorkoutName(sanitizeWorkoutName(input))).toBe(canonical);
+});
+test('fallback name is idempotent and accepted by the phone guard', () => {
+    expect(sanitizeWorkoutName('Custom exercise')).toBe('Custom exercise');
+    expect(() => assertWorkoutPayload({exercises:[{name:'Custom exercise',sets:1,reps:8,volume:100}]})).not.toThrow();
 });

@@ -30,44 +30,14 @@ export function isSummaryLength(value: unknown): value is SummaryLength {
     return value === 'short' || value === 'coach' || value === 'detailed';
 }
 // Catalog mirror is checked against the bundled library in workout-ai.test.ts.
-// Exact catalog membership only: custom annotations never inherit this exception.
 const BUNDLED_NAMES = new Set(exerciseNames);
+const CANONICAL_NAMES = new Map(exerciseNames.map(name => [name.toLowerCase(), name]));
 export function workoutNameForTextGuard(name: string): string {
     return BUNDLED_NAMES.has(name) ? 'Exercise' : name;
 }
-function normalizedName(name: string): string {
-    return name.normalize('NFKD').replace(/\p{M}|\p{Cf}/gu, '').toLowerCase()
-        .replace(/[аα]/g, 'a').replace(/[еεᴇ]/g, 'e').replace(/[оοøᴏ]/g, 'o')
-        .replace(/[рρ]/g, 'p').replace(/[сϲ]/g, 'c').replace(/[ѕꜱ]/g, 's')
-        .replace(/[тτᴛ]/g, 't').replace(/[мμᴍ]/g, 'm').replace(/[ԁᴅ]/g, 'd')
-        .replace(/ʀ/g, 'r').replace(/ɪ/g, 'i').replace(/ɢ/g, 'g').replace(/ʜ/g, 'h')
-        .replace(/0/g, 'o').replace(/3/g, 'e').replace(/[5$]/g, 's').replace(/[7+]/g, 't');
-}
-function sensitiveName(name: string): boolean {
-    const normalized = normalizedName(workoutNameForTextGuard(name));
-    const joined = normalized.replace(/[^a-z]/g, '');
-    return /mood|energy|stress|oura|health|bodyweight|heartrate|readiness|sleep|hrv|notes/.test(joined)
-        || /\b(?:hr|bpm|rhr|bw)\b/.test(normalized);
-}
-const MEASUREMENT_TOKEN = /\b(?:kg|lb|lbs|bpm|hr|rhr|bp|mmhg|pulse|weigh(?:[ -]in)?|weight|bw|cal|kcal|spo2|temp|glucose)\b/gi;
-/** Custom free text is reduced before either phone or edge serializes it. */
+/** Only bundled catalog names or the fixed fallback may leave the device. */
 export function sanitizeWorkoutName(name: string): string {
-    if (BUNDLED_NAMES.has(name))
-        return name;
-    // Keep the existing folded sensitive-word scan as defense in depth, including
-    // lookalikes that removing digits alone would hide (for example m0od).
-    if (sensitiveName(name))
-        return 'Custom exercise';
-    const clean = name.normalize('NFKD').replace(/\p{M}/gu, '')
-        .replace(/spo2/gi, ' ').replace(/\p{N}/gu, '')
-        .replace(/[^A-Za-z ()'-]/g, ' ').replace(MEASUREMENT_TOKEN, ' ')
-        .replace(/ +/g, ' ').trim();
-    const joined = normalizedName(clean).replace(/[^a-z]/g, '');
-    if (joined.length < 3 || sensitiveName(clean)
-        || /weight|pulse|mmhg|glucose|spo|temp/.test(joined)
-        || /^(?:kg|lb|lbs|bpm|hr|rhr|bp|bw|cal|kcal)$/.test(joined))
-        return 'Custom exercise';
-    return clean;
+    return CANONICAL_NAMES.get(name.trim().toLowerCase()) ?? 'Custom exercise';
 }
 function assertWorkoutShape(value: unknown): asserts value is WorkoutFacts {
     if (!exactKeys(value, ['exercises']) || !Array.isArray(value.exercises)
@@ -92,7 +62,7 @@ function assertWorkoutShape(value: unknown): asserts value is WorkoutFacts {
 export function assertWorkoutData(value: unknown): asserts value is WorkoutFacts {
     assertWorkoutShape(value);
     for (const exercise of value.exercises) {
-        if (exercise.name !== sanitizeWorkoutName(exercise.name) || sensitiveName(exercise.name))
+        if (exercise.name !== sanitizeWorkoutName(exercise.name))
             throw Error('Invalid exercise name.');
     }
 }

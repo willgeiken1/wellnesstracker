@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {assertWorkoutData, assertWorkoutModelEnvelope, workoutModelPayload, workoutFactsFromEnvelope} from '../supabase/functions/_shared/workout-payload.ts';
+import {sanitizeWorkoutName, assertWorkoutData, assertWorkoutModelEnvelope, workoutModelPayload, workoutFactsFromEnvelope} from '../supabase/functions/_shared/workout-payload.ts';
 import {callWorkoutModel} from '../supabase/functions/_shared/strip.ts';
 import {createWorkoutSummaryHandler} from '../supabase/functions/workout-summary/handler.ts';
 const vectors=JSON.parse(readFileSync(new URL('../native/fixtures/workout-ai-guard.json',import.meta.url),'utf8'));
@@ -33,6 +33,7 @@ for(const name of vectors.blocked)test(`server sanitizes sensitive name: ${name}
  assert.throws(()=>assertWorkoutData(data));
  const payload=workoutModelPayload(data,'coach');
  assert.equal(workoutFactsFromEnvelope(payload).exercises[0].name,'Custom exercise');
+ assert.equal(JSON.stringify(payload).includes(name),false);
  await callWorkoutModel(payload,()=>{});
 });
 for(const {input,expected} of vectors.sanitized)test(`server sanitizes custom name: ${input}`,async()=>{
@@ -41,8 +42,9 @@ for(const {input,expected} of vectors.sanitized)test(`server sanitizes custom na
  assert.equal((await s.request({...body,workout:data})).status,200);
  const payload=s.calls[0], facts=workoutFactsFromEnvelope(payload);
  assert.equal(facts.exercises[0].name,expected);
- const wire=JSON.stringify(facts.exercises.map(e=>e.name));
- assert.doesNotMatch(wire,/\d|\b(?:kg|lb|lbs|bpm|hr|rhr|bp|mmhg|pulse|weigh|weight|bw|cal|kcal|spo2|temp|glucose)\b/i);
+ assert.equal(JSON.stringify(payload).includes(input),false);
+ assert.equal(sanitizeWorkoutName(input),expected);
+ assert.equal(sanitizeWorkoutName(sanitizeWorkoutName(input)),expected);
  assert.doesNotThrow(()=>assertWorkoutModelEnvelope(payload));
  const forged=structuredClone(payload);
  forged.messages[0].content[0].text=forged.messages[0].content[0].text.replace(JSON.stringify(facts),JSON.stringify(data));
@@ -104,4 +106,18 @@ test('simultaneous generations cannot exceed the shared five-slot quota',async()
  assert.equal(responses.filter(r=>r.status===200).length,5);
  assert.equal(responses.filter(r=>r.status===429).length,7);
  assert.equal(s.calls.length,5);
+});
+
+for (const canonical of vectors.allowed) for (const input of [canonical, canonical.toLowerCase(), `  ${canonical}  `]) test(`server canonicalizes catalog name: ${JSON.stringify(input)}`, () => {
+ const payload=workoutModelPayload({exercises:[{name:input,sets:1,reps:8,volume:100}]},'coach');
+ assert.equal(workoutFactsFromEnvelope(payload).exercises[0].name,canonical);
+ assert.equal(sanitizeWorkoutName(input),canonical);
+ assert.equal(sanitizeWorkoutName(sanitizeWorkoutName(input)),canonical);
+ assert.doesNotThrow(()=>assertWorkoutModelEnvelope(payload));
+});
+test('fallback and blocked name vectors are idempotent', () => {
+ for (const input of ['Custom exercise', ...vectors.blocked]) {
+  assert.equal(sanitizeWorkoutName(input),'Custom exercise');
+  assert.equal(sanitizeWorkoutName(sanitizeWorkoutName(input)),'Custom exercise');
+ }
 });
