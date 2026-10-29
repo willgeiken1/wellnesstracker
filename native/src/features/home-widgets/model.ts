@@ -13,8 +13,12 @@ export type HomeWidgetState = {
 };
 
 export type TrayItem = { id: WidgetId; title: string; locked: boolean; glow: boolean };
-/** A Home layout entry; locked ones keep their slot but Home hides them until a service reconnects. */
-export type HomeItem = { id: WidgetId; title: string; locked: boolean };
+/** Gray Home state for a placed widget whose service dropped (REDESIGN.md §2.5, FP73). */
+export type DisconnectedState = { service: ServiceId; message: string; action: 'Reconnect' };
+/** A Home layout entry; locked ones keep their slot and stay visible, grayed, until the service reconnects. */
+export type HomeItem = { id: WidgetId; title: string; locked: boolean; disconnected: DisconnectedState | null };
+
+const SERVICE_NAMES: Record<ServiceId, string> = { oura: 'Oura', appleHealth: 'Apple Health', fitbit: 'Fitbit', whoop: 'WHOOP' };
 
 export const defaultHomeWidgetState = (): HomeWidgetState =>
   ({ layout: [...DEFAULT_LAYOUT], services: [], editDot: false, glowPending: [], glowSeen: [] });
@@ -71,10 +75,18 @@ export function markGlowSeen(state: HomeWidgetState, id: WidgetId): HomeWidgetSt
   return { ...state, glowPending: state.glowPending.filter(item => item !== id), glowSeen: [...state.glowSeen, id] };
 }
 
-/** Home layout in order, with the locked flag; indices match moveWidget. */
+/** Reconnect target for a locked widget; Oura first, as §2.5 names it for the Health-or-Oura widgets too. */
+function disconnectedState(services: readonly ServiceId[]): DisconnectedState | null {
+  const service = services.includes('oura') ? 'oura' : services[0];
+  return service ? { service, message: `${SERVICE_NAMES[service]} disconnected`, action: 'Reconnect' } : null;
+}
+
+/** Home layout in order, locked widgets included (never hidden); indices match moveWidget. */
 export const homeItems = (state: HomeWidgetState): HomeItem[] => state.layout.flatMap(id => {
   const widget = getWidget(id);
-  return widget ? [{ id, title: widget.title, locked: !isUnlocked(state, id) }] : [];
+  if (!widget) return [];
+  const locked = !isUnlocked(state, id);
+  return [{ id, title: widget.title, locked, disconnected: locked ? disconnectedState(widget.services) : null }];
 });
 
 /** Every available widget not on Home, in registry order; locked ones show but cannot be added. Unavailable ones are hidden. */

@@ -3,13 +3,14 @@ import { join } from 'path';
 import { act, renderHook } from '@testing-library/react-native';
 import {
   CATALOGUE, DEFAULT_LAYOUT, SERVICES, WIDGETS, addWidget, connectService, createHomeWidgetStore, defaultHomeWidgetState,
-  disconnectService, getWidget, homeItems, isUnlocked, markGlowSeen, moveWidget, openEdit, removeWidget, shouldGlow, trayItems,
-  type ServiceId, type WidgetId,
+  disconnectService, getWidget, homeItems, homeWidgetStoreFor, isUnlocked, markGlowSeen, moveWidget, openEdit, removeWidget,
+  shouldGlow, trayItems, type ServiceId, type WidgetId,
 } from '../src/features/home-widgets';
 import { HOME_WIDGETS_KEY, loadHomeWidgets } from '../src/features/home-widgets/storage';
 import { useHomeWidgets } from '../src/features/home-widgets/use-home-widgets';
 import { memoryRepository } from './workout-repository';
 
+const ownedBy = (owner: string) => Object.assign(memoryRepository(), { owner });
 const ids = WIDGETS.map(widget => widget.id);
 const trayIds = (state = defaultHomeWidgetState()) => trayItems(state).map(item => item.id);
 const idsFor = (service: ServiceId) => WIDGETS.filter(widget => widget.available && (widget.services as readonly ServiceId[]).includes(service)).map(widget => widget.id);
@@ -157,11 +158,30 @@ describe('disconnect', () => {
     state = disconnectService(state, 'oura');
     expect(state.services).toEqual([]);
     expect(state.layout).toEqual(placed);
-    expect(homeItems(state).find(item => item.id === 'sleepScore')).toEqual({ id: 'sleepScore', title: 'Sleep score', locked: true });
+    expect(homeItems(state).find(item => item.id === 'sleepScore')).toMatchObject({ id: 'sleepScore', title: 'Sleep score', locked: true });
     expect(trayIds(state)).not.toContain('sleepScore');
     state = connectService(state, 'oura').state;
     expect(state.layout).toEqual(placed);
     expect(homeItems(state).every(item => !item.locked)).toBe(true);
+  });
+  it('shows a disconnected Oura widget on Home, grayed, with "Oura disconnected" and Reconnect (§2.5, FP73)', () => {
+    let state = connectService(defaultHomeWidgetState(), 'oura').state;
+    state = addWidget(addWidget(state, 'readiness'), 'steps');
+    expect(homeItems(state).every(item => item.disconnected === null)).toBe(true);
+    state = disconnectService(state, 'oura');
+    const home = homeItems(state);
+    expect(home.map(item => item.id)).toEqual([...DEFAULT_LAYOUT, 'readiness', 'steps']);
+    for (const id of ['readiness', 'steps']) {
+      expect(home.find(item => item.id === id)).toMatchObject({
+        locked: true, disconnected: { service: 'oura', message: 'Oura disconnected', action: 'Reconnect' },
+      });
+    }
+    for (const item of home.filter(entry => DEFAULT_LAYOUT.includes(entry.id))) expect(item.disconnected).toBeNull();
+  });
+  it('clears the disconnected state on reconnect, keeping the slot', () => {
+    let state = addWidget(connectService(defaultHomeWidgetState(), 'oura').state, 'lastNight');
+    state = connectService(disconnectService(state, 'oura'), 'oura').state;
+    expect(homeItems(state).find(item => item.id === 'lastNight')).toMatchObject({ locked: false, disconnected: null });
   });
   it('keeps an any-of widget unlocked while another of its services stays connected', () => {
     let state = connectService(defaultHomeWidgetState(), 'appleHealth').state;
@@ -271,6 +291,46 @@ describe('useHomeWidgets', () => {
     expect(result.current.layout).not.toContain('foodRing');
     await act(async () => { result.current.add(unlocked[0]); result.current.disconnectService('appleHealth'); });
     expect(result.current.home.find(item => item.id === unlocked[0])?.locked).toBe(true);
+  });
+});
+
+describe('shared store per owner (B3)', () => {
+  it('reuses one store per owner and repository, and a new one for another owner', () => {
+    const a = ownedBy('owner-a');
+    expect(homeWidgetStoreFor(a)).toBe(homeWidgetStoreFor(a));
+    expect(homeWidgetStoreFor(ownedBy('owner-b'))).not.toBe(homeWidgetStoreFor(a));
+  });
+  it('keeps Home and Edit widgets in sync after an edit', async () => {
+    const repo = ownedBy('owner-sync');
+    const home = await renderHook(() => useHomeWidgets(repo));
+    const edit = await renderHook(() => useHomeWidgets(repo));
+    await act(async () => { edit.result.current.connectService('oura'); });
+    await act(async () => { edit.result.current.add('readiness'); edit.result.current.move(4, 0); edit.result.current.remove('foodRing'); });
+    const layout = ['readiness', 'bodyMap', 'insightScore', 'todayWorkout'];
+    expect(edit.result.current.layout).toEqual(layout);
+    expect(home.result.current.layout).toEqual(layout);
+    expect(home.result.current.editDot).toBe(true);
+    await act(async () => { edit.result.current.openEdit(); });
+    expect(home.result.current.editDot).toBe(false);
+    await act(async () => { home.result.current.disconnectService('oura'); });
+    expect(edit.result.current.home[0]).toMatchObject({ id: 'readiness', disconnected: { service: 'oura' } });
+  });
+  it('keeps different owners isolated', async () => {
+    const [x, y] = [ownedBy('owner-x'), ownedBy('owner-y')];
+    const a = await renderHook(() => useHomeWidgets(x));
+    const b = await renderHook(() => useHomeWidgets(y));
+    await act(async () => { a.result.current.remove('bodyMap'); a.result.current.connectService('oura'); });
+    expect(a.result.current.layout).not.toContain('bodyMap');
+    expect(b.result.current.layout).toEqual(DEFAULT_LAYOUT);
+    expect(b.result.current.services).toEqual([]);
+  });
+  it('reconnects a disconnected widget from Home', async () => {
+    const repo = ownedBy('owner-reconnect');
+    const { result } = await renderHook(() => useHomeWidgets(repo));
+    await act(async () => { result.current.connectService('oura'); result.current.add('sleepScore'); result.current.disconnectService('oura'); });
+    const item = result.current.home.find(entry => entry.id === 'sleepScore')!;
+    await act(async () => { result.current.connectService(item.disconnected!.service); });
+    expect(result.current.home.find(entry => entry.id === 'sleepScore')).toMatchObject({ locked: false, disconnected: null });
   });
 });
 
