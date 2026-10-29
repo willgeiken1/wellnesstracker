@@ -11,6 +11,7 @@ Binding inputs, newest first:
 Rules for anyone building from this file:
 - This file specifies layout and behaviour only. Final colour, type and motion values come from the INS-01 token proposal. Until Will's save tap, build against the current `tokens.ts` names. **Never edit `tokens.ts` or `tokens.json` outside INS-01.**
 - Every example number here is synthetic. Real health values never appear in specs, shots, fixtures or analytics (AGENTS.md §4.1-4.2).
+- The 2D body map is built on **react-native-body-highlighter** (MIT licence).
 - Kai owns the body map component. No redesign task changes its component, frame size or props (CHECKLIST M8).
 - Tab labels stay as shipped (Q3): Home, Workouts, Food, Progress, Insights. This file uses "Train" for the Workouts tab and "Eat" for the Food tab, matching the task names. Nothing is renamed.
 
@@ -100,7 +101,7 @@ Every PWA extra survives as an optional tray widget. "Default" = on the starting
 | 17 | `cardioMinutes` | Cardio minutes | none | no | panel | PWA extra |
 | 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Insights › Muscles |
 | 19 | `workoutPrint` | Workout print | none | no | panel | Contour fingerprint (D114) |
-| 20 | `checkIn` | Check in | none | no | panel | **Blocked.** I9 keeps it, but AGENTS.md §4.6 / Q47 FINAL forbid check-ins in native. Not built until Will rules (Q-A) |
+| 20 | `checkIn` | Check in | none | no | panel | **Blocked (conflict pending Will).** I9 keeps it, and Will's on-record decision is that check-ins sync for signed-in users (PR #60 standing rule). That conflicts with AGENTS.md §4.6 / Q47 FINAL, which forbid check-ins in native. Not built until Will confirms which stands (Q-A) |
 | 21 | `steps` | Steps | Apple Health or Oura | no | panel | |
 | 22 | `sleepDuration` | Sleep duration | Apple Health or Oura | no | panel | |
 | 23 | `hrv` | HRV | Apple Health or Oura | no | panel | |
@@ -207,9 +208,11 @@ Shared across all tabs: large title, `Example data` chip in demo, the offline ba
 - **Settings** (avatar → push, large title): a search field, a profile row, then grouped sections: Account, Health & devices, Insight Score (`Switch`), Notifications, Appearance, Privacy, Data & export, About (with the one-line health disclaimer). `Switch` for booleans, `Picker` for enums, sentence-case section headers.
 - **Health & devices:** rows for Apple Health and Oura, each with a status (Connected / Not connected / Reconnect). Later: Fitbit, WHOOP. Connecting triggers the I9b cue (§2.4).
 - **Appearance:** a live preview panel (Home mini), a mode `Picker` (Auto / Light / Dark), the theme grid of the **13** palette swatches (§5: 11 open plus 2 secrets shown locked "???", with a "2 secrets to find" counter, FP11), then presets Basic / Calm / Fluid / Glass / Chrome / Max, the 4 axes (Theme, Material, Motion, Intensity: FP2), Effects (merged, FP95), "Back to Calm" (FP70), and a Reduce Motion note. Building all palettes is INS-10, after INS-01.
+- **About → Credits:** a credit row for the 3D model: "Male base muscular anatomy" by CharacterZone, Sketchfab, licensed CC BY (attribution required). Also list react-native-body-highlighter (MIT).
 - **Accept:**
   - [ ] All native controls.
   - [ ] Theme choice persists.
+  - [ ] About shows the CC BY credit row for "Male base muscular anatomy" by CharacterZone (Sketchfab).
   - [ ] Locked secrets are not selectable.
   - [ ] Widget style offers only system Theme / Tinted (FP43).
 
@@ -283,6 +286,7 @@ Other colours in v2, outside `PALETTES`:
 - Derived per palette: `surface2` (the I12 panel tone), `hair` (text at 9%), `hair2` (text at 20%), `accentSoft` (accent at 16%), `ai` (accent/sleep mix), and `accentOnText`.
 - Secret backgrounds: Neon uses a radial gradient; Holo uses a linear gradient.
 - Duplicates to resolve in INS-01: Spring Citrus `accent` = `training`, and Lotus Garden `accent` = `food`. Both break "colour always means one pillar" (CHECKLIST M2).
+- **Carry into INS-01:** these duplicate-colour notes go into the INS-01 token proposal as required fixes; INS-01 must resolve both.
 
 ### 5.1 Proposed token names (INS-01 proposal; do not apply here)
 Theme ids are the camelCase palette names in the table (`seaGlassTide` … `holographicChrome`). Each id has `dark` and `light` modes. Leaf paths follow design/README.md (D3, meaning not looks):
@@ -331,7 +335,7 @@ Theme ids are the camelCase palette names in the table (`seaGlassTide` … `holo
 Keep the order: **1. map (Home), 2. logger (Train), 3. AI food (Eat: Snap / Describe)**. The store shots wait for M3-01 (the Home map hero). They're captured with demo/synthetic data only, after INS-12 QA.
 
 ## 8. Open questions for Will (do not resolve in code)
-- **Q-A (blocker for `checkIn`):** I9 keeps "Check in" as a tray tile, but AGENTS.md §4.6 / Q47 FINAL forbid check-ins in native. Is the tile allowed, and with what data? Suggested pick: keep it out of native until Will says otherwise.
+- **Q-A (blocker for `checkIn`; conflict pending Will's confirmation):** I9 keeps "Check in" as a tray tile, and Will's on-record decision is that **check-ins sync for signed-in users** (PR #60 standing rule). That conflicts with AGENTS.md §4.6 / Q47 FINAL, which forbid check-ins in native. This contract does not resolve the conflict: Elliot takes it to Will before INS-02/INS-05 build the tile. Until Will confirms, the tile stays unbuilt.
 - **Q-B:** "Needs N more days" threshold. SOURCE-DESIGN says a 28-day baseline; the INS-05 check says "< 7 days". Which is the Score's first-number threshold?
 - **Q-C:** Water colour per palette (v2 has one shared placeholder that sits close to `recovery` blue).
 - **Q-D:** "Once per session" is defined here as once per process launch, so a foreground return doesn't replay it. Confirm.
