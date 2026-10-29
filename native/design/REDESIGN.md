@@ -72,8 +72,8 @@ Plain facts (Q20). An error states the fact plus one fix (FP71). Specific action
 - **Starting Home (nothing connected) is exactly 4 widgets, in this order (I9a):** `bodyMap`, `insightScore`, `todayWorkout`, `foodRing`. Only the first two are cards (I12).
 
 ### 2.2 Insight Score (I8)
-- On by default for new users. It can be hidden in Settings › Insight Score; hiding it removes both the header ring and the card.
-- **From day 1** the header ring shows a progress ring with the centre label "Needs N more days" (VoiceOver: "Insight Score needs 5 more days of logging", synthetic N). The arc fills with days logged toward the baseline. Once there is enough data, the centre shows the score number.
+- On by default for new users. It can be hidden in Settings › Insight Score; hiding it removes both the header ring and the card. **The switch and the tray are one state:** removing `insightScore` from Home in Edit turns the switch off (and removes the header ring); turning the switch on puts the card back on Home from the tray and restores the ring. DECIDED (agent).
+- **From day 1** the header shows the 32 pt progress ring (no text inside it) with a caption "Needs N more days" beside it (or under it when space is tight), in the 13 pt semibold label style; the caption wraps rather than clips at the largest Dynamic Type size (VoiceOver: "Insight Score needs 5 more days of logging", synthetic N). The arc fills with days logged toward the baseline. Once there is enough data, the ring shows the score number and the caption goes away.
 - The card mirrors this: the ring, then "Needs N more days" or the score, then 3 pillar rows (training, food, recovery) with pillar colours, then "How it's worked out" → Score detail (visible equations, adjustable weights, a one-line disclaimer: FP41).
 - The baseline length (N's source) belongs to the Score model, not this file. Threshold is 7 days (Q-B, resolved; I8/Q7).
 
@@ -137,8 +137,9 @@ Fitbit and WHOOP are later services (I9). Their widgets are stubs in the registr
 - **States:** first launch (4 defaults, body map empty state "Your map fills in as you log", Score ring "Needs N more days"); data; demo (Example data chip); offline (slim top banner "Offline · logs save here and sync when you reconnect.", FP51); sync error (a panel row with the fact + "Try again"); Health no-data (§2.5).
 - **Accept:**
   - [ ] A fresh install renders exactly `[bodyMap, insightScore, todayWorkout, foodRing]`.
-  - [ ] Exactly 2 card surfaces on Home.
-  - [ ] The Score ring is in the header on day 1, with "Needs N more days".
+  - [ ] The default Home layout has exactly 2 card surfaces (body map, Score). Removing either tile or hiding the Score overrides this; nothing else ever renders as a card.
+  - [ ] Removing `insightScore` in Edit turns Settings › Insight Score off, and switching it on restores the tile and header ring (one state).
+  - [ ] The Score ring is in the header on day 1 at 32 pt, with "Needs N more days" as a 13 pt semibold caption beside or under it (never inside the ring); no clipping at the largest Dynamic Type size.
   - [ ] Edit dot + one-time glow are wired to INS-02 state, with no modal API.
   - [ ] INS-02 and INS-05 gate: the `checkIn` tile can't ship until the egress tests (sentry-scrub, usage, describe) include mood, energy and stress as sentinel fields (Q-A).
   - [ ] "No data from Health yet" opens the sheet.
@@ -219,10 +220,11 @@ Shared across all tabs: large title, `Example data` chip in demo, the offline ba
   - [ ] Widget style offers only system Theme / Tinted (FP43).
 
 ### 3.6 Onboarding
-Welcome → Account (Apple, Google, email: FP47; account required Q12, with "Look around first" demo Q90) → About you (goal Lose / Maintain / Gain, units, optional birthday / height) → Start (routine or empty) → Health (HealthKit request listing Steps, Sleep, HRV, with no heart rate per Q125; an optional Oura row, FP46) → optional skippable look carousel (FP6) → Home with the 4 defaults.
+Welcome → Account (Apple, Google, email: FP47; account required Q12, with "Look around first" demo Q90) → About you (goal Lose / Maintain / Gain, units, optional birthday / height) → Start (routine or empty) → Health (HealthKit request listing Steps, Sleep, HRV, with no heart rate per Q125; an optional Oura row, FP46) → Home with the 4 defaults.
+- **Step count, DECIDED (agent):** Will hasn't ruled, so the cap stays at **3 steps plus Health**: (1) Account, (2) About you, (3) Start, then Health. Welcome is the entry screen, not a step. The look carousel (FP6) is an optional, skippable intro reachable from Welcome; it doesn't count toward the cap and never blocks Account.
 - Each step: a large title, one primary button pinned above the safe area (never under the keyboard), and "Skip" where allowed. The notification ask comes after the first finished workout (FP45), not in onboarding.
 - **Accept:**
-  - [ ] At most 3 steps + Health before Home.
+  - [ ] At most 3 steps + Health before Home (Account, About you, Start, Health); the intro carousel is optional and skippable.
   - [ ] Primary actions reachable at the largest text size.
   - [ ] Demo lands on Home with the Example data chip.
 
@@ -263,7 +265,7 @@ All motion uses Reanimated on the UI thread and animates transform/opacity (or s
 ---
 
 ## 5. Palette (I4): input to the INS-01 token proposal
-Count from `PALETTES` in `insight-prototype-v2.html` (line 466, parsed): **13 palettes**, of which 2 are secret unlocks (Midnight Neon, Holographic Chrome). The v2 critique's "12 palettes" undercounts; its own name list has 13. Each palette has **12 role colours**, each a dark / light pair.
+Count from `PALETTES` in `insight-prototype-v2.html` (line 466, parsed): **13 palettes** (verified Oct 28 against `library/work/insight-mockup-v2/insight-prototype-v2.html`, sha256 3c2bc0b4e495…: 13 keys, secrets Midnight Neon and Holographic Chrome), of which 2 are secret unlocks (Midnight Neon, Holographic Chrome). The v2 critique's "12 palettes" undercounts; its own name list has 13. Each palette has **12 role colours**, each a dark / light pair.
 
 | # | Name | Proposed id | bg | surface | text | muted | accent | onAccent | training | food | recovery | sleep | success | warn |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
