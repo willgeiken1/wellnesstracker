@@ -369,7 +369,7 @@ test.each([false, true])('workout header only shows an eyebrow for templates: %s
   store.start(routine?.id);
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  if (template) expect(screen.getByText('TEMPLATE')).toBeTruthy();
+  if (template) expect(screen.getByText('Template')).toBeTruthy();
   else expect(screen.getAllByText('Workout')).toHaveLength(1);
 });
 
