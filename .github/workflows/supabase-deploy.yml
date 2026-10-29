@@ -16,6 +16,10 @@ on:
   workflow_dispatch:
 
 # A second deploy waits. cancel-in-progress would stop a migration mid-push.
+# GitHub keeps only one pending run per group, so a newer push can cancel an
+# older pending one. That is safe: plan diffs migrations from the last
+# successful migrate, so the cancelled run's migrations are picked up, and
+# functions only run after that migrate succeeds.
 concurrency:
   group: supabase-deploy
   cancel-in-progress: false
@@ -30,6 +34,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # actions: read lets plan find the last run whose migrate job succeeded.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       migrations: ${{ steps.plan.outputs.migrations }}
       deploy_all: ${{ steps.plan.outputs.deploy_all }}
@@ -40,9 +48,47 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Find last successful migrate
+        id: base
+        # Fail closed: any error here leaves the base empty, and plan then
+        # runs migrate (which still waits for the production approval).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          base=""
+          # workflow_ref is owner/repo/.github/workflows/<file>@ref.
+          wf_path="${WORKFLOW_REF#*/*/}"
+          wf_file="${wf_path%@*}"
+          wf_file="${wf_file##*/}"
+          if [[ "$wf_file" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            runs=$(gh api "repos/${REPO}/actions/workflows/${wf_file}/runs?branch=main&status=completed&per_page=50" \
+              --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' 2>/dev/null) || runs=""
+            while read -r id sha; do
+              [ -z "${id:-}" ] && continue
+              [ "$id" = "$RUN_ID" ] && continue
+              ok=$(gh api "repos/${REPO}/actions/runs/${id}/jobs?per_page=100" \
+                --jq '[.jobs[] | select(.name == "Push database migrations" and .conclusion == "success")] | length' 2>/dev/null) || { echo "Jobs lookup failed; failing closed."; base=""; break; }
+              if [ "${ok:-0}" -gt 0 ] && [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+                base="$sha"
+                break
+              fi
+            done <<< "$runs"
+          fi
+          if [ -n "$base" ]; then
+            echo "Last successful migrate ran at ${base}."
+          else
+            echo "No successful migrate found; migrate will run."
+          fi
+          echo "migrate_base=${base}" >>"$GITHUB_OUTPUT"
+
       - name: Plan deploy
         id: plan
         env:
+          MIGRATE_BASE: ${{ steps.base.outputs.migrate_base }}
           EVENT_NAME: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
@@ -90,7 +136,7 @@ jobs:
             while IFS= read -r -d '' file; do
               case "$file" in
                 supabase/migrations | supabase/migrations/*)
-                  migrations=true
+                  # Decided below against the last successful migrate.
                   ;;
                 supabase/functions/*)
                   rest="${file#supabase/functions/}"
@@ -105,6 +151,27 @@ jobs:
                   ;;
               esac
             done <"$diff_file"
+          fi
+
+          # Migrations fail closed: compare with the last commit whose migrate
+          # job succeeded, not with github.event.before. A cancelled, failed or
+          # rejected migrate is therefore picked up again by the next run.
+          if [ "$migrations" = "false" ]; then
+            if ! [[ "${MIGRATE_BASE:-}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "No migrate base; running migrate."
+              migrations=true
+            elif ! git rev-parse --verify --quiet "${MIGRATE_BASE}^{commit}" >/dev/null; then
+              echo "Migrate base is not in this checkout; running migrate."
+              migrations=true
+            elif ! git merge-base --is-ancestor "$MIGRATE_BASE" "$SHA"; then
+              echo "Migrate base is not an ancestor of this commit; running migrate."
+              migrations=true
+            elif ! git diff --quiet "$MIGRATE_BASE" "$SHA" -- supabase/migrations; then
+              echo "supabase/migrations changed since ${MIGRATE_BASE}; running migrate."
+              migrations=true
+            else
+              echo "supabase/migrations unchanged since ${MIGRATE_BASE}."
+            fi
           fi
 
           functions_out=""
