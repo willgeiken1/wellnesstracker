@@ -17,7 +17,8 @@ import { parseLocalDateTime } from '../src/features/workout/finish';
 import type { Repository } from '../src/data/repository';
 import { ActiveWorkout } from '../src/features/workout/active';
 import { useAuth } from '../src/auth/provider';
-import { clock } from '../src/features/workout/primitives';
+import { clock, Eyebrow } from '../src/features/workout/primitives';
+import { tokens } from '../src/design/tokens';
 import { displayWeight, rounded, nextField } from '../src/core/workout/rules';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: jest.fn(() => ({})), useIsFocused: () => true, router: { canDismiss: () => false, replace: jest.fn(), back: jest.fn() } }));
@@ -371,6 +372,62 @@ test.each([false, true])('workout header only shows an eyebrow for templates: %s
   await render(<ActiveWorkout />, { wrapper });
   if (template) expect(screen.getByText('Template')).toBeTruthy();
   else expect(screen.getAllByText('Workout')).toHaveLength(1);
+});
+
+test('Eyebrow component renders sentence-case semibold caption text', async () => {
+  const { rerender } = await render(<Eyebrow>Template</Eyebrow>, { wrapper });
+  const text = screen.getByText('Template');
+  expect(text).toBeTruthy();
+  expect(text).toHaveStyle({
+    fontSize: tokens.type.caption,
+    fontWeight: '600',
+  });
+
+  await rerender(<Eyebrow center>Rest</Eyebrow>);
+  const centered = screen.getByText('Rest');
+  expect(centered).toBeTruthy();
+  expect(centered).toHaveStyle({
+    textAlign: 'center',
+    fontSize: tokens.type.caption,
+    fontWeight: '600',
+  });
+});
+
+test('active-workout header row renders Eyebrow with semibold style for templates', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const routine = store.saveTemplate('Synthetic Push', []);
+  store.start(routine.id);
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  const eyebrow = screen.getByText('Template');
+  expect(eyebrow).toBeTruthy();
+  expect(eyebrow).toHaveStyle({
+    fontSize: tokens.type.caption,
+    fontWeight: '600',
+  });
+  expect(screen.getByText('Synthetic Push')).toHaveStyle({
+    fontWeight: '600',
+  });
+});
+
+test('active-workout exercise column header row renders sentence-case semibold labels', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  const session = store.start();
+  store.addExercise(session.id, 'Bench Press');
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  const setHeader = screen.getByText('Set');
+  const prevHeader = screen.getByText('Previous');
+  const repsHeader = screen.getByText('Reps');
+  const unitHeader = screen.getByText('lb');
+
+  for (const el of [setHeader, prevHeader, repsHeader, unitHeader]) {
+    expect(el).toBeTruthy();
+    expect(el).toHaveStyle({
+      fontSize: tokens.type.caption,
+      fontWeight: '600',
+    });
+  }
 });
 
 
