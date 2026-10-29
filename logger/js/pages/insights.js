@@ -82,6 +82,7 @@ function storyFactorIds(r) {
 }
 
 function affectsCard(r) {
+  const outcomeLabel = r.outcomeLabel || "";
   const tone = r.valence === "good" ? "good" : r.valence === "bad" ? "bad" : "neutral";
   const mark = tone === "good" ? "Good for you" : tone === "bad" ? UNFAVORABLE_MARK : "Just a pattern";
   const conf = r.confidence === "high" ? "High confidence" : "Medium confidence";
@@ -90,7 +91,7 @@ function affectsCard(r) {
   const alsoHTML = also ? `<p class="aff-also">${app.esc(also)}</p>` : "";
   const factors = storyFactorIds(r).map((id) => app.esc(id)).join(" ");
   return `<article class="card aff-card ${tone}" data-factors="${factors}">
-    <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(r.outcomeLabel || "")}</span></div>
+    <div class="aff-k"><span class="aff-mark">${mark}</span><span class="aff-out">${app.esc(outcomeLabel.charAt(0).toUpperCase() + outcomeLabel.slice(1))}</span></div>
     <p class="aff-s">${app.esc(r.lead || r.sentence)}</p>
     ${alsoHTML}
     <div class="aff-chips"><span class="aff-chip${hi}">${conf}</span><span class="aff-chip">${app.pl(r.nWith, "day")}</span></div>

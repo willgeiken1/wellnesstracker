@@ -7,10 +7,10 @@
 .week-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .week-k {
   margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--muted);
 }
 .week-x {
@@ -56,8 +56,8 @@
 .week-stat span {
   display: block;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
 }
 .week-stat b {
   display: block;
@@ -93,7 +93,7 @@
 .wk-block { display: grid; gap: 14px; }
 .wk-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; }
 .wk-row + .wk-row { padding-top: 12px; border-top: 1px solid var(--line); }
-.wk-row-t span { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
+.wk-row-t span { display: block; color: var(--muted); font-size: 13px; font-weight: 600; }
 .wk-row-t b { display: block; margin-top: 2px; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .wk-row-t b small { font-size: 13px; font-weight: 600; color: var(--muted); }
 .wk-row-t em { display: block; margin-top: 2px; font-style: normal; font-size: 13px; color: var(--muted); }
@@ -106,7 +106,7 @@
 .wk-track i { display: block; height: 100%; border-radius: 99px; background: var(--green); }
 .wk-stand p { margin: 0; font-size: 15px; line-height: 1.4; }
 .wk-stand p + p { margin-top: 10px; }
-.wk-stand b { display: block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.wk-stand b { display: block; font-weight: 600; font-size: 13px; letter-spacing: normal; text-transform: none; color: var(--muted); margin-bottom: 2px; }
 .wk-note { margin: 8px 0 0; }
 .wk-empty h4 { margin-bottom: 6px; }
 .wk-empty .sub { margin: 0; }

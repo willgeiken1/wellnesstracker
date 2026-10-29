@@ -202,9 +202,9 @@ body.timer-on:not(.in-workout) #view {
   gap: 2px;
   background: transparent;
   color: var(--nav-icon);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -.02em;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
   line-height: 1.05;
   transition: none;
 }
@@ -217,9 +217,9 @@ body.timer-on:not(.in-workout) #view {
 
 #tabs .tab span {
   display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -.02em;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
   line-height: 1.1;
   max-width: 100%;
   overflow: hidden;
@@ -235,12 +235,12 @@ body.timer-on:not(.in-workout) #view {
 
 #tabs .tab[aria-current="page"] span {
   display: block;
-  font-size: 11px;
+  font-weight: 600; font-size: 13px;
 }
 
 @media (max-width: 380px) {
   #tabs .tab[aria-current="page"] span,
-  #tabs .tab span { display: block; font-size: 10px; }
+  #tabs .tab span { display: block; font-weight: 600; font-size: 13px; }
   #tabs .tab[aria-current="page"] { padding: 6px 2px 5px; }
 }
 
@@ -382,10 +382,10 @@ body.timer-on:not(.in-workout) #view {
 .aff-out {
   margin-left: auto;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
   white-space: nowrap;
 }
 .aff-s {
