@@ -32,10 +32,11 @@ export function createWorkoutEndpointClient(request: WorkoutEndpointRequest, con
                 throw Error(t('foodAiConsentRequired'));
         };
         check();
-        assertWorkoutPayload(workout);
+        const facts = projectWorkoutFacts(workout);
+        assertWorkoutPayload(facts);
         if (!isSummaryLength(length))
             throw Error(t('workoutAiFailure'));
-        const body = { workout: projectWorkoutFacts(workout), length, localDate: day(), timeZone: zone() };
+        const body = { workout: facts, length, localDate: day(), timeZone: zone() };
         check();
         const response = await request('workout-summary', body, signal);
         check();

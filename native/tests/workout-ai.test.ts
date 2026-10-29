@@ -1,3 +1,5 @@
+import { exerciseLibrary } from '../src/core/workout/library';
+import exerciseNames from '../../supabase/functions/_shared/workout-exercise-names.json';
 import type { WorkoutAiClient } from '../src/features/workout/ai/client';
 import vectors from '../fixtures/workout-ai-guard.json';
 import { WorkoutStore } from '../src/data/workout/store';
@@ -45,10 +47,29 @@ test('explicit phone projection ignores sentinel fields on workout, entry, set a
 test.each(vectors.allowed)('shared phone vector accepts %s', name => {
     expect(() => assertWorkoutPayload({ exercises: [{ name, sets: 1, reps: 8, volume: 100 }] })).not.toThrow();
 });
-test.each(vectors.blocked)('shared phone vector blocks %s before endpoint', async (name) => {
-    const request = jest.fn(async () => response), client = createWorkoutEndpointClient(request, () => ({ consent: true, generation: 1 }));
-    await expect(client({ exercises: [{ name, sets: 1, reps: 8, volume: 100 }] }, 'coach', new AbortController().signal)).rejects.toThrow();
-    expect(request).not.toHaveBeenCalled();
+test.each([...vectors.sanitized, ...vectors.blocked.map(input => ({ input, expected: 'Custom exercise' }))])('phone sanitizes $input at the endpoint boundary', async ({input, expected}) => {
+    const {repo, store, session, entry} = fixture();
+    repo.save('entries', {...entry.data, exercise: input}, entry.id);
+    expect(buildWorkoutFacts(store, session.id).exercises[0].name).toBe(expected);
+    setConsent(repo, true);
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => aiState(repo));
+    await new WorkoutSummaryService(repo, client).generate(session.id);
+    // Exercise both the service projection and direct callers of the client.
+    await client({exercises:[{name:input,sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal);
+    expect(request).toHaveBeenCalledTimes(2);
+    for (const call of request.mock.calls as unknown[][]) {
+        const body = call[1] as {workout: {exercises: {name: string}[]}};
+        expect(body.workout.exercises[0].name).toBe(expected);
+        const wire = JSON.stringify(body.workout.exercises.map(e => e.name));
+        expect(wire).not.toMatch(/\d|\b(?:kg|lb|lbs|bpm|hr|rhr|bp|mmhg|pulse|weigh|weight|bw|cal|kcal|spo2|temp|glucose)\b/i);
+    }
+});
+test.each(['Bench Press', 'Bodyweight Curl'])('phone preserves bundled name %s in the serialized payload', async name => {
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => ({consent: true, generation: 1}));
+    await client({exercises:[{name,sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal);
+    expect(JSON.stringify(request.mock.calls)).toContain(name);
 });
 test('endpoint rejects unknown fields, nested sentinel data, invalid length, missing consent and aborted calls', async () => {
     const request = jest.fn(async () => response);
@@ -164,4 +185,10 @@ test('unmounting an idle service does not abort a different service request', as
     new WorkoutSummaryService(repo,client).cancel();
     finish(response);await pending;
     expect(savedWorkoutSummary(repo,session.id)?.summary).toBe(response.summary);
+});
+
+test('shared AI name allowlist matches the entire bundled exercise catalog exactly', () => {
+    expect(exerciseNames).toEqual(exerciseLibrary.map(exercise => exercise.name));
+    for (const name of exerciseNames)
+        expect(() => assertWorkoutPayload({exercises:[{name,sets:1,reps:8,volume:100}]})).not.toThrow();
 });

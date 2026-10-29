@@ -45,5 +45,99 @@
     "health": {
       "sleep": 917330
     }
-  }
+  },
+  "sanitized": [
+    {
+      "input": "pulse 72",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "82 kg weigh-in",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "bp 120/80",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "HR 150bpm",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "72bpm",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "120/80",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "weight 180lb",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "PULSE 72",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "RHR 72 bpm",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "BW 180 lbs",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "120 mmHg",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "cal 800 kcal",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "SpO2 98",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "temp 37",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "glucose 90",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "h.r. 150",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "m0od 72",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "h\u0435alth 72",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "ab 72",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "123",
+      "expected": "Custom exercise"
+    },
+    {
+      "input": "My Curl 72 kg",
+      "expected": "My Curl"
+    },
+    {
+      "input": "Coach's Curl (left) 12",
+      "expected": "Coach's Curl (left)"
+    },
+    {
+      "input": "Custom Row / 12",
+      "expected": "Custom Row"
+    }
+  ]
 }

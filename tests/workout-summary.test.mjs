@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {assertWorkoutData, workoutModelPayload} from '../supabase/functions/_shared/workout-payload.ts';
+import {assertWorkoutData, assertWorkoutModelEnvelope, workoutModelPayload, workoutFactsFromEnvelope} from '../supabase/functions/_shared/workout-payload.ts';
 import {callWorkoutModel} from '../supabase/functions/_shared/strip.ts';
 import {createWorkoutSummaryHandler} from '../supabase/functions/workout-summary/handler.ts';
 const vectors=JSON.parse(readFileSync(new URL('../native/fixtures/workout-ai-guard.json',import.meta.url),'utf8'));
@@ -25,12 +25,32 @@ function setup() {
 for(const name of vectors.allowed)test(`server accepts exercise name: ${name}`,async()=>{
  const data={exercises:[{name,sets:1,reps:8,volume:100}]};
  assert.doesNotThrow(()=>assertWorkoutData(data));
+ assert.equal(workoutFactsFromEnvelope(workoutModelPayload(data,'coach')).exercises[0].name,name);
  let called=false;await callWorkoutModel(workoutModelPayload(data,'coach'),()=>{called=true;});assert.equal(called,true);
 });
-for(const name of vectors.blocked)test(`server blocks sensitive name: ${name}`,async()=>{
+for(const name of vectors.blocked)test(`server sanitizes sensitive name: ${name}`,async()=>{
+ const data={exercises:[{name,sets:1,reps:8,volume:100}]};
+ assert.throws(()=>assertWorkoutData(data));
+ const payload=workoutModelPayload(data,'coach');
+ assert.equal(workoutFactsFromEnvelope(payload).exercises[0].name,'Custom exercise');
+ await callWorkoutModel(payload,()=>{});
+});
+for(const {input,expected} of vectors.sanitized)test(`server sanitizes custom name: ${input}`,async()=>{
+ const s=setup();
+ const data={exercises:[{name:input,sets:1,reps:8,volume:100}]};
+ assert.equal((await s.request({...body,workout:data})).status,200);
+ const payload=s.calls[0], facts=workoutFactsFromEnvelope(payload);
+ assert.equal(facts.exercises[0].name,expected);
+ const wire=JSON.stringify(facts.exercises.map(e=>e.name));
+ assert.doesNotMatch(wire,/\d|\b(?:kg|lb|lbs|bpm|hr|rhr|bp|mmhg|pulse|weigh|weight|bw|cal|kcal|spo2|temp|glucose)\b/i);
+ assert.doesNotThrow(()=>assertWorkoutModelEnvelope(payload));
+ const forged=structuredClone(payload);
+ forged.messages[0].content[0].text=forged.messages[0].content[0].text.replace(JSON.stringify(facts),JSON.stringify(data));
+ assert.throws(()=>assertWorkoutModelEnvelope(forged));
  let called=false;
- await assert.rejects(async()=>callWorkoutModel(workoutModelPayload({exercises:[{name,sets:1,reps:8,volume:100}]},'coach'),()=>{called=true;}));
+ await assert.rejects(async()=>callWorkoutModel(forged,()=>{called=true;}));
  assert.equal(called,false);
+ assert.equal(data.exercises[0].name,input);
 });
 test('server rejects sentinel fields at every structured level before model or quota',async()=>{
  const s=setup();

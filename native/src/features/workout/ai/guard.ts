@@ -1,6 +1,6 @@
 import type { WorkoutStore } from '../../../data/workout/store';
 import { assertFoodAiPayload } from '../../food/ai/guard';
-import { assertWorkoutData, workoutNameForTextGuard } from '../../../../../supabase/functions/_shared/workout-payload';
+import { assertWorkoutData, projectWorkoutFacts, workoutNameForTextGuard } from '../../../../../supabase/functions/_shared/workout-payload';
 import type { WorkoutFacts } from '../../../../../supabase/functions/_shared/workout-payload';
 export { type WorkoutFacts, type SummaryLength } from '../../../../../supabase/functions/_shared/workout-payload';
 export function assertWorkoutPayload(value: unknown): asserts value is WorkoutFacts {
@@ -13,14 +13,14 @@ export function assertWorkoutPayload(value: unknown): asserts value is WorkoutFa
 /** Project from completed exercise/set records. Never pass a session or profile
  * object to an AI client. Volume is external kg × reps; no body mass is read. */
 export function buildWorkoutFacts(store: WorkoutStore, id: string): WorkoutFacts {
-    const facts = { exercises: store.entries(id).filter(entry => !store.skipped(entry.id)).flatMap(entry => {
+    const facts = projectWorkoutFacts({ exercises: store.entries(id).filter(entry => !store.skipped(entry.id)).flatMap(entry => {
             const sets = store.sets(entry.id);
             if (!sets.length)
                 return [];
             return [{ name: String(entry.data.exercise), sets: sets.length,
                     reps: sets.reduce((n, set) => n + Number(set.data.reps), 0),
                     volume: sets.reduce((n, set) => n + Number(set.data.weight_kg) * Number(set.data.reps), 0) }];
-        }) };
+        }) });
     assertWorkoutPayload(facts);
     return facts;
 }
