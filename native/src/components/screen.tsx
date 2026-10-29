@@ -1,4 +1,4 @@
-import { ScrollView, View, StyleSheet, type ColorValue } from 'react-native';
+import { ScrollView, View, StyleSheet, Platform, type ColorValue } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PropsWithChildren } from 'react';
 import { useTheme } from '@/design/theme-provider';
@@ -10,7 +10,7 @@ export function Screen({ children, title, tabHeader = false, topInset = false }:
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg as ColorValue }} edges={tabHeader ? ['left', 'right'] : topInset ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
     <ScrollView testID="screen-scroll" contentInsetAdjustmentBehavior="automatic"
       automaticallyAdjustsScrollIndicatorInsets
-      contentContainerStyle={[styles.content, tabHeader && { paddingBottom: tokens.spacing[3] + insets.bottom }]}>
+      contentContainerStyle={[styles.content, tabHeader && { paddingBottom: tokens.spacing[3] + (Platform.OS === 'ios' ? 0 : insets.bottom) }]}>
       {title && !tabHeader && <View style={styles.header}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1 }}>{title}</ThemedText>
       </View>}

@@ -1,9 +1,13 @@
 import { act, render, screen } from '@testing-library/react-native';
-import { AccessibilityInfo, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '../src/design/theme-provider';
 import AppTabs from '../src/components/app-tabs';
 import { Screen } from '../src/components/screen';
+import * as ReactNative from 'react-native';
+import { createTheme } from '../src/design/tokens';
+
+afterEach(() => jest.restoreAllMocks());
 
 jest.mock('expo-router/native-tabs', () => {
   const React = require('react');
@@ -13,12 +17,18 @@ jest.mock('expo-router/native-tabs', () => {
   return { NativeTabs };
 });
 
-test.each([0, 34, 83])('tab scroll content with bottom inset %i adjusts both safe areas and does not draw a duplicate title', async (bottom) => {
+test.each([
+  ['ios', 0, 16], ['ios', 34, 16], ['ios', 83, 16],
+  ['android', 0, 16], ['android', 34, 50], ['android', 83, 99],
+  ['web', 0, 16], ['web', 34, 50], ['web', 83, 99],
+] as const)('%s tab content with bottom inset %i has exactly %i points of bottom padding', async (platform, bottom, padding) => {
+  jest.replaceProperty(Platform, 'OS', platform);
   await render(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 59, left: 0, right: 0, bottom } }}><ThemeProvider><Screen title="Home" tabHeader><Text>Last row</Text></Screen></ThemeProvider></SafeAreaProvider>);
   const scroll = screen.getByTestId('screen-scroll');
   expect(scroll.props.contentInsetAdjustmentBehavior).toBe('automatic');
   expect(scroll.props.automaticallyAdjustsScrollIndicatorInsets).toBe(true);
-  expect(StyleSheet.flatten(scroll.props.contentContainerStyle).paddingBottom).toBeGreaterThanOrEqual(bottom);
+  const style = StyleSheet.flatten(scroll.props.contentContainerStyle);
+  expect(style.paddingBottom ?? style.padding).toBe(padding);
   expect(screen.queryByText('Home')).toBeNull();
   expect(screen.getByText('Last row')).toBeTruthy();
 });
@@ -62,4 +72,26 @@ test('a failed accessibility query preserves the solid fallback', async () => {
     expect(screen.getByTestId('native-tabs').props.blurEffect).toBe('none');
     expect(screen.getByTestId('native-tabs').props.backgroundColor).toEqual(expect.any(String));
   } finally { jest.restoreAllMocks(); }
+});
+
+describe.each(['light', 'dark'] as const)('%s tab colours', mode => {
+  test.each(['ios', 'android', 'web'] as const)('%s preserves platform tab styling', async platform => {
+    jest.replaceProperty(Platform, 'OS', platform);
+    jest.spyOn(ReactNative, 'useColorScheme').mockReturnValue(mode);
+    const colors = createTheme(mode, 'sea');
+    await render(<ThemeProvider><AppTabs /></ThemeProvider>);
+    const props = screen.getByTestId('native-tabs').props;
+    expect(props.tintColor).toBe(colors.accent);
+    if (platform === 'ios') {
+      expect(props.iconColor).toBeUndefined();
+      expect(props.labelStyle).toBeUndefined();
+      expect(props.indicatorColor).toBeUndefined();
+    } else {
+      expect(props.iconColor).toEqual({ default: colors['text-muted'], selected: colors.accent });
+      expect(props.labelStyle).toEqual({
+        default: { color: colors['text-muted'] }, selected: { color: colors.text },
+      });
+      expect(props.indicatorColor).toBe(colors['surface-2']);
+    }
+  });
 });

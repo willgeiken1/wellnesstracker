@@ -1,3 +1,6 @@
+import * as ReactNative from 'react-native';
+import { Platform } from 'react-native';
+import { createTheme } from '../src/design/tokens';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -29,4 +32,24 @@ test.each([
   expect(router.push).toHaveBeenLastCalledWith('/settings');
   await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
   expect(router.push).toHaveBeenLastCalledWith('/settings');
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+describe.each(['light', 'dark'] as const)('%s tab header colours', mode => {
+  test.each(['ios', 'android', 'web'] as const)('%s uses the intended platform colours', async platform => {
+    jest.replaceProperty(Platform, 'OS', platform);
+    jest.spyOn(ReactNative, 'useColorScheme').mockReturnValue(mode);
+    const colors = createTheme(mode, 'sea');
+    await render(<ThemeProvider><HomeLayout /></ThemeProvider>);
+    const props = screen.getByTestId('tab-stack').props;
+    expect(props.contentStyle.backgroundColor).toBe(colors.bg);
+    if (platform === 'ios') {
+      expect(props.headerStyle).toBeUndefined();
+      expect(props.headerTintColor).toBe(colors.accent);
+    } else {
+      expect(props.headerStyle).toEqual({ backgroundColor: colors.surface });
+      expect(props.headerTintColor).toBe(colors.text);
+    }
+  });
 });

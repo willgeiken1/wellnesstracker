@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
@@ -8,7 +8,8 @@ import { touchTarget } from './button';
 export function TabRootLayout({ title }: { title: string }) {
   const { colors } = useTheme();
   const openSettings = () => router.push('/settings');
-  return <Stack screenOptions={{ contentStyle: { backgroundColor: colors.bg }, headerTintColor: colors.accent }}>
+  return <Stack screenOptions={{ contentStyle: { backgroundColor: colors.bg }, headerTintColor: Platform.OS === 'ios' ? colors.accent : colors.text,
+    headerStyle: Platform.OS === 'ios' ? undefined : { backgroundColor: colors.surface } }}>
     <Stack.Screen name="index" options={{ title, headerLargeTitleEnabled: true,
       // UIKit provides the standard bar button on iOS; Android/web use the same accessible action.
       unstable_headerRightItems: () => [{ type: 'button', label: t('openSettings'),

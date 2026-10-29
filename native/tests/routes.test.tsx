@@ -44,6 +44,13 @@ const routes = {
   'food/log': FoodLog, 'muscle/[key]': MusclePage,
 };
 
+test('the / route lands on the Home tab', async () => {
+  const result = await renderRouter(routes, { initialUrl: '/' });
+  expect(result.getPathname()).toBe('/');
+  expect(result.getSegments()).toEqual(['(tabs)', '(home)']);
+  expect(screen.getByRole('button', { name: 'Start freestyle' })).toBeTruthy();
+});
+
 test('Home opens the workout modal and provides a working exit', async () => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: 'Start freestyle' }));

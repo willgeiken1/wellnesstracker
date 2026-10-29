@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { NativeTabs } from 'expo-router/native-tabs';
 import { useTheme } from '@/design/theme-provider';
 import { tabs } from '@/features/shell/tabs';
@@ -15,6 +16,11 @@ export default function AppTabs() {
   const reduceTransparency = useReduceTransparency();
   return <NativeTabs backgroundColor={reduceTransparency ? colors.bg : undefined}
     blurEffect={reduceTransparency ? 'none' : undefined} tintColor={colors.accent}
+    iconColor={Platform.OS === 'ios' ? undefined : { default: colors['text-muted'], selected: colors.accent }}
+    labelStyle={Platform.OS === 'ios' ? undefined : {
+      default: { color: colors['text-muted'] }, selected: { color: colors.text },
+    }}
+    indicatorColor={Platform.OS === 'ios' ? undefined : colors['surface-2']}
     disableTransparentOnScrollEdge>
     {tabs.map(tab => <NativeTabs.Trigger key={tab.route} name={tab.route} accessibilityLabel={t(tab.label)}>
       <NativeTabs.Trigger.Label>{t(tab.label)}</NativeTabs.Trigger.Label>

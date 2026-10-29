@@ -4,9 +4,9 @@ Scope: `native/design/REDESIGN.md` §1.1, §3.5 and §3.7; INS-00 at ca00f9e; Wi
 
 The existing five NativeTabs labels and URLs are preserved. Each tab now owns an index route inside a native Stack, enabling the SDK 58 `headerLargeTitleEnabled` option. Settings stays a push from the avatar and also has a large title. iOS uses a UIKit bar button; Android/web retain a labeled action with the existing touch-target token.
 
-Screen scroll views use automatic content and indicator insets. Tab content additionally reserves the bottom inset supplied by the native safe-area provider, plus existing page spacing, without assuming a tab-bar height. Tests cover bottom insets of 0, 34 and 83 pt.
+Screen scroll views use automatic content and indicator insets. On iOS, automatic content insets handle the bottom safe area; tab content keeps only the existing page spacing. Android/web additionally reserve the bottom inset supplied by the safe-area provider, without assuming a tab-bar height. Tests cover bottom insets of 0, 34 and 83 pt.
 
-Reduce Transparency defaults to solid until the OS query resolves, remains solid on query failure, follows preference changes, and ignores a stale initial query after an event. The solid background uses the existing `bg` token. iOS 26 owns Liquid Glass rendering and its accessibility adaptation; the explicit background/blur fallback also covers older iOS versions. Standard tab colors come from the system, with only the accent tint applied.
+Reduce Transparency defaults to solid until the OS query resolves, remains solid on query failure, follows preference changes, and ignores a stale initial query after an event. The solid background uses the existing `bg` token. iOS 26 owns Liquid Glass rendering and its accessibility adaptation; the explicit background/blur fallback also covers older iOS versions. On iOS, standard tab colors come from the system, with only the accent tint applied. Android/web tab icons, labels and indicators use the existing theme tokens, and tab headers use the same surface/text tokens as Settings.
 
 The installed universal Expo UI Picker has no segmented mode. The iOS component therefore uses the SwiftUI Picker with `pickerStyle('segmented')`; Android uses Compose segmented buttons. Each native tree has a universal Host and uses only the current accent and mode. The existing web fallback remains. There were no custom sheets or switches in the shared shell requiring conversion.
 
@@ -14,25 +14,7 @@ No screen contents, tokens, body-map implementation/frame/props, Home widget mod
 
 Sources checked: [Expo native tabs](https://docs.expo.dev/router/advanced/native-tabs/), [SDK 58 Router](https://docs.expo.dev/versions/v58.0.0/sdk/router/), and installed SDK 58 package declarations.
 
-Skills loaded from `/home/willgeiken/.agents/skills/<name>/SKILL.md`:
-
-- incremental-implementation — thin shell slices.
-- expo-native-ui — native navigation and safe areas.
-- expo-ui and its universal reference — native segmented controls and Host API.
-- test-driven-development — failing behavior checks before fixes.
-- verification-before-completion — fresh commands before reporting results.
-- git-workflow-and-versioning — current-branch commit workflow.
-- commit-archaeologist — checked the original shell commits before restructuring routes.
-- debugging-and-error-recovery — investigate test and dependency failures.
-- scope-creep-detector — check the diff against INS-04 exclusions.
-- review-entry-point and identity-check — scope/risk guidance and branch/head identity.
-- test-gap-analysis — accessibility query and inset edge cases.
-- writing-clearly-and-concisely — task report.
-- documentation-and-adrs — shell implementation notes.
-
-Also loaded from `/home/willgeiken/.codex/plugins/cache/openai-curated-remote/superpowers/7.0.1/skills/<name>/SKILL.md`: using-superpowers, brainstorming, test-driven-development, verification-before-completion, systematic-debugging. The supplied redesign contract and explicit implementation request settle the design.
-
-Missing: the local skill wrappers reference `/workspace/library/skills/` recipes that are absent, including incremental-implementation, test-driven-development, verification-before-completion, git-workflow-and-versioning, commit-archaeologist, debugging-and-error-recovery, scope-creep-detector, writing-clearly-and-concisely, documentation-and-adrs and test-gap-analysis. No shared Insight design skill was found in the supplied skill catalog.
+Skills: native UI, Expo UI, test-driven development and verification (see repo guidance in `AGENTS.md` and `native/AGENTS.md`).
 
 Verification limitations:
 
