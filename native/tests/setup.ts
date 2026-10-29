@@ -9,7 +9,12 @@ jest.mock('@expo/ui', () => ({ Host: 'ExpoUIHost' }));
 jest.mock('@expo/ui/swift-ui', () => {
   const React = require('react');
   const { View, Pressable, Text: RNText } = require('react-native');
+  const Pass = ({children}: any) => React.createElement(View, {}, children);
+  const ContextMenu = Pass as any;
+  ContextMenu.Trigger = Pass; ContextMenu.Items = Pass;
   return {
+    ContextMenu, RNHostView: Pass,
+    Button: ({label,onPress}: any) => React.createElement(Pressable, {accessibilityRole:'button',accessibilityLabel:label,onPress}, React.createElement(RNText, {},label)),
     Text: ({ children, ...props }: any) => React.createElement(RNText,
       { ...props, allowFontScaling: true, maxFontSizeMultiplier: 0 }, children),
     Picker: ({ children, selection, onSelectionChange, ...props }: any) => React.createElement(View,

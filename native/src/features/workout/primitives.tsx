@@ -58,7 +58,7 @@ export const layout = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
 });
-export function Panel({
+export function WorkoutPanel({
   children,
   style,
   testID,
@@ -73,9 +73,8 @@ export function Panel({
       style={[
         layout.card,
         {
-          backgroundColor: colors.surface,
-          ...tokens.elevation.ios,
-          shadowOpacity: 0.08,
+          backgroundColor: colors["surface-2"],
+          borderRadius: tokens.radii.card,
         },
         style,
       ]}
@@ -83,6 +82,11 @@ export function Panel({
       {children}
     </View>
   );
+}
+/** Existing callers outside the workout presentation retain their current surface. */
+export function Panel({children,style,testID}: PropsWithChildren<{testID?:string;style?:ViewStyle}>) {
+  const {colors}=useTheme();
+  return <View testID={testID} style={[layout.card,{backgroundColor:colors.surface,...tokens.elevation.ios,shadowOpacity:0.08},style]}>{children}</View>;
 }
 export function Line({
   name,

@@ -1,3 +1,4 @@
+import { WorkoutError, WorkoutUnavailable } from "./view-state";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Alert, AppState, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from "react-native-safe-area-context";
@@ -21,7 +22,7 @@ import {
   IconButton,
   layout,
   Line,
-  Panel,
+  WorkoutPanel as Panel,
   SheetHost,
 } from "./primitives";
 import { Keypad, type Cursor } from "./keypad";
@@ -40,6 +41,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       routine?: string;
     }>(),
     [error, setError] = useState(false),
+    [attempt, setAttempt] = useState(0),
     [pastId, setPastId] = useState<string | null>(null),
     started = useRef(false);
   useEffect(() => {
@@ -58,9 +60,10 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     return () => {
       active = false;
     };
-  }, [store, routine, id, day]);
+  }, [store, routine, id, day, attempt]);
   const session = id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
-  return store && session ? (
+  if (!store) return <SafeAreaView style={{flex:1}}><WorkoutUnavailable auth={auth}/><Button label={t("closeWorkout")} onPress={closeWorkout}/></SafeAreaView>;
+  return session ? (
     <Logger
       key={session.id}
       fixtureState={fixtureState}
@@ -77,6 +80,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       }}
     >
       <ThemedText>{error ? t("workoutSaveError") : t("workout")}</ThemedText>
+      {error && <WorkoutError onRetry={() => {started.current=false;setError(false);setAttempt(value => value+1);}}/>}
       <Button label={t("closeWorkout")} onPress={closeWorkout} />
     </SafeAreaView>
   );
@@ -139,11 +143,14 @@ function Logger({
     drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
     total = drafts.length;
+  const retryAction = useRef<(() => void) | null>(null);
   function run(action: () => void) {
     try {
       action();
+      retryAction.current = null;
       setError(null);
     } catch {
+      retryAction.current = () => run(action);
       setError(t("workoutSaveError"));
     }
   }
@@ -219,11 +226,11 @@ function Logger({
         store.unit(cursor.entryId),
       ).valid
     ) {
+      retryAction.current = null;
       setError(t("invalidSet"));
       return;
     }
-    const commit = () => {
-      try {
+    const commit = () => run(() => {
         if (
           value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] &&
           !(
@@ -263,11 +270,7 @@ function Logger({
           if (nextEntry) edit(nextEntry.id, 0, "weight");
           else setCursor(null);
         }
-        setError(null);
-      } catch {
-        setError(t("workoutSaveError"));
-      }
-    };
+    });
     const baseline = store.sets(cursor.entryId).find((s) => s.id === d.setId);
     const check = validateSet(
       cursor.field === "weight" ? value : cursor.side ? d.rightWeight ?? "" : d.weight,
@@ -303,6 +306,7 @@ function Logger({
         : undefined,
     );
     if (!d.setId && !check.valid) {
+      retryAction.current = null;
       setError(t("invalidSet"));
       return;
     }
@@ -456,9 +460,7 @@ function Logger({
           />
         </View>
         {error && (
-          <ThemedText accessibilityRole="alert" variant="caption">
-            {error}
-          </ThemedText>
+          <WorkoutError message={error} onRetry={error === t('workoutSaveError') ? () => retryAction.current?.() : undefined}/>
         )}
       </View>
       <ScrollView
@@ -794,8 +796,7 @@ function JumpCard({ store, entry }: { store: WorkoutStore; entry: Row }) {
       ]}
       onAccessibilityAction={() => setVisible(false)}
       style={{
-        backgroundColor: colors["accent-tint"],
-        padding: 12,
+        paddingVertical: 8,
         borderRadius: 9,
         minHeight: 44,
         marginVertical: 2,
