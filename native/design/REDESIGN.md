@@ -101,7 +101,7 @@ Every PWA extra survives as an optional tray widget. "Default" = on the starting
 | 17 | `cardioMinutes` | Cardio minutes | none | no | panel | PWA extra |
 | 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Insights › Muscles |
 | 19 | `workoutPrint` | Workout print | none | no | panel | Contour fingerprint (D114) |
-| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). **Unblocked for INS-02/INS-05.** Ships with the 988 crisis card, matched on-device with no network call (Will, Oct 29 2026 4:46 AM CT). Importer ban and the egress-test gate: see Q-A (§8). |
+| 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). **Unblocked for INS-02/INS-05.** Ships with the 988 crisis card, matched on-device with no network call (Will, Oct 29 2026 4:46 AM CT). The PWA importer also brings old check-ins over (Will, Oct 29 2026 4:47 AM CT). Egress-test gate for the tile and the import: see Q-A (§8). |
 | 21 | `steps` | Steps | Apple Health or Oura | no | panel | |
 | 22 | `sleepDuration` | Sleep duration | Apple Health or Oura | no | panel | |
 | 23 | `hrv` | HRV | Apple Health or Oura | no | panel | |
@@ -142,6 +142,7 @@ Fitbit and WHOOP are later services (I9). Their widgets are stubs in the registr
   - [ ] The Score ring is in the header on day 1 at 32 pt, with "Needs N more days" as a 13 pt semibold caption beside or under it (never inside the ring); no clipping at the largest Dynamic Type size.
   - [ ] Edit dot + one-time glow are wired to INS-02 state, with no modal API.
   - [ ] Crisis card: the 988 card shows when crisis words are matched on the phone, and the matching makes no network call (test asserts no fetch/network API is called during matching).
+  - [ ] Check-in import gate: the PWA check-in import can't ship until the egress tests (sentry-scrub, usage, describe) include mood, energy and stress as sentinel fields; imported values never reach AI, Sentry, PostHog or food AI payloads.
   - [ ] INS-02 and INS-05 gate: the `checkIn` tile can't ship until the egress tests (sentry-scrub, usage, describe) include mood, energy and stress as sentinel fields (Q-A).
   - [ ] "No data from Health yet" opens the sheet.
   - [ ] Largest Dynamic Type: no clipping.
@@ -340,7 +341,7 @@ Theme ids are the camelCase palette names in the table (`seaGlassTide` … `holo
 Keep the order: **1. map (Home), 2. logger (Train), 3. AI food (Eat: Snap / Describe)**. The store shots wait for M3-01 (the Home map hero). They're captured with demo/synthetic data only, after INS-12 QA.
 
 ## 8. Open questions for Will (do not resolve in code)
-- **Q-A (resolved):** Check-ins stay in the native app as an optional tray tile (mood, energy, stress) that syncs for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). Mood, energy and stress never go to AI, Sentry or PostHog (AGENTS.md rules 1 and 6); the 988 crisis card ships with the tile (Will, Oct 29 2026 4:46 AM CT, lifts the earlier ban): crisis words are matched on the phone with no network call. Importer check-in data stays banned until Will rules. **Before the tile ships**, the egress test must cover the mood, energy and stress fields.
+- **Q-A (resolved):** Check-ins stay in the native app as an optional tray tile (mood, energy, stress) that syncs for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). Mood, energy and stress never go to AI, Sentry or PostHog (AGENTS.md rules 1 and 6); the 988 crisis card ships with the tile (Will, Oct 29 2026 4:46 AM CT, lifts the earlier ban): crisis words are matched on the phone with no network call. The PWA importer brings old mood, energy and stress check-ins over (Will, Oct 29 2026 4:47 AM CT, lifts the earlier importer ban); imported values stay out of AI, Sentry, PostHog and food AI payloads. **Before either the tile or the import ships**, the egress tests must cover the mood, energy and stress fields as sentinels.
 - **Q-B (resolved):** The full Score appears at **7 days** of data; before that, Home shows the "Needs N more days" countdown ring. Not 28 days (I8/Q7).
 - **Q-C:** Water colour per palette (v2 has one shared placeholder that sits close to `recovery` blue).
 - **Q-D:** "Once per session" is defined here as once per process launch, so a foreground return doesn't replay it. Confirm.
