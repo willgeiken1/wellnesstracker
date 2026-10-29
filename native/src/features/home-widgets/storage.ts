@@ -76,3 +76,9 @@ export function homeWidgetStoreFor(storage: HomeWidgetStorage | null | undefined
   stores.set(owner, store);
   return store;
 }
+
+/** Drops the cached store for an owner (or all owners) so the next caller reloads from storage. Sign-out calls this after the wipe. */
+export function resetHomeWidgetStores(owner?: string) {
+  if (owner === undefined) stores.clear();
+  else stores.delete(owner);
+}

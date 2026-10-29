@@ -9,6 +9,7 @@ import {
 } from '../src/features/home-widgets';
 import { HOME_WIDGETS_KEY, loadHomeWidgets } from '../src/features/home-widgets/storage';
 import { useHomeWidgets } from '../src/features/home-widgets/use-home-widgets';
+import { completeSignOut } from '../src/auth/sign-out';
 import { memoryRepository } from './workout-repository';
 
 const ownedBy = (owner: string) => Object.assign(memoryRepository(), { owner });
@@ -328,6 +329,26 @@ describe('useHomeWidgets', () => {
 });
 
 describe('shared store per owner (B3)', () => {
+  it('starts fresh when the same owner signs out and back in (R4-1)', async () => {
+    const owner = 'owner-resign';
+    const before = ownedBy(owner);
+    const old = await renderHook(() => useHomeWidgets(before));
+    await act(async () => { old.result.current.remove('bodyMap'); old.result.current.connectService('oura'); });
+    const marker = { owner, startedAt: 1, phase: 'pending' as const };
+    const storage = { read: async () => null, write: async () => {}, remove: async () => {} };
+    const wiped = Object.assign(before, { wipe: () => { before.localSave(HOME_WIDGETS_KEY, undefined); } });
+    await completeSignOut(marker, wiped as never, storage, async () => {});
+    const after = ownedBy(owner); // new repository over empty storage
+    const fresh = await renderHook(() => useHomeWidgets(after));
+    expect(fresh.result.current.layout).toEqual(DEFAULT_LAYOUT);
+    expect(fresh.result.current.services).toEqual([]);
+    await act(async () => { fresh.result.current.remove('foodRing'); });
+    expect(loadHomeWidgets(after).layout).not.toContain('foodRing');
+    expect(loadHomeWidgets(after).layout).toContain('bodyMap');
+    expect(loadHomeWidgets(before).layout).toContain('bodyMap'); // old repository is never written again
+    const second = { owner, localGet: after.localGet, localSave: after.localSave };
+    expect(homeWidgetStoreFor(second)).toBe(homeWidgetStoreFor(after));
+  });
   it('reuses one store per owner and repository, and a new one for another owner', () => {
     const a = ownedBy('owner-a');
     expect(homeWidgetStoreFor(a)).toBe(homeWidgetStoreFor(a));

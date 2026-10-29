@@ -1,4 +1,5 @@
 import type { Repository } from '../data/repository';
+import { resetHomeWidgetStores } from '../features/home-widgets/storage';
 export interface SignOutMarker { owner: string; startedAt: number; phase: 'pending' | 'wiped' | 'session-cleared' }
 export interface SignOutStorage {
   read(): Promise<SignOutMarker | null>; write(marker: SignOutMarker): Promise<void>; remove(): Promise<void>;
@@ -19,6 +20,7 @@ export async function completeSignOut(marker: SignOutMarker, repo: Repository, s
   if(repo.owner!==marker.owner)throw new Error('Sign-out owner mismatch.');
   if(marker.phase==='pending') {
     repo.wipe(); // All owner data and sync metadata in one SQLite transaction.
+    resetHomeWidgetStores(marker.owner); // The cached widget store would otherwise restore the wiped layout.
     marker={...marker,phase:'wiped'};await storage.write(marker);
   }
   if(marker.phase==='wiped') {
@@ -35,6 +37,7 @@ export class UnreadableSignOutMarker extends Error {
 /** No checkpoints: a retained corrupt/unreadable marker repeats all steps safely. */
 export async function escapeSignOut(database: {wipeAll():void}, storage: SignOutStorage, clearSession:()=>Promise<void>) {
   database.wipeAll();
+  resetHomeWidgetStores();
   await clearSession();
   await storage.remove();
 }
