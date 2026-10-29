@@ -5,7 +5,10 @@ jest.mock('expo-symbols', () => ({ SymbolView: 'SymbolView' }));
 jest.mock('expo/fetch', () => ({ fetch: (...args: Parameters<typeof fetch>) => global.fetch(...args) }));
 
 // Native Expo UI hosts cannot mount in Jest. Preserve picker selection and modifier props.
-jest.mock('@expo/ui', () => ({ Host: 'ExpoUIHost' }));
+jest.mock('@expo/ui', () => {
+ const React=require('react'),{View}=require('react-native');
+ return {Host:'ExpoUIHost',RNHostView:View,BottomSheet:({isPresented,children,...props}:any)=>isPresented?React.createElement(View,props,children):null};
+});
 jest.mock('@expo/ui/swift-ui', () => {
   const React = require('react');
   const { View, Pressable, Text: RNText } = require('react-native');

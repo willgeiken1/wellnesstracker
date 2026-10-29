@@ -1,5 +1,7 @@
-// Shell-only fixtures have no signed-in repository; feature behavior is covered by body-ui.
-jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
+// Most shell fixtures have no repository. Food's controls require a loaded synthetic repository.
+let mockFoodRepository: ReturnType<typeof memoryRepository>|null=null;
+jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:mockFoodRepository})}));
+import { memoryRepository } from './workout-repository';
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
@@ -61,6 +63,7 @@ test.each([
   const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...getDimensions(key), fontScale: 2 }));
   const fontScale = jest.spyOn(PixelRatio, 'getFontScale').mockReturnValue(2);
   try {
+    if (_name === 'Food tab') mockFoodRepository=memoryRepository();
     const result = await render(<ThemeProvider><Component /></ThemeProvider>);
     // Walk host responders independently of role queries: missing roles must not hide controls.
     const pressables = result.container.queryAll(node => typeof node.props.onPress === 'function' ||
@@ -96,5 +99,5 @@ test.each([
         expect(style.maxHeight).toBeUndefined();
       }
     }
-  } finally { dimensions.mockRestore(); fontScale.mockRestore(); }
+  } finally { mockFoodRepository=null; dimensions.mockRestore(); fontScale.mockRestore(); }
 });

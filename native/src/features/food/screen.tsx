@@ -2,23 +2,30 @@ import { FoodAiEntry } from './ai/entry';
 import { FoodAiResults, FoodAiMorningReview, LocalMealThumbnail } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { useEffect, useState } from 'react';
-import { AppState, View } from 'react-native';
+import { AppState, Pressable, SectionList, View } from 'react-native';
 import type { Repository } from '../../data/repository';
 import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import { t } from '../../i18n/en';
 import { today } from '../onboarding/model';
 import { Field } from '../onboarding/fields';
-import { Panel } from '../workout/primitives';
+import { FoodPanel as Panel, FoodLabel, FoodLoading, FoodUnavailable, FoodReadBoundary } from './presentation';
+import { FoodTargetsSheet } from './targets-sheet';
+import { WaterSlot } from './water-slot';
+import { Icon } from '../../components/icon';
+import { tokens } from '../../design/tokens';
+import { useTheme } from '../../design/theme-provider';
 import { useFoodRevision } from './use-food-revision';
 import { FoodAction } from './action';
 import { FoodScanner } from './scanner';
 import { FoodEntry } from './entry';
-import { FoodTargets } from './targets';
 import { FoodCalendar } from './calendar';
 import { CalorieRing } from './ring';
 import { allFavorites, attributedDay, combos, copyYesterday, deleteFood, favorites, foodTargets, logCombo, meals, recentFoods, saveCombo, saveFood, saveMeal, saveReusable, shiftDay, toggleFavorite, totals, undoFood, type Food, type Undo } from './model';
-export function FoodScreen({repository,initialManual=false}:{repository:Repository;initialManual?:boolean}) {
+export function FoodScreen({repository,error,initialManual=false}:{repository:Repository|null;error?:string|null;initialManual?:boolean}) {
+ return repository?<FoodReadBoundary key={repository.owner}><FoodContent repository={repository} initialManual={initialManual}/></FoodReadBoundary>:error?<FoodUnavailable error={error}/>:<FoodLoading/>;
+}
+function FoodContent({repository,initialManual=false}:{repository:Repository;initialManual?:boolean}) {
  // Repository reads are mutable method calls; do not memoize derived values by object identity.
  'use no memo';
  const [reviewClock,setReviewClock]=useState(()=>today()+':'+attributedDay());
@@ -26,8 +33,10 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const [fallbackId,setFallbackId]=useState<number|undefined>();
  const [aiMode,setAiMode]=useState<'snap'|'describe'|null>(null);
  const [scanning,setScanning]=useState(false);
+ const [mealOptions,setMealOptions]=useState<string|null>(null),[foodOptions,setFoodOptions]=useState<string|null>(null);
+ const {colors}=useTheme();
  const revision=useFoodRevision(repository),repo=repository;
- const [day,setDay]=useState(()=>attributedDay()),[calendar,setCalendar]=useState(false),[fan,setFan]=useState(false);
+ const [day,setDay]=useState(()=>attributedDay()),[calendar,setCalendar]=useState(false),[targetsOpen,setTargetsOpen]=useState(false);
  const mealList=meals(repo),[selectedMeal,setSelectedMeal]=useState(mealList[0].id);
  const [entry,setEntry]=useState<{initial?:Food;id?:string;meal:string}|null>(initialManual?{meal:mealList[0].id}:null),[library,setLibrary]=useState(false);
  const [rename,setRename]=useState<{id?:string;name:string}|null>(null),[combo,setCombo]=useState<{meal:string;name:string}|null>(null);
@@ -46,18 +55,28 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   </View>
   {calendar&&<FoodCalendar day={day} today={today()} onSelect={chooseDay}/>}
   {early&&(day===attributedDay()||day===today())&&<><ThemedText>{t('foodEarly').replace('{day}',day)}</ThemedText><Button variant="secondary" label={t(day===today()?'foodUsePrevious':'foodUseToday')} onPress={()=>chooseDay(day===today()?attributedDay():today())}/></>}
-  <CalorieRing total={total} target={targets.targets} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/>
+  {repo.owner==='demo'&&<FoodLabel accessibilityLabel={t('exampleData')} style={{alignSelf:'flex-start',backgroundColor:colors['surface-2'],paddingHorizontal:8,paddingVertical:4,borderRadius:tokens.radii.input}}>{t('exampleData')}</FoodLabel>}
+  <Panel><CalorieRing total={total} target={targets.targets} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/><Button label={t('foodTargetsInfo')} variant="secondary" onPress={()=>setTargetsOpen(true)}/></Panel>
+  <FoodTargetsSheet repo={repo} day={day} revision={revision} open={targetsOpen} onClose={()=>setTargetsOpen(false)}/>
   <FoodAiMorningReview key={reviewClock} repo={repo}/>
   <FoodAiResults repo={repo} onDescribe={id=>{setScanning(false);setEntry(null);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{setScanning(false);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>
-  <ThemedText muted>{t('foodBurned')}</ThemedText>
-  <Panel><FoodTargets key={day} repo={repo} day={day} revision={revision}/></Panel>
-  <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>
-   {(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><View key={method} style={{flexGrow:1}}><Button label={t(method)} variant="secondary" onPress={()=>{
-    setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else if(method==='foodSaved'){setLibrary(!library);setEntry(null);}else setStatus(t('foodLater').replace('{method}',t(method)));
-   }}/></View>)}
+  <View testID="food-log-actions" style={{gap:8}}>
+   <View style={{flexDirection:'row',backgroundColor:colors['surface-2'],borderRadius:tokens.radii.input,overflow:'hidden'}}>
+    {(['foodSnap','foodScan','foodManual'] as const).map(method=><Pressable key={method} accessibilityRole="button" accessibilityLabel={t(method)} style={({pressed})=>({flex:1,minHeight:48,minWidth:44,padding:8,alignItems:'center',justifyContent:'center',opacity:pressed?0.7:1})} onPress={()=>{
+     setAiMode(null);setScanning(false);setEntry(null);setLibrary(false);
+     if(method==='foodScan')setScanning(true);
+     else if(method==='foodSnap')setAiMode('snap');
+     else setEntry({meal:selectedMeal});
+    }}><FoodLabel>{t(method)}</FoodLabel></Pressable>)}
+   </View>
+   <View style={{flexDirection:'row',gap:8}}>
+    <Button label={t('foodDescribe')} variant="secondary" onPress={()=>{setAiMode('describe');setScanning(false);setEntry(null);setLibrary(false);}}/>
+    <Button label={t('foodSaved')} variant="secondary" onPress={()=>{setLibrary(!library);setEntry(null);setAiMode(null);setScanning(false);}}/>
+   </View>
   </View>
-  <FoodAction label={t('foodFan')} onPress={()=>setFan(!fan)}>{fan?'−':'+'}</FoodAction>
-  {fan&&<View style={{gap:4}}>{(['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const).map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual')setEntry({meal:selectedMeal});else if(method==='foodSaved')setLibrary(true);else setStatus(t('foodLater').replace('{method}',t(method)));}}/>)}</View>}
+  <WaterSlot/>
+  <FoodLabel accessibilityRole="header">{t('foodMeals')}</FoodLabel>
+  {!rows.length&&<Panel><Icon name="food"/><FoodLabel>{t('foodNothingLogged')}</FoodLabel><Button label={t('foodLogBreakfast')} onPress={()=>{setSelectedMeal(mealList[0].id);setEntry({meal:mealList[0].id});setAiMode(null);setScanning(false);setLibrary(false);}}/></Panel>}
   <ThemedText>{t('foodChooseMeal')}</ThemedText>
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>{mealList.map(meal=><Button key={meal.id} label={meal.name} selected={selectedMeal===meal.id} variant="secondary" onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
@@ -69,26 +88,33 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    {([{title:'foodSaved',foods:repo.list('saved_foods').map((r):Food=>({...r.data,saved_food_id:r.id,amount_g:r.data.serving_g??null}))},{title:'foodRecent',foods:recentFoods(repo)},{title:'foodFavorites',foods:allFavorites(repo,selectedMeal)}] as const).map(section=><View key={section.title} style={{gap:6}}><ThemedText variant="headline">{t(section.title)}</ThemedText>{!section.foods.length&&<ThemedText muted>{t('foodNoSaved')}</ThemedText>}{section.foods.map((food,i)=><Button key={i} variant="secondary" label={t('foodLogSaved').replace('{name}',String(food['name']))} onPress={()=>log(food)}/>)}</View>)}
    <ThemedText variant="headline">{t('foodCombos')}</ThemedText>{combos(repo).map((item,i)=><Button key={i} variant="secondary" label={t('foodLogSaved').replace('{name}',item.name)} onPress={()=>run(()=>{logCombo(repo,item,day,selectedMeal);setLibrary(false);})}/>)}
   </Panel>}
-  {mealList.map(meal=><Panel key={meal.id}>
-   <ThemedText variant="headline">{meal.name}</ThemedText>
+  <SectionList testID="food-meals" scrollEnabled={false} sections={mealList.map(meal=>({key:meal.id,data:[meal]}))} keyExtractor={meal=>meal.id} renderItem={({item:meal})=><View style={{gap:8,paddingVertical:16}}>
+   <FoodLabel accessibilityRole="header">{meal.name}</FoodLabel>
    <View style={{flexDirection:'row',flexWrap:'wrap',gap:4}}>{favorites(repo,meal.id).map((food,i)=><Button key={i} label={t('foodLogSaved').replace('{name}',String(food.name))} variant="secondary" onPress={()=>run(()=>{saveFood(repo,day,meal.id,food);})}/>)}</View>
-   <Button label={t('foodRename').replace('{name}',meal.name)} variant="secondary" onPress={()=>setRename({id:meal.id,name:meal.name})}/>
-   {rows.filter(row=>row.data.meal_id===meal.id).map(row=><View key={row.id} style={{gap:6}}>
+   <Button label={t('foodMealOptions').replace('{name}',meal.name)} variant="secondary" onPress={()=>setMealOptions(mealOptions===meal.id?null:meal.id)}/>
+   {mealOptions===meal.id&&<Button label={t('foodRename').replace('{name}',meal.name)} variant="secondary" onPress={()=>setRename({id:meal.id,name:meal.name})}/>}
+   {rows.filter(row=>row.data.meal_id===meal.id).map(row=><View key={row.id} style={{gap:6,paddingVertical:8}}>
     <LocalMealThumbnail data={aiState(repo).entries[row.id]?.thumbnail}/>
     {aiState(repo).entries[row.id]?.confirmed===false&&<View style={{borderWidth:1,borderStyle:'dashed',padding:6}}><ThemedText>{t('foodAiPending')}</ThemedText><Button label={t('foodAiConfirm').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>confirmEstimate(repo,row.id)}/></View>}
-    <ThemedText>{String(row.data.name)}</ThemedText><ThemedText>{t('foodEnergy').replace('{value}',row.data.energy_kj==null?'—':String(Math.round(Number(row.data.energy_kj)/4.184)))}</ThemedText>
+    <Pressable accessibilityRole="button" accessibilityLabel={t('foodEntryDetails').replace('{name}',String(row.data.name))} accessibilityState={{expanded:foodOptions===row.id}} onPress={()=>setFoodOptions(foodOptions===row.id?null:row.id)} style={({pressed})=>({minHeight:48,gap:4,opacity:pressed?0.7:1})}>
+     <FoodLabel>{String(row.data.name)}</FoodLabel><ThemedText numeric>{row.data.amount_g==null?t('foodAmountNotRecorded'):`${row.data.amount_g} g`} · {t('foodEnergy').replace('{value}',row.data.energy_kj==null?'—':String(Math.round(Number(row.data.energy_kj)/4.184)))}</ThemedText>
+    </Pressable>
+    {foodOptions===row.id&&<>
     <Button label={t('foodEdit').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>{setAiMode(null);setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
     <Button label={t('foodDelete').replace('{name}',String(row.data.name))} variant="destructive" onPress={()=>run(()=>setUndo(deleteFood(repo,row.id)))}/>
     <Button label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
-    <Button label={t('foodKeep').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>{saveReusable(repo,row.data);})}/>
+    <Button label={t('foodKeep').replace('{name}',String(row.data.name))} variant="secondary" onPress={()=>run(()=>{saveReusable(repo,row.data);})}/></>}
+   <MealSeparator/>
    </View>)}
    {!rows.some(r=>r.data.meal_id===meal.id)&&<ThemedText muted>{t('foodEmptyMeal')}</ThemedText>}
-   <Button label={t('foodCopy').replace('{name}',meal.name)} variant="secondary" onPress={()=>run(()=>copyYesterday(repo,day,meal.id))}/>
-   <Button label={t('foodSaveCombo').replace('{name}',meal.name)} variant="secondary" disabled={!rows.some(r=>r.data.meal_id===meal.id)} onPress={()=>setCombo({meal:meal.id,name:meal.name})}/>
-  </Panel>)}
+   {mealOptions===meal.id&&<><Button label={t('foodCopy').replace('{name}',meal.name)} variant="secondary" onPress={()=>run(()=>copyYesterday(repo,day,meal.id))}/>
+   <Button label={t('foodSaveCombo').replace('{name}',meal.name)} variant="secondary" disabled={!rows.some(r=>r.data.meal_id===meal.id)} onPress={()=>setCombo({meal:meal.id,name:meal.name})}/></>}
+  </View>} renderSectionFooter={()=> <MealSeparator/>}/>
   <Button label={t('foodAddMeal')} variant="secondary" onPress={()=>setRename({name:''})}/>
   {rename&&<Panel><Field label={t('foodMealName')} value={rename.name} onChange={name=>setRename({...rename,name})}/><Button label={t('foodSaveMeal')} onPress={()=>run(()=>{saveMeal(repo,rename.name,rename.id);setRename(null);})}/><Button label={t('cancel')} variant="secondary" onPress={()=>setRename(null)}/></Panel>}
   {combo&&<Panel><Field label={t('foodComboName')} value={combo.name} onChange={name=>setCombo({...combo,name})}/><Button label={t('foodComboSave')} onPress={()=>run(()=>{saveCombo(repo,day,combo.meal,combo.name);setCombo(null);})}/><Button label={t('cancel')} variant="secondary" onPress={()=>setCombo(null)}/></Panel>}
   <Panel>{(['fiber_g','sugar_g','sodium_mg'] as const).map((key,i)=><ThemedText key={key}>{t((['foodFiber','foodSugar','foodSodium'] as const)[i])}{': '}{total[key]===null?'':String(Math.round(total[key]! *10)/10)}</ThemedText>)}<ThemedText muted>{t('foodUnknown')}</ThemedText></Panel>
  </View>;
 }
+
+function MealSeparator(){const {colors}=useTheme();return <View style={{height:1,backgroundColor:colors['surface-2']}}/>;}

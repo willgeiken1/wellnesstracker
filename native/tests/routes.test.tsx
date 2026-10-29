@@ -95,12 +95,13 @@ test.each([
   await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
   expect(result.getPathname()).toBe('/');
 });
-test('Food without a repository opens logging and returns Home', async () => {
+test('Food without a repository waits for loading and the Home tab remains reachable', async () => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: 'Food' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
-  expect(result.getPathname()).toBe('/food/log');
-  await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
+  expect(result.getPathname()).toBe('/food');
+  expect(screen.getByLabelText('Loading food log')).toBeTruthy();
+  expect(screen.queryByText('Nothing logged today')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Home' }));
   expect(result.getPathname()).toBe('/');
 });
 

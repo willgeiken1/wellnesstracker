@@ -14,6 +14,7 @@ test('four meals, manual entry names day, blank nutrients, edit portions, delete
  await fireEvent.changeText(screen.getByLabelText('Calories (kcal)'),'100');
  await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));
  expect(repo.list('food_entries')).toHaveLength(1);expect(screen.getByText('Synthetic oats')).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Details for Synthetic oats'}));
  await fireEvent.press(screen.getByRole('button',{name:'Edit Synthetic oats'}));
  await fireEvent.changeText(screen.getByLabelText('Portion multiplier'),'2');await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));
  expect(repo.list('food_entries')[0].data.energy_kj).toBeCloseTo(836.8);
@@ -25,6 +26,7 @@ test('past day selected explicitly, future blocked, missing stats inline target 
  expect(screen.getByRole('button',{name:'Next food day'})).toBeDisabled();
  await fireEvent.press(screen.getByRole('button',{name:'Previous food day'}));await fireEvent.press(screen.getByRole('button',{name:'Manual'}));
  expect(screen.getByRole('button',{name:'Save to 2026-10-26'})).toBeTruthy();await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Food targets info'}));
  await fireEvent.press(screen.getByRole('button',{name:'Set food targets'}));
  for(const [label,value] of [['Target calories (kcal)','2000'],['Target protein (g)','100'],['Target carbs (g)','250'],['Target fat (g)','67']])await fireEvent.changeText(screen.getByLabelText(label),value);
  await fireEvent.press(screen.getByRole('button',{name:'Save targets'}));expect(repo.list('food_targets')).toHaveLength(1);
@@ -39,8 +41,10 @@ test('saved foods, favorites, combos, copy yesterday, rename/add meals persist t
  await fireEvent.press(screen.getByRole('button',{name:'Previous food day'}));await fireEvent.press(screen.getByRole('button',{name:'Manual'}));
  await fireEvent.changeText(screen.getByLabelText('Food name'),'Synthetic toast');await fireEvent.changeText(screen.getByLabelText('Calories (kcal)'),'120');
  await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-26'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Details for Synthetic toast'}));
  await fireEvent.press(screen.getByRole('button',{name:'Favorite Synthetic toast'}));await fireEvent.press(screen.getByRole('button',{name:'Save Synthetic toast for later'}));
  expect(repo.list('saved_foods')).toHaveLength(1);
+ await fireEvent.press(screen.getByRole('button',{name:'Options for Breakfast'}));
  await fireEvent.press(screen.getByRole('button',{name:'Save Breakfast as combo'}));await fireEvent.press(screen.getByRole('button',{name:'Save combo'}));
  await fireEvent.press(screen.getByRole('button',{name:'Next food day'}));await fireEvent.press(screen.getByRole('button',{name:'Copy yesterday to Breakfast'}));
  expect(repo.list('food_entries').filter(r=>r.data.day==='2026-10-27')).toHaveLength(1);
@@ -65,7 +69,7 @@ test('failed save retains form, and failed Undo keeps Undo action available',asy
  await fireEvent.changeText(screen.getByLabelText('Food name'),'Synthetic rice');
  const save=jest.spyOn(repo,'save').mockImplementation(()=>{throw new Error('Synthetic failure');});
  await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));expect(screen.getByRole('alert')).toBeTruthy();expect(screen.getByLabelText('Food name')).toHaveDisplayValue('Synthetic rice');
- save.mockRestore();await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic rice'}));
+ save.mockRestore();await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));await fireEvent.press(screen.getByRole('button',{name:'Details for Synthetic rice'}));await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic rice'}));
  const restore=jest.spyOn(repo,'save').mockImplementation(()=>{throw new Error('Synthetic failure');});await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(screen.getByRole('button',{name:'Undo delete'})).toBeTruthy();
  restore.mockRestore();await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(repo.list('food_entries')).toHaveLength(1);
 });
@@ -75,5 +79,6 @@ test('repository revisions refresh totals and targets without reopening the scre
  await act(()=>{repo.save('food_entries',{day:'2026-10-27',meal_id:'fd000000-0000-4000-8000-000000000000',name:'Synthetic fruit',energy_kj:418.4});repo.save('food_targets',{day:'2026-10-27',energy_kj:836.8,protein_g:10,carbs_g:40,fat_g:4});repo.localSave('targetBasis','manual');});
  expect(foodTargets(repo,'2026-10-27').targets!.energy_kj).toBe(836.8);
  expect(screen.getByRole('image',{name:'100 kcal of 200; protein — g, carbs — g, fat — g'})).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Food targets info'}));
  expect(screen.getByText('Daily targets (manual)')).toBeTruthy();
 });

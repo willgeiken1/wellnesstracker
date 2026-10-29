@@ -20,10 +20,10 @@ test('permission is just in time; denied camera retains manual code and food ent
  expect(mockRequest).toHaveBeenCalledTimes(1);expect(screen.getByLabelText('Barcode number')).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Enter food manually'}));expect(screen.getByLabelText('Food name')).toBeTruthy();expect(mockHttp).not.toHaveBeenCalled();
 });
-test('fan Scan opens camera; torch and barcode callback; cached serving selection reaches editable entry',async()=>{
+test('split Scan opens camera; torch and barcode callback; cached serving selection reaches editable entry',async()=>{
  const repo=memoryRepository();repo.localSave('barcode:v2',{[code]:{fetchedAt:Date.now(),product:{food:{name:'Synthetic cereal',energy_kj:418.4,protein_g:0,carbs_g:0,fat_g:0,amount_g:100},servingGrams:40}}});
  await render(<FoodScreen repository={repo}/>,{wrapper});
- await fireEvent.press(screen.getByRole('button',{name:'More food logging options'}));await fireEvent.press(screen.getByRole('button',{name:'+ Scan'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Scan'}));
  mockRequest.mockResolvedValue({granted:true});await fireEvent.press(screen.getByRole('button',{name:'Open barcode camera'}));
  await fireEvent.press(screen.getByRole('button',{name:'Turn torch on'}));expect(mockCameraProps.enableTorch).toBe(true);
  await act(async()=>{await mockCameraProps.onBarcodeScanned({data:code});});
