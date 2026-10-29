@@ -1,0 +1,20 @@
+{
+  "base": "d668adb",
+  "element": "<BodyAtlas sessions={sessions} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>",
+  "files": {
+    "native/assets/atlas/SOURCES.md": "8567a655494314976a232677e21d50aa21866474c19645544cfcd714e40c15de",
+    "native/assets/atlas/female-back.svg": "af7dfbf44713da3db8fd3eca6e072ae328e597f03ae3bfd0c7167f12b31271a6",
+    "native/assets/atlas/female-front.svg": "d8556ba8b361b65c587877063ad90c0beb968781f7518df49e1a1d8cde15e18e",
+    "native/assets/atlas/geometry.json": "ededec635708fb96277cb394fd7f6ed2100f90a92fdc8cabd561af9d10f02554",
+    "native/assets/atlas/male-back.svg": "7ffad9f5310739b8ccd197c7bdffffba93111cec9bb5e311bc9f09548afbd7e5",
+    "native/assets/atlas/male-front.svg": "fd56e1daf474687333fe57ead6db03a48952d3452338bdb38b99787fa1b9d20b",
+    "native/assets/atlas/muscles.json": "78c0049e40ecb24cc0728b337823acc62caae71c9d7dc73c48b149dc7fb18f2f",
+    "native/src/app/muscle/[key].tsx": "94e922e21a83a03e8b3fa0ff5cdbb126d2c616b707fbd87384337fa78d23c34c",
+    "native/src/features/atlas/accessible-path.tsx": "80267e8d7666a36f76cb2e3ecf2a875fa7e86a24cc94a370b2687e7b7bc938b7",
+    "native/src/features/atlas/body-atlas.tsx": "1278511e1b884c6d7810dc6aa0948e6374caf2384ffc1d8171c9a31a9c89f8c4",
+    "native/src/features/atlas/geometry.ts": "897d9003af70dbb9a3f5d6fa0520f67d6af6801904eb4c972e45c764fa8cb03a",
+    "native/src/features/atlas/muscles.ts": "5e00156c7cee833ec67890c3583cf5fa5f830483ac0d30f384ac68406797d523",
+    "native/src/features/atlas/read-logs.ts": "e87ec25c73ca5e8515ac19b5874283f0847209c23f6726742bd112025a7e2bdb",
+    "native/src/features/atlas/volume.ts": "e4cb92d69ca0c86c5827f274c3e9bd766211256fdc7f627a7c077dfb38919a9a"
+  }
+}
