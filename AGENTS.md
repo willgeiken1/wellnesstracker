@@ -54,3 +54,10 @@ Local builds are free. **No paid EAS builds**; free-tier EAS only when the plan 
 
 ## 6. Definition of done
 Typecheck, lint, Jest and `npm test` green · golden fixtures match · egress/leak test passes (no health fields in AI/Sentry/PostHog payloads) · dev build launches on **iOS simulator** and **Pixel emulator** · screenshots attached · plan section + Q numbers cited.
+
+## Decision biases (adopted Oct 29, 2026; check-in Nov 5)
+Will's decision biases (tie-breaks only; never override a hard rule, gate or approval requirement):
+- Fast vs polished (Oct 29 2026, any build/ship choice): ship fast when easy to undo; polish when not.
+- Simple vs flexible (Oct 29 2026, design/architecture): flexible only with 2+ real named reuses or <=20% extra cost; otherwise simple but easy to upgrade.
+- Quality vs usage (Oct 29 2026, model/effort/spend): quality for anything Will sees or ships; cheap for behind-the-scenes work.
+- Settled earlier (standing): free over paid without his OK; safety rules over speed; test and diagnose before dropping an idea.
