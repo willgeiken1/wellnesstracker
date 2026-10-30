@@ -243,8 +243,8 @@ export class FoodAiService {
     private tier: () => Entitlement = () => 'free',
   ) {}
   // Snap reserves a free try when a valid photo is queued, including offline.
-  // Describe reserves before sending and releases that try when the request fails
-  // or never completes, including offline. Queued photo retries do not charge again.
+  // Describe reserves before sending. A genuine failure or offline send releases
+  // that try; a cancel keeps it. Queued photo retries do not charge again.
   // Plus daily caps still count reserved attempts, including failures.
   private allowanceUsage(): FoodAiUsage['daily'] {
     const stored = this.repo.localGet<FoodAiUsage['daily']>('foodAiDailyAllowance');
@@ -318,8 +318,10 @@ export class FoodAiService {
         throw new Error(t("foodAiConsentRequired"));
       return parseEstimates(result);
     } catch (error) {
-      // A failed or offline Describe must not spend a free try. Photo retries keep theirs.
-      if (chargedDescribe) {
+      // Refund only a genuine failure or offline send. Cancel keeps the free try.
+      const cancelled = error instanceof FoodAiCancelledError
+        || (controller.signal.aborted && aiState(this.repo).consent);
+      if (chargedDescribe && !cancelled) {
         try { this.releaseAllowance('descriptions'); } catch { /* Keep the request failure. */ }
       }
       if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();

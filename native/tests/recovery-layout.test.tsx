@@ -71,7 +71,7 @@ test('production root does not mount a purchase provider that grants Plus', asyn
   expect(created).toHaveBeenCalled();
   expect(created.mock.results.length).toBeGreaterThan(0);
   for (const result of created.mock.results) {
-   const provider = result.value;
+   const provider = await result.value;
    expect(await provider.purchase('plus_monthly')).toMatchObject({ status: 'error', error: { code: 'unavailable' } });
    expect(await provider.getEntitlement()).toEqual({ status: 'success', value: 'free' });
    expect(await provider.restore()).toEqual({ status: 'success', value: 'free' });

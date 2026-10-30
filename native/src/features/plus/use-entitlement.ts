@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
+import { createContext, createElement, useContext, useEffect, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { createEntitlementStore, type EntitlementSnapshot, type EntitlementStore } from './entitlement-store';
 import { isFeatureAvailable, type Feature } from './features';
 import * as rootPurchase from './root-purchase';
@@ -9,9 +9,16 @@ const EntitlementContext = createContext<EntitlementStore | null>(null);
 
 /** Dev/test falls back to the simulator. Production falls back to a provider that cannot grant Plus. */
 export function EntitlementProvider({ provider, children }: PropsWithChildren<{ provider?: PurchaseProvider }>) {
-  const [fallbackProvider] = useState(() => rootPurchase.createRootPurchaseProvider());
+  const [fallbackProvider, setFallbackProvider] = useState<PurchaseProvider | null>(null);
+  useEffect(() => {
+    if (provider) return;
+    let active = true;
+    void rootPurchase.createRootPurchaseProvider().then(next => { if (active) setFallbackProvider(next); });
+    return () => { active = false; };
+  }, [provider]);
   const selectedProvider = provider ?? fallbackProvider;
-  const store = useMemo(() => createEntitlementStore(selectedProvider), [selectedProvider]);
+  const store = useMemo(() => selectedProvider ? createEntitlementStore(selectedProvider) : null, [selectedProvider]);
+  if (!selectedProvider || !store) return null;
   return createElement(PurchaseContext.Provider, { value: selectedProvider }, createElement(EntitlementContext.Provider, { value: store }, children));
 }
 

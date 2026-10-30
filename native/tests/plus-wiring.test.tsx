@@ -112,7 +112,7 @@ test('queued photos and descriptions share the daily allowance without double ch
 });
 
 test('production Subscribe does not grant free Plus', async () => {
- const provider = createRootPurchaseProvider(false);
+ const provider = await createRootPurchaseProvider(false);
  const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
  expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
  expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
@@ -168,6 +168,22 @@ test('a loading Plus food entry does not spend a free try', async () => {
  expect(router.push).not.toHaveBeenCalled();
 });
 
+test('cancelling a Describe does not refund the free try', async () => {
+ const repo = memoryRepository(); setConsent(repo, true);
+ let started!: () => void;
+ const ready = new Promise<void>(resolve => { started = resolve; });
+ let release!: (value: unknown) => void;
+ const client = jest.fn(() => { started(); return new Promise(resolve => { release = resolve; }); });
+ const service = new FoodAiService(repo, client, () => '2026-10-30');
+ const pending = service.describe('Synthetic rice');
+ await ready;
+ expect(service.quota('descriptions').remaining).toBe(1);
+ service.cancel();
+ release([item]);
+ await expect(pending).rejects.toThrow(/stopped/);
+ expect(service.quota('descriptions').remaining).toBe(1);
+});
+
 test.each(['failed', 'offline'] as const)('%s Describe does not use a free try', async kind => {
  const repo = memoryRepository(); setConsent(repo, true);
  const client = jest.fn(async () => { throw new Error(kind === 'offline' ? 'offline' : 'synthetic failure'); });
@@ -188,4 +204,26 @@ test('a full photo queue rolls back the reserved try', () => {
  expect(() => service.enqueue({ jpeg: 'YWJj' }, '2026-10-30', 'meal')).toThrow(/already waiting/);
  expect(repo.localGet('foodAiDailyAllowance')).toMatchObject({ day: '2026-10-30', photos: 10, descriptions: 0 });
  expect(service.quota('photos').remaining).toBe(10);
+});
+
+test('a failed plan load settles to free and can be retried', async () => {
+ let calls = 0;
+ const provider = createMockPurchaseProvider();
+ provider.getEntitlement = async () => {
+  calls += 1;
+  if (calls < 4) return { status: 'error', error: { code: 'unavailable' } };
+  return { status: 'success', value: 'plus' };
+ };
+ const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PlusSettings/></EntitlementProvider></ThemeProvider>);
+ expect(view.getByText('Checking plan…')).toBeTruthy();
+ expect(view.queryByText('Free plan')).toBeNull();
+ expect(view.queryByRole('button', { name: 'Try again' })).toBeNull();
+ expect(calls).toBe(1);
+ await act(async () => { await new Promise(resolve => { setTimeout(resolve, 200); }); });
+ expect(calls).toBe(3);
+ expect(view.getByText('Free plan')).toBeTruthy();
+ expect(view.queryByText('Checking plan…')).toBeNull();
+ await fireEvent.press(view.getByRole('button', { name: 'Try again' }));
+ expect(view.getByText('Insight Plus active (simulated)')).toBeTruthy();
+ expect(view.queryByText('Free plan')).toBeNull();
 });
