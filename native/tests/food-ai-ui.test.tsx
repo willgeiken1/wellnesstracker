@@ -1,3 +1,4 @@
+import { EntitlementProvider } from '../src/features/plus/use-entitlement';
 import { AccessibilityInfo } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/design/theme-provider";
@@ -38,7 +39,7 @@ const response = [
   },
 ];
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <ThemeProvider>{children}</ThemeProvider>
+  <EntitlementProvider><ThemeProvider>{children}</ThemeProvider></EntitlementProvider>
 );
 beforeEach(() => {
   jest.useFakeTimers();

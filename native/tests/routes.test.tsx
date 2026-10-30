@@ -1,3 +1,4 @@
+import { EntitlementProvider } from '../src/features/plus/use-entitlement';
 // Shell-only fixtures have no signed-in repository; feature behavior is covered by body-ui.
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
@@ -25,7 +26,7 @@ import MusclePage from '../src/app/muscle/[key]';
 // Exercise real routing with the JS fallback; native tab declarations are covered separately.
 const routes = {
   'sign-in': () => null,
-  _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
+  _layout: () => <EntitlementProvider><ThemeProvider><NavigationShell access /></ThemeProvider></EntitlementProvider>,
   '(tabs)/_layout': WebTabs, '(tabs)/index': Home, '(tabs)/workouts': Workouts,
   '(tabs)/food': Food, '(tabs)/progress': Progress, '(tabs)/insights': Insights,
   'settings/_layout': SettingsLayout, 'settings/index': Settings,

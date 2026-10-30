@@ -1,3 +1,5 @@
+import { EntitlementProvider, useEntitlement } from '../src/features/plus/use-entitlement';
+import { ThemedText } from '../src/components/themed-text';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 import { AuthContext, type AuthState } from '../src/auth/provider';
@@ -8,10 +10,12 @@ jest.mock('expo-constants',()=>({__esModule:true,default:{expoConfig:{version:'1
 jest.mock('../src/data/boot-export',()=>({exportBootDatabase:jest.fn(async()=>{})}));
 jest.mock('../src/auth/client',()=>({getAuthClient:()=>null}));
 const state=():AuthState=>({session:null,demo:false,ready:false,configured:false,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',recovery:'boot-error',bootErrorClass:'DatabaseMigrationError',retryBoot:jest.fn(),lookAround:jest.fn(),signIn:jest.fn(),createAccount:jest.fn(),signOut:jest.fn(),syncNow:jest.fn()});
-const screen=(auth:AuthState)=><AuthContext.Provider value={auth}><ThemeProvider><BootRecovery/></ThemeProvider></AuthContext.Provider>;
-test('support opens a mail draft with only safe diagnostics; export uses the local share helper',async()=>{
+function FreePlan() { const {entitlement}=useEntitlement(); return <ThemedText testID="recovery-plan">{entitlement}</ThemedText>; }
+const screen=(auth:AuthState)=><AuthContext.Provider value={auth}><EntitlementProvider><ThemeProvider><FreePlan/><BootRecovery/></ThemeProvider></EntitlementProvider></AuthContext.Provider>;
+test('free users can export local data; support opens a draft with only safe diagnostics',async()=>{
  const auth={...state(),bootExportOwner:jest.fn(()=> 'synthetic-owner')},open=jest.spyOn(Linking,'openURL').mockResolvedValue(undefined);
  const view=await render(screen(auth));
+ expect(view.getByTestId('recovery-plan')).toHaveTextContent('free');
  await fireEvent.press(view.getByRole('button',{name:'Contact support'}));
  await waitFor(()=>expect(open).toHaveBeenCalledTimes(1));
  const uri=open.mock.calls[0][0],query=new URLSearchParams(uri.split('?')[1]);

@@ -1,3 +1,5 @@
+import type { Entitlement } from '../../plus/types';
+import { foodAiQuota, type FoodAiUsage } from './quota';
 import type { Repository } from "../../../data/repository";
 import { t } from "../../../i18n/en";
 import { today } from "../../onboarding/model";
@@ -133,6 +135,9 @@ export function setThumbnails(repo: Repository, thumbnails: boolean) {
 }
 // This interface receives only a guarded body. The endpoint adapter supplies
 // authentication outside that body; CI always substitutes a stub.
+export class FoodAiQuotaError extends Error {
+  constructor(readonly reason: 'free_weekly_limit' | 'daily_cap') { super(t('foodAiLimit')); }
+}
 export class FoodAiDailyLimitError extends Error {
   constructor(readonly kind: "photos" | "descriptions") {
     super(t("foodAiLimit"));
@@ -235,7 +240,27 @@ export class FoodAiService {
     private client: FoodAiClient | null = null,
     private clock: () => string = today,
     private now: () => number = Date.now,
+    private tier: () => Entitlement = () => 'free',
   ) {}
+  // Calendar day comes from the existing local-day clock. Counts contain no meal/health data.
+  private weekly() {
+    const date = new Date(`${this.clock()}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    const weekStart = date.toISOString().slice(0, 10);
+    const stored = this.repo.localGet<FoodAiUsage['weekly']>('foodAiWeeklyUsage');
+    return stored?.weekStart === weekStart ? stored : { weekStart, photos: 0, descriptions: 0 };
+  }
+  quota(kind: 'photos' | 'descriptions') {
+    return foodAiQuota({ tier: this.tier(), kind,
+      usage: { daily: aiState(this.repo).usage, weekly: this.weekly() },
+      clock: () => new Date(`${this.clock()}T12:00:00Z`), timeZone: 'UTC' });
+  }
+  private reserveWeekly(kind: 'photos' | 'descriptions') {
+    const decision = this.quota(kind);
+    if (decision.reason === 'free_weekly_limit') throw new FoodAiQuotaError(decision.reason);
+    const weekly = this.weekly();
+    this.repo.localSave('foodAiWeeklyUsage', { ...weekly, [kind]: weekly[kind] + 1 });
+  }
   private permission() {
     const s = aiState(this.repo);
     if (!s.consent) throw new Error(t("foodAiConsentRequired"));
@@ -248,10 +273,10 @@ export class FoodAiService {
         s.usage.day === day ? s.usage : { day, photos: 0, descriptions: 0 };
     if (usage[kind] >= (kind === "photos" ? 10 : 20))
       throw new Error(t("foodAiLimit"));
-    update(this.repo, (s) => ({
-      ...s,
-      usage: { ...usage, [kind]: usage[kind] + 1 },
-    }));
+    this.repo.atomic(() => {
+      if (kind === 'descriptions') this.reserveWeekly(kind);
+      update(this.repo, (s) => ({ ...s, usage: { ...usage, [kind]: usage[kind] + 1 } }));
+    });
   }
   private async send(text: string, jpeg?: string) {
     const generation = this.permission(),
@@ -316,39 +341,42 @@ export class FoodAiService {
       throw new Error(t("foodAiFailure"));
     if (photo.thumbnail && photo.thumbnail.length > 40960)
       throw new Error(t("foodAiFailure"));
-    update(this.repo, (s) => {
-      if (s.usage.day === this.clock() && s.usage.photos >= 10)
+    this.repo.atomic(() => {
+      this.reserveWeekly('photos');
+      update(this.repo, (s) => {
+        if (s.usage.day === this.clock() && s.usage.photos >= 10)
+          return {
+            ...s,
+            sequence: s.sequence + 1,
+            fallback: [
+              ...s.fallback,
+              {
+                id: s.sequence + 1,
+                day,
+                meal,
+                thumbnail: s.thumbnails ? photo.thumbnail : undefined,
+              },
+            ],
+          };
+        if (s.queue.length >= 10) throw new Error(t("foodAiQueueFull"));
         return {
           ...s,
           sequence: s.sequence + 1,
-          fallback: [
-            ...s.fallback,
+          queue: [
+            ...s.queue,
             {
               id: s.sequence + 1,
               day,
               meal,
+              jpeg: photo.jpeg,
+              expiresAt: this.now() + PHOTO_TTL_MS,
+              attempts: 0,
+              nextAttemptAt: 0,
               thumbnail: s.thumbnails ? photo.thumbnail : undefined,
             },
           ],
         };
-      if (s.queue.length >= 10) throw new Error(t("foodAiQueueFull"));
-      return {
-        ...s,
-        sequence: s.sequence + 1,
-        queue: [
-          ...s.queue,
-          {
-            id: s.sequence + 1,
-            day,
-            meal,
-            jpeg: photo.jpeg,
-            expiresAt: this.now() + PHOTO_TTL_MS,
-            attempts: 0,
-            nextAttemptAt: 0,
-            thumbnail: s.thumbnails ? photo.thumbnail : undefined,
-          },
-        ],
-      };
+      });
     });
   }
   async drain() {

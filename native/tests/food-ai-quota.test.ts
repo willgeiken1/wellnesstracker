@@ -81,12 +81,12 @@ test('invalid clock and timezone are rejected', () => {
 });
 
 test('always-free features remain ungated: 988, export, data/account deletion, logging, check-ins, workouts, barcode, importer, basic/advanced trends, plain workout summary, widgets/Live Activity', () => {
-  // This step must remain unwired: zero production consumers protects every
-  // always-free path without introducing a second entitlement policy here.
+  // Only AI-food may consume this quota. Safety, ownership and core paths stay free.
   const root = join(__dirname, '../src');
   const consumers = readdirSync(root, { recursive: true })
     .map(String)
     .filter(file => /\.[jt]sx?$/.test(file) && file !== 'features/food/ai/quota.ts')
     .filter(file => /\bfoodAiQuota\b|\b(?:from|import|require)\s*(?:\(\s*)?['"][^'"]*\bquota['"]/.test(readFileSync(join(root, file), 'utf8')));
-  expect(consumers).toEqual([]);
+  // pw-04 wires quota exclusively in the AI-food service; core/free features cannot consume it.
+  expect(consumers).toEqual(['features/food/ai/service.ts']);
 });
