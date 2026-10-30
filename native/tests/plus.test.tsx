@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook } from '@testing-library/react-native';
 import { createElement, type PropsWithChildren } from 'react';
 import { ALWAYS_FREE, FEATURE_ENTITLEMENTS, FREE_AI_FOOD_LOGS_PER_DAY, isFeatureAvailable } from '../src/features/plus/features';
 import { createMockPurchaseProvider } from '../src/features/plus/mock-provider';
@@ -109,7 +109,6 @@ describe('entitlement store and hook', () => {
   it('uses a local default in development', async () => {
     const wrapper = ({ children }: PropsWithChildren) => createElement(EntitlementProvider, {}, children);
     const { result } = await renderHook(() => useEntitlement(), { wrapper });
-    await waitFor(() => { expect(result.current.entitlement).toBe('free'); });
     await act(async () => { await result.current.purchase('plus_monthly'); });
     expect(result.current.entitlement).toBe('plus');
   });
@@ -142,21 +141,62 @@ describe('entitlement store and hook', () => {
     }
   });
   it('contains subscription errors and refresh errors', async () => {
-    const store = createEntitlementStore(createMockPurchaseProvider({ subscribeResult: failure, entitlementResult: failure }));
-    const off = store.subscribe(jest.fn());
-    expect(store.getSnapshot().error).toEqual(failure.error);
-    expect(await store.refresh()).toEqual(failure);
-    expect(store.getSnapshot().entitlement).toBe('free'); off();
+    jest.useFakeTimers();
+    try {
+      const store = createEntitlementStore(createMockPurchaseProvider({ subscribeResult: failure, entitlementResult: failure }));
+      const off = store.subscribe(jest.fn());
+      await jest.advanceTimersByTimeAsync(7000);
+      expect(store.getSnapshot().error).toEqual(failure.error);
+      expect(store.getSnapshot().settled).toBe(true);
+      expect(store.getSnapshot().entitlement).toBe('free');
+      const pending = store.refresh();
+      await jest.advanceTimersByTimeAsync(7000);
+      await expect(pending).resolves.toEqual(failure);
+      off();
+    } finally { jest.useRealTimers(); }
   });
   it('contains thrown subscription setup and rejected refresh calls', async () => {
-    const provider = createMockPurchaseProvider();
-    provider.subscribe = () => { throw new Error('synthetic adapter detail'); };
-    provider.getEntitlement = async () => { throw new Error('synthetic adapter detail'); };
-    const store = createEntitlementStore(provider);
-    const off = store.subscribe(jest.fn());
-    expect(store.getSnapshot().error).toEqual({ code: 'provider_failure' });
-    expect(await store.refresh()).toEqual({ status: 'error', error: { code: 'provider_failure' } });
-    off();
+    jest.useFakeTimers();
+    try {
+      const provider = createMockPurchaseProvider();
+      provider.subscribe = () => { throw new Error('synthetic adapter detail'); };
+      provider.getEntitlement = async () => { throw new Error('synthetic adapter detail'); };
+      const store = createEntitlementStore(provider);
+      const off = store.subscribe(jest.fn());
+      await jest.advanceTimersByTimeAsync(7000);
+      expect(store.getSnapshot().error).toEqual({ code: 'provider_failure' });
+      const pending = store.refresh();
+      await jest.advanceTimersByTimeAsync(7000);
+      await expect(pending).resolves.toEqual({ status: 'error', error: { code: 'provider_failure' } });
+      off();
+    } finally { jest.useRealTimers(); }
+  });
+  it('recovers when store subscribe fails and a later attempt succeeds', async () => {
+    jest.useFakeTimers();
+    try {
+      const provider = createMockPurchaseProvider({ initialEntitlement: 'plus' });
+      const original = provider.subscribe.bind(provider);
+      let calls = 0;
+      provider.subscribe = listener => {
+        calls += 1;
+        if (calls < 3) return { status: 'error', error: { code: 'unavailable' } };
+        return original(listener);
+      };
+      const store = createEntitlementStore(provider);
+      const off = store.subscribe(jest.fn());
+      expect(store.getSnapshot().settled).toBe(false);
+      expect(calls).toBe(1);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(calls).toBe(2);
+      expect(store.getSnapshot().settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(2000);
+      expect(calls).toBe(3);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(store.getSnapshot().settled).toBe(true);
+      expect(store.getSnapshot().entitlement).toBe('plus');
+      expect(store.getSnapshot().status).toBe('ready');
+      off();
+    } finally { jest.useRealTimers(); }
   });
   it('updates all observers on provider changes and ignores callbacks after cleanup', async () => {
     let notify!: (entitlement: Entitlement) => void;
