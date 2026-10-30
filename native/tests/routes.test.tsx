@@ -1,13 +1,14 @@
 // Shell-only fixtures have no signed-in repository; feature behavior is covered by body-ui.
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
+import { act } from '@testing-library/react-native';
 import type { TestInstance } from 'test-renderer';
 import { renderRouter, screen, fireEvent } from 'expo-router/testing-library';
 import { redirectSystemPath } from '../src/app/+native-intent';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { NavigationShell } from '../src/app/_layout';
 import WebTabs from '../src/components/app-tabs.web';
-import Home from '../src/app/(tabs)/index';
+import Home from '../src/app/(tabs)/(home)';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
@@ -22,17 +23,33 @@ import Start from '../src/app/workout/start';
 import FoodLog from '../src/app/food/log';
 import MusclePage from '../src/app/muscle/[key]';
 
+import HomeLayout from '../src/app/(tabs)/(home)/_layout';
+import WorkoutsLayout from '../src/app/(tabs)/workouts/_layout';
+import FoodLayout from '../src/app/(tabs)/food/_layout';
+import ProgressLayout from '../src/app/(tabs)/progress/_layout';
+import InsightsLayout from '../src/app/(tabs)/insights/_layout';
 // Exercise real routing with the JS fallback; native tab declarations are covered separately.
 const routes = {
   'sign-in': () => null,
   _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
-  '(tabs)/_layout': WebTabs, '(tabs)/index': Home, '(tabs)/workouts': Workouts,
-  '(tabs)/food': Food, '(tabs)/progress': Progress, '(tabs)/insights': Insights,
+  '(tabs)/_layout': WebTabs,
+  '(tabs)/(home)/_layout': HomeLayout, '(tabs)/(home)/index': Home,
+  '(tabs)/workouts/_layout': WorkoutsLayout, '(tabs)/workouts/index': Workouts,
+  '(tabs)/food/_layout': FoodLayout, '(tabs)/food/index': Food,
+  '(tabs)/progress/_layout': ProgressLayout, '(tabs)/progress/index': Progress,
+  '(tabs)/insights/_layout': InsightsLayout, '(tabs)/insights/index': Insights,
   'settings/_layout': SettingsLayout, 'settings/index': Settings,
   'settings/appearance': Appearance, 'settings/[section]': Section,
   'workout/_layout': WorkoutLayout, 'workout/index': Workout, 'workout/start': Start,
   'food/log': FoodLog, 'muscle/[key]': MusclePage,
 };
+
+test('the / route lands on the Home tab', async () => {
+  const result = await renderRouter(routes, { initialUrl: '/' });
+  expect(result.getPathname()).toBe('/');
+  expect(result.getSegments()).toEqual(['(tabs)', '(home)']);
+  expect(screen.getByRole('button', { name: 'Start freestyle' })).toBeTruthy();
+});
 
 test('Home opens the workout modal and provides a working exit', async () => {
   const result = await renderRouter(routes);
@@ -43,7 +60,10 @@ test('Home opens the workout modal and provides a working exit', async () => {
 });
 test('avatar opens Settings and Appearance in the stack', async () => {
   const result = await renderRouter(routes);
-  await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
+  // UIKit bar items are outside the React host tree; exercise the actual configured callback.
+  const headers = result.container.queryAll(node => node.props.headerRightBarButtonItems?.[0]?.onPress);
+  expect(headers.length).toBeGreaterThan(0);
+  await act(async () => { headers[0].props.headerRightBarButtonItems[0].onPress(); });
   await fireEvent.press(screen.getByRole('button', { name: 'Appearance' }));
   expect(result.getPathname()).toBe('/settings/appearance');
   await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));

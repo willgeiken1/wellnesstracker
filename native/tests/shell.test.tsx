@@ -4,7 +4,7 @@ jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:nul
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
 import type { TestInstance } from 'test-renderer';
-import Home from '../src/app/(tabs)/index';
+import Home from '../src/app/(tabs)/(home)';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
