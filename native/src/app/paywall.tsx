@@ -25,7 +25,7 @@ export default function PaywallRoute() {
     return () => { active = false; };
   }, [provider]);
   return <View style={{ flex: 1 }}>
-    <ThemedText accessibilityRole="alert">Simulator preview · Sample prices · No real purchases</ThemedText>
+    {__DEV__ && <ThemedText accessibilityRole="alert">Simulator preview · Sample prices · No real purchases</ThemedText>}
     <ThemedText accessibilityLiveRegion="polite">{entitlementPlanLabel(snapshot)}</ThemedText>
     <PaywallScreen products={products.map(product => ({ ...product,
       title: product.period === 'month' ? 'Insight Plus Monthly' : 'Insight Plus Yearly',
@@ -33,7 +33,9 @@ export default function PaywallRoute() {
     }))}
       onPurchase={id => { const product = products.find(p => p.id === id); if (product) void purchase(product.id); }}
       onRestore={() => { void restore(); }} busy={status === 'loading'}
-      error={error || productError ? 'Could not load or update simulated purchases. Please try again.' : null}
+      error={error || productError ? (__DEV__
+        ? 'Could not load or update simulated purchases. Please try again.'
+        : 'Could not load or update purchases. Please try again.') : null}
       onClose={() => { if (router.canGoBack()) router.back(); else router.replace('/'); }}
       termsUrl="https://example.invalid/terms" privacyUrl="https://example.invalid/privacy" />
     {settled && status === 'error' && <Button label={t('tryAgain')} onPress={() => { void refresh(); }} />}

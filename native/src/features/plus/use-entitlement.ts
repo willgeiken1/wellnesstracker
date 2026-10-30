@@ -9,7 +9,8 @@ const EntitlementContext = createContext<EntitlementStore | null>(null);
 
 /** Dev/test falls back to the simulator. Production falls back to a provider that cannot grant Plus. */
 export function EntitlementProvider({ provider, children }: PropsWithChildren<{ provider?: PurchaseProvider }>) {
-  const [fallbackProvider] = useState(() => rootPurchase.createRootPurchaseProvider());
+  // Build the fallback only when the caller did not inject a provider.
+  const [fallbackProvider] = useState(() => provider ?? rootPurchase.createRootPurchaseProvider());
   const selectedProvider = provider ?? fallbackProvider;
   const store = useMemo(() => createEntitlementStore(selectedProvider), [selectedProvider]);
   return createElement(PurchaseContext.Provider, { value: selectedProvider }, createElement(EntitlementContext.Provider, { value: store }, children));

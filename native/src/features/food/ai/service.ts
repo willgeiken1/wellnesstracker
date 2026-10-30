@@ -243,9 +243,10 @@ export class FoodAiService {
     private tier: () => Entitlement = () => 'free',
   ) {}
   // Snap reserves a free try when a valid photo is queued, including offline.
-  // Describe reserves before sending. A genuine failure or offline send releases
-  // that try; a cancel keeps it. Queued photo retries do not charge again.
-  // Plus daily caps still count reserved attempts, including failures.
+  // Describe reserves before sending. A failure before the request is sent releases
+  // that try. Cancel, and going offline or revoking consent after send, keep it.
+  // A failed Describe does not count against the Plus daily cap.
+  // Queued photo retries do not charge the free allowance again.
   private allowanceUsage(): FoodAiUsage['daily'] {
     const stored = this.repo.localGet<FoodAiUsage['daily']>('foodAiDailyAllowance');
     return stored ?? aiState(this.repo).usage;
@@ -268,6 +269,14 @@ export class FoodAiService {
     const stored = this.repo.localGet<FoodAiUsage['daily']>('foodAiDailyAllowance');
     if (!stored || stored.day !== this.clock() || stored[kind] <= 0) return;
     this.repo.localSave('foodAiDailyAllowance', { ...stored, [kind]: stored[kind] - 1 });
+  }
+  /** Failed Describes must not stick on the Plus daily cap. */
+  private releaseUsage(kind: 'photos' | 'descriptions') {
+    const day = this.clock();
+    update(this.repo, (s) => {
+      if (s.usage.day !== day || s.usage[kind] <= 0) return s;
+      return { ...s, usage: { ...s.usage, [kind]: s.usage[kind] - 1 } };
+    });
   }
   private permission() {
     const s = aiState(this.repo);
@@ -297,6 +306,7 @@ export class FoodAiService {
     active.set(this.repo, controller);
     this.controller = controller;
     let chargedDescribe = false;
+    let sent = false;
     try {
       this.reserve(jpeg ? "photos" : "descriptions");
       chargedDescribe = !jpeg;
@@ -308,6 +318,7 @@ export class FoodAiService {
         generation !== aiState(this.repo).generation
       )
         throw new Error(t("foodAiConsentRequired"));
+      sent = true;
       const result = await this.client(payload, controller.signal);
       if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();
       if (
@@ -318,11 +329,17 @@ export class FoodAiService {
         throw new Error(t("foodAiConsentRequired"));
       return parseEstimates(result);
     } catch (error) {
-      // Refund only a genuine failure or offline send. Cancel keeps the free try.
+      // Refund a failure that never left the phone. Cancel keeps the try, as do
+      // offline and consent revocation after the request was sent.
       const cancelled = error instanceof FoodAiCancelledError
         || (controller.signal.aborted && aiState(this.repo).consent);
-      if (chargedDescribe && !cancelled) {
+      const offlineAfterSend = sent && error instanceof Error && /offline|network request failed/i.test(error.message);
+      const consentAfterSend = sent && (!aiState(this.repo).consent || generation !== aiState(this.repo).generation);
+      if (chargedDescribe && !cancelled && !offlineAfterSend && !consentAfterSend) {
         try { this.releaseAllowance('descriptions'); } catch { /* Keep the request failure. */ }
+      }
+      if (chargedDescribe && !cancelled) {
+        try { this.releaseUsage('descriptions'); } catch { /* Keep the request failure. */ }
       }
       if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();
       if (error instanceof FoodAiDailyLimitError) {

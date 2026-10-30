@@ -112,17 +112,25 @@ test('queued photos and descriptions share the daily allowance without double ch
 });
 
 test('production Subscribe does not grant free Plus', async () => {
- const provider = await createRootPurchaseProvider(false);
- const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
- expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
- expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
- expect(view.getAllByText(/\$39\.99/).length).toBeGreaterThan(0);
- expect(view.queryByText(/\$34\.99/)).toBeNull();
- await fireEvent.press(view.getByRole('button', { name: 'Subscribe to Insight Plus Monthly' }));
- expect(await provider.getEntitlement()).toEqual({ status: 'success', value: 'free' });
- expect(view.getByText('Could not load or update simulated purchases. Please try again.')).toBeTruthy();
- expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
- expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
+ const original = __DEV__;
+ Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true, writable: true });
+ try {
+  const provider = createRootPurchaseProvider(false);
+  const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
+  expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
+  expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+  expect(view.queryByText('Simulator preview · Sample prices · No real purchases')).toBeNull();
+  expect(view.getAllByText(/\$39\.99/).length).toBeGreaterThan(0);
+  expect(view.queryByText(/\$34\.99/)).toBeNull();
+  await fireEvent.press(view.getByRole('button', { name: 'Subscribe to Insight Plus Monthly' }));
+  expect(await provider.getEntitlement()).toEqual({ status: 'success', value: 'free' });
+  expect(view.getByText('Could not load or update purchases. Please try again.')).toBeTruthy();
+  expect(view.queryByText('Could not load or update simulated purchases. Please try again.')).toBeNull();
+  expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+  expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
+ } finally {
+  Object.defineProperty(globalThis, '__DEV__', { value: original, configurable: true, writable: true });
+ }
 });
 
 test('a Plus user is not shown as free while the store is loading', async () => {
@@ -186,16 +194,16 @@ test('cancelling a Describe does not refund the free try', async () => {
  expect(service.quota('descriptions').remaining).toBe(1);
 });
 
-test.each(['failed', 'offline'] as const)('%s Describe does not use a free try', async kind => {
+test('a failed Describe refunds the free try and does not count against the cap', async () => {
  const repo = memoryRepository(); setConsent(repo, true);
- const client = jest.fn(async () => { throw new Error(kind === 'offline' ? 'offline' : 'synthetic failure'); });
- const service = new FoodAiService(repo, client, () => '2026-10-30');
+ const client = jest.fn(async () => { throw new Error('synthetic failure'); });
+ const service = new FoodAiService(repo, client, () => '2026-10-30', undefined, () => 'plus');
  await expect(service.describe('Synthetic rice')).rejects.toThrow();
- expect(service.quota('descriptions').remaining).toBe(2);
+ expect(service.quota('descriptions').remaining).toBe(20);
  expect(client).toHaveBeenCalledTimes(1);
- const succeeded = new FoodAiService(repo, async () => [item], () => '2026-10-30');
- await succeeded.describe('Synthetic rice');
- expect(succeeded.quota('descriptions').remaining).toBe(1);
+ const free = new FoodAiService(repo, async () => { throw new Error('synthetic failure'); }, () => '2026-10-30');
+ await expect(free.describe('Synthetic rice')).rejects.toThrow();
+ expect(free.quota('descriptions').remaining).toBe(2);
 });
 
 test('a full photo queue rolls back the reserved try', () => {
@@ -208,11 +216,11 @@ test('a full photo queue rolls back the reserved try', () => {
  expect(service.quota('photos').remaining).toBe(10);
 });
 
-test('offline and consent-revoked Describe refund the free try', async () => {
+test('going offline or revoking consent after send does not refund the free try', async () => {
  const offlineRepo = memoryRepository(); setConsent(offlineRepo, true);
  const offline = new FoodAiService(offlineRepo, async () => { throw new Error('offline'); }, () => '2026-10-30');
  await expect(offline.describe('Synthetic rice')).rejects.toThrow();
- expect(offline.quota('descriptions').remaining).toBe(2);
+ expect(offline.quota('descriptions').remaining).toBe(1);
  const repo = memoryRepository(); setConsent(repo, true);
  let started!: () => void;
  const ready = new Promise<void>(resolve => { started = resolve; });
@@ -225,7 +233,7 @@ test('offline and consent-revoked Describe refund the free try', async () => {
  setConsent(repo, false);
  release([item]);
  await expect(pending).rejects.toThrow();
- expect(service.quota('descriptions').remaining).toBe(2);
+ expect(service.quota('descriptions').remaining).toBe(1);
 });
 
 test('a failed plan load settles to free and can be retried from settings and the paywall', async () => {

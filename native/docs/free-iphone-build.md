@@ -83,9 +83,13 @@ Both variants share the pinned app identifier, so they replace each other on-dev
 
 ## EAS profile and its boundary
 
-`eas.json` defines a development client, Debug configuration, internal distribution,
-local credentials source and the same variant/dotenv settings. The corresponding
-local-build command is:
+`eas.json` `free-iphone` is a development client with internal distribution, a
+local credentials source, and the same variant/dotenv settings. Its iOS
+`buildConfiguration` is **Debug** on purpose: this is the personal-team logging
+build with an embedded Debug JS bundle, not a store Release. `__DEV__` stays on,
+so that bundle includes the local purchase simulator. The CI release export
+(without `--dev`) is the bundle that must omit `createMockPurchaseProvider` and
+`DEFAULT_MOCK_PRICING`. The corresponding local-build command is:
 
 ```sh
 EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 eas build --local --platform ios --profile free-iphone
