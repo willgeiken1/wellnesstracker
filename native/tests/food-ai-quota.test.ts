@@ -8,7 +8,7 @@ const usage: FoodAiUsage = {
 };
 const clock = () => new Date('2026-10-30T17:00:00Z');
 
-test('one exported config sets the pending free daily allowance to two', () => {
+test('one exported config sets the free daily allowance to two', () => {
   expect(FREE_AI_FOOD_LOGS_PER_DAY).toBe(2);
   expect(foodAiQuota({ tier: 'free', kind: 'photos', usage, clock, timeZone: 'UTC' }).remaining)
     .toBe(FREE_AI_FOOD_LOGS_PER_DAY);
