@@ -64,20 +64,20 @@ test("Cancel sends nothing and requests no camera; Privacy consent uses same she
   await render(<FoodAiPrivacy repo={repo} />, { wrapper });
   await fireEvent(
     screen.getByRole("switch", {
-      name: "Allow meal photos and descriptions to be sent to Anthropic",
+      name: "Allow meal estimates and workout summaries to be sent to Anthropic",
     }),
     "valueChange",
     true,
   );
   await fireEvent.press(
-    screen.getByRole("button", { name: "Allow meal estimates" }),
+    screen.getByRole("button", { name: "Allow AI estimates and summaries" }),
   );
   await act(() => {
     new FoodAiService(repo).enqueue({ jpeg: "YWJj" }, "2026-10-27", "meal");
   });
   await fireEvent(
     screen.getByRole("switch", {
-      name: "Allow meal photos and descriptions to be sent to Anthropic",
+      name: "Allow meal estimates and workout summaries to be sent to Anthropic",
     }),
     "valueChange",
     false,

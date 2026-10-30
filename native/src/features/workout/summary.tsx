@@ -1,3 +1,4 @@
+import { WorkoutAiCard } from "./ai/card";
 import { useEffect } from "react";
 import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -338,6 +339,7 @@ export function WorkoutSummary({
           </View>
         </Panel>
       ))}
+      <WorkoutAiCard store={store} id={id} />
       <Panel testID="summary-shelf">
         <View style={[layout.row, { justifyContent: "space-between" }]}>
           <ThemedText style={{ fontSize: 16, fontWeight: "600" }}>

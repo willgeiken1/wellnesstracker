@@ -229,7 +229,7 @@ test("revocation by a quota-write subscriber still sends nothing", async () => {
  });
  test("thumbnail default, consent version and revocation remove stored thumbnail bytes", () => {
   const repo = memoryRepository(); expect(aiState(repo).thumbnails).toBe(false);
-  setConsent(repo, true); expect(aiState(repo).consentVersion).toBe(1);
+  setConsent(repo, true); expect(aiState(repo).consentVersion).toBe(2);
   repo.localSave("foodAi", {...aiState(repo), entries:{synthetic:{confirmed:true,thumbnail:"dGh1bWI="}}});
   setConsent(repo,false); expect(JSON.stringify(aiState(repo))).not.toContain("dGh1bWI=");
   repo.localSave("foodAi", {...aiState(repo), consent:true, consentVersion:0});

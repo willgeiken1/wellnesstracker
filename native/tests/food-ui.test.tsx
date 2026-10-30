@@ -31,7 +31,7 @@ test('past day selected explicitly, future blocked, missing stats inline target 
 });
 test('Snap asks consent before camera or services, calendar excludes future',async()=>{
  await render(<FoodScreen repository={memoryRepository()}/>,{wrapper});
- await fireEvent.press(screen.getByRole('button',{name:'Snap'}));expect(screen.getByText('Use AI for this meal?')).toBeTruthy();await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Snap'}));expect(screen.getByText('Allow AI estimates and workout summaries?')).toBeTruthy();await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
  await fireEvent.press(screen.getByRole('button',{name:'Open food calendar'}));expect(screen.getByRole('button',{name:'2026-10-28'})).toBeDisabled();
 });
 test('saved foods, favorites, combos, copy yesterday, rename/add meals persist through UI',async()=>{

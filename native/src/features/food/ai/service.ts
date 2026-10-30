@@ -42,7 +42,7 @@ export interface AiState {
   entries: Record<string, { confirmed: boolean; thumbnail?: string }>;
   reviewed: string[];
 }
-export const FOOD_AI_CONSENT_VERSION = 1;
+export const FOOD_AI_CONSENT_VERSION = 2;
 export const PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
 const key = "foodAi";
 function entriesWithoutThumbnails(entries: AiState["entries"]): AiState["entries"] {

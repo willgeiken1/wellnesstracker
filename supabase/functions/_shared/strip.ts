@@ -1,3 +1,18 @@
+import { assertWorkoutModelEnvelope, workoutFactsFromEnvelope, workoutNameForTextGuard } from "./workout-payload.ts";
+
+/** Workout-specific allowlist at the final model boundary; no full workout objects. */
+export function assertWorkoutModelPayload(payload: unknown): void {
+  assertWorkoutModelEnvelope(payload);
+  for (const exercise of workoutFactsFromEnvelope(payload).exercises) {
+    if (foodAiTextForbidden(workoutNameForTextGuard(exercise.name))) throw new Error("Invalid exercise name.");
+  }
+}
+
+export async function callWorkoutModel<T>(payload: unknown, client: (body: unknown) => Promise<T> | T): Promise<T> {
+  assertWorkoutModelPayload(payload);
+  return await client(payload);
+}
+
 // Date-range wipe of the user_data JSON blob.
 // Keep this in step with logger/js/shared/purge.js (stripRange / notePurge).
 // opts.before / the before argument is the delete time. Logs created or updated

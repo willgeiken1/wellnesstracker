@@ -1,4 +1,4 @@
-// Daily AI caps. photo is 10, describe is 20. Limits live in consume_ai_quota.
+// Daily AI caps. photo is 10, describe is 20, workout_summary is 5. Limits live in consume_ai_quota.
 import { admin } from "./http.ts";
 import { resolveQuotaDay } from "./quota-day.js";
 
@@ -6,6 +6,7 @@ export { resolveQuotaDay, serverLocalDay, validDay } from "./quota-day.js";
 
 export const PHOTO_KIND = "photo";
 export const DESCRIBE_KIND = "describe";
+export { WORKOUT_SUMMARY_KIND } from "./workout-payload.ts";
 
 export type Quota = {
   allowed: boolean;

@@ -19,6 +19,9 @@ if (process.env.APP_VARIANT === 'freeiphone') {
     if (relative === 'src/features/food/ai/client.ts') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/food-ai-client.ts') };
     }
+    if (relative === 'src/features/workout/ai/client.ts') {
+      return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/workout-ai-client.ts') };
+    }
     // Fail the build if a future route accidentally imports backend/configuration code.
     // flags.ts contains only pure local row/catalog helpers; no transport or backend imports.
     if (relative.startsWith('src/auth/') || (relative.startsWith('src/data/sync/') && relative !== 'src/data/sync/flags.ts')) {
