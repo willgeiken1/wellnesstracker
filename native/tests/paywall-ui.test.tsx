@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 import { PaywallScreen, type PaywallScreenProps } from '../src/features/paywall/screen';
+import { mockPurchaseProvider } from '../src/features/paywall/purchase-provider';
 import { ThemeProvider } from '../src/design/theme-provider';
 
 const props = (): PaywallScreenProps => ({
   products: [
     { id: 'monthly', title: 'Monthly', priceString: '$4.99', period: 'month', trialDays: 7 },
-    { id: 'yearly', title: 'Yearly', priceString: '$39.99', period: 'year' },
+    { id: 'yearly', title: 'Yearly', priceString: '$39.99', period: 'year', trialDays: 7 },
   ],
   onPurchase: jest.fn(), onRestore: jest.fn(), onClose: jest.fn(),
   termsUrl: 'https://example.invalid/terms', privacyUrl: 'https://example.invalid/privacy',
@@ -22,9 +23,19 @@ test('each product discloses price, period, trial and automatic renewal before p
     expect(card.getByText('Renews automatically unless cancelled at least 24 hours before the end of the period; manage in Settings.')).toBeTruthy();
   }
   expect(screen.getByText('7-day free trial, then $4.99 per month.')).toBeTruthy();
-  expect(screen.getByText('No free trial.')).toBeTruthy();
+  expect(screen.getByText('7-day free trial, then $39.99 per year.')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Subscribe to Monthly' }));
   expect(input.onPurchase).toHaveBeenCalledWith('monthly');
+});
+
+test('yearly Insight Plus has a 7-day trial and the trial text renders', async () => {
+  const yearly = mockPurchaseProvider.products.find(product => product.period === 'year');
+  if (!yearly) throw new Error('yearly product missing');
+  expect(yearly.trialDays).toBe(7);
+  const input = props();
+  input.products = [yearly];
+  await render(<PaywallScreen {...input} />, { wrapper });
+  expect(within(screen.getByTestId(`paywall-product-${yearly.id}`)).getByText('7-day free trial, then $39.99 per year.')).toBeTruthy();
 });
 
 test('restore and legal links work; closing is available even while busy with an error', async () => {
