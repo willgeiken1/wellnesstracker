@@ -1,5 +1,5 @@
 import { EntitlementProvider } from '../features/plus/use-entitlement';
-import { createMockPurchaseProvider } from '../features/plus/mock-provider';
+import * as rootPurchase from '../features/plus/root-purchase';
 import { FoodAiRuntime } from '../features/food/ai/runtime';
 import { useEffect, useState } from 'react';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
@@ -59,7 +59,7 @@ function Application() {
   </ThemeProvider>;
 }
 export default function RootLayout() {
-  const [purchaseProvider] = useState(() => createMockPurchaseProvider());
+  const [purchaseProvider] = useState(() => rootPurchase.createRootPurchaseProvider());
   const [loaded, error] = useFonts({ Lexend_500Medium });
   useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
   if (!loaded && !error) return null;

@@ -3,13 +3,14 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 import { ThemedText } from '../components/themed-text';
 import { PaywallScreen } from '../features/paywall/screen';
-import { useEntitlement, usePurchaseProvider } from '../features/plus/use-entitlement';
+import { entitlementPlanLabel, useEntitlement, usePurchaseProvider } from '../features/plus/use-entitlement';
 import type { Product } from '../features/plus/types';
 
 /** Local mock purchases only; no store SDK or customer attributes. */
 export default function PaywallRoute() {
   const provider = usePurchaseProvider();
-  const { entitlement, status, error, purchase, restore } = useEntitlement();
+  const snapshot = useEntitlement();
+  const { status, error, purchase, restore } = snapshot;
   const [products, setProducts] = useState<readonly Product[]>([]);
   const [productError, setProductError] = useState(false);
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function PaywallRoute() {
   }, [provider]);
   return <View style={{ flex: 1 }}>
     <ThemedText accessibilityRole="alert">Simulator preview · Sample prices · No real purchases</ThemedText>
-    <ThemedText accessibilityLiveRegion="polite">{entitlement === 'plus' ? 'Insight Plus active (simulated)' : 'Free plan'}</ThemedText>
+    <ThemedText accessibilityLiveRegion="polite">{entitlementPlanLabel(snapshot)}</ThemedText>
     <PaywallScreen products={products.map(product => ({ ...product,
       title: product.period === 'month' ? 'Insight Plus Monthly' : 'Insight Plus Yearly',
       priceString: new Intl.NumberFormat('en-US', { style: 'currency', currency: product.currency }).format(product.price),

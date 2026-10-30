@@ -39,7 +39,7 @@ export function FoodAiEntry({
 }) {
   "use no memo";
   useFoodRevision(repo);
-  const { entitlement } = useEntitlement();
+  const { entitlement, settled } = useEntitlement();
   const tier = useRef(entitlement);
   tier.current = entitlement;
   const client = useFoodAiClient(repo),
@@ -59,7 +59,7 @@ export function FoodAiEntry({
     };
   }, [service]);
   const run = async (action: () => Promise<void>, checkQuota = true) => {
-    if (inFlight.current) return;
+    if (inFlight.current || !settled) return;
     const quota = service.quota(mode === 'snap' ? 'photos' : 'descriptions');
     if (checkQuota && !quota.allowed) {
       if (quota.reason === 'free_daily_limit') router.push('/paywall');
@@ -139,12 +139,12 @@ export function FoodAiEntry({
             <>
               <Button
                 label={t("foodAiCamera")}
-                disabled={busy}
+                disabled={busy || !settled}
                 onPress={() => photo(true)}
               />
               <Button
                 label={t("foodAiLibrary")}
-                disabled={busy}
+                disabled={busy || !settled}
                 onPress={() => photo(false)}
               />
             </>
@@ -157,7 +157,7 @@ export function FoodAiEntry({
               />
               <Button
                 label={t("foodAiEstimate")}
-                disabled={busy || !!items || !text.trim()}
+                disabled={busy || !settled || !!items || !text.trim()}
                 onPress={() =>
                   void run(async () => {
                     const result = await service.describe(text);
@@ -179,6 +179,9 @@ export function FoodAiEntry({
             />
           )}
         </>
+      )}
+      {!settled && (
+        <ThemedText accessibilityLiveRegion="polite">Checking plan…</ThemedText>
       )}
       {busy && (
         <ThemedText accessibilityLiveRegion="polite">
