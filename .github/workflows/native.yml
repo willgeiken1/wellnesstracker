@@ -42,6 +42,19 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx expo lint
       - run: npm test -- --ci
+      - name: Release bundle excludes the mock purchase provider
+        run: |
+          out="${RUNNER_TEMP}/plus-release"
+          npx expo export --platform ios --output-dir "$out" --max-workers 2
+          mapfile -t bundles < <(find "$out" -type f \( -name '*.hbc' -o -name '*.js' -o -name '*.jsbundle' \) ! -name '*.map')
+          if [ "${#bundles[@]}" -eq 0 ]; then
+            echo 'No release bundle was exported' >&2
+            exit 1
+          fi
+          if grep -a -E -n 'createMockPurchaseProvider|DEFAULT_MOCK_PRICING' "${bundles[@]}"; then
+            echo 'Mock purchase provider leaked into the release bundle' >&2
+            exit 1
+          fi
       - name: Inspect free iPhone config and bundle
         run: npm run check:free-iphone
 

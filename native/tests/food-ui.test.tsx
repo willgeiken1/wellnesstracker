@@ -1,9 +1,10 @@
+import { EntitlementProvider } from '../src/features/plus/use-entitlement';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { foodTargets } from '../src/features/food/model';
 import { FoodScreen } from '../src/features/food/screen';
 import { memoryRepository } from './workout-repository';
-const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
+const wrapper=({children}:{children:React.ReactNode})=><EntitlementProvider><ThemeProvider>{children}</ThemeProvider></EntitlementProvider>;
 beforeEach(()=>{jest.useFakeTimers();jest.setSystemTime(new Date('2026-10-27T17:00:00Z'));});
 afterEach(()=>jest.useRealTimers());
 test('four meals, manual entry names day, blank nutrients, edit portions, delete and Undo',async()=>{

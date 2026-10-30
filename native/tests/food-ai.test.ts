@@ -51,7 +51,7 @@ test("consent gates every send, quotas persist and reset by local day", async ()
   const repo = memoryRepository(),
     client = jest.fn(async () => response);
   let day = "2026-10-27";
-  const service = new FoodAiService(repo, client, () => day);
+  const service = new FoodAiService(repo, client, () => day, undefined, () => 'plus');
   await expect(service.describe("rice")).rejects.toThrow();
   expect(client).not.toHaveBeenCalled();
   setConsent(repo, true);
@@ -67,7 +67,7 @@ test("consent gates every send, quotas persist and reset by local day", async ()
 test("photo quota is 10; retains thumbnail and routes without uploading the eleventh", async () => {
   const repo = memoryRepository(),
     client = jest.fn(async () => response),
-    service = new FoodAiService(repo, client, () => "2026-10-27");
+    service = new FoodAiService(repo, client, () => "2026-10-27", undefined, () => "plus");
   setConsent(repo, true);
   for (let i = 0; i < 11; i++) {
     service.enqueue({ jpeg: "YWJj", thumbnail: "YWJj" }, "2026-10-27", "meal");

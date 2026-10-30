@@ -117,7 +117,7 @@ test("a transient rate limit does not consume the daily cap", async () => {
  const client = createFoodEndpointClient(request,undefined,undefined,()=>true);
  const service = new FoodAiService(repo,client);
  await expect(service.describe("rice")).rejects.toThrow("Too many requests");
- expect(aiState(repo).usage.descriptions).toBe(1);
+ expect(aiState(repo).usage.descriptions).toBe(0);
 });
 
 test.each([null, "rate_limit", "limit"])("HTTP 429 uses the structured code %s, never status alone", async code => {
@@ -125,7 +125,7 @@ test.each([null, "rate_limit", "limit"])("HTTP 429 uses the structured code %s, 
  const invoke = jest.fn(async () => ({data:null,error:{context:{status:429,json:async()=>({code})}}}));
  jest.mocked(getAuthClient).mockReturnValueOnce({functions:{invoke}} as unknown as NonNullable<ReturnType<typeof getAuthClient>>);
  await expect(new FoodAiService(repo,createLocalFoodAiClient(repo)).describe("rice")).rejects.toThrow(code === "limit" ? "Daily AI limit" : "Too many requests");
- expect(aiState(repo).usage.descriptions).toBe(code === "limit" ? 20 : 1);
+ expect(aiState(repo).usage.descriptions).toBe(code === "limit" ? 20 : 0);
 });
 
 test("wire body keys sent by the client equal the FOOD_ENDPOINT_FIELDS allowlist", async () => {

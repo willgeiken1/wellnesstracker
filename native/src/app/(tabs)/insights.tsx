@@ -1,3 +1,4 @@
+import { AdvancedTrends } from '@/features/plus/advanced-trends';
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { router } from 'expo-router';
@@ -23,6 +24,7 @@ export default function Page() {
  return <Screen title={t('insights')} tabHeader>
   <SegmentedControl label={t('segments')} options={(['trends','recovery','weekly'] as const).map(value=>({value,label:t(value)}))} value={section} onChange={setSection}/>
   {section==='trends'?<BodyAtlas sessions={sessions} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>:<EmptyState title={t(section==='recovery'?'recovery':'weekly')} action={{label:t('backHome'),onPress:()=>router.navigate('/')}}/>}
+  {section==='trends'&&<AdvancedTrends sessions={sessions} now={now}/>}
   {section==='trends'&&<Button label={t('backHome')} variant="secondary" onPress={()=>router.navigate('/')}/>}
  </Screen>;
 }

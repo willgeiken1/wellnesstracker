@@ -1,4 +1,5 @@
 export const settingsSections = [
+  { route: 'plus', label: 'insightPlus' },
   { route: 'account', label: 'account' }, { route: 'profile', label: 'profile' },
   { route: 'appearance', label: 'appearance' }, { route: 'workout', label: 'workoutSettings' },
   { route: 'health', label: 'health' }, { route: 'notifications', label: 'notifications' },
