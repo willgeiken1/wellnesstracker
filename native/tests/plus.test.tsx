@@ -1,25 +1,32 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { createElement, type PropsWithChildren } from 'react';
-import { ALWAYS_FREE, FEATURE_ENTITLEMENTS, isFeatureAvailable } from '../src/features/plus/features';
+import { ALWAYS_FREE, FEATURE_ENTITLEMENTS, FREE_AI_FOOD_LOGS_PER_DAY, isFeatureAvailable } from '../src/features/plus/features';
 import { createMockPurchaseProvider } from '../src/features/plus/mock-provider';
 import { createEntitlementStore } from '../src/features/plus/entitlement-store';
 import { EntitlementProvider, useEntitlement } from '../src/features/plus/use-entitlement';
 import type { Entitlement, PurchaseProvider, Result } from '../src/features/plus/types';
 
-const FREE = ['crisis988', 'dataExport', 'dataDeletion', 'logging', 'checkins', 'workouts', 'barcode', 'pwaImport', 'basicTrends', 'widgets', 'liveActivity'];
-const PLUS = ['aiFoodUnlimited', 'aiHigherCaps', 'advancedTrends'] as const;
+const FREE = ['crisis988', 'dataExport', 'dataDeletion', 'logging', 'checkins', 'workouts', 'barcode', 'pwaImport', 'basicTrends', 'advancedTrends', 'workoutSummary', 'widgets', 'liveActivity'] as const;
+const PLUS = ['aiFoodUnlimited', 'aiHigherCaps', 'aiVoiceFoodLog', 'aiRecipeImport', 'aiMenuScan'] as const;
 const failure = { status: 'error', error: { code: 'unavailable' } } as const;
 
 describe('Plus feature policy', () => {
-  it('keeps every protected feature free, including widgets and Live Activity', () => {
+  it('lists every always-free feature', () => {
     expect([...ALWAYS_FREE].sort()).toEqual([...FREE].sort());
-    for (const feature of ALWAYS_FREE) {
-      expect(FEATURE_ENTITLEMENTS[feature]).toBe('free');
-      expect(isFeatureAvailable(feature, 'free')).toBe(true);
-      expect(isFeatureAvailable(feature, 'plus')).toBe(true);
-    }
+  });
+  it.each(FREE)('keeps %s free regardless of entitlement', feature => {
+    expect(FEATURE_ENTITLEMENTS[feature]).toBe('free');
+    expect(isFeatureAvailable(feature, 'free')).toBe(true);
+    expect(isFeatureAvailable(feature, 'plus')).toBe(true);
+  });
+  it('configures two free AI food logs per day', () => {
+    expect(FREE_AI_FOOD_LOGS_PER_DAY).toBe(2);
+  });
+  it('gates only the AI extras', () => {
+    expect(Object.entries(FEATURE_ENTITLEMENTS).filter(([, entitlement]) => entitlement === 'plus').map(([feature]) => feature).sort()).toEqual([...PLUS].sort());
   });
   it.each(PLUS)('requires Plus for %s', feature => {
+    expect(FEATURE_ENTITLEMENTS[feature]).toBe('plus');
     expect(isFeatureAvailable(feature, 'free')).toBe(false);
     expect(isFeatureAvailable(feature, 'plus')).toBe(true);
   });
@@ -91,9 +98,12 @@ describe('entitlement store and hook', () => {
     const wrapper = ({ children }: PropsWithChildren) => createElement(EntitlementProvider, { provider }, children);
     const { result, unmount } = await renderHook(() => useEntitlement(), { wrapper });
     expect(result.current.entitlement).toBe('free');
+    for (const feature of FREE) expect(result.current.isFeatureAvailable(feature)).toBe(true);
+    for (const feature of PLUS) expect(result.current.isFeatureAvailable(feature)).toBe(false);
     await act(async () => { await result.current.restore(); });
     expect(result.current.entitlement).toBe('plus');
-    expect(result.current.isFeatureAvailable('advancedTrends')).toBe(true);
+    for (const feature of FREE) expect(result.current.isFeatureAvailable(feature)).toBe(true);
+    for (const feature of PLUS) expect(result.current.isFeatureAvailable(feature)).toBe(true);
     await unmount();
   });
   it('uses a local default in development', async () => {

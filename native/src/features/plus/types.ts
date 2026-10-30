@@ -1,5 +1,5 @@
 export type Entitlement = 'free' | 'plus';
-export type PlusFeature = 'aiFoodUnlimited' | 'aiHigherCaps' | 'advancedTrends';
+export type PlusFeature = 'aiFoodUnlimited' | 'aiHigherCaps' | 'aiVoiceFoodLog' | 'aiRecipeImport' | 'aiMenuScan';
 export type ProductId = 'plus_monthly' | 'plus_yearly';
 
 export interface Product {
