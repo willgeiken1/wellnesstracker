@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { createElement, type PropsWithChildren } from 'react';
 import { ALWAYS_FREE, FEATURE_ENTITLEMENTS, FREE_AI_FOOD_LOGS_PER_DAY, isFeatureAvailable } from '../src/features/plus/features';
 import { createMockPurchaseProvider } from '../src/features/plus/mock-provider';
@@ -109,6 +109,7 @@ describe('entitlement store and hook', () => {
   it('uses a local default in development', async () => {
     const wrapper = ({ children }: PropsWithChildren) => createElement(EntitlementProvider, {}, children);
     const { result } = await renderHook(() => useEntitlement(), { wrapper });
+    await waitFor(() => { expect(result.current.entitlement).toBe('free'); });
     await act(async () => { await result.current.purchase('plus_monthly'); });
     expect(result.current.entitlement).toBe('plus');
   });

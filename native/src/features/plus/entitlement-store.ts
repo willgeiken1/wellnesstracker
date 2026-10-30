@@ -9,6 +9,11 @@ export interface EntitlementSnapshot {
 }
 
 const providerFailure = { status: 'error', error: { code: 'provider_failure' } } as const;
+const PLAN_LOAD_ATTEMPTS = 3;
+/** Two retries after the first read. Short enough that a failed load still settles in tests. */
+const PLAN_LOAD_BACKOFF_MS = [20, 40] as const;
+
+const delay = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); });
 
 /** Per-provider memory only. Subscriptions exist only while React/other callers observe it. */
 export function createEntitlementStore(provider: PurchaseProvider) {
@@ -23,23 +28,42 @@ export function createEntitlementStore(provider: PurchaseProvider) {
       try { listener(); } catch { /* Isolate consumer failures; never log raw errors. */ }
     }
   };
-  const run = async (operation: () => Promise<Result<Entitlement>>) => {
+  const run = async (operation: () => Promise<Result<Entitlement>>, finalLoad = false) => {
     const current = ++revision;
     publish({ ...snapshot, status: 'loading', error: null });
     let result: Result<Entitlement>;
     try { result = await operation(); } catch { result = providerFailure; }
     // A newer operation or provider notification supersedes this response.
     if (current === revision) {
+      const giveUp = finalLoad && result.status !== 'success' && !snapshot.settled;
+      const showError = result.status === 'error' && (snapshot.settled || giveUp);
       publish({
         entitlement: result.status === 'success' ? result.value : snapshot.entitlement,
-        status: result.status === 'error' ? 'error' : 'ready',
-        error: result.status === 'error' ? result.error : null,
-        settled: result.status === 'success' ? true : snapshot.settled,
+        // Keep checking through the backoff. The last failure settles as free.
+        status: result.status === 'error' ? (showError ? 'error' : 'loading') : 'ready',
+        error: result.status === 'error' && showError ? result.error : null,
+        settled: result.status === 'success' || giveUp ? true : snapshot.settled,
       });
     }
     return result;
   };
-  const refresh = () => run(() => provider.getEntitlement());
+  const refresh = async () => {
+    let latest: Result<Entitlement> = providerFailure;
+    let epoch = revision;
+    for (let attempt = 0; attempt < PLAN_LOAD_ATTEMPTS; attempt++) {
+      if (attempt > 0) {
+        await delay(PLAN_LOAD_BACKOFF_MS[attempt - 1] ?? PLAN_LOAD_BACKOFF_MS[PLAN_LOAD_BACKOFF_MS.length - 1]);
+        // A purchase or provider push during backoff replaces this load.
+        if (revision !== epoch) return latest;
+      }
+      epoch = revision;
+      latest = await run(() => provider.getEntitlement(), attempt === PLAN_LOAD_ATTEMPTS - 1);
+      // run() bumps revision once. Anything else means a newer purchase or push won.
+      if (revision !== epoch + 1 || latest.status === 'success') return latest;
+      epoch = revision;
+    }
+    return latest;
+  };
   return {
     getSnapshot: () => snapshot,
     refresh,
@@ -62,7 +86,7 @@ export function createEntitlementStore(provider: PurchaseProvider) {
           disconnect = result.value;
           void refresh();
         } else if (result.status === 'error') {
-          publish({ ...snapshot, status: 'error', error: result.error });
+          publish({ entitlement: 'free', status: 'error', error: result.error, settled: true });
         }
       }
       return () => {

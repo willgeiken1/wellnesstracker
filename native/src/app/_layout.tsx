@@ -2,6 +2,7 @@ import { EntitlementProvider } from '../features/plus/use-entitlement';
 import * as rootPurchase from '../features/plus/root-purchase';
 import { FoodAiRuntime } from '../features/food/ai/runtime';
 import { useEffect, useState } from 'react';
+import type { PurchaseProvider } from '../features/plus/types';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -59,9 +60,14 @@ function Application() {
   </ThemeProvider>;
 }
 export default function RootLayout() {
-  const [purchaseProvider] = useState(() => rootPurchase.createRootPurchaseProvider());
+  const [purchaseProvider, setPurchaseProvider] = useState<PurchaseProvider | null>(null);
   const [loaded, error] = useFonts({ Lexend_500Medium });
-  useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
-  if (!loaded && !error) return null;
+  useEffect(() => {
+    let active = true;
+    void rootPurchase.createRootPurchaseProvider().then(provider => { if (active) setPurchaseProvider(provider); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => { if ((loaded || error) && purchaseProvider) void SplashScreen.hideAsync(); }, [loaded, error, purchaseProvider]);
+  if ((!loaded && !error) || !purchaseProvider) return null;
   return <EntitlementProvider provider={purchaseProvider}><OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider></EntitlementProvider>;
 }

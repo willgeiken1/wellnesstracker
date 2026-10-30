@@ -3,10 +3,11 @@ import { router } from 'expo-router';
 import { Screen } from '../../components/screen';
 import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
+import { t } from '../../i18n/en';
 import { entitlementPlanLabel, useEntitlement } from './use-entitlement';
 export function PlusSettings() {
   const snapshot = useEntitlement();
-  const { entitlement, settled, status, error, restore } = snapshot;
+  const { entitlement, settled, status, error, restore, refresh } = snapshot;
   const [message, setMessage] = useState<string | null>(null);
   return <Screen title="Insight Plus">
     <ThemedText>Simulator preview · No real purchases</ThemedText>
@@ -18,5 +19,6 @@ export function PlusSettings() {
     <Button label="Manage subscription" variant="secondary" onPress={() => setMessage('Subscription management will be available when store purchases are connected.')} />
     {message && <ThemedText accessibilityLiveRegion="polite">{message}</ThemedText>}
     {error && <ThemedText accessibilityRole="alert">Could not update simulated purchases. Try again.</ThemedText>}
+    {settled && status === 'error' && <Button label={t('tryAgain')} onPress={() => { void refresh(); }} />}
   </Screen>;
 }
