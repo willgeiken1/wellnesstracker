@@ -48,7 +48,7 @@ export function createWorkoutEndpointClient(request: WorkoutEndpointRequest, con
         if (result.code === 'limit')
             throw new WorkoutSummaryLimitError();
         if (typeof result.summary !== 'string' || !result.summary.trim() || result.summary.length > 2000
-            || result.limit !== 5 || !Number.isInteger(result.remaining) || Number(result.remaining) < 0 || Number(result.remaining) > 4)
+            || result.limit !== 5 || !Number.isInteger(result.remaining) || Number(result.remaining) < 0 || Number(result.remaining) >= result.limit)
             throw Error(t('workoutAiFailure'));
         return { summary: result.summary.trim(), remaining: result.remaining!, limit: 5 };
     };

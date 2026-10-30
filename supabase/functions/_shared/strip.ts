@@ -4,6 +4,8 @@ import { assertWorkoutModelEnvelope, workoutFactsFromEnvelope, workoutNameForTex
 export function assertWorkoutModelPayload(payload: unknown): void {
   assertWorkoutModelEnvelope(payload);
   for (const exercise of workoutFactsFromEnvelope(payload).exercises) {
+    // Only catalog names or 'Custom exercise' reach this point; keep the food
+    // text guard as defense in depth (catalog names are masked as 'Exercise').
     if (foodAiTextForbidden(workoutNameForTextGuard(exercise.name))) throw new Error("Invalid exercise name.");
   }
 }
