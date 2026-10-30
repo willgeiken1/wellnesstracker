@@ -136,7 +136,7 @@ export function setThumbnails(repo: Repository, thumbnails: boolean) {
 // This interface receives only a guarded body. The endpoint adapter supplies
 // authentication outside that body; CI always substitutes a stub.
 export class FoodAiQuotaError extends Error {
-  constructor(readonly reason: 'free_weekly_limit' | 'daily_cap') { super(t('foodAiLimit')); }
+  constructor(readonly reason: 'free_daily_limit' | 'daily_cap') { super(t('foodAiLimit')); }
 }
 export class FoodAiDailyLimitError extends Error {
   constructor(readonly kind: "photos" | "descriptions") {
@@ -242,24 +242,24 @@ export class FoodAiService {
     private now: () => number = Date.now,
     private tier: () => Entitlement = () => 'free',
   ) {}
-  // Calendar day comes from the existing local-day clock. Counts contain no meal/health data.
-  private weekly() {
-    const date = new Date(`${this.clock()}T12:00:00Z`);
-    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
-    const weekStart = date.toISOString().slice(0, 10);
-    const stored = this.repo.localGet<FoodAiUsage['weekly']>('foodAiWeeklyUsage');
-    return stored?.weekStart === weekStart ? stored : { weekStart, photos: 0, descriptions: 0 };
+  // Reserve Snap at enqueue and Describe before sending; queued uploads and retries
+  // do not charge the shared allowance again. Existing daily attempts remain counted.
+  private allowanceUsage(): FoodAiUsage['daily'] {
+    const stored = this.repo.localGet<FoodAiUsage['daily']>('foodAiDailyAllowance');
+    return stored ?? aiState(this.repo).usage;
   }
   quota(kind: 'photos' | 'descriptions') {
     return foodAiQuota({ tier: this.tier(), kind,
-      usage: { daily: aiState(this.repo).usage, weekly: this.weekly() },
+      usage: { daily: this.tier() === 'free' ? this.allowanceUsage() : aiState(this.repo).usage },
       clock: () => new Date(`${this.clock()}T12:00:00Z`), timeZone: 'UTC' });
   }
-  private reserveWeekly(kind: 'photos' | 'descriptions') {
+  private reserveAllowance(kind: 'photos' | 'descriptions') {
     const decision = this.quota(kind);
-    if (decision.reason === 'free_weekly_limit') throw new FoodAiQuotaError(decision.reason);
-    const weekly = this.weekly();
-    this.repo.localSave('foodAiWeeklyUsage', { ...weekly, [kind]: weekly[kind] + 1 });
+    if (decision.reason === 'free_daily_limit') throw new FoodAiQuotaError(decision.reason);
+    const day = this.clock();
+    const stored = this.allowanceUsage();
+    const usage = stored.day === day ? stored : { day, photos: 0, descriptions: 0 };
+    this.repo.localSave('foodAiDailyAllowance', { ...usage, [kind]: usage[kind] + 1 });
   }
   private permission() {
     const s = aiState(this.repo);
@@ -274,7 +274,7 @@ export class FoodAiService {
     if (usage[kind] >= (kind === "photos" ? 10 : 20))
       throw new Error(t("foodAiLimit"));
     this.repo.atomic(() => {
-      if (kind === 'descriptions') this.reserveWeekly(kind);
+      if (kind === 'descriptions') this.reserveAllowance(kind);
       update(this.repo, (s) => ({ ...s, usage: { ...usage, [kind]: usage[kind] + 1 } }));
     });
   }
@@ -342,7 +342,7 @@ export class FoodAiService {
     if (photo.thumbnail && photo.thumbnail.length > 40960)
       throw new Error(t("foodAiFailure"));
     this.repo.atomic(() => {
-      this.reserveWeekly('photos');
+      this.reserveAllowance('photos');
       update(this.repo, (s) => {
         if (s.usage.day === this.clock() && s.usage.photos >= 10)
           return {

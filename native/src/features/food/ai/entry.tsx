@@ -62,7 +62,7 @@ export function FoodAiEntry({
     if (inFlight.current) return;
     const quota = service.quota(mode === 'snap' ? 'photos' : 'descriptions');
     if (checkQuota && !quota.allowed) {
-      if (quota.reason === 'free_weekly_limit') router.push('/paywall');
+      if (quota.reason === 'free_daily_limit') router.push('/paywall');
       else setStatus(t('foodAiLimit'));
       return;
     }
@@ -73,7 +73,7 @@ export function FoodAiEntry({
       await action();
     } catch (error) {
       if (!mounted.current) return;
-      if (error instanceof FoodAiQuotaError && error.reason === 'free_weekly_limit') { router.push('/paywall'); return; }
+      if (error instanceof FoodAiQuotaError && error.reason === 'free_daily_limit') { router.push('/paywall'); return; }
       const safe = [
         "foodAiLimit",
         "foodAiRateLimit",
