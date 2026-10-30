@@ -32,6 +32,7 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       <Stack.Screen name="dev/logger-fixture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="workout" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="food/log" options={{ title: t('foodLog') }} />
+      <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Screen name="import" options={{ title: t('importTitle') }} />
       <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" options={{ headerShown: false }} /></Stack.Protected>
