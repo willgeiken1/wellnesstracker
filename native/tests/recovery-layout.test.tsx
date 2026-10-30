@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { memoryRepository } from './workout-repository';
 import { act, render, fireEvent } from '@testing-library/react-native';
 import RootLayout from '../src/app/_layout';
+import * as rootPurchase from '../src/features/plus/root-purchase';
 import { AuthContext, type AuthState } from '../src/auth/provider';
 jest.mock('expo-router',()=>{const actual=jest.requireActual('expo-router');const Stack=({children}:{children:React.ReactNode})=>children;Stack.Screen=()=>null;Stack.Protected=({children,guard}:{children:React.ReactNode;guard:boolean})=>guard?children:null;return {...actual,Stack,router:{...actual.router,replace:jest.fn()}};});
 jest.mock('expo-network',()=>({getNetworkStateAsync:jest.fn(async()=>({isConnected:false,isInternetReachable:false})),addNetworkStateListener:jest.fn(()=>({remove:jest.fn()}))}));
@@ -57,6 +58,28 @@ test('root surfaces a retry after demo transfer failure while account remains av
  const view=await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);
  expect(view.getByRole('alert')).toHaveTextContent(/Your account is ready/);
  await fireEvent.press(view.getByRole('button',{name:'Try again'}));expect(retryDemoTransfer).toHaveBeenCalled();
+});
+
+test('production root does not mount a purchase provider that grants Plus', async () => {
+ const original = __DEV__;
+ const created = jest.spyOn(rootPurchase, 'createRootPurchaseProvider');
+ Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true, writable: true });
+ const auth: AuthState = { session: null, demo: false, ready: false, configured: false, configError: null, repository: null, pending: 0, conflicts: 0, syncStatus: 'idle', recovery: 'corrupt-marker', lookAround: jest.fn(), signIn: jest.fn(), createAccount: jest.fn(), signOut: jest.fn(), syncNow: jest.fn() };
+ try {
+  created.mockClear();
+  await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);
+  expect(created).toHaveBeenCalled();
+  expect(created.mock.results.length).toBeGreaterThan(0);
+  for (const result of created.mock.results) {
+   const provider = result.value;
+   expect(await provider.purchase('plus_monthly')).toMatchObject({ status: 'error', error: { code: 'unavailable' } });
+   expect(await provider.getEntitlement()).toEqual({ status: 'success', value: 'free' });
+   expect(await provider.restore()).toEqual({ status: 'success', value: 'free' });
+  }
+ } finally {
+  created.mockRestore();
+  Object.defineProperty(globalThis, '__DEV__', { value: original, configurable: true, writable: true });
+ }
 });
 
 test('root free mock keeps confirmed local recovery erasure reachable',async()=>{

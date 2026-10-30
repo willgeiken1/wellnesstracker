@@ -4,13 +4,15 @@ export interface EntitlementSnapshot {
   readonly entitlement: Entitlement;
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly error: PurchaseError | null;
+  /** False until the provider has reported an entitlement. Unsettled is not a free plan. */
+  readonly settled: boolean;
 }
 
 const providerFailure = { status: 'error', error: { code: 'provider_failure' } } as const;
 
 /** Per-provider memory only. Subscriptions exist only while React/other callers observe it. */
 export function createEntitlementStore(provider: PurchaseProvider) {
-  let snapshot: EntitlementSnapshot = { entitlement: 'free', status: 'idle', error: null };
+  let snapshot: EntitlementSnapshot = { entitlement: 'free', status: 'loading', error: null, settled: false };
   const listeners = new Set<() => void>();
   let disconnect: Unsubscribe | undefined;
   let revision = 0;
@@ -32,6 +34,7 @@ export function createEntitlementStore(provider: PurchaseProvider) {
         entitlement: result.status === 'success' ? result.value : snapshot.entitlement,
         status: result.status === 'error' ? 'error' : 'ready',
         error: result.status === 'error' ? result.error : null,
+        settled: result.status === 'success' ? true : snapshot.settled,
       });
     }
     return result;
@@ -52,7 +55,7 @@ export function createEntitlementStore(provider: PurchaseProvider) {
           result = provider.subscribe(entitlement => {
             if (currentConnection !== connection) return;
             ++revision;
-            publish({ entitlement, status: 'ready', error: null });
+            publish({ entitlement, status: 'ready', error: null, settled: true });
           });
         } catch { result = providerFailure; }
         if (result.status === 'success') {

@@ -1,4 +1,6 @@
 import { createMockPurchaseProvider } from '../src/features/plus/mock-provider';
+import { createRootPurchaseProvider } from '../src/features/plus/root-purchase';
+import type { Entitlement } from '../src/features/plus/types';
 import { AdvancedTrends } from '../src/features/plus/advanced-trends';
 import { PlusSettings } from '../src/features/plus/settings';
 import PaywallRoute from '../src/app/paywall';
@@ -107,4 +109,83 @@ test('queued photos and descriptions share the daily allowance without double ch
  expect(client).toHaveBeenCalledTimes(2);
  expect(service.quota('descriptions').remaining).toBe(0);
  await expect(service.describe('Synthetic rice')).rejects.toThrow();
+});
+
+test('production Subscribe does not grant free Plus', async () => {
+ const provider = createRootPurchaseProvider(false);
+ const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
+ expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
+ expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+ await fireEvent.press(view.getByRole('button', { name: 'Subscribe to Insight Plus Monthly' }));
+ expect(await provider.getEntitlement()).toEqual({ status: 'success', value: 'free' });
+ expect(view.getByText('Could not load or update simulated purchases. Please try again.')).toBeTruthy();
+ expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+ expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
+});
+
+test('a Plus user is not shown as free while the store is loading', async () => {
+ let resolveEntitlement: (result: { status: 'success'; value: 'plus' }) => void = () => {};
+ const provider = createMockPurchaseProvider({ initialEntitlement: 'plus' });
+ provider.getEntitlement = () => new Promise(resolve => { resolveEntitlement = resolve; });
+ const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
+ expect(view.queryByText('Free plan')).toBeNull();
+ expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+ expect(view.queryByRole('button', { name: 'Explore Insight Plus' })).toBeNull();
+ expect(view.getAllByText('Checking plan…').length).toBeGreaterThan(0);
+ await act(async () => { resolveEntitlement({ status: 'success', value: 'plus' }); });
+ expect(view.getAllByText('Insight Plus active (simulated)')).toHaveLength(2);
+ expect(view.queryByText('Free plan')).toBeNull();
+});
+
+test('downgrade returns settings to the free plan', async () => {
+ let notify: (entitlement: Entitlement) => void = () => {};
+ const provider = createMockPurchaseProvider({ initialEntitlement: 'plus' });
+ const subscribe = provider.subscribe.bind(provider);
+ provider.subscribe = listener => { notify = listener; return subscribe(listener); };
+ const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PlusSettings/></EntitlementProvider></ThemeProvider>);
+ expect(view.getByText('Insight Plus active (simulated)')).toBeTruthy();
+ expect(view.queryByRole('button', { name: 'Explore Insight Plus' })).toBeNull();
+ await act(async () => { notify('free'); });
+ expect(view.getByText('Free plan')).toBeTruthy();
+ expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+ expect(view.getByRole('button', { name: 'Explore Insight Plus' })).toBeTruthy();
+});
+
+test('a loading Plus food entry does not spend a free try', async () => {
+ let resolveEntitlement: (result: { status: 'success'; value: 'plus' }) => void = () => {};
+ const provider = createMockPurchaseProvider({ initialEntitlement: 'plus' });
+ provider.getEntitlement = () => new Promise(resolve => { resolveEntitlement = resolve; });
+ const repo = memoryRepository(); setConsent(repo, true);
+ const client = jest.fn(async () => [item]);
+ const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><FoodAiClientProvider client={client}><FoodAiEntry repo={repo} mode="describe" day="2026-10-30" meal="meal" onClose={jest.fn()} onManual={jest.fn()}/></FoodAiClientProvider></EntitlementProvider></ThemeProvider>);
+ await fireEvent.changeText(view.getByLabelText('Describe the foods and portions'), 'Synthetic rice');
+ await fireEvent.press(view.getByRole('button', { name: 'Estimate meal' }));
+ expect(client).not.toHaveBeenCalled();
+ expect(new FoodAiService(repo).quota('descriptions').remaining).toBe(2);
+ await act(async () => { resolveEntitlement({ status: 'success', value: 'plus' }); });
+ await fireEvent.press(view.getByRole('button', { name: 'Estimate meal' }));
+ expect(client).toHaveBeenCalledTimes(1);
+ expect(router.push).not.toHaveBeenCalled();
+});
+
+test.each(['failed', 'offline'] as const)('%s Describe does not use a free try', async kind => {
+ const repo = memoryRepository(); setConsent(repo, true);
+ const client = jest.fn(async () => { throw new Error(kind === 'offline' ? 'offline' : 'synthetic failure'); });
+ const service = new FoodAiService(repo, client, () => '2026-10-30');
+ await expect(service.describe('Synthetic rice')).rejects.toThrow();
+ expect(service.quota('descriptions').remaining).toBe(2);
+ expect(client).toHaveBeenCalledTimes(1);
+ const succeeded = new FoodAiService(repo, async () => [item], () => '2026-10-30');
+ await succeeded.describe('Synthetic rice');
+ expect(succeeded.quota('descriptions').remaining).toBe(1);
+});
+
+test('a full photo queue rolls back the reserved try', () => {
+ const repo = memoryRepository(); setConsent(repo, true);
+ const service = new FoodAiService(repo, async () => [item], () => '2026-10-30', undefined, () => 'plus');
+ for (let i = 0; i < 10; i++) service.enqueue({ jpeg: 'YWJj' }, '2026-10-30', 'meal');
+ expect(repo.localGet('foodAiDailyAllowance')).toMatchObject({ day: '2026-10-30', photos: 10, descriptions: 0 });
+ expect(() => service.enqueue({ jpeg: 'YWJj' }, '2026-10-30', 'meal')).toThrow(/already waiting/);
+ expect(repo.localGet('foodAiDailyAllowance')).toMatchObject({ day: '2026-10-30', photos: 10, descriptions: 0 });
+ expect(service.quota('photos').remaining).toBe(10);
 });
