@@ -1,3 +1,6 @@
+import { router } from 'expo-router';
+import { useEntitlement } from '../../plus/use-entitlement';
+import { FoodAiQuotaError } from './service';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { Button } from "../../../components/button";
@@ -36,8 +39,11 @@ export function FoodAiEntry({
 }) {
   "use no memo";
   useFoodRevision(repo);
+  const { entitlement } = useEntitlement();
+  const tier = useRef(entitlement);
+  tier.current = entitlement;
   const client = useFoodAiClient(repo),
-    service = useMemo(() => new FoodAiService(repo, client), [repo, client]);
+    service = useMemo(() => new FoodAiService(repo, client, undefined, undefined, () => tier.current), [repo, client]);
   const [text, setText] = useState(""),
     [status, setStatus] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
@@ -52,8 +58,14 @@ export function FoodAiEntry({
       service.cancel();
     };
   }, [service]);
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, checkQuota = true) => {
     if (inFlight.current) return;
+    const quota = service.quota(mode === 'snap' ? 'photos' : 'descriptions');
+    if (checkQuota && !quota.allowed) {
+      if (quota.reason === 'free_weekly_limit') router.push('/paywall');
+      else setStatus(t('foodAiLimit'));
+      return;
+    }
     inFlight.current = true;
     setBusy(true);
     setStatus(t("foodAiReading"));
@@ -61,6 +73,7 @@ export function FoodAiEntry({
       await action();
     } catch (error) {
       if (!mounted.current) return;
+      if (error instanceof FoodAiQuotaError && error.reason === 'free_weekly_limit') { router.push('/paywall'); return; }
       const safe = [
         "foodAiLimit",
         "foodAiRateLimit",
@@ -187,7 +200,7 @@ export function FoodAiEntry({
               void run(async () => {
                 await drainIfOnline(service);
                 if (mounted.current) setStatus(null);
-              })
+              }, false)
             }
           />
         </>

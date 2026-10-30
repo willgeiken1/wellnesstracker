@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { memoryRepository } from './workout-repository';
 import { act, render, fireEvent } from '@testing-library/react-native';
@@ -56,4 +57,18 @@ test('root surfaces a retry after demo transfer failure while account remains av
  const view=await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);
  expect(view.getByRole('alert')).toHaveTextContent(/Your account is ready/);
  await fireEvent.press(view.getByRole('button',{name:'Try again'}));expect(retryDemoTransfer).toHaveBeenCalled();
+});
+
+test('root free mock keeps confirmed local recovery erasure reachable',async()=>{
+ const recoverLocalData=jest.fn(async()=>{});
+ const auth:AuthState={session:null,demo:false,ready:false,configured:false,configError:null,repository:null,pending:0,conflicts:0,syncStatus:'idle',recovery:'corrupt-marker',recoverLocalData,countRecoveryUnsynced:jest.fn(async()=>0),lookAround:jest.fn(),signIn:jest.fn(),createAccount:jest.fn(),signOut:jest.fn(),syncNow:jest.fn()};
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+ try {
+  const view=await render(<AuthContext.Provider value={auth}><RootLayout/></AuthContext.Provider>);
+  await fireEvent.press(view.getByRole('button',{name:'Erase all local data and sign out'}));
+  expect(recoverLocalData).not.toHaveBeenCalled();
+  const buttons=alert.mock.calls[0][2]!;
+  await act(async()=>{buttons.find(button=>button.style==='destructive')!.onPress!();});
+  expect(recoverLocalData).toHaveBeenCalledTimes(1);
+ } finally {alert.mockRestore();}
 });

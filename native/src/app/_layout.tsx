@@ -1,5 +1,7 @@
+import { EntitlementProvider } from '../features/plus/use-entitlement';
+import { createMockPurchaseProvider } from '../features/plus/mock-provider';
 import { FoodAiRuntime } from '../features/food/ai/runtime';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -57,8 +59,9 @@ function Application() {
   </ThemeProvider>;
 }
 export default function RootLayout() {
+  const [purchaseProvider] = useState(() => createMockPurchaseProvider());
   const [loaded, error] = useFonts({ Lexend_500Medium });
   useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
   if (!loaded && !error) return null;
-  return <OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider>;
+  return <EntitlementProvider provider={purchaseProvider}><OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider></EntitlementProvider>;
 }
