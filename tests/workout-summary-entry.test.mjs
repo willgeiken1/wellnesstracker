@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {registerHooks} from 'node:module';
+import {register} from 'node:module';
 
 test('entry point wires auth, quota and model; OPTIONS and all responses carry CORS', async t => {
  const calls=[];
@@ -19,15 +18,9 @@ test('entry point wires auth, quota and model; OPTIONS and all responses carry C
   if(priorDeno)Object.defineProperty(globalThis,'Deno',priorDeno);
   else delete globalThis.Deno;
  });
- const hooks=registerHooks({load(url,context,nextLoad){
-  if(url.endsWith('/_shared/http.ts')) {
-   const source=readFileSync(new URL(url),'utf8');
-   return {format:'module-typescript',shortCircuit:true,source:source.slice(source.indexOf('export const cors'),source.indexOf('export function serverKey'))+'\nexport const requireUser=globalThis.workoutEntryTestDeps.requireUser;'};
-  }
-  if(url.endsWith('/_shared/quota.ts')) return {format:'module',shortCircuit:true,source:'export const {consumeQuota,releaseQuota}=globalThis.workoutEntryTestDeps;'};
-  return nextLoad(url,context);
- }});
- t.after(()=>hooks.deregister());
+ // Async hooks run off-thread; the returned module sources read deps when
+ // evaluated in this thread. Registration lasts for this test-file process.
+ register('./fixtures/workout-entry-loader.mjs',import.meta.url);
  let serve;
  const envGet=t.mock.fn(()=> 'synthetic-provider-configuration');
  globalThis.Deno={env:{get:envGet},serve:handler=>{serve=handler;}};
