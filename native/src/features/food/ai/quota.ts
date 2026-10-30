@@ -1,9 +1,9 @@
+import { FREE_AI_FOOD_LOGS_PER_DAY } from './config';
+
 /** Local policy only. No persistence, purchases, UI, or server enforcement. */
 export interface FoodAiUsage {
   /** Calendar keys and counts must be recorded in the supplied timeZone. */
   readonly daily: { readonly day: string; readonly photos: number; readonly descriptions: number };
-  /** Monday's YYYY-MM-DD; Snap and Describe share this weekly allowance. */
-  readonly weekly: { readonly weekStart: string; readonly photos: number; readonly descriptions: number };
 }
 
 export interface FoodAiQuotaOptions {
@@ -12,7 +12,6 @@ export interface FoodAiQuotaOptions {
   readonly usage: FoodAiUsage;
   readonly clock: () => Date;
   readonly timeZone: string;
-  readonly freeWeeklyLimit?: number;
 }
 
 export interface FoodAiQuotaDecision {
@@ -21,7 +20,7 @@ export interface FoodAiQuotaDecision {
   readonly remaining: number;
   /** UTC ISO instant of the next local calendar reset. */
   readonly resetsAt: string;
-  readonly reason: 'free_weekly_limit' | 'daily_cap' | null;
+  readonly reason: 'free_daily_limit' | 'daily_cap' | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -62,37 +61,25 @@ function midnight(day: string, formatter: Intl.DateTimeFormat): string {
 }
 
 /**
- * Weeks start Monday at local midnight; daily caps reset at local midnight.
- * Daily counters match service.ts: 10 photos / 20 descriptions, independently,
+ * Snap and Describe share the configured free allowance per local day.
+ * All tiers reset at local midnight. Plus retains independent daily caps.
+ * Plus counters match service.ts: 10 photos / 20 descriptions, independently,
  * counting reserved attempts (including failures), rather than successful results.
  * Stale period counters are ignored. Callers own reservation and persistence.
  * This policy applies only to AI food attempts; no other feature accepts it.
  */
 export function foodAiQuota(options: FoodAiQuotaOptions): FoodAiQuotaDecision {
-  const { tier, kind, usage, clock, timeZone, freeWeeklyLimit = 3 } = options;
-  count(freeWeeklyLimit);
+  const { tier, kind, usage, clock, timeZone } = options;
   const formatter = calendarFormatter(timeZone);
   const now = clock();
   if (!Number.isFinite(now.getTime())) throw new RangeError('Invalid quota clock');
   const day = localParts(formatter, now).day;
-  let limit: number;
-  let used: number;
-  let resetDay: string;
-  let reason: Exclude<FoodAiQuotaDecision['reason'], null>;
-  if (tier === 'free') {
-    const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
-    const weekStart = shift(day, -((weekday + 6) % 7));
-    limit = freeWeeklyLimit;
-    used = usage.weekly.weekStart === weekStart
-      ? count(usage.weekly.photos) + count(usage.weekly.descriptions) : 0;
-    resetDay = shift(weekStart, 7);
-    reason = 'free_weekly_limit';
-  } else {
-    limit = kind === 'photos' ? 10 : 20;
-    used = usage.daily.day === day ? count(usage.daily[kind]) : 0;
-    resetDay = shift(day, 1);
-    reason = 'daily_cap';
-  }
+  const limit = tier === 'free' ? FREE_AI_FOOD_LOGS_PER_DAY : kind === 'photos' ? 10 : 20;
+  const used = usage.daily.day !== day ? 0 : tier === 'free'
+    ? count(usage.daily.photos) + count(usage.daily.descriptions)
+    : count(usage.daily[kind]);
+  const resetDay = shift(day, 1);
+  const reason = tier === 'free' ? 'free_daily_limit' : 'daily_cap';
   const remaining = Math.max(0, limit - used);
   return { allowed: remaining > 0, remaining, resetsAt: midnight(resetDay, formatter), reason: remaining > 0 ? null : reason };
 }
