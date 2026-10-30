@@ -1,7 +1,6 @@
 import type { Entitlement, PlusFeature } from './types';
 
-// TODO(Will): pending choice of 1-3 per day
-export const FREE_AI_FOOD_LOGS_PER_DAY = 2;
+export { FREE_AI_FOOD_LOGS_PER_DAY } from '../food/ai/config';
 
 /** Safety, ownership, trends and plain workout summaries are always free. */
 export const ALWAYS_FREE = Object.freeze([

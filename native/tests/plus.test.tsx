@@ -37,7 +37,7 @@ describe('local purchase provider', () => {
     const provider = createMockPurchaseProvider();
     expect(await provider.getProducts()).toEqual({ status: 'success', value: [
       { id: 'plus_monthly', price: 4.99, currency: 'USD', period: 'month', trialDays: 7 },
-      { id: 'plus_yearly', price: 34.99, currency: 'USD', period: 'year', trialDays: 7 },
+      { id: 'plus_yearly', price: 39.99, currency: 'USD', period: 'year', trialDays: 7 },
     ] });
     const config = { monthlyPrice: 2, yearlyPrice: 20, trialDays: 14 };
     const configured = createMockPurchaseProvider(config);
