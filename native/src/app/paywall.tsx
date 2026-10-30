@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { View } from 'react-native';
+import { Button } from '../components/button';
 import { ThemedText } from '../components/themed-text';
+import { t } from '../i18n/en';
 import { PaywallScreen } from '../features/paywall/screen';
 import { entitlementPlanLabel, useEntitlement, usePurchaseProvider } from '../features/plus/use-entitlement';
 import type { Product } from '../features/plus/types';
@@ -10,7 +12,7 @@ import type { Product } from '../features/plus/types';
 export default function PaywallRoute() {
   const provider = usePurchaseProvider();
   const snapshot = useEntitlement();
-  const { status, error, purchase, restore } = snapshot;
+  const { settled, status, error, purchase, restore, refresh } = snapshot;
   const [products, setProducts] = useState<readonly Product[]>([]);
   const [productError, setProductError] = useState(false);
   useEffect(() => {
@@ -34,5 +36,6 @@ export default function PaywallRoute() {
       error={error || productError ? 'Could not load or update simulated purchases. Please try again.' : null}
       onClose={() => { if (router.canGoBack()) router.back(); else router.replace('/'); }}
       termsUrl="https://example.invalid/terms" privacyUrl="https://example.invalid/privacy" />
+    {settled && status === 'error' && <Button label={t('tryAgain')} onPress={() => { void refresh(); }} />}
   </View>;
 }

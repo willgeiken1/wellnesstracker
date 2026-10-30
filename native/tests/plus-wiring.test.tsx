@@ -116,6 +116,8 @@ test('production Subscribe does not grant free Plus', async () => {
  const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
  expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
  expect(view.queryByText('Insight Plus active (simulated)')).toBeNull();
+ expect(view.getAllByText(/\$39\.99/).length).toBeGreaterThan(0);
+ expect(view.queryByText(/\$34\.99/)).toBeNull();
  await fireEvent.press(view.getByRole('button', { name: 'Subscribe to Insight Plus Monthly' }));
  expect(await provider.getEntitlement()).toEqual({ status: 'success', value: 'free' });
  expect(view.getByText('Could not load or update simulated purchases. Please try again.')).toBeTruthy();
@@ -206,24 +208,55 @@ test('a full photo queue rolls back the reserved try', () => {
  expect(service.quota('photos').remaining).toBe(10);
 });
 
-test('a failed plan load settles to free and can be retried', async () => {
- let calls = 0;
- const provider = createMockPurchaseProvider();
- provider.getEntitlement = async () => {
-  calls += 1;
-  if (calls < 4) return { status: 'error', error: { code: 'unavailable' } };
-  return { status: 'success', value: 'plus' };
- };
- const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PlusSettings/></EntitlementProvider></ThemeProvider>);
- expect(view.getByText('Checking plan…')).toBeTruthy();
- expect(view.queryByText('Free plan')).toBeNull();
- expect(view.queryByRole('button', { name: 'Try again' })).toBeNull();
- expect(calls).toBe(1);
- await act(async () => { await new Promise(resolve => { setTimeout(resolve, 200); }); });
- expect(calls).toBe(3);
- expect(view.getByText('Free plan')).toBeTruthy();
- expect(view.queryByText('Checking plan…')).toBeNull();
- await fireEvent.press(view.getByRole('button', { name: 'Try again' }));
- expect(view.getByText('Insight Plus active (simulated)')).toBeTruthy();
- expect(view.queryByText('Free plan')).toBeNull();
+test('offline and consent-revoked Describe refund the free try', async () => {
+ const offlineRepo = memoryRepository(); setConsent(offlineRepo, true);
+ const offline = new FoodAiService(offlineRepo, async () => { throw new Error('offline'); }, () => '2026-10-30');
+ await expect(offline.describe('Synthetic rice')).rejects.toThrow();
+ expect(offline.quota('descriptions').remaining).toBe(2);
+ const repo = memoryRepository(); setConsent(repo, true);
+ let started!: () => void;
+ const ready = new Promise<void>(resolve => { started = resolve; });
+ let release!: (value: unknown) => void;
+ const client = jest.fn(() => { started(); return new Promise(resolve => { release = resolve; }); });
+ const service = new FoodAiService(repo, client, () => '2026-10-30');
+ const pending = service.describe('Synthetic rice');
+ await ready;
+ expect(service.quota('descriptions').remaining).toBe(1);
+ setConsent(repo, false);
+ release([item]);
+ await expect(pending).rejects.toThrow();
+ expect(service.quota('descriptions').remaining).toBe(2);
+});
+
+test('a failed plan load settles to free and can be retried from settings and the paywall', async () => {
+ jest.useFakeTimers();
+ try {
+  let calls = 0;
+  const provider = createMockPurchaseProvider();
+  provider.getEntitlement = async () => {
+   calls += 1;
+   if (calls < 5) return { status: 'error', error: { code: 'unavailable' } };
+   return { status: 'success', value: 'plus' };
+  };
+  const view = await render(<ThemeProvider><EntitlementProvider provider={provider}><PaywallRoute/><PlusSettings/></EntitlementProvider></ThemeProvider>);
+  expect(view.getAllByText('Checking plan…').length).toBeGreaterThan(0);
+  expect(view.queryByText('Free plan')).toBeNull();
+  expect(view.queryByRole('button', { name: 'Try again' })).toBeNull();
+  expect(calls).toBe(1);
+  await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+  expect(calls).toBe(2);
+  await act(async () => { await jest.advanceTimersByTimeAsync(2000); });
+  expect(calls).toBe(3);
+  await act(async () => { await jest.advanceTimersByTimeAsync(4000); });
+  expect(calls).toBe(4);
+  expect(view.getAllByText('Free plan').length).toBeGreaterThan(0);
+  expect(view.queryByText('Checking plan…')).toBeNull();
+  expect(view.getAllByRole('button', { name: 'Try again' })).toHaveLength(2);
+  await act(async () => {
+   fireEvent.press(view.getAllByRole('button', { name: 'Try again' })[0]);
+   await jest.advanceTimersByTimeAsync(0);
+  });
+  expect(view.getAllByText('Insight Plus active (simulated)').length).toBeGreaterThan(0);
+  expect(view.queryByText('Free plan')).toBeNull();
+ } finally { jest.useRealTimers(); }
 });
