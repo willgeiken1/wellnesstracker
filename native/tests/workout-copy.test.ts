@@ -1,4 +1,4 @@
-import { pluralize, workingSetsPhrase } from "../src/i18n/en";
+import { t, pluralize, workingSetsPhrase } from "../src/i18n/en";
 test.each([
   [0, "0 sets"],
   [1, "1 set"],
@@ -16,4 +16,8 @@ test("count copy covers tokens, exercises, reps and invariant left", () => {
   expect(workingSetsPhrase(1)).toBe("on your 1 working set");
   expect(workingSetsPhrase(2)).toBe("on both sets");
   expect(workingSetsPhrase(3)).toBe("on all 3 working sets");
+});
+
+test('summary limit hint explains charged cancellations and regenerations', () => {
+  expect(t('workoutAiLimitHint')).toBe('5 summaries per day. Each regeneration uses one summary. A cancelled summary still counts toward the daily limit.');
 });

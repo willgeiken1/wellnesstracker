@@ -258,3 +258,15 @@ test('fallback name is idempotent and accepted by the phone guard', () => {
     expect(sanitizeWorkoutName('Custom exercise')).toBe('Custom exercise');
     expect(() => assertWorkoutPayload({exercises:[{name:'Custom exercise',sets:1,reps:8,volume:100}]})).not.toThrow();
 });
+
+test.each(vectors.unicode)('phone pins Unicode spelling $input', async ({input, expected}) => {
+    expect(sanitizeWorkoutName(input)).toBe(expected);
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => ({consent: true, generation: 1}));
+    await client({exercises:[{name:input,sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal);
+    expect(request).toHaveBeenCalledWith('workout-summary', expect.objectContaining({workout:{exercises:[{name:expected,sets:1,reps:8,volume:100}]}}), expect.any(AbortSignal));
+});
+test.each([-1, 5, 6, 0.5, NaN])('rejects invalid remaining quota %s', async remaining => {
+    const client = createWorkoutEndpointClient(async () => ({...response, remaining}), () => ({consent:true,generation:1}));
+    await expect(client({exercises:[{name:'Bench Press',sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal)).rejects.toThrow();
+});

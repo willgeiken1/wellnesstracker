@@ -121,3 +121,55 @@ test('fallback and blocked name vectors are idempotent', () => {
   assert.equal(sanitizeWorkoutName(sanitizeWorkoutName(input)),'Custom exercise');
  }
 });
+
+for (const {input, expected} of vectors.unicode) test(`unicode name keeps exact trim/lowercase semantics: ${JSON.stringify(input)}`, async () => {
+ const s=setup();
+ assert.equal(sanitizeWorkoutName(input),expected);
+ assert.equal((await s.request({...body,workout:{exercises:[{...workout.exercises[0],name:input}]}})).status,200);
+ assert.equal(workoutFactsFromEnvelope(s.calls[0]).exercises[0].name,expected);
+});
+
+const sentinels=JSON.stringify(vectors.sentinels).match(/917\d+/g);
+function assertNoSentinels(value) {
+ const wire=typeof value==='string'?value:JSON.stringify(value);
+ for(const sentinel of sentinels) assert.equal(wire.includes(sentinel),false);
+}
+test('sentinels stay out of responses and every console sink, including quota failure paths',async t=>{
+ const logs=[];
+ for(const method of ['log','info','warn','error','debug','trace']) t.mock.method(console,method,(...args)=>logs.push(args));
+ for(const failure of ['none','consume','model','json','release']) {
+  const s=setup(); let releases=0;
+  const detail=JSON.stringify(vectors.sentinels);
+  const release=s.deps.releaseQuota;
+  s.deps.releaseQuota=async(...args)=>{releases++;if(failure==='release')throw Error(detail);await release(...args);};
+  if(failure==='consume')s.deps.consumeQuota=async()=>{throw Error(detail);};
+  if(failure==='model'||failure==='release')s.deps.model=async()=>{throw Error(detail);};
+  if(failure==='json')s.deps.model=async()=>({ok:true,json:async()=>{throw Error(detail);}});
+  // Plant values in free-text names, then also try forbidden structured fields.
+  const r=await s.request({...body,workout:{exercises:[{...workout.exercises[0],name:`Bench Press ${detail}`}]}});
+  assert.equal(r.status,failure==='none'?200:502);
+  assertNoSentinels(await r.text()); assertNoSentinels(s.calls);
+  assert.equal(releases,['model','json','release'].includes(failure)?1:0);
+  assert.equal(s.used,failure==='none'||failure==='release'?1:0);
+  for(const [key,value] of Object.entries(vectors.sentinels)) {
+   const rejected=await s.request({...body,workout:{exercises:[{...workout.exercises[0],[key]:value}]}});
+   assert.equal(rejected.status,400);assertNoSentinels(await rejected.text());
+  }
+ }
+ assert.deepEqual(logs,[]);
+});
+test('request byte cap rejects declared and streamed oversized bodies before quota or model',async()=>{
+ for(const declared of [true,false]) {
+  const s=setup();let pulls=0,cancelled=false;
+  const req=new Request('http://local/workout-summary',{method:'POST',duplex:'half',
+   headers:declared?{'content-length':'30001'}:{},
+   body:new ReadableStream({pull(controller){pulls++;controller.enqueue(new Uint8Array(10001));},cancel(){cancelled=true;}}),
+  });
+  const r=await createWorkoutSummaryHandler(s.deps)(req);
+  assert.equal(r.status,400);assert.equal(s.used,0);assert.equal(s.calls.length,0);
+  assert.ok(pulls<=4);assert.equal(cancelled,true);
+ }
+ // Multibyte text must be counted in bytes, not JS code units.
+ const s=setup();assert.equal((await s.request({...body,padding:'é'.repeat(16000)})).status,400);
+ assert.equal(s.used,0);
+});
