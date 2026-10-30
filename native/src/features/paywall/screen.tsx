@@ -5,8 +5,8 @@ import { Button, touchTarget } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
+import { FREE_AI_FOOD_LOGS_PER_DAY } from '../food/ai/config';
 import type { PaywallProduct } from './purchase-provider';
-import { FREE_AI_FOOD_LOGS_PER_DAY } from './config';
 
 export interface PaywallScreenProps {
   products: readonly PaywallProduct[];
@@ -22,13 +22,12 @@ export interface PaywallScreenProps {
 const alwaysFree = [
   '988 crisis card', 'Data export', 'Data and account deletion', 'Logging',
   'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends',
-  'Plain workout summary',
+  'Advanced trends', 'Plain workout summary',
 ] as const;
 
 const plusBenefits = [
   'AI food logging beyond the free tries',
   'Higher AI caps',
-  'Advanced trends',
 ] as const;
 
 /** Presentation only. The caller owns purchase/restore state and all access decisions. */

@@ -13,7 +13,7 @@ export interface MockPurchaseConfig {
   readonly subscribeResult?: Exclude<Result<Unsubscribe>, { status: 'success' }>;
 }
 
-export const DEFAULT_MOCK_PRICING = Object.freeze({ monthlyPrice: 4.99, yearlyPrice: 34.99, trialDays: 7 });
+export const DEFAULT_MOCK_PRICING = Object.freeze({ monthlyPrice: 4.99, yearlyPrice: 39.99, trialDays: 7 });
 
 /** Synthetic ownership only. No persistence, timers, store SDK, network or user data. */
 export function createMockPurchaseProvider(config: MockPurchaseConfig = {}): PurchaseProvider {

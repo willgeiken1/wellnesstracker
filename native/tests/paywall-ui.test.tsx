@@ -56,10 +56,9 @@ test('all protected features are always free without purchasing or restoring', a
   await render(<PaywallScreen {...input} />, { wrapper });
   const free = within(screen.getByTestId('paywall-always-free'));
   expect(free.getByText('Always free')).toBeTruthy();
-  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Plain workout summary']) {
+  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
     expect(free.getByText(feature)).toBeTruthy();
   }
-  expect(free.queryByText('Advanced trends')).toBeNull();
   expect(input.onPurchase).not.toHaveBeenCalled();
   expect(input.onRestore).not.toHaveBeenCalled();
   expect(free.getByText('2 free AI food logs per day with Snap/Describe.')).toBeTruthy();
@@ -68,11 +67,12 @@ test('all protected features are always free without purchasing or restoring', a
 test('Plus benefits advertise only features that exist today', async () => {
   await render(<PaywallScreen {...props()} />, { wrapper });
   const benefits = within(screen.getByTestId('paywall-plus-benefits'));
-  for (const benefit of ['AI food logging beyond the free tries', 'Higher AI caps', 'Advanced trends']) {
+  for (const benefit of ['AI food logging beyond the free tries', 'Higher AI caps']) {
     expect(benefits.getByText(benefit)).toBeTruthy();
   }
+  expect(benefits.queryByText('Advanced trends')).toBeNull();
   expect(screen.queryByText(/voice|recipe|menu/i)).toBeNull();
-  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Plain workout summary']) {
+  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
     expect(benefits.queryByText(feature)).toBeNull();
   }
 });
