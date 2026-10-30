@@ -12,6 +12,13 @@ test('local preview renders sample products; purchase and restore make no networ
   try {
     await render(<PaywallRoute />, { wrapper });
     expect(screen.getByText('Simulator preview · Sample prices · Purchases disabled')).toBeTruthy();
+    expect(mockPurchaseProvider.products.map(product => [product.period, product.priceString])).toEqual([
+      ['month', '$4.99'],
+      ['year', '$39.99'],
+    ]);
+    expect(screen.getByText('$4.99 per month')).toBeTruthy();
+    expect(screen.getByText('$39.99 per year')).toBeTruthy();
+    expect(screen.queryByText(/voice|recipe|menu/i)).toBeNull();
     for (const product of mockPurchaseProvider.products) {
       await fireEvent.press(screen.getByRole('button', { name: `Subscribe to ${product.title}` }));
     }

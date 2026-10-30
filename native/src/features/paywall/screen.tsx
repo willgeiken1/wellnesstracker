@@ -22,7 +22,13 @@ export interface PaywallScreenProps {
 const alwaysFree = [
   '988 crisis card', 'Data export', 'Data and account deletion', 'Logging',
   'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends',
-  'Advanced trends', 'Plain workout summary',
+  'Plain workout summary',
+] as const;
+
+const plusBenefits = [
+  'AI food logging beyond the free tries',
+  'Higher AI caps',
+  'Advanced trends',
 ] as const;
 
 /** Presentation only. The caller owns purchase/restore state and all access decisions. */
@@ -42,8 +48,7 @@ export function PaywallScreen({ products, onPurchase, onRestore, onClose, termsU
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: tokens.spacing[4], gap: tokens.spacing[4] }}>
       <ThemedText variant="title" accessibilityRole="header">Insight Plus</ThemedText>
       <View testID="paywall-plus-benefits" style={{ gap: tokens.spacing[2] }}>
-        <ThemedText>AI extras for food logging</ThemedText>
-        <ThemedText>AI voice food logging, recipe URL import and menu/dish scan.</ThemedText>
+        {plusBenefits.map(benefit => <ThemedText key={benefit}>{benefit}</ThemedText>)}
       </View>
       <View testID="paywall-always-free" style={{ gap: tokens.spacing[2] }}>
         <ThemedText variant="headline" accessibilityRole="header">Always free</ThemedText>
