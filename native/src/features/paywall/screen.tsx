@@ -6,6 +6,7 @@ import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import type { PaywallProduct } from './purchase-provider';
+import { FREE_AI_FOOD_LOGS_PER_DAY } from './config';
 
 export interface PaywallScreenProps {
   products: readonly PaywallProduct[];
@@ -21,6 +22,7 @@ export interface PaywallScreenProps {
 const alwaysFree = [
   '988 crisis card', 'Data export', 'Data and account deletion', 'Logging',
   'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends',
+  'Advanced trends', 'Plain workout summary',
 ] as const;
 
 /** Presentation only. The caller owns purchase/restore state and all access decisions. */
@@ -39,11 +41,14 @@ export function PaywallScreen({ products, onPurchase, onRestore, onClose, termsU
     </View>
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: tokens.spacing[4], gap: tokens.spacing[4] }}>
       <ThemedText variant="title" accessibilityRole="header">Insight Plus</ThemedText>
-      <ThemedText>More room for your food insights</ThemedText>
-      <ThemedText>AI food Snap/Describe beyond free tries, higher AI daily caps and advanced trends.</ThemedText>
+      <View testID="paywall-plus-benefits" style={{ gap: tokens.spacing[2] }}>
+        <ThemedText>AI extras for food logging</ThemedText>
+        <ThemedText>AI voice food logging, recipe URL import and menu/dish scan.</ThemedText>
+      </View>
       <View testID="paywall-always-free" style={{ gap: tokens.spacing[2] }}>
         <ThemedText variant="headline" accessibilityRole="header">Always free</ThemedText>
         {alwaysFree.map(feature => <ThemedText key={feature}>{feature}</ThemedText>)}
+        <ThemedText>{`${FREE_AI_FOOD_LOGS_PER_DAY} free AI food logs per day with Snap/Describe.`}</ThemedText>
         <ThemedText muted>No subscription required for these features.</ThemedText>
       </View>
       {products.length === 0 && <ThemedText>No plans available right now. Please try again later.</ThemedText>}

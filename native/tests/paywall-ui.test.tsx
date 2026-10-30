@@ -56,12 +56,21 @@ test('all protected features are always free without purchasing or restoring', a
   await render(<PaywallScreen {...input} />, { wrapper });
   const free = within(screen.getByTestId('paywall-always-free'));
   expect(free.getByText('Always free')).toBeTruthy();
-  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends']) {
+  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
     expect(free.getByText(feature)).toBeTruthy();
   }
   expect(input.onPurchase).not.toHaveBeenCalled();
   expect(input.onRestore).not.toHaveBeenCalled();
-  expect(screen.getByText('AI food Snap/Describe beyond free tries, higher AI daily caps and advanced trends.')).toBeTruthy();
+  expect(free.getByText('2 free AI food logs per day with Snap/Describe.')).toBeTruthy();
+});
+
+test('Plus benefits list only the approved AI extras', async () => {
+  await render(<PaywallScreen {...props()} />, { wrapper });
+  const benefits = within(screen.getByTestId('paywall-plus-benefits'));
+  expect(benefits.getByText('AI extras for food logging')).toBeTruthy();
+  expect(benefits.getByText('AI voice food logging, recipe URL import and menu/dish scan.')).toBeTruthy();
+  expect(benefits.queryByText(/trends|workout|summary|summaries/i)).toBeNull();
+  expect(screen.queryByText(/beyond free tries|higher AI daily caps|unlimited/i)).toBeNull();
 });
 
 test('empty products preserve free features, restore, legal links and close', async () => {
