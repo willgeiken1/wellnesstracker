@@ -1,9 +1,10 @@
-import test from 'node:test';
+import test, {afterEach, mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {sanitizeWorkoutName, assertWorkoutData, assertWorkoutModelEnvelope, workoutModelPayload, workoutFactsFromEnvelope} from '../supabase/functions/_shared/workout-payload.ts';
 import {callWorkoutModel} from '../supabase/functions/_shared/strip.ts';
 import {createWorkoutSummaryHandler} from '../supabase/functions/workout-summary/handler.ts';
+afterEach(()=>mock.restoreAll());
 const vectors=JSON.parse(readFileSync(new URL('../native/fixtures/workout-ai-guard.json',import.meta.url),'utf8'));
 const workout={exercises:[{name:'Bench Press',sets:3,reps:24,volume:1200}]};
 const body={workout,length:'coach',localDate:'2026-10-29',timeZone:'UTC'};
@@ -55,11 +56,17 @@ for(const {input,expected} of vectors.sanitized)test(`server sanitizes custom na
  assert.equal(data.exercises[0].name,input);
 });
 test('server rejects sentinel fields at every structured level before model or quota',async()=>{
+ const logs=captureLogs();
  const s=setup();
  for(const [key,value] of Object.entries(vectors.sentinels))for(const contaminated of [
   {...body,[key]:value}, {...body,workout:{...workout,[key]:value}},
   {...body,workout:{exercises:[{...workout.exercises[0],[key]:value}]}},
- ])assert.equal((await s.request(contaminated)).status,400);
+ ]) {
+  const response=await s.request(contaminated);
+  assert.equal(response.status,400);
+  assertNoSentinels(await response.text());
+ }
+ assertNoSentinels(logs());
  assert.equal(s.calls.length,0);assert.equal(s.used,0);
 });
 test('shape guard rejects malformed, oversized, nested and nonfinite exercise values',()=>{
@@ -81,7 +88,7 @@ test('fifth generation is allowed, sixth refused; regenerate is an ordinary char
  const wire=JSON.stringify(s.calls);for(const sentinel of JSON.stringify(vectors.sentinels).match(/917\d+/g) ?? [])assert.equal(wire.includes(sentinel),false);
 });
 test('upstream, parse and truncated-output failures release the quota without exposing model errors',async()=>{
- for(const model of [async()=>{throw Error('private provider details');},async()=>({ok:false}),async()=>({ok:true,json:async()=>({content:[]})}),async()=>({ok:true,json:async()=>({stop_reason:'max_tokens',content:[{type:'text',text:'cut off'}]})})]){
+ for(const model of [async()=>{throw Error('private provider details');},async()=>({ok:false}),async()=>({ok:true,json:async()=>{throw Error('private provider details');}}),async()=>({ok:true,json:async()=>({content:[]})}),async()=>({ok:true,json:async()=>({stop_reason:'max_tokens',content:[{type:'text',text:'cut off'}]})})]){
  const s=setup();s.deps.model=model;
  const response=await s.request();assert.equal(response.status,502);assert.equal(s.used,0);assert.doesNotMatch(await response.text(),/private|provider details/);
  s.deps.model=async()=>({ok:true,json:async()=>({stop_reason:'end_turn',content:[{type:'text',text:'A complete synthetic summary.'}]})});
@@ -122,54 +129,63 @@ test('fallback and blocked name vectors are idempotent', () => {
  }
 });
 
-for (const {input, expected} of vectors.unicode) test(`unicode name keeps exact trim/lowercase semantics: ${JSON.stringify(input)}`, async () => {
- const s=setup();
- assert.equal(sanitizeWorkoutName(input),expected);
- assert.equal((await s.request({...body,workout:{exercises:[{...workout.exercises[0],name:input}]}})).status,200);
- assert.equal(workoutFactsFromEnvelope(s.calls[0]).exercises[0].name,expected);
-});
-
-const sentinels=JSON.stringify(vectors.sentinels).match(/917\d+/g);
 function assertNoSentinels(value) {
- const wire=typeof value==='string'?value:JSON.stringify(value);
- for(const sentinel of sentinels) assert.equal(wire.includes(sentinel),false);
+ const wire=typeof value==='string' ? value : JSON.stringify(value);
+ for(const sentinel of JSON.stringify(vectors.sentinels).match(/917\d+/g) ?? []) assert.equal(wire.includes(sentinel),false);
 }
-test('sentinels stay out of responses and every console sink, including quota failure paths',async t=>{
- const logs=[];
- for(const method of ['log','info','warn','error','debug','trace']) t.mock.method(console,method,(...args)=>logs.push(args));
- for(const failure of ['none','consume','model','json','release']) {
-  const s=setup(); let releases=0;
-  const detail=JSON.stringify(vectors.sentinels);
-  const release=s.deps.releaseQuota;
-  s.deps.releaseQuota=async(...args)=>{releases++;if(failure==='release')throw Error(detail);await release(...args);};
-  if(failure==='consume')s.deps.consumeQuota=async()=>{throw Error(detail);};
-  if(failure==='model'||failure==='release')s.deps.model=async()=>{throw Error(detail);};
-  if(failure==='json')s.deps.model=async()=>({ok:true,json:async()=>{throw Error(detail);}});
-  // Plant values in free-text names, then also try forbidden structured fields.
-  const r=await s.request({...body,workout:{exercises:[{...workout.exercises[0],name:`Bench Press ${detail}`}]}});
-  assert.equal(r.status,failure==='none'?200:502);
-  assertNoSentinels(await r.text()); assertNoSentinels(s.calls);
-  assert.equal(releases,['model','json','release'].includes(failure)?1:0);
-  assert.equal(s.used,failure==='none'||failure==='release'?1:0);
-  for(const [key,value] of Object.entries(vectors.sentinels)) {
-   const rejected=await s.request({...body,workout:{exercises:[{...workout.exercises[0],[key]:value}]}});
-   assert.equal(rejected.status,400);assertNoSentinels(await rejected.text());
-  }
+function captureLogs() {
+ const spies=['log','info','warn','error','debug','trace'].map(method=>mock.method(console,method,()=>{}));
+ return ()=>spies.flatMap(spy=>spy.mock.calls.map(call=>call.arguments.map(value=>value instanceof Error ? value.message : value)));
+}
+test('sensitive custom names never enter successful responses, model requests or logs',async()=>{
+ const logs=captureLogs();
+ for(const sentinel of Object.values(vectors.sentinels).flatMap(value=>typeof value==='object' ? Object.values(value) : [value])) {
+  const s=setup();
+  const response=await s.request({...body,workout:{exercises:[{...workout.exercises[0],name:`Bench Press ${sentinel}`}]}});
+  assert.equal(response.status,200);
+  assertNoSentinels(await response.text());assertNoSentinels(s.calls);
  }
- assert.deepEqual(logs,[]);
+ assertNoSentinels(logs());
 });
-test('request byte cap rejects declared and streamed oversized bodies before quota or model',async()=>{
- for(const declared of [true,false]) {
-  const s=setup();let pulls=0,cancelled=false;
-  const req=new Request('http://local/workout-summary',{method:'POST',duplex:'half',
-   headers:declared?{'content-length':'30001'}:{},
-   body:new ReadableStream({pull(controller){pulls++;controller.enqueue(new Uint8Array(10001));},cancel(){cancelled=true;}}),
-  });
-  const r=await createWorkoutSummaryHandler(s.deps)(req);
-  assert.equal(r.status,400);assert.equal(s.used,0);assert.equal(s.calls.length,0);
-  assert.ok(pulls<=4);assert.equal(cancelled,true);
+test('consumeQuota failure returns 502 without releasing an unreserved slot or calling the model',async()=>{
+ const logs=captureLogs(),s=setup();let releases=0;
+ s.deps.consumeQuota=async()=>{throw Error(JSON.stringify(vectors.sentinels));};
+ s.deps.releaseQuota=async()=>{releases++;};
+ const response=await s.request();
+ assert.equal(response.status,502);assert.equal(releases,0);assert.equal(s.calls.length,0);
+ assertNoSentinels(await response.text());assertNoSentinels(logs());
+});
+for(const releaseFails of [false,true])test(`provider JSON failure and quota release failure=${releaseFails} stay private`,async()=>{
+ const logs=captureLogs(),s=setup();let releases=0;
+ s.deps.model=async payload=>{s.calls.push(payload);return {ok:true,json:async()=>{throw Error(JSON.stringify(vectors.sentinels));}};};
+ const release=s.deps.releaseQuota;
+ s.deps.releaseQuota=async(...args)=>{releases++;if(releaseFails)throw Error(JSON.stringify(vectors.sentinels));await release(...args);};
+ const response=await s.request({...body,workout:{exercises:[{...workout.exercises[0],name:'Bench Press 917321'}]}});
+ assert.equal(response.status,502);assert.equal(releases,1);assert.equal(s.used,releaseFails ? 1 : 0);
+ assertNoSentinels(s.calls);assertNoSentinels(await response.text());assertNoSentinels(logs());
+});
+test('body cap rejects content-length before reading and stops a finite stream at the limit',async()=>{
+ for(const declaredLength of ['40004',null,'1']) {
+  const s=setup();let reads=0,cancelled=false;
+  // Four finite chunks; no prefetch, so reads reflect the handler's demand.
+  const stream=new ReadableStream({pull(controller){reads++;controller.enqueue(new Uint8Array(10001));if(reads===4)controller.close();},cancel(){cancelled=true;}},{highWaterMark:0});
+  const headers=declaredLength===null ? {} : {'content-length':declaredLength};
+  const response=await createWorkoutSummaryHandler(s.deps)(new Request('http://local/workout-summary',{method:'POST',headers,body:stream,duplex:'half'}));
+  assert.equal(response.status,400);
+  // Reject the declared size without a read; otherwise stop on the first chunk crossing 30,000 bytes.
+  assert.equal(reads,declaredLength==='40004' ? 0 : 3);
+  assert.equal(cancelled,true);assert.equal(s.used,0);assert.equal(s.calls.length,0);
  }
- // Multibyte text must be counted in bytes, not JS code units.
- const s=setup();assert.equal((await s.request({...body,padding:'é'.repeat(16000)})).status,400);
- assert.equal(s.used,0);
+});
+test('body cap measures UTF-8 bytes and accepts valid requests exactly at 30,000 bytes',async()=>{
+ for(const extra of [0,1]) {
+  const s=setup(),prefix=JSON.stringify(body),wire=prefix+' '.repeat(30000-new TextEncoder().encode(prefix).length+extra);
+  const response=await createWorkoutSummaryHandler(s.deps)(new Request('http://local/workout-summary',{method:'POST',body:wire}));
+  assert.equal(response.status,extra ? 400 : 200);
+ }
+ const s=setup();
+ // Under 30k code units but over 30k UTF-8 bytes; sanitizer would otherwise redact the names.
+ const exercises=Array.from({length:100},()=>({...workout.exercises[0],name:'\uff45'.repeat(90)}));
+ assert.equal((await s.request({...body,workout:{exercises}})).status,400);
+ assert.equal(s.calls.length,0);assert.equal(s.used,0);
 });

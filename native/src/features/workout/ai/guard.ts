@@ -6,7 +6,8 @@ export { type WorkoutFacts, type SummaryLength } from '../../../../../supabase/f
 export function assertWorkoutPayload(value: unknown): asserts value is WorkoutFacts {
     assertWorkoutData(value);
     for (const exercise of value.exercises) {
-        // Reuse M2-16's phone-side free-text guard as well as the exact workout shape.
+        // Only catalog names or 'Custom exercise' reach this point; keep the food
+        // text guard as defense in depth (catalog names are masked as 'Exercise').
         assertFoodAiPayload({ model: 'workout-name-guard', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'text', text: workoutNameForTextGuard(exercise.name) }] }] });
     }
 }
@@ -19,6 +20,8 @@ export function buildWorkoutFacts(store: WorkoutStore, id: string): WorkoutFacts
                 return [];
             return [{ name: String(entry.data.exercise), sets: sets.length,
                     reps: sets.reduce((n, set) => n + Number(set.data.reps), 0),
+                    // Use recorded external kg × reps even for one-sided sets; unlike the
+                    // summary screen, do not double dumbbell load or include body mass.
                     volume: sets.reduce((n, set) => n + Number(set.data.weight_kg) * Number(set.data.reps), 0) }];
         }) });
     assertWorkoutPayload(facts);

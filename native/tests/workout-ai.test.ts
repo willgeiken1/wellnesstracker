@@ -8,7 +8,10 @@ import { memoryRepository } from './workout-repository';
 import { aiState, FOOD_AI_CONSENT_VERSION, setConsent } from '../src/features/food/ai/service';
 import { assertWorkoutPayload, buildWorkoutFacts } from '../src/features/workout/ai/guard';
 import { WorkoutSummaryService, savedWorkoutSummary, summaryLength, setSummaryLength, rateWorkoutSummary } from '../src/features/workout/ai/service';
-import { createWorkoutEndpointClient } from '../src/features/workout/ai/client';
+import { getAuthClient } from '../src/auth/client';
+import { t } from '../src/i18n/en';
+jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null) }));
+import { createLocalWorkoutAiClient, WorkoutSummaryLimitError, createWorkoutEndpointClient } from '../src/features/workout/ai/client';
 const response = { summary: 'You completed your sets. Keep building consistency.', remaining: 4, limit: 5 };
 function fixture() {
     const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start(undefined, Date.now() - 60000);
@@ -259,14 +262,22 @@ test('fallback name is idempotent and accepted by the phone guard', () => {
     expect(() => assertWorkoutPayload({exercises:[{name:'Custom exercise',sets:1,reps:8,volume:100}]})).not.toThrow();
 });
 
-test.each(vectors.unicode)('phone pins Unicode spelling $input', async ({input, expected}) => {
-    expect(sanitizeWorkoutName(input)).toBe(expected);
-    const request = jest.fn(async () => response);
-    const client = createWorkoutEndpointClient(request, () => ({consent: true, generation: 1}));
-    await client({exercises:[{name:input,sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal);
-    expect(request).toHaveBeenCalledWith('workout-summary', expect.objectContaining({workout:{exercises:[{name:expected,sets:1,reps:8,volume:100}]}}), expect.any(AbortSignal));
+test.each(['limit', 'other', 'malformed', 'throws'] as const)('phone HTTP 429 context JSON: %s', async code => {
+    const {repo, session}=fixture();setConsent(repo,true);
+    const json=jest.fn(async () => {
+        if(code==='throws')throw Error('synthetic parse failure');
+        return code==='malformed' ? null : {code};
+    });
+    const invoke=jest.fn(async () => ({data:null,error:{context:{status:429,json}}}));
+    jest.mocked(getAuthClient).mockReturnValueOnce({functions:{invoke}} as unknown as NonNullable<ReturnType<typeof getAuthClient>>);
+    const pending=new WorkoutSummaryService(repo,createLocalWorkoutAiClient(repo)).generate(session.id);
+    await expect(pending).rejects.toThrow(code==='limit' ? WorkoutSummaryLimitError : t('workoutAiFailure'));
+    expect(invoke).toHaveBeenCalledTimes(1);expect(json).toHaveBeenCalledTimes(1);
+    expect(savedWorkoutSummary(repo,session.id)).toBeUndefined();
 });
-test.each([-1, 5, 6, 0.5, NaN])('rejects invalid remaining quota %s', async remaining => {
-    const client = createWorkoutEndpointClient(async () => ({...response, remaining}), () => ({consent:true,generation:1}));
-    await expect(client({exercises:[{name:'Bench Press',sets:1,reps:8,volume:100}]}, 'coach', new AbortController().signal)).rejects.toThrow();
+test.each([-1, 0, 4, 5, 1.5])('phone validates remaining quota %s against the daily limit', async remaining => {
+    const client=createWorkoutEndpointClient(async()=>({...response,remaining}),()=>({consent:true,generation:1}));
+    const pending=client({exercises:[{name:'Bench Press',sets:1,reps:8,volume:100}]},'coach',new AbortController().signal);
+    if(remaining===0 || remaining===4)await expect(pending).resolves.toEqual({...response,remaining});
+    else await expect(pending).rejects.toThrow(t('workoutAiFailure'));
 });

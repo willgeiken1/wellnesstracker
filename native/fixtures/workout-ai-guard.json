@@ -200,9 +200,7 @@
     {
       "input": "Cable Row",
       "expected": "Custom exercise"
-    }
-  ],
-  "unicode": [
+    },
     {
       "input": "Bench\u200b Press",
       "expected": "Custom exercise"

@@ -25,6 +25,35 @@ interface Dependencies {
     json: (body: unknown, status?: number) => Response;
     now?: () => Date;
 }
+const MAX_BODY_BYTES = 30000;
+/** Bound retained bytes even when Content-Length is absent or inaccurate. */
+async function readBody(req: Request): Promise<string> {
+    if (Number(req.headers.get('content-length')) > MAX_BODY_BYTES) {
+        await req.body?.cancel();
+        throw Error('Too large.');
+    }
+    if (!req.body)
+        throw Error('Missing body.');
+    const reader = req.body.getReader();
+    const buffer = new Uint8Array(MAX_BODY_BYTES);
+    let size = 0;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+                return new TextDecoder().decode(buffer.subarray(0, size));
+            if (value.byteLength > MAX_BODY_BYTES - size) {
+                await reader.cancel();
+                throw Error('Too large.');
+            }
+            buffer.set(value, size);
+            size += value.byteLength;
+        }
+    }
+    finally {
+        reader.releaseLock();
+    }
+}
 /** Dependency injection keeps tests on the actual handler without auth/AI/network. */
 export function createWorkoutSummaryHandler(deps: Dependencies) {
     return async (req: Request): Promise<Response> => {
@@ -38,9 +67,7 @@ export function createWorkoutSummaryHandler(deps: Dependencies) {
             userId = user.id;
             let facts: WorkoutFacts, length: 'short' | 'coach' | 'detailed';
             try {
-                const wire = await req.text();
-                if (wire.length > 30000)
-                    throw Error('Too large.');
+                const wire = await readBody(req);
                 const body: unknown = JSON.parse(wire);
                 if (!exactKeys(body, ['workout', 'length', 'localDate', 'timeZone']) || !isSummaryLength(body.length))
                     throw Error('Invalid request.');
