@@ -16,6 +16,32 @@ Every accepted write assigns a fresh `server_seq`. A transaction-scoped advisory
 
 ## Future rollback procedure
 
+**If the PWA importer migration is installed, roll back the importer first;
+do not run `rollback-0001-0002.sql` on its own.** The
+[`20261027190000_pwa_import.sql`](../../../supabase/migrations/20261027190000_pwa_import.sql)
+migration defines `native_pwa_commit`, which calls `sync_push` and reads row-sync
+tables, and attaches `native_pwa_purge` to `public.purges`. Dropping row-sync first
+can leave callable importer functions referring to missing objects. PL/pgSQL
+body references are resolved at execution time; `RESTRICT` is not a complete
+dependency guard for those references.
+
+Before any approved rollback, stop importer and sync callers, verify a restorable
+backup, and have Quinn review the exact importer-first rollback plan. Any live
+SQL execution also needs Will's recorded approval for that exact PR/revision,
+separate from merge approval. No importer rollback script is provided here:
+the plan must remove or replace dependent importer functions before row-sync
+is removed, and preserve working `delete_user_rows` and `purge_user_range_rows`
+definitions, which this migration changes to reference `native_pwa_imports` and
+`native_pwa_purges`. Do not drop those importer tables while the privacy RPCs
+still reference them. Coordinate trigger/function removal with
+[`rollback-0001-0002.sql`](rollback-0001-0002.sql): it drops `public.purges` and
+then unconditionally drops `native_pwa_invalidate_on_purge()`, so an earlier
+drop of that function would make this script fail. Verify the complete order
+in an approved disposable environment with synthetic data, including retained
+privacy RPCs, before considering a separately approved live procedure. If the
+importer-first plan or its verification is missing, stop; this note authorizes
+no rollback and does not supply executable importer rollback SQL.
+
 An error during initial application rolls back the enclosing transaction. If the draft has already been applied in an approved disposable environment, stop clients first and preserve a backup before rollback. Remove `sync_push(jsonb)` and `sync_purge_range(uuid,date,date,bigint,text)`, then all 23 row tables named in `src/data/catalog.ts`, then `row_sync_guard()` and `row_sync_seq`, in one reviewed transaction. Dropping the tables destroys their rows; never do this to an environment containing data that must be retained. Leave `auth`, its users/roles and unrelated application tables intact. M1-04 tests this rollback only in disposable in-memory PGlite. Use `rollback-0001-0002.sql`; its RESTRICT drops fail if unrelated objects depend on the batch. It is intentionally not an idempotent cleanup script.
 
 ## Tests
