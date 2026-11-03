@@ -4,6 +4,42 @@ import { scrubBreadcrumb, scrubEvent, scrubString, stripUrlQuery } from "../logg
 
 const JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
 
+// Synthetic string encodings deliberately resemble permitted SDK identifiers.
+// Sensitive field names must win over the technical-value allowlist.
+for (const [field, sentinel] of Object.entries({
+  mood: "a1b2c3d4e5f60718",
+  energy: "b2c3d4e5f6071829",
+  stress: "c3d4e5f60718293a",
+})) {
+  test(`Sentry removes ${field} even when its value resembles SDK metadata`, () => {
+    const record = { [field]: sentinel };
+    const event = scrubEvent({
+      message: `${field}: ${sentinel}`,
+      extra: { checkins: [record] },
+      contexts: { app: { ...record, nested: record }, browser: { name: "Chrome" } },
+      tags: record,
+      request: { url: `https://example.invalid/checkin?${field}=${sentinel}`, data: record },
+      exception: { values: [{ type: "TypeError", value: sentinel,
+        mechanism: { type: "generic", handled: true, data: record } }] },
+      breadcrumbs: [{ category: "fetch", type: "http", data: {
+        method: "POST", status_code: 200, url: `https://example.invalid/?${field}=${sentinel}`,
+        ...record,
+      } }],
+    });
+    assert.equal(JSON.stringify(event).includes(sentinel), false);
+    assert.deepEqual(JSON.parse(JSON.stringify(event)), {
+      message: "message",
+      contexts: { browser: { name: "Chrome" } },
+      request: { url: "https://example.invalid" },
+      exception: { values: [{ type: "TypeError", value: "TypeError",
+        mechanism: { type: "generic", handled: true } }] },
+      breadcrumbs: [{ category: "fetch", type: "http", data: {
+        method: "POST", status_code: 200, url: "https://example.invalid",
+      } }],
+    });
+  });
+}
+
 test("query strings are removed from urls and left alone in prose", () => {
   assert.equal(
     stripUrlQuery("https://x.supabase.co/rest/v1/user_data?user_id=eq.abc&select=data"),
