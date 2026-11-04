@@ -2,6 +2,29 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { parseFoodEstimate } from "../supabase/functions/_shared/food-estimate.js";
+import { callFoodModel, FoodAiPayloadError } from "../supabase/functions/_shared/strip.ts";
+
+test("describe model boundary rejects check-in sentinel fields before transport", async () => {
+  const meal = () => ({ model: "fixture-model", max_tokens: 1500,
+    messages: [{ role: "user", content: [{ type: "text", text: "Synthetic toast" }] }] });
+  const sentinels = { mood: 987651, energy: 987652, stress: 987653 };
+  const sent = [];
+  const transport = async (body) => { sent.push(JSON.stringify(body)); return { ok: true }; };
+  // Positive control: the actual guard reaches transport for a valid meal.
+  await callFoodModel(meal(), transport);
+  assert.deepEqual(JSON.parse(sent[0]), { model: "fixture-model", max_tokens: 1500,
+    messages: [{ role: "user", content: [{ type: "text", text: "Synthetic toast" }] }] });
+  for (const [field, sentinel] of Object.entries(sentinels)) {
+    for (const level of ["payload", "message", "content"]) {
+      const payload = meal();
+      const target = level === "payload" ? payload : level === "message" ? payload.messages[0] : payload.messages[0].content[0];
+      target[field] = sentinel;
+      await assert.rejects(() => callFoodModel(payload, transport), FoodAiPayloadError);
+    }
+  }
+  assert.equal(sent.length, 1, "no contaminated payload reaches the model transport");
+  for (const sentinel of Object.values(sentinels)) assert.equal(sent.join("").includes(String(sentinel)), false);
+});
 
 test("a written meal becomes the same item shape as a photo", () => {
   const reply = `Here you go:

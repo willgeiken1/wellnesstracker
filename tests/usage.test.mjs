@@ -25,6 +25,26 @@ function memoryStorage(initial = {}) {
 /* before_send and the SDK loader read this phone's analytics choice. These tests run with it on. */
 globalThis.localStorage = memoryStorage({ "insight-share-analytics": "1" });
 
+test("PostHog drops check-in sentinels from events and person properties", () => {
+  const checkin = { mood: 987651, energy: 987652, stress: 987653 };
+  const event = sanitizePosthogEvent({
+    event: "tab_viewed",
+    properties: { tab: "home", ...checkin, checkins: [checkin],
+      $mood: checkin.mood, $energy: checkin.energy, $stress: checkin.stress,
+      $current_url: `https://example.invalid/?mood=${checkin.mood}#energy=${checkin.energy}` },
+    $set: checkin,
+    $set_once: { checkins: [checkin], ...checkin },
+  });
+  // Only the route, origin and mandatory location-disable flag may leave.
+  assert.deepEqual(event, { event: "tab_viewed", properties: {
+    tab: "home", $current_url: "https://example.invalid", $geoip_disable: true,
+  } });
+  for (const sentinel of Object.values(checkin)) assert.equal(JSON.stringify(event).includes(String(sentinel)), false);
+  assert.deepEqual(sanitizeCapture("tab_viewed", { tab: "home", ...checkin }), {
+    event: "tab_viewed", properties: { tab: "home" },
+  });
+});
+
 test("crash reports default on and only an explicit off turns them off", () => {
   const store = memoryStorage();
   assert.equal(usageSharingOn(store), true);
