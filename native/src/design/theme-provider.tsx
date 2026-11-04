@@ -51,7 +51,13 @@ function useThemeState(repository?: Repository | null) {
     }).catch(() => {if(active)setReduceMotionReady(true);});
     return () => { active = false; subscription.remove(); };
   }, []);
-  return { persistenceError, override, setOverride, accent, setAccent, mode, colors: createTheme(mode, accent),
+  // INS-01 subset from PR144: retain accent/text/status roles and stored preferences.
+  const colors = { ...createTheme(mode, accent),
+    bg: tokens.color.surface.base[mode],
+    surface: tokens.color.surface.card[mode],
+    'surface-2': tokens.color.surface.panel[mode],
+  };
+  return { persistenceError, override, setOverride, accent, setAccent, mode, colors,
     reduceMotion, reduceMotionReady, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
 }
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);
