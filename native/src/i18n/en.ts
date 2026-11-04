@@ -1,4 +1,5 @@
 export const en = {
+  insightPlus: 'Insight Plus',
   importCount_profile: 'Profiles: {count}',
   importCount_weigh_ins: 'Weigh-ins: {count}',
   importCount_measurements: 'Measurements: {count}',

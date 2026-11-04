@@ -1,3 +1,4 @@
+import { EntitlementProvider } from '../src/features/plus/use-entitlement';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { AppState, Linking } from 'react-native';
 import { FoodScreen } from '../src/features/food/screen';
@@ -7,7 +8,7 @@ const mockRequest=jest.fn();let mockGranted=false;
 let mockCameraProps:Record<string,any>={};
 jest.mock('expo-camera',()=>({useCameraPermissions:()=>[{granted:mockGranted},mockRequest],CameraView:(props:Record<string,any>)=>{mockCameraProps=props;return null;}}));
 jest.mock('@react-native-picker/picker',()=>{const React=require('react');const {View}=require('react-native');const Picker=(props:any)=>React.createElement(View,props);Picker.Item=()=>null;return {Picker};});
-const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
+const wrapper=({children}:{children:React.ReactNode})=><EntitlementProvider><ThemeProvider>{children}</ThemeProvider></EntitlementProvider>;
 const code='0000000000017';
 const originalFetch=global.fetch;
 let mockHttp:jest.Mock;

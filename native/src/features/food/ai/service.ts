@@ -1,3 +1,5 @@
+import type { Entitlement } from '../../plus/types';
+import { foodAiQuota, type FoodAiUsage } from './quota';
 import type { Repository } from "../../../data/repository";
 import { t } from "../../../i18n/en";
 import { today } from "../../onboarding/model";
@@ -133,6 +135,9 @@ export function setThumbnails(repo: Repository, thumbnails: boolean) {
 }
 // This interface receives only a guarded body. The endpoint adapter supplies
 // authentication outside that body; CI always substitutes a stub.
+export class FoodAiQuotaError extends Error {
+  constructor(readonly reason: 'free_daily_limit' | 'daily_cap') { super(t('foodAiLimit')); }
+}
 export class FoodAiDailyLimitError extends Error {
   constructor(readonly kind: "photos" | "descriptions") {
     super(t("foodAiLimit"));
@@ -235,7 +240,44 @@ export class FoodAiService {
     private client: FoodAiClient | null = null,
     private clock: () => string = today,
     private now: () => number = Date.now,
+    private tier: () => Entitlement = () => 'free',
   ) {}
+  // Snap reserves a free try when a valid photo is queued, including offline.
+  // Describe reserves before sending. A failure before the request is sent releases
+  // that try. Cancel, and going offline or revoking consent after send, keep it.
+  // A failed Describe does not count against the Plus daily cap.
+  // Queued photo retries do not charge the free allowance again.
+  private allowanceUsage(): FoodAiUsage['daily'] {
+    const stored = this.repo.localGet<FoodAiUsage['daily']>('foodAiDailyAllowance');
+    return stored ?? aiState(this.repo).usage;
+  }
+  quota(kind: 'photos' | 'descriptions') {
+    return foodAiQuota({ tier: this.tier(), kind,
+      usage: { daily: this.tier() === 'free' ? this.allowanceUsage() : aiState(this.repo).usage },
+      clock: () => new Date(`${this.clock()}T12:00:00Z`), timeZone: 'UTC' });
+  }
+  private reserveAllowance(kind: 'photos' | 'descriptions') {
+    const decision = this.quota(kind);
+    if (decision.reason === 'free_daily_limit') throw new FoodAiQuotaError(decision.reason);
+    const day = this.clock();
+    const stored = this.allowanceUsage();
+    const usage = stored.day === day ? stored : { day, photos: 0, descriptions: 0 };
+    this.repo.localSave('foodAiDailyAllowance', { ...usage, [kind]: usage[kind] + 1 });
+  }
+  /** Compensating write. Memory fixtures do not roll a thrown atomic() back. */
+  private releaseAllowance(kind: 'photos' | 'descriptions') {
+    const stored = this.repo.localGet<FoodAiUsage['daily']>('foodAiDailyAllowance');
+    if (!stored || stored.day !== this.clock() || stored[kind] <= 0) return;
+    this.repo.localSave('foodAiDailyAllowance', { ...stored, [kind]: stored[kind] - 1 });
+  }
+  /** Failed Describes must not stick on the Plus daily cap. */
+  private releaseUsage(kind: 'photos' | 'descriptions') {
+    const day = this.clock();
+    update(this.repo, (s) => {
+      if (s.usage.day !== day || s.usage[kind] <= 0) return s;
+      return { ...s, usage: { ...s.usage, [kind]: s.usage[kind] - 1 } };
+    });
+  }
   private permission() {
     const s = aiState(this.repo);
     if (!s.consent) throw new Error(t("foodAiConsentRequired"));
@@ -248,10 +290,10 @@ export class FoodAiService {
         s.usage.day === day ? s.usage : { day, photos: 0, descriptions: 0 };
     if (usage[kind] >= (kind === "photos" ? 10 : 20))
       throw new Error(t("foodAiLimit"));
-    update(this.repo, (s) => ({
-      ...s,
-      usage: { ...usage, [kind]: usage[kind] + 1 },
-    }));
+    this.repo.atomic(() => {
+      if (kind === 'descriptions') this.reserveAllowance(kind);
+      update(this.repo, (s) => ({ ...s, usage: { ...usage, [kind]: usage[kind] + 1 } }));
+    });
   }
   private async send(text: string, jpeg?: string) {
     const generation = this.permission(),
@@ -263,8 +305,11 @@ export class FoodAiService {
     if (active.has(this.repo)) throw new Error(t("foodAiBusy"));
     active.set(this.repo, controller);
     this.controller = controller;
+    let chargedDescribe = false;
+    let sent = false;
     try {
       this.reserve(jpeg ? "photos" : "descriptions");
+      chargedDescribe = !jpeg;
       // A local-save subscriber can revoke consent while quota is reserved.
       // Check again at the exact egress boundary, before calling the client.
       if (
@@ -273,6 +318,7 @@ export class FoodAiService {
         generation !== aiState(this.repo).generation
       )
         throw new Error(t("foodAiConsentRequired"));
+      sent = true;
       const result = await this.client(payload, controller.signal);
       if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();
       if (
@@ -283,6 +329,18 @@ export class FoodAiService {
         throw new Error(t("foodAiConsentRequired"));
       return parseEstimates(result);
     } catch (error) {
+      // Refund a failure that never left the phone. Cancel keeps the try, as do
+      // offline and consent revocation after the request was sent.
+      const cancelled = error instanceof FoodAiCancelledError
+        || (controller.signal.aborted && aiState(this.repo).consent);
+      const offlineAfterSend = sent && error instanceof Error && /offline|network request failed/i.test(error.message);
+      const consentAfterSend = sent && (!aiState(this.repo).consent || generation !== aiState(this.repo).generation);
+      if (chargedDescribe && !cancelled && !offlineAfterSend && !consentAfterSend) {
+        try { this.releaseAllowance('descriptions'); } catch { /* Keep the request failure. */ }
+      }
+      if (chargedDescribe && !cancelled) {
+        try { this.releaseUsage('descriptions'); } catch { /* Keep the request failure. */ }
+      }
       if (controller.signal.aborted && aiState(this.repo).consent) throw new FoodAiCancelledError();
       if (error instanceof FoodAiDailyLimitError) {
         update(this.repo, (s) => ({
@@ -316,39 +374,47 @@ export class FoodAiService {
       throw new Error(t("foodAiFailure"));
     if (photo.thumbnail && photo.thumbnail.length > 40960)
       throw new Error(t("foodAiFailure"));
-    update(this.repo, (s) => {
-      if (s.usage.day === this.clock() && s.usage.photos >= 10)
-        return {
-          ...s,
-          sequence: s.sequence + 1,
-          fallback: [
-            ...s.fallback,
-            {
-              id: s.sequence + 1,
-              day,
-              meal,
-              thumbnail: s.thumbnails ? photo.thumbnail : undefined,
-            },
-          ],
-        };
-      if (s.queue.length >= 10) throw new Error(t("foodAiQueueFull"));
-      return {
-        ...s,
-        sequence: s.sequence + 1,
-        queue: [
-          ...s.queue,
-          {
-            id: s.sequence + 1,
-            day,
-            meal,
-            jpeg: photo.jpeg,
-            expiresAt: this.now() + PHOTO_TTL_MS,
-            attempts: 0,
-            nextAttemptAt: 0,
-            thumbnail: s.thumbnails ? photo.thumbnail : undefined,
-          },
-        ],
-      };
+    this.repo.atomic(() => {
+      this.reserveAllowance('photos');
+      try {
+        update(this.repo, (s) => {
+          if (s.usage.day === this.clock() && s.usage.photos >= 10)
+            return {
+              ...s,
+              sequence: s.sequence + 1,
+              fallback: [
+                ...s.fallback,
+                {
+                  id: s.sequence + 1,
+                  day,
+                  meal,
+                  thumbnail: s.thumbnails ? photo.thumbnail : undefined,
+                },
+              ],
+            };
+          if (s.queue.length >= 10) throw new Error(t("foodAiQueueFull"));
+          return {
+            ...s,
+            sequence: s.sequence + 1,
+            queue: [
+              ...s.queue,
+              {
+                id: s.sequence + 1,
+                day,
+                meal,
+                jpeg: photo.jpeg,
+                expiresAt: this.now() + PHOTO_TTL_MS,
+                attempts: 0,
+                nextAttemptAt: 0,
+                thumbnail: s.thumbnails ? photo.thumbnail : undefined,
+              },
+            ],
+          };
+        });
+      } catch (error) {
+        try { this.releaseAllowance('photos'); } catch { /* Keep the queue failure. */ }
+        throw error;
+      }
     });
   }
   async drain() {

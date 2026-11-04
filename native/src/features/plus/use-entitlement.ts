@@ -1,18 +1,25 @@
 import { createContext, createElement, useContext, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
-import { createEntitlementStore, type EntitlementStore } from './entitlement-store';
+import { createEntitlementStore, type EntitlementSnapshot, type EntitlementStore } from './entitlement-store';
 import { isFeatureAvailable, type Feature } from './features';
-import { createMockPurchaseProvider } from './mock-provider';
+import * as rootPurchase from './root-purchase';
 import type { PurchaseProvider } from './types';
 
+const PurchaseContext = createContext<PurchaseProvider | null>(null);
 const EntitlementContext = createContext<EntitlementStore | null>(null);
 
-/** Mount explicitly when wiring a future screen. Production must inject its adapter. */
+/** Dev/test falls back to the simulator. Production falls back to a provider that cannot grant Plus. */
 export function EntitlementProvider({ provider, children }: PropsWithChildren<{ provider?: PurchaseProvider }>) {
-  const [developmentProvider] = useState(() => __DEV__ ? createMockPurchaseProvider() : undefined);
-  const selectedProvider = provider ?? developmentProvider;
-  const store = useMemo(() => selectedProvider ? createEntitlementStore(selectedProvider) : null, [selectedProvider]);
-  if (!store) throw new Error('EntitlementProvider requires an explicit purchase provider outside development.');
-  return createElement(EntitlementContext.Provider, { value: store }, children);
+  // Build the fallback only when the caller did not inject a provider.
+  const [fallbackProvider] = useState(() => provider ?? rootPurchase.createRootPurchaseProvider());
+  const selectedProvider = provider ?? fallbackProvider;
+  const store = useMemo(() => createEntitlementStore(selectedProvider), [selectedProvider]);
+  return createElement(PurchaseContext.Provider, { value: selectedProvider }, createElement(EntitlementContext.Provider, { value: store }, children));
+}
+
+/** Unsettled and failed loads are not shown as the free plan. */
+export function entitlementPlanLabel(snapshot: Pick<EntitlementSnapshot, 'settled' | 'status' | 'entitlement'>): string {
+  if (!snapshot.settled) return snapshot.status === 'error' ? 'Plan status unavailable' : 'Checking plan…';
+  return snapshot.entitlement === 'plus' ? 'Insight Plus active (simulated)' : 'Free plan';
 }
 
 export function useEntitlement() {
@@ -26,4 +33,10 @@ export function useEntitlement() {
     refresh: store.refresh,
     isFeatureAvailable: (feature: Feature) => isFeatureAvailable(feature, snapshot.entitlement),
   };
+}
+
+export function usePurchaseProvider() {
+  const provider = useContext(PurchaseContext);
+  if (!provider) throw new Error('usePurchaseProvider requires EntitlementProvider.');
+  return provider;
 }

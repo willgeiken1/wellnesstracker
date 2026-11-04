@@ -1,3 +1,4 @@
+import { EntitlementProvider } from '../src/features/plus/use-entitlement';
 // Shell-only fixtures have no signed-in repository; feature behavior is covered by body-ui.
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
@@ -31,14 +32,14 @@ function ThemeProbe() {
   return <Text testID="theme">{`${mode}/${accent}/${colors.bg}`}</Text>;
 }
 test('tab shell renders the five native tab labels', async () => {
-  await render(<ThemeProvider><AppTabs /></ThemeProvider>);
+  await render(<EntitlementProvider><ThemeProvider><AppTabs /></ThemeProvider></EntitlementProvider>);
   for (const label of ['Home', 'Workouts', 'Food', 'Progress', 'Insights']) {
     expect(screen.getByText(label)).toBeTruthy();
     expect(screen.getByLabelText(label)).toBeTruthy();
   }
 });
 test('Appearance changes theme, accent, and restores system following', async () => {
-  await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
+  await render(<EntitlementProvider><ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider></EntitlementProvider>);
   await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
   expect(screen.getByTestId('theme')).toHaveTextContent('light/sea/#F3F4F1');
   await fireEvent.press(screen.getByRole('tab', { name: 'Dark' }));
@@ -61,7 +62,7 @@ test.each([
   const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...getDimensions(key), fontScale: 2 }));
   const fontScale = jest.spyOn(PixelRatio, 'getFontScale').mockReturnValue(2);
   try {
-    const result = await render(<ThemeProvider><Component /></ThemeProvider>);
+    const result = await render(<EntitlementProvider><ThemeProvider><Component /></ThemeProvider></EntitlementProvider>);
     // Walk host responders independently of role queries: missing roles must not hide controls.
     const pressables = result.container.queryAll(node => typeof node.props.onPress === 'function' ||
       typeof node.props.onResponderRelease === 'function');
