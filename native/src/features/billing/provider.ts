@@ -21,36 +21,72 @@ export interface BillingPort {
   subscribe(listener: (receipt: BillingReceipt) => void): Unsubscribe;
 }
 
+export const OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function parseReceipt(value: unknown): BillingReceipt | undefined {
+  if (typeof value !== 'object' || value === null) return;
+  const receipt = value as Partial<BillingReceipt>;
+  if (typeof receipt.active !== 'boolean' || typeof receipt.expiresAtMs !== 'number'
+    || !Number.isFinite(receipt.expiresAtMs)) return;
+  return { active: receipt.active, expiresAtMs: receipt.expiresAtMs };
+}
+
 const unavailable = { status: 'error', error: { code: 'unavailable' } } as const;
 const failure = { status: 'error', error: { code: 'provider_failure' } } as const;
 
 /** In-memory boundary only: no SDK, persistence, network, or app wiring.
- * Refresh on foreground and at the effective deadline; no offline grace is invented.
+ * Refresh on foreground and at access deadlines; unreachable refreshes allow bounded seven-day grace.
  * Dispose before logout/account changes, then create a fresh instance for the new account.
  */
-export function createBillingProvider(port: BillingPort, now: () => number = Date.now): PurchaseProvider & { dispose(): void } {
+export function createBillingProvider(port: BillingPort, now: () => number = Date.now, timeoutMs = 30_000): PurchaseProvider & { dispose(): void } {
   let disposed = false;
   let busy = false;
   let revision = 0;
+  let revokedRevision = 0;
+  let confirmedAtMs: number | undefined;
+  let offline = false;
   let receipt: BillingReceipt | undefined;
   let disconnect: Unsubscribe | undefined;
   const listeners = new Set<(value: Entitlement) => void>();
   const entitlement = (): Entitlement => {
     const time = now();
-    return receipt?.active === true && Number.isFinite(receipt.expiresAtMs)
-      && Number.isFinite(time) && receipt.expiresAtMs > time ? 'plus' : 'free';
+    if (!receipt?.active || !Number.isFinite(time)) return 'free';
+    const deadline = offline && confirmedAtMs !== undefined
+      ? Math.min(confirmedAtMs + OFFLINE_GRACE_MS, receipt.expiresAtMs + OFFLINE_GRACE_MS)
+      : receipt.expiresAtMs;
+    return time < deadline ? 'plus' : 'free';
   };
   const publish = () => {
     for (const listener of [...listeners]) {
       try { listener(entitlement()); } catch { /* Isolate consumers without logging. */ }
     }
   };
+  const confirm = (value: BillingReceipt | undefined) => {
+    const current = ++revision;
+    receipt = value;
+    offline = false;
+    const time = now();
+    confirmedAtMs = value?.active && Number.isFinite(time) && value.expiresAtMs > time ? time : undefined;
+    if (!value?.active) revokedRevision = current;
+    publish();
+  };
+  // Timeout only settles the boundary; a late SDK result has no state-changing handler.
+  const withTimeout = async <T>(operation: () => Promise<Result<T>>): Promise<Result<T>> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        new Promise<Result<T>>(resolve => {
+          timer = setTimeout(() => resolve(failure), Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 30_000);
+        }),
+        operation(),
+      ]);
+    } catch { return failure; }
+    finally { clearTimeout(timer); }
+  };
   try {
     disconnect = port.subscribe(value => {
       if (disposed) return;
-      ++revision;
-      receipt = { active: value.active, expiresAtMs: value.expiresAtMs };
-      publish();
+      confirm(parseReceipt(value));
     });
   } catch {
     // Without revocation notifications this instance cannot safely grant access.
@@ -62,16 +98,24 @@ export function createBillingProvider(port: BillingPort, now: () => number = Dat
     busy = true;
     const started = revision;
     try {
-      let result: Result<BillingReceipt>;
-      try { result = await operation(); } catch { result = failure; }
+      const result = await withTimeout(operation);
       if (disposed) return unavailable;
-      if (started !== revision) return { status: 'success', value: entitlement() };
       if (result.status === 'success') {
-        receipt = { active: result.value.active, expiresAtMs: result.value.expiresAtMs };
-        publish();
+        const value = parseReceipt(result.value);
+        if (!value) {
+          confirm(undefined);
+          return failure;
+        }
+        // Completion is newer than active snapshots delivered mid-operation. A
+        // revocation delivered after this operation started remains a barrier.
+        if (!value.active || revokedRevision <= started) confirm(value);
         return { status: 'success', value: entitlement() };
       }
-      if (refresh) { receipt = undefined; publish(); }
+      if (refresh && started === revision) {
+        offline = result.status === 'error' && result.error.code !== 'invalid_product' && confirmedAtMs !== undefined;
+        if (!offline) { receipt = undefined; confirmedAtMs = undefined; }
+        publish();
+      }
       // Only allowlisted error codes cross this boundary, never raw SDK details.
       if (result.status === 'error') return failure;
       return { status: result.status };
@@ -81,7 +125,7 @@ export function createBillingProvider(port: BillingPort, now: () => number = Dat
     getProducts: async () => {
       if (disposed) return unavailable;
       try {
-        const result = await port.getProducts();
+        const result = await withTimeout(() => port.getProducts());
         if (disposed) return unavailable;
         if (result.status === 'error') return failure;
         if (result.status !== 'success') return { status: result.status };
