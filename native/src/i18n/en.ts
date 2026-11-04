@@ -55,7 +55,7 @@ export const en = {
   workoutAiTitle: 'AI workout summary',
   workoutAiGenerate: 'Create AI summary',
   workoutAiRegenerate: 'Regenerate AI summary',
-  workoutAiLimitHint: '5 summaries per day. Each regeneration uses one summary.',
+  workoutAiLimitHint: '5 summaries per day. Each regeneration uses one summary. A cancelled summary still counts toward the daily limit.',
   workoutAiLimit: 'You have used all 5 workout summaries today. Try again tomorrow.',
   workoutAiFailure: 'Could not create the workout summary. Try again.',
   workoutAiChanged: 'This workout changed. Create a new summary for the updated workout.',

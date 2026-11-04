@@ -91,6 +91,8 @@ test('length picker persists and cancellation on unmount discards late output', 
         children: React.ReactNode;
     }) => <ThemeProvider><WorkoutAiClientContext.Provider value={client}>{children}</WorkoutAiClientContext.Provider></ThemeProvider>;
     const view = await render(<WorkoutAiCard store={store} id={session.id}/>, { wrapper });
+    expect(screen.getByText(t('workoutAiLimitHint'))).toBeTruthy();
+    expect(t('workoutAiLimitHint')).toContain('A cancelled summary still counts toward the daily limit.');
     await fireEvent.press(screen.getByRole('button', { name: t('workoutAiShort') }));
     await fireEvent.press(screen.getByRole('button', { name: t('workoutAiGenerate') }));
     expect(client.mock.calls[0][1]).toBe('short');
