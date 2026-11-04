@@ -271,13 +271,15 @@ jobs:
   functions:
     name: Deploy functions
     needs: [plan, migrate]
-    # Ungated. Runs after migrate when there is one; skipped migrate is fine,
-    # a failed or rejected migrate stops it.
+    # No approval gate. Runs after migrate when there is one; skipped migrate is
+    # fine, a failed or rejected migrate stops it. The environment has no
+    # reviewers; it only limits the management token to main.
     if: >-
       always() &&
       needs.plan.result == 'success' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
       (needs.plan.outputs.deploy_all == 'true' || needs.plan.outputs.functions != '')
+    environment: supabase-functions-deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
