@@ -22,6 +22,25 @@ test.each(['photos', 'descriptions'] as const)('free %s shares the daily Snap/De
   expect(used.daily.photos).toBe(1);
 });
 
+test.each([
+  ['photos', 'photos'],
+  ['descriptions', 'descriptions'],
+  ['photos', 'descriptions'],
+  ['descriptions', 'photos'],
+] as const)('free allows %s then %s and blocks the third attempt of either kind', (first, second) => {
+  const daily = { ...usage.daily };
+  for (const [index, kind] of [first, second].entries()) {
+    expect(foodAiQuota({ tier: 'free', kind, usage: { daily }, clock, timeZone: 'UTC' }))
+      .toMatchObject({ allowed: true, remaining: 2 - index, reason: null });
+    // The caller persists each reservation; the policy itself does not mutate usage.
+    daily[kind] += 1;
+  }
+  for (const kind of ['photos', 'descriptions'] as const) {
+    expect(foodAiQuota({ tier: 'free', kind, usage: { daily }, clock, timeZone: 'UTC' }))
+      .toMatchObject({ allowed: false, remaining: 0, reason: 'free_daily_limit' });
+  }
+});
+
 test.each([[1, 1], [2, 0], [0, 2], [3, 4]])('free cap hit at %i photos + %i descriptions blocks both kinds', (photos, descriptions) => {
   for (const kind of ['photos', 'descriptions'] as const) {
     expect(foodAiQuota({ tier: 'free', kind, usage: { daily: { ...usage.daily, photos, descriptions } }, clock, timeZone: 'UTC' }))
@@ -59,6 +78,19 @@ describe.each(['free', 'plus'] as const)('%s local day rollover', tier => {
   ])('reset spans Chicago DST/year boundary at %s', (now, resetsAt) => {
     expect(foodAiQuota({ tier, kind: 'photos', usage, clock: () => new Date(now), timeZone: 'America/Chicago' }).resetsAt).toBe(resetsAt);
   });
+});
+
+test.each([
+  ['2026-03-08', '2026-03-09T04:59:59.999Z', '2026-03-09T05:00:00.000Z'],
+  ['2026-11-01', '2026-11-02T05:59:59.999Z', '2026-11-02T06:00:00.000Z'],
+] as const)('free budget stays exhausted throughout the Chicago DST day %s and resets at midnight', (day, before, midnight) => {
+  const daily = { day, photos: 1, descriptions: 1 };
+  for (const kind of ['photos', 'descriptions'] as const) {
+    expect(foodAiQuota({ tier: 'free', kind, usage: { daily }, clock: () => new Date(before), timeZone: 'America/Chicago' }))
+      .toEqual({ allowed: false, remaining: 0, reason: 'free_daily_limit', resetsAt: midnight });
+    expect(foodAiQuota({ tier: 'free', kind, usage: { daily }, clock: () => new Date(midnight), timeZone: 'America/Chicago' }))
+      .toMatchObject({ allowed: true, remaining: 2, reason: null });
+  }
 });
 
 test('a stale daily bucket replenishes the full shared free allowance', () => {
