@@ -3,7 +3,7 @@
 Status: **draft with placeholder values.** The real values come from the S3 slider mockup, through a proposal PR.
 
 ## Rules (D18, D19, D24, FP82, FP83)
-- Claude and Codex both load the shared Insight design skill before any UI work (D18, FP83). The skill gets written in S2. **Codex never edits `tokens.ts`.**
+- Before any UI work, read the six-part Claude design handoff as the visual reference only, plus the repo's design docs (`design/README.md`, `native/design/REDESIGN.md`, `native/design/INS-01-TOKEN-PROPOSAL.md`) and `AGENTS.md`, which hold the token and health-data rules (Will, 7:14 PM CT, Nov 3, 2026). **Codex never edits `tokens.ts`.**
 - Any token change goes through a proposal PR. Elliot opens it (Claude drafts), Codex does a read-only GPT check, Quinn reviews, and then it waits for Will's save tap. Token and design PRs are excluded from VR25 auto-merge.
 - Figma copies these tokens. This repo folder is the source.
 - At each milestone Quinn checks Apple's Human Interface Guidelines and adds a pass/fail list to the log below (D21).
@@ -54,6 +54,7 @@ Screenshot pairs from the mockups get added here in the next mockup pass.
 ## Changelog (D20)
 - 0.1.0 (Oct 23, 2026): S1 draft with placeholder values.
 - 0.1.1 (Oct 23, 2026): B1 — colour leaves are string, so theme overrides typecheck. M1 — placeholder colours miss the D6 contrast rule; S3 sets the real values. M2 — accent and recovery placeholders differ. M3 — one shared motion scale, and all six type steps map to iOS text styles. M4 — the selection-detent comment reads animation idea #23 / W6. README token paths match `tokens.ts`. Dusk and Sandstone each override all five pillar colours (placeholders in the base hue families; S3 tunes them). The shared Insight design skill is named; it gets written in S2.
+- Nov 3, 2026 (Will, 7:14 PM CT): The shared Insight design skill is dropped. Before any UI work, read the six-part Claude design handoff as the visual reference only, plus the repo's design docs and `AGENTS.md`, which hold the token and health-data rules.
 
 ## Quinn HIG log (D21)
 No milestone checks yet.
