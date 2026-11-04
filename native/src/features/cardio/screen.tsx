@@ -5,6 +5,7 @@ import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import type { Repository } from '../../data/repository';
 import { useTheme } from '../../design/theme-provider';
+import { tokens } from '../../design/tokens';
 import { t, type MessageKey } from '../../i18n/en';
 import { bodyWeight, elapsedMs, kcalPerMin, localDay, machines, weeklyMinutes, type Machine, type Settings } from '../../core/cardio/rules';
 import { clock, layout, Panel } from '../workout/primitives';
@@ -28,14 +29,14 @@ function Field({ label, value, onChangeText, decimal = false }: { label: string;
   return <View style={{ gap: 4 }}><ThemedText muted variant="caption">{label}</ThemedText><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} keyboardType={decimal ? 'decimal-pad' : 'default'} autoCapitalize="none" style={[layout.input, { color: colors.text, backgroundColor: colors['surface-2'] }]} /></View>;
 }
 function WeeklyRing({ minutes, goal }: { minutes: number; goal: number }) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const circumference = Math.PI * 60;
   const label = t('cardioWeekSummary').replace('{minutes}', String(Math.round(minutes))).replace('{goal}', String(goal));
   // Deliberately static, including on goal changes: no animation under Reduce Motion.
   return <View accessible style={layout.row} accessibilityRole="progressbar" accessibilityLabel={label} accessibilityValue={{ min: 0, max: goal, now: Math.min(minutes, goal), text: label }}>
     <Svg accessible={false} width={108} height={108} viewBox="0 0 76 76">
       <Circle cx={38} cy={38} r={30} fill="none" stroke={colors['surface-2']} strokeWidth={8} />
-      <Circle cx={38} cy={38} r={30} fill="none" stroke={colors.accent} strokeWidth={8} strokeDasharray={[circumference * Math.min(1, minutes / goal), circumference]} rotation={-90} origin="38,38" />
+      <Circle cx={38} cy={38} r={30} fill="none" stroke={tokens.color.pillar.training[mode]} strokeWidth={8} strokeDasharray={[circumference * Math.min(1, minutes / goal), circumference]} rotation={-90} origin="38,38" />
     </Svg>
     <View style={{ flex: 1 }}><ThemedText variant="headline">{t('cardioWeeklyGoal')}</ThemedText><ThemedText>{label}</ThemedText></View>
   </View>;

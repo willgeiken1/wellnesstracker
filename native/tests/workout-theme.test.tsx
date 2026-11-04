@@ -2,7 +2,7 @@ jest.mock("expo-router", () => ({router:{canDismiss:()=>false,replace:jest.fn()}
 import * as ReactNative from "react-native";
 import { render, screen, within } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/design/theme-provider";
-import { createTheme } from "../src/design/tokens";
+import { createTheme, tokens } from "../src/design/tokens";
 import { SetRow } from "../src/features/workout/set-row";
 import { SyncBadge } from "../src/features/workout/badge";
 import { Keypad } from "../src/features/workout/keypad";
@@ -50,7 +50,7 @@ test.each(["dark", "light"] as const)(
       });
       expect(screen.getByTestId("set-0-0-done").queryAll(node => node.type === "RNSVGPath")[0].props.stroke).toEqual({type:0,payload:ReactNative.processColor(c["on-accent"])});
       expect(screen.getByTestId("sync-chip")).toHaveStyle({
-        backgroundColor: c["surface-2"],
+        backgroundColor: tokens.color.surface.panel[mode],
       });
     } finally {
       scheme.mockRestore();
@@ -81,7 +81,7 @@ test.each(["dark", "light"] as const)(
         </ThemeProvider>,
       );
       expect(screen.getByTestId("keypad-sheet")).toHaveStyle({
-        backgroundColor: c.surface,
+        backgroundColor: tokens.color.surface.card[mode],
       });
       expect(screen.getByTestId("keypad-next")).toHaveStyle({
         backgroundColor: c.accent,
@@ -100,7 +100,7 @@ test.each(["dark", "light"] as const)("summary uses %s card and action tokens", 
   const fixture=createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},"summary")!;
   const c=createTheme(mode,"sea");
   await render(<ThemeProvider><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
-  for (const id of ["summary-stats","summary-pr","summary-shelf"]) expect(screen.getByTestId(id)).toHaveStyle({backgroundColor:c.surface});
+  for (const id of ["summary-stats","summary-pr","summary-shelf"]) expect(screen.getByTestId(id)).toHaveStyle({backgroundColor:tokens.color.surface.card[mode]});
   expect(screen.getByTestId("summary-done")).toHaveStyle({backgroundColor:c.accent});
   expect(within(screen.getByTestId("summary-done")).getByText("Done")).toHaveStyle({color:c["on-accent"]});
   expect(screen.getByText("7 tokens ›")).toBeTruthy();
@@ -137,7 +137,7 @@ test.each(['dark', 'light'] as const)('rest ring track uses the %s semantic toke
     await render(<ThemeProvider><RestContours seconds={60} duration={90} style="unwind" /></ThemeProvider>);
     const track = screen.getByTestId('rest-contours').queryAll(n => n.type === 'RNSVGPath')[0];
     const colors = createTheme(mode, 'sea');
-    expect(track.props.stroke).toEqual({ type: 0, payload: ReactNative.processColor(colors[mode === 'dark' ? 'text-muted' : 'surface-2']) });
+    expect(track.props.stroke).toEqual({ type: 0, payload: ReactNative.processColor(mode === 'dark' ? colors['text-muted'] : tokens.color.surface.panel[mode]) });
     expect(track.props.opacity ?? 1).toBe(mode === 'dark' ? 0.4 : 1);
   } finally { scheme.mockRestore(); }
 });
