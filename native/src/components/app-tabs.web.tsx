@@ -8,7 +8,7 @@ export default function AppTabs() {
   const { colors } = useTheme();
   return <Tabs screenOptions={{ headerShown: false, tabBarAllowFontScaling: true,
     tabBarButton: props => <PlatformPressable {...props} accessibilityRole="button" />, tabBarActiveTintColor: colors.accent,
-    tabBarInactiveTintColor: colors['text-muted'], tabBarStyle: { backgroundColor: colors.bg } }}>
+    tabBarInactiveTintColor: colors['text-muted'], tabBarStyle: { backgroundColor: colors.bg, minHeight: 44 } }}>
     {tabs.map(tab => <Tabs.Screen key={tab.route} name={tab.route} options={{ title: t(tab.label),
       tabBarAccessibilityLabel: t(tab.label), tabBarIcon: ({ color }) => <Icon name={tab.label} color={color} /> }} />)}
   </Tabs>;
