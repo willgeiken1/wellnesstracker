@@ -6,7 +6,7 @@ import { AppState, View } from 'react-native';
 import type { Repository } from '../../data/repository';
 import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
-import { t } from '../../i18n/en';
+import { foodDayLabel, t } from '../../i18n/en';
 import { today } from '../onboarding/model';
 import { Field } from '../onboarding/fields';
 import { Panel } from '../workout/primitives';
@@ -41,7 +41,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  return <View style={{gap:16}}>
   <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
    <FoodAction label={t('foodPrevious')} onPress={()=>chooseDay(shiftDay(day,-1))}>{'‹'}</FoodAction>
-   <View style={{flex:1}}><ThemedText variant="headline">{t('foodDay').replace('{day}',day)}</ThemedText><Button label={t('foodCalendar')} variant="secondary" onPress={()=>setCalendar(!calendar)}/></View>
+   <View style={{flex:1}}><ThemedText variant="headline">{foodDayLabel(day,today())}</ThemedText><Button label={t('foodCalendar')} variant="secondary" onPress={()=>setCalendar(!calendar)}/></View>
    <FoodAction label={t('foodNext')} disabled={day>=today()} onPress={()=>chooseDay(shiftDay(day,1))}>{'›'}</FoodAction>
   </View>
   {calendar&&<FoodCalendar day={day} today={today()} onSelect={chooseDay}/>}
