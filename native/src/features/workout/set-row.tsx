@@ -6,6 +6,10 @@ import { useTheme } from "@/design/theme-provider";
 import type { Draft } from "@/data/workout/store";
 import { t } from "@/i18n/en";
 import { Line, layout } from "./primitives";
+/** A faded hint is a suggestion, so screen readers say so instead of "blank". */
+function spoken(hint: string) {
+  return hint && hint !== "—" ? `${t("suggested")} ${hint}` : t("blank");
+}
 export function SetRow({
   exerciseIndex = 0,
   exercise,
@@ -96,7 +100,7 @@ export function SetRow({
           testID={`set-${exerciseIndex}-${index}${side === "right" ? "-right" : ""}-${field}`}
           key={field}
           accessibilityRole="button"
-          accessibilityLabel={`${label}, ${t(field)}, ${draft[field] || t("blank")}`}
+          accessibilityLabel={`${label}, ${t(field)}, ${draft[field] || spoken(field === "weight" ? hint : repsHint)}`}
           hitSlop={3}
           onPress={() => onEdit(field)}
           style={[

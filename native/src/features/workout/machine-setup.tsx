@@ -4,16 +4,18 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import type { WorkoutStore } from '@/data/workout/store';
-import { fromKg, rounded, toKg, type Unit } from '@/core/workout/rules';
+import { fromKg, rounded, toKg, type Equipment, type Unit } from '@/core/workout/rules';
 import { t } from '@/i18n/en';
 import { Sheet, layout } from './primitives';
-export function MachineSetup({ store, name }: { store: WorkoutStore; name: string }) {
+/** The same editor serves every lift; only machines and cables call it "Machine setup". */
+function setupLabel(equipment?: Equipment) { return t(!equipment || equipment === 'machine' || equipment === 'cable' ? 'machineSetup' : 'barStepSetup'); }
+export function MachineSetup({ store, name, equipment }: { store: WorkoutStore; name: string; equipment?: Equipment }) {
   const [open, setOpen] = useState(false);
   const note = store.preferences().machine(name);
-  return <>{!!note.text && <ThemedText muted variant="caption">{note.text}</ThemedText>}<Button label={t('machineSetup')} variant="secondary" onPress={() => setOpen(true)} />
-    {open && <SetupEditor store={store} name={name} onClose={() => setOpen(false)} />}</>;
+  return <>{!!note.text && <ThemedText muted variant="caption">{note.text}</ThemedText>}<Button label={setupLabel(equipment)} variant="secondary" onPress={() => setOpen(true)} />
+    {open && <SetupEditor store={store} name={name} title={setupLabel(equipment)} onClose={() => setOpen(false)} />}</>;
 }
-function SetupEditor({ store, name, onClose }: { store: WorkoutStore; name: string; onClose: () => void }) {
+function SetupEditor({ store, name, title, onClose }: { store: WorkoutStore; name: string; title: string; onClose: () => void }) {
   const note = store.preferences().machine(name);
   const [text, setText] = useState(note.text), [step, setStep] = useState(note.step === undefined ? '' : String(note.step)),
     [bar, setBar] = useState(note.bar_weight === undefined ? '' : String(note.bar_weight)),
@@ -28,7 +30,7 @@ function SetupEditor({ store, name, onClose }: { store: WorkoutStore; name: stri
     setBar(convert(bar));
     setOverride(next);
   }
-  return <Sheet expanded label={`${name} · ${t('machineSetup')}`} onClose={onClose}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={layout.stack}>
+  return <Sheet expanded label={`${name} · ${title}`} onClose={onClose}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={layout.stack}>
     <ThemedText>{t('machineNotes')}</ThemedText>
     <TextInput accessibilityLabel={t('machineNotes')} multiline value={text} onChangeText={setText} style={inputStyle} />
     <ThemedText>{t('setupStep').replace('{unit}', unit)}</ThemedText>
