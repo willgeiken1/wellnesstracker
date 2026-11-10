@@ -3,6 +3,7 @@ import { AppState, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import type { WorkoutStore } from '@/data/workout/store';
 import { useHomeWidgets, type WidgetId } from '@/features/home-widgets';
@@ -58,7 +59,7 @@ function BodyMap({ store }: { store: WorkoutStore }) {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') setNow(Date.now()); });
     return () => { clearInterval(timer); sub.remove(); };
   }, []);
-  return <BodyAtlas sessions={sessions} now={now} haptics={store.repo.localGet<boolean>('haptics') !== false} />;
+  return <Card><BodyAtlas compact sessions={sessions} now={now} haptics={store.repo.localGet<boolean>('haptics') !== false} /></Card>;
 }
 
 function TodayWorkout({ store }: { store: WorkoutStore }) {
