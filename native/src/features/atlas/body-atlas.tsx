@@ -41,6 +41,8 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  const values=useMemo(()=>heatmap(sessions,now),[sessions,now]), geometry=atlasGeometry[body][side];
  const valuesByKey=useMemo(()=>new Map(values.map(value=>[value.key,value])),[values]);
  const current=selected?valuesByKey.get(selected):undefined;
+ // Line work: cut out of the body in dark mode, drawn in soft ink on the pale light-mode body.
+ const ink=mode==='dark'?colors.bg:colors['text-muted'], inkOpacity=mode==='dark'?1:.55;
  const select=(key: string)=>{
   setSelected(key);
   if(haptics) void impactAsync(ImpactFeedbackStyle.Light).catch(()=>{});
@@ -56,7 +58,7 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
   <ThemedText muted>{t('atlasHint')}</ThemedText>
   {!list && <View style={{width:'100%',maxWidth:compact?180:320,alignSelf:'center',aspectRatio:200/440}}>
    <Svg width="100%" height="100%" viewBox="0 0 200 440" accessible={false}>
-    <G id="skin"><Path d={geometry.skin} fill={colors['surface-2']} stroke={colors['text-muted']} strokeWidth={1}/></G>
+    <G id="skin"><Path d={geometry.skin} fill={colors['surface-2']} stroke={ink} strokeOpacity={inkOpacity} strokeWidth={.9} strokeLinejoin="round"/></G>
     {/* Enlarged strokes sit behind exact paths; overlapping targets use paint order.
         Non-scaling strokes retain a 44 pt target even in compact previews.
         The list remains the precise selection path for adjacent small regions. */}
@@ -64,14 +66,19 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
      testID={`atlas-hit-${path.id}`} d={path.d} fill="transparent" stroke="transparent"
      strokeWidth={44} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
      accessible={false} onPress={()=>select(path.id)}/>)}</G>
+    {/* Untrained muscles keep the body colour, so only the line work shows until there is data.
+        Deep muscles sit on top as dashed outlines and tint when trained. */}
     <G id="muscles">{geometry.muscles.map(path=>{
-     const value=valuesByKey.get(path.id)!;
+     const value=valuesByKey.get(path.id)!, chosen=selected===path.id, trained=value.sets>0;
      return <AccessiblePath key={path.id} id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
-      fill={heatFill(value,mode==='dark')} fillOpacity={.65+.35*value.freshness}
-      stroke={selected===path.id?colors.text:colors.bg} strokeWidth={selected===path.id?2.5:.8}
-      accessible accessibilityRole="button" accessibilityState={{selected:selected===path.id}} accessibilityLabel={atlasLabel(value,now)}
+      fill={trained?heatFill(value,mode==='dark'):path.deep?'transparent':colors['surface-2']}
+      fillOpacity={path.deep?(trained?.6:0):trained?.65+.35*value.freshness:1}
+      stroke={chosen?colors.text:path.deep?colors['text-muted']:ink} strokeOpacity={chosen||path.deep?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
+      strokeDasharray={path.deep&&!chosen?[2.2,1.6]:undefined} strokeLinejoin="round"
+      accessible accessibilityRole="button" accessibilityState={{selected:chosen}} accessibilityLabel={atlasLabel(value,now)}
       onPress={()=>select(path.id)}/>;
     })}</G>
+    <G id="lines" pointerEvents="none"><Path d={geometry.lines} fill="none" stroke={ink} strokeOpacity={inkOpacity} strokeWidth={.8} strokeLinecap="round" strokeLinejoin="round"/></G>
    </Svg>
   </View>}
   <ThemedText muted>{t('atlasLegend')}</ThemedText>
