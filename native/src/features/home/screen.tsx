@@ -130,7 +130,7 @@ export function Home() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
-            {auth.demo && <ThemedText muted style={{ fontSize: 11, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
+            {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
           </View>
           <ThemedText variant="title" accessibilityRole="header" style={semibold}>{greeting(now.getHours())}</ThemedText>
         </View>
@@ -238,7 +238,7 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
             ? <Contours values={values} width={40} height={30} mini />
             : <Circle cx={20} cy={15} r={2} fill={colors['text-muted']} opacity={0.5} />}
         </Svg>
-        <ThemedText muted={!isSelected} style={{ fontSize: 11, fontWeight: isSelected ? '700' : '400' }}>{name.slice(0, 1)}</ThemedText>
+        <ThemedText muted={!isSelected} variant="caption" style={{ fontWeight: isSelected ? '700' : '400' }}>{name.slice(0, 1)}</ThemedText>
       </Pressable>;
     })}
   </View>;
@@ -316,11 +316,11 @@ function Tiles({ store, facts }: { store: WorkoutStore; facts: DayFacts[] }) {
         <Card style={[card, { minHeight: 108, gap: 2 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}
-            <ThemedText muted style={{ fontSize: 12 }}>{tile.label}</ThemedText>
+            <ThemedText muted variant="caption">{tile.label}</ThemedText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
             <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
-            <ThemedText muted style={{ fontSize: 12 }}>{tile.unit}</ThemedText>
+            <ThemedText muted variant="caption">{tile.unit}</ThemedText>
           </View>
           <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} /></View>
         </Card>
