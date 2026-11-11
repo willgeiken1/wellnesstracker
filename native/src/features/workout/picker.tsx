@@ -21,14 +21,16 @@ export function ExercisePicker({ onPick, onClose, store, label = t('addExercise'
       <TextInput testID="exercise-picker-search" accessibilityLabel={t('searchExercise')} placeholder={t('searchExercise')} placeholderTextColor={colors['text-muted']} value={query} onChangeText={text => { setQuery(text); results.current?.scrollToOffset({ offset: 0, animated: false }); }} style={[layout.input, { color: colors.text, backgroundColor: colors['surface-2'] }]} />
       <MuscleChoices all filter value={muscle ? [muscle] : []} onChange={setMuscle} />
       <EquipmentChoices all value={equipment} onChange={setEquipment} />
-      <FlatList ref={results} testID="exercise-picker-results" data={matches} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyExtractor={e => e.name} initialNumToRender={12} renderItem={({ item, index }) => <Pressable testID={`exercise-picker-result-${index}`} accessibilityRole="button" accessibilityLabel={item.name} onPress={() => pick(item.name)}
+      <FlatList ref={results} testID="exercise-picker-results" data={matches} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyExtractor={e => e.name} initialNumToRender={12} renderItem={({ item, index }) => <Pressable testID={`exercise-picker-result-${index}`} accessibilityRole="button" accessibilityLabel={item.name} accessibilityValue={item.main ? { text: muscleLine(item) } : undefined} onPress={() => pick(item.name)}
         style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors['surface-2'], opacity: pressed ? 0.6 : 1 })}>
         <ThemedText>{item.name}</ThemedText>
-        {!!item.main && <ThemedText muted variant="caption">{t('mainMuscle').replace('{muscle}', muscleLabel(item.main))}{item.helpers.length ? ` · ${item.helpers.map(muscleLabel).join(', ')}` : ''}</ThemedText>}
+        {!!item.main && <ThemedText muted variant="caption">{muscleLine(item)}</ThemedText>}
       </Pressable>} ListFooterComponent={store && query.trim() && !library.some(e => e.name.toLowerCase() === query.trim().toLowerCase()) ? <Button label={t('createCustom').replace('{name}', query.trim())} variant={matches.length ? 'secondary' : 'primary'} onPress={() => setCreating(true)} /> : undefined} />
     </>}
   </Sheet>;
 }
+/** The muscles line under an exercise name. Also read to screen readers as the row's value, since the row's label is the name. */
+const muscleLine = (item: Exercise) => `${t('mainMuscle').replace('{muscle}', muscleLabel(item.main ?? ''))}${item.helpers.length ? ` · ${item.helpers.map(muscleLabel).join(', ')}` : ''}`;
 function CustomForm({ name, store, onPick, onCancel }: { name: string; store: WorkoutStore; onPick: (name: string) => void; onCancel: () => void }) {
   const [main, setMain] = useState(''), [equipment, setEquipment] = useState(''), [helpers, setHelpers] = useState<string[]>([]), [error, setError] = useState(false);
   const exercise = { name, main, equipment, helpers };

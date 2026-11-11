@@ -24,6 +24,8 @@ test('a result row is one button that carries its muscle line', async () => {
   await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'bench press');
   const row = screen.getByRole('button', { name: 'Bench Press' });
   expect(within(row).getByText(/Main muscle: Chest/)).toBeTruthy();
+  // The label is the name, so a screen reader gets the muscles as the row's value.
+  expect(row.props.accessibilityValue).toEqual({ text: expect.stringMatching(/^Main muscle: Chest/) });
   await fireEvent.press(row);
   expect(pick).toHaveBeenCalledWith('Bench Press');
 });
