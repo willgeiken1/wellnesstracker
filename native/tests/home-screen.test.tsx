@@ -156,3 +156,53 @@ describe('add button and the tab bar', () => {
     expect(screen.getByTestId('home-add-dock')).toHaveStyle({ bottom: expected });
   });
 });
+
+describe('review fixes: volume, targets and the hours after midnight', () => {
+  const { setTargets } = require('../src/features/food/model') as typeof import('../src/features/food/model');
+  const { entryVolumeKg, setVolumeKg } = require('../src/features/workout/volume') as typeof import('../src/features/workout/volume');
+  // Only the clock is faked, so rendering still runs on real timers. A Wednesday keeps Monday and Tuesday in the week strip.
+  const at = (hour: number, minute = 0) => jest.useFakeTimers({ now: new Date(2026, 10, 11, hour, minute), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'performance', 'hrtime'] });
+  afterEach(() => jest.useRealTimers());
+  const targets = (kcal: number) => ({ energy_kj: kcal * 4.184, protein_g: 100, carbs_g: 200, fat_g: 50 });
+  const food = (kcal: number) => ({ ...oats, energy_kj: kcal * 4.184 });
+
+  test('a one-arm set counts both sides', () => {
+    const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start();
+    const curl = store.addExercise(session.id, 'Dumbbell Curl', 2), press = store.addExercise(session.id, 'Bench Press', 1);
+    const kg = (entryId: string) => store.unit(entryId) === 'kg' ? 1 : 2.2046226218487757;
+    store.setUnilateral(curl.id, true);
+    store.editDraft(curl.id, 0, { weight: String(10 * kg(curl.id)), reps: '8', rightWeight: String(12 * kg(curl.id)), rightReps: '8' });
+    store.toggleDone(curl.id, 0);
+    store.editDraft(press.id, 0, { weight: String(100 * kg(press.id)), reps: '5' });
+    store.toggleDone(press.id, 0);
+    const fresh = new WorkoutStore(repo), entries = fresh.entries(session.id);
+    expect(setVolumeKg(fresh.sets(curl.id)[0])).toBeCloseTo(10 * 8 + 12 * 8, 3);
+    expect(entryVolumeKg(fresh, entries.find(e => e.id === curl.id)!)).toBeCloseTo(176, 3);
+    expect(entryVolumeKg(fresh, entries.find(e => e.id === press.id)!)).toBeCloseTo(500, 3);
+  });
+
+  test('an earlier day is measured against its own target, not today\'s', async () => {
+    at(12);
+    const repo = open(), meal = meals(repo)[0].id;
+    setTargets(repo, '2026-11-10', targets(1000), '2026-11-11');
+    setTargets(repo, '2026-11-11', targets(2000), '2026-11-11');
+    saveFood(repo, '2026-11-10', meal, food(500), 1, undefined, '2026-11-11');
+    saveFood(repo, '2026-11-11', meal, food(500), 1, undefined, '2026-11-11');
+    await render(<Home />, { wrapper });
+    expect(screen.getByRole('button', { name: /^Tuesday.*Food 50%$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Wednesday.*Today.*Food 25%$/ })).toBeTruthy();
+  });
+
+  test('before 4 a.m. last night\'s food shows once, under today, as the Food tab has it', async () => {
+    at(1, 30);
+    hours.mockRestore();
+    const repo = open(), meal = meals(repo)[0].id;
+    expect(attributedDay()).toBe('2026-11-10');
+    setTargets(repo, '2026-11-09', targets(1000), '2026-11-11');
+    saveFood(repo, '2026-11-10', meal, food(500), 1, undefined, '2026-11-11');
+    await render(<Home />, { wrapper });
+    expect(screen.getByRole('button', { name: /^Wednesday.*Today.*Food 50%$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Tuesday.*Food 0%$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Calories, 500 kcal' })).toBeTruthy();
+  });
+});
