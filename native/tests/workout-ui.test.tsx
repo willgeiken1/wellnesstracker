@@ -520,7 +520,8 @@ test('picker keeps search and tappable results in a keyboard avoiding container'
   expect(container).toHaveStyle({ paddingBottom: 300 });
   expect(screen.getByTestId('exercise-picker-results')).toHaveProp('keyboardShouldPersistTaps', 'handled');
   await fireEvent.press(screen.getByTestId('exercise-picker-result-0'));
-  expect(screen.getByText('Close-Grip Bench Press')).toBeTruthy();
+  // The picked exercise shows on its card and on the Up next card.
+  expect(screen.getAllByText('Close-Grip Bench Press').length).toBe(2);
 });
 
 test('logger reuses one native modal across picker, keypad, rest and finish; dismissals can reopen', async () => {

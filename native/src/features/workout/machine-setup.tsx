@@ -6,13 +6,14 @@ import { useTheme } from '@/design/theme-provider';
 import type { WorkoutStore } from '@/data/workout/store';
 import { fromKg, rounded, toKg, type Equipment, type Unit } from '@/core/workout/rules';
 import { t } from '@/i18n/en';
-import { Sheet, layout } from './primitives';
+import { Chip, Sheet, layout } from './primitives';
 /** The same editor serves every lift; only machines and cables call it "Machine setup". */
 function setupLabel(equipment?: Equipment) { return t(!equipment || equipment === 'machine' || equipment === 'cable' ? 'machineSetup' : 'barStepSetup'); }
-export function MachineSetup({ store, name, equipment }: { store: WorkoutStore; name: string; equipment?: Equipment }) {
+export function MachineSetup({ store, name, equipment, compact }: { store: WorkoutStore; name: string; equipment?: Equipment; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const note = store.preferences().machine(name);
-  return <>{!!note.text && <ThemedText muted variant="caption">{note.text}</ThemedText>}<Button label={setupLabel(equipment)} variant="secondary" onPress={() => setOpen(true)} />
+  return <>{!compact && !!note.text && <ThemedText muted variant="caption">{note.text}</ThemedText>}
+    {compact ? <Chip label={setupLabel(equipment)} onPress={() => setOpen(true)} /> : <Button label={setupLabel(equipment)} variant="secondary" onPress={() => setOpen(true)} />}
     {open && <SetupEditor store={store} name={name} title={setupLabel(equipment)} onClose={() => setOpen(false)} />}</>;
 }
 function SetupEditor({ store, name, title, onClose }: { store: WorkoutStore; name: string; title: string; onClose: () => void }) {
