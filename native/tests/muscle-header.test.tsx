@@ -20,3 +20,10 @@ test.each([[...muscleByKey.keys()][0], 'not-a-muscle'])('muscle page %s sets its
   expect(JSON.stringify(options)).not.toContain('[key]');
   expect(screen.getByRole('header')).toHaveTextContent(muscleByKey.get(key)?.name ?? 'Muscles this week');
 });
+
+test('a muscle whose scientific name is its everyday name shows the name once', async () => {
+  const same = [...muscleByKey.values()].find(m => m.scientific === m.name), different = [...muscleByKey.values()].find(m => m.scientific !== m.name);
+  if (same) { mockKey = same.key; const view = await render(<ThemeProvider><MusclePage /></ThemeProvider>); expect(screen.getAllByText(same.name)).toHaveLength(1); await view.unmount(); }
+  if (different) { mockKey = different.key; await render(<ThemeProvider><MusclePage /></ThemeProvider>); expect(screen.getByText(different.scientific)).toBeTruthy(); }
+  expect(same ?? different).toBeTruthy();
+});

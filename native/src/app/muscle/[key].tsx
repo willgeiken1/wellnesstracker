@@ -9,5 +9,5 @@ export default function MusclePage() {
  // Without these the header shows the route file name and the back button says "(tabs)". The name is the page title below.
  const header=<Stack.Screen options={{title:'',headerBackButtonDisplayMode:'minimal'}}/>;
  if(!muscle)return <>{header}<Screen title={t('atlasTitle')}><ThemedText accessibilityRole="alert">{t('atlasNotFound')}</ThemedText></Screen></>;
- return <>{header}<Screen title={muscle.name}><ThemedText>{muscle.scientific}</ThemedText><ThemedText>{t('atlasStub')}</ThemedText></Screen></>;
+ return <>{header}<Screen title={muscle.name}>{muscle.scientific!==muscle.name&&<ThemedText>{muscle.scientific}</ThemedText>}<ThemedText>{t('atlasStub')}</ThemedText></Screen></>;
 }
