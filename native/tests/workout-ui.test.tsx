@@ -228,6 +228,18 @@ test('compiled logger opens immediately after start', async () => {
   await render(<ActiveWorkout />, { wrapper });
   expect(screen.getByText('Add exercise')).toBeTruthy();
 });
+test('an empty workout shows no set counter until a set exists', async () => {
+  const repo = memoryRepository();
+  const store = new WorkoutStore(repo);
+  const session = store.start();
+  activeRepository(repo);
+  const view = await render(<ActiveWorkout />, { wrapper });
+  expect(screen.queryByText(/Set 0 of 0/)).toBeNull();
+  expect(screen.queryByText(/Set \d+ of \d+/)).toBeNull();
+  await act(() => { store.addExercise(session.id, 'Bench Press'); });
+  await view.rerender(<ActiveWorkout />);
+  expect(screen.getByText(/Set 1 of \d+/)).toBeTruthy();
+});
 test('compiled logger updates keypad values and rows live', async () => {
   const repo = memoryRepository();
   const store = new WorkoutStore(repo);
@@ -239,7 +251,7 @@ test('compiled logger updates keypad values and rows live', async () => {
   store.addExercise(store.start().id, 'Close-Grip Bench Press');
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, blank' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, suggested 105' }));
   for (const digit of ['1', '3', '5']) await fireEvent.press(screen.getByRole('button', { name: digit }));
   expect(screen.getByText('135 lb')).toBeTruthy();
   expect(within(screen.getByTestId('keypad-sheet')).getByText('100 × 8')).toBeTruthy();

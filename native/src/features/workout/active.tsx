@@ -416,8 +416,8 @@ function Logger({
             <ThemedText muted style={{ fontSize: 13 }}>
               <ThemedText muted style={{ fontWeight: "700", fontSize: 13 }}>
                 {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
-              </ThemedText>{" "}
-              · {t("set")} {Math.min(done + 1, total)} {t("of")} {total}
+              </ThemedText>
+              {total > 0 && <>{" "}· {t("set")} {Math.min(done + 1, total)} {t("of")} {total}</>}
             </ThemedText>
           </View>
           <SyncBadge
@@ -571,7 +571,7 @@ function Logger({
               {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
               {!collapsed && !store.skipped(e.id) && (
                 <>
-                  <MachineSetup store={store} name={String(e.data.exercise)} />
+                  <MachineSetup store={store} name={String(e.data.exercise)} equipment={store.preferences().exercise(String(e.data.exercise)).equipment} />
                   <View style={layout.row}>
                     <ThemedText
                       muted
