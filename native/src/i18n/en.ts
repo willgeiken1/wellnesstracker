@@ -655,7 +655,7 @@ export const en = {
   ringLooks: 'Rings', ringLooksBody: 'How every progress ring in the app is drawn.',
   ringContour: 'Contour', ringLiquid: 'Liquid', ringGlass: 'Glass',
   appearanceHint: 'Your preferences are saved on this phone.',
-  today: 'Today', yesterday: 'Yesterday', notInVersion: 'Not part of this version yet.',
+  yesterday: 'Yesterday', notInVersion: 'Not part of this version yet.',
   placeholder: 'Coming soon', placeholderBody: "This part of Insight isn't built yet.",
   welcome: 'Your daily space', welcomeBody: 'The foundation is ready. Workout and food logging arrive in M2/M3.',
   workout: 'Active workout', foodLog: 'Food log', segments: 'Sections',
