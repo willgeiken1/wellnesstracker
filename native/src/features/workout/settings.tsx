@@ -8,6 +8,7 @@ import { t } from '@/i18n/en';
 import { compareRows } from '@/data/rows';
 import { useWorkout } from './use-workout';
 import { layout } from './primitives';
+import { REST_OPENS, restOpens, setRestOpens } from './rest-pref';
 export function WorkoutSettings() {
   const {
     store
@@ -23,6 +24,8 @@ export function WorkoutSettings() {
       }, settings?.id)} />)}</View>
     <PlateSettings store={store} />
     <SummaryLengthPicker repo={store.repo} />
+    <ThemedText>{t('restOpens')}</ThemedText><View style={layout.row}>{REST_OPENS.map(value => <Button key={value} label={t(value === 'bar' ? 'restOpensBar' : 'restOpensFull')} variant="secondary" selected={restOpens(store.repo) === value} onPress={() => setRestOpens(store.repo, value)} />)}</View>
+    <ThemedText muted variant="caption">{t('restOpensBody')}</ThemedText>
     <ThemedText>{t('restStyle')}</ThemedText><View style={layout.row}>{(['unwind', 'converge'] as const).map(style => <Button key={style} label={t(style)} variant="secondary" selected={store.defaultRestStyle() === style} onPress={() => store.setDefaultRestStyle(style)} />)}</View>
     <Button label={store.hapticsEnabled() ? t('disableHaptics') : t('enableHaptics')} variant="secondary" onPress={() => store.toggleHaptics()} />
   </Screen>;
