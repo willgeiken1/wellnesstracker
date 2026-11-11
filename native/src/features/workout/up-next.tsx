@@ -11,9 +11,10 @@ const FLICK = 65;
 /** The card at the top of the logger: the exercise with the next open set. Tap to log that set,
  * swipe right to skip the exercise, swipe left to swap it. Screen readers get the same two as actions. */
 export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string; detail: string; onPress: () => void; onSkip?: () => void; onSwap: () => void }) {
-  const { colors, mode } = useTheme(), training = tokens.color.pillar.training[mode];
+  const { colors, mode, reduceMotion } = useTheme(), training = tokens.color.pillar.training[mode];
   const [x] = useState(() => new Animated.Value(0));
-  const settle = () => Animated.spring(x, { toValue: 0, useNativeDriver: true }).start();
+  // With Reduce Motion on the card goes straight back; otherwise it springs back.
+  const settle = () => { if (reduceMotion) x.setValue(0); else Animated.spring(x, { toValue: 0, useNativeDriver: true }).start(); };
   const pan = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 16 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
     onPanResponderMove: (_, g) => x.setValue(!onSkip && g.dx > 0 ? g.dx / 4 : g.dx),
