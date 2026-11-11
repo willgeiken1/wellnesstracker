@@ -71,6 +71,7 @@ def side(figure, name):
         elif kind == 'o': lines += subpaths(d)
         else:
             shape = area(d).intersection(clips[rest[0]]) if kind == 'c' else area(d)
+            if kind != 'd': skin_parts.append(shape)  # arms and legs are muscle shapes only; the silhouette needs them
             rings = [ring(p) for p in parts(shape)]
             if not rings: raise SystemExit(f'{name} {key}: no visible area')
             rings += [flip(r) for r in rings]
