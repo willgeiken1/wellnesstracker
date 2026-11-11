@@ -32,6 +32,7 @@ import { RestOptions } from "./rest-options";
 import { SetRow } from "./set-row";
 import { UpNext } from "./up-next";
 import { RestTimer } from "./timer";
+import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
@@ -316,6 +317,8 @@ function Logger({
           });
         if (store.toggleDone(entry.id, index)) {
           tick(store.repo);
+          // Rest starts as the bar pinned at the bottom unless the person asked for the full-screen timer.
+          if (restOpens(store.repo) === "bar" && store.timer() && !store.timer()!.minimized) store.updateTimer({ minimized: true });
           if (store.supersetGroup(entry)) {
             const next = store.nextSet(session.id);
             if (next) edit(next.entryId,next.index,'weight');

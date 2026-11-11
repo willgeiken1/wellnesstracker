@@ -265,7 +265,9 @@ test('compiled logger updates keypad values and rows live', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
   expect(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, 135' })).toBeTruthy();
   await fireEvent.press(screen.getByTestId('set-0-0-done'));
-  expect(screen.getByTestId('rest-sheet')).toBeTruthy();
+  // Rest now starts as the bar at the bottom; the full-screen timer is one tap away.
+  expect(screen.getByTestId('rest-mini-bar')).toBeTruthy();
+  expect(screen.queryByTestId('rest-sheet')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
   expect(screen.getByText(/Set 2 of 3/)).toBeTruthy();
 });
@@ -528,6 +530,8 @@ test('logger reuses one native modal across picker, keypad, rest and finish; dis
   const repo = memoryRepository(), store = new WorkoutStore(repo);
   const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
   store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  // This test is about the full-screen timer sharing the modal, so it opts in to it.
+  repo.localSave('restOpens', 'full');
   activeRepository(repo);
   const view = await render(<ActiveWorkout />, { wrapper });
   const modal = () => screen.getByTestId('workout-sheet-host');

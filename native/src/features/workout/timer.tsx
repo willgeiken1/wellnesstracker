@@ -5,7 +5,6 @@ import type { WorkoutStore } from "@/data/workout/store";
 import { remainingSeconds } from "@/core/workout/rules";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
-import { Button } from "@/components/button";
 import { ThemedText } from "@/components/themed-text";
 import { t } from "@/i18n/en";
 import { clock, Eyebrow, Pill, layout, Sheet } from "./primitives";
@@ -74,6 +73,18 @@ export function RestContours({
     </Svg>
   );
 }
+/** A bar button: a full 44pt target with a compact chip drawn inside it. */
+function Chip({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+      style={{ minHeight: 44, minWidth: 52, justifyContent: "center" }}>
+      <View style={{ minHeight: 36, paddingHorizontal: 10, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors["surface-2"] }}>
+        <ThemedText numeric style={{ fontSize: 15, fontWeight: "600" }}>{label}</ThemedText>
+      </View>
+    </Pressable>
+  );
+}
 export function RestTimer({
   store: source,
   hidden = false,
@@ -132,51 +143,50 @@ export function RestTimer({
     (presentation === "sheet" && timer.minimized)
   )
     return null;
-  if (timer.minimized)
+  if (timer.minimized) {
+    const left = timer.ended ? 0 : Math.max(0, Math.min(1, (timer.endAt - now) / 1000 / Math.max(1, timer.duration)));
     return (
       <View
         testID="rest-mini-bar"
-        style={[
-          layout.row,
-          {
-            padding: 8,
-            backgroundColor: colors.surface,
-            borderTopWidth: 1,
-            borderColor: colors.accent,
-          },
-        ]}
+        style={{
+          marginHorizontal: tokens.logger.page,
+          marginBottom: 8,
+          borderRadius: tokens.logger.cardRadius,
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors["surface-2"],
+          overflow: "hidden",
+        }}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("expandRest")}
-          onPress={() =>
-            store.updateTimer({
-              minimized: false,
-            })
-          }
-          style={[
-            layout.cell,
-            {
-              flex: 1,
-            },
-          ]}
-        >
-          <ThemedText numeric>
-            {timer.ended ? t("restReady") : `${t("rest")} · ${clock(seconds)}`}
-          </ThemedText>
-        </Pressable>
-        <Button
-          label={t("plus15")}
-          variant="secondary"
-          onPress={() => store.adjustTimer(15)}
-        />
-        <Button
-          label={t("skip")}
-          variant="secondary"
-          onPress={() => store.skipTimer()}
-        />
+        <View style={[layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6 }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("expandRest")}
+            accessibilityValue={{ text: timer.ended ? t("restReady") : clock(seconds) }}
+            onPress={() => store.updateTimer({ minimized: false })}
+            style={{ flex: 1, minHeight: 44, justifyContent: "center" }}
+          >
+            {timer.ended ? (
+              <ThemedText numberOfLines={2}>{t("restReady")}</ThemedText>
+            ) : (
+              <ThemedText muted>
+                {t("rest")}{"  "}
+                <ThemedText testID="rest-bar-clock" numeric style={{ fontSize: 22, fontWeight: "600", color: colors.text }}>
+                  {clock(seconds)}
+                </ThemedText>
+              </ThemedText>
+            )}
+          </Pressable>
+          {!timer.ended && <Chip label={t("minus15")} onPress={() => store.adjustTimer(-15)} />}
+          <Chip label={t("plus15")} onPress={() => store.adjustTimer(15)} />
+          <Chip label={t(timer.ended ? "done" : "skip")} onPress={() => store.skipTimer()} />
+        </View>
+        <View accessible={false} style={{ height: 3, backgroundColor: colors["surface-2"] }}>
+          <View testID="rest-bar-progress" style={{ height: 3, width: `${Math.round(left * 1000) / 10}%`, backgroundColor: colors.accent }} />
+        </View>
       </View>
     );
+  }
   return (
     <Sheet
       minimal

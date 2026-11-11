@@ -419,6 +419,8 @@ export const en = {
   rest: "Rest",
   plus15: "+15 s",
   minus15: "−15 s",
+  restOpens: "Rest timer opens as", restOpensBar: "Bar", restOpensFull: "Full screen",
+  restOpensBody: "The bar sits at the bottom and keeps your workout in view. Tap it for the full timer.",
   skip: "Skip",
   next: "Next",
   set: "Set",
