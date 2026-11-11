@@ -8,13 +8,23 @@ import {
   useSyncExternalStore,
   useCallback,
 } from "react";
-import { Alert, TextInput, AppState } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
 import { getSharedPayloads, clearSharedPayloads } from "expo-sharing";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../auth/provider";
 import { useTheme } from "../../design/theme-provider";
+import { tokens } from "../../design/tokens";
 import { Screen } from "../../components/screen";
 import { Button } from "../../components/button";
+import { Card } from "../../components/card";
 import { ThemedText } from "../../components/themed-text";
 import { t as message, type MessageKey } from "../../i18n/en";
 import { exerciseLibrary } from "../../core/workout/library";
@@ -51,6 +61,16 @@ function ImportBody() {
     [error, setError] = useState(false),
     [previewConflict, setPreviewConflict] = useState(false),
     [done, setDone] = useState(false);
+  const [lastAction, setLastAction] = useState<"file" | "account" | "save">(
+      source === "account" ? "account" : "file",
+    ),
+    [summary, setSummary] = useState<{
+      found: number;
+      existing: number;
+      flagged: number;
+      removed: number;
+      replaced: boolean;
+    } | null>(null);
   const currentOwner = useRef(repo?.owner);
   useEffect(() => {
     currentOwner.current = repo?.owner;
@@ -199,127 +219,458 @@ function ImportBody() {
         },
       ],
     );
+  // Presentation only from here: which existing handler Retry calls, and what the result card reports.
+  const chooseFile = () => {
+    setLastAction("file");
+    void run(async () => {
+      const owner = repo?.owner,
+        v = await pickBackup();
+      if (v !== undefined && currentOwner.current === owner) await receive(v);
+    });
+  };
+  const fromAccount = () => {
+    setLastAction("account");
+    void loadServer();
+  };
+  const startImport = () => {
+    if (!preview) return;
+    setLastAction("save");
+    setSummary({
+      found: preview.plan.rows.length,
+      existing: preview.existing,
+      flagged: preview.plan.issues.length,
+      removed: preview.removed,
+      replaced: mode === "replace",
+    });
+    confirm();
+  };
+  const canUseAccount = !!auth.session && !!auth.legacyImport;
+  const failed = error || derived.error;
+  const retry =
+    (previewConflict || lastAction === "account") && canUseAccount
+      ? fromAccount
+      : lastAction === "save" && preview && !previewConflict
+        ? startImport
+        : chooseFile;
+  const waitingForAccount =
+    source === "account" && !!requestImport && !plan && !server && !error;
+  const mappingChanged = server && serverMapping !== JSON.stringify(mapping);
+  const hair = { borderTopWidth: 1, borderTopColor: colors["surface-2"] };
+  const field = {
+    color: colors.text,
+    backgroundColor: colors["surface-2"],
+    borderRadius: tokens.radii.input,
+    minHeight: 48,
+    paddingHorizontal: tokens.spacing[2],
+    paddingVertical: tokens.spacing[1],
+    fontSize: tokens.type.body,
+  };
   return (
     <>
       <Stack.Screen options={{ title: t("importTitle") }} />
-      <Screen title={t("importTitle")}>
-        <ThemedText>{t("importIntro")}</ThemedText>
-        <Button
-          label={t("importChoose")}
-          disabled={busy}
-          onPress={() => {
-            void run(async () => {
-              const owner = repo?.owner,
-                v = await pickBackup();
-              if (v !== undefined && currentOwner.current === owner)
-                await receive(v);
-            });
-          }}
-        />
-        {auth.session && auth.legacyImport && (
-          <Button
-            label={t("importAccount")}
-            disabled={busy}
-            onPress={() => {
-              void loadServer();
-            }}
-          />
-        )}
-        {!auth.session && <ThemedText>{t("importSignedOut")}</ThemedText>}
-        {(error || derived.error) && (
-          <ThemedText accessibilityRole="alert">{t(previewConflict ? "importPreviewAgain" : "importError")}</ThemedText>
-        )}
-        {invalidMapping && (
-          <ThemedText accessibilityRole="alert">
-            {t("importMapInvalid")}
+      <Screen>
+        <ThemedText muted>{t("importIntro")}</ThemedText>
+        <Card testID="import-step-source" style={card}>
+          <StepTitle step={1} label={t("importStepSource")} />
+          <ThemedText muted variant="caption">
+            {t("importSourceBody")}
           </ThemedText>
-        )}
+          <Button
+            label={t("importChoose")}
+            disabled={busy}
+            onPress={chooseFile}
+          />
+          {canUseAccount && (
+            <Button
+              label={t("importAccount")}
+              variant="secondary"
+              disabled={busy}
+              onPress={fromAccount}
+            />
+          )}
+          {!auth.session && (
+            <ThemedText muted variant="caption">
+              {t("importSignedOut")}
+            </ThemedText>
+          )}
+          {(busy || waitingForAccount) && (
+            <View
+              testID="import-progress"
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel={t(
+                busy ? BUSY_LABEL[lastAction] : "importBusyAccount",
+              )}
+              accessibilityLiveRegion="polite"
+              style={[styles.note, { backgroundColor: colors["surface-2"] }]}
+            >
+              <ActivityIndicator color={colors["text-muted"]} />
+              <ThemedText muted style={{ flex: 1 }}>
+                {t(busy ? BUSY_LABEL[lastAction] : "importBusyAccount")}
+              </ThemedText>
+            </View>
+          )}
+          {failed && (
+            <View
+              testID="import-error"
+              style={[styles.note, { backgroundColor: colors["surface-2"] }]}
+            >
+              <ThemedText
+                muted
+                accessibilityRole="alert"
+                style={{ flex: 1 }}
+              >
+                {t(previewConflict ? "importPreviewAgain" : "importError")}
+              </ThemedText>
+              <Pressable
+                testID="import-retry"
+                accessibilityRole="button"
+                accessibilityLabel={t("importRetry")}
+                accessibilityState={{ disabled: busy }}
+                disabled={busy}
+                onPress={retry}
+                style={styles.quiet}
+              >
+                <ThemedText style={{ color: colors.accent, fontWeight: "600" }}>
+                  {t("importRetry")}
+                </ThemedText>
+              </Pressable>
+            </View>
+          )}
+        </Card>
         {done && (
-          <ThemedText accessibilityRole="alert">{t("importDone")}</ThemedText>
+          <Card testID="import-result" style={card}>
+            <ThemedText
+              variant="headline"
+              accessibilityRole="alert"
+              style={semibold}
+            >
+              {t("importDone")}
+            </ThemedText>
+            {summary && (
+              <>
+                <ThemedText muted variant="caption">
+                  {t("importDoneBody")}
+                </ThemedText>
+                <View>
+                  <Stat label={t("importFound")} value={summary.found} first />
+                  <Stat label={t("importExisting")} value={summary.existing} />
+                  <Stat label={t("importFlagged")} value={summary.flagged} />
+                  {summary.replaced && (
+                    <Stat label={t("importRemoved")} value={summary.removed} />
+                  )}
+                </View>
+              </>
+            )}
+          </Card>
         )}
         {preview && !done && (
           <>
-            <ThemedText accessibilityRole="header">
-              {t("importPreview")}
-            </ThemedText>
-            <ThemedText>
-              {t("importCounts", {
-                rows: preview.plan.rows.length,
-                existing: preview.existing,
-                flags: preview.plan.issues.length,
-                removed: preview.removed,
-              })}
-            </ThemedText>
-            {Object.entries(preview.counts).map(([table, count]) => (
-              <ThemedText key={table}>
-                {t(("importCount_" + table) as MessageKey, { count })}
-              </ThemedText>
-            ))}
-            <ThemedText>{t("importFlags")}</ThemedText>
-            {preview.plan.issues.map((issue, i) => (
-              <ThemedText key={i}>
-                {t("importIssue", { path: issue.path, reason: issue.reason })}
-              </ThemedText>
-            ))}
-            {derived.names.map((name) => (
-              <TextInput
-                key={name}
-                accessibilityLabel={t("importMapLabel", { name })}
-                placeholder={t("importKeepCustom", { name })}
-                value={mapping[name] === "custom" ? "" : (mapping[name] ?? "")}
-                onChangeText={(value) =>
-                  setMapping((m) => ({ ...m, [name]: value || "custom" }))
-                }
-                style={{
-                  color: colors.text,
-                  borderColor: colors["surface-2"],
-                  borderWidth: 1,
-                  minHeight: 48,
-                  padding: 12,
-                }}
-              />
-            ))}
-            {server && (
-              <Button
-                label={t("importRefreshMapping")}
-                disabled={busy}
-                onPress={() => {
-                  void loadServer();
-                }}
-              />
-            )}
-            {!server && (
-              <Button
-                label={t(
-                  mode === "merge"
-                    ? "importSelectReplace"
-                    : "importSelectMerge",
+            <Card testID="import-step-review" style={card}>
+              <StepTitle step={2} label={t("importStepReview")} />
+              {preview.plan.rows.length === 0 && (
+                <ThemedText muted>{t("importNothing")}</ThemedText>
+              )}
+              <View testID="import-summary">
+                <Stat
+                  label={t("importFound")}
+                  value={preview.plan.rows.length}
+                  first
+                />
+                <Stat label={t("importExisting")} value={preview.existing} />
+                <Stat
+                  label={t("importFlagged")}
+                  value={preview.plan.issues.length}
+                />
+                {(mode === "replace" || preview.removed > 0) && (
+                  <Stat label={t("importRemoved")} value={preview.removed} />
                 )}
-                variant="secondary"
-                onPress={() =>
-                  setMode((m) => (m === "merge" ? "replace" : "merge"))
-                }
-              />
+              </View>
+              {Object.keys(preview.counts).length > 0 && (
+                <>
+                  <ThemedText
+                    variant="headline"
+                    accessibilityRole="header"
+                    style={[semibold, { marginTop: tokens.spacing[1] }]}
+                  >
+                    {t("importWhat")}
+                  </ThemedText>
+                  <View testID="import-tables">
+                    {Object.entries(preview.counts).map(
+                      ([table, count], index) => (
+                        <Stat
+                          key={table}
+                          label={tableLabel(table)}
+                          value={count}
+                          first={index === 0}
+                        />
+                      ),
+                    )}
+                  </View>
+                </>
+              )}
+              <ThemedText muted variant="caption">
+                {t("importFlags")}
+              </ThemedText>
+              {preview.plan.issues.map((issue, i) => (
+                <ThemedText
+                  key={i}
+                  muted
+                  variant="caption"
+                  style={[hair, { paddingTop: tokens.spacing[1] }]}
+                >
+                  {t("importIssue", { path: issue.path, reason: issue.reason })}
+                </ThemedText>
+              ))}
+            </Card>
+            {derived.names.length > 0 && (
+              <Card testID="import-match" style={card}>
+                <ThemedText
+                  variant="headline"
+                  accessibilityRole="header"
+                  style={semibold}
+                >
+                  {t("importMatchTitle")}
+                </ThemedText>
+                <ThemedText muted variant="caption">
+                  {t("importMatchBody")}
+                </ThemedText>
+                {derived.names.map((name) => (
+                  <View key={name} style={{ gap: tokens.spacing[0] }}>
+                    <ThemedText style={semibold}>{name}</ThemedText>
+                    <TextInput
+                      accessibilityLabel={t("importMapLabel", { name })}
+                      placeholder={t("importKeepCustom", { name })}
+                      placeholderTextColor={colors["text-muted"]}
+                      autoCorrect={false}
+                      value={
+                        mapping[name] === "custom" ? "" : (mapping[name] ?? "")
+                      }
+                      onChangeText={(value) =>
+                        setMapping((m) => ({ ...m, [name]: value || "custom" }))
+                      }
+                      style={field}
+                    />
+                  </View>
+                ))}
+                {invalidMapping && (
+                  <View
+                    style={[
+                      styles.note,
+                      { backgroundColor: colors["surface-2"] },
+                    ]}
+                  >
+                    <ThemedText
+                      muted
+                      accessibilityRole="alert"
+                      style={{ flex: 1 }}
+                    >
+                      {t("importMapInvalid")}
+                    </ThemedText>
+                  </View>
+                )}
+                {server && (
+                  <Button
+                    label={t("importRefreshMapping")}
+                    variant="secondary"
+                    disabled={busy}
+                    onPress={fromAccount}
+                  />
+                )}
+              </Card>
             )}
-            <Button
-              label={t(mode === "replace" ? "importReplace" : "importMerge")}
-              disabled={
-                busy ||
-                !repo ||
-                invalidMapping ||
-                (server && serverMapping !== JSON.stringify(mapping))
-              }
-              onPress={confirm}
-            />
+            <Card testID="import-step-confirm" style={card}>
+              <StepTitle step={3} label={t("importStepConfirm")} />
+              {!server && (
+                <View
+                  accessibilityRole="radiogroup"
+                  accessibilityLabel={t("importHow")}
+                  style={{ gap: tokens.spacing[1] }}
+                >
+                  {(["merge", "replace"] as const).map((value) => {
+                    const selected = mode === value;
+                    const label = t(
+                      value === "merge"
+                        ? "importSelectMerge"
+                        : "importSelectReplace",
+                    );
+                    const body = t(
+                      value === "merge" ? "importMergeBody" : "importReplaceHint",
+                    );
+                    return (
+                      <Pressable
+                        key={value}
+                        testID={`import-mode-${value}`}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`${label}. ${body}`}
+                        accessibilityState={{ selected, checked: selected }}
+                        onPress={() => setMode(value)}
+                        style={[
+                          styles.option,
+                          {
+                            borderColor: selected
+                              ? colors.accent
+                              : colors["hair-2"],
+                            backgroundColor: selected
+                              ? colors["accent-tint"]
+                              : colors.surface,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.dot,
+                            {
+                              borderColor: selected
+                                ? colors.accent
+                                : colors["text-muted"],
+                            },
+                          ]}
+                        >
+                          {selected && (
+                            <View
+                              style={[
+                                styles.dotFill,
+                                { backgroundColor: colors.accent },
+                              ]}
+                            />
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <ThemedText style={semibold}>{label}</ThemedText>
+                          <ThemedText muted variant="caption">
+                            {body}
+                          </ThemedText>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              {server && (
+                <ThemedText muted variant="caption">
+                  {t("importMergeBody")}
+                </ThemedText>
+              )}
+              <Button
+                label={t(mode === "replace" ? "importReplace" : "importMerge")}
+                variant={mode === "replace" ? "destructive" : "primary"}
+                disabled={busy || !repo || invalidMapping || mappingChanged}
+                onPress={startImport}
+              />
+              {mappingChanged && (
+                <ThemedText muted variant="caption">
+                  {t("importMappingChanged")}
+                </ThemedText>
+              )}
+            </Card>
           </>
         )}
-        <Button
-          label={t("importClose")}
-          variant="secondary"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t(done ? "importFinish" : "importClose")}
           onPress={() => router.replace(auth.session ? "/settings" : "/auth")}
-        />
+          style={[styles.quiet, { alignSelf: "center" }]}
+        >
+          <ThemedText style={{ color: colors.accent, fontWeight: "600" }}>
+            {t(done ? "importFinish" : "importClose")}
+          </ThemedText>
+        </Pressable>
       </Screen>
     </>
+  );
+}
+const semibold = { fontWeight: "600" } as const;
+const card = { borderRadius: 18, padding: tokens.spacing[3] } as const;
+const BUSY_LABEL = {
+  file: "importBusyFile",
+  account: "importBusyAccount",
+  save: "importBusySave",
+} as const;
+/** "Workouts: {count}" in the shared copy becomes the row label "Workouts". */
+const tableLabel = (table: string) =>
+  (message(("importCount_" + table) as MessageKey) ?? table).replace(
+    /:\s*\{count\}$/,
+    "",
+  );
+const styles = StyleSheet.create({
+  note: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing[1],
+    borderRadius: tokens.radii.input,
+    paddingHorizontal: tokens.spacing[2],
+    paddingVertical: tokens.spacing[1],
+    minHeight: 44,
+  },
+  quiet: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: tokens.spacing[1],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing[2],
+    minHeight: 56,
+    padding: tokens.spacing[2],
+    borderRadius: tokens.radii.card,
+    borderWidth: 2,
+  },
+  dot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dotFill: { width: 10, height: 10, borderRadius: 5 },
+  stat: { flexDirection: "row", alignItems: "center", minHeight: 44, gap: tokens.spacing[2] },
+  step: {
+    minWidth: 26,
+    minHeight: 26,
+    paddingHorizontal: 6,
+    borderRadius: 99,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+function StepTitle({ step, label }: { step: number; label: string }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={t("importStepLabel", { step, label })}
+      style={{ flexDirection: "row", alignItems: "center", gap: tokens.spacing[1] }}
+    >
+      <View style={[styles.step, { backgroundColor: colors["accent-tint"] }]}>
+        <ThemedText numeric variant="caption" style={{ color: colors.text, fontWeight: "600" }}>
+          {step}
+        </ThemedText>
+      </View>
+      <ThemedText variant="headline" style={[semibold, { flex: 1 }]}>
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+function Stat({ label, value, first = false }: { label: string; value: number; first?: boolean }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${label}: ${value}`}
+      style={[styles.stat, { borderTopWidth: first ? 0 : 1, borderTopColor: colors["surface-2"] }]}
+    >
+      <ThemedText style={{ flex: 1 }}>{label}</ThemedText>
+      <ThemedText numeric style={semibold}>
+        {value.toLocaleString("en-US")}
+      </ThemedText>
+    </View>
   );
 }
 /** First native sign-in offers conversion; retry remains available in Data. */

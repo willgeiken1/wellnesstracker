@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import { Button } from '../../components/button';
-import { SegmentedControl } from '../../components/segmented-control';
+import { Button, touchTarget } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import { fromKg } from '../../core/workout/rules';
 import { compareRows } from '../../data/rows';
 import type { Repository } from '../../data/repository';
 import { t } from '../../i18n/en';
 import { useTheme } from '../../design/theme-provider';
+import { tokens } from '../../design/tokens';
 import { readProfile, today } from '../onboarding/model';
 import { Panel } from '../workout/primitives';
 import { useWorkoutStore } from '../workout/use-workout';
@@ -37,7 +37,13 @@ export function Body({repository}:{repository:Repository}) {
         <ThemedText numeric style={{fontSize:28,lineHeight:34,fontWeight:'600'}}>{t('bodyTrend').replace('{weight}',fromKg(last.trendKg,unit).toFixed(1)).replace('{unit}',unit)}</ThemedText>
         <ThemedText muted variant="caption">{t('bodyAsOf').replace('{day}',last.day)}</ThemedText>
       </>:<ThemedText>{t('bodyEmpty')}</ThemedText>}
-      <SegmentedControl label={t('bodyRanges')} value={String(range)} options={([7,30,90,365] as const).map(n=>({value:String(n),label:t(`bodyRange${n}`)}))} onChange={n=>setRange(Number(n) as BodyRange)}/>
+      {/* Four equal segments on one row, so no range is left alone on a second line at phone width. */}
+      <View testID="body-ranges" accessibilityRole="tablist" accessibilityLabel={t('bodyRanges')} style={{flexDirection:'row',gap:tokens.spacing[0]}}>
+        {([7,30,90,365] as const).map(n=>{const on=n===range;return <Pressable key={n} accessibilityRole="tab" accessibilityLabel={t(`bodyRange${n}`)} accessibilityState={{selected:on}} onPress={()=>setRange(n)}
+          style={{flex:1,minHeight:touchTarget,justifyContent:'center',paddingHorizontal:tokens.spacing[0],paddingVertical:tokens.spacing[1],borderRadius:tokens.radii.input,backgroundColor:on?colors.accent:colors['surface-2']}}>
+          <ThemedText style={{color:on?colors['on-accent']:colors.text,textAlign:'center'}}>{t(`bodyRange${n}`)}</ThemedText>
+        </Pressable>;})}
+      </View>
       <BodyChart key={range} points={visible} raw={raw} unit={unit}/>
       <ThemedText muted variant="caption">{t('bodyAverageHint')}</ThemedText>
     </Panel>
