@@ -403,3 +403,38 @@ export function Pill({
     </Pressable>
   );
 }
+/** A small rounded action inside a card, with a full-height touch area around a short pill. */
+export function Chip({
+  label,
+  accessibilityLabel,
+  onPress,
+  testID,
+}: {
+  label: string;
+  accessibilityLabel?: string;
+  onPress: () => void;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      onPress={onPress}
+      style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
+    >
+      <View
+        style={{
+          minHeight: 34,
+          paddingHorizontal: 14,
+          borderRadius: 99,
+          justifyContent: "center",
+          backgroundColor: colors["surface-2"],
+        }}
+      >
+        <ThemedText style={{ fontSize: 15 }}>{label}</ThemedText>
+      </View>
+    </Pressable>
+  );
+}
