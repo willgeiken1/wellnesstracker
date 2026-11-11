@@ -32,6 +32,8 @@ test('a saved accent from before palettes maps to its closest palette', () => {
   expect(resolvePalette('citrus')).toBe('springCitrus');
   expect(resolvePalette('goldenHour')).toBe('goldenHour');
   for (const unknown of ['midnightNeon', 'nope', '', null, undefined, 3]) expect(resolvePalette(unknown)).toBe('seaGlassTide');
+  // Names every object carries must not be read as saved themes.
+  for (const builtIn of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) expect(resolvePalette(builtIn)).toBe('seaGlassTide');
 });
 
 test('pillar colours in the default palette match the shared pillar tokens other screens still read', () => {
@@ -62,4 +64,12 @@ test('contrast agrees with known WCAG reference ratios', () => {
   expect(contrast('#000000', '#FFFFFF').toFixed(2)).toBe('21.00');
   expect(contrast('#777777', '#FFFFFF').toFixed(2)).toBe('4.48');
   expect(contrast('#5E7A00', '#5E7A00')).toBe(1);
+});
+
+test('the second accent reads as text on the accent tint and every surface in each theme', () => {
+  for (const palette of palettes) for (const mode of ['dark', 'light'] as const) {
+    const c = createTheme(mode, palette);
+    for (const under of ['bg', 'surface', 'surface-2', 'accent-tint'] as const)
+      expect({ palette, mode, under, ok: contrast(c['accent-2'], c[under]) >= 4.5 }).toEqual({ palette, mode, under, ok: true });
+  }
 });
