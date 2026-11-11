@@ -18,6 +18,8 @@ import { PlanStore } from '@/features/plans/store';
 import { useWorkout } from '@/features/workout/use-workout';
 import { pluralize, t } from '@/i18n/en';
 import { MINI, terrain } from './contour';
+import { EditHome } from './edit-sheet';
+import { HOME_TILES_KEY, isSmall, loadTiles, type HomeTiles, type TileId } from './tiles';
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -120,6 +122,16 @@ export function Home() {
   const now = new Date(), today = localDay(now);
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const repo = store?.repo;
+  // The saved layout is read once per repository; edits update this state and the saved copy together.
+  const [layout, setLayout] = useState<{ repo: typeof repo; tiles: HomeTiles }>(() => ({ repo, tiles: loadTiles(repo) }));
+  const tiles = layout.repo === repo ? layout.tiles : loadTiles(repo);
+  const change = (next: HomeTiles) => {
+    setLayout({ repo, tiles: next });
+    // Home still shows the new layout this session if the local write fails.
+    try { repo?.localSave(HOME_TILES_KEY, next); } catch { /* saved again on the next change */ }
+  };
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
   const selected = picked && picked <= today ? picked : today;
@@ -137,9 +149,14 @@ export function Home() {
           </View>
           <ThemedText variant="title" accessibilityRole="header" style={semibold}>{greeting(now.getHours())}</ThemedText>
         </View>
+        {store && <Pressable testID="home-edit" accessibilityRole="button" accessibilityLabel={t('homeEdit')} onPress={() => setEditing(true)} hitSlop={4}
+          style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
+          <ThemedText style={[semibold, { fontSize: 14 }]}>{t('edit')}</ThemedText>
+        </Pressable>}
       </View>
-      {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} /> : <Next />}
+      {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} /> : <Next />}
     </Screen>
+    <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
     <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>
@@ -156,7 +173,7 @@ export function Home() {
   </View>;
 }
 
-function Body({ store, now, selected, onPick }: { store: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void }) {
+function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void }) {
   const revision = useFoodRevision(store.repo), today = localDay(now), foodDay = attributedDay();
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   const week = Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
@@ -164,6 +181,7 @@ function Body({ store, now, selected, onPick }: { store: WorkoutStore; now: Date
   const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
   const active = !!store.active();
+  const pillar = usePillarColors(), accent = useTheme().colors.accent;
   const of = (day: string) => progress(facts.get(day) ?? NONE, targets?.kcal ?? null, active && day === today);
   if (!hasAnything(store, revision)) return <>
     <EmptyMap />
@@ -171,12 +189,25 @@ function Body({ store, now, selected, onPick }: { store: WorkoutStore; now: Date
     <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('homeTiles')}</ThemedText>
     <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
   </>;
-  return <>
-    <MapCard day={selected} today={today} values={of(selected)} />
-    <Week week={week} today={today} selected={selected} onPick={onPick} of={of} />
-    <Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} />
-    <Tiles store={store} facts={recent.map(day => facts.get(day) ?? NONE)} />
-  </>;
+  if (!tiles.order.length) return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
+    <ThemedText variant="headline" style={semibold}>{t('homeNothingOn')}</ThemedText>
+    <ThemedText muted variant="caption" style={{ textAlign: 'center' }}>{t('homeNothingOnBody')}</ThemedText>
+    <View style={{ marginTop: tokens.spacing[1] }}><SmallButton label={t('homeEdit')} onPress={onEdit} /></View>
+  </Card>;
+  const numbers = numberTiles(store, recent.map(day => facts.get(day) ?? NONE), pillar, accent);
+  const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
+  // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
+  return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
+    {tiles.order.map(id => {
+      const full = { width: '100%' } as const;
+      if (id === 'map') return <View key={id} style={full}><MapCard day={selected} today={today} values={of(selected)} /></View>;
+      if (id === 'week') return <View key={id} style={full}><Week week={week} today={today} selected={selected} onPick={onPick} of={of} /></View>;
+      if (id === 'next') return <View key={id} style={full}><Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /></View>;
+      const tile = numbers[id];
+      return tile ? <NumberTile key={id} tile={tile} wide={tiles.wide.includes(id)} /> : null;
+    })}
+    {wanted.length > 0 && !shownNumbers.length && <ThemedText muted variant="caption" style={{ width: '100%' }}>{t('homeTilesEmpty')}</ThemedText>}
+  </View>;
 }
 
 function EmptyMap() {
@@ -295,39 +326,34 @@ function Spark({ values, color, bars }: { values: number[]; color: string; bars?
   </Svg>;
 }
 
-interface TileData { id: string; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
+interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
 
-/** Tiles show only when they have something to show, as in the prototype. */
-function Tiles({ store, facts }: { store: WorkoutStore; facts: DayFacts[] }) {
-  const pillar = usePillarColors(), { colors } = useTheme();
+/** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
+function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string): Partial<Record<TileId, TileData>> {
   const unit = store.unit(), last = facts[facts.length - 1], weights = readWeights(store).map(kg => fromKg(kg, unit));
   const volumes = facts.map(f => fromKg(f.volumeKg, unit));
   const all: TileData[] = [
     { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), to: '/food' },
     { id: 'protein', label: t('homeProtein'), kind: 'food', color: pillar.food, value: whole(last.protein ?? 0), unit: 'g', series: facts.map(f => f.protein ?? 0), to: '/food' },
     { id: 'volume', label: t('volume'), kind: 'training', color: pillar.training, value: whole(volumes.reduce((a, b) => a + b, 0)), unit: `${unit} · ${t('homeSevenDays')}`, series: volumes, bars: true, to: '/workouts' },
-    { id: 'weight', label: t('weight'), color: colors.accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
+    { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
   ];
-  const shown = all.filter(tile => tile.series.some(v => v > 0));
-  return <>
-    <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('homeTiles')}</ThemedText>
-    {!shown.length && <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>}
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, paddingBottom: 72 }}>
-      {shown.map(tile => <Pressable key={tile.id} testID={`home-tile-${tile.id}`} accessibilityRole="button"
-        accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
-        style={({ pressed }) => ({ width: '48.5%', opacity: pressed ? 0.85 : 1 })}>
-        <Card style={[card, { minHeight: 108, gap: 2 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}
-            <ThemedText muted variant="caption">{tile.label}</ThemedText>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-            <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
-            <ThemedText muted variant="caption">{tile.unit}</ThemedText>
-          </View>
-          <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} /></View>
-        </Card>
-      </Pressable>)}
-    </View>
-  </>;
+  return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
+}
+function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
+  return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"
+    accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
+    style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
+    <Card style={[card, { minHeight: 108, gap: 2 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}
+        <ThemedText muted variant="caption">{tile.label}</ThemedText>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+        <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
+        <ThemedText muted variant="caption">{tile.unit}</ThemedText>
+      </View>
+      <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} /></View>
+    </Card>
+  </Pressable>;
 }
