@@ -99,3 +99,29 @@ test('tapping the set number opens the tags, which also hold Remove set', async 
   expect(within(screen.getByTestId('set-row-0-0')).getByText('W')).toBeTruthy();
   expect(within(screen.getByTestId('set-row-0-0')).getByText('Warm-up')).toBeTruthy();
 });
+
+test('the set tag button reads the previous weight and reps to a screen reader', async () => {
+  sample();
+  await render(<ActiveWorkout />, { wrapper });
+  const tag = screen.getAllByRole('button', { name: /^Deadlift, Set 1, .*tag/i })[0];
+  expect(tag.props.accessibilityValue).toEqual({ text: expect.stringMatching(/^Last time: 285 .*3$/) });
+});
+
+describe('the Up next card and Reduce Motion', () => {
+  const { Animated, AccessibilityInfo } = require('react-native') as typeof import('react-native');
+  const { UpNext } = require('../src/features/workout/up-next') as typeof import('../src/features/workout/up-next');
+  afterEach(() => jest.restoreAllMocks());
+  const release = async (dx: number) => {
+    const card = screen.getByTestId('logger-up-next'), find = (node: any): any => node?.props?.onResponderRelease ? node : (node?.children ?? []).map(find).find(Boolean);
+    const handlers = find(card).props, touch = (x: number) => ({ nativeEvent: { touches: [{ pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }], changedTouches: [{ pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }], pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }, persist() {}, touchHistory: { touchBank: [], numberActiveTouches: 0, indexOfSingleActiveTouch: 0, mostRecentTimeStamp: 0 } });
+    await act(async () => { handlers.onResponderRelease(touch(dx)); });
+  };
+  test.each([[true, 0], [false, 1]])('with Reduce Motion %s the card springs back %i times', async (reduced, springs) => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduced);
+    const spring = jest.spyOn(Animated, 'spring');
+    await render(<UpNext name="Deadlift" detail="3 sets" onPress={() => {}} onSwap={() => {}} />, { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    await release(0);
+    expect(spring).toHaveBeenCalledTimes(springs);
+  });
+});
