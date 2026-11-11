@@ -29,6 +29,7 @@ type Props = {
 export function RingArc({ look, cx, cy, r, width, progress, color, track, ink, dark, dashed = false, echoes = true, testID }: Props) {
   const v = Math.min(Math.max(progress, 0), 1);
   const wide = width >= 10;
+  const roomy = r >= 40;
   const cap = dashed ? "butt" : "round";
   const dash = dashed ? "4 5" : undefined;
   const arc = (radius: number, strokeWidth: number, part = v, extra: object = {}) => part > 0
@@ -48,9 +49,9 @@ export function RingArc({ look, cx, cy, r, width, progress, color, track, ink, d
   if (look === "liquid") {
     // Swells along the arc stand in for the prototype's displacement filter, which react-native-svg cannot draw.
     const swells = wide && !dashed && v > 0.03
-      ? Array.from({ length: Math.floor(v * 28) }, (_, i) => {
-        const [x, y] = point(cx, cy, r + Math.sin(i * 2.1) * width * 0.07, TOP + ((i + 0.5) / 28) * Math.PI * 2);
-        return <Circle key={i} cx={x} cy={y} r={(width / 2) * (1.02 + 0.13 * Math.sin(i * 1.7))} fill={color} />;
+      ? Array.from({ length: Math.floor(v * 90) }, (_, i) => {
+        const [x, y] = point(cx, cy, r + Math.sin(i * 0.47) * width * 0.06, TOP + ((i + 0.5) / 90) * Math.PI * 2);
+        return <Circle key={i} cx={x} cy={y} r={(width / 2) * (1.04 + 0.12 * Math.sin(i * 0.31 + 1))} fill={color} />;
       })
       : null;
     const [ex, ey] = point(cx, cy, r, TOP + Math.min(v, 0.9999) * Math.PI * 2);
@@ -66,7 +67,7 @@ export function RingArc({ look, cx, cy, r, width, progress, color, track, ink, d
   return <G testID={testID} id="ring-look-contour">
     <Circle cx={cx} cy={cy} r={r} fill="none" stroke={track} strokeWidth={width} />
     {arc(r, width)}
-    {wide && echoes && !dashed && arc(r - width * 1.15, 1.2, v, { strokeOpacity: 0.35 })}
-    {wide && echoes && !dashed && arc(r - width * 1.75, 1, v * 0.85, { strokeOpacity: 0.18 })}
+    {wide && roomy && echoes && !dashed && arc(r - width * 1.15, 1.2, v, { strokeOpacity: 0.35 })}
+    {wide && roomy && echoes && !dashed && arc(r - width * 1.75, 1, v * 0.85, { strokeOpacity: 0.18 })}
   </G>;
 }
