@@ -59,6 +59,15 @@ function Pick({label,selected,onPress}:{label:string;selected:boolean;onPress:()
   </View>
  </Pressable>;
 }
+/** A short visible word with the full sentence as its spoken label. */
+function Act({text,label,danger=false,disabled=false,onPress}:{text:string;label:string;danger?:boolean;disabled?:boolean;onPress:()=>void}) {
+ const {colors}=useTheme();
+ return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={{minHeight:touchTarget,justifyContent:'center',opacity:disabled?0.4:1}}>
+  <View style={{minHeight:34,paddingHorizontal:14,borderRadius:99,justifyContent:'center',backgroundColor:colors['surface-2']}}>
+   <ThemedText style={{fontSize:15,color:danger?colors.danger:colors.text}}>{text}</ThemedText>
+  </View>
+ </Pressable>;
+}
 export function FoodScreen({repository,initialManual=false}:{repository:Repository;initialManual?:boolean}) {
  // Repository reads are mutable method calls; do not memoize derived values by object identity.
  'use no memo';
@@ -141,10 +150,10 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
       </View>
      </Pressable>
     </View>
-    {menu&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>
-     <Button label={t('foodRename').replace('{name}',meal.name)} variant="secondary" onPress={()=>setRename({id:meal.id,name:meal.name})}/>
-     <Button label={t('foodCopy').replace('{name}',meal.name)} variant="secondary" onPress={()=>run(()=>copyYesterday(repo,day,meal.id))}/>
-     <Button label={t('foodSaveCombo').replace('{name}',meal.name)} variant="secondary" disabled={!items.length} onPress={()=>setCombo({meal:meal.id,name:meal.name})}/>
+    {menu&&<View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6}}>
+     <Act text={t('foodActRename')} label={t('foodRename').replace('{name}',meal.name)} onPress={()=>setRename({id:meal.id,name:meal.name})}/>
+     <Act text={t('foodActCopy')} label={t('foodCopy').replace('{name}',meal.name)} onPress={()=>run(()=>copyYesterday(repo,day,meal.id))}/>
+     <Act text={t('foodActCombo')} label={t('foodSaveCombo').replace('{name}',meal.name)} disabled={!items.length} onPress={()=>setCombo({meal:meal.id,name:meal.name})}/>
     </View>}
     {!!quick.length&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{quick.map((food,i)=><Button key={i} label={t('foodLogSaved').replace('{name}',String(food.name))} variant="secondary" onPress={()=>run(()=>{saveFood(repo,day,meal.id,food);})}/>)}</View>}
     {items.map((row,index)=>{
@@ -162,11 +171,11 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
        <ThemedText muted numeric>{energy}</ThemedText>
       </Pressable>
       {pending&&<View style={{borderWidth:1,borderStyle:'dashed',borderColor:colors['text-muted'],borderRadius:12,padding:8,gap:6}}><ThemedText variant="caption">{t('foodAiPending')}</ThemedText><Button label={t('foodAiConfirm').replace('{name}',name)} variant="secondary" onPress={()=>confirmEstimate(repo,row.id)}/></View>}
-      {open&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6,paddingBottom:tokens.spacing[1]}}>
-       <Button label={t('foodEdit').replace('{name}',name)} variant="secondary" onPress={()=>{setAiMode(null);setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
-       <Button label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',name)} variant="secondary" onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
-       <Button label={t('foodKeep').replace('{name}',name)} variant="secondary" onPress={()=>run(()=>{saveReusable(repo,row.data);})}/>
-       <Button label={t('foodDelete').replace('{name}',name)} variant="destructive" onPress={()=>run(()=>{setOpenEntry(null);setUndo(deleteFood(repo,row.id));})}/>
+      {open&&<View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6,paddingBottom:tokens.spacing[0]}}>
+       <Act text={t('edit')} label={t('foodEdit').replace('{name}',name)} onPress={()=>{setAiMode(null);setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
+       <Act text={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodActUnfavorite':'foodActFavorite')} label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',name)} onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
+       <Act text={t('foodActKeep')} label={t('foodKeep').replace('{name}',name)} onPress={()=>run(()=>{saveReusable(repo,row.data);})}/>
+       <Act danger text={t('delete')} label={t('foodDelete').replace('{name}',name)} onPress={()=>run(()=>{setOpenEntry(null);setUndo(deleteFood(repo,row.id));})}/>
       </View>}
      </View>;
     })}
