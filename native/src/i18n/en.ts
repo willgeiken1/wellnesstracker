@@ -530,6 +530,7 @@ export const en = {
   workoutComplete: "Workout complete",
   time: "Time",
   volume: "Volume",
+  latestPrint: "Latest print", printCaption: "One hill per exercise, sized by its share of the volume.", upNextStart: "Up next. Start {name}", routineActions: "Actions for {name}",
   prs: "PR",
   newPR: "New PR",
   est1RM: "Est. 1RM",

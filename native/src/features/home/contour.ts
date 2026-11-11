@@ -79,3 +79,48 @@ export function terrain(progress: readonly number[], width: number, height: numb
     ? [{ hill, x: k.x * width, y: k.y * height, summit: progress[hill] >= 1 }] : []);
   return { lines, markers };
 }
+
+/** Workout print, ported from the prototype: one hill per exercise, placed by a seed from its
+ * name and sized by its share of the session's volume. The same workout always draws the same print. */
+export interface PrintData { names: string[]; shares: number[]; seed: number }
+export function printData(id: string, exercises: readonly { name: string; volume: number }[]): PrintData {
+  const most = Math.max(...exercises.map(e => e.volume), 1);
+  let seed = 5;
+  for (let i = 0; i < id.length; i++) seed = (seed * 31 + id.charCodeAt(i)) | 0;
+  return { names: exercises.map(e => e.name), shares: exercises.map(e => Math.max(0, e.volume) / most), seed };
+}
+export function workoutPrint(data: PrintData, width: number, height: number, options: { levels?: number; grid?: number; strokeWidth?: number } = {}) {
+  const hills = data.names.map((name, i) => {
+    let s = 7;
+    for (let q = 0; q < name.length; q++) s = (Math.imul(s, 31) + name.charCodeAt(q)) | 0;
+    const j = data.seed | 0;
+    return { x: 0.2 + 0.6 * hash(s, 1, 3) + (hash(s, j, 5) - 0.5) * 0.14, y: 0.22 + 0.56 * hash(s, 2, 3) + (hash(s, j, 6) - 0.5) * 0.14,
+      sd: 0.095 + 0.05 * hash(s, j, 7), h: 0.45 + 0.6 * data.shares[i] };
+  });
+  const levels = options.levels ?? (width > 120 ? 7 : width > 60 ? 5 : 4), cols = options.grid ?? Math.max(24, Math.round(width / 2.6));
+  const sw = options.strokeWidth ?? (width > 120 ? 1.35 : 1.1), seed = Math.abs(data.seed) % 997 + 1;
+  const aspect = width / height, rows = Math.max(8, Math.round(cols * height / width)), f: number[][] = [];
+  let top = 0;
+  for (let j = 0; j <= rows; j++) {
+    const row: number[] = [];
+    for (let i = 0; i <= cols; i++) {
+      const x = i / cols, y = j / rows;
+      let h = 0;
+      for (const k of hills) { const dx = (x - k.x) * aspect, dy = y - k.y; h += k.h * Math.exp(-(dx * dx + dy * dy) / (2 * k.sd * k.sd)); }
+      h += 0.1 * (noise(3.2 * x * aspect, 3.2 * y, seed) - 0.5) * Math.min(1, 3 * h);
+      if (h > top) top = h;
+      row.push(h);
+    }
+    f.push(row);
+  }
+  const scale = top > 0 ? 1.06 / top : 1;
+  for (const row of f) for (let i = 0; i < row.length; i++) row[i] *= scale;
+  const X = (v: number) => (v * width / cols).toFixed(1), Y = (v: number) => (v * height / rows).toFixed(1);
+  const lines: { d: string; width: number; opacity: number }[] = [];
+  for (let k = 1; k <= levels; k++) {
+    let d = '';
+    marchingSquares(f, cols, rows, k / levels, (p, q) => { d += `M${X(p[0])} ${Y(p[1])}L${X(q[0])} ${Y(q[1])}`; });
+    if (d) lines.push({ d, width: k === levels ? sw * 1.9 : sw, opacity: 0.35 + 0.65 * k / levels });
+  }
+  return lines;
+}
