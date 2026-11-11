@@ -50,8 +50,9 @@ function readDays(store: WorkoutStore, days: string[], today: string, foodDay: s
   for (const day of days) {
     // Before 4 a.m. the food screen still files food under yesterday. Home shows that food under today, to agree
     // with the Food tab, so yesterday's column must not show the same entries a second time.
-    const source = day === today ? foodDay : day === foodDay ? null : day;
-    const rows = source === null ? [] : food.filter(r => r.data.day === source), sum = totals(rows);
+    // Food filed under the calendar day itself in those hours (the Food tab lets you pick it) still counts for today.
+    const sources = day === today ? [foodDay, today] : day === foodDay ? [] : [day];
+    const rows = food.filter(r => sources.includes(String(r.data.day))), sum = totals(rows);
     out.set(day, { ...NONE, logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g });
   }
   for (const session of store.history()) {
@@ -72,7 +73,7 @@ function readDayTargets(store: WorkoutStore, days: string[], today: string, food
 }
 function readWeights(store: WorkoutStore) { return dailyWeights(store.repo.list('weigh_ins')).slice(-14).map(w => w.kg); }
 function hasAnything(store: WorkoutStore, _revision: number) {
-  return !!store.active() || store.history().length > 0 || store.repo.list('food_entries').length > 0;
+  return !!store.active() || store.history().length > 0 || store.repo.list('food_entries').length > 0 || readWeights(store).length > 0;
 }
 
 /** How far along each pillar is, 0 to 1.05. A finished workout fills training; food follows the calorie target. */

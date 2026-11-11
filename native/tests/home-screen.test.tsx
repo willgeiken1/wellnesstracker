@@ -205,4 +205,24 @@ describe('review fixes: volume, targets and the hours after midnight', () => {
     expect(screen.getByRole('button', { name: /^Tuesday.*Food 0%$/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Calories, 500 kcal' })).toBeTruthy();
   });
+  test('before 4 a.m. food filed under the calendar day itself still counts for today', async () => {
+    at(1, 30);
+    hours.mockRestore();
+    const repo = open(), meal = meals(repo)[0].id;
+    saveFood(repo, '2026-11-10', meal, food(500), 1, undefined, '2026-11-11');
+    saveFood(repo, '2026-11-11', meal, food(200), 1, undefined, '2026-11-11');
+    await render(<Home />, { wrapper });
+    expect(screen.getByRole('button', { name: 'Calories, 700 kcal' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Tuesday.*Food 0%$/ })).toBeTruthy();
+  });
+
+  test('an account with only weigh-ins gets its weight tile, not the empty state', async () => {
+    at(12);
+    const repo = open();
+    repo.save('weigh_ins', { day: '2026-11-10', weight_kg: 80, entered_value: 80, entered_unit: 'kg', source: 'app' });
+    repo.save('weigh_ins', { day: '2026-11-11', weight_kg: 79.5, entered_value: 79.5, entered_unit: 'kg', source: 'app' });
+    await render(<Home />, { wrapper });
+    expect(screen.getByTestId('home-tile-weight')).toBeTruthy();
+    expect(screen.getByTestId('home-map')).toBeTruthy();
+  });
 });
