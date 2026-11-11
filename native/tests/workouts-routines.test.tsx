@@ -68,6 +68,18 @@ test('the latest finished workout shows as a print with its date and volume, and
   await fireEvent.press(screen.getByRole('button', { name: /^Latest print: / }));
   expect(router.push).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id: session.id } });
 });
+test('the latest print counts both sides of a one-arm set', async () => {
+  const { repo, store } = open(), session = store.start(), curl = store.addExercise(session.id, 'Dumbbell Curl', 1);
+  store.setUnilateral(curl.id, true);
+  // Made-up set: 10 x 8 on the left and 12 x 8 on the right is 176, not the 80 of the weaker side alone.
+  store.editDraft(curl.id, 0, { weight: '10', reps: '8', rightWeight: '12', rightReps: '8' });
+  store.toggleDone(curl.id, 0);
+  store.skipTimer();
+  const start = Date.now() - 600000;
+  store.finish(session.id, { startedAt: start, finishedAt: Date.now() - 60000, notes: '' });
+  await render(<Workouts />, { wrapper });
+  expect(screen.getByText(`176 ${new WorkoutStore(repo).unit()}`)).toBeTruthy();
+});
 test('edit, reorder and delete sit behind the routine row and still work', async () => {
   const { repo, store } = open(), a = routine(store, 'Sample push');
   routine(store, 'Sample pull');
