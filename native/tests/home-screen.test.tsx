@@ -146,3 +146,13 @@ test('greeting follows the time of day, the header keeps settings, and demo mode
   await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
   expect(router.push).toHaveBeenCalledWith('/settings');
 });
+
+describe('add button and the tab bar', () => {
+  const { SafeAreaProvider } = jest.requireActual('react-native-safe-area-context');
+  test.each([[0, 16], [83, 99]])('with a bottom inset of %i the + button sits %i from the bottom', async (bottom, expected) => {
+    open();
+    const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 59, left: 0, right: 0, bottom } };
+    await render(<SafeAreaProvider initialMetrics={metrics}><ThemeProvider><Home /></ThemeProvider></SafeAreaProvider>);
+    expect(screen.getByTestId('home-add-dock')).toHaveStyle({ bottom: expected });
+  });
+});
