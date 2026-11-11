@@ -268,7 +268,7 @@ function Next({ store, facts = NONE, targets = null, hour = 12 }: { store?: Work
     const body = !facts.logged ? t('nothingLogged')
       : targets && facts.kcal !== null ? t('homeLeft').replace('{kcal}', whole(Math.max(0, targets.kcal - facts.kcal))).replace('{protein}', whole(Math.max(0, targets.protein - (facts.protein ?? 0))))
         : t('homeLoggedSoFar').replace('{kcal}', facts.kcal === null ? '0' : whole(facts.kcal));
-    return <Brief title={t(hour >= 17 ? 'homeEvening' : 'foodToday')} body={body} action={<SmallButton ghost label={t('logFood')} onPress={() => router.push('/food')} />} />;
+    return <Brief title={t(hour >= 17 ? 'homeEvening' : 'homeFoodToday')} body={body} action={<SmallButton ghost label={t('logFood')} onPress={() => router.push('/food')} />} />;
   }
   const next = nextRoutine(store);
   if (!next) return freestyle;
