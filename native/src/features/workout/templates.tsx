@@ -134,9 +134,6 @@ function Editor({
     setExercises(next);
   }
   return <Screen topInset title={id ? t('editTemplate') : t('newTemplate')}>
-    <Button label={t('cancel')} variant="secondary" onPress={() => {
-      if (router.canGoBack()) router.back();else router.replace('/workouts');
-    }} />
     <TextInput accessibilityLabel={t('templateName')} placeholder={t('templateName')} placeholderTextColor={colors['text-muted']} style={inputStyle} value={name} onChangeText={setName} />
     {exercises.map((e, i) => <Panel key={e.id ?? i}><ThemedText variant="headline">{e.exercise}</ThemedText><View style={layout.row}>
       {(['target_sets', 'target_reps'] as const).map(field => <View key={field} style={{
@@ -161,6 +158,9 @@ function Editor({
       } catch {
         setError(true);
       }
+    }} />
+    <Button label={t('cancel')} variant="secondary" onPress={() => {
+      if (router.canGoBack()) router.back();else router.replace('/workouts');
     }} />
     {picker && <ExercisePicker store={store} onClose={() => setPicker(false)} onPick={exercise => {
       setExercises(es => [...es, {
