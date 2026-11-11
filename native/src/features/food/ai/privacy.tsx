@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Modal, Switch, View } from "react-native";
+import { Modal, View } from "react-native";
 import { Button } from "../../../components/button";
 import { ThemedText } from "../../../components/themed-text";
 import { Screen } from "../../../components/screen";
 import { useAuth } from "../../../auth/provider";
 import type { Repository } from "../../../data/repository";
 import { useTheme } from "../../../design/theme-provider";
+import { Group, QuietCard, SectionLabel, ToggleRow } from "../../settings/parts";
 import { t } from "../../../i18n/en";
 import { useFoodRevision } from "../use-food-revision";
 import { aiState, setConsent, setThumbnails } from "./service";
@@ -55,26 +56,32 @@ export function FoodAiPrivacy({ repo }: { repo: Repository }) {
     }
   };
   return (
-    <View style={{ gap: 16 }}>
-      <ThemedText>{t("foodAiPrivacy")}</ThemedText>
-      <Switch
-        accessibilityLabel={t("foodAiPrivacy")}
-        value={s.consent}
-        onValueChange={(v) => {
-          if (v) setSheet(true);
-          else run(() => setConsent(repo, false));
-        }}
-      />
-      <ThemedText>{t("foodAiRevokeHint")}</ThemedText>
-      <ThemedText>{t("foodAiThumbnails")}</ThemedText>
-      <Switch
-        accessibilityLabel={t("foodAiThumbnails")}
-        value={s.thumbnails}
-        onValueChange={(v) => run(() => setThumbnails(repo, v))}
-      />
-      <ThemedText>{t("foodAiThumbnailHint")}</ThemedText>
+    <View style={{ gap: 12 }}>
+      <SectionLabel>{t("settingsAi")}</SectionLabel>
+      <Group testID="privacy-ai">
+        <ToggleRow
+          testID="privacy-ai-consent"
+          label={t("foodAiPrivacy")}
+          hint={t("foodAiRevokeHint")}
+          value={s.consent}
+          onValueChange={(v) => {
+            if (v) setSheet(true);
+            else run(() => setConsent(repo, false));
+          }}
+        />
+      </Group>
+      <SectionLabel>{t("settingsPhotos")}</SectionLabel>
+      <Group testID="privacy-photos">
+        <ToggleRow
+          testID="privacy-thumbnails"
+          label={t("foodAiThumbnails")}
+          hint={t("foodAiThumbnailHint")}
+          value={s.thumbnails}
+          onValueChange={(v) => run(() => setThumbnails(repo, v))}
+        />
+      </Group>
       {error && (
-        <ThemedText accessibilityRole="alert">
+        <ThemedText muted variant="caption" accessibilityRole="alert">
           {t("preferenceError")}
         </ThemedText>
       )}
@@ -99,7 +106,7 @@ export function FoodPrivacyScreen() {
       {repository ? (
         <FoodAiPrivacy repo={repository} />
       ) : (
-        <ThemedText>{t("localError")}</ThemedText>
+        <QuietCard title={t("localError")} />
       )}
     </Screen>
   );

@@ -41,19 +41,41 @@ test('machine setup saves seat, pad, pin notes, Step and bar', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Save setup' }));
   expect(store.preferences().machine('Bench Press')).toMatchObject({ text: 'Seat 5, pad 2, pin 3', step: 12, bar_weight: 35 });
 });
-test('plate settings persist both units independently and reject invalid lists', async () => {
+test('plate settings save both units with one Save and reject invalid lists', async () => {
   const store = new WorkoutStore(memoryRepository());
   await render(<PlateSettings store={store} />, { wrapper });
+  expect(screen.getAllByRole('button')).toHaveLength(1);
   await fireEvent.changeText(screen.getByLabelText('Available plates (lb)'), '45, 10, 5');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save plates (lb)' }));
   await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), '20, 2.5');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save plates (kg)' }));
+  expect(store.preferences().plateSet('lb')).not.toEqual([45, 10, 5]);
+  await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
   expect(store.preferences().plateSet('lb')).toEqual([45, 10, 5]);
   expect(store.preferences().plateSet('kg')).toEqual([20, 2.5]);
+  expect(screen.getByText('Plates saved')).toBeTruthy();
   await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), '20, nope');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save plates (kg)' }));
+  expect(screen.queryByText('Plates saved')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
   expect(screen.getByText('Enter positive plate sizes separated by commas.')).toBeTruthy();
+  expect(screen.getByTestId('plates-error-kg')).toBeTruthy();
+  expect(screen.queryByTestId('plates-error-lb')).toBeNull();
   expect(store.preferences().plateSet('kg')).toEqual([20, 2.5]);
+});
+test('one invalid plate list stops the whole save, and an untouched list is never written', async () => {
+  const store = new WorkoutStore(memoryRepository());
+  const prefs = store.preferences(), write = jest.spyOn(Object.getPrototypeOf(prefs), 'savePlates');
+  await render(<PlateSettings store={store} />, { wrapper });
+  const before = store.preferences().plateSet('lb');
+  await fireEvent.changeText(screen.getByLabelText('Available plates (lb)'), '45, 25');
+  await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), 'twenty');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
+  expect(write).not.toHaveBeenCalled();
+  expect(store.preferences().plateSet('lb')).toEqual(before);
+  await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), store.preferences().plateSet('kg').join(', '));
+  await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(write).toHaveBeenCalledWith('lb', [45, 25]);
+  expect(store.preferences().plateSet('lb')).toEqual([45, 25]);
+  write.mockRestore();
 });
 test('keypad uses saved Step, custom bar and gym plates', async () => {
   const change = jest.fn();

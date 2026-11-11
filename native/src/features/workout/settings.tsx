@@ -1,32 +1,50 @@
-import { SummaryLengthPicker } from './ai/length-picker';
 import { PlateSettings } from './plate-settings';
-import { View } from 'react-native';
-import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
-import { ThemedText } from '@/components/themed-text';
+import { Group, InfoRow, ChoiceChips, SectionLabel, ToggleRow, QuietCard } from '@/features/settings/parts';
 import { t } from '@/i18n/en';
 import { compareRows } from '@/data/rows';
 import { useWorkout } from './use-workout';
-import { layout } from './primitives';
 import { REST_OPENS, restOpens, setRestOpens } from './rest-pref';
+import { REST_STYLES, restChoices } from './rest-options';
+import { summaryLength, setSummaryLength } from './ai/service';
+const LENGTHS = [{ value: 'short', label: t('workoutAiShort') }, { value: 'coach', label: t('workoutAiCoach') }, { value: 'detailed', label: t('workoutAiDetailed') }] as const;
 export function WorkoutSettings() {
+  // Reads saved choices straight from the repository on every render, so a tap shows as chosen at once.
+  'use no memo';
   const {
     store
   } = useWorkout();
-  if (!store) return <Screen><ThemedText>{t('localError')}</ThemedText></Screen>;
+  if (!store) return <Screen title={t('workoutSettings')}><QuietCard title={t('localError')} /></Screen>;
   const settings = store.repo.list('settings').sort(compareRows).at(-1);
   return <Screen title={t('workoutSettings')}>
-    <ThemedText>{t('defaultRest')}</ThemedText><View style={[layout.row, {
-      flexWrap: 'wrap'
-    }]}>{[60, 90, 120, 180].map(seconds => <Button key={seconds} label={`${seconds} ${t('seconds')}`} selected={Number(settings?.data.rest_seconds ?? 90) === seconds} variant="secondary" onPress={() => store.repo.save('settings', {
-        ...settings?.data,
-        rest_seconds: seconds
-      }, settings?.id)} />)}</View>
+    <SectionLabel>{t('settingsRestTimer')}</SectionLabel>
+    <Group testID="workout-settings-rest">
+      <InfoRow label={t('defaultRest')}>
+        <ChoiceChips options={restChoices([60, 90, 120, 180])} value={Number(settings?.data.rest_seconds ?? 90)} onChange={seconds => store.repo.save('settings', {
+          ...settings?.data,
+          rest_seconds: seconds
+        }, settings?.id)} />
+      </InfoRow>
+      <InfoRow label={t('restOpens')} hint={t('restOpensBody')}>
+        <ChoiceChips options={REST_OPENS.map(value => ({ value, label: t(value === 'bar' ? 'restOpensBar' : 'restOpensFull') }))}
+          value={restOpens(store.repo)} onChange={value => setRestOpens(store.repo, value)} />
+      </InfoRow>
+      <InfoRow label={t('restStyle')}>
+        <ChoiceChips options={REST_STYLES.map(style => ({ value: style, label: t(style) }))}
+          value={store.defaultRestStyle()} onChange={style => store.setDefaultRestStyle(style)} />
+      </InfoRow>
+    </Group>
+    <SectionLabel>{t('gymPlates')}</SectionLabel>
     <PlateSettings store={store} />
-    <SummaryLengthPicker repo={store.repo} />
-    <ThemedText>{t('restOpens')}</ThemedText><View style={layout.row}>{REST_OPENS.map(value => <Button key={value} label={t(value === 'bar' ? 'restOpensBar' : 'restOpensFull')} variant="secondary" selected={restOpens(store.repo) === value} onPress={() => setRestOpens(store.repo, value)} />)}</View>
-    <ThemedText muted variant="caption">{t('restOpensBody')}</ThemedText>
-    <ThemedText>{t('restStyle')}</ThemedText><View style={layout.row}>{(['unwind', 'converge'] as const).map(style => <Button key={style} label={t(style)} variant="secondary" selected={store.defaultRestStyle() === style} onPress={() => store.setDefaultRestStyle(style)} />)}</View>
-    <Button label={store.hapticsEnabled() ? t('disableHaptics') : t('enableHaptics')} variant="secondary" onPress={() => store.toggleHaptics()} />
+    <SectionLabel>{t('settingsSummary')}</SectionLabel>
+    <Group testID="workout-settings-summary">
+      <InfoRow label={t('workoutAiLength')}>
+        <ChoiceChips stacked options={LENGTHS} value={summaryLength(store.repo)} onChange={length => setSummaryLength(store.repo, length)} />
+      </InfoRow>
+    </Group>
+    <SectionLabel>{t('settingsFeedback')}</SectionLabel>
+    <Group testID="workout-settings-feedback">
+      <ToggleRow testID="workout-haptics" label={t('settingsHaptics')} hint={t('settingsHapticsHint')} value={store.hapticsEnabled()} onValueChange={() => store.toggleHaptics()} />
+    </Group>
   </Screen>;
 }
