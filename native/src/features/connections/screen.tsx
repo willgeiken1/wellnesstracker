@@ -28,17 +28,17 @@ export const EXAMPLE_DAY: readonly { label: string; value: string; sources: read
 ];
 
 function Badge({ source }: { source: ServiceId | 'insight' }) {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: 22, borderRadius: 99, backgroundColor: colors['surface-2'] }}>
-    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tokens.color.pillar[PILLAR[source]][mode] }} />
+    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors[PILLAR[source]] }} />
     <ThemedText variant="caption">{NAMES[source]}</ThemedText>
   </View>;
 }
 
 function Monogram({ service }: { service: ServiceId }) {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
   return <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
-    <ThemedText style={[semibold, { color: tokens.color.pillar[PILLAR[service]][mode] }]}>{NAMES[service].charAt(0)}</ThemedText>
+    <ThemedText style={[semibold, { color: colors[PILLAR[service]] }]}>{NAMES[service].charAt(0)}</ThemedText>
   </View>;
 }
 

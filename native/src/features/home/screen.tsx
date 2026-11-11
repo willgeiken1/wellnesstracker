@@ -82,8 +82,8 @@ function progress(facts: DayFacts, goalKcal: number | null, active: boolean): Re
 const percent = (p: Record<Pillar, number>) => Math.round(100 * (Math.min(1, p.training) + Math.min(1, p.food)) / 2);
 
 function usePillarColors(): Record<Pillar, string> {
-  const { mode } = useTheme();
-  return { training: tokens.color.pillar.training[mode], food: tokens.color.pillar.food[mode] };
+  const { colors } = useTheme();
+  return { training: colors.training, food: colors.food };
 }
 
 /** Data shapes from the prototype: training is a circle, food a triangle. Colour is never the only cue. */

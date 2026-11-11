@@ -56,7 +56,7 @@ function startRoutine(store: WorkoutStore, id: string) {
 }
 
 function Print({ data, width, height }: { data: PrintData; width: number; height: number }) {
-  const { mode } = useTheme(), color = tokens.color.pillar.training[mode];
+  const color = useTheme().colors.training;
   const lines = useMemo(() => workoutPrint(data, width, height), [data, width, height]);
   return <Svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} accessible={false}>
     {lines.map((line, i) => <Path key={i} d={line.d} fill="none" stroke={color} strokeWidth={line.width} opacity={line.opacity} strokeLinecap="round" />)}
@@ -67,11 +67,11 @@ function Print({ data, width, height }: { data: PrintData; width: number; height
  * the plan, then the routines. Every action the old list had is still here; edit, reorder and
  * delete sit behind each routine's row. */
 export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | null; run: (action: () => void) => void; undo: (() => void) | null; onUndo: (restore: (() => void) | null) => void }) {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState<string | null>(null);
   const routines = store?.templates() ?? [], history = store?.history() ?? [];
   const latest = history[0], next = store ? nextRoutine(store, routines) : undefined;
-  const training = tokens.color.pillar.training[mode];
+  const training = colors.training;
   const lastOf = (id: string) => history.find(s => s.data.routine_id === id);
   return <>
     {store && latest && <LatestPrint store={store} session={latest} />}

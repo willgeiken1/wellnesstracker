@@ -11,7 +11,7 @@ const FLICK = 65;
 /** The card at the top of the logger: the exercise with the next open set. Tap to log that set,
  * swipe right to skip the exercise, swipe left to swap it. Screen readers get the same two as actions. */
 export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string; detail: string; onPress: () => void; onSkip?: () => void; onSwap: () => void }) {
-  const { colors, mode } = useTheme(), training = tokens.color.pillar.training[mode];
+  const { colors } = useTheme(), training = colors.training;
   const [x] = useState(() => new Animated.Value(0));
   const settle = () => Animated.spring(x, { toValue: 0, useNativeDriver: true }).start();
   const pan = PanResponder.create({
