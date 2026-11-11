@@ -26,6 +26,8 @@ export function atlasLabel(value: MuscleVolume, now: number) {
 }
 /** Responsive at any parent width. Compact previews retain controls and full list access.
  * Static rendering intentionally has no animation, including when Reduce Motion is on. */
+/** Strength of the muscle lines over the body. Tested against both modes for 3:1 contrast. */
+export const ATLAS_LINE_OPACITY=.85;
 export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  sessions: AtlasSession[]; now: number; compact?: boolean; haptics?: boolean;
 }) {
@@ -41,8 +43,9 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  const values=useMemo(()=>heatmap(sessions,now),[sessions,now]), geometry=atlasGeometry[body][side];
  const valuesByKey=useMemo(()=>new Map(values.map(value=>[value.key,value])),[values]);
  const current=selected?valuesByKey.get(selected):undefined;
- // Line work: cut out of the body in dark mode, drawn in soft ink on the pale light-mode body.
- const ink=mode==='dark'?colors.bg:colors['text-muted'], inkOpacity=mode==='dark'?1:.55;
+ // Line work is soft ink in both modes. At this strength the lines keep at least 3:1 against an untrained
+ // muscle, so muscles can be told apart; the outline of the body is full strength.
+ const ink=colors['text-muted'], inkOpacity=ATLAS_LINE_OPACITY;
  const select=(key: string)=>{
   setSelected(key);
   if(haptics) void impactAsync(ImpactFeedbackStyle.Light).catch(()=>{});
@@ -58,7 +61,7 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
   <ThemedText muted>{t('atlasHint')}</ThemedText>
   {!list && <View style={{width:'100%',maxWidth:compact?180:320,alignSelf:'center',aspectRatio:200/440}}>
    <Svg width="100%" height="100%" viewBox="0 0 200 440" accessible={false}>
-    <G id="skin"><Path d={geometry.skin} fill={colors['surface-2']} stroke={ink} strokeOpacity={inkOpacity} strokeWidth={.9} strokeLinejoin="round"/></G>
+    <G id="skin"><Path testID="atlas-outline" d={geometry.skin} fill={colors['surface-2']} stroke={ink} strokeWidth={.9} strokeLinejoin="round"/></G>
     {/* Enlarged strokes sit behind exact paths; overlapping targets use paint order.
         Non-scaling strokes retain a 44 pt target even in compact previews.
         The list remains the precise selection path for adjacent small regions. */}

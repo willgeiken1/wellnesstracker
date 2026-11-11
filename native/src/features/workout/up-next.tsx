@@ -15,9 +15,6 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
   const [x] = useState(() => new Animated.Value(0));
   // With Reduce Motion on the card goes straight back; otherwise it springs back.
   const settle = () => { if (reduceMotion) x.setValue(0); else Animated.spring(x, { toValue: 0, useNativeDriver: true }).start(); };
-  const [x] = useState(() => new Animated.Value(0));
-  // With Reduce Motion on the card goes straight back; otherwise it springs back.
-  const settle = () => { if (reduceMotion) x.setValue(0); else Animated.spring(x, { toValue: 0, useNativeDriver: true }).start(); };
   const pan = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 16 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
     onPanResponderMove: (_, g) => x.setValue(!onSkip && g.dx > 0 ? g.dx / 4 : g.dx),
