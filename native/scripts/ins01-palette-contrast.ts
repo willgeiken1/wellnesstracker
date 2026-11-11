@@ -409,16 +409,20 @@ export const renderReport = () => {
 // ---- app tokens (src/design/tokens.json `palettes`) ----
 // Open palettes only; the two secret palettes stay out of the app until they are built.
 // Keys are today's app names (section 1.2 of the doc). `accent` is accentOnText, because the app uses one accent for text and fills.
-export const appColors = (c: FullColors) => ({
-  bg: c.bg, surface: c.surface, 'surface-2': c.surface2, text: c.text, 'text-muted': c.muted,
-  accent: c.accentOnText, 'accent-2': c.ai, 'on-accent': c.onAccent, 'accent-tint': mix(c.surface, c.accentOnText, 0.16),
-  success: c.success, warning: c.warn,
-  training: c.training, food: c.food, recovery: c.recovery, sleep: c.sleep, water: c.water,
-  hair: c.hair, 'hair-2': c.hair2,
-});
+export const appColors = (c: FullColors, mode: Mode) => {
+  const accentTint = mix(c.surface, c.accentOnText, 0.16);
+  return {
+    bg: c.bg, surface: c.surface, 'surface-2': c.surface2, text: c.text, 'text-muted': c.muted,
+    // accent-2 is used as text on every surface and on accent-tint (the workout AI card), so it must read on all of them.
+    accent: c.accentOnText, 'accent-2': nudge(c.ai, [c.bg, c.surface, c.surface2, accentTint], 4.5, away(mode)), 'on-accent': c.onAccent, 'accent-tint': accentTint,
+    success: c.success, warning: c.warn,
+    training: c.training, food: c.food, recovery: c.recovery, sleep: c.sleep, water: c.water,
+    hair: c.hair, 'hair-2': c.hair2,
+  };
+};
 export const appPalettes = () => Object.fromEntries(PALETTES.filter(p => !p.secret).map(p => {
   const q = proposePalette(p);
-  const dark = appColors(q.dark), light = appColors(q.light);
+  const dark = appColors(q.dark, 'dark'), light = appColors(q.light, 'light');
   return [p.id, { name: p.name, swatches: [dark.accent, dark.training, dark.food, dark.sleep], dark, light }];
 }));
 

@@ -15,8 +15,8 @@ const LEGACY: Record<string, Palette> = {
 /** A saved value (palette id or an older accent name) to a palette that exists; anything else is the default. */
 export function resolvePalette(saved: unknown): Palette {
   if (typeof saved !== "string") return DEFAULT_PALETTE;
-  if (palettes.includes(saved as Palette)) return saved as Palette;
-  return LEGACY[saved] ?? DEFAULT_PALETTE;
+  if (Object.prototype.hasOwnProperty.call(tokens.palettes, saved)) return saved as Palette;
+  return Object.prototype.hasOwnProperty.call(LEGACY, saved) ? LEGACY[saved] : DEFAULT_PALETTE;
 }
 /** Every palette is open today. A paid or unlockable palette is one line here; the picker already shows the lock. */
 export function paletteLocked(_palette: Palette): boolean {
