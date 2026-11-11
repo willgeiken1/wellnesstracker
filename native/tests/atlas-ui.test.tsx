@@ -99,3 +99,26 @@ test.each([[24,'1 day ago'],[48,'2 days ago'],[200,'not in the last 7 days']] as
  expect(screen.getByText(new RegExp(label))).toBeTruthy();
  expect(screen.queryByText(/200 hours ago/)).toBeNull();
 });
+
+describe('line contrast', () => {
+  const { ATLAS_LINE_OPACITY } = require('../src/features/atlas/body-atlas') as typeof import('../src/features/atlas/body-atlas');
+  const design = require('../src/design/tokens');
+  // Works before and after the move from four accents to themes: only the default colours are needed here.
+  const createTheme = (mode: 'dark' | 'light'): Record<string, string> => design.createTheme(mode, 'accents' in design.tokens ? 'sea' : undefined);
+  const { contrast } = require('../src/core/contrast') as typeof import('../src/core/contrast');
+  const blend = (under: string, over: string, alpha: number) => '#' + [1, 3, 5].map(i => {
+    const a = parseInt(under.slice(i, i + 2), 16), b = parseInt(over.slice(i, i + 2), 16);
+    return Math.round(a + (b - a) * alpha).toString(16).padStart(2, '0');
+  }).join('');
+  test.each(['dark', 'light'] as const)('in %s mode muscle lines keep 3:1 on an untrained muscle and the body outline keeps 4.5:1', mode => {
+    const c = createTheme(mode);
+    expect(contrast(blend(c['surface-2'], c['text-muted'], ATLAS_LINE_OPACITY), c['surface-2'])).toBeGreaterThanOrEqual(3);
+    expect(contrast(c['text-muted'], c['surface-2'])).toBeGreaterThanOrEqual(4.5);
+  });
+  test('the body outline is drawn at full strength', async () => {
+    await render(<BodyAtlas sessions={sessions} now={now}/>, { wrapper });
+    const outline = screen.getByTestId('atlas-outline').props;
+    expect(outline.strokeOpacity ?? 1).toBe(1);
+    expect(outline.stroke).toBeTruthy();
+  });
+});
