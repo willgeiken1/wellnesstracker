@@ -1,10 +1,11 @@
 import { WorkoutAiCard } from "./ai/card";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import Svg, {
   Circle,
   Ellipse,
+  G,
   LinearGradient,
   Defs,
   RadialGradient,
@@ -12,23 +13,30 @@ import Svg, {
   Path,
 } from "react-native-svg";
 import { Screen } from "@/components/screen";
-import { Button } from "@/components/button";
+import { Card } from "@/components/card";
 import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
 import { displayWeight, fromKg } from "@/core/workout/rules";
 import type { WorkoutStore } from "@/data/workout/store";
-import { pluralize, t } from "@/i18n/en";
+import { atlasGeometry, type Side } from "@/features/atlas/geometry";
+import { muscleByKey } from "@/features/atlas/muscles";
+import { atlasSessions } from "@/features/atlas/read-logs";
+import { muscleLabel, pluralize, t } from "@/i18n/en";
 import { useWorkout, useWorkoutStore } from "./use-workout";
+import { Eyebrow, Pill, Line, Panel, clock, layout } from "./primitives";
 import {
-  Eyebrow,
-  IconButton,
-  Pill,
-  Line,
-  Panel,
-  clock,
-  layout,
-} from "./primitives";
+  PageBar,
+  Primary,
+  Print,
+  Round,
+  Secondary,
+  SectionTitle,
+  card,
+  leave,
+  semibold,
+  sessionPrint,
+} from "./parts";
 import { signatureBuzz } from "./haptics";
 /** Static synthetic artwork; no workout values enter the contour thumbnail. */
 export function ContourThumbnail() {
@@ -184,13 +192,50 @@ export function Summary() {
     <WorkoutSummary store={store} id={id} />
   ) : (
     <Screen topInset>
-      <Button
+      <PageBar
+        title={t("summaryTitle")}
+        left={<Round glyph="back" label={t("flowBack")} onPress={leave} />}
+      />
+      <Card testID="summary-missing" style={card}>
+        <ThemedText style={semibold}>
+          {t(store ? "summaryMissing" : "localError")}
+        </ThemedText>
+        {store && <ThemedText muted>{t("summaryMissingBody")}</ThemedText>}
+      </Card>
+      <View style={{ flex: 1 }} />
+      <Primary
         testID="summary-done"
-        label={t("done")}
-        onPress={() => router.replace("/")}
+        label={t("flowWorkouts")}
+        onPress={() => router.replace("/workouts")}
       />
     </Screen>
   );
+}
+/** What one finished workout trained, read from the same logs the body atlas uses. Full sets go to an
+ * exercise's main muscle; helper muscles are named but not counted. */
+export function sessionMuscles(store: WorkoutStore, id: string) {
+  const finished = store
+    .history()
+    .filter(
+      (s) =>
+        typeof s.data.finished_at === "number" &&
+        Number.isFinite(s.data.finished_at),
+    );
+  const index = finished.findIndex((s) => s.id === id);
+  const exercises = index < 0 ? [] : (atlasSessions(store)[index]?.exercises ?? []);
+  const main = new Map<string, number>(),
+    helpers = new Set<string>();
+  for (const exercise of exercises) {
+    if (!(exercise.sets > 0)) continue;
+    if (exercise.main)
+      main.set(exercise.main, (main.get(exercise.main) ?? 0) + exercise.sets);
+    for (const helper of exercise.helpers) helpers.add(helper);
+  }
+  for (const group of main.keys()) helpers.delete(group);
+  return {
+    main: [...main].map(([group, sets]) => ({ group, sets })).sort((a, b) => b.sets - a.sets),
+    helpers: [...helpers],
+  };
 }
 export function WorkoutSummary({
   store: source,
@@ -220,47 +265,62 @@ export function WorkoutSummary({
         .reverse(),
       ...milestones.filter((token) => token.sessionId === id),
     ];
+  const print = useMemo(() => sessionPrint(store, id), [store, id]);
+  const muscles = useMemo(() => sessionMuscles(store, id), [store, id]);
+  const entries = store.entries(id).filter((e) => !store.skipped(e.id));
+  const stats = [
+    [clock(Number(s.data.duration_ms) / 1000), t("time")],
+    [
+      Math.round(data.volume).toLocaleString(),
+      `${t("volume")}, ${store.unit()}`,
+    ],
+    [String(data.count), t("setsLabel")],
+    // A count of records only when there is one: a zero here would read as a result.
+    ...(data.prs.length ? [[String(data.prs.length), t("prs")]] : []),
+  ];
   return (
     <Screen topInset>
-      <View
-        style={[
-          layout.row,
-          { position: "relative", justifyContent: "center", minHeight: 32 },
-        ]}
-      >
-        <View style={{ position: "absolute", left: -8, top: -6 }}>
-          <IconButton name="close" label={t("close")} onPress={close} />
-        </View>
-        <ThemedText muted style={{ fontSize: 15 }}>
+      <View style={[layout.row, { minHeight: 44 }]}>
+        <Round glyph="close" label={t("close")} onPress={close} />
+        <ThemedText muted style={{ flex: 1, textAlign: "center", fontSize: 15 }}>
           {t("savedHistory")}
         </ThemedText>
+        <View style={{ width: 44 }} />
       </View>
-      <View style={[layout.row, { gap: 14 }]}>
-        <ContourThumbnail />
-        <View style={{ flex: 1, gap: 5 }}>
-          <Eyebrow>{t("workoutComplete")}</Eyebrow>
-          {store.edited(id) && <ThemedText muted variant="caption" accessibilityLabel={t("editedWorkout")}>{t("edited")}</ThemedText>}
-          <ThemedText variant="title" style={{ fontSize: 26 }}>
-            {String(s.data.name ?? t("workoutName"))}
-          </ThemedText>
-          <ThemedText muted style={{ fontSize: 13 }}>
-            {summaryDate(Number(s.data.started_at), Number(s.data.finished_at))}
-          </ThemedText>
-        </View>
+      <View style={{ alignItems: "center", gap: 4 }}>
+        <Eyebrow center>{t("workoutComplete")}</Eyebrow>
+        <ThemedText
+          variant="title"
+          accessibilityRole="header"
+          style={{ fontSize: 28, lineHeight: 34, fontWeight: "600", textAlign: "center" }}
+        >
+          {String(s.data.name ?? t("workoutName"))}
+        </ThemedText>
+        <ThemedText muted style={{ fontSize: 15, textAlign: "center" }}>
+          {summaryDate(Number(s.data.started_at), Number(s.data.finished_at))}
+        </ThemedText>
+        {store.edited(id) && (
+          <View
+            style={{
+              borderRadius: 99,
+              paddingHorizontal: 10,
+              paddingVertical: 3,
+              backgroundColor: colors["surface-2"],
+            }}
+          >
+            <ThemedText muted variant="caption" accessibilityLabel={t("editedWorkout")}>
+              {t("edited")}
+            </ThemedText>
+          </View>
+        )}
       </View>
-      <Panel testID="summary-stats" style={{ paddingVertical: 12 }}>
-        <View style={layout.row}>
-          {[
-            [clock(Number(s.data.duration_ms) / 1000), t("time")],
-            [
-              Math.round(data.volume).toLocaleString(),
-              `${t("volume")}, ${store.unit()}`,
-            ],
-            [String(data.count), t("setsLabel")],
-            [String(data.prs.length), t("prs")],
-          ].map(([value, label], i) => (
+      <Panel testID="summary-stats" style={{ paddingVertical: 14 }}>
+        <View style={[layout.row, { alignItems: "flex-start" }]}>
+          {stats.map(([value, label], i) => (
             <View
               key={label}
+              accessible
+              accessibilityLabel={`${label}: ${value}`}
               style={{
                 flex: 1,
                 alignItems: "center",
@@ -277,6 +337,7 @@ export function WorkoutSummary({
                 style={{
                   fontSize: tokens.type.caption,
                   fontWeight: "600",
+                  textAlign: "center",
                 }}
               >
                 {label}
@@ -285,6 +346,26 @@ export function WorkoutSummary({
           ))}
         </View>
       </Panel>
+      {print.data.names.length > 0 && (
+        <>
+          <SectionTitle>{t("summaryPrint")}</SectionTitle>
+          <Card testID="summary-print" style={[card, { gap: tokens.spacing[1] }]}>
+            <View style={{ width: "100%", aspectRatio: 2 }}>
+              <Print data={print.data} width={300} height={150} />
+            </View>
+            <ThemedText muted variant="caption">
+              {t("printCaption")}
+            </ThemedText>
+          </Card>
+        </>
+      )}
+      {muscles.main.length + muscles.helpers.length > 0 && (
+        <>
+          <SectionTitle>{t("summaryMuscles")}</SectionTitle>
+          <MusclesCard main={muscles.main} helpers={muscles.helpers} />
+        </>
+      )}
+      {data.prs.length > 0 && <SectionTitle>{t("summaryRecords")}</SectionTitle>}
       {data.prs.map((pr) => (
         <Panel testID="summary-pr" key={pr.exercise}>
           <View style={[layout.row, { gap: 10 }]}>
@@ -341,6 +422,7 @@ export function WorkoutSummary({
         </Panel>
       ))}
       <WorkoutAiCard store={store} id={id} />
+      {milestones.length > 0 && (
       <Panel testID="summary-shelf">
         <View style={[layout.row, { justifyContent: "space-between" }]}>
           <ThemedText style={{ fontSize: 16, fontWeight: "600" }}>
@@ -402,18 +484,193 @@ export function WorkoutSummary({
           </ThemedText>
         )}
       </Panel>
-      {store.entries(id).filter(e => !store.skipped(e.id)).map(e => <Panel key={e.id}>
-        <ThemedText>{String(e.data.exercise)}</ThemedText>
-        {store.sets(e.id).map(set => <ThemedText numeric key={set.id}>{displayWeight(Number(set.data.weight_kg), store.unit(e.id))} {store.unit(e.id)} × {String(set.data.reps)}</ThemedText>)}
-      </Panel>)}
-      {!!s.data.notes && (
-        <Panel>
-          <ThemedText>{String(s.data.notes)}</ThemedText>
-        </Panel>
       )}
-      <Button label={t("editWorkout")} variant="secondary" onPress={() => {store.beginEditing(id); router.push({pathname:"/workout", params:{id}});}} />
+      <SectionTitle>{t("summaryExercises")}</SectionTitle>
+      {entries.length === 0 ? (
+        <Card testID="summary-no-exercises" style={card}>
+          <ThemedText muted>{t("summaryNoExercises")}</ThemedText>
+        </Card>
+      ) : (
+        <Card testID="summary-exercises" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
+          {entries.map((e, index) => {
+            const sets = store.sets(e.id), unit = store.unit(e.id);
+            return (
+              <View
+                key={e.id}
+                style={{
+                  paddingVertical: tokens.spacing[2],
+                  gap: 2,
+                  borderTopWidth: index ? 1 : 0,
+                  borderTopColor: colors["surface-2"],
+                }}
+              >
+                <View style={[layout.row, { alignItems: "baseline" }]}>
+                  <ThemedText style={{ flex: 1, fontWeight: "600" }}>
+                    {String(e.data.exercise)}
+                  </ThemedText>
+                  <ThemedText muted numeric variant="caption">
+                    {sets.length ? `${pluralize(sets.length, "set")} · ${unit}` : t("summaryNoSets")}
+                  </ThemedText>
+                </View>
+                {sets.length > 0 && (
+                  <ThemedText muted numeric style={{ fontSize: 15, lineHeight: 21 }}>
+                    {sets
+                      .map((set) => {
+                        const weight = displayWeight(Number(set.data.weight_kg), unit);
+                        // A set with no load is its reps alone, not "0 ×".
+                        return weight > 0
+                          ? `${weight} × ${String(set.data.reps)}`
+                          : t("summaryReps").replace("{reps}", String(set.data.reps));
+                      })
+                      .join("   ")}
+                  </ThemedText>
+                )}
+              </View>
+            );
+          })}
+        </Card>
+      )}
+      {!!s.data.notes && (
+        <>
+          <SectionTitle>{t("notes")}</SectionTitle>
+          <Card style={card}>
+            <ThemedText>{String(s.data.notes)}</ThemedText>
+          </Card>
+        </>
+      )}
       <View style={{ flex: 1 }} />
+      <View style={[layout.row, { gap: tokens.spacing[1], marginTop: tokens.spacing[1] }]}>
+        <View style={{ flex: 1 }}>
+          <Secondary
+            label={t("editWorkout")}
+            onPress={() => {
+              store.beginEditing(id);
+              router.push({ pathname: "/workout", params: { id } });
+            }}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Secondary
+            testID="summary-view-day"
+            label={t("summaryViewDay")}
+            onPress={() =>
+              router.push({
+                pathname: "/workout/day",
+                params: { day: String(s.data.day) },
+              })
+            }
+          />
+        </View>
+      </View>
       <Pill testID="summary-done" label={t("done")} onPress={close} />
     </Screen>
+  );
+}
+const SIDES: readonly Side[] = ["front", "back"];
+/** The muscles one workout trained: a small front and back figure, then each main muscle with its sets.
+ * The figure is a picture of the list beside it, so screen readers get the list only. */
+function MusclesCard({
+  main,
+  helpers,
+}: {
+  main: { group: string; sets: number }[];
+  helpers: string[];
+}) {
+  const { colors } = useTheme();
+  const worked = new Set(main.map((m) => m.group)),
+    helped = new Set(helpers),
+    most = Math.max(1, ...main.map((m) => m.sets));
+  return (
+    <Card testID="summary-muscles" style={[card, { gap: tokens.spacing[2] }]}>
+      <View
+        style={{ flexDirection: "row", justifyContent: "center", gap: tokens.spacing[4] }}
+      >
+        {SIDES.map((side) => {
+          const geometry = atlasGeometry.male[side];
+          return (
+            <View key={side} style={{ width: 92, aspectRatio: 200 / 440 }}>
+              <Svg width="100%" height="100%" viewBox="0 0 200 440" accessible={false}>
+                <Path
+                  d={geometry.skin}
+                  fill={colors["surface-2"]}
+                  stroke={colors["text-muted"]}
+                  strokeWidth={1.2}
+                  strokeLinejoin="round"
+                />
+                <G>
+                  {geometry.muscles.map((path) => {
+                    const group = muscleByKey.get(path.id)?.group ?? "";
+                    const on = worked.has(group), half = helped.has(group);
+                    if (!on && !half) return null;
+                    return (
+                      <Path
+                        key={path.id}
+                        testID={`summary-muscle-${path.id}`}
+                        d={path.d}
+                        fill={colors.training}
+                        fillOpacity={on ? (path.deep ? 0.6 : 0.95) : 0.35}
+                      />
+                    );
+                  })}
+                </G>
+                <Path
+                  d={geometry.lines}
+                  fill="none"
+                  stroke={colors["text-muted"]}
+                  strokeOpacity={0.7}
+                  strokeWidth={0.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          );
+        })}
+      </View>
+      <View>
+        {main.map((muscle, index) => (
+          <View
+            key={muscle.group}
+            accessible
+            accessibilityLabel={`${muscleLabel(muscle.group)}: ${pluralize(muscle.sets, "set")}`}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: tokens.spacing[2],
+              minHeight: 40,
+              borderTopWidth: index ? 1 : 0,
+              borderTopColor: colors["surface-2"],
+            }}
+          >
+            <ThemedText style={{ flex: 1 }}>{muscleLabel(muscle.group)}</ThemedText>
+            <View
+              style={{
+                width: 60,
+                height: 6,
+                borderRadius: 3,
+                overflow: "hidden",
+                backgroundColor: colors["surface-2"],
+              }}
+            >
+              <View
+                style={{
+                  width: `${Math.round((muscle.sets / most) * 100)}%`,
+                  height: "100%",
+                  backgroundColor: colors.training,
+                }}
+              />
+            </View>
+            <ThemedText muted numeric variant="caption" style={{ minWidth: 48, textAlign: "right" }}>
+              {pluralize(muscle.sets, "set")}
+            </ThemedText>
+          </View>
+        ))}
+      </View>
+      {helpers.length > 0 && (
+        <ThemedText muted variant="caption">
+          {t("summaryHelpers").replace("{muscles}", helpers.map(muscleLabel).join(", "))}
+        </ThemedText>
+      )}
+    </Card>
   );
 }

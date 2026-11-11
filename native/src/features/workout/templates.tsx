@@ -1,15 +1,19 @@
-import { useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedControl } from '@/components/segmented-control';
 import { useTheme } from '@/design/theme-provider';
+import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
-import { layout, Panel } from './primitives';
+import { layout } from './primitives';
+import { Field, PageBar, Pick, Primary, Print, Round, Secondary, SectionTitle, Trouble, card, dayLabel, leave, minutesLabel, semibold, sessionPrint } from './parts';
 import { SupersetControls } from './superset-controls';
 import { RepRangeInput } from './rep-range-input';
 import { RestOptions } from './rest-options';
@@ -17,13 +21,19 @@ import { ExercisePicker } from './picker';
 import { Routines } from './routines';
 import { PastDayChoice } from './days';
 import { Cardio } from '../cardio/screen';
+/** A finished workout's print at thumbnail size. Worked out once per saved change, not on every redraw of the list. */
+function Thumb({ store, id }: { store: WorkoutStore; id: string }) {
+  const data = useMemo(() => sessionPrint(store, id).data, [store, id]);
+  return <Print data={data} width={36} height={36} />;
+}
 export function Workouts() {
   const {
       store
     } = useWorkout(),
     [segment, setSegment] = useState<'routines' | 'history' | 'cardio'>('routines'),
     [undo, setUndo] = useState<(() => void) | null>(null),
-    [error, setError] = useState(false);
+    [error, setError] = useState(false),
+    { colors } = useTheme();
   function run(action: () => void) {
     try {
       action();
@@ -32,21 +42,44 @@ export function Workouts() {
       setError(true);
     }
   }
+  const history = store?.history() ?? [];
   return <Screen title={t('workouts')} tabHeader>
     <SegmentedControl label={t('segments')} options={(['routines', 'history', 'cardio'] as const).map(value => ({
       value,
       label: t(value)
     }))} value={segment} onChange={setSegment} />
-    {error && <ThemedText accessibilityRole="alert">{t('workoutSaveError')}</ThemedText>}
-    {store?.active() && <Button label={t('resumeWorkout')} onPress={() => router.push('/workout')} />}
+    {error && <Trouble text={t('workoutSaveError')} />}
+    {store?.active() && <Primary label={t('resumeWorkout')} onPress={() => router.push('/workout')} />}
     {segment === 'routines' && <Routines store={store} run={run} undo={undo} onUndo={restore => setUndo(() => restore)} />}
-    {segment === 'history' && <><PastDayChoice />{store?.history().length === 0 && <ThemedText muted>{t('historyEmpty')}</ThemedText>}{store?.history().map(s => <Button key={s.id} label={`${s.data.name ?? t('workoutName')} · ${s.data.day}${store.edited(s.id) ? ` · ${t('edited')}` : ''}`} variant="secondary" onPress={() => router.push({
-        pathname: '/workout/summary',
-        params: {
-          id: s.id
-        }
-      })} />)}</>}
-    {segment === 'cardio' && (store ? <Cardio key={store.repo.owner} repository={store.repo} /> : <ThemedText>{t('localError')}</ThemedText>)}
+    {segment === 'history' && <>
+      {store && history.length === 0 && <Card testID="history-empty" style={card}>
+        <ThemedText style={semibold}>{t('historyEmptyTitle')}</ThemedText>
+        <ThemedText muted>{t('historyEmpty')}</ThemedText>
+      </Card>}
+      {store && history.length > 0 && <Card testID="history-list" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
+        {history.map((s, index) => {
+          const name = String(s.data.name ?? t('workoutName')), edited = store.edited(s.id);
+          const facts = [dayLabel(s.data.day), minutesLabel(Number(s.data.duration_ms)), edited ? t('edited') : ''].filter(Boolean).join(' · ');
+          return <Pressable key={s.id} accessibilityRole="button" accessibilityLabel={`${name}, ${facts}`} onPress={() => router.push({
+            pathname: '/workout/summary',
+            params: {
+              id: s.id
+            }
+          })} style={({ pressed }) => ({ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[1], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'], opacity: pressed ? 0.7 : 1 })}>
+            <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], padding: 4 }}>
+              <Thumb store={store} id={s.id} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText variant="headline">{name}</ThemedText>
+              <ThemedText muted numeric variant="caption">{facts}</ThemedText>
+            </View>
+            <Icon name="chevron" size={18} color={colors['text-muted']} />
+          </Pressable>;
+        })}
+      </Card>}
+      <PastDayChoice />
+    </>}
+    {segment === 'cardio' && (store ? <Cardio key={store.repo.owner} repository={store.repo} /> : <Trouble text={t('localError')} />)}
     <Button label={t('backHome')} variant="secondary" onPress={() => router.navigate('/')} />
   </Screen>;
 }
@@ -59,7 +92,10 @@ export function TemplateEditor() {
     } = useLocalSearchParams<{
       id?: string;
     }>();
-  return store ? <Editor key={id ?? 'new'} store={store} id={id} /> : <Screen topInset><ThemedText>{t('localError')}</ThemedText></Screen>;
+  return store ? <Editor key={id ?? 'new'} store={store} id={id} /> : <Screen topInset>
+    <PageBar title={id ? t('editTemplate') : t('newTemplate')} left={<Round glyph="back" label={t('flowBack')} onPress={leave} />} />
+    <Trouble text={t('localError')} />
+  </Screen>;
 }
 function Editor({
   store,
@@ -82,44 +118,59 @@ function Editor({
     })) : []),
     [picker, setPicker] = useState(false),
     [error, setError] = useState(false);
-  const inputStyle = [layout.input, {
-    color: colors.text,
-    backgroundColor: colors['surface-2']
-  }];
   function move(i: number, by: number) {
     const next = [...exercises];
     if (i + by < 0 || i + by >= next.length) return;
     [next[i], next[i + by]] = [next[i + by], next[i]];
     setExercises(next);
   }
-  return <Screen topInset title={id ? t('editTemplate') : t('newTemplate')}>
-    <TextInput accessibilityLabel={t('templateName')} placeholder={t('templateName')} placeholderTextColor={colors['text-muted']} style={inputStyle} value={name} onChangeText={setName} />
-    {exercises.map((e, i) => <Panel key={e.id ?? i}><ThemedText variant="headline">{e.exercise}</ThemedText><View style={layout.row}>
-      {(['target_sets', 'target_reps'] as const).map(field => <View key={field} style={{
+  const title = id ? t('editTemplate') : t('newTemplate');
+  // Cancel sits in the bar with the title, where a sheet's Cancel always is; Save stays the one big button at the end.
+  return <Screen topInset>
+    <PageBar testID="template-bar" title={title} left={<Pick testID="template-cancel" text={t('cancel')} onPress={() => {
+      if (router.canGoBack()) router.back();else router.replace('/workouts');
+    }} />} />
+    <Field onSurface={false} label={t('templateName')} placeholder={t('templateNameHint')} value={name} onChangeText={setName} />
+    <SectionTitle>{t('summaryExercises')}</SectionTitle>
+    {exercises.length === 0 && <Card testID="template-empty" style={card}>
+      <ThemedText style={semibold}>{t('templateEmpty')}</ThemedText>
+      <ThemedText muted>{t('templateEmptyBody')}</ThemedText>
+    </Card>}
+    {exercises.map((e, i) => <Card key={e.id ?? i} testID={`template-exercise-${i}`} style={[card, { gap: tokens.spacing[2] }]}>
+      <View style={[layout.row, { alignItems: 'flex-start' }]}>
+        <View style={{ minWidth: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
+          <ThemedText muted numeric variant="caption" style={semibold}>{i + 1}</ThemedText>
+        </View>
+        <ThemedText variant="headline" style={[semibold, { flex: 1, lineHeight: 28 }]}>{e.exercise}</ThemedText>
+      </View>
+      <View style={[layout.row, { alignItems: 'flex-start', gap: tokens.spacing[2] }]}>
+      {(['target_sets', 'target_reps'] as const).map(field => <Field key={field} style={{
           flex: 1
-        }}><ThemedText muted variant="caption">{t(field === 'target_sets' ? 'targetSets' : 'targetReps')}</ThemedText><TextInput accessibilityLabel={`${e.exercise} ${t(field === 'target_sets' ? 'targetSets' : 'targetReps')}`} keyboardType="number-pad" style={inputStyle} value={Number.isNaN(e[field]) ? '' : String(e[field])} onChangeText={text => setExercises(es => es.map((v, j) => j === i ? {
+        }} label={t(field === 'target_sets' ? 'targetSets' : 'targetReps')} accessibilityLabel={`${e.exercise} ${t(field === 'target_sets' ? 'targetSets' : 'targetReps')}`} keyboardType="number-pad" value={Number.isNaN(e[field]) ? '' : String(e[field])} onChangeText={text => setExercises(es => es.map((v, j) => j === i ? {
             ...v,
             [field]: text === '' ? NaN : Number(text)
-          } : v))} /></View>)}
+          } : v))} />)}
     </View><RepRangeInput exercise={e.exercise} value={e} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,...value} : v))} />
     <SupersetControls currentId={String(i)} items={exercises.map((v,j) => ({id:String(j),name:v.exercise,group:v.superset_group ?? null}))} onUnlink={() => setExercises(es => es.map(v => v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} onLink={ids => setExercises(es => {
       const group = `superset:${Date.now()}:${++groupSequence.current}`;
       const oldGroups = new Set(es.filter((_,j) => ids.includes(String(j))).map(v => v.superset_group).filter(Boolean));
       return es.map((v,j) => ({...v,superset_group:ids.includes(String(j)) ? group : oldGroups.has(v.superset_group) ? null : v.superset_group}));
     })} />
-    <RestOptions value={{seconds:e.restSeconds ?? store.rest(e.exercise).seconds, style:e.restStyle ?? store.rest(e.exercise).style}} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,restSeconds:value.seconds,restStyle:value.style} : v))} /><View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => move(i, -1)} /><Button label={t('moveDown')} variant="secondary" onPress={() => move(i, 1)} /><Button label={t('remove')} variant="secondary" onPress={() => setExercises(es => es.filter((_, j) => j !== i).map(v => v.superset_group && es.filter(x => x.superset_group === v.superset_group).length === 2 && v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} /></View></Panel>)}
-    {error && <ThemedText accessibilityRole="alert">{t('invalidTemplate')}</ThemedText>}
-    <Button label={t('addExercise')} variant="secondary" onPress={() => setPicker(true)} />
-    <Button label={t('saveTemplate')} onPress={() => {
+    <RestOptions value={{seconds:e.restSeconds ?? store.rest(e.exercise).seconds, style:e.restStyle ?? store.rest(e.exercise).style}} onChange={value => setExercises(es => es.map((v,j) => j === i ? {...v,restSeconds:value.seconds,restStyle:value.style} : v))} />
+    <View style={[layout.row, { flexWrap: 'wrap', borderTopWidth: 1, borderTopColor: colors['surface-2'], paddingTop: tokens.spacing[0] }]}>
+      <Pick onSurface text={t('moveUp')} label={`${t('moveUp')}, ${e.exercise}`} disabled={i === 0} onPress={() => move(i, -1)} />
+      <Pick onSurface text={t('moveDown')} label={`${t('moveDown')}, ${e.exercise}`} disabled={i === exercises.length - 1} onPress={() => move(i, 1)} />
+      <Pick onSurface text={t('remove')} label={`${t('remove')}, ${e.exercise}`} onPress={() => setExercises(es => es.filter((_, j) => j !== i).map(v => v.superset_group && es.filter(x => x.superset_group === v.superset_group).length === 2 && v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} />
+    </View></Card>)}
+    <Secondary label={t('addExercise')} onPress={() => setPicker(true)} />
+    {error && <Trouble text={t('invalidTemplate')} />}
+    <Primary label={t('saveTemplate')} onPress={() => {
       try {
         store.saveTemplate(name, exercises, id);
         router.back();
       } catch {
         setError(true);
       }
-    }} />
-    <Button label={t('cancel')} variant="secondary" onPress={() => {
-      if (router.canGoBack()) router.back();else router.replace('/workouts');
     }} />
     {picker && <ExercisePicker store={store} onClose={() => setPicker(false)} onPick={exercise => {
       setExercises(es => [...es, {

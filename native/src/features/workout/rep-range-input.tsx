@@ -1,18 +1,14 @@
-import { View, TextInput } from 'react-native';
+import { View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/button';
-import { useTheme } from '@/design/theme-provider';
+import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import type { ExerciseOptions } from '@/data/workout/options';
-import { layout } from './primitives';
+import { Field, Pick, semibold } from './parts';
 export function RepRangeInput({exercise,value,onChange}: {exercise:string;value:ExerciseOptions;onChange:(options:ExerciseOptions)=>void}) {
-  const {colors} = useTheme();
-  return <View>
-    <ThemedText>{t('optionalRepRange')}</ThemedText>
-    <View style={layout.row}>{(['rep_min','rep_max'] as const).map(field => <View key={field} style={{flex:1}}>
-      <ThemedText>{t(field === 'rep_min' ? 'repMin' : 'repMax')}</ThemedText>
-      <TextInput accessibilityLabel={`${exercise}, ${t(field === 'rep_min' ? 'repMin' : 'repMax')}`} keyboardType="number-pad" style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']}]} value={value[field] == null || Number.isNaN(value[field]) ? '' : String(value[field])} onChangeText={text => onChange({...value,[field]:text === '' ? null : /^\d+$/.test(text) ? Number(text) : NaN})} />
-    </View>)}</View>
-    {(value.rep_min != null || value.rep_max != null) && <Button label={t('clearRepRange').replace('{name}',exercise)} variant="secondary" onPress={() => onChange({...value,rep_min:null,rep_max:null})} />}
+  return <View style={{gap:tokens.spacing[0]}}>
+    <ThemedText muted variant="caption" style={semibold}>{t('optionalRepRange')}</ThemedText>
+    <View style={{flexDirection:'row',alignItems:'flex-start',gap:tokens.spacing[2]}}>{(['rep_min','rep_max'] as const).map(field =>
+      <Field key={field} style={{flex:1}} label={t(field === 'rep_min' ? 'repMin' : 'repMax')} accessibilityLabel={`${exercise}, ${t(field === 'rep_min' ? 'repMin' : 'repMax')}`} keyboardType="number-pad" value={value[field] == null || Number.isNaN(value[field]) ? '' : String(value[field])} onChangeText={text => onChange({...value,[field]:text === '' ? null : /^\d+$/.test(text) ? Number(text) : NaN})} />)}</View>
+    {(value.rep_min != null || value.rep_max != null) && <View style={{alignSelf:'flex-start'}}><Pick onSurface text={t('repRangeClear')} label={t('clearRepRange').replace('{name}',exercise)} onPress={() => onChange({...value,rep_min:null,rep_max:null})} /></View>}
   </View>;
 }

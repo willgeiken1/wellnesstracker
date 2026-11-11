@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, Switch, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button } from '@/components/button';
+import { touchTarget } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
+import { tokens } from '@/design/tokens';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { localDay } from '@/core/workout/rules';
 import { t } from '@/i18n/en';
 import { Sheet, clock, layout } from './primitives';
+import { Field, Primary, Trouble, semibold } from './parts';
 export function parseLocalDateTime(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(value);
   if (!match) return NaN;
@@ -40,21 +42,31 @@ export function FinishSheet({
     [saveTemplate, setSaveTemplate] = useState(false),
     [error, setError] = useState(false),
     [saving, setSaving] = useState(false);
-  const inputStyle = [layout.input, {
-    color: colors.text,
-    backgroundColor: colors['surface-2']
-  }];
+  // What will be saved, as plain counts. Skipped exercises and sets that were never logged are left out.
+  const entries = store.entries(session.id).filter(e => !store.skipped(e.id)),
+    logged = entries.reduce((n, e) => n + store.sets(e.id).length, 0),
+    facts = [[clock(Number(duration)), t('duration')], [String(logged), t('setsLabel')], [String(entries.length), t('summaryExercises')]];
   return <Sheet label={t('finishWorkout')} onClose={onClose}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={layout.stack}>
-    <ThemedText muted>{t('duration')} · {clock(Number(duration))}</ThemedText>
-    <TextInput accessibilityLabel={t('workoutName')} placeholder={t('workoutName')} placeholderTextColor={colors['text-muted']} value={name} onChangeText={setName} style={inputStyle} />
-    <ThemedText muted variant="caption">{t('startDateTime')}</ThemedText><TextInput accessibilityLabel={t('startDateTime')} value={start} onChangeText={setStart} style={inputStyle} autoCapitalize="none" />
-    <ThemedText muted variant="caption">{t('durationSeconds')}</ThemedText><TextInput accessibilityLabel={t('durationSeconds')} value={duration} onChangeText={setDuration} keyboardType="number-pad" style={inputStyle} />
-    <TextInput accessibilityLabel={t('notes')} placeholder={t('notes')} placeholderTextColor={colors['text-muted']} value={notes} onChangeText={setNotes} maxLength={2000} multiline style={[inputStyle, {
-        minHeight: 88
-      }]} />
-    {session.data.origin === 'empty' && <Button label={t('saveAsTemplate')} selected={saveTemplate} variant="secondary" onPress={() => setSaveTemplate(v => !v)} />}
-    {error && <ThemedText accessibilityRole="alert">{t('invalidFinish')}</ThemedText>}
-    <View><Button testID="save-workout" label={t('saveWorkout')} disabled={saving} onPress={() => {
+    <View testID="finish-facts" style={{ flexDirection: 'row', borderRadius: 16, paddingVertical: tokens.spacing[2], backgroundColor: colors['surface-2'] }}>
+      {facts.map(([value, label], i) => <View key={label} accessible accessibilityLabel={`${label}: ${value}`} style={{ flex: 1, alignItems: 'center', gap: 2, borderLeftWidth: i ? 1 : 0, borderColor: colors['hair-2'] }}>
+        <ThemedText numeric style={{ fontSize: 20 }}>{value}</ThemedText>
+        <ThemedText muted variant="caption" style={[semibold, { textAlign: 'center' }]}>{label}</ThemedText>
+      </View>)}
+    </View>
+    {logged === 0 && <ThemedText muted variant="caption">{t('finishNoSets')}</ThemedText>}
+    <Field label={t('finishName')} accessibilityLabel={t('workoutName')} placeholder={t('workoutName')} value={name} onChangeText={setName} />
+    <Field label={t('startDateTime')} hint={t('finishStartHint')} value={start} onChangeText={setStart} autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" />
+    <Field label={t('durationSeconds')} value={duration} onChangeText={setDuration} keyboardType="number-pad" />
+    <Field label={t('notes')} placeholder={t('finishNotesHint')} value={notes} onChangeText={setNotes} maxLength={2000} multiline inputStyle={{ minHeight: 88, textAlignVertical: 'top' }} />
+    {session.data.origin === 'empty' && <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: touchTarget }}>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={semibold}>{t('saveAsTemplate')}</ThemedText>
+        <ThemedText muted variant="caption">{t('finishTemplateHint')}</ThemedText>
+      </View>
+      <Switch accessibilityLabel={t('saveAsTemplate')} value={saveTemplate} onValueChange={setSaveTemplate} trackColor={{ true: colors.accent }} />
+    </View>}
+    {error && <Trouble text={t('invalidFinish')} />}
+    <View><Primary testID="save-workout" label={t('saveWorkout')} disabled={saving} onPress={() => {
           if (saving) return;
           setSaving(true);
           try {
