@@ -67,7 +67,7 @@ test('all protected features are always free without purchasing or restoring', a
   await render(<PaywallScreen {...input} />, { wrapper });
   const free = within(screen.getByTestId('paywall-always-free'));
   expect(free.getByText('Always free')).toBeTruthy();
-  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
+  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'Import from the web app', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
     expect(free.getByText(feature)).toBeTruthy();
   }
   expect(input.onPurchase).not.toHaveBeenCalled();
@@ -83,7 +83,7 @@ test('Plus benefits advertise only features that exist today', async () => {
   }
   expect(benefits.queryByText('Advanced trends')).toBeNull();
   expect(screen.queryByText(/voice|recipe|menu/i)).toBeNull();
-  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
+  for (const feature of ['988 crisis card', 'Data export', 'Data and account deletion', 'Logging', 'Check-ins', 'Workouts', 'Barcode scan', 'Import from the web app', 'Basic trends', 'Advanced trends', 'Plain workout summary']) {
     expect(benefits.queryByText(feature)).toBeNull();
   }
 });

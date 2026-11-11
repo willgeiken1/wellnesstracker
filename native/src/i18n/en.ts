@@ -113,7 +113,7 @@ export const en = {
   demoTransferFailed: "Your account is ready, but demo entries could not be moved. They are still on this device. Try again to move them.",
   foodPrevious: 'Previous food day', foodNext: 'Next food day', foodCalendar: 'Open food calendar',
   foodPreviousMonth: 'Previous food month', foodNextMonth: 'Next food month', foodLast14: 'Last 14 days',
-  foodBurned: 'Burned: —', foodDay: 'Food for {day}', foodSaveDay: 'Save to {day}',
+  foodBurned: 'Burned: no data from Health yet', foodDay: 'Food for {day}', foodSaveDay: 'Save to {day}',
   foodSnap: 'Snap', foodDescribe: 'Describe', foodScan: 'Scan', foodManual: 'Manual', foodSaved: 'Saved',
   foodLater: '{method} arrives in a later step.', foodFan: 'More food logging options',
   foodName: 'Food name', foodCalories: 'Calories (kcal)', foodProtein: 'Protein (g)', foodCarbs: 'Carbs (g)', foodFat: 'Fat (g)',
@@ -186,15 +186,15 @@ export const en = {
   atlasTitle: "Muscles this week",
   atlasFront: "Front", atlasBack: "Back", atlasMale: "Male outline", atlasFemale: "Female outline",
   atlasList: "Muscle list", atlasMap: "Muscle map", atlasGroups: "Basic groups",
-  atlasHint: "Tap a region or use the muscle list for precise selection. Deep muscles are schematic surface projections.",
-  atlasWindow: "Past 7 days · main sets count 1, helper sets count 0.5. Advanced regions inherit basic-group attribution.",
+  atlasHint: "Tap a muscle, or open the muscle list to pick one by name. Deep muscles are shown where they sit under the surface.",
+  atlasWindow: "Past 7 days. A set counts fully for its main muscle and half for muscles that help.",
   atlasValue: "{sets} weekly sets · target {min}–{max} · last trained {last}",
   atlasNever: "Not yet", atlasHours: "{hours} hours ago", atlasOpen: "View muscle page",
   atlasDay: "1 day ago", atlasDays: "{days} days ago", atlasOutsideWindow: "not in the last {days} days",
   atlasNotFound: "Muscle not found. Choose a muscle from the map or list.",
   atlasPaletteCredit: "ColorBrewer Blues palette: Cynthia Brewer, Penn State. Licensed under Apache-2.0. https://colorbrewer2.org/ · https://github.com/axismaps/colorbrewer/blob/master/LICENCE.txt. Dark-mode adaptations #263746, #5685a2 and #8dbbd6 are original.",
   atlasStub: "More muscle details are coming in a later version.",
-  atlasLegend: "Volume: pale blue (below target), blue (in target), deep blue (above target). Highlight fades with time since training. Exact values are in the list.",
+  atlasLegend: "Pale blue is below your weekly target, blue is on target, deep blue is above. Colour fades the longer since you trained. Exact numbers are in the muscle list.",
 
   barcodeTitle: 'Scan food barcode',
   barcodePrivacy: 'Only the barcode is sent to Open Food Facts. Cached foods work offline.',
@@ -617,7 +617,8 @@ export const en = {
   theme: 'Theme', system: 'System', light: 'Light', dark: 'Dark', accent: 'Accent',
   citrus: 'Citrus', sea: 'Sea Glass', dusk: 'Dusk', sand: 'Sandstone',
   appearanceHint: 'Your preferences are saved on this phone.',
-  placeholder: 'M2/M3 placeholder', placeholderBody: 'This feature is coming in M2/M3. Explore the app or change its appearance while you wait.',
+  today: 'Today', yesterday: 'Yesterday', notInVersion: 'Not part of this version yet.',
+  placeholder: 'Coming soon', placeholderBody: "This part of Insight isn't built yet.",
   welcome: 'Your daily space', welcomeBody: 'The foundation is ready. Workout and food logging arrive in M2/M3.',
   workout: 'Active workout', foodLog: 'Food log', segments: 'Sections',
   fontError: 'The heading font could not load. System text is available.',
@@ -629,6 +630,13 @@ export function signOutUnsynced(count: number): string {
   return t(count===1?'signOutUnsynced_one':'signOutUnsynced_other').replace('{count}',String(count));
 }
 
+/** Food day header: Today, Yesterday, or a short weekday date (with the year when it differs). */
+export function foodDayLabel(day: string, today: string) {
+  if (day === today) return en.today;
+  const date = new Date(`${day}T12:00:00`), now = new Date(`${today}T12:00:00`);
+  if (Math.round((now.getTime() - date.getTime()) / 86400000) === 1) return en.yesterday;
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) });
+}
 export function equipmentLabel(equipment: import('../core/workout/rules').Equipment) {return t(`equipment_${equipment}`);}
 
 /** Counted logger copy lives here so singular forms cannot drift between screens. */

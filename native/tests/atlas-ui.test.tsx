@@ -91,7 +91,7 @@ test('map hit layer expands touch areas without obscuring precise paths and expo
  await fireEvent.press(screen.getByTestId('atlas-hit-deltAnt'));
  expect(screen.getByTestId('atlas-path-deltAnt').props.accessibilityState).toEqual({selected:true});
  expect(screen.getByTestId('atlas-path-pecUpper').props.accessibilityState).toEqual({selected:false});
- expect(screen.getByText(/list for precise selection/)).toBeTruthy();
+ expect(screen.getByText(/muscle list to pick one by name/)).toBeTruthy();
 });
 test.each([[24,'1 day ago'],[48,'2 days ago'],[200,'not in the last 7 days']] as const)('last trained %s hours uses a sensible label',async(hours,label)=>{
  await render(<BodyAtlas sessions={[{at:now-hours*3600000,exercises:[{main:'chest',helpers:[],sets:1}]}]} now={now}/>,{wrapper});
