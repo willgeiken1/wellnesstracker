@@ -137,3 +137,36 @@ test('with every tile removed Home says so and offers Edit', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Add, What is next' }));
   expect(screen.getByTestId('home-next')).toBeTruthy();
 });
+
+describe('a new account, before anything is logged', () => {
+  test('starts with the empty map, what is next and the tiles note', async () => {
+    open();
+    await render(<Home />, { wrapper });
+    expect(screen.getByTestId('home-empty-map')).toBeTruthy();
+    expect(screen.getByTestId('home-next')).toBeTruthy();
+    expect(screen.getByText('Tiles')).toBeTruthy();
+  });
+  test('keeps only what the person left on Home, in their order', async () => {
+    const repo = open();
+    repo.localSave(HOME_TILES_KEY, { order: ['next'], wide: [] });
+    await render(<Home />, { wrapper });
+    expect(screen.getByTestId('home-next')).toBeTruthy();
+    expect(screen.queryByTestId('home-empty-map')).toBeNull();
+    expect(screen.queryByText('Tiles')).toBeNull();
+  });
+  test('removing the map in Edit takes it off Home straight away', async () => {
+    open();
+    await render(<Home />, { wrapper });
+    await fireEvent.press(screen.getByTestId('home-edit'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
+    expect(screen.queryByTestId('home-empty-map')).toBeNull();
+    expect(screen.getByTestId('home-next')).toBeTruthy();
+  });
+  test('with every tile removed it says Home is empty, the same as an account with data', async () => {
+    const repo = open();
+    repo.localSave(HOME_TILES_KEY, { order: [], wide: [] });
+    await render(<Home />, { wrapper });
+    expect(screen.getByTestId('home-nothing-on')).toBeTruthy();
+    expect(screen.queryByTestId('home-next')).toBeNull();
+  });
+});

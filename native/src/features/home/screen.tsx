@@ -9,6 +9,7 @@ import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg, localDay } from '@/core/workout/rules';
 import type { WorkoutStore } from '@/data/workout/store';
+import { entryVolumeKg } from '@/features/workout/volume';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { dailyWeights } from '@/features/body/model';
@@ -49,23 +50,27 @@ function readDays(store: WorkoutStore, days: string[], today: string, foodDay: s
   const wanted = new Set(days), out = new Map<string, DayFacts>();
   const food = store.repo.list('food_entries');
   for (const day of days) {
-    const rows = food.filter(r => r.data.day === (day === today ? foodDay : day)), sum = totals(rows);
+    // Before 4 a.m. the food screen still files food under yesterday. Home shows that food under today, to agree
+    // with the Food tab, so yesterday's column must not show the same entries a second time.
+    const source = day === today ? foodDay : day === foodDay ? null : day;
+    const rows = source === null ? [] : food.filter(r => r.data.day === source), sum = totals(rows);
     out.set(day, { ...NONE, logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g });
   }
   for (const session of store.history()) {
     const day = String(session.data.day), facts = out.get(day);
     if (!wanted.has(day) || !facts) continue;
     facts.trained = true;
-    for (const entry of store.entries(session.id)) for (const set of store.working(entry)) {
-      const volume = set.warmup ? 0 : set.weight * set.reps;
-      if (Number.isFinite(volume)) facts.volumeKg += volume;
-    }
+    for (const entry of store.entries(session.id)) facts.volumeKg += entryVolumeKg(store, entry);
   }
   return out;
 }
 function readTargets(store: WorkoutStore, day: string, _revision: number) {
   const targets = foodTargets(store.repo, day).targets;
   return targets ? { kcal: targets.energy_kj / 4.184, protein: targets.protein_g } : null;
+}
+/** Each day is measured against its own target, so changing today's target never redraws earlier days. */
+function readDayTargets(store: WorkoutStore, days: string[], today: string, foodDay: string, revision: number) {
+  return new Map(days.map(day => [day, readTargets(store, day === today ? foodDay : day, revision)]));
 }
 function readWeights(store: WorkoutStore) { return dailyWeights(store.repo.list('weigh_ins')).slice(-14).map(w => w.kg); }
 function hasAnything(store: WorkoutStore, _revision: number) {
@@ -182,18 +187,23 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
   const active = !!store.active();
   const pillar = usePillarColors(), accent = useTheme().colors.accent;
-  const of = (day: string) => progress(facts.get(day) ?? NONE, targets?.kcal ?? null, active && day === today);
-  if (!hasAnything(store, revision)) return <>
-    <EmptyMap />
-    <Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} />
-    <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('homeTiles')}</ThemedText>
-    <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
-  </>;
+  const dayTargets = readDayTargets(store, days, today, foodDay, revision);
+  const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
   if (!tiles.order.length) return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
     <ThemedText variant="headline" style={semibold}>{t('homeNothingOn')}</ThemedText>
     <ThemedText muted variant="caption" style={{ textAlign: 'center' }}>{t('homeNothingOnBody')}</ThemedText>
     <View style={{ marginTop: tokens.spacing[1] }}><SmallButton label={t('homeEdit')} onPress={onEdit} /></View>
   </Card>;
+  // A new account has nothing to draw yet, but the layout the person chose still applies: only what they kept
+  // on Home shows, in their order. The week strip waits for data, like the number tiles.
+  if (!hasAnything(store, revision)) return <>
+    {tiles.order.map(id => id === 'map' ? <EmptyMap key={id} />
+      : id === 'next' ? <Next key={id} store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /> : null)}
+    {tiles.order.some(id => id !== 'map' && id !== 'next') && <>
+      <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('homeTiles')}</ThemedText>
+      <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
+    </>}
+  </>;
   const numbers = numberTiles(store, recent.map(day => facts.get(day) ?? NONE), pillar, accent);
   const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
   // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
@@ -212,7 +222,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
 
 function EmptyMap() {
   const { colors } = useTheme();
-  return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]}>
+  return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-empty-map">
     <Svg width={200} height={48} viewBox="0 0 200 48" accessible={false}>
       <Path d="M10 30 Q100 6 190 30" fill="none" stroke={colors['text-muted']} strokeWidth={1.4} strokeDasharray="3 4" strokeLinecap="round" />
       <Path d="M40 40 Q100 24 160 40" fill="none" stroke={colors['text-muted']} strokeWidth={1.4} strokeDasharray="3 4" strokeLinecap="round" opacity={0.5} />
