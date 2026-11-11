@@ -49,7 +49,7 @@ test('signed-in setup finishes locally with no stats, a starter routine, and dev
  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
  expect(screen.getByText('Step 3 of 3')).toBeTruthy();expect(screen.getByText(t('targetsUnset'))).toBeTruthy();
- await fireEvent.press(screen.getByRole('tab',{name:t('starterFullBody')}));
+ await fireEvent.press(screen.getByRole('radio',{name:t('starterFullBody')}));
  await fireEvent.press(screen.getByRole('button',{name:t('finishOnboarding')}));
  expect(repository.list('profile')[0].data.dob).toBe('2000-01-01');
  expect(repository.list('routines')).toHaveLength(1);expect(repository.list('routine_exercises')).toHaveLength(3);
