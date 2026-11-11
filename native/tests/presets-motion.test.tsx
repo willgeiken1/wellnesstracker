@@ -33,10 +33,10 @@ describe('saved motion and strength', () => {
   });
   test('round-trips and writes only what differs from the default', () => {
     expect(formatAppearance({ ...DEFAULT_APPEARANCE, motion: 'lively', intensity: 3 })).toBe('seaGlassTide;motion=lively;strength=3');
-    expect(parseAppearance('seaGlassTide;ring=glass;motion=basic;strength=1')).toEqual({ palette: 'seaGlassTide', ring: 'glass', motion: 'basic', intensity: 1 });
+    expect(parseAppearance('seaGlassTide;ring=glass;motion=basic;strength=1')).toEqual({ ...DEFAULT_APPEARANCE, ring: 'glass', motion: 'basic', intensity: 1 });
   });
   test('an unknown motion or strength falls back alone', () => {
-    expect(parseAppearance('goldenHour;ring=liquid;motion=wild;strength=9')).toEqual({ palette: 'goldenHour', ring: 'liquid', motion: 'calm', intensity: 2 });
+    expect(parseAppearance('goldenHour;ring=liquid;motion=wild;strength=9')).toEqual({ ...DEFAULT_APPEARANCE, palette: 'goldenHour', ring: 'liquid' });
     expect(parseAppearance('goldenHour;strength=__proto__;motion=constructor')).toMatchObject({ motion: 'calm', intensity: 2 });
   });
 });
@@ -44,7 +44,7 @@ describe('saved motion and strength', () => {
 describe('presets', () => {
   test('each preset is recognised from the looks it sets, and a mix of two is none of them', () => {
     for (const id of PRESET_IDS) expect(presetOf(PRESETS[id])).toBe(id);
-    expect(presetOf({ ring: 'liquid', motion: 'calm' })).toBeNull();
+    expect(presetOf({ ...DEFAULT_APPEARANCE, ring: 'liquid', motion: 'calm' })).toBeNull();
     expect(presetOf(DEFAULT_APPEARANCE)).toBe('calm');
   });
   test('tapping a preset saves its rings and motion and keeps the theme and strength', async () => {
@@ -137,5 +137,28 @@ describe('Reduce Motion', () => {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 900)); });
     expect(screen.queryAllByTestId('ring-drop-pulsing')).toHaveLength(0);
     expect(screen.queryAllByTestId('ring-drop').length).toBeGreaterThan(0);
+  });
+});
+
+describe('tab bar and keypad looks', () => {
+  test('both save on their own and read back, and older saved text gets the standard bar and plain keys', async () => {
+    expect(parseAppearance('goldenHour;ring=liquid')).toMatchObject({ bar: 'standard', keypad: 'plain' });
+    expect(parseAppearance('goldenHour;bar=mirror;keypad=chrome')).toMatchObject({ bar: 'standard', keypad: 'plain' });
+    const repository = settingsRepository();
+    await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
+    await fireEvent.press(screen.getAllByLabelText('Glass').find(node => node.props.accessibilityRole === 'tab')!);
+    expect(savedAccent(repository)).toBe('seaGlassTide;bar=glass');
+    expect(parseAppearance(savedAccent(repository))).toMatchObject({ bar: 'glass', keypad: 'plain' });
+  });
+  test('the Glass preset turns on glass rings, bar and keys together, and Calm turns them all back', async () => {
+    const repository = settingsRepository('berryMeadow');
+    await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
+    await fireEvent.press(screen.getByTestId('preset-glass'));
+    expect(savedAccent(repository)).toBe('berryMeadow;ring=glass;motion=lively;bar=glass;keypad=glass');
+    await fireEvent.press(screen.getByTestId('preset-calm'));
+    expect(savedAccent(repository)).toBe('berryMeadow');
+  });
+  test('a glass ring with a standard bar is your own mix', () => {
+    expect(presetOf({ ...PRESETS.glass, bar: 'standard' })).toBeNull();
   });
 });

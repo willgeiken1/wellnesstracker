@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 import Svg from 'react-native-svg';
 import { RingArc } from '@/components/ring-arc';
-import { INTENSITIES, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
+import { BAR_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
 import { Screen } from '@/components/screen';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
@@ -79,7 +79,8 @@ const STRENGTH_NAME = { 1: 'strengthSubtle', 2: 'strengthMedium', 3: 'strengthFu
 
 export default function Appearance() {
   const { override, setOverride, palette, setPalette, ringLook, setRingLook, persistenceError,
-    preset, applyPreset, motionStyle, setMotionStyle, intensity, setIntensity, reduceMotion, reduceMotionReady } = useTheme();
+    preset, applyPreset, motionStyle, setMotionStyle, intensity, setIntensity, reduceMotion, reduceMotionReady,
+    barLook, setBarLook, keypadLook, setKeypadLook } = useTheme();
   return <Screen><Card>
     <ThemedText variant="headline" accessibilityRole="header">{t('themeMode')}</ThemedText>
     <SegmentedControl label={t('themeMode')} value={override} onChange={setOverride}
@@ -103,6 +104,15 @@ export default function Appearance() {
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
       {RING_LOOKS.map(look => <RingTile key={look} look={look} selected={ringLook === look} onPress={() => setRingLook(look)} />)}
     </View>
+  </Card><Card>
+    <ThemedText variant="headline" accessibilityRole="header">{t('barLookTitle')}</ThemedText>
+    <ThemedText muted variant="caption">{t('barLookBody')}</ThemedText>
+    <SegmentedControl label={t('barLookTitle')} value={barLook} onChange={setBarLook}
+      options={BAR_LOOKS.map(value => ({ value, label: t(value === 'glass' ? 'lookGlass' : 'lookStandard') }))} />
+    <ThemedText variant="headline" accessibilityRole="header">{t('keypadLookTitle')}</ThemedText>
+    <ThemedText muted variant="caption">{t('keypadLookBody')}</ThemedText>
+    <SegmentedControl label={t('keypadLookTitle')} value={keypadLook} onChange={setKeypadLook}
+      options={KEYPAD_LOOKS.map(value => ({ value, label: t(value === 'glass' ? 'lookGlass' : 'lookPlain') }))} />
   </Card><Card>
     <ThemedText variant="headline" accessibilityRole="header">{t('motionTitle')}</ThemedText>
     <SegmentedControl label={t('motionTitle')} value={motionStyle} onChange={setMotionStyle}
