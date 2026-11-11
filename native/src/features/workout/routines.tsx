@@ -20,9 +20,9 @@ import { layout } from './primitives';
 const semibold = { fontWeight: '600' } as const;
 const card = { borderRadius: 18, padding: tokens.spacing[3] } as const;
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
-const dayLabel = (day: unknown) => {
+const dayLabel = (day: unknown, weekday = true) => {
   const date = new Date(`${String(day)}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? String(day) : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return Number.isNaN(date.getTime()) ? String(day) : date.toLocaleDateString('en-US', { ...(weekday ? { weekday: 'short' } : {}), month: 'short', day: 'numeric' });
 };
 
 /** Volume per exercise for a finished session, in kg. A set without weight still counts by its reps. */
@@ -103,7 +103,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
               </View>
               <View style={{ flex: 1 }}>
                 <ThemedText variant="headline">{name}</ThemedText>
-                <ThemedText muted variant="caption">{pluralize(store.templateExercises(r.id).length, 'exercise')} · {last ? `${t('lastDone')} ${dayLabel(last.data.day)}` : t('notYetDone')}</ThemedText>
+                <ThemedText muted variant="caption">{pluralize(store.templateExercises(r.id).length, 'exercise')} · {last ? `${t('lastDone')} ${dayLabel(last.data.day, false)}` : t('notYetDone')}</ThemedText>
               </View>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel={t('startTemplate').replace('{name}', name)} onPress={() => run(() => startRoutine(store, r.id))}

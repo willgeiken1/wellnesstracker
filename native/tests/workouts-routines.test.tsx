@@ -64,7 +64,7 @@ test('the latest finished workout shows as a print with its date and volume, and
   await render(<Workouts />, { wrapper });
   expect(screen.getByTestId('workouts-latest-print')).toBeTruthy();
   expect(screen.getByText("800 lb")).toBeTruthy();
-  expect(screen.getByText(/^2 exercises · Last done \w{3}, \w{3} \d+$/)).toBeTruthy();
+  expect(screen.getByText(/^2 exercises · Last done \w{3} \d+$/)).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: /^Latest print: / }));
   expect(router.push).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id: session.id } });
 });
