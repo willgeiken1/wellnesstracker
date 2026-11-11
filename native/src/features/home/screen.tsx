@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -8,6 +9,7 @@ import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg, localDay } from '@/core/workout/rules';
 import type { WorkoutStore } from '@/data/workout/store';
+import { entryVolumeKg } from '@/features/workout/volume';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { dailyWeights } from '@/features/body/model';
@@ -46,23 +48,27 @@ function readDays(store: WorkoutStore, days: string[], today: string, foodDay: s
   const wanted = new Set(days), out = new Map<string, DayFacts>();
   const food = store.repo.list('food_entries');
   for (const day of days) {
-    const rows = food.filter(r => r.data.day === (day === today ? foodDay : day)), sum = totals(rows);
+    // Before 4 a.m. the food screen still files food under yesterday. Home shows that food under today, to agree
+    // with the Food tab, so yesterday's column must not show the same entries a second time.
+    const source = day === today ? foodDay : day === foodDay ? null : day;
+    const rows = source === null ? [] : food.filter(r => r.data.day === source), sum = totals(rows);
     out.set(day, { ...NONE, logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g });
   }
   for (const session of store.history()) {
     const day = String(session.data.day), facts = out.get(day);
     if (!wanted.has(day) || !facts) continue;
     facts.trained = true;
-    for (const entry of store.entries(session.id)) for (const set of store.working(entry)) {
-      const volume = set.warmup ? 0 : set.weight * set.reps;
-      if (Number.isFinite(volume)) facts.volumeKg += volume;
-    }
+    for (const entry of store.entries(session.id)) facts.volumeKg += entryVolumeKg(store, entry);
   }
   return out;
 }
 function readTargets(store: WorkoutStore, day: string, _revision: number) {
   const targets = foodTargets(store.repo, day).targets;
   return targets ? { kcal: targets.energy_kj / 4.184, protein: targets.protein_g } : null;
+}
+/** Each day is measured against its own target, so changing today's target never redraws earlier days. */
+function readDayTargets(store: WorkoutStore, days: string[], today: string, foodDay: string, revision: number) {
+  return new Map(days.map(day => [day, readTargets(store, day === today ? foodDay : day, revision)]));
 }
 function readWeights(store: WorkoutStore) { return dailyWeights(store.repo.list('weigh_ins')).slice(-14).map(w => w.kg); }
 function hasAnything(store: WorkoutStore, _revision: number) {
@@ -119,6 +125,8 @@ export function Home() {
   const now = new Date(), today = localDay(now);
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
+  const insets = useSafeAreaInsets();
   const selected = picked && picked <= today ? picked : today;
   return <View style={{ flex: 1 }}>
     <Screen tabHeader>
@@ -138,7 +146,7 @@ export function Home() {
       {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} /> : <Next />}
     </Screen>
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
-    <View pointerEvents="box-none" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3], alignItems: 'flex-end', gap: tokens.spacing[1] }}>
+    <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>
         <SmallButton label={t('logFood')} onPress={() => { setAdding(false); router.push('/food'); }} />
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
@@ -161,7 +169,8 @@ function Body({ store, now, selected, onPick }: { store: WorkoutStore; now: Date
   const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
   const active = !!store.active();
-  const of = (day: string) => progress(facts.get(day) ?? NONE, targets?.kcal ?? null, active && day === today);
+  const dayTargets = readDayTargets(store, days, today, foodDay, revision);
+  const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
   if (!hasAnything(store, revision)) return <>
     <EmptyMap />
     <Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} />
@@ -265,7 +274,7 @@ function Next({ store, facts = NONE, targets = null, hour = 12 }: { store?: Work
     const body = !facts.logged ? t('nothingLogged')
       : targets && facts.kcal !== null ? t('homeLeft').replace('{kcal}', whole(Math.max(0, targets.kcal - facts.kcal))).replace('{protein}', whole(Math.max(0, targets.protein - (facts.protein ?? 0))))
         : t('homeLoggedSoFar').replace('{kcal}', facts.kcal === null ? '0' : whole(facts.kcal));
-    return <Brief title={t(hour >= 17 ? 'homeEvening' : 'foodToday')} body={body} action={<SmallButton ghost label={t('logFood')} onPress={() => router.push('/food')} />} />;
+    return <Brief title={t(hour >= 17 ? 'homeEvening' : 'homeFoodToday')} body={body} action={<SmallButton ghost label={t('logFood')} onPress={() => router.push('/food')} />} />;
   }
   const next = nextRoutine(store);
   if (!next) return freestyle;

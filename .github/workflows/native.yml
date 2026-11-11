@@ -38,7 +38,8 @@ jobs:
       - run: npm ci
       - run: node --test plugins/*.test.js
       - run: npx expo install --check
-      - run: npx expo-doctor
+      # 1.21.7 (published Nov 11) fails on start with "Cannot find module @expo/env"; unpin once fixed upstream.
+      - run: npx expo-doctor@1.21.6
       - run: npx tsc --noEmit
       - run: npx expo lint
       - run: npm test -- --ci

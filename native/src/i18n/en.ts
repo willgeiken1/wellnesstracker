@@ -609,7 +609,7 @@ export const en = {
   settings: 'Settings', openSettings: 'Open settings', backHome: 'Back to Home', backSettings: 'Back to Settings',
   startFreestyle: 'Start freestyle', logFood: 'Log food', closeWorkout: 'Close workout',
   todayWorkout: "Today's workout", workoutInProgress: 'Workout in progress', noRoutinePlanned: 'No routine planned',
-  foodToday: 'Food today', nothingLogged: 'Nothing logged yet',
+  homeFoodToday: 'Food today', nothingLogged: 'Nothing logged yet',
   goodMorning: 'Good morning', goodAfternoon: 'Good afternoon', goodEvening: 'Good evening', today: 'Today',
   start: 'Start', resume: 'Resume', homeProtein: 'Protein', homeCalories: 'Calories', homeTraining: 'Training', homeFood: 'Food',
   homePercentToday: '{n}% today', homeThisWeek: 'This week', homeSevenDays: '7 days', exampleData: 'Example data',
