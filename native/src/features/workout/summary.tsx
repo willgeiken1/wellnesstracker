@@ -68,10 +68,11 @@ export function SummitToken({
   size?: number;
   muted?: boolean;
 }) {
-  const { colors, accent } = useTheme();
-  const highlight = muted ? colors["token-muted-highlight"] : tokens.accents[accent].dark.accent;
+  const { colors, palette } = useTheme();
+  const light = tokens.palettes[palette].light;
+  const highlight = muted ? colors["token-muted-highlight"] : tokens.palettes[palette].dark.accent;
   const face = muted ? colors["token-muted"] : colors.accent;
-  const rim = muted ? colors["token-muted"] : tokens.accents[accent].light.accent;
+  const rim = muted ? colors["token-muted"] : light.accent;
   return (
     <View
       testID={fresh ? "summit-token-new" : muted ? "summit-token-muted" : undefined}
@@ -80,7 +81,7 @@ export function SummitToken({
       <Svg accessible={false} width={size} height={size} viewBox="0 0 80 80">
         <Defs>
           <RadialGradient id="token" cx="32%" cy="20%" r="85%">
-            <Stop offset="0" stopColor={muted ? highlight : tokens.themes.light.surface} />
+            <Stop offset="0" stopColor={muted ? highlight : light.surface} />
             <Stop offset="12%" stopColor={highlight} />
             <Stop offset="45%" stopColor={face} />
             <Stop offset="100%" stopColor={face} stopOpacity={0.75} />
@@ -90,8 +91,8 @@ export function SummitToken({
             <Stop offset="100%" stopColor={rim} />
           </LinearGradient>
           <RadialGradient id="shadow">
-            <Stop offset="0" stopColor={tokens.themes.light.text} stopOpacity={0.32} />
-            <Stop offset="100%" stopColor={tokens.themes.light.text} stopOpacity={0} />
+            <Stop offset="0" stopColor={light.text} stopOpacity={0.32} />
+            <Stop offset="100%" stopColor={light.text} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Ellipse cx={40} cy={71} rx={25} ry={5} fill="url(#shadow)" />
@@ -126,7 +127,7 @@ export function SummitToken({
           stroke={colors["on-accent"]}
           opacity={0.25}
         />
-        <Ellipse cx={31} cy={24} rx={10} ry={4} fill={tokens.themes.light.surface} opacity={0.22} transform="rotate(-35 31 24)" />
+        <Ellipse cx={31} cy={24} rx={10} ry={4} fill={light.surface} opacity={0.22} transform="rotate(-35 31 24)" />
         <Path
           d="M25 47L40 24L55 47ZM40 24C15 38 28 69 48 54S51 27 40 24Z"
           fill="none"

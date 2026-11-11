@@ -2,11 +2,11 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import { AccessibilityInfo, Appearance, useColorScheme } from 'react-native';
 import type { Repository } from '../data/repository';
 import { compareRows } from '../data/rows';
-import { createTheme, tokens, type Accent, type ThemeOverride } from './tokens';
+import { createTheme, DEFAULT_PALETTE, paletteLocked, resolvePalette, tokens, type Palette, type ThemeOverride } from './tokens';
 
 function useThemeState(repository?: Repository | null) {
   const [override, updateOverride] = useState<ThemeOverride>('system');
-  const [accent, updateAccent] = useState<Accent>('sea');
+  const [palette, updatePalette] = useState<Palette>(DEFAULT_PALETTE);
   const [persistenceError, setPersistenceError] = useState(false);
   useEffect(() => {
     const hydrate = () => {
@@ -14,22 +14,24 @@ function useThemeState(repository?: Repository | null) {
         const row = repository?.list('settings').sort(compareRows).at(-1);
         const theme = row?.data.theme_override, color = row?.data.accent;
         updateOverride(theme === 'light' || theme === 'dark' ? theme : 'system');
-        updateAccent(color === 'citrus' || color === 'dusk' || color === 'sand' ? color : 'sea');
+        // The palette lives in the existing `accent` setting, so older saved accents still resolve.
+        const saved = resolvePalette(color);
+        updatePalette(paletteLocked(saved) ? DEFAULT_PALETTE : saved);
         setPersistenceError(false);
       } catch { setPersistenceError(true); }
     };
     hydrate();
     return repository?.subscribe(hydrate);
   }, [repository]);
-  const persist = (theme: ThemeOverride, color: Accent) => {
+  const persist = (theme: ThemeOverride, color: Palette) => {
     try {
       const current = repository?.list('settings').sort(compareRows).at(-1);
       repository?.save('settings', { ...current?.data, theme_override: theme, accent: color }, current?.id);
-      updateOverride(theme); updateAccent(color); setPersistenceError(false);
+      updateOverride(theme); updatePalette(color); setPersistenceError(false);
     } catch { setPersistenceError(true); }
   };
-  const setOverride = (theme: ThemeOverride) => persist(theme, accent);
-  const setAccent = (color: Accent) => persist(override, color);
+  const setOverride = (theme: ThemeOverride) => persist(theme, palette);
+  const setPalette = (color: Palette) => { if (!paletteLocked(color)) persist(override, color); };
   useEffect(() => {
     Appearance.setColorScheme(override === 'system' ? 'auto' : override);
     return () => Appearance.setColorScheme('auto');
@@ -51,7 +53,7 @@ function useThemeState(repository?: Repository | null) {
     }).catch(() => {if(active)setReduceMotionReady(true);});
     return () => { active = false; subscription.remove(); };
   }, []);
-  return { persistenceError, override, setOverride, accent, setAccent, mode, colors: createTheme(mode, accent),
+  return { persistenceError, override, setOverride, palette, setPalette, mode, colors: createTheme(mode, palette),
     reduceMotion, reduceMotionReady, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
 }
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);

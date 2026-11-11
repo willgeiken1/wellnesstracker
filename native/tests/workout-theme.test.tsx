@@ -19,7 +19,7 @@ test.each(["dark", "light"] as const)(
     const scheme = jest
       .spyOn(ReactNative, "useColorScheme")
       .mockReturnValue(mode);
-    const c = createTheme(mode, "sea");
+    const c = createTheme(mode, "seaGlassTide");
     try {
       await render(
         <ThemeProvider>
@@ -63,7 +63,7 @@ test.each(["dark", "light"] as const)(
     const scheme = jest
       .spyOn(ReactNative, "useColorScheme")
       .mockReturnValue(mode);
-    const c = createTheme(mode, "sea");
+    const c = createTheme(mode, "seaGlassTide");
     try {
       await render(
         <ThemeProvider>
@@ -98,7 +98,7 @@ test.each(["dark", "light"] as const)("summary uses %s card and action tokens", 
  try {
   const store=new WorkoutStore(memoryRepository());
   const fixture=createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},"summary")!;
-  const c=createTheme(mode,"sea");
+  const c=createTheme(mode,"seaGlassTide");
   await render(<ThemeProvider><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
   for (const id of ["summary-stats","summary-pr","summary-shelf"]) expect(screen.getByTestId(id)).toHaveStyle({backgroundColor:c.surface});
   expect(screen.getByTestId("summary-done")).toHaveStyle({backgroundColor:c.accent});
@@ -121,12 +121,12 @@ test.each(['dark','light'] as const)('older shelf tokens are desaturated in %s w
    const gradients=token.queryAll(n=>n.type==='RNSVGRadialGradient'||n.type==='RNSVGLinearGradient');
    expect(gradients).toHaveLength(3);
    const colors=gradients.flatMap(n=>n.props.gradient);
-   expect(colors).not.toContain((ReactNative.processColor(createTheme(mode,'sea').accent) as number) | 0);
-   expect(colors).toContain((ReactNative.processColor(createTheme(mode,'sea')['token-muted']) as number) | 0);
+   expect(colors).not.toContain((ReactNative.processColor(createTheme(mode,'seaGlassTide').accent) as number) | 0);
+   expect(colors).toContain((ReactNative.processColor(createTheme(mode,'seaGlassTide')['token-muted']) as number) | 0);
   }
   expect(screen.getAllByTestId('summit-token-new')).toHaveLength(1);
   const newest=screen.getByTestId('summit-token-new').queryAll(n=>n.type==='RNSVGRadialGradient'||n.type==='RNSVGLinearGradient').flatMap(n=>n.props.gradient);
-  expect(newest).toContain((ReactNative.processColor(createTheme(mode,'sea').accent) as number) | 0);
+  expect(newest).toContain((ReactNative.processColor(createTheme(mode,'seaGlassTide').accent) as number) | 0);
  } finally {scheme.mockRestore();}
 });
 
@@ -136,7 +136,7 @@ test.each(['dark', 'light'] as const)('rest ring track uses the %s semantic toke
   try {
     await render(<ThemeProvider><RestContours seconds={60} duration={90} style="unwind" /></ThemeProvider>);
     const track = screen.getByTestId('rest-contours').queryAll(n => n.type === 'RNSVGPath')[0];
-    const colors = createTheme(mode, 'sea');
+    const colors = createTheme(mode, 'seaGlassTide');
     expect(track.props.stroke).toEqual({ type: 0, payload: ReactNative.processColor(colors[mode === 'dark' ? 'text-muted' : 'surface-2']) });
     expect(track.props.opacity ?? 1).toBe(mode === 'dark' ? 0.4 : 1);
   } finally { scheme.mockRestore(); }
