@@ -24,7 +24,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-pecLower",
       "opacity": 0.8833333333333333,
       "stroke": {
-        "payload": 4288388001,
+        "payload": 4279176977,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -37,7 +37,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-pecUpper",
       "opacity": 0.8833333333333333,
       "stroke": {
-        "payload": 4288388001,
+        "payload": 4279176977,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -102,7 +102,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsLat",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4288388001,
+        "payload": 4294243569,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -546,7 +546,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsMed",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4288388001,
+        "payload": 4294243569,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -559,7 +559,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsLong",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4288388001,
+        "payload": 4294243569,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -572,7 +572,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsLat",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4288388001,
+        "payload": 4294243569,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -683,7 +683,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-pecLower",
       "opacity": 0.8833333333333333,
       "stroke": {
-        "payload": 4284835694,
+        "payload": 4279505940,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -696,7 +696,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-pecUpper",
       "opacity": 0.8833333333333333,
       "stroke": {
-        "payload": 4284835694,
+        "payload": 4279505940,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -761,7 +761,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsLat",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4284835694,
+        "payload": 4279505940,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -1205,7 +1205,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsMed",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4284835694,
+        "payload": 4279505940,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -1218,7 +1218,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsLong",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4284835694,
+        "payload": 4279505940,
         "type": 0,
       },
       "strokeWidth": 0.9,
@@ -1231,7 +1231,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-tricepsLat",
       "opacity": 0.825,
       "stroke": {
-        "payload": 4284835694,
+        "payload": 4279505940,
         "type": 0,
       },
       "strokeWidth": 0.9,
