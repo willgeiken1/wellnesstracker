@@ -618,6 +618,8 @@ export const en = {
   theme: 'Theme', themeMode: 'Light or dark', system: 'System', light: 'Light', dark: 'Dark',
   themeBody: 'A theme sets the background, the accent and the colours for training, food and sleep.',
   themeLocked: 'locked',
+  ringLooks: 'Rings', ringLooksBody: 'How every progress ring in the app is drawn.',
+  ringContour: 'Contour', ringLiquid: 'Liquid', ringGlass: 'Glass',
   appearanceHint: 'Your preferences are saved on this phone.',
   placeholder: 'M2/M3 placeholder', placeholderBody: 'This feature is coming in M2/M3. Explore the app or change its appearance while you wait.',
   welcome: 'Your daily space', welcomeBody: 'The foundation is ready. Workout and food logging arrive in M2/M3.',

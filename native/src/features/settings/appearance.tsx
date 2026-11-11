@@ -1,4 +1,7 @@
 import { Pressable, View } from 'react-native';
+import Svg from 'react-native-svg';
+import { RingArc } from '@/components/ring-arc';
+import { RING_LOOKS, type RingLook } from '@/design/looks';
 import { Screen } from '@/components/screen';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
@@ -34,8 +37,25 @@ function ThemeTile({ id, selected, onPress }: { id: Palette; selected: boolean; 
   </Pressable>;
 }
 
+const RING_NAME = { contour: 'ringContour', liquid: 'ringLiquid', glass: 'ringGlass' } as const;
+/** One ring look, shown as a small ring at 70 percent in the accent colour. */
+function RingTile({ look, selected, onPress }: { look: RingLook; selected: boolean; onPress: () => void }) {
+  const { colors, mode } = useTheme();
+  return <Pressable testID={`ring-look-${look}`} accessibilityRole="button" accessibilityLabel={t(RING_NAME[look])}
+    accessibilityState={{ selected }} onPress={onPress}
+    style={{ flexGrow: 1, flexBasis: '28%', minHeight: 112, alignItems: 'center', justifyContent: 'center', padding: tokens.spacing[1],
+      gap: tokens.spacing[1], borderRadius: tokens.radii.card, backgroundColor: colors.bg,
+      borderWidth: 2, borderColor: selected ? colors.accent : colors['hair-2'] }}>
+    <Svg width={64} height={64} viewBox="0 0 64 64" accessible={false}>
+      <RingArc look={look} cx={32} cy={32} r={22} width={10} progress={0.7} color={colors.accent} track={colors['surface-2']}
+        ink={colors.text} dark={mode === 'dark'} />
+    </Svg>
+    <ThemedText variant="caption" style={{ fontWeight: selected ? '600' : '400' }}>{t(RING_NAME[look])}</ThemedText>
+  </Pressable>;
+}
+
 export default function Appearance() {
-  const { override, setOverride, palette, setPalette, persistenceError } = useTheme();
+  const { override, setOverride, palette, setPalette, ringLook, setRingLook, persistenceError } = useTheme();
   return <Screen><Card>
     <ThemedText variant="headline" accessibilityRole="header">{t('themeMode')}</ThemedText>
     <SegmentedControl label={t('themeMode')} value={override} onChange={setOverride}
@@ -46,6 +66,12 @@ export default function Appearance() {
     <View testID="theme-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
       {palettes.map(id => <ThemeTile key={id} id={id} selected={palette === id} onPress={() => setPalette(id)} />)}
       {palettes.length % 2 === 1 && <View style={{ flexGrow: 1, flexBasis: '45%' }} />}
+    </View>
+  </Card><Card>
+    <ThemedText variant="headline" accessibilityRole="header">{t('ringLooks')}</ThemedText>
+    <ThemedText muted variant="caption">{t('ringLooksBody')}</ThemedText>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
+      {RING_LOOKS.map(look => <RingTile key={look} look={look} selected={ringLook === look} onPress={() => setRingLook(look)} />)}
     </View>
     <ThemedText muted variant="caption">{t('appearanceHint')}</ThemedText>
     {persistenceError && <ThemedText accessibilityRole="alert">{t('preferenceError')}</ThemedText>}
