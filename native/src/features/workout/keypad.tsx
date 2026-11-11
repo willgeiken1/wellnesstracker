@@ -1,4 +1,5 @@
-import { View, Pressable, ScrollView } from "react-native";
+import { View, Pressable, ScrollView, StyleSheet } from "react-native";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useState } from "react";
 import { equipmentLabel, pluralize, t } from "@/i18n/en";
 import {
@@ -50,7 +51,9 @@ export function Keypad({
   onNext: () => void;
   onClose: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, keypadLook } = useTheme();
+  // Glass keys: real liquid glass where iOS has it, and everywhere else a see-through key with a light rim.
+  const glassKeys = keypadLook === "glass", liquid = glassKeys && isLiquidGlassAvailable();
   const focus = `${inputId}:${field}:${unit}`;
   const [selectedInput, setSelectedInput] = useState(focus),
     [wheel, setWheel] = useState(false),
@@ -328,10 +331,21 @@ export function Keypad({
                     minHeight: tokens.logger.keyHeight,
                     borderRadius: tokens.logger.keyRadius,
                     backgroundColor:
-                      key === "next" ? colors.accent : colors["surface-2"],
+                      key === "next" ? colors.accent : glassKeys ? `${colors.text}14` : colors["surface-2"],
+                    borderWidth: glassKeys ? StyleSheet.hairlineWidth * 2 : 0,
+                    borderColor: `${colors.text}3D`,
+                    overflow: "hidden",
                   },
                 ]}
               >
+                {liquid && key !== "next" && !unavailable && (
+                  <GlassView
+                    testID="keypad-glass"
+                    pointerEvents="none"
+                    glassEffectStyle="regular"
+                    style={StyleSheet.absoluteFill}
+                  />
+                )}
                 {key === "backspace" ? (
                   <Line name="backspace" />
                 ) : (

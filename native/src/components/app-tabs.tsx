@@ -10,11 +10,13 @@ const images = {
   insights: require('../../assets/images/navigation/insights.png'),
 };
 export default function AppTabs() {
-  const { colors } = useTheme();
-  return <NativeTabs backgroundColor={colors.bg} tintColor={colors.accent}
+  const { colors, barLook } = useTheme();
+  // Standard tints the bar with the theme's background. Glass leaves the system's clear material, so content shows through it.
+  const glass = barLook === 'glass';
+  return <NativeTabs backgroundColor={glass ? undefined : colors.bg} blurEffect={glass ? 'systemUltraThinMaterial' : undefined} tintColor={colors.accent}
     iconColor={{ default: colors['text-muted'], selected: colors.accent }}
     labelStyle={{ default: { color: colors['text-muted'] }, selected: { color: colors.text } }}
-    indicatorColor={colors['surface-2']} disableTransparentOnScrollEdge>
+    indicatorColor={colors['surface-2']} disableTransparentOnScrollEdge={!glass}>
     {tabs.map(tab => <NativeTabs.Trigger key={tab.route} name={tab.route} accessibilityLabel={t(tab.label)}>
       <NativeTabs.Trigger.Label>{t(tab.label)}</NativeTabs.Trigger.Label>
       <NativeTabs.Trigger.Icon sf={tab.symbol} src={images[tab.label]} renderingMode="template" />

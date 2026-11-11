@@ -58,3 +58,32 @@ test('meal actions open from the meal options button', async () => {
   expect(screen.getByRole('button', { name: `Copy yesterday to ${meal.name}` })).toBeTruthy();
   expect(screen.getByRole('button', { name: `Save ${meal.name} as combo` })).toBeDisabled();
 });
+
+test('a day with food but no calories entered shows a dash, not the whole target as left', async () => {
+  const target = { energy_kj: 2000 * 4.184, protein_g: 150, carbs_g: 220, fat_g: 60 };
+  const unknown = { ...oats, energy_kj: null };
+  const view = await render(<CalorieRing total={unknown} target={target} logged />, { wrapper });
+  expect(screen.getByText('kcal not entered')).toBeTruthy();
+  expect(screen.queryByText('2,000')).toBeNull();
+  expect(screen.queryByText('kcal left')).toBeNull();
+  // Nothing logged at all is different: the whole target really is left.
+  await view.rerender(<CalorieRing total={{ ...unknown, protein_g: null, carbs_g: null, fat_g: null }} target={target} />);
+  expect(screen.getByText('2,000')).toBeTruthy();
+  expect(screen.getByText('kcal left')).toBeTruthy();
+});
+
+test('a meal whose items have no calories shows a dash, and known items still add up', async () => {
+  const repo = memoryRepository(), [first, second] = meals(repo), day = attributedDay();
+  saveFood(repo, day, first.id, { ...oats, name: 'Synthetic mystery snack', energy_kj: null });
+  saveFood(repo, day, second.id, { ...oats, name: 'Synthetic mystery drink', energy_kj: null });
+  saveFood(repo, day, second.id, oats);
+  await render(<FoodScreen repository={repo} />, { wrapper });
+  expect(within(screen.getByTestId(`food-meal-${first.name}`)).getAllByText('— kcal')).toHaveLength(2); // the item row and the meal total
+  expect(within(screen.getByTestId(`food-meal-${first.name}`)).queryByText('0 kcal')).toBeNull();
+  expect(within(screen.getByTestId(`food-meal-${second.name}`)).getAllByText('300 kcal').length).toBeGreaterThan(0);
+});
+
+test('the day button tells a screen reader which day is showing', async () => {
+  await render(<FoodScreen repository={memoryRepository()} />, { wrapper });
+  expect(screen.getByRole('button', { name: 'Open food calendar' }).props.accessibilityValue).toEqual({ text: `Food for ${attributedDay()}` });
+});
