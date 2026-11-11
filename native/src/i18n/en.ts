@@ -114,7 +114,7 @@ export const en = {
   foodPrevious: 'Previous food day', foodNext: 'Next food day', foodCalendar: 'Open food calendar',
   foodPreviousMonth: 'Previous food month', foodNextMonth: 'Next food month', foodLast14: 'Last 14 days',
   foodActRename: 'Rename', foodActCopy: 'Copy yesterday', foodActCombo: 'Save as combo', foodActFavorite: 'Favorite', foodActUnfavorite: 'Unfavorite', foodActKeep: 'Save for later',
-  foodKcal: 'kcal', foodKcalLeft: 'kcal left', foodKcalOver: 'kcal over', foodMacroProtein: 'Protein', foodMacroCarbs: 'Carbs', foodMacroFat: 'Fat',
+  foodKcal: 'kcal', foodKcalLeft: 'kcal left', foodKcalOver: 'kcal over', foodKcalUnknown: 'kcal not entered', foodEnergyUnknown: '— kcal', foodMacroProtein: 'Protein', foodMacroCarbs: 'Carbs', foodMacroFat: 'Fat',
   foodToday: 'Today', foodYesterday: 'Yesterday', foodMeals: 'Meals', foodMealOptions: '{name} options', foodEntryActions: '{name}, {energy}', foodEstimateChip: 'est.', foodNothing: 'Nothing logged for this day', foodNothingBody: 'Snap, describe or scan a meal, or add it by hand.', foodTotals: 'Other nutrients',
   foodBurned: 'Burned: —', foodDay: 'Food for {day}', foodSaveDay: 'Save to {day}',
   foodSnap: 'Snap', foodDescribe: 'Describe', foodScan: 'Scan', foodManual: 'Manual', foodSaved: 'Saved',
