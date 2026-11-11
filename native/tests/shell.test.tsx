@@ -27,8 +27,8 @@ jest.mock('expo-router/native-tabs', () => {
   return { NativeTabs };
 });
 function ThemeProbe() {
-  const { mode, accent, colors } = useTheme();
-  return <Text testID="theme">{`${mode}/${accent}/${colors.bg}`}</Text>;
+  const { mode, palette, colors } = useTheme();
+  return <Text testID="theme">{`${mode}/${palette}/${colors.bg}`}</Text>;
 }
 test('tab shell renders the five native tab labels', async () => {
   await render(<ThemeProvider><AppTabs /></ThemeProvider>);
@@ -40,11 +40,12 @@ test('tab shell renders the five native tab labels', async () => {
 test('Appearance changes theme, accent, and restores system following', async () => {
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
   await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
-  expect(screen.getByTestId('theme')).toHaveTextContent('light/sea/#F3F4F1');
+  expect(screen.getByTestId('theme')).toHaveTextContent('light/seaGlassTide/#F2F6F4');
   await fireEvent.press(screen.getByRole('tab', { name: 'Dark' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Sea Glass' }));
-  expect(screen.getByTestId('theme')).toHaveTextContent('dark/sea/#0F0F11');
-  expect(screen.getByRole('button', { name: 'Sea Glass' })).toBeSelected();
+  await fireEvent.press(screen.getByRole('button', { name: 'Forest Ember' }));
+  expect(screen.getByTestId('theme')).toHaveTextContent('dark/forestEmber/#0C120E');
+  expect(screen.getByRole('button', { name: 'Forest Ember' })).toBeSelected();
+  expect(screen.getByRole('button', { name: 'Sea Glass Tide' })).not.toBeSelected();
   await fireEvent.press(screen.getByRole('tab', { name: 'System' }));
   expect(screen.getByRole('tab', { name: 'System' })).toBeSelected();
 });
