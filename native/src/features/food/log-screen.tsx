@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { touchTarget } from '../../components/button';
 import { Card } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
@@ -75,7 +75,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
       {calendar && <FoodCalendar day={day} today={now} onSelect={chooseDay} repo={repo} />}
       <View style={{ borderTopWidth: 1, borderTopColor: colors['surface-2'], paddingTop: tokens.spacing[1], gap: 2 }}>
         <ThemedText muted variant="caption" style={semibold}>{t('foodLogMeal')}</ThemedText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 6 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ columnGap: 6 }}>
           {mealList.map(meal => {
             const selected = meal.id === selectedMeal;
             return <Pressable key={meal.id} accessibilityRole="button" accessibilityLabel={meal.name} accessibilityState={{ selected }}
@@ -85,7 +85,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
               </View>
             </Pressable>;
           })}
-        </View>
+        </ScrollView>
       </View>
     </Card>
     {early && (day === attributedDay() || day === now) && <NoticeRow text={t('foodEarly').replace('{day}', dayInSentence(day, now))}
