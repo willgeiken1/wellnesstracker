@@ -94,7 +94,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  return <View style={{gap:tokens.spacing[3]}}>
   <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
    <Round label={t('foodPrevious')} glyph="M15 5l-7 7 7 7" onPress={()=>chooseDay(shiftDay(day,-1))}/>
-   <Pressable accessibilityRole="button" accessibilityLabel={t('foodCalendar')} accessibilityState={{expanded:calendar}} onPress={()=>setCalendar(!calendar)} style={{flex:1,minHeight:touchTarget,alignItems:'center',justifyContent:'center'}}>
+   <Pressable accessibilityRole="button" accessibilityLabel={t('foodCalendar')} accessibilityValue={{text:t('foodDay').replace('{day}',day)}} accessibilityState={{expanded:calendar}} onPress={()=>setCalendar(!calendar)} style={{flex:1,minHeight:touchTarget,alignItems:'center',justifyContent:'center'}}>
     <ThemedText variant="headline" style={{fontWeight:'600'}}>{dayTitle(day)}</ThemedText>
     <ThemedText muted variant="caption" accessibilityLabel={t('foodDay').replace('{day}',day)}>{dayDate(day)}</ThemedText>
    </Pressable>
@@ -103,7 +103,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   {calendar&&<Card style={card}><FoodCalendar day={day} today={today()} onSelect={chooseDay}/></Card>}
   {early&&(day===attributedDay()||day===today())&&<Card style={card}><ThemedText>{t('foodEarly').replace('{day}',day)}</ThemedText><Button variant="secondary" label={t(day===today()?'foodUsePrevious':'foodUseToday')} onPress={()=>chooseDay(day===today()?attributedDay():today())}/></Card>}
   <Card style={[card,{alignItems:'center',paddingVertical:tokens.spacing[4]}]} testID="food-ring-card">
-   <CalorieRing total={total} target={targets.targets} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/>
+   <CalorieRing total={total} target={targets.targets} logged={rows.length>0} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/>
    <ThemedText muted variant="caption">{t('foodBurned')}</ThemedText>
   </Card>
   <View style={{flexDirection:'row',gap:6}} testID="food-log-row">
@@ -138,11 +138,12 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   </Card>}
   {mealList.map(meal=>{
    const items=rows.filter(row=>row.data.meal_id===meal.id),quick=favorites(repo,meal.id),menu=mealMenu===meal.id;
-   const sum=items.reduce((n,row)=>n+(kcal(row.data.energy_kj)??0),0);
+   // Items with no calories entered are left out of the sum; a meal with none entered shows a dash, never 0.
+   const known=items.map(row=>kcal(row.data.energy_kj)).filter((n):n is number=>n!==null),sum=known.reduce((n,value)=>n+value,0);
    return <Card key={meal.id} style={[card,{gap:tokens.spacing[1]}]} testID={`food-meal-${meal.name}`}>
     <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
      <ThemedText variant="headline" style={{flex:1,fontWeight:'600'}}>{meal.name}</ThemedText>
-     {!!items.length&&<ThemedText muted numeric variant="caption">{t('foodEnergy').replace('{value}',sum.toLocaleString('en-US'))}</ThemedText>}
+     {!!items.length&&<ThemedText muted numeric variant="caption">{known.length?t('foodEnergy').replace('{value}',sum.toLocaleString('en-US')):t('foodEnergyUnknown')}</ThemedText>}
      <Pressable accessibilityRole="button" accessibilityLabel={t('foodMealOptions').replace('{name}',meal.name)} accessibilityState={{expanded:menu}} onPress={()=>setMealMenu(menu?null:meal.id)}
       style={{width:touchTarget,height:touchTarget,alignItems:'center',justifyContent:'center',marginVertical:-6,marginRight:-6}}>
       <View style={{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors['surface-2']}}>
