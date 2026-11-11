@@ -5,6 +5,7 @@ import { WorkoutStore } from '../src/data/workout/store';
 import { ExercisePicker } from '../src/features/workout/picker';
 import { TemplateEditor } from '../src/features/workout/templates';
 import { useAuth } from '../src/auth/provider';
+import { router } from 'expo-router';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: jest.fn(() => ({})), useIsFocused: () => true, router: { canDismiss: () => false, canGoBack: () => false, replace: jest.fn(), back: jest.fn(), push: jest.fn() } }));
 beforeEach(() => { jest.mocked(useAuth).mockReturnValue({ repository: memoryRepository(), pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>); });
@@ -36,10 +37,15 @@ test('create is still offered when nothing matches', async () => {
   expect(screen.getByRole('button', { name: 'Create “Zzyzx fixture lift”' })).toBeTruthy();
 });
 
-test('routine editor puts the name field first and Cancel last, after Save', async () => {
-  const names2 = () => screen.getAllByRole('button').map(b => b.props.accessibilityLabel as string);
+// Cancel moved from the foot of the form into the header bar (owner's ruling for the new look); Save stays the last button.
+test('routine editor has Cancel in its header bar, still leaving the editor, and Save template last', async () => {
   await render(<TemplateEditor />, { wrapper });
-  const order = names2();
-  expect(order.indexOf('Cancel')).toBeGreaterThan(order.indexOf('Save template'));
-  expect(order[order.length - 1]).toBe('Cancel');
+  const order = names();
+  expect(order[0]).toBe('Cancel');
+  expect(order[order.length - 1]).toBe('Save template');
+  expect(order.filter(name => name === 'Cancel')).toHaveLength(1);
+  const bar = screen.getByTestId('template-bar');
+  expect(within(bar).getByRole('header')).toHaveTextContent('New template');
+  await fireEvent.press(within(bar).getByRole('button', { name: 'Cancel' }));
+  expect(router.replace).toHaveBeenCalledWith('/workouts');
 });
