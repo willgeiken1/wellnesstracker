@@ -62,7 +62,8 @@ test.each([
 
 test.each([
   ['Workouts', '/workouts', ['Routines', 'History', 'Cardio']],
-  ['Progress', '/progress', ['Body', 'Photos', 'Goals & PRs']],
+  // Goals & PRs is a real screen now; Photos is the one still waiting, so it is the one that offers Home.
+  ['Progress', '/progress', ['Body', 'Goals & PRs', 'Photos']],
   ['Insights', '/insights', ['Trends', 'Recovery', 'Weekly report']],
 ] as const)('%s segments stay within their tab and offer Home', async (label, path, segments) => {
   const result = await renderRouter(routes);
