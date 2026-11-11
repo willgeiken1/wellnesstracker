@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -119,6 +120,8 @@ export function Home() {
   const now = new Date(), today = localDay(now);
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
+  const insets = useSafeAreaInsets();
   const selected = picked && picked <= today ? picked : today;
   return <View style={{ flex: 1 }}>
     <Screen tabHeader>
@@ -138,7 +141,7 @@ export function Home() {
       {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} /> : <Next />}
     </Screen>
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
-    <View pointerEvents="box-none" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3], alignItems: 'flex-end', gap: tokens.spacing[1] }}>
+    <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>
         <SmallButton label={t('logFood')} onPress={() => { setAdding(false); router.push('/food'); }} />
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
