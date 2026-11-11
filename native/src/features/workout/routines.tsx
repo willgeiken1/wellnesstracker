@@ -16,6 +16,7 @@ import { PlansPanel } from '@/features/plans/panel';
 import { PlanStore } from '@/features/plans/store';
 import { pluralize, t } from '@/i18n/en';
 import { layout } from './primitives';
+import { entryVolumeKg } from './volume';
 
 const semibold = { fontWeight: '600' } as const;
 const card = { borderRadius: 18, padding: tokens.spacing[3] } as const;
@@ -29,10 +30,12 @@ const dayLabel = (day: unknown, weekday = true) => {
 function sessionPrint(store: WorkoutStore, session: Row) {
   let total = 0;
   const exercises = store.entries(session.id).map(entry => {
-    let volume = 0, body = 0;
+    // Weighted volume counts both sides of a one-arm or one-leg set, the same way Home and the summary do.
+    const volume = entryVolumeKg(store, entry);
+    let body = 0;
     for (const set of store.working(entry)) {
       if (set.warmup || !Number.isFinite(set.reps)) continue;
-      if (Number.isFinite(set.weight) && set.weight > 0) volume += set.weight * set.reps; else body += set.reps;
+      if (!(Number.isFinite(set.weight) && set.weight > 0)) body += set.reps;
     }
     total += volume;
     return { name: String(entry.data.exercise), volume: volume + body * 20 };
