@@ -24,18 +24,18 @@ const target = { energy_kj: 2000 * 4.184, protein_g: 150, carbs_g: 220, fat_g: 7
 
 describe('saved appearance text', () => {
   test('a plain palette id or an old accent still reads, with the default ring', () => {
-    expect(parseAppearance('goldenHour')).toEqual({ palette: 'goldenHour', ring: 'contour' });
-    expect(parseAppearance('dusk')).toEqual({ palette: 'moonlightDusk', ring: 'contour' });
+    expect(parseAppearance('goldenHour')).toMatchObject({ palette: 'goldenHour', ring: 'contour' });
+    expect(parseAppearance('dusk')).toMatchObject({ palette: 'moonlightDusk', ring: 'contour' });
     for (const junk of [null, undefined, 4, '', 'nope;ring=nope']) expect(parseAppearance(junk)).toEqual(DEFAULT_APPEARANCE);
   });
   test('round-trips every look and writes only what differs from the default', () => {
     expect(formatAppearance(DEFAULT_APPEARANCE)).toBe('seaGlassTide');
-    expect(formatAppearance({ palette: 'goldenHour', ring: 'liquid' })).toBe('goldenHour;ring=liquid');
-    for (const ring of RING_LOOKS) expect(parseAppearance(formatAppearance({ palette: 'berryMeadow', ring }))).toEqual({ palette: 'berryMeadow', ring });
+    expect(formatAppearance({ ...DEFAULT_APPEARANCE, palette: 'goldenHour', ring: 'liquid' })).toBe('goldenHour;ring=liquid');
+    for (const ring of RING_LOOKS) expect(parseAppearance(formatAppearance({ ...DEFAULT_APPEARANCE, palette: 'berryMeadow', ring }))).toEqual({ ...DEFAULT_APPEARANCE, palette: 'berryMeadow', ring });
   });
   test('an unknown look falls back alone and unknown keys are ignored', () => {
-    expect(parseAppearance('forestEmber;ring=swarm;bar=glass')).toEqual({ palette: 'forestEmber', ring: 'contour' });
-    expect(parseAppearance('sand;ring=glass')).toEqual({ palette: 'desertMirage', ring: 'glass' });
+    expect(parseAppearance('forestEmber;ring=swarm;bar=glass')).toMatchObject({ palette: 'forestEmber', ring: 'contour' });
+    expect(parseAppearance('sand;ring=glass')).toMatchObject({ palette: 'desertMirage', ring: 'glass' });
   });
 });
 

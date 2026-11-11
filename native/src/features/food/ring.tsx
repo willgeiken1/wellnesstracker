@@ -19,7 +19,7 @@ const whole = (n: number) => Math.round(n).toLocaleString('en-US');
 
 /** Calories on the outer ring with what is left in the middle; protein, carbs and fat ride inside it. */
 export function CalorieRing({total,target,estimated=false}:{total:Record<Nutrient,number|null>;target:Targets|null;estimated?:boolean}) {
- const {colors,mode,ringLook}=useTheme(),value=(n:number|null)=>n===null?'—':String(Math.round(n));
+ const {colors,mode,ringLook,ringMotion,intensity}=useTheme(),value=(n:number|null)=>n===null?'—':String(Math.round(n));
  const eaten=total.energy_kj===null?null:total.energy_kj/4.184,goal=target?target.energy_kj/4.184:null;
  const label=t('foodRing').replace('{calories}',value(eaten)).replace('{target}',goal===null?'—':String(Math.round(goal))).replace('{protein}',value(total.protein_g)).replace('{carbs}',value(total.carbs_g)).replace('{fat}',value(total.fat_g));
  const left=goal===null?null:Math.round(goal)-Math.round(eaten??0);
@@ -29,7 +29,7 @@ export function CalorieRing({total,target,estimated=false}:{total:Record<Nutrien
    <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} accessible={false} style={{position:'absolute'}}>
     {RINGS.map(ring=>{const progress=target&&target[ring.key]>0?Math.min(1,Math.max(0,(total[ring.key]??0)/target[ring.key])):0;
      return <RingArc key={ring.key} testID={`food-ring-${ring.key}`} look={ringLook} cx={CENTER} cy={CENTER} r={ring.radius} width={ring.width} progress={progress}
-      color={colors[ring.pillar]} track={colors['surface-2']} ink={colors.text} dark={mode==='dark'} dashed={estimated} echoes={false}/>;})}
+      color={colors[ring.pillar]} track={colors['surface-2']} ink={colors.text} dark={mode==='dark'} dashed={estimated} echoes={false} motion={ringMotion} intensity={intensity}/>;})}
    </Svg>
    <ThemedText numeric style={{fontSize:30,lineHeight:34,fontWeight:'600'}}>{left===null?value(eaten):whole(Math.abs(left))}</ThemedText>
    <ThemedText muted variant="caption">{t(left===null?'foodKcal':left>=0?'foodKcalLeft':'foodKcalOver')}</ThemedText>

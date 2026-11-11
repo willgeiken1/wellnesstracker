@@ -3,8 +3,27 @@ import { DEFAULT_PALETTE, paletteLocked, resolvePalette, type Palette } from "./
 /** How every progress ring in the app is drawn. */
 export const RING_LOOKS = ["contour", "liquid", "glass"] as const;
 export type RingLook = (typeof RING_LOOKS)[number];
-export type Looks = { palette: Palette; ring: RingLook };
-export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour" };
+/** How much moves: nothing, a gentle sweep, or a sweep with a little bounce and a pulsing drop. */
+export const MOTIONS = ["basic", "calm", "lively"] as const;
+export type Motion = (typeof MOTIONS)[number];
+/** How strong the effects are: 1 subtle, 2 medium, 3 full. */
+export const INTENSITIES = [1, 2, 3] as const;
+export type Intensity = (typeof INTENSITIES)[number];
+export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity };
+export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2 };
+
+/** A preset is a starting point that sets several looks at once. It never changes the theme or the strength. */
+export const PRESETS = {
+  basic: { ring: "contour", motion: "basic" },
+  calm: { ring: "contour", motion: "calm" },
+  fluid: { ring: "liquid", motion: "lively" },
+  glass: { ring: "glass", motion: "lively" },
+} as const satisfies Record<string, { ring: RingLook; motion: Motion }>;
+export type Preset = keyof typeof PRESETS;
+export const PRESET_IDS = Object.keys(PRESETS) as Preset[];
+/** The preset the current looks add up to, or null when the person has mixed their own. */
+export const presetOf = (looks: Pick<Looks, "ring" | "motion">): Preset | null =>
+  PRESET_IDS.find((id) => PRESETS[id].ring === looks.ring && PRESETS[id].motion === looks.motion) ?? null;
 
 const oneOf = <T extends string>(options: readonly T[], value: string | undefined, fallback: T): T =>
   options.includes(value as T) ? (value as T) : fallback;
@@ -22,11 +41,14 @@ export function parseAppearance(saved: unknown): Looks {
   return {
     palette: paletteLocked(palette) ? DEFAULT_PALETTE : palette,
     ring: oneOf(RING_LOOKS, pairs.get("ring"), DEFAULT_APPEARANCE.ring),
+    motion: oneOf(MOTIONS, pairs.get("motion"), DEFAULT_APPEARANCE.motion),
+    intensity: INTENSITIES.find((level) => String(level) === pairs.get("strength")) ?? DEFAULT_APPEARANCE.intensity,
   };
 }
 export function formatAppearance(appearance: Looks): string {
-  const extras = (["ring"] as const)
+  const saved = { ring: "ring", motion: "motion", intensity: "strength" } as const;
+  const extras = (["ring", "motion", "intensity"] as const)
     .filter((key) => appearance[key] !== DEFAULT_APPEARANCE[key])
-    .map((key) => `;${key}=${appearance[key]}`);
+    .map((key) => `;${saved[key]}=${appearance[key]}`);
   return appearance.palette + extras.join("");
 }
