@@ -26,7 +26,9 @@ const semibold = { fontWeight: '600' } as const;
 // The prototype's card: softer corners and tighter padding than the shared Card default.
 const card: ViewStyle = { borderRadius: 18, padding: tokens.spacing[2] };
 // Two hills until a recovery source exists in this build; the prototype's third hill sits below these.
-const HILLS = [[0.31, 0.45], [0.69, 0.55]] as const;
+const HILLS = [[0.36, 0.42], [0.63, 0.60]] as const;
+// Wider, wobblier hills than the prototype default so two hills still merge into one piece of terrain.
+const SHAPE = { positions: HILLS, sd: 0.2, wobble: 0.22 } as const;
 type Pillar = 'training' | 'food';
 const PILLARS: Pillar[] = ['training', 'food'];
 
@@ -90,7 +92,7 @@ function Shape({ kind, color, size = 9 }: { kind: Pillar; color: string; size?: 
 
 function Contours({ values, width, height, mini }: { values: Record<Pillar, number>; width: number; height: number; mini?: boolean }) {
   const colors = usePillarColors(), { training, food } = values;
-  const map = useMemo(() => terrain([training, food], width, height, { ...(mini ? MINI : {}), positions: HILLS }), [training, food, width, height, mini]);
+  const map = useMemo(() => terrain([training, food], width, height, mini ? { ...MINI, positions: HILLS } : SHAPE), [training, food, width, height, mini]);
   return <>
     {map.lines.map((line, i) => <Path key={i} d={line.d} fill="none" stroke={colors[PILLARS[line.hill]]} strokeWidth={line.width} opacity={line.opacity} strokeLinecap="round" />)}
     {map.markers.map(m => m.summit
