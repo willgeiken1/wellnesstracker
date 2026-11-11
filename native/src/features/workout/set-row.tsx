@@ -113,6 +113,8 @@ export function SetRow({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${label}, ${t('setTag')}${draft.tag ? `, ${t(draft.tag)}` : ''}`}
+          // The label names the button, so the previous weight and reps it shows are read as its value.
+          accessibilityValue={previous ? { text: `${t('lastTime')}: ${previous}` } : undefined}
           accessibilityState={{ expanded: tagsOpen }}
           onPress={() => setTagsOpen(!tagsOpen)}
           style={{ flex: 1, minHeight: 44, justifyContent: "center" }}
