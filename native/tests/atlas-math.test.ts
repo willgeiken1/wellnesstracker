@@ -3,18 +3,23 @@ import { heatmap, targetFor, fadeHours, rollup } from '../src/features/atlas/vol
 import { atlasMuscles } from '../src/features/atlas/muscles';
 const now = Date.UTC(2026, 9, 28, 12);
 const session = (hours: number, sets: number, main = 'chest', helpers = ['triceps']) => ({ at: now-hours*3600000, exercises: [{main,helpers,sets}] });
-test('all 44 canonical keys have exactly one path per body type and both layers', () => {
+test('all 44 canonical keys are drawn for each body type, once per side at most', () => {
  expect(atlasMuscles).toHaveLength(44);
  for (const sex of ['male','female'] as const) {
-  const paths = (['front','back'] as const).flatMap(side => atlasGeometry[sex][side].muscles);
-  expect(paths.map(p=>p.id).sort()).toEqual(atlasMuscles.map(m=>m.key).sort());
-  expect(atlasGeometry[sex].front.skin).toBeTruthy(); expect(atlasGeometry[sex].back.skin).toBeTruthy();
+  const sides = (['front','back'] as const).map(side => atlasGeometry[sex][side].muscles.map(p=>p.id));
+  for (const ids of sides) expect(new Set(ids).size).toBe(ids.length);
+  expect([...new Set(sides.flat())].sort()).toEqual(atlasMuscles.map(m=>m.key).sort());
+  // A muscle seen from both sides (upper traps, side delts, calves) has a shape on each.
+  expect(sides[0].filter(id=>sides[1].includes(id)).sort()).toEqual(['deltLat','gastroc','obliques','soleus','trapsUpper','tricepsLat']);
+  for (const side of ['front','back'] as const) { expect(atlasGeometry[sex][side].skin).toBeTruthy(); expect(atlasGeometry[sex][side].lines).toBeTruthy(); }
+  expect(atlasGeometry[sex].front.muscles.filter(m=>m.deep).map(m=>m.id)).toEqual(['transverseAbs','subscapularis']);
+  expect(atlasGeometry[sex].back.muscles.filter(m=>m.deep).map(m=>m.id)).toEqual(['quadLumb','gluteMin','hipRotators']);
  }
 });
 test('exact polygon hit test: centers, mirrored halves, edges and background', () => {
- expect(hitTest('male','front',80,80)).toBe('pecUpper'); expect(hitTest('male','front',120,80)).toBe('pecUpper');
- expect(hitTest('male','front',70,76)).toBe('pecUpper'); expect(hitTest('male','front',1,1)).toBeNull();
- expect(hitTest('male','back',80,80)).not.toBe('pecUpper'); expect(hitTest('female','front',80,80)).toBe('pecUpper');
+ expect(hitTest('male','front',80,110)).toBe('pecUpper'); expect(hitTest('male','front',120,110)).toBe('pecUpper');
+ expect(hitTest('male','front',100,110)).toBe('pecUpper'); expect(hitTest('male','front',1,1)).toBeNull();
+ expect(hitTest('male','back',80,110)).not.toBe('pecUpper'); expect(hitTest('female','front',80,110)).toBe('pecUpper');
 });
 test('weekly sets use main 1/helper .5 and ignore old/future/invalid sets', () => {
  const map=heatmap([session(1,4),session(169,20),session(-1,10),session(2,NaN)],now);

@@ -66,7 +66,7 @@ test('Reduce Motion renders static paths and disabled haptics sends nothing',asy
   await render(<BodyAtlas sessions={sessions} now={now} haptics={false}/>,{wrapper});
   await fireEvent.press(screen.getByTestId('atlas-path-pecUpper'));
   expect(impactAsync).not.toHaveBeenCalled();
-  expect(screen.getAllByTestId(/^atlas-path-/)).toHaveLength(20);
+  expect(screen.getAllByTestId(/^atlas-path-/)).toHaveLength(25);
  }finally{reduce.mockRestore();}
 });
 test('screen readers start in the complete list without needing to navigate SVG',async()=>{
@@ -81,7 +81,7 @@ test('screen readers start in the complete list without needing to navigate SVG'
 test('map hit layer expands touch areas without obscuring precise paths and exposes selection',async()=>{
  await render(<BodyAtlas sessions={sessions} now={now} compact/>,{wrapper});
  const hits=screen.getAllByTestId(/^atlas-hit-/);
- expect(hits).toHaveLength(20);
+ expect(hits).toHaveLength(25);
  for(const hit of hits){
   expect(hit.props.strokeWidth).toBeGreaterThanOrEqual(44);
   // Assert the native SVG props after react-native-svg extraction.
