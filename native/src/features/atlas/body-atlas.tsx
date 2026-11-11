@@ -12,6 +12,7 @@ import { atlasGeometry, type BodyType, type Side } from './geometry';
 import { AccessiblePath } from './accessible-path';
 import { muscleByKey } from './muscles';
 import { heatFill, heatmap, rollup, type AtlasSession, type MuscleVolume } from './volume';
+import { contrast } from '../../core/contrast';
 export function atlasValue(value: MuscleVolume, now: number) {
  const hours=value.lastTrained===null?null:Math.max(0,(now-value.lastTrained)/3600000);
  const last=hours===null?t('atlasNever'):hours>7*24?t('atlasOutsideWindow').replace('{days}','7'):
@@ -28,6 +29,16 @@ export function atlasLabel(value: MuscleVolume, now: number) {
  * Static rendering intentionally has no animation, including when Reduce Motion is on. */
 /** Strength of the muscle lines over the body. Tested against both modes for 3:1 contrast. */
 export const ATLAS_LINE_OPACITY=.85;
+const mix=(under: string, over: string, alpha: number)=>'#'+[1,3,5].map(i=>{
+ const a=parseInt(under.slice(i,i+2),16), b=parseInt(over.slice(i,i+2),16);
+ return Math.round(a+(b-a)*alpha).toString(16).padStart(2,'0');
+}).join('');
+/** The boundary of a trained muscle. Soft ink disappears on the heat colours, so the line takes whichever of the
+ * text and background colours stands out more against the tint as it is actually drawn over the body. */
+export function trainedStroke(fill: string, fillOpacity: number, colors: Record<'text'|'bg'|'surface-2', string>) {
+ const drawn=mix(colors['surface-2'],fill,fillOpacity);
+ return contrast(colors.text,drawn)>=contrast(colors.bg,drawn)?colors.text:colors.bg;
+}
 export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  sessions: AtlasSession[]; now: number; compact?: boolean; haptics?: boolean;
 }) {
@@ -73,10 +84,12 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
         Deep muscles sit on top as dashed outlines and tint when trained. */}
     <G id="muscles">{geometry.muscles.map(path=>{
      const value=valuesByKey.get(path.id)!, chosen=selected===path.id, trained=value.sets>0;
+     const heat=heatFill(value,mode==='dark'), fillOpacity=path.deep?(trained?.6:0):trained?.65+.35*value.freshness:1;
+     const edge=trained&&!path.deep?trainedStroke(heat,fillOpacity,colors):null;
      return <AccessiblePath key={path.id} id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
-      fill={trained?heatFill(value,mode==='dark'):path.deep?'transparent':colors['surface-2']}
-      fillOpacity={path.deep?(trained?.6:0):trained?.65+.35*value.freshness:1}
-      stroke={chosen?colors.text:path.deep?colors['text-muted']:ink} strokeOpacity={chosen||path.deep?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
+      fill={trained?heat:path.deep?'transparent':colors['surface-2']}
+      fillOpacity={fillOpacity}
+      stroke={chosen?colors.text:path.deep?colors['text-muted']:edge??ink} strokeOpacity={chosen||path.deep||edge?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
       strokeDasharray={path.deep&&!chosen?[2.2,1.6]:undefined} strokeLinejoin="round"
       accessible accessibilityRole="button" accessibilityState={{selected:chosen}} accessibilityLabel={atlasLabel(value,now)}
       onPress={()=>select(path.id)}/>;

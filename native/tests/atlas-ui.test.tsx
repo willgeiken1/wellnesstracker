@@ -115,6 +115,23 @@ describe('line contrast', () => {
     expect(contrast(blend(c['surface-2'], c['text-muted'], ATLAS_LINE_OPACITY), c['surface-2'])).toBeGreaterThanOrEqual(3);
     expect(contrast(c['text-muted'], c['surface-2'])).toBeGreaterThanOrEqual(4.5);
   });
+  test.each(['dark', 'light'] as const)('in %s mode the boundary of a trained muscle keeps 3:1 against its heat colour, fresh or faded', mode => {
+    const { trainedStroke } = require('../src/features/atlas/body-atlas') as typeof import('../src/features/atlas/body-atlas');
+    const { heatFill } = require('../src/features/atlas/volume') as typeof import('../src/features/atlas/volume');
+    const c = createTheme(mode) as Record<'text' | 'bg' | 'surface-2', string>;
+    for (const sets of [1, 12, 40]) for (const freshness of [0, 0.5, 1]) {
+      const fill = heatFill({ sets, target: [10, 20] } as unknown as Parameters<typeof heatFill>[0], mode === 'dark'), opacity = .65 + .35 * freshness;
+      expect(contrast(trainedStroke(fill, opacity, c), blend(c['surface-2'], fill, opacity))).toBeGreaterThanOrEqual(3);
+    }
+  });
+  test('a trained muscle is outlined at full strength in a colour that stands out, an untrained one keeps soft ink', async () => {
+    await render(<BodyAtlas sessions={[{ at: now - 3600000, exercises: [{ main: 'chest', helpers: [], sets: 12 }] }]} now={now}/>, { wrapper });
+    const trained = screen.getByTestId('atlas-path-pecUpper').props;
+    expect(trained.strokeOpacity).toBe(1);
+    const untrained = screen.getAllByTestId(/^atlas-path-/).map(n => n.props).find(p => p.strokeOpacity === ATLAS_LINE_OPACITY);
+    expect(untrained).toBeTruthy();
+    expect(JSON.stringify(trained.stroke)).not.toBe(JSON.stringify(untrained!.stroke));
+  });
   test('the body outline is drawn at full strength', async () => {
     await render(<BodyAtlas sessions={sessions} now={now}/>, { wrapper });
     const outline = screen.getByTestId('atlas-outline').props;
