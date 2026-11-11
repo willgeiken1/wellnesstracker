@@ -6,6 +6,9 @@ import { memoryRepository } from './workout-repository';
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
 beforeEach(()=>{jest.useFakeTimers();jest.setSystemTime(new Date('2026-10-27T17:00:00Z'));});
 afterEach(()=>jest.useRealTimers());
+// Entry and meal actions sit behind a tap on the row or on the meal's options button.
+const openRow=async(name:string)=>{const row=screen.getByRole('button',{name:new RegExp('^'+name+', ')});if(!row.props.accessibilityState?.expanded)await fireEvent.press(row);};
+const openMeal=async(name:string)=>{const menu=screen.getByRole('button',{name:name+' options'});if(!menu.props.accessibilityState?.expanded)await fireEvent.press(menu);};
 test('four meals, manual entry names day, blank nutrients, edit portions, delete and Undo',async()=>{
  const repo=memoryRepository();await render(<FoodScreen repository={repo}/>,{wrapper});
  for(const meal of ['Breakfast','Lunch','Dinner','Snacks'])expect(screen.getByRole('button',{name:meal})).toBeTruthy();
@@ -14,10 +17,10 @@ test('four meals, manual entry names day, blank nutrients, edit portions, delete
  await fireEvent.changeText(screen.getByLabelText('Calories (kcal)'),'100');
  await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));
  expect(repo.list('food_entries')).toHaveLength(1);expect(screen.getByText('Synthetic oats')).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'Edit Synthetic oats'}));
+ await openRow('Synthetic oats');await fireEvent.press(screen.getByRole('button',{name:'Edit Synthetic oats'}));
  await fireEvent.changeText(screen.getByLabelText('Portion multiplier'),'2');await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));
  expect(repo.list('food_entries')[0].data.energy_kj).toBeCloseTo(836.8);
- await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic oats'}));expect(repo.list('food_entries')).toHaveLength(0);
+ await openRow('Synthetic oats');await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic oats'}));expect(repo.list('food_entries')).toHaveLength(0);
  await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(repo.list('food_entries')).toHaveLength(1);
 });
 test('past day selected explicitly, future blocked, missing stats inline target entry',async()=>{
@@ -39,14 +42,14 @@ test('saved foods, favorites, combos, copy yesterday, rename/add meals persist t
  await fireEvent.press(screen.getByRole('button',{name:'Previous food day'}));await fireEvent.press(screen.getByRole('button',{name:'Manual'}));
  await fireEvent.changeText(screen.getByLabelText('Food name'),'Synthetic toast');await fireEvent.changeText(screen.getByLabelText('Calories (kcal)'),'120');
  await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-26'}));
- await fireEvent.press(screen.getByRole('button',{name:'Favorite Synthetic toast'}));await fireEvent.press(screen.getByRole('button',{name:'Save Synthetic toast for later'}));
+ await openRow('Synthetic toast');await fireEvent.press(screen.getByRole('button',{name:'Favorite Synthetic toast'}));await fireEvent.press(screen.getByRole('button',{name:'Save Synthetic toast for later'}));
  expect(repo.list('saved_foods')).toHaveLength(1);
- await fireEvent.press(screen.getByRole('button',{name:'Save Breakfast as combo'}));await fireEvent.press(screen.getByRole('button',{name:'Save combo'}));
- await fireEvent.press(screen.getByRole('button',{name:'Next food day'}));await fireEvent.press(screen.getByRole('button',{name:'Copy yesterday to Breakfast'}));
+ await openMeal('Breakfast');await fireEvent.press(screen.getByRole('button',{name:'Save Breakfast as combo'}));await fireEvent.press(screen.getByRole('button',{name:'Save combo'}));
+ await fireEvent.press(screen.getByRole('button',{name:'Next food day'}));await openMeal('Breakfast');await fireEvent.press(screen.getByRole('button',{name:'Copy yesterday to Breakfast'}));
  expect(repo.list('food_entries').filter(r=>r.data.day==='2026-10-27')).toHaveLength(1);
  await fireEvent.press(screen.getByRole('button',{name:'Saved'}));await fireEvent.press(screen.getByRole('button',{name:'Log Breakfast'}));
  expect(repo.list('food_entries').filter(r=>r.data.day==='2026-10-27')).toHaveLength(2);
- await fireEvent.press(screen.getByRole('button',{name:'Rename Breakfast'}));await fireEvent.changeText(screen.getByLabelText('Meal name'),'Morning');await fireEvent.press(screen.getByRole('button',{name:'Save meal name'}));
+ await openMeal('Breakfast');await fireEvent.press(screen.getByRole('button',{name:'Rename Breakfast'}));await fireEvent.changeText(screen.getByLabelText('Meal name'),'Morning');await fireEvent.press(screen.getByRole('button',{name:'Save meal name'}));
  expect(screen.getByRole('button',{name:'Morning'})).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Add meal'}));await fireEvent.changeText(screen.getByLabelText('Meal name'),'After work');await fireEvent.press(screen.getByRole('button',{name:'Save meal name'}));
  expect(screen.getByRole('button',{name:'After work'})).toBeTruthy();
@@ -65,7 +68,7 @@ test('failed save retains form, and failed Undo keeps Undo action available',asy
  await fireEvent.changeText(screen.getByLabelText('Food name'),'Synthetic rice');
  const save=jest.spyOn(repo,'save').mockImplementation(()=>{throw new Error('Synthetic failure');});
  await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));expect(screen.getByRole('alert')).toBeTruthy();expect(screen.getByLabelText('Food name')).toHaveDisplayValue('Synthetic rice');
- save.mockRestore();await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic rice'}));
+ save.mockRestore();await fireEvent.press(screen.getByRole('button',{name:'Save to 2026-10-27'}));await openRow('Synthetic rice');await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic rice'}));
  const restore=jest.spyOn(repo,'save').mockImplementation(()=>{throw new Error('Synthetic failure');});await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(screen.getByRole('button',{name:'Undo delete'})).toBeTruthy();
  restore.mockRestore();await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(repo.list('food_entries')).toHaveLength(1);
 });
