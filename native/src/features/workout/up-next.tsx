@@ -16,9 +16,9 @@ export const SWIPE_COMMIT = 40;
  * The swipe is a native horizontal scroll view with three stops: skip, the card, swap. The system tracks the
  * finger, so the drag cannot be lost to the page's own scrolling or to the logger re-rendering each second, and
  * the card moves and settles with the phone's own scroll physics. After an action it goes back to rest without
- * animating, so nothing is added for Reduce Motion to turn off. */
+ * animating, and a swipe that did not count slides back, or jumps back under Reduce Motion. */
 export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string; detail: string; onPress: () => void; onSkip?: () => void; onSwap: () => void }) {
-  const { colors } = useTheme(), training = colors.training;
+  const { colors, reduceMotion } = useTheme(), training = colors.training;
   const scroller = useRef<ComponentRef<typeof ScrollView>>(null), [width, setWidth] = useState(0);
   // Without skip there is no stop on the left, so the card rests at the start and only resists a right swipe.
   const rest = onSkip ? SWIPE_REVEAL : 0, swapAt = rest + SWIPE_REVEAL;
@@ -27,9 +27,14 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
   // so the two end-of-scroll events for the same swipe cannot fire it twice.
   const intent = useRef<'skip' | 'swap' | null>(null);
   const at = (e: NativeSyntheticEvent<NativeScrollEvent>) => e.nativeEvent.contentOffset.x;
+  const goHome = () => scroller.current?.scrollTo({ x: rest, animated: !reduceMotion });
   const commit = (x: number) => {
-    const want = intent.current;
-    if (!want || (want === 'skip' ? x > 1 : x < swapAt - 1)) return;
+    const want = intent.current, away = Math.abs(x - rest) >= 1;
+    if (!want || (want === 'skip' ? x > 1 : x < swapAt - 1)) {
+      // Whatever did not count as a swipe ends back at rest, so the next one is always measured from there.
+      if (away) { intent.current = null; goHome(); }
+      return;
+    }
     intent.current = null;
     scroller.current?.scrollTo({ x: rest, animated: false });
     if (want === 'skip') onSkip?.(); else onSwap();
@@ -37,8 +42,9 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
   const released = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = at(e), moved = x - rest;
     intent.current = moved >= SWIPE_COMMIT ? 'swap' : onSkip && -moved >= SWIPE_COMMIT ? 'skip' : null;
-    if (intent.current) commit(x);
-    else if (Math.abs(moved) >= 1) scroller.current?.scrollTo({ x: rest, animated: true });
+    if (!intent.current) { if (x !== rest) goHome(); return; }
+    // Released exactly on its stop there is no glide to wait for; otherwise the end of the glide decides.
+    if (intent.current === 'skip' ? x <= 1 : x >= swapAt - 1) commit(x);
   };
   const actions = [...(onSkip ? [{ name: 'skip', label: t('skipExercise') }] : []), { name: 'swap', label: t('swapExercise') }];
   const reveal = (label: string, side: 'left' | 'right') => <View accessible={false} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden

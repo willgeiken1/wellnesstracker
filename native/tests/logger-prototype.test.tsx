@@ -149,6 +149,54 @@ describe('swiping the Up next card', () => {
     await release(SWIPE_REVEAL * 2); await settle(SWIPE_REVEAL * 2); await settle(SWIPE_REVEAL * 2);
     expect(onSwap).toHaveBeenCalledTimes(1);
   });
+  describe('coming back to rest', () => {
+    const { ScrollView, AccessibilityInfo } = require('react-native') as typeof import('react-native');
+    let scrollTo: jest.SpyInstance;
+    beforeEach(() => { scrollTo = jest.spyOn(ScrollView.prototype as unknown as { scrollTo: (o: object) => void }, 'scrollTo').mockImplementation(() => {}); });
+    afterEach(() => scrollTo.mockRestore());
+    test('a short flick that the snap carries to a stop is sent back to rest, and so is one let go part way', async () => {
+      const onSwap = jest.fn();
+      await render(card({ onSkip: () => {}, onSwap }), { wrapper });
+      await release(SWIPE_REVEAL + 20);
+      expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ x: SWIPE_REVEAL }));
+      scrollTo.mockClear();
+      await settle(SWIPE_REVEAL * 2);
+      expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ x: SWIPE_REVEAL }));
+      scrollTo.mockClear();
+      await release(SWIPE_REVEAL + 0.5);
+      expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ x: SWIPE_REVEAL }));
+      expect(onSwap).not.toHaveBeenCalled();
+    });
+    test('a deliberate swipe that stops short of its stop is sent back too, and nothing fires', async () => {
+      const onSwap = jest.fn();
+      await render(card({ onSkip: () => {}, onSwap }), { wrapper });
+      await release(SWIPE_REVEAL + SWIPE_COMMIT); await settle(SWIPE_REVEAL + SWIPE_COMMIT + 5);
+      expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ x: SWIPE_REVEAL }));
+      await settle(SWIPE_REVEAL * 2);
+      expect(onSwap).not.toHaveBeenCalled();
+    });
+    test('the way back slides, but jumps under Reduce Motion; after an action it always jumps', async () => {
+      const reduce = AccessibilityInfo.isReduceMotionEnabled as jest.Mock;
+      for (const on of [false, true]) {
+        reduce.mockResolvedValueOnce(on);
+        const view = await render(card({ onSkip: () => {}, onSwap: () => {} }), { wrapper });
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+        await release(SWIPE_REVEAL + 20);
+        expect(scrollTo).toHaveBeenLastCalledWith({ x: SWIPE_REVEAL, animated: !on });
+        await release(SWIPE_REVEAL * 2);
+        expect(scrollTo).toHaveBeenLastCalledWith({ x: SWIPE_REVEAL, animated: false });
+        await view.unmount();
+      }
+    });
+    test('handlers that change between letting go and the end of the glide: the newest one fires', async () => {
+      const first = jest.fn(), second = jest.fn();
+      const view = await render(card({ onSkip: () => {}, onSwap: first }), { wrapper });
+      await release(SWIPE_REVEAL + SWIPE_COMMIT);
+      await view.rerender(card({ onSkip: () => {}, onSwap: second }));
+      await settle(SWIPE_REVEAL * 2);
+      expect(first).not.toHaveBeenCalled(); expect(second).toHaveBeenCalledTimes(1);
+    });
+  });
   test('starting a new drag forgets the last one', async () => {
     const onSwap = jest.fn();
     await render(card({ onSkip: () => {}, onSwap }), { wrapper });
