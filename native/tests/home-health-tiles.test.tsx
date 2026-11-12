@@ -85,3 +85,29 @@ test('tiles added while Home is behind another screen show when Home comes back,
   expect(screen.getByTestId('home-tile-steps')).toBeTruthy();
   expect(screen.getByTestId('home-tile-sleep')).toBeTruthy();
 });
+
+test('reopening the app the next morning moves all of Home to the new day, not just the Health tiles', async () => {
+  const { AppState } = require('react-native') as typeof import('react-native');
+  const listeners: ((state: string) => void)[] = [];
+  const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_: string, fn: (state: string) => void) => { listeners.push(fn); return { remove: () => {} }; }) as never);
+  jest.useFakeTimers();
+  try {
+    jest.setSystemTime(new Date(2026, 10, 12, 23, 50));
+    const source = fake('asked'), windows: Date[] = [];
+    (source.steps as jest.Mock).mockImplementation(async (from: Date) => { windows.push(from); return 8430; });
+    jest.mocked(appleHealth).mockReturnValue(source);
+    jest.mocked(useFocused).mockReturnValue(true);
+    addHealthTiles(open());
+    await render(<Home />, { wrapper });
+    await settle();
+    expect(screen.getByText('Thursday, Nov 12')).toBeTruthy();
+    const before = Math.max(...windows.map(Number));
+    expect(new Date(before)).toEqual(new Date(2026, 10, 12));
+    jest.setSystemTime(new Date(2026, 10, 13, 8, 0));
+    await act(async () => { for (const fn of listeners) fn('active'); });
+    await settle();
+    expect(new Date(Math.max(...windows.map(Number)))).toEqual(new Date(2026, 10, 13));
+    expect(screen.getByText('Friday, Nov 13')).toBeTruthy();
+    expect(screen.queryByText('Thursday, Nov 12')).toBeNull();
+  } finally { jest.useRealTimers(); spy.mockRestore(); }
+});

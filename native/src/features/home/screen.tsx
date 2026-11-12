@@ -1,6 +1,6 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, View, type ViewStyle } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
@@ -129,6 +129,12 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
 export function Home() {
   const { store, auth } = useWorkout();
   const { colors } = useTheme();
+  // Reopening the app draws Home again, so "today" is the real day even if the app sat open overnight.
+  const [, setWoken] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') setWoken(n => n + 1); });
+    return () => sub?.remove();
+  }, []);
   const now = new Date(), today = localDay(now);
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
