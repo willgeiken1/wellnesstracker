@@ -627,7 +627,9 @@ test('offline badge is a themed chip even in a forced-offline demo', async () =>
 test('completed rows fill the card width and pending inputs remain borderless', async () => {
   const props = { exercise: 'Bench Press', index: 0, previous: '185 × 8', hint: '190', onEdit: jest.fn(), onDone: jest.fn(), onRemove: jest.fn() };
   const view = await render(<SetRow {...props} draft={{weight:'185',reps:'8',setId:'synthetic'}} />, {wrapper});
-  expect(screen.getByTestId('set-row-0-0')).toHaveStyle({marginHorizontal:-14,borderRadius:0});
+  // The swipe frame around the row reaches the card's edges; the row fills it with square corners.
+  expect(screen.getByTestId('set-swipe-0-0-frame')).toHaveStyle({marginHorizontal:-14});
+  expect(screen.getByTestId('set-row-0-0')).toHaveStyle({paddingHorizontal:14,borderRadius:0});
   await view.rerender(<SetRow {...props} draft={{weight:'',reps:''}} />);
   expect(screen.getByTestId('set-0-0-weight')).toHaveStyle({borderWidth:0});
 });

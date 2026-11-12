@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
-import { router } from 'expo-router';
 import { SegmentedControl } from '@/components/segmented-control';
-import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -32,7 +30,6 @@ export default function Page() {
   {section==='recovery'&&<Card testID="recovery-later">
    <ThemedText variant="headline" accessibilityRole="header">{t('recoveryLaterTitle')}</ThemedText>
    <ThemedText muted>{t('recoveryLaterBody')}</ThemedText>
-   <Button label={t('backHome')} variant="secondary" onPress={()=>router.navigate('/')}/>
   </Card>}
  </Screen>;
 }

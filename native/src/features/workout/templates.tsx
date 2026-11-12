@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
-import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
@@ -80,7 +79,6 @@ export function Workouts() {
       <PastDayChoice />
     </>}
     {segment === 'cardio' && (store ? <Cardio key={store.repo.owner} repository={store.repo} /> : <Trouble text={t('localError')} />)}
-    <Button label={t('backHome')} variant="secondary" onPress={() => router.navigate('/')} />
   </Screen>;
 }
 export function TemplateEditor() {

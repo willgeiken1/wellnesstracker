@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/button";
-import { PanResponder, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { SwipeStops } from "./swipe-stops";
 import { ThemedText } from "@/components/themed-text";
 import { useTheme } from "@/design/theme-provider";
 import type { Draft } from "@/data/workout/store";
@@ -41,13 +42,6 @@ export function SetRow({
   const { colors } = useTheme();
   const [tagsOpen, setTagsOpen] = useState(false);
   const label = `${exercise}, ${t("set")} ${index + 1}${side ? `, ${t(side === "left" ? "leftSide" : "rightSide")}` : ""}`;
-  const pan = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) =>
-      g.dx > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
-    onPanResponderRelease: (_, g) => {
-      if (g.dx > 65 && !draft.setId) onDone();
-    },
-  });
   const suffix = side === "right" ? "-right" : "";
   const done = !!draft.setId;
   const tagLetter = draft.tag && onTag ? { warmup: "W", failure: "F", drop: "D" }[draft.tag] : "";
@@ -66,17 +60,22 @@ export function SetRow({
   return (
     <>
     {side && <ThemedText muted variant="caption">{t(side === 'left' ? 'leftSide' : 'rightSide')}</ThemedText>}
+    {/* Swipe right marks the set done, on native scrolling so the drag is not lost to the page or to the
+        logger re-rendering each second. A done row has nothing to swipe to. The checkbox does the same by tap. */}
+    <SwipeStops
+      testID={`set-swipe-${exerciseIndex}-${index}${suffix}`}
+      start={done ? undefined : { label: t("done"), onCommit: onDone }}
+      // A done row tints the full card width.
+      style={{ marginHorizontal: -14 }}
+    >
     <View
       testID={`set-row-${exerciseIndex}-${index}${suffix}`}
-      {...pan.panHandlers}
       style={[
         layout.row,
         {
           minHeight: tokens.logger.rowHeight,
           paddingVertical: 4,
-          // A done row tints the full card width.
           paddingHorizontal: 14,
-          marginHorizontal: -14,
           borderRadius: 0,
           backgroundColor: done ? colors["accent-tint"] : undefined,
         },
@@ -178,6 +177,7 @@ export function SetRow({
         />
       </Pressable>
     </View>
+    </SwipeStops>
     {tagsOpen && onTag && <View style={[layout.row, {flexWrap:'wrap', paddingBottom: 6}]}>
       {(['warmup','failure','drop'] as const).map(tag => <Button key={tag} label={t(tag)} selected={draft.tag === tag} variant="secondary" onPress={() => {onTag(draft.tag === tag ? null : tag); setTagsOpen(false);}} />)}
       <Button label={t('clearTag')} variant="secondary" onPress={() => {onTag(null); setTagsOpen(false);}} />
