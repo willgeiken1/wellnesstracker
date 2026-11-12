@@ -26,7 +26,9 @@ export function MiniChart({ values, goal, bars = false, color, height = 120, fir
   const { colors } = useTheme();
   const known = values.filter((v): v is number => v !== null), top = Math.max(1, ...known, goal ?? 0) * 1.08;
   const slot = (W - PAD * 2) / Math.max(1, values.length), y = (value: number) => PAD + (height - PAD * 2) * (1 - value / top);
-  const single = !bars && known.length === 1;
+  const step = values.length > 1 ? (W - PAD * 2) / (values.length - 1) : 0;
+  // A value with no logged day on either side cannot join a line, so it is drawn as a dot.
+  const alone = (i: number) => !bars && values[i] !== null && (values[i - 1] ?? null) === null && (values[i + 1] ?? null) === null;
   return <View accessible={false}>
     <Svg testID={testID} width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" accessible={false}>
       <Line x1={PAD} x2={W - PAD} y1={height - PAD} y2={height - PAD} stroke={colors['surface-2']} strokeWidth={1} />
@@ -34,8 +36,7 @@ export function MiniChart({ values, goal, bars = false, color, height = 120, fir
       {bars
         ? values.map((value, i) => value ? <Rect key={i} testID="chart-bar" x={PAD + i * slot + slot * 0.18} width={slot * 0.64} y={y(value)} height={Math.max(1, height - PAD - y(value))} rx={2} fill={color} /> : null)
         : <Path testID="chart-line" d={linePath(values, top, height)} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
-      {/* A lone day cannot make a line, so it is drawn as a dot. */}
-      {single && values.map((value, i) => value === null ? null : <Rect key={i} testID="chart-dot" x={PAD + i * (values.length > 1 ? (W - PAD * 2) / (values.length - 1) : 0) - 3} y={y(value) - 3} width={6} height={6} rx={3} fill={color} />)}
+      {values.map((value, i) => value !== null && alone(i) ? <Rect key={i} testID="chart-dot" x={PAD + i * step - 3} y={y(value) - 3} width={6} height={6} rx={3} fill={color} /> : null)}
     </Svg>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
       <ThemedText muted numeric variant="caption">{first}</ThemedText><ThemedText muted numeric variant="caption">{last}</ThemedText>

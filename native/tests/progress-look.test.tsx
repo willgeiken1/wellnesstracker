@@ -91,6 +91,16 @@ describe('Goals & PRs', () => {
     const { store } = trained();
     expect(lifetime(store)).toEqual({ workouts: 2, sets: 6, volume: 100 * 5 * 2 + 140 * 5 * 2 + 105 * 5 * 2, unit: 'kg' });
   });
+  test('lifetime totals match the workout summaries and do not rescan history for every workout', () => {
+    const { store } = trained(), sessions = store.trainingHistory();
+    const fromSummaries = sessions.map(s => store.summary(s.id)).reduce((n, s) => ({ sets: n.sets + s.count, volume: n.volume + s.volume }), { sets: 0, volume: 0 });
+    const history = jest.spyOn(store, 'history');
+    const total = lifetime(store);
+    expect(total).toMatchObject({ workouts: sessions.length, sets: fromSummaries.sets, volume: Math.round(fromSummaries.volume) });
+    // One pass to list the workouts. The old code called history again for every exercise of every workout.
+    expect(history.mock.calls.length).toBeLessThanOrEqual(1);
+    history.mockRestore();
+  });
   test('shows the binder and the lifetime list', async () => {
     const { repo } = trained();
     await render(wrap(<Records repository={repo} />));
