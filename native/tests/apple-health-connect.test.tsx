@@ -17,9 +17,11 @@ function fakes(start: HealthAccess, list = samples) {
     access: jest.fn(async () => access),
     request: jest.fn(async () => { access = 'asked'; }),
     weights: jest.fn(async () => list),
+    steps: async () => 0, sleep: async () => [],
   };
-  const repo = { list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); } } as unknown as Repository;
-  return { source, repo, saved };
+  const local = new Map<string, unknown>();
+  const repo = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); } } as unknown as Repository;
+  return { source, repo, saved, local };
 }
 function Page({ repo, source }: { repo: Repository | null; source: HealthSource | null }) {
   return <ConnectedServices apple={useAppleHealth(repo, source)} />;
@@ -47,7 +49,21 @@ test('Connect asks once, brings the weights in and says how many', async () => {
   expect(saved.size).toBe(3);
   expect(screen.getByText('3 weights added.')).toBeTruthy();
   expect(within(screen.getByTestId('connect-appleHealth')).getByText('Connected')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Check for new weights' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy();
+});
+
+test('connecting puts the Steps and Sleep tiles on Home by id only; a quiet visit does not', async () => {
+  const first = fakes('ask');
+  await render(<Page repo={first.repo} source={first.source} />, { wrapper });
+  await settle();
+  expect(first.local.size).toBe(0);
+  await fireEvent.press(screen.getByTestId('connect-apple-button'));
+  await settle();
+  expect(first.local.get('homeTiles')).toEqual({ order: ['map', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep'], wide: [] });
+  const second = fakes('asked');
+  await render(<Page repo={second.repo} source={second.source} />, { wrapper });
+  await settle();
+  expect(second.local.size).toBe(0);
 });
 
 test('once connected, opening the page picks up new weights without asking again', async () => {

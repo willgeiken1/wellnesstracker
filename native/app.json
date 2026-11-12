@@ -103,7 +103,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Insight Daily reads your body weight from Apple Health so weigh-ins from a scale or another app appear on Progress. It stays on this phone.",
+          "NSHealthShareUsageDescription": "Insight Daily reads your body weight, steps and sleep from Apple Health to show them beside your training and food. They stay on this phone.",
           "NSHealthUpdateUsageDescription": false,
           "background": false
         }
