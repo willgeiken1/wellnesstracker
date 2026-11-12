@@ -108,8 +108,9 @@ test('the set tag button reads the previous weight and reps to a screen reader',
 });
 
 describe('swiping the Up next card', () => {
-  const { UpNext, SWIPE_REVEAL } = require('../src/features/workout/up-next') as typeof import('../src/features/workout/up-next');
-  const settle = (x: number) => fireEvent(screen.getByTestId('up-next-swipe'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { x, y: 0 } } });
+  const { UpNext, SWIPE_REVEAL, SWIPE_COMMIT } = require('../src/features/workout/up-next') as typeof import('../src/features/workout/up-next');
+  const ev = (name: string, x: number) => fireEvent(screen.getByTestId('up-next-swipe'), name, { nativeEvent: { contentOffset: { x, y: 0 } } });
+  const release = (x: number) => ev('scrollEndDrag', x), settle = (x: number) => ev('momentumScrollEnd', x);
   const card = (handlers: { onSkip?: () => void; onSwap: () => void }) => <UpNext name="Deadlift" detail="3 sets" onPress={() => {}} {...handlers} />;
 
   test('it is a native horizontal scroll with three stops: skip, the card, swap', async () => {
@@ -117,39 +118,60 @@ describe('swiping the Up next card', () => {
     const swipe = screen.getByTestId('up-next-swipe').props;
     expect(swipe).toMatchObject({ horizontal: true, snapToOffsets: [0, SWIPE_REVEAL, SWIPE_REVEAL * 2], contentOffset: { x: SWIPE_REVEAL, y: 0 } });
   });
-  test('settling on the left stop skips, on the right stop swaps, and back at rest does nothing', async () => {
+  test('a deliberate swipe that settles on the left stop skips, on the right stop swaps', async () => {
     const onSkip = jest.fn(), onSwap = jest.fn();
     await render(card({ onSkip, onSwap }), { wrapper });
-    await settle(SWIPE_REVEAL);
-    expect(onSkip).not.toHaveBeenCalled(); expect(onSwap).not.toHaveBeenCalled();
-    await settle(SWIPE_REVEAL * 0.6);
-    expect(onSkip).not.toHaveBeenCalled(); expect(onSwap).not.toHaveBeenCalled();
-    await settle(0);
+    await release(SWIPE_REVEAL - SWIPE_COMMIT); await settle(0);
     expect(onSkip).toHaveBeenCalledTimes(1); expect(onSwap).not.toHaveBeenCalled();
-    await settle(SWIPE_REVEAL * 2);
+    await release(SWIPE_REVEAL + SWIPE_COMMIT); await settle(SWIPE_REVEAL * 2);
     expect(onSwap).toHaveBeenCalledTimes(1); expect(onSkip).toHaveBeenCalledTimes(1);
   });
-  test('a drag released exactly on a stop counts too, with no momentum to wait for', async () => {
+  test('a short flick does nothing even when the snap carries the card to a stop', async () => {
+    const onSkip = jest.fn(), onSwap = jest.fn();
+    await render(card({ onSkip, onSwap }), { wrapper });
+    await release(SWIPE_REVEAL + 20); await settle(SWIPE_REVEAL * 2);
+    await release(SWIPE_REVEAL - 20); await settle(0);
+    expect(onSkip).not.toHaveBeenCalled(); expect(onSwap).not.toHaveBeenCalled();
+  });
+  test('a swipe that falls back to rest, or a settle with no swipe before it, does nothing', async () => {
+    const onSkip = jest.fn(), onSwap = jest.fn();
+    await render(card({ onSkip, onSwap }), { wrapper });
+    await settle(SWIPE_REVEAL * 2); await settle(0);
+    await release(SWIPE_REVEAL + SWIPE_COMMIT); await settle(SWIPE_REVEAL);
+    await release(SWIPE_REVEAL + SWIPE_COMMIT); await settle(0);
+    expect(onSkip).not.toHaveBeenCalled(); expect(onSwap).not.toHaveBeenCalled();
+  });
+  test('one swipe fires once, whichever end-of-scroll events arrive and however often', async () => {
+    const onSkip = jest.fn(), onSwap = jest.fn();
+    await render(card({ onSkip, onSwap }), { wrapper });
+    await release(0); await settle(0); await settle(0);
+    expect(onSkip).toHaveBeenCalledTimes(1);
+    await release(SWIPE_REVEAL * 2); await settle(SWIPE_REVEAL * 2); await settle(SWIPE_REVEAL * 2);
+    expect(onSwap).toHaveBeenCalledTimes(1);
+  });
+  test('starting a new drag forgets the last one', async () => {
     const onSwap = jest.fn();
     await render(card({ onSkip: () => {}, onSwap }), { wrapper });
-    await fireEvent(screen.getByTestId('up-next-swipe'), 'scrollEndDrag', { nativeEvent: { contentOffset: { x: SWIPE_REVEAL * 2, y: 0 } } });
-    expect(onSwap).toHaveBeenCalledTimes(1);
+    await release(SWIPE_REVEAL + SWIPE_COMMIT);
+    await fireEvent(screen.getByTestId('up-next-swipe'), 'scrollBeginDrag');
+    await settle(SWIPE_REVEAL * 2);
+    expect(onSwap).not.toHaveBeenCalled();
   });
   test('once a set is logged there is no skip stop: the card rests at the start and only swap is offered', async () => {
     const onSwap = jest.fn();
     await render(card({ onSwap }), { wrapper });
     expect(screen.getByTestId('up-next-swipe').props).toMatchObject({ snapToOffsets: [0, SWIPE_REVEAL], contentOffset: { x: 0, y: 0 } });
     expect(screen.queryByText('Skip')).toBeNull();
-    await settle(0);
+    await release(0); await settle(0);
     expect(onSwap).not.toHaveBeenCalled();
-    await settle(SWIPE_REVEAL);
+    await release(SWIPE_COMMIT); await settle(SWIPE_REVEAL);
     expect(onSwap).toHaveBeenCalledTimes(1);
   });
   test('the latest handlers are used after the logger re-renders', async () => {
     const first = jest.fn(), second = jest.fn();
     const view = await render(card({ onSkip: () => {}, onSwap: first }), { wrapper });
     await view.rerender(card({ onSkip: () => {}, onSwap: second }));
-    await settle(SWIPE_REVEAL * 2);
+    await release(SWIPE_REVEAL * 2);
     expect(first).not.toHaveBeenCalled(); expect(second).toHaveBeenCalledTimes(1);
   });
   test('the revealed Skip and Swap words are not extra buttons for a screen reader', async () => {

@@ -8,6 +8,8 @@ import { t } from '@/i18n/en';
 
 /** How far the card travels to commit a swipe: the width of the action revealed beside it. */
 export const SWIPE_REVEAL = 96;
+/** How far the finger has to carry the card before letting go for the swipe to count. */
+export const SWIPE_COMMIT = 40;
 /** The card at the top of the logger: the exercise with the next open set. Tap to log that set,
  * swipe right to skip the exercise, swipe left to swap it. Screen readers get the same two as actions.
  *
@@ -20,13 +22,23 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
   const scroller = useRef<ComponentRef<typeof ScrollView>>(null), [width, setWidth] = useState(0);
   // Without skip there is no stop on the left, so the card rests at the start and only resists a right swipe.
   const rest = onSkip ? SWIPE_REVEAL : 0, swapAt = rest + SWIPE_REVEAL;
-  const settled = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const x = e.nativeEvent.contentOffset.x;
-    if (Math.abs(x - rest) < 1) return;
-    const skip = !!onSkip && x <= 1, swap = x >= swapAt - 1;
-    if (!skip && !swap) return;
+  // A swipe counts only when the finger itself carried the card most of the way: the snap finishes the travel, so
+  // without this a short flick would commit. The intent is set when the finger lifts and used up by one action,
+  // so the two end-of-scroll events for the same swipe cannot fire it twice.
+  const intent = useRef<'skip' | 'swap' | null>(null);
+  const at = (e: NativeSyntheticEvent<NativeScrollEvent>) => e.nativeEvent.contentOffset.x;
+  const commit = (x: number) => {
+    const want = intent.current;
+    if (!want || (want === 'skip' ? x > 1 : x < swapAt - 1)) return;
+    intent.current = null;
     scroller.current?.scrollTo({ x: rest, animated: false });
-    if (skip) onSkip?.(); else onSwap();
+    if (want === 'skip') onSkip?.(); else onSwap();
+  };
+  const released = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = at(e), moved = x - rest;
+    intent.current = moved >= SWIPE_COMMIT ? 'swap' : onSkip && -moved >= SWIPE_COMMIT ? 'skip' : null;
+    if (intent.current) commit(x);
+    else if (Math.abs(moved) >= 1) scroller.current?.scrollTo({ x: rest, animated: true });
   };
   const actions = [...(onSkip ? [{ name: 'skip', label: t('skipExercise') }] : []), { name: 'swap', label: t('swapExercise') }];
   const reveal = (label: string, side: 'left' | 'right') => <View accessible={false} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
@@ -42,7 +54,7 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
         key={`${rest}:${width}`} contentOffset={{ x: rest, y: 0 }}
         snapToOffsets={onSkip ? [0, rest, swapAt] : [rest, swapAt]} snapToEnd={false} snapToStart={false} decelerationRate="fast" disableIntervalMomentum
         directionalLockEnabled scrollsToTop={false} overScrollMode="never"
-        onMomentumScrollEnd={settled} onScrollEndDrag={settled} scrollEventThrottle={16}
+        onScrollBeginDrag={() => { intent.current = null; }} onScrollEndDrag={released} onMomentumScrollEnd={e => commit(at(e))} scrollEventThrottle={16}
         // Room above and below for the card's shadow, taken back by the margin so the layout does not move.
         contentContainerStyle={{ paddingVertical: 6 }} style={{ marginVertical: -6 }}>
         {onSkip && reveal(t('skip'), 'left')}
