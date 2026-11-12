@@ -12,7 +12,7 @@ const options = [{ value: 'a', label: 'First' }, { value: 'b', label: 'Second' }
 test('the choices sit in one visible track: filled for a card, outlined for the page', async () => {
   const onChange = jest.fn();
   await render(<SegmentedControl label="Made-up choices" options={options} value="a" onChange={onChange} />, { wrapper });
-  const track = StyleSheet.flatten(screen.root.props.style);
+  const track = StyleSheet.flatten(screen.root!.props.style);
   expect(track.backgroundColor).toBeTruthy();
   expect(track.borderWidth).toBe(1);
   const chosen = StyleSheet.flatten(screen.getByRole('tab', { name: 'First' }).props.style);
