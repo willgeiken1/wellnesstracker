@@ -70,3 +70,28 @@ test('device-only losing versions never leave in a boot recovery export',async()
   expect(copy.prepare('SELECT key FROM sync_state').all()).toEqual([{key:'cursor:sessions'}]);
  }finally{copy.close();}
 });
+
+test('staged export leaves out Apple Health and Health Connect weigh-ins, down to the file bytes',async()=>{
+ const directory=mkdtempSync(join(tmpdir(),'insight-export-health-'));
+ const staged=join(directory,'staged.db');
+ const copy=new DatabaseSync(staged);
+ try {
+  copy.exec("CREATE TABLE weigh_ins (owner_id TEXT, id TEXT, day TEXT, weight_kg REAL, source TEXT)");
+  const insert=copy.prepare('INSERT INTO weigh_ins VALUES (?, ?, ?, ?, ?)');
+  // Made-up readings with values that are easy to find in the bytes.
+  insert.run(OWNER_A,'typed-row','2026-11-10',80.5,'app');
+  insert.run(OWNER_A,'synthetic-healthkit-row','2026-11-11',91.375,'healthkit');
+  insert.run(OWNER_A,'synthetic-health-connect-row','2026-11-12',92.625,'health_connect');
+  await filterBootExport({
+   execAsync:async query=>{copy.exec(query);},
+   getAllAsync:async <T>(query:string)=>copy.prepare(query).all() as T[],
+   runAsync:async (query:string,...params:unknown[])=>{const result=copy.prepare(query).run(...params as string[]);return {changes:Number(result.changes),lastInsertRowId:Number(result.lastInsertRowid)};},
+  },OWNER_A);
+  expect(copy.prepare('SELECT id, source FROM weigh_ins').all()).toEqual([{id:'typed-row',source:'app'}]);
+ } finally {copy.close();}
+ try {
+  const exported=readFileSync(staged).toString('latin1');
+  expect(exported).toContain('typed-row');
+  for(const secret of ['synthetic-healthkit-row','synthetic-health-connect-row','healthkit','health_connect'])expect(exported).not.toContain(secret);
+ } finally {rmSync(directory,{recursive:true,force:true});}
+});

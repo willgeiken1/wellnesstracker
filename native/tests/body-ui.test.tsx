@@ -141,3 +141,14 @@ test('a stale delete confirmation shows failure when its row is already deleted'
  await act(()=>{confirm();});
  expect(screen.getByRole('alert')).toHaveTextContent('Could not delete this weigh-in. Try again.');alert.mockRestore();
 });
+test('Log weigh-in never starts from an Apple Health reading, so a Health value cannot be saved as a typed one',async()=>{
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
+ // Made-up reading, stored the way the Apple Health import stores it.
+ repo.save('weigh_ins',{day:'2026-01-05',weight_kg:91.3,entered_value:91.3,entered_unit:'kg',source:'healthkit'});
+ await render(<Body repository={repo}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
+ expect(screen.getByLabelText('Weight (kg)').props.value).toBe('');
+ await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
+ saveWeighIn(repo,80,'kg','2026-01-04');
+ await act(async()=>{});await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
+ expect(screen.getByRole('adjustable',{name:'Weight wheel (kg)'})).toHaveAccessibilityValue({text:'80.0 kg'});
+});

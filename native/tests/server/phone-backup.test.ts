@@ -32,3 +32,20 @@ test('SQLite JSON snapshot includes tombstones, drafts, timer, weekly/milestone 
     expect(sqlite.prepare("SELECT count(*) AS n FROM sync_outbox WHERE owner_id='guest'").get()?.n).toBe(0);
   } finally { sqlite.close(); }
 });
+test('the backup file leaves out Apple Health weigh-ins and keeps typed ones', async () => {
+  const sqlite = new DatabaseSync(':memory:');
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    await migrate(db, migrations);
+    let n = 0;
+    const guest = new Repository(db, 'guest', DEVICE_A, () => `10000000-0000-4000-8000-00000000010${n++}`);
+    // Made-up readings with values that are easy to find in the file.
+    guest.save('weigh_ins', { day: '2026-11-10', weight_kg: 80.5, entered_value: 80.5, entered_unit: 'kg', source: 'app' });
+    guest.save('weigh_ins', { day: '2026-11-11', weight_kg: 91.375, entered_value: 91.375, entered_unit: 'kg', source: 'healthkit' });
+    const json = createPhoneBackup(guest);
+    expect(JSON.parse(json).rows.weigh_ins.map((row: { data: { source: string } }) => row.data.source)).toEqual(['app']);
+    expect(json).toContain('80.5');
+    for (const secret of ['91.375', 'healthkit']) expect(json).not.toContain(secret);
+    expect(guest.list('weigh_ins')).toHaveLength(2);
+  } finally { sqlite.close(); }
+});

@@ -68,7 +68,8 @@ export function Cardio({ repository }: { repository: Repository }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const weight = bodyWeight(repository.list('weigh_ins'), localDay(now));
+  // Typed weigh-ins only. A saved session syncs, so its calorie estimate must not come from an Apple Health reading.
+  const weight = bodyWeight(repository.list('weigh_ins').filter(row => row.data.source === 'app'), localDay(now));
   const settings: Settings = { mph: speed.trim() ? Number(speed) / (metric ? 1.609344 : 1) : NaN, incline: incline.trim() ? Number(incline) : NaN, level: level.trim() ? Number(level) : NaN };
   function run(action: () => void, message: MessageKey = 'cardioValidation') {
     try { action(); setError(null); } catch { setError(message); }

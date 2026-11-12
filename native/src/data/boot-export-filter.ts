@@ -23,6 +23,10 @@ export async function filterBootExport(copy: Pick<SQLiteDatabase, 'execAsync' | 
     if (!ownerColumn) await copy.execAsync(`DROP TABLE ${identifier(name)}`);
     else {
       await copy.runAsync(`DELETE FROM ${identifier(name)} WHERE ${identifier(ownerColumn.name)} IS NULL OR ${identifier(ownerColumn.name)} != ?`, owner);
+      // Readings from Apple Health or Health Connect never leave the phone, not even in the person's own export.
+      if (name === 'weigh_ins' && columns.some(column => column.name === 'source')) {
+        await copy.runAsync("DELETE FROM weigh_ins WHERE source IS NOT NULL AND source != 'app'");
+      }
       // Recovery history is device-only, including explicit boot database exports.
       if (name === 'sync_state' && columns.some(column => column.name === 'key')) {
         await copy.runAsync("DELETE FROM sync_state WHERE key LIKE 'losing:%'");

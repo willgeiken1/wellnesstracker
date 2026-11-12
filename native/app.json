@@ -99,6 +99,14 @@
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Insight Daily reads your body weight from Apple Health so weigh-ins from a scale or another app appear on Progress. It stays on this phone.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
       ]
     ],
     "experiments": {

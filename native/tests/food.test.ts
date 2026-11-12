@@ -75,3 +75,14 @@ test('return to automatic is dated and does not relabel old manual targets or in
  resetFoodTargets(repo,day,day);expect(foodTargets(repo,day).targets).toBeNull();expect(foodTargets(repo,'2026-10-26').basis).toBe('manual');
  expect(foodTargets(repo,'2026-10-26').targets!.energy_kj).toBe(8000);
 });
+test('target estimates ignore Apple Health weights, so a Health value can never be saved into synced targets',()=>{
+ const repo=memoryRepository();
+ repo.save('profile',{dob:'1990-01-01',height_m:1.75,weight_unit:'kg'});repo.localSave('profileExtras',{sex:'male',activity:'light'});
+ // Made-up reading, stored the way the Apple Health import stores it.
+ repo.save('weigh_ins',{day,weight_kg:95,source:'healthkit'});
+ expect(foodTargets(repo,day).targets).toBeNull();
+ repo.save('weigh_ins',{day,weight_kg:80,source:'app'});
+ const typed=foodTargets(repo,day).targets!;expect(typed.energy_kj).toBeGreaterThan(0);
+ repo.save('weigh_ins',{day,weight_kg:120,source:'healthkit'});
+ expect(foodTargets(repo,day).targets).toEqual(typed);
+});

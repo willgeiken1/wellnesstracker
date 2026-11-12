@@ -90,7 +90,8 @@ export function foodTargets(repo:Repository,day:string,steps?:number):{targets:T
   const map=repo.localGet<Record<string,'manual'|'estimated'>>('foodTargetBasis')??{};
   const basis=(persisted?map[String(persisted.data.day)]:undefined)??(repo.localGet<string>('targetBasis')==='manual'?'manual':'estimated');
   const input=readProfile(repo);
-  const weight=repo.list('weigh_ins').filter(r=>typeof r.data.day==='string'&&r.data.day<=day&&typeof r.data.weight_kg==='number'&&Number.isFinite(r.data.weight_kg)&&r.data.weight_kg>0).sort((a,b)=>String(a.data.day).localeCompare(String(b.data.day))||compareRows(a,b)).at(-1);
+  // Typed weigh-ins only. Targets sync, so an estimate must not be worked out from an Apple Health reading.
+  const weight=repo.list('weigh_ins').filter(r=>r.data.source==='app'&&typeof r.data.day==='string'&&r.data.day<=day&&typeof r.data.weight_kg==='number'&&Number.isFinite(r.data.weight_kg)&&r.data.weight_kg>0).sort((a,b)=>String(a.data.day).localeCompare(String(b.data.day))||compareRows(a,b)).at(-1);
   input.weight=weight?String(Number(weight.data.weight_kg)*(input.unit==='kg'?1:2.2046226218487757)):'';
   if(steps!==undefined&&Number.isFinite(steps)&&steps>=0)input.activity=steps<5000?'sitting':steps<8500?'light':steps<12500?'active':'very';
   const targets=persisted?Object.fromEntries(['energy_kj','protein_g','carbs_g','fat_g'].map(k=>[k,persisted.data[k]])) as unknown as Targets:null;

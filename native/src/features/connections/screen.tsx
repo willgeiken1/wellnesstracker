@@ -1,8 +1,10 @@
 import { View } from 'react-native';
+import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
+import type { AppleHealthState } from '@/features/health/use-apple-health';
 import { SERVICES, WIDGETS, type ServiceId } from '@/features/home-widgets/registry';
 import { t } from '@/i18n/en';
 
@@ -44,8 +46,10 @@ function Monogram({ service }: { service: ServiceId }) {
 
 /** Health & devices: which services Insight can bring together and what one combined day looks like.
  * A preview only. It connects nothing, stores nothing and reads no health data; the example numbers are made up. */
-export function ConnectedServices({ connected = [] }: { connected?: readonly ServiceId[] }) {
+export function ConnectedServices({ connected: given = [], apple }: { connected?: readonly ServiceId[]; apple?: AppleHealthState }) {
   const { colors } = useTheme();
+  const live = !!apple && apple.access !== 'unavailable';
+  const connected = live && apple.access === 'asked' && !given.includes('appleHealth') ? [...given, 'appleHealth' as const] : given;
   return <View style={{ gap: tokens.spacing[3] }}>
     <View style={{ gap: tokens.spacing[0] }}>
       <ThemedText variant="title" accessibilityRole="header" style={semibold}>{t('connectTitle')}</ThemedText>
@@ -67,7 +71,15 @@ export function ConnectedServices({ connected = [] }: { connected?: readonly Ser
         </View>;
       })}
     </Card>
-    <ThemedText muted variant="caption">{t('connectSoon')}</ThemedText>
+    {live && <Card style={card} testID="connect-apple-card">
+      <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('appleHealthTitle')}</ThemedText>
+      <ThemedText muted>{t(apple.access === 'asked' ? 'appleHealthOn' : 'appleHealthOff')}</ThemedText>
+      {apple.added !== null && <ThemedText testID="connect-apple-added" accessibilityLiveRegion="polite">{apple.added === 0 ? t('appleHealthNone') : apple.added === 1 ? t('appleHealthOne') : t('appleHealthMany').replace('{n}', String(apple.added))}</ThemedText>}
+      {apple.failed && <ThemedText testID="connect-apple-failed" accessibilityLiveRegion="polite" style={{ color: colors.warning }}>{t('appleHealthFailed')}</ThemedText>}
+      <Button testID="connect-apple-button" label={t(apple.busy ? 'appleHealthBusy' : apple.access === 'asked' ? 'appleHealthAgain' : 'appleHealthConnect')} disabled={apple.busy} variant={apple.access === 'asked' ? 'secondary' : 'primary'} onPress={apple.connect} />
+      {apple.access === 'asked' && <ThemedText muted variant="caption">{t('appleHealthStop')}</ThemedText>}
+    </Card>}
+    <ThemedText muted variant="caption">{t(live ? 'connectSoonOthers' : 'connectSoon')}</ThemedText>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1] }}>
       <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { flex: 1 }]}>{t('connectDayTitle')}</ThemedText>
       <View style={{ paddingHorizontal: 10, minHeight: 24, borderRadius: 99, justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
