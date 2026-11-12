@@ -555,7 +555,7 @@ export const en = {
   upNext: "Up next",
   upNextSwipe: "Up next · swipe right to skip, left to swap",
   upNextSwipeSwap: "Up next · swipe left to swap",
-  upNextHint: "Opens the next set",
+  upNextHint: "Opens the next set", swapShort: "Swap",
   upNextDetail: "{sets} × {reps} at {weight} {unit}",
   plates: "Plates",
   onBar: "on a {weight} {unit} bar",

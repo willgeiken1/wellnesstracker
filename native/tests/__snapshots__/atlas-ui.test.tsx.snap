@@ -310,7 +310,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-transverseAbs",
       "opacity": 0,
       "stroke": {
-        "payload": 4288525232,
+        "payload": 4293850611,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -323,7 +323,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-subscapularis",
       "opacity": 0,
       "stroke": {
-        "payload": 4288525232,
+        "payload": 4293850611,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -624,7 +624,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-quadLumb",
       "opacity": 0,
       "stroke": {
-        "payload": 4288525232,
+        "payload": 4293850611,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -637,7 +637,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-gluteMin",
       "opacity": 0,
       "stroke": {
-        "payload": 4288525232,
+        "payload": 4293850611,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -650,7 +650,7 @@ exports[`dark rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-hipRotators",
       "opacity": 0,
       "stroke": {
-        "payload": 4288525232,
+        "payload": 4293850611,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -969,7 +969,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-transverseAbs",
       "opacity": 0,
       "stroke": {
-        "payload": 4283787366,
+        "payload": 4279377954,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -982,7 +982,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-subscapularis",
       "opacity": 0,
       "stroke": {
-        "payload": 4283787366,
+        "payload": 4279377954,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -1283,7 +1283,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-quadLumb",
       "opacity": 0,
       "stroke": {
-        "payload": 4283787366,
+        "payload": 4279377954,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -1296,7 +1296,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-gluteMin",
       "opacity": 0,
       "stroke": {
-        "payload": 4283787366,
+        "payload": 4279377954,
         "type": 0,
       },
       "strokeWidth": 0.8,
@@ -1309,7 +1309,7 @@ exports[`light rendered heatmap snapshot, body controls and list colors 1`] = `
       "id": "atlas-path-hipRotators",
       "opacity": 0,
       "stroke": {
-        "payload": 4283787366,
+        "payload": 4279377954,
         "type": 0,
       },
       "strokeWidth": 0.8,

@@ -39,6 +39,10 @@ export function trainedStroke(fill: string, fillOpacity: number, colors: Record<
  const drawn=mix(colors['surface-2'],fill,fillOpacity);
  return contrast(colors.text,drawn)>=contrast(colors.bg,drawn)?colors.text:colors.bg;
 }
+/** The colour under a deep muscle's dashed line: the opposite of the line, out of text and background. */
+export function deepCasing(line: string, colors: Record<'text'|'bg', string>) {
+ return contrast(line,colors.text)>=contrast(line,colors.bg)?colors.text:colors.bg;
+}
 export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  sessions: AtlasSession[]; now: number; compact?: boolean; haptics?: boolean;
 }) {
@@ -86,13 +90,19 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
      const value=valuesByKey.get(path.id)!, chosen=selected===path.id, trained=value.sets>0;
      const heat=heatFill(value,mode==='dark'), fillOpacity=path.deep?(trained?.6:0):trained?.65+.35*value.freshness:1;
      const edge=trained?trainedStroke(heat,fillOpacity,colors):null;
-     return <AccessiblePath key={path.id} id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
+     // A muscle under the surface is drawn over its neighbours, trained or not, so no single line colour is safe.
+     // Its dashed line sits on a casing in the opposite colour: whatever is underneath, one of the two stands out.
+     const deepLine=edge??colors.text, casing=deepCasing(deepLine,colors);
+     return <G key={path.id}>
+      {path.deep&&<Path testID={`atlas-casing-${path.id}`} d={path.d} fill="none" stroke={casing} strokeWidth={chosen?4.2:2.4} strokeLinejoin="round" pointerEvents="none" accessible={false}/>}
+      <AccessiblePath id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
       fill={trained?heat:path.deep?'transparent':colors['surface-2']}
       fillOpacity={fillOpacity}
-      stroke={edge??(chosen?colors.text:path.deep?colors['text-muted']:ink)} strokeOpacity={chosen||path.deep||edge?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
+      stroke={path.deep?deepLine:edge??(chosen?colors.text:ink)} strokeOpacity={chosen||path.deep||edge?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
       strokeDasharray={path.deep&&!chosen?[2.2,1.6]:undefined} strokeLinejoin="round"
       accessible accessibilityRole="button" accessibilityState={{selected:chosen}} accessibilityLabel={atlasLabel(value,now)}
-      onPress={()=>select(path.id)}/>;
+      onPress={()=>select(path.id)}/>
+     </G>;
     })}</G>
     <G id="lines" pointerEvents="none"><Path d={geometry.lines} fill="none" stroke={ink} strokeOpacity={inkOpacity} strokeWidth={.8} strokeLinecap="round" strokeLinejoin="round"/></G>
    </Svg>
