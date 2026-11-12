@@ -9,7 +9,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { createContext, useContext, type PropsWithChildren } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import Svg, { Path } from "react-native-svg";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/design/theme-provider";
@@ -17,6 +17,14 @@ import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { touchTarget, Button } from "@/components/button";
 import { t } from "@/i18n/en";
+/** How far a sheet's handle has to be dragged down for the sheet to close. */
+export const SHEET_DRAG_CLOSE = 35;
+/** A stable getter for the newest value, for handlers that are created once. */
+function useLatest<T>(value: T): () => T {
+  const ref = useRef(value);
+  useEffect(() => { ref.current = value; });
+  return useCallback(() => ref.current, []);
+}
 export const layout = StyleSheet.create({
   row: {
     flexDirection: "row",
@@ -207,13 +215,18 @@ export function Sheet({
     Keyboard.dismiss();
     onClose();
   };
-  const drag = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) =>
-      g.dy > 12 && Math.abs(g.dy) > Math.abs(g.dx),
+  // The responder is made once: a sheet over the logger re-renders every second, and a new responder mid-drag
+  // would lose the gesture. A visible grabber has nothing under it, so it takes the touch from the start and keeps
+  // it; the unseen strip over a short sheet's top edge only takes a clear downward drag, so taps pass through.
+  const latest = useLatest({ close, tall });
+  const [drag] = useState(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => !!latest().tall,
+    onMoveShouldSetPanResponder: (_, g) => !!latest().tall || (g.dy > 12 && Math.abs(g.dy) > Math.abs(g.dx)),
+    onPanResponderTerminationRequest: () => false,
     onPanResponderRelease: (_, g) => {
-      if (g.dy > 35) close();
+      if (g.dy > SHEET_DRAG_CLOSE && g.dy > Math.abs(g.dx)) latest().close();
     },
-  });
+  }));
   const content = (
     <SafeAreaProvider style={{ flex: 1 }}>
       <SafeAreaView
@@ -273,7 +286,7 @@ export function Sheet({
                   else close();
                 }}
                 style={{
-                  minHeight: 20,
+                  minHeight: tall ? 28 : 20,
                   alignItems: "center",
                   justifyContent: "center",
                   ...(!tall
