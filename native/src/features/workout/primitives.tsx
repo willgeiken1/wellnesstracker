@@ -21,6 +21,8 @@ import { t } from "@/i18n/en";
 export const SHEET_DRAG_CLOSE = 35;
 /** The space around a sheet's content. A short sheet's drag handle lies over the top of it. */
 const SHEET_PADDING = 16;
+/** Height of the drag strip at the top of a sheet. */
+const SHEET_HANDLE = 28;
 /** A stable getter for the newest value, for handlers that are created once. */
 function useLatest<T>(value: T): () => T {
   const ref = useRef(value);
@@ -263,6 +265,7 @@ export function Sheet({
                 paddingBottom: 32,
                 ...(minimal ? { gap: tall ? 12 : 6 } : {}),
                 ...(tall ? { height: "87%", paddingTop: 0 } : {}),
+                ...(minimal && !tall ? { paddingTop: SHEET_HANDLE } : {}),
                 ...(expanded ? { flex: 1 } : {}),
               },
             ]}
@@ -271,6 +274,8 @@ export function Sheet({
               <View
                 testID={`${testID}-handle`}
                 {...drag.panHandlers}
+                // The strip is 28pt; the slop brings the area a finger can grab to 44pt.
+                hitSlop={{ top: 8, bottom: 8 }}
                 accessible
                 accessibilityLabel={label}
                 accessibilityActions={[
@@ -289,7 +294,7 @@ export function Sheet({
                 // On a short sheet the handle lies over the sheet's own top padding, above every control, so it
                 // takes no room and covers nothing that can be tapped.
                 style={{
-                  minHeight: tall ? 28 : SHEET_PADDING,
+                  minHeight: SHEET_HANDLE,
                   alignItems: "center",
                   justifyContent: "center",
                   ...(!tall
@@ -303,7 +308,8 @@ export function Sheet({
                     width: 38,
                     height: 5,
                     borderRadius: 3,
-                    backgroundColor: colors["surface-2"],
+                    // Muted text, not a surface tone: the bar has to stand out from the sheet (3:1 or better).
+                    backgroundColor: colors["text-muted"],
                   }}
                 />
               </View>

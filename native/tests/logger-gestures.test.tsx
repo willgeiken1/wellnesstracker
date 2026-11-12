@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import { View } from 'react-native';
+import { contrast } from '../src/core/contrast';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { SetRow } from '../src/features/workout/set-row';
 import { Sheet, SHEET_DRAG_CLOSE } from '../src/features/workout/primitives';
@@ -106,6 +107,16 @@ describe('dragging a sheet down by its handle', () => {
     const handle = StyleSheet.flatten(screen.getByTestId('demo-sheet-handle').props.style);
     const box = StyleSheet.flatten(screen.getByTestId('demo-sheet').props.style);
     expect(handle).toMatchObject({ position: 'absolute', top: 0 });
-    expect(handle.minHeight).toBeLessThanOrEqual(box.padding);
+    expect(handle.minHeight).toBeLessThanOrEqual(box.paddingTop);
+  });
+  test('the handle is 44pt to a finger and its bar stands out from the sheet', async () => {
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    await render(sheet(() => {}, false), { wrapper });
+    const handle = screen.getByTestId('demo-sheet-handle');
+    const slop = handle.props.hitSlop as { top: number; bottom: number };
+    expect(StyleSheet.flatten(handle.props.style).minHeight + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
+    const bar = StyleSheet.flatten(screen.getByTestId('demo-sheet-grabber').props.style);
+    const box = StyleSheet.flatten(screen.getByTestId('demo-sheet').props.style);
+    expect(contrast(bar.backgroundColor as string, box.backgroundColor as string)).toBeGreaterThanOrEqual(3);
   });
 });

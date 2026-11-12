@@ -15,7 +15,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
   // the fill shows on a card, the hairline on the page.
   return <View accessibilityRole="tablist" accessibilityLabel={label}
     style={{ flexDirection: 'row', flexWrap: 'wrap', gap: TRACK_GAP, padding: TRACK_GAP, borderRadius: tokens.radii.card,
-      backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors.hair }}>
+      backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
     {options.map(option => <Pressable key={option.value} accessibilityRole="tab" accessibilityLabel={option.label}
       accessibilityState={{ selected: option.value === value }} onPress={() => onChange(option.value)}
       style={{ flexGrow: 1, flexBasis: four ? '45%' : '28%', minHeight: touchTarget, minWidth: touchTarget, justifyContent: 'center',
