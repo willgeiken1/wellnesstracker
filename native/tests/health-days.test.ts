@@ -1,4 +1,4 @@
-import { dayEnd, dayStart, hoursAsleep, nightOf, readHealthDays } from '../src/features/health/days';
+import { dayEnd, dayStart, hoursAsleep, lastDays, nightOf, readHealthDays } from '../src/features/health/days';
 import type { HealthAccess, HealthSource, SleepSpan } from '../src/features/health/source';
 
 // Made-up values only.
@@ -74,4 +74,9 @@ test('time one device marks awake comes out of another device\'s broad asleep bl
 test('sleep that has not happened yet is not counted', async () => {
   const read = await readHealthDays(source('asked', { sleep: async () => [span(at(11, 23), at(12, 8))] }), ['2026-11-12'], at(12, 2));
   expect(read!.sleepHours![0]).toBeCloseTo(3);
+});
+
+test('the last days end on today, oldest first, across a month boundary', () => {
+  expect(lastDays(new Date(2026, 2, 2, 9), 4)).toEqual(['2026-02-27', '2026-02-28', '2026-03-01', '2026-03-02']);
+  expect(lastDays(new Date(2026, 10, 13, 0, 1), 1)).toEqual(['2026-11-13']);
 });

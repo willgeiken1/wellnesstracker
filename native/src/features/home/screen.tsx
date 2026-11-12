@@ -196,7 +196,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
   const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
   // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else.
-  const health = useHealthDays(recent, useFocused());
+  const health = useHealthDays(useFocused());
   const active = !!store.active();
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const dayTargets = readDayTargets(store, days, today, foodDay, revision);

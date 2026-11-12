@@ -12,6 +12,14 @@ export const dayEnd = (day: string) => { const [y, m, d] = parts(day); return ne
 /** A night belongs to the day you wake up on: from 6 pm the evening before to noon, by the clock on the wall. */
 export const nightOf = (day: string) => { const [y, m, d] = parts(day); return { from: new Date(y, m - 1, d - 1, 18), to: new Date(y, m - 1, d, 12) }; };
 
+/** The last `count` local days ending on the day of `now`, oldest first, as `YYYY-MM-DD`. */
+export function lastDays(now: Date, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (count - 1 - i));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+}
+
 type Range = readonly [number, number];
 /** Clips to the window, drops bad stretches, and merges overlaps into separate ranges in order. */
 function union(spans: readonly SleepSpan[], from: number, to: number): Range[] {
