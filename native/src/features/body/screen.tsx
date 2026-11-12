@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Button, touchTarget } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
@@ -8,6 +8,8 @@ import type { Repository } from '../../data/repository';
 import { t } from '../../i18n/en';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
+import { appleHealth } from '../health/apple';
+import { refreshWeights } from '../health/weights';
 import { readProfile, today } from '../onboarding/model';
 import { Panel } from '../workout/primitives';
 import { useWorkoutStore } from '../workout/use-workout';
@@ -17,6 +19,8 @@ import { deleteWeighIn, dailyWeights, inRange, lastWeight, saveWeighIn, trendWei
 export function Body({repository}:{repository:Repository}) {
   const facade=useWorkoutStore(repository),{colors}=useTheme();
   const repo=facade.repo,unit=readProfile(repo).unit;
+  // Once Apple Health is connected, opening Body quietly picks up new readings. It never prompts from here.
+  useEffect(()=>{void refreshWeights(repo,appleHealth()).catch(()=>{});},[repo]);
   const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false),[deleteFailed,setDeleteFailed]=useState(false);
   const [showAll,setShowAll]=useState(false);
   const rows=repo.list('weigh_ins').filter(r=>String(r.data.day)<=today());

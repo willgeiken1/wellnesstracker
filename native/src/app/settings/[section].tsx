@@ -10,8 +10,14 @@ import { Profile } from '@/features/onboarding/profile';
 import { WorkoutSettings } from '@/features/workout/settings';
 import { t } from '@/i18n/en';
 import { ImportScreen } from '@/features/importer/screen';
+import { useAuth } from '@/auth/provider';
 import { ConnectedServices } from '@/features/connections/screen';
+import { useAppleHealth } from '@/features/health/use-apple-health';
 import Constants from 'expo-constants';
+function HealthAndDevices() {
+  const { repository } = useAuth();
+  return <ConnectedServices apple={useAppleHealth(repository)} />;
+}
 /** One Settings page. The bar shows only Back; every page carries its own single title. */
 export default function SettingsSection() {
   const { section } = useLocalSearchParams<{ section: string }>();
@@ -24,7 +30,7 @@ export default function SettingsSection() {
   if (section === 'notifications') return <>{named}<Screen title={title}>
     <QuietCard testID="settings-notifications-empty" title={t('settingsNotificationsEmpty')} body={t('notInVersion')} /></Screen></>;
   // Health & devices opens with its own headline, so the bar names the page here.
-  if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><ConnectedServices /></Screen></>;
+  if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><HealthAndDevices /></Screen></>;
   if (section === 'data') return <>{named}<ImportScreen /></>;
   if (section === 'privacy') return <>{named}<FoodPrivacyScreen /></>;
   if (section === 'profile') return <>{named}<Profile /></>;
