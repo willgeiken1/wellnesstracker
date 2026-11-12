@@ -4,7 +4,7 @@ import type { HealthSource } from './source';
 
 const READ = ['HKQuantityTypeIdentifierBodyMass', 'HKQuantityTypeIdentifierStepCount', 'HKCategoryTypeIdentifierSleepAnalysis'] as const;
 // Apple's sleep values: 0 in bed, 2 awake; 1, 3, 4 and 5 are the kinds of asleep.
-const ASLEEP = new Set([1, 3, 4, 5]);
+const ASLEEP = new Set([1, 3, 4, 5]), AWAKE = 2;
 type Kit = typeof import('@kingstinct/react-native-healthkit');
 
 /** Apple Health, read-only. Null where it cannot work: off iPhone, in the phone-only build (which carries
@@ -36,7 +36,9 @@ export function appleHealth(): HealthSource | null {
     },
     async sleep(from, to) {
       const samples = await kit.queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', { limit: 0, ascending: true, filter: { date: { startDate: from, endDate: to } } });
-      return samples.filter(sample => ASLEEP.has(Number(sample.value))).map(sample => ({ start: new Date(sample.startDate), end: new Date(sample.endDate) }));
+      // Awake stretches are kept so one device's awake time can be taken out of another device's broad asleep block.
+      return samples.filter(sample => ASLEEP.has(Number(sample.value)) || Number(sample.value) === AWAKE)
+        .map(sample => ({ start: new Date(sample.startDate), end: new Date(sample.endDate), awake: Number(sample.value) === AWAKE }));
     },
   };
 }

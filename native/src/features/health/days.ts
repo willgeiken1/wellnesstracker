@@ -1,35 +1,59 @@
 import type { HealthSource, SleepSpan } from './source';
 
-/** Steps and hours asleep for a run of days, oldest first. Held in memory only: never saved, synced or sent. */
-export type HealthDays = { steps: number[]; sleepHours: number[] };
+/** Steps and hours asleep for a run of days, oldest first. Held in memory only: never saved, synced or sent.
+ * A list is null when today's reading could not be made, so the tile is left out instead of showing a false 0. */
+export type HealthDays = { steps: number[] | null; sleepHours: number[] | null };
 const HOUR = 3_600_000;
+const parts = (day: string) => day.split('-').map(Number) as [number, number, number];
 /** Local midnight at the start of a `YYYY-MM-DD` day. */
-export const dayStart = (day: string) => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d); };
-/** A night belongs to the day you wake up on: from 6 pm the evening before to noon. */
-export const nightOf = (day: string) => { const start = dayStart(day); return { from: new Date(start.getTime() - 6 * HOUR), to: new Date(start.getTime() + 12 * HOUR) }; };
+export const dayStart = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d); };
+/** Local midnight at the end of the day. Calendar maths, so a 23 or 25 hour day is still one day. */
+export const dayEnd = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d + 1); };
+/** A night belongs to the day you wake up on: from 6 pm the evening before to noon, by the clock on the wall. */
+export const nightOf = (day: string) => { const [y, m, d] = parts(day); return { from: new Date(y, m - 1, d - 1, 18), to: new Date(y, m - 1, d, 12) }; };
 
-/** Hours asleep inside a window. Overlapping stretches (a watch and a phone both tracking) count once. */
-export function hoursAsleep(spans: readonly SleepSpan[], from: Date, to: Date): number {
-  const clipped = spans.map(span => [Math.max(span.start.getTime(), from.getTime()), Math.min(span.end.getTime(), to.getTime())] as const)
+type Range = readonly [number, number];
+/** Clips to the window, drops bad stretches, and merges overlaps into separate ranges in order. */
+function union(spans: readonly SleepSpan[], from: number, to: number): Range[] {
+  const clipped = spans.map(span => [Math.max(span.start.getTime(), from), Math.min(span.end.getTime(), to)] as const)
     .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start).sort((a, b) => a[0] - b[0]);
-  let total = 0, reach = -Infinity;
+  const merged: [number, number][] = [];
   for (const [start, end] of clipped) {
-    if (end <= reach) continue;
-    total += end - Math.max(start, reach); reach = end;
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end); else merged.push([start, end]);
   }
-  return total / HOUR;
+  return merged;
+}
+const length = (ranges: readonly Range[]) => ranges.reduce((sum, [start, end]) => sum + end - start, 0);
+function overlap(a: readonly Range[], b: readonly Range[]): number {
+  let total = 0;
+  for (const [s1, e1] of a) for (const [s2, e2] of b) total += Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
+  return total;
 }
 
-/** Reads the given days if the person has already been asked. Never prompts. A day that cannot be read counts as none. */
+/** Hours asleep inside a window. Overlapping stretches (a watch and a phone both tracking) count once, and
+ * time any device marked awake is taken out, even from another device's broad asleep block. */
+export function hoursAsleep(spans: readonly SleepSpan[], from: Date, to: Date): number {
+  const asleep = union(spans.filter(span => !span.awake), from.getTime(), to.getTime());
+  const awake = union(spans.filter(span => span.awake), from.getTime(), to.getTime());
+  return (length(asleep) - overlap(asleep, awake)) / HOUR;
+}
+
+/** Reads the given days if the person has already been asked. Never prompts. Nothing past `now` is counted. */
 export async function readHealthDays(source: HealthSource | null, days: readonly string[], now = new Date()): Promise<HealthDays | null> {
   if (!source || !days.length || await source.access() !== 'asked') return null;
-  const steps = await Promise.all(days.map(async day => {
-    const from = dayStart(day), to = new Date(Math.min(from.getTime() + 24 * HOUR, now.getTime()));
+  const last = days.length - 1, cap = (date: Date) => new Date(Math.min(date.getTime(), now.getTime()));
+  const counts = await Promise.all(days.map(async day => {
+    const from = dayStart(day), to = cap(dayEnd(day));
     if (to <= from) return 0;
-    try { const count = await source.steps(from, to); return Number.isFinite(count) && count > 0 ? Math.round(count) : 0; } catch { return 0; }
+    try { const count = await source.steps(from, to); return Number.isFinite(count) && count > 0 ? Math.round(count) : 0; } catch { return null; }
   }));
-  let spans: SleepSpan[] = [];
-  try { spans = await source.sleep(nightOf(days[0]).from, nightOf(days[days.length - 1]).to); } catch { spans = []; }
-  const sleepHours = days.map(day => { const night = nightOf(day); return Math.min(18, hoursAsleep(spans, night.from, night.to)); });
+  // An earlier day that failed only loses its bar. Today failing means there is no honest number to show.
+  const steps = counts[last] === null ? null : counts.map(count => count ?? 0);
+  let sleepHours: number[] | null;
+  try {
+    const spans = await source.sleep(nightOf(days[0]).from, cap(nightOf(days[last]).to));
+    sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to); return to > night.from ? hoursAsleep(spans, night.from, to) : 0; });
+  } catch { sleepHours = null; }
   return { steps, sleepHours };
 }

@@ -22,6 +22,7 @@ import { MINI, terrain } from './contour';
 import { EditHome } from './edit-sheet';
 import { type HealthDays } from '../health/days';
 import { useHealthDays } from '../health/use-health-days';
+import { useFocused } from './use-focused';
 import { HOME_TILES_KEY, isSmall, loadTiles, type HomeTiles, type TileId } from './tiles';
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
@@ -136,6 +137,11 @@ export function Home() {
   // The saved layout is read once per repository; edits update this state and the saved copy together.
   const [layout, setLayout] = useState<{ repo: typeof repo; tiles: HomeTiles }>(() => ({ repo, tiles: loadTiles(repo) }));
   const tiles = layout.repo === repo ? layout.tiles : loadTiles(repo);
+  // Coming back to Home re-reads the saved layout, so tiles added elsewhere (connecting Apple Health) show at
+  // once and a later edit here cannot overwrite them.
+  const focused = useFocused();
+  const [wasFocused, setWasFocused] = useState(focused);
+  if (focused !== wasFocused) { setWasFocused(focused); if (focused) setLayout({ repo, tiles: loadTiles(repo) }); }
   const change = (next: HomeTiles) => {
     setLayout({ repo, tiles: next });
     // Home still shows the new layout this session if the local write fails.
@@ -190,7 +196,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
   const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
   // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else.
-  const health = useHealthDays(recent);
+  const health = useHealthDays(recent, useFocused());
   const active = !!store.active();
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const dayTargets = readDayTargets(store, days, today, foodDay, revision);
@@ -355,11 +361,9 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
   ];
   if (health) {
-    const steps = health.steps, sleep = health.sleepHours, night = sleep[sleep.length - 1] ?? 0, minutes = Math.round(night * 60);
-    all.push(
-      { id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' },
-      { id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' },
-    );
+    const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
+    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
+    if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }

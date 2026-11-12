@@ -4,6 +4,7 @@ import { memoryRepository } from './workout-repository';
 import { useAuth } from '../src/auth/provider';
 import Home from '../src/app/(tabs)/index';
 import { appleHealth } from '../src/features/health/apple';
+import { useFocused } from '../src/features/home/use-focused';
 import { addHealthTiles } from '../src/features/home/tiles';
 import type { HealthAccess, HealthSource } from '../src/features/health/source';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
@@ -11,6 +12,7 @@ jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn()
 jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
 jest.mock('../src/features/health/apple', () => ({ appleHealth: jest.fn() }));
+jest.mock('../src/features/home/use-focused', () => ({ useFocused: jest.fn(() => true) }));
 const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 // Made-up values only: 8,430 steps a day, and 7 h 12 min asleep each night.
 const fake = (access: HealthAccess): HealthSource => ({
@@ -64,4 +66,22 @@ test('with no Apple Health on the device Home is unchanged', async () => {
   await render(<Home />, { wrapper });
   await settle();
   expect(screen.queryByTestId('home-tile-steps')).toBeNull();
+});
+
+test('tiles added while Home is behind another screen show when Home comes back, and a later edit keeps them', async () => {
+  const source = fake('asked');
+  jest.mocked(appleHealth).mockReturnValue(source);
+  const repo = open();
+  jest.mocked(useFocused).mockReturnValue(true);
+  const view = await render(<Home />, { wrapper });
+  await settle();
+  expect(screen.queryByTestId('home-tile-steps')).toBeNull();
+  jest.mocked(useFocused).mockReturnValue(false);
+  await view.rerender(<Home />);
+  addHealthTiles(repo);
+  jest.mocked(useFocused).mockReturnValue(true);
+  await view.rerender(<Home />);
+  await settle();
+  expect(screen.getByTestId('home-tile-steps')).toBeTruthy();
+  expect(screen.getByTestId('home-tile-sleep')).toBeTruthy();
 });

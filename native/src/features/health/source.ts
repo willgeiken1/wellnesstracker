@@ -1,7 +1,7 @@
 /** One body-weight reading as a health service reports it. */
 export type WeightSample = { id: string; at: Date; kg: number };
-/** One stretch of time asleep. In bed and awake stretches are never included. */
-export type SleepSpan = { start: Date; end: Date };
+/** One stretch of the night: asleep, or awake when `awake` is set. In-bed stretches are never included. */
+export type SleepSpan = { start: Date; end: Date; awake?: boolean };
 /** `ask`: Insight has not asked yet. `asked`: the person has seen Apple's sheet. iOS never says which
  * types they allowed to be read, so "asked" is as much as an app can know. */
 export type HealthAccess = 'unavailable' | 'ask' | 'asked';
