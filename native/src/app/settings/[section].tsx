@@ -1,3 +1,4 @@
+import { useContext } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
@@ -10,12 +11,13 @@ import { Profile } from '@/features/onboarding/profile';
 import { WorkoutSettings } from '@/features/workout/settings';
 import { t } from '@/i18n/en';
 import { ImportScreen } from '@/features/importer/screen';
-import { useAuth } from '@/auth/provider';
+import { AuthContext } from '@/auth/provider';
 import { ConnectedServices } from '@/features/connections/screen';
 import { useAppleHealth } from '@/features/health/use-apple-health';
 import Constants from 'expo-constants';
 function HealthAndDevices() {
-  const { repository } = useAuth();
+  // Settings also opens with no account provider around it; Apple Health is simply not offered there.
+  const repository = useContext(AuthContext)?.repository;
   return <ConnectedServices apple={useAppleHealth(repository)} />;
 }
 /** One Settings page. The bar shows only Back; every page carries its own single title. */
