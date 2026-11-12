@@ -57,7 +57,7 @@ export default function Settings() {
       contentContainerStyle={{ padding: tokens.spacing[3], gap: tokens.spacing[3], flexGrow: 1 }}>
     <ThemedText variant="title" accessibilityRole="header">{t('settings')}</ThemedText>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, paddingHorizontal: tokens.spacing[2],
-      borderRadius: 12, borderWidth: 1, borderColor: colors.hair, backgroundColor: colors.surface }}>
+      borderRadius: 12, backgroundColor: colors.surface }}>
       <SettingsIcon name="search" size={18} color={colors['text-muted']} />
       <TextInput testID="settings-search" accessibilityLabel={t('settingsSearch')} placeholder={t('settingsSearchHint')}
         placeholderTextColor={colors['text-muted']} value={query} onChangeText={setQuery} autoCorrect={false} autoCapitalize="none"

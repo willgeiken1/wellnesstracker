@@ -9,7 +9,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { createContext, useContext, type PropsWithChildren } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import Svg, { Path } from "react-native-svg";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/design/theme-provider";
@@ -17,6 +17,18 @@ import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { touchTarget, Button } from "@/components/button";
 import { t } from "@/i18n/en";
+/** How far a sheet's handle has to be dragged down for the sheet to close. */
+export const SHEET_DRAG_CLOSE = 35;
+/** The space around a sheet's content. A short sheet's drag handle lies over the top of it. */
+const SHEET_PADDING = 16;
+/** Height of the drag strip at the top of a sheet. */
+const SHEET_HANDLE = 28;
+/** A stable getter for the newest value, for handlers that are created once. */
+function useLatest<T>(value: T): () => T {
+  const ref = useRef(value);
+  useEffect(() => { ref.current = value; });
+  return useCallback(() => ref.current, []);
+}
 export const layout = StyleSheet.create({
   row: {
     flexDirection: "row",
@@ -50,7 +62,7 @@ export const layout = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: tokens.logger.sheetRadius,
     borderTopRightRadius: tokens.logger.sheetRadius,
-    padding: 16,
+    padding: SHEET_PADDING,
     gap: 16,
     maxHeight: "94%",
   },
@@ -207,13 +219,17 @@ export function Sheet({
     Keyboard.dismiss();
     onClose();
   };
-  const drag = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) =>
-      g.dy > 12 && Math.abs(g.dy) > Math.abs(g.dx),
+  // The responder is made once: a sheet over the logger re-renders every second, and a new responder mid-drag
+  // would lose the gesture. The handle holds only the grabber, so it takes the touch from the start and keeps it.
+  const latest = useLatest(close);
+  const [drag] = useState(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderTerminationRequest: () => false,
     onPanResponderRelease: (_, g) => {
-      if (g.dy > 35) close();
+      if (g.dy > SHEET_DRAG_CLOSE && g.dy > Math.abs(g.dx)) latest()();
     },
-  });
+  }));
   const content = (
     <SafeAreaProvider style={{ flex: 1 }}>
       <SafeAreaView
@@ -249,6 +265,7 @@ export function Sheet({
                 paddingBottom: 32,
                 ...(minimal ? { gap: tall ? 12 : 6 } : {}),
                 ...(tall ? { height: "87%", paddingTop: 0 } : {}),
+                ...(minimal && !tall ? { paddingTop: SHEET_HANDLE } : {}),
                 ...(expanded ? { flex: 1 } : {}),
               },
             ]}
@@ -257,6 +274,9 @@ export function Sheet({
               <View
                 testID={`${testID}-handle`}
                 {...drag.panHandlers}
+                // The strip is 28pt; slop below it brings the area a finger can grab to 44pt. None above: the
+                // strip sits at the sheet's top edge and a touch outside the sheet never reaches it.
+                hitSlop={{ bottom: 16 }}
                 accessible
                 accessibilityLabel={label}
                 accessibilityActions={[
@@ -272,25 +292,27 @@ export function Sheet({
                   else if (e.nativeEvent.actionName === "skip") onSkip?.();
                   else close();
                 }}
+                // On a short sheet the handle lies over the sheet's own top padding, above every control, so it
+                // takes no room and covers nothing that can be tapped.
                 style={{
-                  minHeight: 20,
+                  minHeight: SHEET_HANDLE,
                   alignItems: "center",
                   justifyContent: "center",
                   ...(!tall
-                    ? { position: "absolute", top: 0, left: 0, right: 0 }
+                    ? { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1 }
                     : {}),
                 }}
               >
-                {tall && (
-                  <View
-                    style={{
-                      width: 38,
-                      height: 5,
-                      borderRadius: 3,
-                      backgroundColor: colors["surface-2"],
-                    }}
-                  />
-                )}
+                <View
+                  testID={`${testID}-grabber`}
+                  style={{
+                    width: 38,
+                    height: 5,
+                    borderRadius: 3,
+                    // Muted text, not a surface tone: the bar has to stand out from the sheet (3:1 or better).
+                    backgroundColor: colors["text-muted"],
+                  }}
+                />
               </View>
             ) : null}
             {minimal ? (

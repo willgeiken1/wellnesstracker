@@ -64,11 +64,11 @@ test.each([
 
 test.each([
   ['Workouts', '/workouts', ['Routines', 'History', 'Cardio']],
-  // Goals & PRs is a real screen now; Photos is the one still waiting, so it is the one that offers Home.
+  // Goals & PRs is a real screen now; Photos is the one still waiting, so it is the one that says so.
   ['Progress', '/progress', ['Body', 'Goals & PRs', 'Photos']],
-  // Trends, Muscles and Weekly are real screens now; Recovery is the one still waiting, so it is the one that offers Home.
+  // Trends, Muscles and Weekly are real screens now; Recovery is the one still waiting, so it is the one that says so.
   ['Insights', '/insights', ['Trends', 'Muscles', 'Weekly', 'Recovery']],
-] as const)('%s segments stay within their tab and offer Home', async (label, path, segments) => {
+] as const)('%s segments stay within their tab, with no Back to Home button: the tab bar goes Home', async (label, path, segments) => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: label }));
   for (const segment of segments) {
@@ -76,7 +76,8 @@ test.each([
     expect(result.getPathname()).toBe(path);
     expect(screen.getByRole('tab', { name: segment })).toBeSelected();
   }
-  await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
+  expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Home' }));
   expect(result.getPathname()).toBe('/');
 });
 test('Food without a repository opens logging, says so plainly, and the normal back returns to Food', async () => {
