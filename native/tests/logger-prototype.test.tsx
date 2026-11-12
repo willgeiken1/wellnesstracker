@@ -107,33 +107,53 @@ test('the set tag button reads the previous weight and reps to a screen reader',
   expect(tag.props.accessibilityValue).toEqual({ text: expect.stringMatching(/^Last time: 285 .*3$/) });
 });
 
-describe('the Up next card and Reduce Motion', () => {
-  const { Animated, AccessibilityInfo } = require('react-native') as typeof import('react-native');
-  const { UpNext } = require('../src/features/workout/up-next') as typeof import('../src/features/workout/up-next');
-  afterEach(() => jest.restoreAllMocks());
-  const release = async (dx: number) => {
-    const card = screen.getByTestId('logger-up-next'), find = (node: any): any => node?.props?.onResponderRelease ? node : (node?.children ?? []).map(find).find(Boolean);
-    const handlers = find(card).props, touch = (x: number) => ({ nativeEvent: { touches: [{ pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }], changedTouches: [{ pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }], pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }, persist() {}, touchHistory: { touchBank: [], numberActiveTouches: 0, indexOfSingleActiveTouch: 0, mostRecentTimeStamp: 0 } });
-    await act(async () => { handlers.onResponderRelease(touch(dx)); });
-  };
-  test('the swipe responder survives a re-render, so the logger\'s once-a-second clock cannot drop a drag in progress', async () => {
-    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
-    const find = (node: any): any => node?.props?.onResponderRelease ? node : (node?.children ?? []).map(find).find(Boolean);
-    const view = await render(<UpNext name="Deadlift" detail="3 sets" onPress={() => {}} onSwap={() => {}} />, { wrapper });
-    const before = find(screen.getByTestId('logger-up-next')).props;
-    await view.rerender(<UpNext name="Deadlift" detail="2 sets" onPress={() => {}} onSwap={() => {}} />);
-    const after = find(screen.getByTestId('logger-up-next')).props;
-    for (const handler of ['onMoveShouldSetResponder', 'onResponderMove', 'onResponderRelease', 'onResponderTerminationRequest'] as const) {
-      expect(typeof after[handler]).toBe('function');
-      expect(after[handler]).toBe(before[handler]);
-    }
+describe('swiping the Up next card', () => {
+  const { UpNext, SWIPE_REVEAL } = require('../src/features/workout/up-next') as typeof import('../src/features/workout/up-next');
+  const settle = (x: number) => fireEvent(screen.getByTestId('up-next-swipe'), 'momentumScrollEnd', { nativeEvent: { contentOffset: { x, y: 0 } } });
+  const card = (handlers: { onSkip?: () => void; onSwap: () => void }) => <UpNext name="Deadlift" detail="3 sets" onPress={() => {}} {...handlers} />;
+
+  test('it is a native horizontal scroll with three stops: skip, the card, swap', async () => {
+    await render(card({ onSkip: () => {}, onSwap: () => {} }), { wrapper });
+    const swipe = screen.getByTestId('up-next-swipe').props;
+    expect(swipe).toMatchObject({ horizontal: true, snapToOffsets: [0, SWIPE_REVEAL, SWIPE_REVEAL * 2], contentOffset: { x: SWIPE_REVEAL, y: 0 } });
   });
-  test.each([[true, 0], [false, 1]])('with Reduce Motion %s the card springs back %i times', async (reduced, springs) => {
-    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduced);
-    const spring = jest.spyOn(Animated, 'spring');
-    await render(<UpNext name="Deadlift" detail="3 sets" onPress={() => {}} onSwap={() => {}} />, { wrapper });
-    await act(async () => { await Promise.resolve(); });
-    await release(0);
-    expect(spring).toHaveBeenCalledTimes(springs);
+  test('settling on the left stop skips, on the right stop swaps, and back at rest does nothing', async () => {
+    const onSkip = jest.fn(), onSwap = jest.fn();
+    await render(card({ onSkip, onSwap }), { wrapper });
+    await settle(SWIPE_REVEAL);
+    expect(onSkip).not.toHaveBeenCalled(); expect(onSwap).not.toHaveBeenCalled();
+    await settle(SWIPE_REVEAL * 0.6);
+    expect(onSkip).not.toHaveBeenCalled(); expect(onSwap).not.toHaveBeenCalled();
+    await settle(0);
+    expect(onSkip).toHaveBeenCalledTimes(1); expect(onSwap).not.toHaveBeenCalled();
+    await settle(SWIPE_REVEAL * 2);
+    expect(onSwap).toHaveBeenCalledTimes(1); expect(onSkip).toHaveBeenCalledTimes(1);
+  });
+  test('a drag released exactly on a stop counts too, with no momentum to wait for', async () => {
+    const onSwap = jest.fn();
+    await render(card({ onSkip: () => {}, onSwap }), { wrapper });
+    await fireEvent(screen.getByTestId('up-next-swipe'), 'scrollEndDrag', { nativeEvent: { contentOffset: { x: SWIPE_REVEAL * 2, y: 0 } } });
+    expect(onSwap).toHaveBeenCalledTimes(1);
+  });
+  test('once a set is logged there is no skip stop: the card rests at the start and only swap is offered', async () => {
+    const onSwap = jest.fn();
+    await render(card({ onSwap }), { wrapper });
+    expect(screen.getByTestId('up-next-swipe').props).toMatchObject({ snapToOffsets: [0, SWIPE_REVEAL], contentOffset: { x: 0, y: 0 } });
+    expect(screen.queryByText('Skip')).toBeNull();
+    await settle(0);
+    expect(onSwap).not.toHaveBeenCalled();
+    await settle(SWIPE_REVEAL);
+    expect(onSwap).toHaveBeenCalledTimes(1);
+  });
+  test('the latest handlers are used after the logger re-renders', async () => {
+    const first = jest.fn(), second = jest.fn();
+    const view = await render(card({ onSkip: () => {}, onSwap: first }), { wrapper });
+    await view.rerender(card({ onSkip: () => {}, onSwap: second }));
+    await settle(SWIPE_REVEAL * 2);
+    expect(first).not.toHaveBeenCalled(); expect(second).toHaveBeenCalledTimes(1);
+  });
+  test('the revealed Skip and Swap words are not extra buttons for a screen reader', async () => {
+    await render(card({ onSkip: () => {}, onSwap: () => {} }), { wrapper });
+    expect(within(screen.getByTestId('logger-up-next')).getAllByRole('button')).toHaveLength(1);
   });
 });

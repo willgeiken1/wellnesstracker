@@ -142,6 +142,31 @@ describe('line contrast', () => {
     expect(JSON.stringify(after.stroke)).toBe(JSON.stringify(before.stroke));
     expect(after.strokeWidth).toBeGreaterThan(before.strokeWidth);
   });
+  test.each(['dark', 'light'] as const)('in %s mode a deep muscle keeps a 3:1 edge over any muscle underneath, trained or not', mode => {
+    const { trainedStroke, deepCasing } = require('../src/features/atlas/body-atlas') as typeof import('../src/features/atlas/body-atlas');
+    const { heatFill } = require('../src/features/atlas/volume') as typeof import('../src/features/atlas/volume');
+    const c = createTheme(mode) as Record<'text' | 'bg' | 'surface-2', string>;
+    const fills = [1, 12, 40].map(sets => heatFill({ sets, target: [10, 20] } as unknown as Parameters<typeof heatFill>[0], mode === 'dark'));
+    // What can lie under a deep muscle's edge: the bare body, or a neighbour's heat colour, fresh to faded.
+    const under = [c['surface-2'], ...fills.flatMap(fill => [.65, .825, 1].map(o => blend(c['surface-2'], fill, o)))];
+    // The deep muscle's own line: plain text when untrained, the trained pick otherwise.
+    const lines = [c.text, ...fills.map(fill => trainedStroke(fill, .6, c))];
+    for (const line of lines) {
+      const casing = deepCasing(line, c);
+      expect(casing).not.toBe(line);
+      for (const below of under) expect(Math.max(contrast(line, below), contrast(casing, below))).toBeGreaterThanOrEqual(3);
+    }
+  });
+  test('a deep muscle over a trained one is drawn as a dashed line on a casing in the opposite colour', async () => {
+    await render(<BodyAtlas sessions={[{ at: now - 3600000, exercises: [{ main: 'glutes', helpers: [], sets: 40 }] }]} now={now}/>, { wrapper });
+    await fireEvent.press(screen.getByText(t('atlasBack')));
+    const casing = screen.getByTestId('atlas-casing-hipRotators').props, line = screen.getByTestId('atlas-path-hipRotators').props;
+    expect(JSON.stringify(casing.stroke)).not.toBe(JSON.stringify(line.stroke));
+    expect(casing.strokeWidth).toBeGreaterThan(line.strokeWidth);
+    expect(casing.onPress).toBeUndefined();
+    expect(casing.accessibilityLabel).toBeUndefined();
+    expect(screen.queryByTestId('atlas-casing-gluteMax')).toBeNull();
+  });
   test('the body outline is drawn at full strength', async () => {
     await render(<BodyAtlas sessions={sessions} now={now}/>, { wrapper });
     const outline = screen.getByTestId('atlas-outline').props;
