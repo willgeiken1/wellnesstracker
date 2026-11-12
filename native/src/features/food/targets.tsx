@@ -1,26 +1,62 @@
 import { useState } from 'react';
-import { Button } from '../../components/button';
+import { View } from 'react-native';
 import { ThemedText } from '../../components/themed-text';
-import { Field } from '../onboarding/fields';
+import { useTheme } from '../../design/theme-provider';
+import { tokens } from '../../design/tokens';
 import type { Repository } from '../../data/repository';
 import { t } from '../../i18n/en';
 import { foodTargets, setTargets, resetFoodTargets } from './model';
-export function FoodTargets({repo,day,revision}:{repo:Repository;day:string;revision:number}) {
- 'use no memo';
- // The revision prop invalidates the parent's child element after local writes.
- void revision;
- const current=foodTargets(repo,day),[editing,setEditing]=useState(false),[values,setValues]=useState(['','','','']),[error,setError]=useState(false);
- const target=current.targets,labels=['foodTargetCalories','foodTargetProtein','foodTargetCarbs','foodTargetFat'] as const;
- return <>
-  <ThemedText>{target?t(current.basis==='manual'?'foodTargetsManual':'estimatedTargets'):t('targetsUnset')}</ThemedText>
-  {target&&<ThemedText>{t('foodTargetSummary').replace('{calories}',String(Math.round(target.energy_kj/4.184))).replace('{protein}',String(target.protein_g)).replace('{carbs}',String(target.carbs_g)).replace('{fat}',String(target.fat_g))}</ThemedText>}
-  {current.basis==='estimated'&&<ThemedText muted>{t('foodActivityEstimate').replace('{level}',t(({sitting:'activitySitting',light:'activityLight',active:'activityActive',very:'activityVery'} as const)[current.activity]??'activityLight'))}</ThemedText>}
-  {!editing?<Button label={t(target?'foodTargetsEdit':'foodTargetsSet')} variant="secondary" onPress={()=>{setValues(target?[String(Math.round(target.energy_kj/4.184)),String(target.protein_g),String(target.carbs_g),String(target.fat_g)]:['','','','']);setEditing(true);setError(false);}}/>:<>
-   {labels.map((label,i)=><Field key={label} label={t(label)} numeric value={values[i]} onChange={value=>setValues(values.map((v,n)=>n===i?value:v))}/>)}
-   {error&&<ThemedText accessibilityRole="alert">{t('invalidTargets')}</ThemedText>}
-   <Button label={t('foodTargetsSave')} onPress={()=>{try{if(values.some(v=>!v.trim()||!Number.isFinite(Number(v))))throw new Error();setTargets(repo,day,{energy_kj:Number(values[0])*4.184,protein_g:Number(values[1]),carbs_g:Number(values[2]),fat_g:Number(values[3])});setEditing(false);}catch{setError(true);}}}/>
-   <Button label={t('foodTargetsAuto')} variant="secondary" onPress={()=>{try{resetFoodTargets(repo,day);setEditing(false);}catch{setError(true);}}}/>
-   <Button label={t('cancel')} variant="secondary" onPress={()=>setEditing(false)}/>
-  </>}
- </>;
+import { FieldRow, Group, NoticeRow, PanelHeader, PrimaryAction, QuietAction, semibold, SoftAction } from './parts';
+
+/** Spoken label, short name, unit and the ring colour each target shares with the calorie ring. */
+const ROWS = [
+  ['foodTargetCalories', 'foodFieldCalories', 'foodUnitKcal', 'food'],
+  ['foodTargetProtein', 'foodMacroProtein', 'foodUnitG', 'training'],
+  ['foodTargetCarbs', 'foodMacroCarbs', 'foodUnitG', 'food'],
+  ['foodTargetFat', 'foodMacroFat', 'foodUnitG', 'sleep'],
+] as const;
+const ACTIVITY = { sitting: 'activitySitting', light: 'activityLight', active: 'activityActive', very: 'activityVery' } as const;
+
+export function FoodTargets({ repo, day, revision }: { repo: Repository; day: string; revision: number }) {
+  'use no memo';
+  // The revision prop invalidates the parent's child element after local writes.
+  void revision;
+  const { colors } = useTheme();
+  const current = foodTargets(repo, day), [editing, setEditing] = useState(false), [values, setValues] = useState(['', '', '', '']), [error, setError] = useState(false);
+  const target = current.targets;
+  const shown = target ? [Math.round(target.energy_kj / 4.184), target.protein_g, target.carbs_g, target.fat_g] : null;
+  const heading = target ? t(current.basis === 'manual' ? 'foodTargetsManual' : 'estimatedTargets') : t('foodTargetsTitle');
+  const open = () => { setValues(shown ? shown.map(String) : ['', '', '', '']); setEditing(true); setError(false); };
+  if (editing) return <View style={{ gap: tokens.spacing[2] }} testID="food-targets-edit">
+    <PanelHeader title={t(target ? 'foodTargetsEdit' : 'foodTargetsSet')} action={{ label: t('cancel'), onPress: () => setEditing(false) }} />
+    <Group>
+      {ROWS.map(([label, title, unit], i) => <FieldRow key={label} first={i === 0} label={t(label)} title={t(title)} unit={t(unit)} numeric
+        placeholder={t('foodValueNotSet')} value={values[i]} onChange={value => { setValues(values.map((v, n) => n === i ? value : v)); setError(false); }} />)}
+    </Group>
+    {error && <NoticeRow alert text={t('invalidTargets')} />}
+    <PrimaryAction label={t('foodTargetsSave')} onPress={() => { try { if (values.some(v => !v.trim() || !Number.isFinite(Number(v)))) throw new Error(); setTargets(repo, day, { energy_kj: Number(values[0]) * 4.184, protein_g: Number(values[1]), carbs_g: Number(values[2]), fat_g: Number(values[3]) }); setEditing(false); } catch { setError(true); } }} />
+    <SoftAction label={t('foodTargetsAuto')} onPress={() => { try { resetFoodTargets(repo, day); setEditing(false); } catch { setError(true); } }} />
+    <ThemedText muted variant="caption">{t('foodTargetsAutoHint')}</ThemedText>
+  </View>;
+  return <View style={{ gap: tokens.spacing[1] }} testID="food-targets">
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: tokens.spacing[1] }}>
+      <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { flexGrow: 1, flexShrink: 1 }]}>{heading}</ThemedText>
+      {target && <QuietAction label={t('foodTargetsEdit')} onPress={open} />}
+    </View>
+    {shown
+      ? <View accessible accessibilityLabel={t('foodTargetSummary').replace('{calories}', String(shown[0])).replace('{protein}', String(shown[1])).replace('{carbs}', String(shown[2])).replace('{fat}', String(shown[3]))}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {ROWS.map(([, title, unit, pillar], i) => <View key={title} style={{ flexGrow: 1, flexBasis: '45%', borderRadius: 14, backgroundColor: colors['surface-2'], paddingHorizontal: 10, paddingVertical: 10, gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[pillar] }} />
+              <ThemedText muted variant="caption" style={[semibold, { flexShrink: 1 }]}>{t(title)}</ThemedText>
+            </View>
+            <ThemedText numeric style={{ fontSize: 19, lineHeight: 24, fontWeight: '600' }}>{Math.round(shown[i]).toLocaleString('en-US')}
+              <ThemedText muted variant="caption">{' '}{t(unit)}</ThemedText></ThemedText>
+          </View>)}
+        </View>
+      : <ThemedText muted>{t('targetsUnset')}</ThemedText>}
+    {current.basis === 'estimated' && <ThemedText muted variant="caption">{t('foodActivityEstimate').replace('{level}', t(ACTIVITY[current.activity] ?? 'activityLight'))}</ThemedText>}
+    {!target && <SoftAction label={t('foodTargetsSet')} onPress={open} />}
+  </View>;
 }

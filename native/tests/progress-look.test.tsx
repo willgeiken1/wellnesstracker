@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import Progress from '../src/app/(tabs)/progress';
@@ -138,4 +139,23 @@ test('Photos says plainly that it is not built, with no placeholder badge', asyn
   await fireEvent.press(screen.getByRole('tab', { name: 'Goals & PRs' }));
   expect(screen.getByRole('header', { name: 'Lifetime' })).toBeTruthy();
   expect(screen.queryByText('M2/M3 placeholder')).toBeNull();
+});
+
+test('the bodyweight range chips share one row as equal 44pt segments and keep their selected state', async () => {
+  await render(wrap(<Body repository={weighed()} />));
+  const row = screen.getByTestId('body-ranges');
+  expect(StyleSheet.flatten(row.props.style)).toMatchObject({ flexDirection: 'row' });
+  expect(StyleSheet.flatten(row.props.style).flexWrap).toBeUndefined();
+  const tabs = within(row).getAllByRole('tab');
+  expect(tabs.map(tab => tab.props.accessibilityLabel)).toEqual(['7d', '30d', '90d', '1y']);
+  for (const tab of tabs) {
+    const style = StyleSheet.flatten(tab.props.style);
+    expect(style.flex).toBe(1);
+    expect(style.minHeight).toBeGreaterThanOrEqual(44);
+    expect(style.height).toBeUndefined();
+  }
+  expect(screen.getByRole('tab', { name: '30d' })).toBeSelected();
+  await fireEvent.press(screen.getByRole('tab', { name: '1y' }));
+  expect(screen.getByRole('tab', { name: '1y' })).toBeSelected();
+  expect(screen.getByRole('tab', { name: '30d' })).not.toBeSelected();
 });

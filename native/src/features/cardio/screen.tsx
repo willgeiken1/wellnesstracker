@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, TextInput, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { Button } from '../../components/button';
+import { Card } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import type { Repository } from '../../data/repository';
 import { useTheme } from '../../design/theme-provider';
+import { tokens } from '../../design/tokens';
 import { t, type MessageKey } from '../../i18n/en';
 import { bodyWeight, elapsedMs, kcalPerMin, localDay, machines, weeklyMinutes, type Machine, type Settings } from '../../core/cardio/rules';
-import { clock, layout, Panel } from '../workout/primitives';
+import { clock, layout } from '../workout/primitives';
+import { Field as Input, Pick, Primary, Secondary, SectionTitle, Trouble, card, dayLabel, semibold } from '../workout/parts';
 import { useWorkoutStore } from '../workout/use-workout';
 import { CardioStore, machineDefaults } from './store';
 
@@ -19,25 +21,28 @@ const iconPaths: Record<Machine, string> = {
   bike: 'M8 17A4 4 0 1 0 0 17A4 4 0 1 0 8 17M23 17A4 4 0 1 0 15 17A4 4 0 1 0 23 17M4 17L9 7L15 17H4M8 7H12M19 17L16 4H20',
   rower: 'M2 19H22M5 16H15L20 9M9 16L5 8M5 8L13 5M5 8L2 12M13 5L19 14',
 };
-function MachineIcon({ machine }: { machine: Machine }) {
+function MachineIcon({ machine, color }: { machine: Machine; color?: string }) {
   const { colors } = useTheme();
-  return <Svg accessible={false} width={28} height={28} viewBox="0 0 24 24"><Path d={iconPaths[machine]} fill="none" stroke={colors.text} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
+  return <Svg accessible={false} width={28} height={28} viewBox="0 0 24 24"><Path d={iconPaths[machine]} fill="none" stroke={color ?? colors.text} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 }
-function Field({ label, value, onChangeText, decimal = false }: { label: string; value: string; onChangeText: (value: string) => void; decimal?: boolean }) {
-  const { colors } = useTheme();
-  return <View style={{ gap: 4 }}><ThemedText muted variant="caption">{label}</ThemedText><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} keyboardType={decimal ? 'decimal-pad' : 'default'} autoCapitalize="none" style={[layout.input, { color: colors.text, backgroundColor: colors['surface-2'] }]} /></View>;
+function Field({ label, value, onChangeText, decimal = false, grow = false }: { label: string; value: string; onChangeText: (value: string) => void; decimal?: boolean; grow?: boolean }) {
+  return <Input style={grow ? { flex: 1 } : undefined} label={label} value={value} onChangeText={onChangeText} keyboardType={decimal ? 'decimal-pad' : 'default'} autoCapitalize="none" />;
 }
 function WeeklyRing({ minutes, goal }: { minutes: number; goal: number }) {
   const { colors } = useTheme();
   const circumference = Math.PI * 60;
   const label = t('cardioWeekSummary').replace('{minutes}', String(Math.round(minutes))).replace('{goal}', String(goal));
   // Deliberately static, including on goal changes: no animation under Reduce Motion.
-  return <View accessible style={layout.row} accessibilityRole="progressbar" accessibilityLabel={label} accessibilityValue={{ min: 0, max: goal, now: Math.min(minutes, goal), text: label }}>
-    <Svg accessible={false} width={108} height={108} viewBox="0 0 76 76">
-      <Circle cx={38} cy={38} r={30} fill="none" stroke={colors['surface-2']} strokeWidth={8} />
-      <Circle cx={38} cy={38} r={30} fill="none" stroke={colors.accent} strokeWidth={8} strokeDasharray={[circumference * Math.min(1, minutes / goal), circumference]} rotation={-90} origin="38,38" />
-    </Svg>
-    <View style={{ flex: 1 }}><ThemedText variant="headline">{t('cardioWeeklyGoal')}</ThemedText><ThemedText>{label}</ThemedText></View>
+  return <View accessible style={[layout.row, { gap: tokens.spacing[3] }]} accessibilityRole="progressbar" accessibilityLabel={label} accessibilityValue={{ min: 0, max: goal, now: Math.min(minutes, goal), text: label }}>
+    <View style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg accessible={false} width={96} height={96} viewBox="0 0 76 76" style={{ position: 'absolute' }}>
+        <Circle cx={38} cy={38} r={30} fill="none" stroke={colors['surface-2']} strokeWidth={8} />
+        <Circle cx={38} cy={38} r={30} fill="none" stroke={colors.training} strokeWidth={8} strokeLinecap="round" strokeDasharray={[circumference * Math.min(1, minutes / goal), circumference]} rotation={-90} origin="38,38" />
+      </Svg>
+      <ThemedText numeric style={{ fontSize: 22, lineHeight: 26 }}>{Math.round(minutes)}</ThemedText>
+      <ThemedText muted variant="caption">{t('cardioMin')}</ThemedText>
+    </View>
+    <View style={{ flex: 1, gap: 2 }}><ThemedText variant="headline" style={semibold}>{t('cardioWeeklyGoal')}</ThemedText><ThemedText muted>{label}</ThemedText></View>
   </View>;
 }
 export function Cardio({ repository }: { repository: Repository }) {
@@ -74,54 +79,74 @@ export function Cardio({ repository }: { repository: Repository }) {
   const currentMachine = live?.machine ?? machine;
   const estimate = live ? store.liveKcal(weight.kg, now) : kcalPerMin(machine, settings, weight.kg) * (Number(minutes) || 0);
   const kcalText = (kcal: number) => t('cardioKcal').replace('{kcal}', String(Math.round(kcal)));
+  const sessions = store.sessions();
   return <View style={layout.stack}>
-    <Panel><WeeklyRing minutes={weeklyMinutes(store.sessions(), repository.list('pauses'), localDay(now))} goal={store.goal()} />
-      <Field label={t('cardioGoalMinutes')} value={goal} onChangeText={setGoal} decimal />
-      <Button label={t('cardioSaveGoal')} variant="secondary" onPress={() => run(() => store.setGoal(Number(goal)), 'cardioGoalError')} />
-    </Panel>
-    {error && <ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
-    <Panel>
-      {!live && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{machines.map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={machineName(value)} accessibilityState={{ selected: machine === value }} onPress={() => { setMachine(value); fillSettings(machineDefaults(value)); }} style={{ width: '47%', minHeight: 72, padding: 12, gap: 4, borderRadius: 12, backgroundColor: machine === value ? colors['surface-2'] : colors.surface, borderWidth: 1, borderColor: machine === value ? colors.accent : colors['surface-2'] }}><MachineIcon machine={value} /><ThemedText>{machineName(value)}</ThemedText></Pressable>)}</View>}
-      {live && <>
-        <ThemedText variant="headline">{machineName(live.machine)}</ThemedText>
+    <Card testID="cardio-week" style={[card, { gap: tokens.spacing[2] }]}><WeeklyRing minutes={weeklyMinutes(sessions, repository.list('pauses'), localDay(now))} goal={store.goal()} />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: tokens.spacing[1] }}>
+        <Field grow label={t('cardioGoalMinutes')} value={goal} onChangeText={setGoal} decimal />
+        <View style={{ minHeight: 48, justifyContent: 'center' }}><Pick onSurface text={t('cardioSaveGoal')} onPress={() => run(() => store.setGoal(Number(goal)), 'cardioGoalError')} /></View>
+      </View>
+    </Card>
+    {error && <Trouble text={t(error)} />}
+    <SectionTitle>{t(live ? 'cardioNow' : 'cardioChoose')}</SectionTitle>
+    <Card testID="cardio-session" style={[card, { gap: tokens.spacing[2] }]}>
+      {!live && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>{machines.map(value => { const on = machine === value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={machineName(value)} accessibilityState={{ selected: on }} onPress={() => { setMachine(value); fillSettings(machineDefaults(value)); }} style={({ pressed }) => ({ flexGrow: 1, flexBasis: '45%', minHeight: 76, padding: 12, gap: 6, borderRadius: 14, backgroundColor: colors['surface-2'], borderWidth: 2, borderColor: on ? colors.accent : colors['surface-2'], opacity: pressed ? 0.7 : 1 })}><MachineIcon machine={value} color={on ? colors.accent : undefined} /><ThemedText style={on ? semibold : undefined}>{machineName(value)}</ThemedText></Pressable>; })}</View>}
+      {live && <View style={{ alignItems: 'center', gap: 2 }}>
+        <View style={[layout.row, { gap: tokens.spacing[1] }]}><MachineIcon machine={live.machine} /><ThemedText variant="headline" style={semibold}>{machineName(live.machine)}</ThemedText></View>
+        <ThemedText accessibilityLabel={t('cardioElapsed')} variant="headline" style={{ fontSize: 48, lineHeight: 56, fontVariant: ['tabular-nums'] }}>{clock(elapsedMs(live, now) / 1000)}</ThemedText>
         <ThemedText muted>{t(live.pausedAt === null ? 'cardioInProgress' : 'cardioPaused')}</ThemedText>
-        <ThemedText accessibilityLabel={t('cardioElapsed')} variant="headline" style={{ fontSize: 48, fontVariant: ['tabular-nums'] }}>{clock(elapsedMs(live, now) / 1000)}</ThemedText>
-      </>}
-      {currentMachine === 'treadmill' && <Field label={t(metric ? 'cardioSpeedKmh' : 'cardioSpeedMph')} value={speed} onChangeText={setSpeed} decimal />}
-      {currentMachine !== 'treadmill' && <Field label={t('cardioLevel')} value={level} onChangeText={setLevel} decimal />}
-      {(['treadmill', 'stair', 'elliptical'] as Machine[]).includes(currentMachine) && <Field label={t('cardioIncline')} value={incline} onChangeText={setIncline} decimal />}
-      {Number.isFinite(estimate) && <ThemedText>{kcalText(estimate)}</ThemedText>}
-      <ThemedText muted variant="caption">{t(weight.fallback ? 'cardioFallback' : 'cardioEstimateHint')}</ThemedText>
+      </View>}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing[2] }}>
+        {currentMachine === 'treadmill' && <Field grow label={t(metric ? 'cardioSpeedKmh' : 'cardioSpeedMph')} value={speed} onChangeText={setSpeed} decimal />}
+        {currentMachine !== 'treadmill' && <Field grow label={t('cardioLevel')} value={level} onChangeText={setLevel} decimal />}
+        {(['treadmill', 'stair', 'elliptical'] as Machine[]).includes(currentMachine) && <Field grow label={t('cardioIncline')} value={incline} onChangeText={setIncline} decimal />}
+      </View>
+      <View style={{ gap: 2 }}>
+        {Number.isFinite(estimate) && <ThemedText numeric style={semibold}>{kcalText(estimate)}</ThemedText>}
+        <ThemedText muted variant="caption">{t(weight.fallback ? 'cardioFallback' : 'cardioEstimateHint')}</ThemedText>
+      </View>
       {live ? <>
-        <Button label={t('cardioApplySettings')} variant="secondary" onPress={() => run(() => store.change(settings))} />
-        <Button label={t(live.pausedAt === null ? 'cardioPause' : 'cardioResume')} variant="secondary" onPress={() => run(() => live.pausedAt === null ? store.pause() : store.resume())} />
-        <Button label={t('finish')} onPress={() => run(() => { store.finish(); setNow(Date.now()); })} />
-        <Button label={t('cardioCancel')} variant="secondary" onPress={() => Alert.alert(t('cardioCancelTitle'), t('cardioCancelBody'), [{ text: t('cancel'), style: 'cancel' }, { text: t('cardioCancel'), style: 'destructive', onPress: () => run(() => store.cancel()) }])} />
+        <Primary label={t('finish')} onPress={() => run(() => { store.finish(); setNow(Date.now()); })} />
+        <View style={{ flexDirection: 'row', gap: tokens.spacing[1] }}>
+          <View style={{ flex: 1 }}><Secondary onSurface label={t(live.pausedAt === null ? 'cardioPause' : 'cardioResume')} onPress={() => run(() => live.pausedAt === null ? store.pause() : store.resume())} /></View>
+          <View style={{ flex: 1 }}><Secondary onSurface label={t('cardioApplySettings')} onPress={() => run(() => store.change(settings))} /></View>
+        </View>
+        <View style={{ alignSelf: 'center' }}><Pick onSurface text={t('cardioCancel')} onPress={() => Alert.alert(t('cardioCancelTitle'), t('cardioCancelBody'), [{ text: t('cancel'), style: 'cancel' }, { text: t('cardioCancel'), style: 'destructive', onPress: () => run(() => store.cancel()) }])} /></View>
       </> : logging ? <>
-        <Field label={t('cardioDate')} value={day} onChangeText={setDay} />
-        <Field label={t('cardioMinutes')} value={minutes} onChangeText={setMinutes} decimal />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing[2] }}>
+          <Field grow label={t('cardioDate')} value={day} onChangeText={setDay} />
+          <Field grow label={t('cardioMinutes')} value={minutes} onChangeText={setMinutes} decimal />
+        </View>
         <Field label={t('notes')} value={notes} onChangeText={setNotes} />
-        <Button label={t('cardioSave')} onPress={() => run(() => { store.logFinished({ day, machine, durationMs: Math.round(Number(minutes) * 60000), settings, notes }); setLogging(false); })} />
-        <Button label={t('cancel')} variant="secondary" onPress={() => { setLogging(false); setError(null); }} />
+        <Primary label={t('cardioSave')} onPress={() => run(() => { store.logFinished({ day, machine, durationMs: Math.round(Number(minutes) * 60000), settings, notes }); setLogging(false); })} />
+        <Secondary onSurface label={t('cancel')} onPress={() => { setLogging(false); setError(null); }} />
       </> : <>
-        <Button label={t('cardioStart')} onPress={() => run(() => { store.start(machine, settings); setNow(Date.now()); })} />
-        <Button label={t('cardioLogFinished')} variant="secondary" onPress={() => { setDay(localDay()); setLogging(true); }} />
+        <Primary label={t('cardioStart')} onPress={() => run(() => { store.start(machine, settings); setNow(Date.now()); })} />
+        <Secondary onSurface label={t('cardioLogFinished')} onPress={() => { setDay(localDay()); setLogging(true); }} />
       </>}
-    </Panel>
+    </Card>
     <ThemedText muted variant="caption">{t('cardioLocalSettings')}</ThemedText>
-    <ThemedText variant="headline" accessibilityRole="header">{t('cardioSaved')}</ThemedText>
-    {store.sessions().length === 0 && <ThemedText muted>{t('cardioEmpty')}</ThemedText>}
-    {store.sessions().map(row => {
+    <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { marginTop: tokens.spacing[1] }]}>{t('cardioSaved')}</ThemedText>
+    {sessions.length === 0 && <Card testID="cardio-empty" style={card}>
+      <ThemedText style={semibold}>{t('cardioEmptyTitle')}</ThemedText>
+      <ThemedText muted>{t('cardioEmpty')}</ThemedText>
+    </Card>}
+    {sessions.map(row => {
       const kind = row.data.kind as Machine;
       const known = machines.includes(kind);
       const kcal = store.sessionKcal(row, weight.kg);
-      return <Panel key={row.id} testID={`cardio-session-${row.id}`}>
-        <ThemedText variant="headline">{known ? machineName(kind) : t('cardio')}</ThemedText>
-        <ThemedText>{t('cardioSessionSummary').replace('{day}', String(row.data.day)).replace('{minutes}', String(Math.round(Number(row.data.duration_ms) / 60000)))}</ThemedText>
-        <ThemedText muted>{kcal === null ? t('cardioUnknownKcal') : kcalText(kcal)}</ThemedText>
+      return <Card key={row.id} testID={`cardio-session-${row.id}`} style={[card, { gap: tokens.spacing[1] }]}>
+        <View style={[layout.row, { gap: tokens.spacing[2] }]}>
+          {known && <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}><MachineIcon machine={kind} /></View>}
+          <View style={{ flex: 1 }}>
+            <ThemedText variant="headline" style={semibold}>{known ? machineName(kind) : t('cardio')}</ThemedText>
+            <ThemedText muted numeric variant="caption">{t('cardioSessionSummary').replace('{day}', dayLabel(row.data.day)).replace('{minutes}', String(Math.round(Number(row.data.duration_ms) / 60000)))}</ThemedText>
+          </View>
+        </View>
+        <ThemedText muted={kcal === null} numeric={kcal !== null}>{kcal === null ? t('cardioUnknownKcal') : kcalText(kcal)}</ThemedText>
         {!!row.data.notes && <ThemedText>{row.data.notes}</ThemedText>}
-        {known && !live && <Button label={t('cardioRestart').replace('{machine}', machineName(kind))} variant="secondary" onPress={() => run(() => { const settings = store.segments(row.id)?.[0]?.settings ?? machineDefaults(kind); fillSettings(settings); setMachine(kind); store.start(kind, settings); setNow(Date.now()); })} />}
-      </Panel>;
+        {known && !live && <View style={{ alignSelf: 'flex-start' }}><Pick onSurface text={t('cardioAgain')} label={t('cardioRestart').replace('{machine}', machineName(kind))} onPress={() => run(() => { const settings = store.segments(row.id)?.[0]?.settings ?? machineDefaults(kind); fillSettings(settings); setMachine(kind); store.start(kind, settings); setNow(Date.now()); })} /></View>}
+      </Card>;
     })}
   </View>;
 }

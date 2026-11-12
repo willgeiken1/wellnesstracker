@@ -826,9 +826,11 @@ test.each([false,true])('M2-06 haptics switch writes only phone-local state, fla
   const repo = memoryRepository(); Object.defineProperty(repo,'syncFlags',{value:{syncedV1Columns:enabled}});
   activeRepository(repo); const save = jest.spyOn(repo,'save');
   await render(<WorkoutSettings/>,{wrapper});
-  await fireEvent.press(screen.getByRole('button',{name:'Disable workout haptics'}));
+  expect(screen.getByRole('switch',{name:'Workout haptics'})).toHaveProp('value',true);
+  await fireEvent(screen.getByRole('switch',{name:'Workout haptics'}),'valueChange',false);
   expect(repo.localGet('haptics')).toBe(false);
-  await fireEvent.press(screen.getByRole('button',{name:'Enable workout haptics'}));
+  expect(screen.getByRole('switch',{name:'Workout haptics'})).toHaveProp('value',false);
+  await fireEvent(screen.getByRole('switch',{name:'Workout haptics'}),'valueChange',true);
   expect(repo.localGet('haptics')).toBe(true); expect(save).not.toHaveBeenCalled();
 });
 

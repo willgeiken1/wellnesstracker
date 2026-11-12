@@ -15,6 +15,9 @@ import { useTheme } from '../design/theme-provider';
 import { signOutUnsynced, t, type MessageKey } from '../i18n/en';
 import { useAuth } from './provider';
 import { syncBeforeSignOut } from './sign-out-sync';
+import { Card } from '../components/card';
+import { SectionLabel } from '../features/settings/parts';
+const accountCard={borderRadius:18,padding:16,gap:12} as const;
 export function Welcome() {
   const auth=useAuth();
   return <Screen topInset title={t('authWelcome')}>
@@ -92,16 +95,22 @@ export function Account() {
     finally {submitting.current=false;setBusy(false);}
   };
   return <Screen title={t('account')}>
-    <ThemedText>{auth.demo?t('demoMode'):auth.session?.user.email}</ThemedText>
+    <Card style={accountCard}>
+      <ThemedText variant="headline" style={{fontWeight:'600'}}>{auth.demo?t('settingsExample'):auth.session?.user.email}</ThemedText>
+      {auth.demo&&<ThemedText muted>{t('settingsExampleBody')}</ThemedText>}
+    </Card>
     {auth.demo?<><Button label={t('createAccount')} disabled={!auth.configured||busy} onPress={()=>router.push('/onboarding')}/><Button label={t('haveAccount')} disabled={!auth.configured||busy} onPress={()=>router.push('/sign-in')}/><Button label={t('leaveDemo')} variant="secondary" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/></>:<>
+      <SectionLabel>{t('settingsSync')}</SectionLabel>
+      <Card style={accountCard}>
       <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.pending>0?'syncPending':auth.conflicts>0?'syncConflictStatus':'syncIdle')}</ThemedText>
       {auth.conflicts>0&&<Badge label={`${auth.conflicts} ${t('syncConflicts')}`}/>}
       {auth.pending>0&&<Badge label={`${auth.pending} ${t('pending')}`}/>}
       <SyncRecovery repository={auth.repository}/>
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
+      </Card>
       <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
     </>}
-    {error&&<ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
+    {error&&<ThemedText muted accessibilityRole="alert">{t(error)}</ThemedText>}
     <Modal transparent visible={lossCount!==null} animationType="none" onRequestClose={()=>{if(!submitting.current)setLossCount(null);}}>
       {lossCount!==null&&<View style={{flex:1,justifyContent:'flex-end',backgroundColor:colors.scrim}}>
         <View accessibilityViewIsModal onAccessibilityEscape={()=>{if(!submitting.current)setLossCount(null);}}

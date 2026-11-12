@@ -1,1 +1,1 @@
-export { Welcome as default } from '../../auth/screens';
+export { Welcome as default } from '../../features/onboarding/welcome';

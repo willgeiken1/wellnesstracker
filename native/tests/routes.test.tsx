@@ -2,7 +2,8 @@
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import type { TestInstance } from 'test-renderer';
-import { renderRouter, screen, fireEvent } from 'expo-router/testing-library';
+import { renderRouter, screen, fireEvent, act } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 import { redirectSystemPath } from '../src/app/+native-intent';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { NavigationShell } from '../src/app/_layout';
@@ -50,14 +51,15 @@ test('avatar opens Settings and Appearance in the stack', async () => {
   expect(screen.getByRole('tab', { name: 'Light' })).toBeSelected();
 });
 test.each([
-  ['insight://food/log', '/food/log', 'Back to Home'],
-  ['insight://workout/start', '/workout', 'Close workout'],
-])('cold link %s resolves and has an exit', async (initialUrl, expected, exit) => {
+  // A cold food link has nothing to go back to, so its header offers Close, which lands on the Food tab.
+  ['insight://food/log', '/food/log', 'Close', '/food'],
+  ['insight://workout/start', '/workout', 'Close workout', '/'],
+])('cold link %s resolves and has an exit', async (initialUrl, expected, exit, landing) => {
   // renderRouter's location bypasses native getInitialURL; apply the actual native intent hook.
   const result = await renderRouter(routes, { initialUrl: redirectSystemPath({ path: initialUrl, initial: true }) });
   expect(result.getPathname()).toBe(expected);
   await fireEvent.press(screen.getByRole('button', { name: exit }));
-  expect(result.getPathname()).toBe('/');
+  expect(result.getPathname()).toBe(landing);
 });
 
 test.each([
@@ -77,13 +79,24 @@ test.each([
   await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
   expect(result.getPathname()).toBe('/');
 });
-test('Food without a repository opens logging and returns Home', async () => {
+test('Food without a repository opens logging, says so plainly, and the normal back returns to Food', async () => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: 'Food' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
   expect(result.getPathname()).toBe('/food/log');
-  await fireEvent.press(screen.getByRole('button', { name: 'Back to Home' }));
-  expect(result.getPathname()).toBe('/');
+  expect(screen.getByText('Food log unavailable')).toBeTruthy();
+  // Pushed from the Food tab, the screen relies on the header back: no Close and no "Back to Home" button.
+  expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  await act(() => router.back());
+  expect(result.getPathname()).toBe('/food');
+});
+
+test('the food log page repeats no title: the stack header carries the only one', async () => {
+  await renderRouter(routes, { initialUrl: '/food/log' });
+  // The native header title is not part of the rendered tree, so any title text found here would be a second one.
+  expect(screen.queryByText('Log food')).toBeNull();
+  expect(screen.queryByText('Food log')).toBeNull();
 });
 
 test('About exposes a Licenses placeholder', async () => {
