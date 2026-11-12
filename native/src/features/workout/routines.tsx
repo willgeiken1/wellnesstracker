@@ -1,3 +1,4 @@
+import { readableOn } from '@/core/contrast';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -73,7 +74,9 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
   const { colors } = useTheme();
   const [open, setOpen] = useState<string | null>(null);
   const routines = store?.templates() ?? [], history = store?.history() ?? [];
-  const latest = history[0], next = store ? nextRoutine(store, routines) : undefined;
+  // The latest print is the newest workout with a counted set. A workout saved with nothing in it has no print
+  // to draw and read as "0 lb".
+  const latest = store?.trainingHistory()[0], next = store ? nextRoutine(store, routines) : undefined;
   const training = colors.training;
   const lastOf = (id: string) => history.find(s => s.data.routine_id === id);
   return <>
@@ -89,7 +92,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
       <ThemedText muted variant="caption" style={{ lineHeight: 20 }}>{store.templateExercises(next.id).map(e => String(e.data.exercise)).join(' · ')}</ThemedText>
       <Pressable accessibilityRole="button" accessibilityLabel={t('upNextStart').replace('{name}', String(next.data.name))} onPress={() => run(() => startRoutine(store, next.id))}
         style={({ pressed }) => ({ marginTop: tokens.spacing[1], minHeight: 48, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: training, opacity: pressed ? 0.8 : 1 })}>
-        <ThemedText style={[semibold, { color: colors['on-accent'] }]}>{t('startTemplate').replace('{name}', String(next.data.name))}</ThemedText>
+        <ThemedText testID="start-routine-label" style={[semibold, { color: readableOn(training, [colors['on-accent'], colors.text]) }]}>{t('startTemplate').replace('{name}', String(next.data.name))}</ThemedText>
       </Pressable>
     </Card>}
     {store && <PlansPanel store={store} />}

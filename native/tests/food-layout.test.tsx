@@ -6,6 +6,7 @@ import { attributedDay, meals, saveFood } from '../src/features/food/model';
 import { FoodScreen } from '../src/features/food/screen';
 import { memoryRepository } from './workout-repository';
 
+afterEach(() => jest.useRealTimers());
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 const blank = { fiber_g: null, sugar_g: null, sodium_mg: null, amount_g: null };
 /** Made-up sample food only. */
@@ -27,11 +28,14 @@ test('the ring shows what is left, then what is over, and plain kcal without a t
 });
 
 test('an empty day says so and offers the five ways to log', async () => {
+  // Before 4 a.m. the Food tab opens on yesterday, so the clock is set to midday. Unpinned, this failed overnight.
+  jest.useFakeTimers(); jest.setSystemTime(new Date(2026, 10, 11, 12));
   await render(<FoodScreen repository={memoryRepository()} />, { wrapper });
   expect(screen.getByText('Today')).toBeTruthy();
   expect(within(screen.getByTestId('food-empty')).getByText('Nothing logged for this day')).toBeTruthy();
   const row = screen.getByTestId('food-log-row');
   for (const name of ['Snap', 'Describe', 'Scan', 'Manual', 'Saved']) expect(within(row).getByRole('button', { name })).toBeTruthy();
+  jest.useRealTimers();
 });
 
 test('a logged food shows as one row with macros and calories, and its actions open on tap', async () => {

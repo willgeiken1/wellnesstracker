@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ThemedText } from '@/components/themed-text';
@@ -8,22 +8,35 @@ import { t } from '@/i18n/en';
 
 const FLICK = 65;
 
+/** A stable getter for the newest value, for handlers that are created once. */
+function useLatest<T>(value: T): () => T {
+  const ref = useRef(value);
+  useEffect(() => { ref.current = value; });
+  return useCallback(() => ref.current, []);
+}
 /** The card at the top of the logger: the exercise with the next open set. Tap to log that set,
  * swipe right to skip the exercise, swipe left to swap it. Screen readers get the same two as actions. */
 export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string; detail: string; onPress: () => void; onSkip?: () => void; onSwap: () => void }) {
   const { colors, reduceMotion } = useTheme(), training = colors.training;
   const [x] = useState(() => new Animated.Value(0));
-  // With Reduce Motion on the card goes straight back; otherwise it springs back.
-  const settle = () => { if (reduceMotion) x.setValue(0); else Animated.spring(x, { toValue: 0, useNativeDriver: true }).start(); };
-  const pan = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 16 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
-    onPanResponderMove: (_, g) => x.setValue(!onSkip && g.dx > 0 ? g.dx / 4 : g.dx),
-    onPanResponderRelease: (_, g) => {
-      settle();
-      if (g.dx > FLICK) onSkip?.();
-      else if (g.dx < -FLICK) onSwap();
-    },
-    onPanResponderTerminate: settle,
+  // The logger re-renders every second for its clocks. The responder is made once and reads the latest handlers
+  // through a ref: a responder rebuilt on each render loses the drag in progress, so a swipe never completed.
+  const latest = useLatest({ onSkip, onSwap, reduceMotion });
+  const [pan] = useState(() => {
+    // With Reduce Motion on the card goes straight back; otherwise it springs back.
+    const settle = () => { if (latest().reduceMotion) x.setValue(0); else Animated.spring(x, { toValue: 0, useNativeDriver: true }).start(); };
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 16 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      // Keep the drag once it has started, so the scroll view around the card cannot take it back mid-swipe.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderMove: (_, g) => x.setValue(!latest().onSkip && g.dx > 0 ? g.dx / 4 : g.dx),
+      onPanResponderRelease: (_, g) => {
+        settle();
+        if (g.dx > FLICK) latest().onSkip?.();
+        else if (g.dx < -FLICK) latest().onSwap();
+      },
+      onPanResponderTerminate: settle,
+    });
   });
   const actions = [...(onSkip ? [{ name: 'skip', label: t('skipExercise') }] : []), { name: 'swap', label: t('swapExercise') }];
   return <View testID="logger-up-next" style={{ gap: tokens.spacing[1] }}>

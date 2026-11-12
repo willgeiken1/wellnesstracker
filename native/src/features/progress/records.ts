@@ -1,4 +1,4 @@
-import { displayWeight, type Unit } from '../../core/workout/rules';
+import { displayWeight, fromKg, type Unit } from '../../core/workout/rules';
 import type { WorkoutStore } from '../../data/workout/store';
 
 export interface LiftRecord { exercise: string; weight: number; unit: Unit; day: string }
@@ -29,12 +29,19 @@ export function liftRecords(store: WorkoutStore): LiftRecord[] {
 export interface Lifetime { workouts: number; sets: number; volume: number; unit: Unit }
 /** Totals across every finished workout that has at least one working set. Volume is in the profile unit. */
 export function lifetime(store: WorkoutStore): Lifetime {
+  // Reads sets directly. The workout summary also works out records against every earlier workout, which made
+  // this total grow with the square of the history; the count and volume here match the summary's own.
+  const unit = store.unit(), sessions = store.trainingHistory();
   let sets = 0, volume = 0;
-  const sessions = store.trainingHistory();
-  for (const session of sessions) {
-    const summary = store.summary(session.id);
-    sets += summary.count;
-    volume += summary.volume;
+  for (const session of sessions) for (const entry of store.entries(session.id)) {
+    if (store.skipped(entry.id)) continue;
+    for (const set of store.sets(entry.id)) {
+      const d = set.data, load = d.left_weight_kg != null && d.right_weight_kg != null
+        ? fromKg(Number(d.left_weight_kg), unit) * Number(d.left_reps) + fromKg(Number(d.right_weight_kg), unit) * Number(d.right_reps)
+        : fromKg(Number(d.weight_kg), unit) * Number(d.reps);
+      sets += 1;
+      if (Number.isFinite(load)) volume += load;
+    }
   }
-  return { workouts: sessions.length, sets, volume: Math.round(volume), unit: store.unit() };
+  return { workouts: sessions.length, sets, volume: Math.round(volume), unit };
 }

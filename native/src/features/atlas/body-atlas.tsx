@@ -85,11 +85,11 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
     <G id="muscles">{geometry.muscles.map(path=>{
      const value=valuesByKey.get(path.id)!, chosen=selected===path.id, trained=value.sets>0;
      const heat=heatFill(value,mode==='dark'), fillOpacity=path.deep?(trained?.6:0):trained?.65+.35*value.freshness:1;
-     const edge=trained&&!path.deep?trainedStroke(heat,fillOpacity,colors):null;
+     const edge=trained?trainedStroke(heat,fillOpacity,colors):null;
      return <AccessiblePath key={path.id} id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
       fill={trained?heat:path.deep?'transparent':colors['surface-2']}
       fillOpacity={fillOpacity}
-      stroke={chosen?colors.text:path.deep?colors['text-muted']:edge??ink} strokeOpacity={chosen||path.deep||edge?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
+      stroke={edge??(chosen?colors.text:path.deep?colors['text-muted']:ink)} strokeOpacity={chosen||path.deep||edge?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
       strokeDasharray={path.deep&&!chosen?[2.2,1.6]:undefined} strokeLinejoin="round"
       accessible accessibilityRole="button" accessibilityState={{selected:chosen}} accessibilityLabel={atlasLabel(value,now)}
       onPress={()=>select(path.id)}/>;

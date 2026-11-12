@@ -7,6 +7,8 @@ export interface DayPoint {
   day: string;
   /** Calories and protein logged that day; null when nothing with a value was logged. */
   kcal: number | null; protein: number | null;
+  /** How many foods were filed under the day, with or without calories. */
+  foods: number;
   /** That day's own targets; null when none were set or could be estimated. */
   targetKcal: number | null; targetProtein: number | null;
   workouts: number; volumeKg: number;
@@ -27,11 +29,12 @@ export function weekDays(now = new Date()): string[] {
 export function dayPoints(store: WorkoutStore, days: string[], _revision = 0): DayPoint[] {
   const food = store.repo.list('food_entries'), out = new Map<string, DayPoint>();
   for (const day of days) {
-    const sum = totals(food.filter(row => row.data.day === day)), targets = foodTargets(store.repo, day).targets;
-    out.set(day, { day, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g,
+    const rows = food.filter(row => row.data.day === day), sum = totals(rows), targets = foodTargets(store.repo, day).targets;
+    out.set(day, { day, foods: rows.length, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g,
       targetKcal: targets ? targets.energy_kj / 4.184 : null, targetProtein: targets ? targets.protein_g : null, workouts: 0, volumeKg: 0 });
   }
-  for (const session of store.history()) {
+  // Only workouts with a counted set: a past-day draft that was opened and left empty is not a workout.
+  for (const session of store.trainingHistory()) {
     const point = out.get(String(session.data.day));
     if (!point) continue;
     point.workouts += 1;
@@ -39,7 +42,7 @@ export function dayPoints(store: WorkoutStore, days: string[], _revision = 0): D
   }
   return days.map(day => out.get(day)!);
 }
-export const hasAny = (points: DayPoint[]) => points.some(p => p.kcal !== null || p.protein !== null || p.workouts > 0);
+export const hasAny = (points: DayPoint[]) => points.some(p => p.foods > 0 || p.workouts > 0);
 const mean = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 /** A day is on target when its calories land between 80% and 115% of that day's target. */
 export const onTarget = (p: DayPoint) => p.kcal !== null && p.targetKcal !== null && p.kcal >= p.targetKcal * 0.8 && p.kcal <= p.targetKcal * 1.15;
@@ -48,7 +51,8 @@ export function weekReport(points: DayPoint[]): WeekReport {
   const logged = points.filter(p => p.kcal !== null);
   return {
     days: points.length, workouts: points.reduce((n, p) => n + p.workouts, 0), volumeKg: points.reduce((n, p) => n + p.volumeKg, 0),
-    foodDays: logged.length, targetDays: logged.filter(p => p.targetKcal !== null).length, onTargetDays: points.filter(onTarget).length,
+    // A day with food counts even when none of it has calories entered.
+    foodDays: points.filter(p => p.foods > 0).length, targetDays: logged.filter(p => p.targetKcal !== null).length, onTargetDays: points.filter(onTarget).length,
     avgKcal: mean(logged.map(p => p.kcal!)), avgProtein: mean(points.filter(p => p.protein !== null).map(p => p.protein!)),
   };
 }

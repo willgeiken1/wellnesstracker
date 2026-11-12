@@ -57,7 +57,8 @@ function readDays(store: WorkoutStore, days: string[], today: string, foodDay: s
     const rows = food.filter(r => sources.includes(String(r.data.day))), sum = totals(rows);
     out.set(day, { ...NONE, logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g });
   }
-  for (const session of store.history()) {
+  // Only workouts with a counted set: a past-day draft that was opened and left empty is not a workout.
+  for (const session of store.trainingHistory()) {
     const day = String(session.data.day), facts = out.get(day);
     if (!wanted.has(day) || !facts) continue;
     facts.trained = true;

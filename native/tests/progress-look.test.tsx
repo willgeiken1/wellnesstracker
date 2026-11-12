@@ -73,6 +73,10 @@ describe('Body', () => {
     expect(screen.getByRole('button', { name: `Delete weigh-in for ${today()}, 81.1 kg` })).toBeTruthy();
     expect(screen.getAllByText('Delete')).toHaveLength(10);
   });
+  test('the previous and next buttons under the trend wrap instead of running off a narrow screen', async () => {
+    await render(wrap(<Body repository={weighed()} />));
+    expect(screen.getByTestId('body-chart-steps').props.style).toMatchObject({ flexWrap: 'wrap' });
+  });
   test('the trend line takes the recovery colour from the theme', async () => {
     await render(wrap(<Body repository={weighed()} />));
     const recovery = [createTheme('dark').recovery, createTheme('light').recovery].map(hex => parseInt(hex.slice(1), 16));
@@ -91,6 +95,16 @@ describe('Goals & PRs', () => {
   test('lifetime totals count finished workouts, sets and volume', () => {
     const { store } = trained();
     expect(lifetime(store)).toEqual({ workouts: 2, sets: 6, volume: 100 * 5 * 2 + 140 * 5 * 2 + 105 * 5 * 2, unit: 'kg' });
+  });
+  test('lifetime totals match the workout summaries and do not rescan history for every workout', () => {
+    const { store } = trained(), sessions = store.trainingHistory();
+    const fromSummaries = sessions.map(s => store.summary(s.id)).reduce((n, s) => ({ sets: n.sets + s.count, volume: n.volume + s.volume }), { sets: 0, volume: 0 });
+    const history = jest.spyOn(store, 'history');
+    const total = lifetime(store);
+    expect(total).toMatchObject({ workouts: sessions.length, sets: fromSummaries.sets, volume: Math.round(fromSummaries.volume) });
+    // One pass to list the workouts. The old code called history again for every exercise of every workout.
+    expect(history.mock.calls.length).toBeLessThanOrEqual(1);
+    history.mockRestore();
   });
   test('shows the binder and the lifetime list', async () => {
     const { repo } = trained();

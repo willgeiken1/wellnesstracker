@@ -73,3 +73,13 @@ test('the glass tab bar drops the tint and lets the screen show through', async 
   expect(props.backgroundColor).toBeUndefined();
   expect(props).toMatchObject({ blurEffect: 'systemUltraThinMaterial', disableTransparentOnScrollEdge: false, tintColor: dark.accent });
 });
+
+test('the Hold to scroll and Next keys shrink or wrap to fit, so a label is never cut off', async () => {
+  await render(keypad('seaGlassTide'));
+  for (const name of ['Hold to scroll', 'Next: Reps']) {
+    const label = screen.getByText(name);
+    expect(label.props).toMatchObject({ numberOfLines: 2, adjustsFontSizeToFit: true });
+  }
+  // Number keys stay on one line at full size.
+  expect(screen.getByText('5').props.adjustsFontSizeToFit).toBe(false);
+});

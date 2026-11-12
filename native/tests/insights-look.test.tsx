@@ -3,7 +3,7 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { saveFood, setTargets, meals } from '../src/features/food/model';
 import { dayPoints, hasAny, lastDays, onTarget, weekDays, weekReport } from '../src/features/insights/model';
-import { linePath } from '../src/features/insights/mini-chart';
+import { linePath, MiniChart } from '../src/features/insights/mini-chart';
 import { Trends, Weekly } from '../src/features/insights/trends';
 import Insights from '../src/app/(tabs)/insights';
 import { useAuth } from '../src/auth/provider';
@@ -58,7 +58,7 @@ describe('the numbers', () => {
     expect(hasAny(dayPoints(new WorkoutStore(memoryRepository()), lastDays(14, NOW)))).toBe(false);
   });
   test('on target means 80% to 115% of that day\'s target', () => {
-    const day = (kcal: number | null, targetKcal: number | null) => ({ day: TODAY, kcal, protein: null, targetKcal, targetProtein: null, workouts: 0, volumeKg: 0 });
+    const day = (kcal: number | null, targetKcal: number | null) => ({ day: TODAY, foods: kcal === null ? 0 : 1, kcal, protein: null, targetKcal, targetProtein: null, workouts: 0, volumeKg: 0 });
     expect([1599, 1600, 2000, 2300, 2301].map(k => onTarget(day(k, 2000)))).toEqual([false, true, true, true, false]);
     expect(onTarget(day(null, 2000))).toBe(false);
     expect(onTarget(day(2000, null))).toBe(false);
@@ -69,6 +69,23 @@ describe('the numbers', () => {
     expect(report.volumeKg).toBeCloseTo(1000, 3);
     expect(report.avgKcal).toBeCloseTo((1900 + 1000 + 2100) / 3, 3);
     expect(report.avgProtein).toBeCloseTo(120, 3);
+  });
+  test('a day with food but no calories entered still counts as a food day', () => {
+    const repo = memoryRepository(), store = new WorkoutStore(repo), meal = meals(repo)[0].id;
+    saveFood(repo, TODAY, meal, { name: 'Sample shake', energy_kj: null, protein_g: 30, carbs_g: null, fat_g: null, ...blank }, 1, undefined, TODAY);
+    saveFood(repo, '2026-11-10', meal, { name: 'Sample snack', energy_kj: null, protein_g: null, carbs_g: null, fat_g: null, ...blank }, 1, undefined, TODAY);
+    const points = dayPoints(store, weekDays(NOW)), report = weekReport(points);
+    expect(points.map(p => p.foods)).toEqual([0, 1, 1]);
+    expect(report).toMatchObject({ foodDays: 2, targetDays: 0, avgKcal: null });
+    expect(report.avgProtein).toBeCloseTo(30, 3);
+    expect(hasAny(points)).toBe(true);
+  });
+  test('a past-day workout that was opened and left empty is not counted as a workout', () => {
+    const repo = memoryRepository(), store = new WorkoutStore(repo);
+    store.startPast('2026-11-10');
+    const points = dayPoints(store, weekDays(NOW));
+    expect(points.map(p => p.workouts)).toEqual([0, 0, 0]);
+    expect(hasAny(points)).toBe(false);
   });
   test('reading saves nothing', () => {
     const { repo, store } = sample(), save = jest.spyOn(repo, 'save'), local = jest.spyOn(repo, 'localSave');
@@ -81,6 +98,17 @@ describe('the numbers', () => {
     expect(d.match(/L/g)).toHaveLength(2);
     expect(linePath([null, null], 10, 120)).toBe('');
   });
+});
+
+test('values with no logged day beside them are drawn as dots, so sparse logging still shows', async () => {
+  await render(wrap(<MiniChart values={[100, null, 200, null, 150]} color="#000" first="a" last="b" />));
+  expect(await screen.findAllByTestId('chart-dot')).toHaveLength(3);
+  await screen.unmount();
+  await render(wrap(<MiniChart values={[100, 120, null, 150]} color="#000" first="a" last="b" />));
+  expect(await screen.findAllByTestId('chart-dot')).toHaveLength(1);
+  await screen.unmount();
+  await render(wrap(<MiniChart bars values={[100, null, 200]} color="#000" first="a" last="b" />));
+  expect(screen.queryByTestId('chart-dot')).toBeNull();
 });
 
 describe('Trends', () => {

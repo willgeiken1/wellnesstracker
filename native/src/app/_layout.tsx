@@ -21,7 +21,9 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
   return <NavigationThemeProvider value={{ ...base, colors: { ...base.colors, primary: colors.accent,
     background: colors.bg, card: colors.surface, text: colors.text, border: colors['surface-2'], notification: colors.accent } }}>
     <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-    <Stack screenOptions={{ headerTintColor: colors.text, headerStyle: { backgroundColor: colors.surface },
+    {/* Full-screen modals (the workout logger) take the status bar from their own screen, not from the component
+        above, so the style is also set per screen. Without it a dark theme showed dark clock text on a dark page. */}
+    <Stack screenOptions={{ statusBarStyle: mode === 'dark' ? 'light' : 'dark', headerTintColor: colors.text, headerStyle: { backgroundColor: colors.surface },
       contentStyle: { backgroundColor: colors.bg }, animation: reduceMotion ? 'none' : 'default', animationDuration: motion.sheet }}>
       <Stack.Protected guard={!access}>
         <Stack.Screen name="auth" options={{ headerShown: false }} />
