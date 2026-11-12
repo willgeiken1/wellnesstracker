@@ -19,6 +19,8 @@ import { touchTarget, Button } from "@/components/button";
 import { t } from "@/i18n/en";
 /** How far a sheet's handle has to be dragged down for the sheet to close. */
 export const SHEET_DRAG_CLOSE = 35;
+/** The space around a sheet's content. A short sheet's drag handle lies over the top of it. */
+const SHEET_PADDING = 16;
 /** A stable getter for the newest value, for handlers that are created once. */
 function useLatest<T>(value: T): () => T {
   const ref = useRef(value);
@@ -58,7 +60,7 @@ export const layout = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: tokens.logger.sheetRadius,
     borderTopRightRadius: tokens.logger.sheetRadius,
-    padding: 16,
+    padding: SHEET_PADDING,
     gap: 16,
     maxHeight: "94%",
   },
@@ -216,15 +218,14 @@ export function Sheet({
     onClose();
   };
   // The responder is made once: a sheet over the logger re-renders every second, and a new responder mid-drag
-  // would lose the gesture. A visible grabber has nothing under it, so it takes the touch from the start and keeps
-  // it; the unseen strip over a short sheet's top edge only takes a clear downward drag, so taps pass through.
-  const latest = useLatest({ close, tall });
+  // would lose the gesture. The handle holds only the grabber, so it takes the touch from the start and keeps it.
+  const latest = useLatest(close);
   const [drag] = useState(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !!latest().tall,
-    onMoveShouldSetPanResponder: (_, g) => !!latest().tall || (g.dy > 12 && Math.abs(g.dy) > Math.abs(g.dx)),
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
     onPanResponderTerminationRequest: () => false,
     onPanResponderRelease: (_, g) => {
-      if (g.dy > SHEET_DRAG_CLOSE && g.dy > Math.abs(g.dx)) latest().close();
+      if (g.dy > SHEET_DRAG_CLOSE && g.dy > Math.abs(g.dx)) latest()();
     },
   }));
   const content = (
@@ -285,25 +286,26 @@ export function Sheet({
                   else if (e.nativeEvent.actionName === "skip") onSkip?.();
                   else close();
                 }}
+                // On a short sheet the handle lies over the sheet's own top padding, above every control, so it
+                // takes no room and covers nothing that can be tapped.
                 style={{
-                  minHeight: tall ? 28 : 20,
+                  minHeight: tall ? 28 : SHEET_PADDING,
                   alignItems: "center",
                   justifyContent: "center",
                   ...(!tall
-                    ? { position: "absolute", top: 0, left: 0, right: 0 }
+                    ? { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1 }
                     : {}),
                 }}
               >
-                {tall && (
-                  <View
-                    style={{
-                      width: 38,
-                      height: 5,
-                      borderRadius: 3,
-                      backgroundColor: colors["surface-2"],
-                    }}
-                  />
-                )}
+                <View
+                  testID={`${testID}-grabber`}
+                  style={{
+                    width: 38,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: colors["surface-2"],
+                  }}
+                />
               </View>
             ) : null}
             {minimal ? (

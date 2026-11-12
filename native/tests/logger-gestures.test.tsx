@@ -90,14 +90,22 @@ describe('dragging a sheet down by its handle', () => {
     await drag(handle, SHEET_DRAG_CLOSE + 40);
     expect(first).not.toHaveBeenCalled(); expect(second).toHaveBeenCalledTimes(1);
   });
-  test('a visible grabber takes the touch at once and refuses to give it up; the unseen strip waits for a downward drag', async () => {
-    await render(sheet(() => {}), { wrapper });
-    const tall = screen.getByTestId('demo-sheet-handle').props;
-    expect(tall.onStartShouldSetResponder(touch(100, 100, 1))).toBe(true);
-    expect(tall.onResponderTerminationRequest(touch(100, 100, 1))).toBe(false);
-    await screen.unmount();
+  test.each([true, false])('the handle shows a grabber, takes the touch at once and refuses to give it up (tall: %s)', async tall => {
+    const onClose = jest.fn();
+    await render(sheet(onClose, tall), { wrapper });
+    const handle = screen.getByTestId('demo-sheet-handle');
+    expect(screen.getByTestId('demo-sheet-grabber')).toBeTruthy();
+    expect(handle.props.onStartShouldSetResponder(touch(100, 100, 1))).toBe(true);
+    expect(handle.props.onResponderTerminationRequest(touch(100, 100, 1))).toBe(false);
+    await drag(handle, SHEET_DRAG_CLOSE + 40);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+  test('on a short sheet the handle lies over the top padding only, so it covers no control', async () => {
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
     await render(sheet(() => {}, false), { wrapper });
-    const strip = screen.getByTestId('demo-sheet-handle').props;
-    expect(strip.onStartShouldSetResponder(touch(100, 100, 1))).toBe(false);
+    const handle = StyleSheet.flatten(screen.getByTestId('demo-sheet-handle').props.style);
+    const box = StyleSheet.flatten(screen.getByTestId('demo-sheet').props.style);
+    expect(handle).toMatchObject({ position: 'absolute', top: 0 });
+    expect(handle.minHeight).toBeLessThanOrEqual(box.padding);
   });
 });
