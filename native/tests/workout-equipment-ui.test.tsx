@@ -60,21 +60,26 @@ test('plate settings save both units with one Save and reject invalid lists', as
   expect(screen.queryByTestId('plates-error-lb')).toBeNull();
   expect(store.preferences().plateSet('kg')).toEqual([20, 2.5]);
 });
-test('one invalid plate list stops the whole save, and an untouched list is never written', async () => {
+test('an invalid plate list does not hold back the other, and an untouched list is never written', async () => {
   const store = new WorkoutStore(memoryRepository());
   const prefs = store.preferences(), write = jest.spyOn(Object.getPrototypeOf(prefs), 'savePlates');
   await render(<PlateSettings store={store} />, { wrapper });
-  const before = store.preferences().plateSet('lb');
+  const kgBefore = store.preferences().plateSet('kg');
   await fireEvent.changeText(screen.getByLabelText('Available plates (lb)'), '45, 25');
   await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), 'twenty');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
-  expect(write).not.toHaveBeenCalled();
-  expect(store.preferences().plateSet('lb')).toEqual(before);
-  await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), store.preferences().plateSet('kg').join(', '));
   await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
   expect(write).toHaveBeenCalledTimes(1);
   expect(write).toHaveBeenCalledWith('lb', [45, 25]);
   expect(store.preferences().plateSet('lb')).toEqual([45, 25]);
+  expect(store.preferences().plateSet('kg')).toEqual(kgBefore);
+  expect(screen.getByTestId('plates-error-kg')).toBeTruthy();
+  expect(screen.queryByTestId('plates-error-lb')).toBeNull();
+  expect(screen.queryByText('Plates saved')).toBeNull();
+  // Putting the kg list back as it was leaves nothing to write: the lb list is already saved.
+  await fireEvent.changeText(screen.getByLabelText('Available plates (kg)'), kgBefore.join(', '));
+  await fireEvent.press(screen.getByRole('button', { name: 'Save plates' }));
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Plates saved')).toBeTruthy();
   write.mockRestore();
 });
 test('keypad uses saved Step, custom bar and gym plates', async () => {

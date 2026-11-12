@@ -15,7 +15,7 @@ function parsePlates(text: string): number[] | null {
   const parts = text.trim() ? text.split(',').map(v => v.trim()) : [];
   return parts.some(v => !/^\d+(?:\.\d{1,2})?$/.test(v)) ? null : parts.map(Number);
 }
-/** Both plate lists, one Save. Nothing is stored until every list reads correctly, and only a list that was edited is written. */
+/** Both plate lists, one Save. Only a list that was edited and reads correctly is written; the other is left alone. */
 export function PlateSettings({ store }: { store: WorkoutStore }) {
   const { colors } = useTheme();
   const read = () => ({ lb: store.preferences().plateSet('lb').join(', '), kg: store.preferences().plateSet('kg').join(', ') });
@@ -26,9 +26,9 @@ export function PlateSettings({ store }: { store: WorkoutStore }) {
   const save = () => {
     const parsed = UNITS.map(unit => ({ unit, sizes: parsePlates(text[unit]) }));
     const bad = parsed.filter(item => item.sizes === null).map(item => item.unit);
-    setInvalid(bad); setDone(false);
-    if (bad.length) return;
-    const failed: Unit[] = [];
+    setDone(false);
+    // Each list stands on its own: one that does not read correctly never holds back the other.
+    const failed: Unit[] = [...bad];
     for (const { unit, sizes } of parsed) {
       if (text[unit] === saved[unit] || !sizes) continue;
       try { store.preferences().savePlates(unit, sizes); } catch { failed.push(unit); }

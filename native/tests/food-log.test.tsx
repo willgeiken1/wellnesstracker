@@ -36,11 +36,11 @@ describe('log screen', () => {
     expect(screen.getByTestId('food-saved')).toBeTruthy();
   });
 
-  test('shows the day as a word, not a raw date, and picks the meal that fits the hour', async () => {
+  test('shows the day as a word, not a raw date, and starts on the first meal, as the Food tab does', async () => {
     await render(<FoodLogScreen repository={memoryRepository()} />, { wrapper });
     expect(screen.getByTestId('food-log-day').props.children).toBe('Today');
     expect(screen.queryByText(new RegExp(DAY))).toBeNull();
-    expect(screen.getByRole('button', { name: 'Lunch' })).toBeSelected();
+    expect(screen.getByRole('button', { name: 'Breakfast' })).toBeSelected();
     await fireEvent.press(screen.getByRole('button', { name: 'Choose the day to log to' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Yesterday, nothing logged' }));
     expect(screen.getByTestId('food-log-day').props.children).toBe('Yesterday');
@@ -58,7 +58,7 @@ describe('log screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Save to today' }));
     const [row] = repo.list('food_entries');
     expect(row.data).toMatchObject({ name: 'Synthetic soup', day: DAY, energy_kj: null, protein_g: null });
-    expect(row.data.meal_id).toBe(meals(repo)[1].id);
+    expect(row.data.meal_id).toBe(meals(repo)[0].id);
     expect(within(screen.getByTestId('food-log-day-list')).getByText('kcal not entered')).toBeTruthy();
     expect(within(screen.getByTestId('food-log-day-list')).queryByText(/\b0 kcal/)).toBeNull();
   });
@@ -70,7 +70,7 @@ describe('log screen', () => {
     await fireEvent.changeText(screen.getByLabelText('Search your foods'), 'oats');
     await fireEvent.press(screen.getByRole('button', { name: 'Log Synthetic oats' }));
     expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(1);
-    expect(within(screen.getByTestId('food-log-added')).getByText('Added Synthetic oats to Lunch.')).toBeTruthy();
+    expect(within(screen.getByTestId('food-log-added')).getByText('Added Synthetic oats to Breakfast.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Undo' }));
     expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(0);
     expect(screen.queryByTestId('food-log-added')).toBeNull();
@@ -90,7 +90,7 @@ describe('log screen', () => {
   });
 
   test('Saved lists saved foods, favorites and combos, says how empty ones fill, and logs a combo with Undo', async () => {
-    const repo = memoryRepository(), [breakfast, lunch] = meals(repo);
+    const repo = memoryRepository(), [breakfast] = meals(repo);
     await render(<FoodLogScreen repository={repo} />, { wrapper });
     await fireEvent.press(screen.getByRole('tab', { name: 'Saved' }));
     expect(screen.getByText(/^Nothing saved yet\./)).toBeTruthy();
@@ -100,7 +100,7 @@ describe('log screen', () => {
     saveFood(repo, YESTERDAY, breakfast.id, mystery, 1, undefined, DAY);
     saveCombo(repo, YESTERDAY, breakfast.id, 'Synthetic combo');
     saveReusable(repo, oats);
-    toggleFavorite(repo, lunch.id, mystery);
+    toggleFavorite(repo, breakfast.id, mystery);
     await screen.rerender(<FoodLogScreen repository={repo} />);
     expect(screen.getByRole('button', { name: 'Log Synthetic oats' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Log Synthetic mystery snack' })).toBeTruthy();
@@ -108,7 +108,7 @@ describe('log screen', () => {
     expect(within(screen.getByRole('button', { name: 'Log combo Synthetic combo' })).queryByText(/kcal/)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Log combo Synthetic combo' }));
     expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(2);
-    expect(screen.getByText('Added 2 foods to Lunch.')).toBeTruthy();
+    expect(screen.getByText('Added 2 foods to Breakfast.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Undo' }));
     expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(0);
   });
@@ -305,5 +305,18 @@ describe('calendar', () => {
     expect(screen.getByRole('button', { name: 'Tuesday, October 27, today' })).toBeSelected();
     expect(screen.getByRole('button', { name: 'Monday, October 26' })).toBeTruthy();
     expect(within(screen.getByTestId('food-cal-key')).queryByText('Food logged')).toBeNull();
+  });
+});
+
+describe('touch and text room on the screens around food logging', () => {
+  test('the calendar grid reaches into the card so a day is at least 44pt wide on a 360pt phone', async () => {
+    const { FoodCalendar } = require('../src/features/food/calendar') as typeof import('../src/features/food/calendar');
+    const { tokens } = require('../src/design/tokens') as typeof import('../src/design/tokens');
+    await render(<FoodCalendar day={DAY} today={DAY} onSelect={() => {}} />, { wrapper });
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    const grid = StyleSheet.flatten(screen.getByTestId('food-calendar-grid').props.style);
+    // Screen padding and card padding on each side, less what the grid takes back.
+    const width = 360 - 2 * tokens.spacing[3] - 2 * tokens.spacing[3] - 2 * grid.marginHorizontal;
+    expect(width / 7).toBeGreaterThanOrEqual(44);
   });
 });

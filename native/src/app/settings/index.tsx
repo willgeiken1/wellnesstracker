@@ -34,7 +34,7 @@ function ProfileCard() {
     accessibilityHint={t('account')} onPress={() => open('account')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
     <Card style={{ borderRadius: 18, padding: tokens.spacing[3], flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
       <View style={{ minWidth: 52, minHeight: 52, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['accent-tint'] }}>
-        {initial ? <ThemedText variant="title" style={{ color: colors.accent }}>{initial}</ThemedText>
+        {initial ? <ThemedText variant="title" style={{ color: colors.text }}>{initial}</ThemedText>
           : <SettingsIcon name="account" size={26} color={colors.accent} />}
       </View>
       <View style={{ flex: 1, gap: 2 }}>

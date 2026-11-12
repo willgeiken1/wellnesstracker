@@ -63,7 +63,7 @@ export function FinishSheet({
         <ThemedText style={semibold}>{t('saveAsTemplate')}</ThemedText>
         <ThemedText muted variant="caption">{t('finishTemplateHint')}</ThemedText>
       </View>
-      <Switch accessibilityLabel={t('saveAsTemplate')} value={saveTemplate} onValueChange={setSaveTemplate} trackColor={{ true: colors.accent }} />
+      <Switch hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t('saveAsTemplate')} value={saveTemplate} onValueChange={setSaveTemplate} trackColor={{ true: colors.accent }} />
     </View>}
     {error && <Trouble text={t('invalidFinish')} />}
     <View><Primary testID="save-workout" label={t('saveWorkout')} disabled={saving} onPress={() => {

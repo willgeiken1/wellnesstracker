@@ -77,7 +77,7 @@ function Toggle({ label, value, onChange, first = false }: { label: string; valu
   return <View style={{ minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing[2],
     paddingVertical: tokens.spacing[1], borderTopWidth: first ? 0 : 1, borderTopColor: colors['surface-2'] }}>
     <ThemedText style={{ flex: 1 }}>{label}</ThemedText>
-    <Switch accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ true: colors.accent, false: colors['hair-2'] }} />
+    <Switch hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ true: colors.accent, false: colors['hair-2'] }} />
   </View>;
 }
 export function PreferenceFields({ value, onChange }: { value: DevicePreferences; onChange: (value: DevicePreferences) => void }) {

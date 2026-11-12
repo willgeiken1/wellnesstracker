@@ -49,7 +49,7 @@ export function FoodTargets({ repo, day, revision }: { repo: Repository; day: st
           {ROWS.map(([, title, unit, pillar], i) => <View key={title} style={{ flexGrow: 1, flexBasis: '45%', borderRadius: 14, backgroundColor: colors['surface-2'], paddingHorizontal: 10, paddingVertical: 10, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[pillar] }} />
-              <ThemedText muted variant="caption" numberOfLines={1} style={[semibold, { flexShrink: 1 }]}>{t(title)}</ThemedText>
+              <ThemedText muted variant="caption" style={[semibold, { flexShrink: 1 }]}>{t(title)}</ThemedText>
             </View>
             <ThemedText numeric style={{ fontSize: 19, lineHeight: 24, fontWeight: '600' }}>{Math.round(shown[i]).toLocaleString('en-US')}
               <ThemedText muted variant="caption">{' '}{t(unit)}</ThemedText></ThemedText>

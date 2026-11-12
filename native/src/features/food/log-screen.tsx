@@ -21,12 +21,6 @@ import { FoodScanner } from './scanner';
 import { FoodSearch } from './search';
 import { useFoodRevision } from './use-food-revision';
 
-/** The built-in meal that fits the hour, when it still exists; otherwise the first meal. */
-function mealForNow(list: { id: string }[], hour = new Date().getHours() + new Date().getMinutes() / 60) {
-  const slot = hour < 4 ? 3 : hour < 10.5 ? 0 : hour < 15 ? 1 : hour < 21 ? 2 : 3;
-  return (list.find(meal => meal.id === `fd000000-0000-4000-8000-00000000000${slot}`) ?? list[0]).id;
-}
-
 /**
  * The food logging screen: pick the day and meal, then one of five ways to log.
  * Search covers foods already on this phone and leads to manual entry; Snap and Describe are the AI entry, unchanged.
@@ -38,7 +32,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
   useFoodRevision(repo);
   const { colors } = useTheme();
   const [day, setDay] = useState(() => attributedDay()), [calendar, setCalendar] = useState(false);
-  const mealList = meals(repo), [selectedMeal, setSelectedMeal] = useState(() => mealForNow(mealList));
+  const mealList = meals(repo), [selectedMeal, setSelectedMeal] = useState(mealList[0].id);
   const [mode, setMode] = useState<LogMode>('search');
   const [entry, setEntry] = useState<{ initial?: Food; id?: string; meal: string } | null>(null);
   const [fallbackId, setFallbackId] = useState<number | undefined>();

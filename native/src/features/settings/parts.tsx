@@ -94,7 +94,7 @@ export function ThemedSwitch({ label, value, onValueChange, disabled, testID }: 
   label: string; value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean; testID?: string;
 }) {
   const { colors } = useTheme();
-  return <Switch testID={testID} accessibilityLabel={label} value={value} onValueChange={onValueChange} disabled={disabled}
+  return <Switch hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID={testID} accessibilityLabel={label} value={value} onValueChange={onValueChange} disabled={disabled}
     trackColor={{ false: colors['text-muted'], true: colors.accent }} ios_backgroundColor={colors['text-muted']}
     thumbColor={value ? colors['on-accent'] : colors.surface} />;
 }

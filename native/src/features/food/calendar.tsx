@@ -26,16 +26,18 @@ export function FoodCalendar({ day, today, onSelect, repo }: { day: string; toda
   /** Spoken state of a day: today, and whether food is logged when that is known. Future days say neither. */
   const state = (date: string) => [date === today ? t('foodCalToday') : null, logged && date <= today ? t(logged.has(date) ? 'foodCalLogged' : 'foodCalNotLogged') : null].filter(Boolean);
   const mark = (date: string, selected: boolean) => <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: logged?.has(date) ? (selected ? colors['on-accent'] : colors.food) : 'transparent' }} />;
+  // The grid reaches into the card's padding, so a day is at least 44pt wide even on the narrowest phones.
+  const wide = { marginHorizontal: -tokens.spacing[1] };
   return <View style={{ gap: tokens.spacing[1] }} testID="food-calendar">
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1] }}>
       <FoodAction label={t('foodPreviousMonth')} onPress={() => setMonth(shiftDay(first, -1).slice(0, 7))}><Glyph name="back" size={16} width={2} /></FoodAction>
       <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { flex: 1, textAlign: 'center' }]}>{noon(first).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</ThemedText>
       <FoodAction label={t('foodNextMonth')} disabled={month >= today.slice(0, 7)} onPress={() => setMonth(next.slice(0, 7))}><Glyph name="chevron" size={16} width={2} /></FoodAction>
     </View>
-    <View style={{ flexDirection: 'row' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <View style={[{ flexDirection: 'row' }, wide]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {WEEKDAYS.map((name, i) => <ThemedText key={i} muted variant="caption" style={[semibold, { width: '14.28%', textAlign: 'center' }]}>{name}</ThemedText>)}
     </View>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+    <View testID="food-calendar-grid" style={[{ flexDirection: 'row', flexWrap: 'wrap' }, wide]}>
       {Array.from({ length: weekday }, (_, i) => <View key={`blank${i}`} style={{ width: '14.28%' }} />)}
       {Array.from({ length }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`).map(date => {
         const selected = date === day, future = date > today;
