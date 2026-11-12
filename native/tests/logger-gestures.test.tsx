@@ -113,8 +113,10 @@ describe('dragging a sheet down by its handle', () => {
     const { StyleSheet } = require('react-native') as typeof import('react-native');
     await render(sheet(() => {}, false), { wrapper });
     const handle = screen.getByTestId('demo-sheet-handle');
-    const slop = handle.props.hitSlop as { top: number; bottom: number };
-    expect(StyleSheet.flatten(handle.props.style).minHeight + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
+    // Only slop inside the sheet counts: the strip is at the sheet's top edge, so slop above it is clipped.
+    const slop = handle.props.hitSlop as { top?: number; bottom: number };
+    expect(slop.top ?? 0).toBe(0);
+    expect(StyleSheet.flatten(handle.props.style).minHeight + slop.bottom).toBeGreaterThanOrEqual(44);
     const bar = StyleSheet.flatten(screen.getByTestId('demo-sheet-grabber').props.style);
     const box = StyleSheet.flatten(screen.getByTestId('demo-sheet').props.style);
     expect(contrast(bar.backgroundColor as string, box.backgroundColor as string)).toBeGreaterThanOrEqual(3);

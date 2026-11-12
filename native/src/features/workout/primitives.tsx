@@ -274,8 +274,9 @@ export function Sheet({
               <View
                 testID={`${testID}-handle`}
                 {...drag.panHandlers}
-                // The strip is 28pt; the slop brings the area a finger can grab to 44pt.
-                hitSlop={{ top: 8, bottom: 8 }}
+                // The strip is 28pt; slop below it brings the area a finger can grab to 44pt. None above: the
+                // strip sits at the sheet's top edge and a touch outside the sheet never reaches it.
+                hitSlop={{ bottom: 16 }}
                 accessible
                 accessibilityLabel={label}
                 accessibilityActions={[
