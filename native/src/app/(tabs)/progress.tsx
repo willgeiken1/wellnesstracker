@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { router } from 'expo-router';
 import { useAuth } from '@/auth/provider';
-import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -19,7 +17,6 @@ export default function Page() {
     {selected==='photos' && <Card testID="photos-later">
       <ThemedText variant="headline" accessibilityRole="header">{t('photosLaterTitle')}</ThemedText>
       <ThemedText muted>{t('photosLaterBody')}</ThemedText>
-      <Button label={t('backHome')} variant="secondary" onPress={()=>router.navigate('/')}/>
     </Card>}
   </Screen>;
 }
