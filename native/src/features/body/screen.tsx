@@ -20,14 +20,16 @@ export function Body({repository}:{repository:Repository}) {
   const facade=useWorkoutStore(repository),{colors}=useTheme();
   const repo=facade.repo,unit=readProfile(repo).unit;
   // Once Apple Health is connected, opening Body quietly picks up new readings. It never prompts from here.
-  useEffect(()=>{void refreshWeights(repo,appleHealth()).catch(()=>{});},[repo]);
+  useEffect(()=>{let live=true;void refreshWeights(repo,appleHealth(),new Date(),()=>live).catch(()=>{});return()=>{live=false;};},[repo]);
   const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false),[deleteFailed,setDeleteFailed]=useState(false);
   const [showAll,setShowAll]=useState(false);
   const rows=repo.list('weigh_ins').filter(r=>String(r.data.day)<=today());
   const deletable=rows.filter(row=>row.data.source==='app').sort((a,b)=>String(b.data.day).localeCompare(String(a.data.day)) || compareRows(b,a) || b.id.localeCompare(a.id));
   const deleteRows=showAll?deletable:deletable.slice(0,30);
   const trend=trendWeights(dailyWeights(rows)),visible=inRange(trend,range),last=trend.at(-1),change=weeklyChange(trend);
-  const lastKg=lastWeight(rows);
+  // The entry starts from the last weight typed here, never from a Health reading: saving a typed weigh-in
+  // syncs, and a Health value must not ride along with it.
+  const lastKg=lastWeight(rows.filter(row=>row.data.source==='app'));
   const raw=rows.filter(r=>visible.some(p=>p.day===r.data.day) && typeof r.data.weight_kg==='number' && Number.isFinite(r.data.weight_kg) && r.data.weight_kg>0).map(r=>({day:String(r.data.day),kg:Number(r.data.weight_kg)}));
   const delta=(kg:number|null)=>kg===null?'—':`${kg>0?'+':''}${fromKg(kg,unit).toFixed(1)} ${unit}`;
   const stats=[

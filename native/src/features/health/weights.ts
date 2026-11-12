@@ -20,9 +20,12 @@ export function importWeights(repo: Repository, samples: readonly WeightSample[]
   return added;
 }
 
-/** Apple Health stays the record for its own readings: one that is no longer there (deleted in Health, or
- * no longer shared) is removed here too. Only `healthkit` rows inside the window just read are touched. */
+/** Apple Health stays the record for its own readings: one that is no longer there is removed here too.
+ * Only `healthkit` rows from `since` onward are touched, and `since` must be the same instant the read
+ * started from. An empty read removes nothing: iOS returns nothing both when every reading is gone and when
+ * the person has turned sharing off, and the two cannot be told apart. */
 export function dropMissing(repo: Repository, samples: readonly WeightSample[], since: Date): number {
+  if (!samples.length) return 0;
   const kept = new Set(samples.map(rowId)), from = localDay(since);
   let dropped = 0;
   for (const row of repo.list('weigh_ins')) {
@@ -32,10 +35,20 @@ export function dropMissing(repo: Repository, samples: readonly WeightSample[], 
   return dropped;
 }
 
-/** Reads recent weights if the person has already been asked, and adds any new ones. Never prompts. */
-export async function refreshWeights(repo: Repository, source: HealthSource | null, now = new Date()): Promise<number> {
-  if (!source || await source.access() !== 'asked') return 0;
-  const since = new Date(now.getTime() - IMPORT_DAYS * 86_400_000), samples = await source.weights(since);
+/** Local midnight `IMPORT_DAYS` ago, so the read and the removal check cover exactly the same whole days. */
+export function importStart(now = new Date()): Date {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  start.setDate(start.getDate() - IMPORT_DAYS);
+  return start;
+}
+
+/** Reads recent weights if the person has already been asked, and adds any new ones. Never prompts.
+ * `live` is asked after every wait: once it says no (the page closed, or the account changed or signed out)
+ * nothing more is written. */
+export async function refreshWeights(repo: Repository, source: HealthSource | null, now = new Date(), live: () => boolean = () => true): Promise<number> {
+  if (!source || await source.access() !== 'asked' || !live()) return 0;
+  const since = importStart(now), samples = await source.weights(since);
+  if (!live()) return 0;
   dropMissing(repo, samples, since);
   return importWeights(repo, samples, now);
 }
