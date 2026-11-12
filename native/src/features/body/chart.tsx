@@ -39,7 +39,7 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
     </Pressable>
     <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{points[0].day}</ThemedText><ThemedText muted variant="caption">{points.at(-1)!.day}</ThemedText></View>
     <ThemedText accessibilityLiveRegion="polite">{label}</ThemedText>
-    <View style={{flexDirection:'row',gap:8}}>
+    <View testID="body-chart-steps" style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
       <Button label={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>setSelected(points[index-1].day)}/>
       <Button label={t('bodyNext')} variant="secondary" disabled={index===points.length-1} onPress={()=>setSelected(points[index+1].day)}/>
     </View>

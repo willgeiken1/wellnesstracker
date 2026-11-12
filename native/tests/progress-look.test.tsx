@@ -72,6 +72,10 @@ describe('Body', () => {
     expect(screen.getByRole('button', { name: `Delete weigh-in for ${today()}, 81.1 kg` })).toBeTruthy();
     expect(screen.getAllByText('Delete')).toHaveLength(10);
   });
+  test('the previous and next buttons under the trend wrap instead of running off a narrow screen', async () => {
+    await render(wrap(<Body repository={weighed()} />));
+    expect(screen.getByTestId('body-chart-steps').props.style).toMatchObject({ flexWrap: 'wrap' });
+  });
   test('the trend line takes the recovery colour from the theme', async () => {
     await render(wrap(<Body repository={weighed()} />));
     const recovery = [createTheme('dark').recovery, createTheme('light').recovery].map(hex => parseInt(hex.slice(1), 16));

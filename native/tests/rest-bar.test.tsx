@@ -103,3 +103,11 @@ test('the choice is made in workout settings, stays on this phone, and unknown v
   expect(restOpens(repo)).toBe('bar');
   expect(save).not.toHaveBeenCalled();
 });
+
+test('at large text the bar wraps its buttons under the clock, and every button keeps the shared touch target', async () => {
+  await logger();
+  await fireEvent.press(screen.getByTestId('set-0-0-done'));
+  expect(StyleSheet.flatten(screen.getByTestId('rest-bar-row').props.style)).toMatchObject({ flexWrap: 'wrap' });
+  const { touchTarget } = require('../src/components/button') as typeof import('../src/components/button');
+  for (const name of ['−15 s', '+15 s', 'Skip']) expect(StyleSheet.flatten(screen.getByRole('button', { name }).props.style).minHeight).toBe(touchTarget);
+});

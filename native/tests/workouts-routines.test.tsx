@@ -99,3 +99,12 @@ test('edit, reorder and delete sit behind the routine row and still work', async
   expect(new WorkoutStore(repo).templates()).toHaveLength(2);
   alert.mockRestore();
 });
+
+test('the Start routine label keeps 4.5:1 on the training colour in every theme, light and dark', () => {
+  const { contrast, readableOn } = require('../src/core/contrast') as typeof import('../src/core/contrast');
+  const { createTheme, palettes } = require('../src/design/tokens') as typeof import('../src/design/tokens');
+  for (const palette of palettes) for (const mode of ['light', 'dark'] as const) {
+    const c = createTheme(mode, palette);
+    expect(contrast(readableOn(c.training, [c['on-accent'], c.text]), c.training)).toBeGreaterThanOrEqual(4.5);
+  }
+});

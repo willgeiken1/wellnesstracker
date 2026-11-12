@@ -5,6 +5,7 @@ import type { WorkoutStore } from "@/data/workout/store";
 import { remainingSeconds } from "@/core/workout/rules";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
+import { touchTarget } from "@/components/button";
 import { ThemedText } from "@/components/themed-text";
 import { t } from "@/i18n/en";
 import { clock, Eyebrow, Pill, layout, Sheet } from "./primitives";
@@ -78,7 +79,7 @@ function Chip({ label, onPress }: { label: string; onPress: () => void }) {
   const { colors } = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
-      style={{ minHeight: 44, minWidth: 52, justifyContent: "center" }}>
+      style={{ minHeight: touchTarget, minWidth: 52, justifyContent: "center" }}>
       <View style={{ minHeight: 36, paddingHorizontal: 10, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors["surface-2"] }}>
         <ThemedText numeric style={{ fontSize: 15, fontWeight: "600" }}>{label}</ThemedText>
       </View>
@@ -158,13 +159,14 @@ export function RestTimer({
           overflow: "hidden",
         }}
       >
-        <View style={[layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6 }]}>
+        {/* Wraps: at the largest text sizes the chips drop under the clock instead of pushing Skip off the edge. */}
+        <View testID="rest-bar-row" style={[layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("expandRest")}
             accessibilityValue={{ text: timer.ended ? t("restReady") : clock(seconds) }}
             onPress={() => store.updateTimer({ minimized: false })}
-            style={{ flex: 1, minHeight: 44, justifyContent: "center" }}
+            style={{ flexGrow: 1, flexShrink: 1, flexBasis: 96, minHeight: touchTarget, justifyContent: "center" }}
           >
             {timer.ended ? (
               <ThemedText numberOfLines={2}>{t("restReady")}</ThemedText>
