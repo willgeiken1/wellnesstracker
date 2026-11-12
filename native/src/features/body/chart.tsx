@@ -32,13 +32,14 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
       }} style={{height:190}}>
       <Svg accessible={false} width="100%" height={190} viewBox="0 0 300 190" preserveAspectRatio="none">
         {raw.map((p,i)=><Circle key={i} cx={x(p.day)} cy={y(p.kg)} r={3} fill={colors.text} opacity={0.22}/>)}
-        <Path d={points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} fill="none" stroke={colors.accent} strokeWidth={2.5}/>
-        <Circle cx={x(point.day)} cy={y(point.trendKg)} r={5} fill={colors.accent}/>
+        {points.length>1&&<Path testID="body-chart-area" d={`${points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} L${x(points.at(-1)!.day)},190 L${x(points[0].day)},190 Z`} fill={colors.recovery} opacity={0.14}/>}
+        <Path testID="body-chart-line" d={points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} fill="none" stroke={colors.recovery} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"/>
+        <Circle cx={x(point.day)} cy={y(point.trendKg)} r={5} fill={colors.recovery}/>
       </Svg>
     </Pressable>
     <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{points[0].day}</ThemedText><ThemedText muted variant="caption">{points.at(-1)!.day}</ThemedText></View>
     <ThemedText accessibilityLiveRegion="polite">{label}</ThemedText>
-    <View style={{gap:8}}>
+    <View testID="body-chart-steps" style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
       <Button label={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>setSelected(points[index-1].day)}/>
       <Button label={t('bodyNext')} variant="secondary" disabled={index===points.length-1} onPress={()=>setSelected(points[index+1].day)}/>
     </View>

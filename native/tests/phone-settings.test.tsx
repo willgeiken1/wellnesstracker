@@ -10,11 +10,11 @@ jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 test.each(['health', 'notifications'])('free build %s setting is calm without an auth/native provider', async section => {
   mockSection = section;
   await render(<ThemeProvider><Settings /></ThemeProvider>);
-  expect(screen.getByText('Not in this build.')).toBeTruthy();
+  expect(screen.getByText('Not part of this version yet.')).toBeTruthy();
 });
 test('default settings remain available independently of an auth provider', async () => {
   Constants.expoConfig!.extra!.phoneOnly = false;
   mockSection = 'health';
   await render(<ThemeProvider><Settings /></ThemeProvider>);
-  expect(screen.queryByText('Not in this build.')).toBeNull();
+  expect(screen.queryByText('Not part of this version yet.')).toBeNull();
 });

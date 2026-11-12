@@ -1,7 +1,8 @@
 // INS-01 token proposal: v2 palettes, derived roles, D6 contrast table and proposed fixes.
 // Run from native/: node scripts/ins01-palette-contrast.ts --write  (rewrites the generated block in design/INS-01-TOKEN-PROPOSAL.md)
 // tests/ins01-palette-contrast.test.ts recomputes the block and fails if the doc drifts.
-// Proposal only: nothing here is imported by the app, and tokens.ts / tokens.json are untouched.
+// The open palettes are applied to src/design/tokens.json with: node scripts/ins01-palette-contrast.ts --apply
+// tests/tokens.test.ts recomputes them and fails if tokens.json drifts. The app never imports this file.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 export const BASE_ROLES = ['bg', 'surface', 'text', 'muted', 'accent', 'onAccent', 'training', 'food', 'recovery', 'sleep', 'success', 'warn'] as const;
@@ -404,6 +405,32 @@ export const renderReport = () => {
   });
   return out.join('\n') + '\n';
 };
+
+// ---- app tokens (src/design/tokens.json `palettes`) ----
+// Open palettes only; the two secret palettes stay out of the app until they are built.
+// Keys are today's app names (section 1.2 of the doc). `accent` is accentOnText, because the app uses one accent for text and fills.
+export const appColors = (c: FullColors, mode: Mode) => {
+  const accentTint = mix(c.surface, c.accentOnText, 0.16);
+  return {
+    bg: c.bg, surface: c.surface, 'surface-2': c.surface2, text: c.text, 'text-muted': c.muted,
+    // accent-2 is used as text on every surface and on accent-tint (the workout AI card), so it must read on all of them.
+    accent: c.accentOnText, 'accent-2': nudge(c.ai, [c.bg, c.surface, c.surface2, accentTint], 4.5, away(mode)), 'on-accent': c.onAccent, 'accent-tint': accentTint,
+    success: c.success, warning: c.warn,
+    training: c.training, food: c.food, recovery: c.recovery, sleep: c.sleep, water: c.water,
+    hair: c.hair, 'hair-2': c.hair2,
+  };
+};
+export const appPalettes = () => Object.fromEntries(PALETTES.filter(p => !p.secret).map(p => {
+  const q = proposePalette(p);
+  const dark = appColors(q.dark, 'dark'), light = appColors(q.light, 'light');
+  return [p.id, { name: p.name, swatches: [dark.accent, dark.training, dark.food, dark.sleep], dark, light }];
+}));
+
+if (process.argv.includes('--apply')) {
+  const file = 'src/design/tokens.json';
+  const { palettes: _old, ...rest } = JSON.parse(readFileSync(file, 'utf8'));
+  writeFileSync(file, JSON.stringify({ palettes: appPalettes(), ...rest }, null, 2) + '\n');
+}
 
 if (process.argv.includes('--write')) {
   const doc = readFileSync(DOC_PATH, 'utf8');

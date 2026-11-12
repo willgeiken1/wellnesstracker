@@ -21,7 +21,7 @@ export interface PaywallScreenProps {
 
 const alwaysFree = [
   '988 crisis card', 'Data export', 'Data and account deletion', 'Logging',
-  'Check-ins', 'Workouts', 'Barcode scan', 'PWA importer', 'Basic trends',
+  'Check-ins', 'Workouts', 'Barcode scan', 'Import from the web app', 'Basic trends',
   'Advanced trends', 'Plain workout summary',
 ] as const;
 

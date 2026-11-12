@@ -10,3 +10,7 @@ export function contrast(a: string, b: string): number {
   const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
+/** Of the candidate text colours, the one that reads best on a filled background. */
+export function readableOn(fill: string, candidates: string[]): string {
+  return candidates.reduce((best, colour) => contrast(colour, fill) > contrast(best, fill) ? colour : best);
+}

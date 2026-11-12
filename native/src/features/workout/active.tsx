@@ -16,6 +16,7 @@ import { useWorkout } from "./use-workout";
 import { SyncBadge } from "./badge";
 import {
   clock,
+  Chip,
   Eyebrow,
   Pill,
   IconButton,
@@ -29,7 +30,9 @@ import { ExercisePicker } from "./picker";
 import { SupersetControls } from "./superset-controls";
 import { RestOptions } from "./rest-options";
 import { SetRow } from "./set-row";
+import { UpNext } from "./up-next";
 import { RestTimer } from "./timer";
+import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
@@ -314,6 +317,8 @@ function Logger({
           });
         if (store.toggleDone(entry.id, index)) {
           tick(store.repo);
+          // Rest starts as the bar pinned at the bottom unless the person asked for the full-screen timer.
+          if (restOpens(store.repo) === "bar" && store.timer() && !store.timer()!.minimized) store.updateTimer({ minimized: true });
           if (store.supersetGroup(entry)) {
             const next = store.nextSet(session.id);
             if (next) edit(next.entryId,next.index,'weight');
@@ -342,6 +347,22 @@ function Logger({
   const current = cursor
     ? entries.find((e) => e.id === cursor.entryId)
     : undefined;
+  function repsHint(entry: Row, index: number) {
+    return String(store.repRange(entry) ? store.suggestion(entry).target ?? "" : store.repo.localGet<number>(`target:${entry.id}`) ?? store.previous(entry).find((s) => Number(s.data.position) === index)?.data.reps ?? "");
+  }
+  const upcoming = past ? undefined : store.nextSet(session.id),
+    upcomingEntry = upcoming ? entries.find((e) => e.id === upcoming.entryId) : undefined;
+  function upcomingDetail(entry: Row, index: number) {
+    const ds = store.drafts(entry.id), d = ds[index], left = ds.filter((draft) => !draft.setId).length;
+    const weight = d.weight || weightHint(entry, index), reps = d.reps || repsHint(entry, index);
+    if (weight && reps) return t("upNextDetail").replace("{sets}", String(left)).replace("{reps}", reps).replace("{weight}", weight).replace("{unit}", store.unit(entry.id));
+    return reps ? `${left} × ${reps}` : pluralize(left, "set");
+  }
+  const swap = (entryId: string, mode: "swap" | "replace") => {
+    if (!past) store.updateTimer({ minimized: true });
+    setReplacement({ entryId, mode });
+    setPicker(true);
+  };
   return (
     <SafeAreaView
       testID="logger-safe-area"
@@ -365,27 +386,18 @@ function Logger({
           },
         ]}
       >
-        <View style={[layout.row, { justifyContent: "space-between" }]}>
+        <View style={[layout.row, { gap: 4 }]}>
           <IconButton
             name="down"
             label={t("closeWorkout")}
             onPress={closeWorkout}
           />
-          <View
-            style={{
-              position: "absolute",
-              left: 80,
-              right: 80,
-              alignItems: "center",
-            }}
-          >
-            {session.data.origin === "template" && (
-              <Eyebrow>{t("template")}</Eyebrow>
-            )}
-            <ThemedText
-              style={{ fontSize: tokens.logger.title, fontWeight: "600" }}
-            >
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+            <ThemedText variant="title" numberOfLines={1} style={{ fontWeight: "600", flexShrink: 1 }}>
               {String(session.data.name ?? t("workoutName"))}
+            </ThemedText>
+            <ThemedText muted numeric style={{ fontSize: 15 }}>
+              {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
             </ThemedText>
           </View>
           <Pill
@@ -400,25 +412,14 @@ function Logger({
             }}
           />
         </View>
-        <View
-          style={[
-            layout.row,
-            {
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 6,
-              paddingVertical: 0,
-            },
-          ]}
-        >
+        <View style={[layout.row, { justifyContent: "space-between", flexWrap: "wrap", gap: 6 }]}>
           <View style={[layout.row, { gap: 6 }]}>
-            {!past && <Line name="clock" size={16} color={colors["text-muted"]} />}
-            <ThemedText muted style={{ fontSize: 13 }}>
-              <ThemedText muted style={{ fontWeight: "700", fontSize: 13 }}>
-                {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
-              </ThemedText>{" "}
-              · {t("set")} {Math.min(done + 1, total)} {t("of")} {total}
-            </ThemedText>
+            {session.data.origin === "template" && <Eyebrow>{t("template")}</Eyebrow>}
+            {total > 0 && (
+              <ThemedText muted variant="caption">
+                {session.data.origin === "template" ? "· " : ""}{t("set")} {Math.min(done + 1, total)} {t("of")} {total}
+              </ThemedText>
+            )}
           </View>
           <SyncBadge
             local={["demo", "guest"].includes(store.repo.owner)}
@@ -468,6 +469,15 @@ function Logger({
         automaticallyAdjustContentInsets={false}
         contentContainerStyle={[layout.content, { paddingTop: 12 }]}
       >
+        {upcoming && upcomingEntry && (
+          <UpNext
+            name={String(upcomingEntry.data.exercise)}
+            detail={upcomingDetail(upcomingEntry, upcoming.index)}
+            onPress={() => edit(upcomingEntry.id, upcoming.index, "weight")}
+            onSkip={store.sets(upcomingEntry.id).length > 0 ? undefined : () => run(() => store.skipExercise(upcomingEntry.id))}
+            onSwap={() => swap(upcomingEntry.id, "swap")}
+          />
+        )}
         {entries.map((e, exerciseIndex) => {
           const ds = store.drafts(e.id),
             complete = ds.length > 0 && ds.every((d) => d.setId),
@@ -485,9 +495,13 @@ function Logger({
                     store.drafts(entry.id).some((d) => d.setId),
                   )),
             collapsed = compact && !open.includes(e.id),
-            previous = store.previous(e);
+            previous = store.previous(e),
+            name = String(e.data.exercise),
+            equipment = store.preferences().exercise(name).equipment,
+            setupNote = store.preferences().machine(name).text,
+            pendingIndex = Math.max(0, ds.findIndex((d) => !d.setId));
           return (
-            <Panel key={e.id} style={{...(collapsed ? {paddingVertical:8} : {}), ...(store.skipped(e.id) ? {opacity:0.45} : {})}}>
+            <Panel key={e.id} testID={`logger-card-${exerciseIndex}`} style={{borderRadius: 18, ...(collapsed ? {paddingVertical:8} : {}), ...(store.skipped(e.id) ? {opacity:0.45} : {})}}>
               <View style={layout.row}>
                 {compact && (
                   <View
@@ -522,6 +536,7 @@ function Logger({
                   style={{ flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
                 >
                   <ThemedText
+                    variant="headline"
                     style={{
                       fontSize: collapsed ? 17 : tokens.logger.exercise,
                       fontWeight: "600",
@@ -535,6 +550,13 @@ function Logger({
                       : `${exerciseIndex > firstPending && !completed ? t("upNext") : equipmentLabel(store.preferences().exercise(String(e.data.exercise)).equipment)} · ${pluralize(ds.length, "set")}`}
                   </ThemedText>
                 </Pressable>
+                {!collapsed && !store.skipped(e.id) && equipment === "barbell" && ds.length > 0 && (
+                  <Chip
+                    label={t("plates")}
+                    accessibilityLabel={`${name}, ${t("plates")}`}
+                    onPress={() => edit(e.id, pendingIndex, "weight")}
+                  />
+                )}
                 {compact && (
                   <IconButton
                     name="down"
@@ -549,17 +571,23 @@ function Logger({
                   />
                 )}
 
-                  <IconButton
-                    name="more"
-                    label={`${e.data.exercise}, ${t("exerciseOptions")}`}
-                    onPress={() => setOptions(options === e.id ? null : e.id)}
-                  />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${e.data.exercise}, ${t("exerciseOptions")}`}
+                  accessibilityState={{ expanded: options === e.id }}
+                  onPress={() => setOptions(options === e.id ? null : e.id)}
+                  style={layout.cell}
+                >
+                  <View style={{ width: 34, height: 34, borderRadius: 99, alignItems: "center", justifyContent: "center", backgroundColor: colors["surface-2"] }}>
+                    <Line name="more" size={20} color={colors["text-muted"]} />
+                  </View>
+                </Pressable>
               </View>
                 {store.skipped(e.id) && <ThemedText>{t('skippedExercise')}</ThemedText>}
               {options === e.id && <View style={layout.stack}>
                 <Button label={t('cancel')} variant="secondary" onPress={() => setOptions(null)} />
                 <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} disabled={!store.skipped(e.id) && store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
-                {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => {if (!past) store.updateTimer({minimized:true}); setReplacement({entryId:e.id,mode}); setPicker(true);}} />)}
+                {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => swap(e.id, mode)} />)}
                 <Button label={t(store.isUnilateral(e.id) ? 'bilateral' : 'unilateral')} disabled={store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.setUnilateral(e.id, !store.isUnilateral(e.id)))} />
                 <SupersetControls currentId={e.id} items={entries.filter(entry => !store.skipped(entry.id)).map(entry => ({id:entry.id,name:String(entry.data.exercise),group:store.supersetGroup(entry)}))} onLink={ids => run(() => store.linkSuperset(ids))} onUnlink={() => run(() => store.unlinkSuperset(e.id))} />
                 {!past && <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />}
@@ -571,61 +599,41 @@ function Logger({
               {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
               {!collapsed && !store.skipped(e.id) && (
                 <>
-                  <MachineSetup store={store} name={String(e.data.exercise)} />
+                  {!!setupNote && <ThemedText muted variant="caption">{setupNote}</ThemedText>}
                   <View style={layout.row}>
                     <ThemedText
                       muted
                       variant="caption"
-                      style={{
-                        width: 26,
-                        fontSize: tokens.type.caption,
-                        fontWeight: "600",
-                      }}
+                      numberOfLines={1}
+                      style={{ width: 26, textAlign: "center", fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("setHeader")}
                     </ThemedText>
                     <ThemedText
                       muted
                       variant="caption"
-                      style={{
-                        flex: 1,
-                        fontSize: tokens.type.caption,
-                        fontWeight: "600",
-                      }}
+                      numberOfLines={1}
+                      style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("previous")}
                     </ThemedText>
                     <ThemedText
                       muted
                       variant="caption"
-                      style={{
-                        flex: 1,
-                        fontSize: tokens.type.caption,
-                        fontWeight: "600",
-                        textAlign: "center",
-                      }}
+                      numberOfLines={1}
+                      style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {store.unit(e.id)}
                     </ThemedText>
                     <ThemedText
                       muted
                       variant="caption"
-                      style={{
-                        flex: 1,
-                        fontSize: tokens.type.caption,
-                        fontWeight: "600",
-                        textAlign: "center",
-                      }}
+                      numberOfLines={1}
+                      style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("repsHeader")}
                     </ThemedText>
-                    <View
-                      style={{
-                        width: 38,
-                      }}
-                    >
-                      <Line name="check" color={colors["text-muted"]} />
-                    </View>
+                    <View style={{ width: 40 }} />
                   </View>
                   <View>
                     {ds.map((d, i) => (
@@ -644,7 +652,7 @@ function Logger({
                               : ""
                           }
                           hint={weightHint(e, i)}
-                          repsHint={String(store.repRange(e) ? store.suggestion(e).target ?? "" : store.repo.localGet<number>(`target:${e.id}`) ?? previous.find((s) => Number(s.data.position) === i)?.data.reps ?? "")}
+                          repsHint={repsHint(e, i)}
                           onEdit={(field) => edit(e.id, i, field)}
                           onDone={() => mark(e, i)}
                           onRemove={() => confirmRemoveSet(e.id,i)}
@@ -657,6 +665,15 @@ function Logger({
                           ) && <JumpCard store={store} entry={e} />}
                       </Fragment>
                     ))}
+                  </View>
+                  <View style={[layout.row, { flexWrap: "wrap" }]}>
+                    <Chip
+                      testID={`add-set-${exerciseIndex}`}
+                      label={`+ ${t("addSet")}`}
+                      accessibilityLabel={`${name}, ${t("addSet")}`}
+                      onPress={() => run(() => store.addSet(e.id))}
+                    />
+                    <MachineSetup compact store={store} name={name} equipment={equipment} />
                   </View>
                 </>
               )}

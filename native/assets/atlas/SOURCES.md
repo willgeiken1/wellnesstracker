@@ -1,8 +1,13 @@
 # BA-2D sources
 
-- Geometry: **original**. All polygon vertices, skin outlines, body proportions and
-  compound SVG paths were drawn for BA-2D by Codex. No internet SVG, traced art,
-  generated bitmap, GLB, or legacy PWA diagram paths were used.
+- Geometry: **Insight's own web app figure.** The outlines, muscle shapes, deep-muscle
+  projections and detail lines are the 44-muscle body from the web app
+  (`ASSETS.advBody` in `logger/js/data/body.js`, male and female), converted by
+  `native/scripts/atlas/build_atlas.py`. The converter mirrors the drawn half,
+  applies the web figure's clip shapes, flattens curves to straight-edge polygons
+  and centres the figure in the 200 x 440 viewBox. No outside artwork was added.
+  This replaces the first BA-2D outline (straight-edge shapes drawn by Codex) at
+  Will's direction on 2026-11-10: the web app figure is the floor for the native atlas.
 - Stable keys and basic-group mapping: existing repository
   `logger/js/data/body.js` (`ASSETS.advToBasic`, 44 keys). Labels derive from its
   `advGroups`; scientific labels are anatomical terminology in `src/i18n/en.ts`.
@@ -12,10 +17,13 @@
   Dark-mode #263746, #5685a2 and #8dbbd6 are **original adaptations**, not
   ColorBrewer values. No artwork copied. Attribution is shown in About → Licenses.
 
-`geometry.json` is the canonical vertex/path source. Native reads it directly.
+`geometry.json` is what native reads. It is generated: change the web figure or the
+converter and rerun it, do not edit the JSON by hand. Each side has `skin` (filled
+silhouette), `lines` (stroke-only detail) and `muscles` in paint order; `deep: true`
+marks a dashed deep muscle. Six muscles seen from both sides have a shape on each.
 The PWA diagram swap was removed in fix round 2 per Will
 (2026-10-28, 7:15 AM CT): the body map is native-only.
-The four SVG files are plain exports of the skin and muscle layers, one compound
+The four SVG files are plain exports of the skin, muscle and line layers, one compound
 Path per key, both lateral halves in that path. Tests enforce export equality
 and the combined 300 KB SVG cap. Update these exports together.
 

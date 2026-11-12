@@ -12,6 +12,7 @@ import { atlasGeometry, type BodyType, type Side } from './geometry';
 import { AccessiblePath } from './accessible-path';
 import { muscleByKey } from './muscles';
 import { heatFill, heatmap, rollup, type AtlasSession, type MuscleVolume } from './volume';
+import { contrast } from '../../core/contrast';
 export function atlasValue(value: MuscleVolume, now: number) {
  const hours=value.lastTrained===null?null:Math.max(0,(now-value.lastTrained)/3600000);
  const last=hours===null?t('atlasNever'):hours>7*24?t('atlasOutsideWindow').replace('{days}','7'):
@@ -26,6 +27,22 @@ export function atlasLabel(value: MuscleVolume, now: number) {
 }
 /** Responsive at any parent width. Compact previews retain controls and full list access.
  * Static rendering intentionally has no animation, including when Reduce Motion is on. */
+/** Strength of the muscle lines over the body. Tested against both modes for 3:1 contrast. */
+export const ATLAS_LINE_OPACITY=.85;
+const mix=(under: string, over: string, alpha: number)=>'#'+[1,3,5].map(i=>{
+ const a=parseInt(under.slice(i,i+2),16), b=parseInt(over.slice(i,i+2),16);
+ return Math.round(a+(b-a)*alpha).toString(16).padStart(2,'0');
+}).join('');
+/** The boundary of a trained muscle. Soft ink disappears on the heat colours, so the line takes whichever of the
+ * text and background colours stands out more against the tint as it is actually drawn over the body. */
+export function trainedStroke(fill: string, fillOpacity: number, colors: Record<'text'|'bg'|'surface-2', string>) {
+ const drawn=mix(colors['surface-2'],fill,fillOpacity);
+ return contrast(colors.text,drawn)>=contrast(colors.bg,drawn)?colors.text:colors.bg;
+}
+/** The colour under a deep muscle's dashed line: the opposite of the line, out of text and background. */
+export function deepCasing(line: string, colors: Record<'text'|'bg', string>) {
+ return contrast(line,colors.text)>=contrast(line,colors.bg)?colors.text:colors.bg;
+}
 export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  sessions: AtlasSession[]; now: number; compact?: boolean; haptics?: boolean;
 }) {
@@ -41,6 +58,9 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  const values=useMemo(()=>heatmap(sessions,now),[sessions,now]), geometry=atlasGeometry[body][side];
  const valuesByKey=useMemo(()=>new Map(values.map(value=>[value.key,value])),[values]);
  const current=selected?valuesByKey.get(selected):undefined;
+ // Line work is soft ink in both modes. At this strength the lines keep at least 3:1 against an untrained
+ // muscle, so muscles can be told apart; the outline of the body is full strength.
+ const ink=colors['text-muted'], inkOpacity=ATLAS_LINE_OPACITY;
  const select=(key: string)=>{
   setSelected(key);
   if(haptics) void impactAsync(ImpactFeedbackStyle.Light).catch(()=>{});
@@ -56,7 +76,7 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
   <ThemedText muted>{t('atlasHint')}</ThemedText>
   {!list && <View style={{width:'100%',maxWidth:compact?180:320,alignSelf:'center',aspectRatio:200/440}}>
    <Svg width="100%" height="100%" viewBox="0 0 200 440" accessible={false}>
-    <G id="skin"><Path d={geometry.skin} fill={colors['surface-2']} stroke={colors['text-muted']} strokeWidth={1}/></G>
+    <G id="skin"><Path testID="atlas-outline" d={geometry.skin} fill={colors['surface-2']} stroke={ink} strokeWidth={.9} strokeLinejoin="round"/></G>
     {/* Enlarged strokes sit behind exact paths; overlapping targets use paint order.
         Non-scaling strokes retain a 44 pt target even in compact previews.
         The list remains the precise selection path for adjacent small regions. */}
@@ -64,14 +84,27 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
      testID={`atlas-hit-${path.id}`} d={path.d} fill="transparent" stroke="transparent"
      strokeWidth={44} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
      accessible={false} onPress={()=>select(path.id)}/>)}</G>
+    {/* Untrained muscles keep the body colour, so only the line work shows until there is data.
+        Deep muscles sit on top as dashed outlines and tint when trained. */}
     <G id="muscles">{geometry.muscles.map(path=>{
-     const value=valuesByKey.get(path.id)!;
-     return <AccessiblePath key={path.id} id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
-      fill={heatFill(value,mode==='dark')} fillOpacity={.65+.35*value.freshness}
-      stroke={selected===path.id?colors.text:colors.bg} strokeWidth={selected===path.id?2.5:.8}
-      accessible accessibilityRole="button" accessibilityState={{selected:selected===path.id}} accessibilityLabel={atlasLabel(value,now)}
-      onPress={()=>select(path.id)}/>;
+     const value=valuesByKey.get(path.id)!, chosen=selected===path.id, trained=value.sets>0;
+     const heat=heatFill(value,mode==='dark'), fillOpacity=path.deep?(trained?.6:0):trained?.65+.35*value.freshness:1;
+     const edge=trained?trainedStroke(heat,fillOpacity,colors):null;
+     // A muscle under the surface is drawn over its neighbours, trained or not, so no single line colour is safe.
+     // Its dashed line sits on a casing in the opposite colour: whatever is underneath, one of the two stands out.
+     const deepLine=edge??colors.text, casing=deepCasing(deepLine,colors);
+     return <G key={path.id}>
+      {path.deep&&<Path testID={`atlas-casing-${path.id}`} d={path.d} fill="none" stroke={casing} strokeWidth={chosen?4.2:2.4} strokeLinejoin="round" pointerEvents="none" accessible={false}/>}
+      <AccessiblePath id={path.id} testID={`atlas-path-${path.id}`} d={path.d}
+      fill={trained?heat:path.deep?'transparent':colors['surface-2']}
+      fillOpacity={fillOpacity}
+      stroke={path.deep?deepLine:edge??(chosen?colors.text:ink)} strokeOpacity={chosen||path.deep||edge?1:inkOpacity} strokeWidth={chosen?2.5:path.deep?.8:.9}
+      strokeDasharray={path.deep&&!chosen?[2.2,1.6]:undefined} strokeLinejoin="round"
+      accessible accessibilityRole="button" accessibilityState={{selected:chosen}} accessibilityLabel={atlasLabel(value,now)}
+      onPress={()=>select(path.id)}/>
+     </G>;
     })}</G>
+    <G id="lines" pointerEvents="none"><Path d={geometry.lines} fill="none" stroke={ink} strokeOpacity={inkOpacity} strokeWidth={.8} strokeLinecap="round" strokeLinejoin="round"/></G>
    </Svg>
   </View>}
   <ThemedText muted>{t('atlasLegend')}</ThemedText>

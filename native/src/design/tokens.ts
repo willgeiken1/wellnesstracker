@@ -2,12 +2,30 @@ import source from "./tokens.json";
 export const tokens = source;
 export type ThemeMode = keyof typeof tokens.themes;
 export type ThemeOverride = ThemeMode | "system";
-export type Accent = keyof typeof tokens.accents;
-export const accents = Object.keys(tokens.accents) as Accent[];
-export function createTheme(mode: ThemeMode, accent: Accent) {
+export type Palette = keyof typeof tokens.palettes;
+export const palettes = Object.keys(tokens.palettes) as Palette[];
+export const DEFAULT_PALETTE: Palette = "seaGlassTide";
+// The four accents the app shipped before palettes, mapped to the closest palette (INS-01 section 1.1).
+const LEGACY: Record<string, Palette> = {
+  sea: "seaGlassTide",
+  dusk: "moonlightDusk",
+  sand: "desertMirage",
+  citrus: "springCitrus",
+};
+/** A saved value (palette id or an older accent name) to a palette that exists; anything else is the default. */
+export function resolvePalette(saved: unknown): Palette {
+  if (typeof saved !== "string") return DEFAULT_PALETTE;
+  if (Object.prototype.hasOwnProperty.call(tokens.palettes, saved)) return saved as Palette;
+  return Object.prototype.hasOwnProperty.call(LEGACY, saved) ? LEGACY[saved] : DEFAULT_PALETTE;
+}
+/** Every palette is open today. A paid or unlockable palette is one line here; the picker already shows the lock. */
+export function paletteLocked(_palette: Palette): boolean {
+  return false;
+}
+export function createTheme(mode: ThemeMode, palette: Palette = DEFAULT_PALETTE) {
   return {
     ...tokens.themes[mode],
-    ...tokens.accents[accent][mode],
+    ...tokens.palettes[palette][mode],
     scrim: "#00000066",
   };
 }

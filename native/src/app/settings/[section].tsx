@@ -10,11 +10,13 @@ import { Profile } from '@/features/onboarding/profile';
 import { WorkoutSettings } from '@/features/workout/settings';
 import { t } from '@/i18n/en';
 import { ImportScreen } from '@/features/importer/screen';
+import { ConnectedServices } from '@/features/connections/screen';
 import Constants from 'expo-constants';
 export default function SettingPlaceholder() {
   const { section } = useLocalSearchParams<{ section: string }>();
   const title = section === 'licenses' ? t('licenses') : t(settingsSections.find(item => item.route === section)?.label ?? 'settings');
-  if (Constants.expoConfig?.extra?.phoneOnly === true && ['health', 'notifications'].includes(section)) return <Screen title={title}><ThemedText>Not in this build.</ThemedText></Screen>;
+  if (Constants.expoConfig?.extra?.phoneOnly === true && ['health', 'notifications'].includes(section)) return <Screen title={title}><ThemedText>{t('notInVersion')}</ThemedText></Screen>;
+  if (section === 'health') return <><Stack.Screen options={{ title }} /><Screen><ConnectedServices /></Screen></>;
   if (section === 'data') return <ImportScreen/>;
   if (section === 'privacy') return <FoodPrivacyScreen/>;
   if (section === 'profile') return <Profile/>;

@@ -66,7 +66,7 @@ test('Reduce Motion renders static paths and disabled haptics sends nothing',asy
   await render(<BodyAtlas sessions={sessions} now={now} haptics={false}/>,{wrapper});
   await fireEvent.press(screen.getByTestId('atlas-path-pecUpper'));
   expect(impactAsync).not.toHaveBeenCalled();
-  expect(screen.getAllByTestId(/^atlas-path-/)).toHaveLength(20);
+  expect(screen.getAllByTestId(/^atlas-path-/)).toHaveLength(25);
  }finally{reduce.mockRestore();}
 });
 test('screen readers start in the complete list without needing to navigate SVG',async()=>{
@@ -81,7 +81,7 @@ test('screen readers start in the complete list without needing to navigate SVG'
 test('map hit layer expands touch areas without obscuring precise paths and exposes selection',async()=>{
  await render(<BodyAtlas sessions={sessions} now={now} compact/>,{wrapper});
  const hits=screen.getAllByTestId(/^atlas-hit-/);
- expect(hits).toHaveLength(20);
+ expect(hits).toHaveLength(25);
  for(const hit of hits){
   expect(hit.props.strokeWidth).toBeGreaterThanOrEqual(44);
   // Assert the native SVG props after react-native-svg extraction.
@@ -91,11 +91,86 @@ test('map hit layer expands touch areas without obscuring precise paths and expo
  await fireEvent.press(screen.getByTestId('atlas-hit-deltAnt'));
  expect(screen.getByTestId('atlas-path-deltAnt').props.accessibilityState).toEqual({selected:true});
  expect(screen.getByTestId('atlas-path-pecUpper').props.accessibilityState).toEqual({selected:false});
- expect(screen.getByText(/list for precise selection/)).toBeTruthy();
+ expect(screen.getByText(/muscle list to pick one by name/)).toBeTruthy();
 });
 test.each([[24,'1 day ago'],[48,'2 days ago'],[200,'not in the last 7 days']] as const)('last trained %s hours uses a sensible label',async(hours,label)=>{
  await render(<BodyAtlas sessions={[{at:now-hours*3600000,exercises:[{main:'chest',helpers:[],sets:1}]}]} now={now}/>,{wrapper});
  await fireEvent.press(screen.getByTestId('atlas-path-pecUpper'));
  expect(screen.getByText(new RegExp(label))).toBeTruthy();
  expect(screen.queryByText(/200 hours ago/)).toBeNull();
+});
+
+describe('line contrast', () => {
+  const { ATLAS_LINE_OPACITY } = require('../src/features/atlas/body-atlas') as typeof import('../src/features/atlas/body-atlas');
+  const design = require('../src/design/tokens');
+  // Works before and after the move from four accents to themes: only the default colours are needed here.
+  const createTheme = (mode: 'dark' | 'light'): Record<string, string> => design.createTheme(mode, 'accents' in design.tokens ? 'sea' : undefined);
+  const { contrast } = require('../src/core/contrast') as typeof import('../src/core/contrast');
+  const blend = (under: string, over: string, alpha: number) => '#' + [1, 3, 5].map(i => {
+    const a = parseInt(under.slice(i, i + 2), 16), b = parseInt(over.slice(i, i + 2), 16);
+    return Math.round(a + (b - a) * alpha).toString(16).padStart(2, '0');
+  }).join('');
+  test.each(['dark', 'light'] as const)('in %s mode muscle lines keep 3:1 on an untrained muscle and the body outline keeps 4.5:1', mode => {
+    const c = createTheme(mode);
+    expect(contrast(blend(c['surface-2'], c['text-muted'], ATLAS_LINE_OPACITY), c['surface-2'])).toBeGreaterThanOrEqual(3);
+    expect(contrast(c['text-muted'], c['surface-2'])).toBeGreaterThanOrEqual(4.5);
+  });
+  test.each(['dark', 'light'] as const)('in %s mode the boundary of a trained muscle keeps 3:1 against its heat colour, fresh or faded', mode => {
+    const { trainedStroke } = require('../src/features/atlas/body-atlas') as typeof import('../src/features/atlas/body-atlas');
+    const { heatFill } = require('../src/features/atlas/volume') as typeof import('../src/features/atlas/volume');
+    const c = createTheme(mode) as Record<'text' | 'bg' | 'surface-2', string>;
+    for (const sets of [1, 12, 40]) for (const freshness of [0, 0.5, 1]) {
+      const fill = heatFill({ sets, target: [10, 20] } as unknown as Parameters<typeof heatFill>[0], mode === 'dark');
+      // .6 is how a trained muscle under the surface is drawn; the rest is the surface range, fresh to faded.
+      for (const opacity of [.6, .65 + .35 * freshness]) expect(contrast(trainedStroke(fill, opacity, c), blend(c['surface-2'], fill, opacity))).toBeGreaterThanOrEqual(3);
+    }
+  });
+  test('a trained muscle is outlined at full strength in a colour that stands out, an untrained one keeps soft ink', async () => {
+    await render(<BodyAtlas sessions={[{ at: now - 3600000, exercises: [{ main: 'chest', helpers: [], sets: 12 }] }]} now={now}/>, { wrapper });
+    const trained = screen.getByTestId('atlas-path-pecUpper').props;
+    expect(trained.strokeOpacity).toBe(1);
+    const untrained = screen.getAllByTestId(/^atlas-path-/).map(n => n.props).find(p => p.strokeOpacity === ATLAS_LINE_OPACITY);
+    expect(untrained).toBeTruthy();
+    expect(JSON.stringify(trained.stroke)).not.toBe(JSON.stringify(untrained!.stroke));
+  });
+  test('a selected trained muscle keeps the contrasting outline, only thicker', async () => {
+    await render(<BodyAtlas sessions={[{ at: now - 3600000, exercises: [{ main: 'chest', helpers: [], sets: 12 }] }]} now={now}/>, { wrapper });
+    const before = screen.getByTestId('atlas-path-pecUpper').props;
+    await fireEvent.press(screen.getByTestId('atlas-path-pecUpper'));
+    const after = screen.getByTestId('atlas-path-pecUpper').props;
+    expect(after.accessibilityState).toMatchObject({ selected: true });
+    expect(JSON.stringify(after.stroke)).toBe(JSON.stringify(before.stroke));
+    expect(after.strokeWidth).toBeGreaterThan(before.strokeWidth);
+  });
+  test.each(['dark', 'light'] as const)('in %s mode a deep muscle keeps a 3:1 edge over any muscle underneath, trained or not', mode => {
+    const { trainedStroke, deepCasing } = require('../src/features/atlas/body-atlas') as typeof import('../src/features/atlas/body-atlas');
+    const { heatFill } = require('../src/features/atlas/volume') as typeof import('../src/features/atlas/volume');
+    const c = createTheme(mode) as Record<'text' | 'bg' | 'surface-2', string>;
+    const fills = [1, 12, 40].map(sets => heatFill({ sets, target: [10, 20] } as unknown as Parameters<typeof heatFill>[0], mode === 'dark'));
+    // What can lie under a deep muscle's edge: the bare body, or a neighbour's heat colour, fresh to faded.
+    const under = [c['surface-2'], ...fills.flatMap(fill => [.65, .825, 1].map(o => blend(c['surface-2'], fill, o)))];
+    // The deep muscle's own line: plain text when untrained, the trained pick otherwise.
+    const lines = [c.text, ...fills.map(fill => trainedStroke(fill, .6, c))];
+    for (const line of lines) {
+      const casing = deepCasing(line, c);
+      expect(casing).not.toBe(line);
+      for (const below of under) expect(Math.max(contrast(line, below), contrast(casing, below))).toBeGreaterThanOrEqual(3);
+    }
+  });
+  test('a deep muscle over a trained one is drawn as a dashed line on a casing in the opposite colour', async () => {
+    await render(<BodyAtlas sessions={[{ at: now - 3600000, exercises: [{ main: 'glutes', helpers: [], sets: 40 }] }]} now={now}/>, { wrapper });
+    await fireEvent.press(screen.getByText(t('atlasBack')));
+    const casing = screen.getByTestId('atlas-casing-hipRotators').props, line = screen.getByTestId('atlas-path-hipRotators').props;
+    expect(JSON.stringify(casing.stroke)).not.toBe(JSON.stringify(line.stroke));
+    expect(casing.strokeWidth).toBeGreaterThan(line.strokeWidth);
+    expect(casing.onPress).toBeUndefined();
+    expect(casing.accessibilityLabel).toBeUndefined();
+    expect(screen.queryByTestId('atlas-casing-gluteMax')).toBeNull();
+  });
+  test('the body outline is drawn at full strength', async () => {
+    await render(<BodyAtlas sessions={sessions} now={now}/>, { wrapper });
+    const outline = screen.getByTestId('atlas-outline').props;
+    expect(outline.strokeOpacity ?? 1).toBe(1);
+    expect(outline.stroke).toBeTruthy();
+  });
 });

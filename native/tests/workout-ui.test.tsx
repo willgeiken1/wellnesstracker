@@ -228,6 +228,18 @@ test('compiled logger opens immediately after start', async () => {
   await render(<ActiveWorkout />, { wrapper });
   expect(screen.getByText('Add exercise')).toBeTruthy();
 });
+test('an empty workout shows no set counter until a set exists', async () => {
+  const repo = memoryRepository();
+  const store = new WorkoutStore(repo);
+  const session = store.start();
+  activeRepository(repo);
+  const view = await render(<ActiveWorkout />, { wrapper });
+  expect(screen.queryByText(/Set 0 of 0/)).toBeNull();
+  expect(screen.queryByText(/Set \d+ of \d+/)).toBeNull();
+  await act(() => { store.addExercise(session.id, 'Bench Press'); });
+  await view.rerender(<ActiveWorkout />);
+  expect(screen.getByText(/Set 1 of \d+/)).toBeTruthy();
+});
 test('compiled logger updates keypad values and rows live', async () => {
   const repo = memoryRepository();
   const store = new WorkoutStore(repo);
@@ -239,7 +251,7 @@ test('compiled logger updates keypad values and rows live', async () => {
   store.addExercise(store.start().id, 'Close-Grip Bench Press');
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, blank' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, suggested 105' }));
   for (const digit of ['1', '3', '5']) await fireEvent.press(screen.getByRole('button', { name: digit }));
   expect(screen.getByText('135 lb')).toBeTruthy();
   expect(within(screen.getByTestId('keypad-sheet')).getByText('100 × 8')).toBeTruthy();
@@ -253,7 +265,9 @@ test('compiled logger updates keypad values and rows live', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
   expect(screen.getByRole('button', { name: 'Close-Grip Bench Press, Set 1, Weight, 135' })).toBeTruthy();
   await fireEvent.press(screen.getByTestId('set-0-0-done'));
-  expect(screen.getByTestId('rest-sheet')).toBeTruthy();
+  // Rest now starts as the bar at the bottom; the full-screen timer is one tap away.
+  expect(screen.getByTestId('rest-mini-bar')).toBeTruthy();
+  expect(screen.queryByTestId('rest-sheet')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
   expect(screen.getByText(/Set 2 of 3/)).toBeTruthy();
 });
@@ -508,13 +522,16 @@ test('picker keeps search and tappable results in a keyboard avoiding container'
   expect(container).toHaveStyle({ paddingBottom: 300 });
   expect(screen.getByTestId('exercise-picker-results')).toHaveProp('keyboardShouldPersistTaps', 'handled');
   await fireEvent.press(screen.getByTestId('exercise-picker-result-0'));
-  expect(screen.getByText('Close-Grip Bench Press')).toBeTruthy();
+  // The picked exercise shows on its card and on the Up next card.
+  expect(screen.getAllByText('Close-Grip Bench Press').length).toBe(2);
 });
 
 test('logger reuses one native modal across picker, keypad, rest and finish; dismissals can reopen', async () => {
   const repo = memoryRepository(), store = new WorkoutStore(repo);
   const entry = store.addExercise(store.start().id, 'Close-Grip Bench Press');
   store.editDraft(entry.id, 0, { weight: '135', reps: '8' });
+  // This test is about the full-screen timer sharing the modal, so it opts in to it.
+  repo.localSave('restOpens', 'full');
   activeRepository(repo);
   const view = await render(<ActiveWorkout />, { wrapper });
   const modal = () => screen.getByTestId('workout-sheet-host');

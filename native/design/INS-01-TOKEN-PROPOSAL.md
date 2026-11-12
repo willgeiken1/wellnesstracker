@@ -2,6 +2,8 @@
 
 **DRAFT - not applied; needs Elliot's proposal PR + Will's save tap.**
 
+**Nov 11, 2026 update.** Will asked for the themes in the app. The 11 open palettes' proposed values are now in `native/src/design/tokens.json` under `palettes`, written by `node scripts/ins01-palette-contrast.ts --apply`, with today's leaf names kept (the section 1.2 renames are not applied). The two secret palettes and the renames are still proposal only.
+
 Oct 29, 2026. Task: `task-breakdown.md` row INS-01. Decision: Will's I4 (v1 ships v2's full palette list; tokens renamed).
 
 This file proposes values only. It does not change `native/src/design/tokens.ts`, `native/src/design/tokens.json`, `design/tokens.ts` or any app code. Under design/README.md (D19), Elliot opens the token proposal PR (Claude drafts), Codex does a read-only GPT check, Quinn reviews, and nothing is applied until Will's save tap.

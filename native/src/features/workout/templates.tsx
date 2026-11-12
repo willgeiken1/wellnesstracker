@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
-import { Alert, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedControl } from '@/components/segmented-control';
 import { useTheme } from '@/design/theme-provider';
-import { pluralize, t } from '@/i18n/en';
+import { t } from '@/i18n/en';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
 import { layout, Panel } from './primitives';
@@ -14,8 +14,7 @@ import { SupersetControls } from './superset-controls';
 import { RepRangeInput } from './rep-range-input';
 import { RestOptions } from './rest-options';
 import { ExercisePicker } from './picker';
-import { PlansPanel } from '../plans/panel';
-import { PlanStore } from '../plans/store';
+import { Routines } from './routines';
 import { PastDayChoice } from './days';
 import { Cardio } from '../cardio/screen';
 export function Workouts() {
@@ -40,47 +39,7 @@ export function Workouts() {
     }))} value={segment} onChange={setSegment} />
     {error && <ThemedText accessibilityRole="alert">{t('workoutSaveError')}</ThemedText>}
     {store?.active() && <Button label={t('resumeWorkout')} onPress={() => router.push('/workout')} />}
-    {segment === 'routines' && <>
-      {store && <PlansPanel store={store} />}
-      <Button label={t('startEmpty')} onPress={() => run(() => {
-        store?.start();
-        router.push('/workout');
-      })} />
-      <Button label={t('newTemplate')} variant="secondary" onPress={() => router.push('/workout/template')} />
-      {store?.templates().map(r => {
-        const last = store.history().find(s => s.data.routine_id === r.id);
-        return <Panel key={r.id}>
-        <ThemedText variant="headline">{String(r.data.name)}</ThemedText><ThemedText muted variant="caption">{pluralize(store.templateExercises(r.id).length,'exercise')} · {last ? `${t('lastDone')} ${last.data.day}` : t('notYetDone')}</ThemedText>
-        <View style={layout.row}><View style={{
-              flex: 1
-            }}><Button label={t('startTemplate').replace('{name}', String(r.data.name))} onPress={() => run(() => {
-                const plans = new PlanStore(store.repo);
-                if (!store.active() && plans.read().days.some(day => day.routineId === r.id)) plans.startDay(r.id);
-                else store.start(r.id);
-                router.push('/workout');
-              })} /></View><Button label={t('edit')} variant="secondary" onPress={() => router.push({
-              pathname: '/workout/template',
-              params: {
-                id: r.id
-              }
-            })} /></View>
-        <View style={layout.row}><Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveTemplate(r.id, -1))} /><Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveTemplate(r.id, 1))} /><Button label={t('delete')} variant="secondary" onPress={() => Alert.alert(t('deleteTemplate'), String(r.data.name), [{
-              text: t('cancel'),
-              style: 'cancel'
-            }, {
-              text: t('delete'),
-              onPress: () => run(() => {
-                const restore = store.deleteTemplate(r.id);
-                setUndo(() => restore);
-              })
-            }])} /></View>
-      </Panel>;
-      })}
-      {undo && <Button label={t('undoDelete')} variant="secondary" onPress={() => run(() => {
-        undo();
-        setUndo(null);
-      })} />}
-    </>}
+    {segment === 'routines' && <Routines store={store} run={run} undo={undo} onUndo={restore => setUndo(() => restore)} />}
     {segment === 'history' && <><PastDayChoice />{store?.history().length === 0 && <ThemedText muted>{t('historyEmpty')}</ThemedText>}{store?.history().map(s => <Button key={s.id} label={`${s.data.name ?? t('workoutName')} · ${s.data.day}${store.edited(s.id) ? ` · ${t('edited')}` : ''}`} variant="secondary" onPress={() => router.push({
         pathname: '/workout/summary',
         params: {
@@ -134,9 +93,6 @@ function Editor({
     setExercises(next);
   }
   return <Screen topInset title={id ? t('editTemplate') : t('newTemplate')}>
-    <Button label={t('cancel')} variant="secondary" onPress={() => {
-      if (router.canGoBack()) router.back();else router.replace('/workouts');
-    }} />
     <TextInput accessibilityLabel={t('templateName')} placeholder={t('templateName')} placeholderTextColor={colors['text-muted']} style={inputStyle} value={name} onChangeText={setName} />
     {exercises.map((e, i) => <Panel key={e.id ?? i}><ThemedText variant="headline">{e.exercise}</ThemedText><View style={layout.row}>
       {(['target_sets', 'target_reps'] as const).map(field => <View key={field} style={{
@@ -161,6 +117,9 @@ function Editor({
       } catch {
         setError(true);
       }
+    }} />
+    <Button label={t('cancel')} variant="secondary" onPress={() => {
+      if (router.canGoBack()) router.back();else router.replace('/workouts');
     }} />
     {picker && <ExercisePicker store={store} onClose={() => setPicker(false)} onPick={exercise => {
       setExercises(es => [...es, {
