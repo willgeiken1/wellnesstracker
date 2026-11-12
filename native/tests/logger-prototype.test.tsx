@@ -116,6 +116,18 @@ describe('the Up next card and Reduce Motion', () => {
     const handlers = find(card).props, touch = (x: number) => ({ nativeEvent: { touches: [{ pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }], changedTouches: [{ pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }], pageX: x, pageY: 0, identifier: 1, timestamp: Date.now() }, persist() {}, touchHistory: { touchBank: [], numberActiveTouches: 0, indexOfSingleActiveTouch: 0, mostRecentTimeStamp: 0 } });
     await act(async () => { handlers.onResponderRelease(touch(dx)); });
   };
+  test('the swipe responder survives a re-render, so the logger\'s once-a-second clock cannot drop a drag in progress', async () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+    const find = (node: any): any => node?.props?.onResponderRelease ? node : (node?.children ?? []).map(find).find(Boolean);
+    const view = await render(<UpNext name="Deadlift" detail="3 sets" onPress={() => {}} onSwap={() => {}} />, { wrapper });
+    const before = find(screen.getByTestId('logger-up-next')).props;
+    await view.rerender(<UpNext name="Deadlift" detail="2 sets" onPress={() => {}} onSwap={() => {}} />);
+    const after = find(screen.getByTestId('logger-up-next')).props;
+    for (const handler of ['onMoveShouldSetResponder', 'onResponderMove', 'onResponderRelease', 'onResponderTerminationRequest'] as const) {
+      expect(typeof after[handler]).toBe('function');
+      expect(after[handler]).toBe(before[handler]);
+    }
+  });
   test.each([[true, 0], [false, 1]])('with Reduce Motion %s the card springs back %i times', async (reduced, springs) => {
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduced);
     const spring = jest.spyOn(Animated, 'spring');

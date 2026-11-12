@@ -74,7 +74,9 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
   const { colors } = useTheme();
   const [open, setOpen] = useState<string | null>(null);
   const routines = store?.templates() ?? [], history = store?.history() ?? [];
-  const latest = history[0], next = store ? nextRoutine(store, routines) : undefined;
+  // The latest print is the newest workout with a counted set. A workout saved with nothing in it has no print
+  // to draw and read as "0 lb".
+  const latest = store?.trainingHistory()[0], next = store ? nextRoutine(store, routines) : undefined;
   const training = colors.training;
   const lastOf = (id: string) => history.find(s => s.data.routine_id === id);
   return <>

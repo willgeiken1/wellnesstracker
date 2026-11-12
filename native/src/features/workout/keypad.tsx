@@ -354,8 +354,14 @@ export function Keypad({
                     variant={
                       key === "wheel" || key === "next" ? "body" : "title"
                     }
+                    // The two word keys shrink to fit and may take two lines, so a label is never cut off by the key.
+                    numberOfLines={key === "wheel" || key === "next" ? 2 : 1}
+                    adjustsFontSizeToFit={key === "wheel" || key === "next"}
+                    minimumFontScale={0.75}
                     style={{
                       textAlign: "center",
+                      paddingHorizontal: key === "wheel" || key === "next" ? 4 : 0,
+                      lineHeight: key === "wheel" ? 17 : key === "next" ? 19 : undefined,
                       fontSize: key === "wheel" ? 14 : key === "next" ? 16 : 24,
                       fontWeight: key === "next" ? "600" : undefined,
                       color: key === "next" ? colors["on-accent"] : colors.text,

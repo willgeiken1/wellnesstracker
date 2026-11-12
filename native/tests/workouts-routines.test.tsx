@@ -108,3 +108,13 @@ test('the Start routine label keeps 4.5:1 on the training colour in every theme,
     expect(contrast(readableOn(c.training, [c['on-accent'], c.text]), c.training)).toBeGreaterThanOrEqual(4.5);
   }
 });
+
+test('a workout saved with nothing in it does not become the latest print', async () => {
+  const { store } = open();
+  const session = store.start(undefined, Date.now() - 3600000);
+  store.finish(session.id, { startedAt: Date.now() - 3600000, finishedAt: Date.now() - 1800000, notes: '' });
+  expect(store.history()).toHaveLength(1);
+  await render(<Workouts />, { wrapper });
+  expect(screen.queryByTestId('workouts-latest-print')).toBeNull();
+  expect(screen.queryByText(/\b0 lb\b/)).toBeNull();
+});
