@@ -5,6 +5,13 @@ import { today, type Unit } from '../onboarding/model';
 export interface DailyWeight { day: string; kg: number; count: number }
 export interface TrendWeight extends DailyWeight { trendKg: number }
 export type BodyRange = 7 | 30 | 90 | 365;
+/** A day as people say it: "Nov 13", with the year only when it is not this year. Anything that is not a real day stays as it was. */
+export function friendlyDay(day: string, now = new Date()) {
+  const stamp = dayStamp(day);
+  if (!Number.isFinite(stamp)) return day;
+  const date = new Date(stamp), sameYear = date.getUTCFullYear() === now.getFullYear();
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), timeZone: 'UTC' });
+}
 export function dayStamp(day: string) {
   const stamp = Date.parse(`${day}T00:00:00Z`);
   return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(stamp) && new Date(stamp).toISOString().slice(0,10) === day ? stamp : NaN;

@@ -27,7 +27,7 @@ const fill = (text: string, values: Record<string, string | number>) => Object.e
 function workings(pillar: ScorePillar, score: Score): string[] {
   const p = score.parts;
   if (pillar === 'training') return [
-    fill(t('scoreTrainingSum'), { done: p.workouts, goal: p.workoutGoal }),
+    fill(t(p.workouts >= p.workoutGoal ? 'scoreTrainingSumMet' : 'scoreTrainingSum'), { done: p.workouts, goal: p.workoutGoal }),
     p.stepsAverage === null ? t('scoreTrainingNoSteps') : fill(t('scoreTrainingSteps'), { steps: whole(p.stepsAverage), goal: whole(STEP_GOAL) }),
   ];
   if (pillar === 'food') return [
