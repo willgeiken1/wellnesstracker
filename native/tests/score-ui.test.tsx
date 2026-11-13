@@ -190,9 +190,9 @@ test('one night of sleep reads as one night', async () => {
 test('without sleep data the detail screen says recovery is left out', async () => {
   open();
   await render(<ScoreDetail />, { wrapper });
-  expect(screen.getByText('Sleep comes from Apple Health. Until there is some, this pillar is left out of your score.')).toBeTruthy();
+  expect(screen.getByText('Sleep comes from Apple Health or Oura. Until there is some, this pillar is left out of your score.')).toBeTruthy();
   expect(within(screen.getByTestId('score-detail-recovery')).getByText('Left out for now')).toBeTruthy();
-  expect(screen.getByText('Steps join this pillar when Apple Health is connected.')).toBeTruthy();
+  expect(screen.getByText('Steps join this pillar when Apple Health or Oura is connected.')).toBeTruthy();
 });
 
 test('the Settings switch and the Home tile are one state', async () => {
