@@ -106,8 +106,8 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
     </Card>
     {(!!ai.ready.length || !!ai.fallback.length) && <Card style={foodCard}>
       <FoodAiResults repo={repo}
-        onDescribe={id => { const job = aiState(repo).fallback.find(j => j.id === id)!; setEntry(null); setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setMode('describe'); }}
-        onManual={id => { const job = aiState(repo).fallback.find(j => j.id === id)!; setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setEntry({ meal: job.meal }); }} />
+        onDescribe={id => { const job = aiState(repo).fallback.find(j => j.id === id); if (!job) return; setEntry(null); setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setMode('describe'); }}
+        onManual={id => { const job = aiState(repo).fallback.find(j => j.id === id); if (!job) return; setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setEntry({ meal: job.meal }); }} />
     </Card>}
     <Card style={foodCard} testID="food-log-day-list">
       <GroupLabel>{t('foodLoggedDay').replace('{day}', dayInSentence(day, now))}</GroupLabel>

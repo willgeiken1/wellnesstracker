@@ -117,7 +117,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    </Pressable>)}
   </View>
   <FoodAiMorningReview key={reviewClock} repo={repo}/>
-  <FoodAiResults repo={repo} onDescribe={id=>{setScanning(false);setEntry(null);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{setScanning(false);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>
+  <FoodAiResults repo={repo} onDescribe={id=>{setScanning(false);setEntry(null);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id);if(!job)return;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{setScanning(false);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id);if(!job)return;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>
   <View style={{gap:tokens.spacing[0]}}>
    <View style={{flexDirection:'row',alignItems:'center'}}>
     <ThemedText muted variant="caption" style={{flex:1}}>{t('foodChooseMeal')}</ThemedText>
@@ -175,7 +175,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
        </View>
        <ThemedText muted numeric>{energy}</ThemedText>
       </Pressable>
-      {pending&&<View style={{borderWidth:1,borderStyle:'dashed',borderColor:colors['text-muted'],borderRadius:12,padding:8,gap:6}}><ThemedText variant="caption">{t('foodAiPending')}</ThemedText><Button label={t('foodAiConfirm').replace('{name}',name)} variant="secondary" onPress={()=>confirmEstimate(repo,row.id)}/></View>}
+      {pending&&<View style={{borderWidth:1,borderStyle:'dashed',borderColor:colors['text-muted'],borderRadius:12,padding:8,gap:6}}><ThemedText variant="caption">{t('foodAiPending')}</ThemedText><Button label={t('foodAiConfirm').replace('{name}',name)} variant="secondary" onPress={()=>run(()=>confirmEstimate(repo,row.id))}/></View>}
       {open&&<View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6,paddingBottom:tokens.spacing[0]}}>
        <Act text={t('edit')} label={t('foodEdit').replace('{name}',name)} onPress={()=>{setAiMode(null);setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
        <Act text={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodActUnfavorite':'foodActFavorite')} label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',name)} onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
