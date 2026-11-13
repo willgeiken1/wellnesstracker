@@ -45,7 +45,9 @@ test('a logged food shows as one row with macros and calories, and its actions o
   expect(screen.queryByTestId('food-empty')).toBeNull();
   const card = screen.getByTestId(`food-meal-${meal.name}`);
   expect(within(card).getByText('P 10 · C 54 · F 5')).toBeTruthy();
-  expect(within(card).getAllByText('300 kcal').length).toBe(2);
+  // One item: its row carries the number, and the meal header does not repeat it.
+  expect(within(card).getAllByText('300 kcal')).toHaveLength(1);
+  expect(screen.queryByTestId(`food-meal-total-${meal.name}`)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Edit Synthetic oats' })).toBeNull();
   await fireEvent.press(within(card).getByRole('button', { name: 'Synthetic oats, 300 kcal' }));
   for (const name of ['Edit Synthetic oats', 'Delete Synthetic oats', 'Favorite Synthetic oats', 'Save Synthetic oats for later']) expect(screen.getByRole('button', { name })).toBeTruthy();
@@ -82,9 +84,11 @@ test('a meal whose items have no calories shows a dash, and known items still ad
   saveFood(repo, day, second.id, { ...oats, name: 'Synthetic mystery drink', energy_kj: null });
   saveFood(repo, day, second.id, oats);
   await render(<FoodScreen repository={repo} />, { wrapper });
-  expect(within(screen.getByTestId(`food-meal-${first.name}`)).getAllByText('— kcal')).toHaveLength(2); // the item row and the meal total
+  expect(within(screen.getByTestId(`food-meal-${first.name}`)).getAllByText('— kcal')).toHaveLength(1); // the item row; one item has no meal total
   expect(within(screen.getByTestId(`food-meal-${first.name}`)).queryByText('0 kcal')).toBeNull();
-  expect(within(screen.getByTestId(`food-meal-${second.name}`)).getAllByText('300 kcal').length).toBeGreaterThan(0);
+  // Two items: the known one adds up, the unknown one is left out of the total.
+  expect(screen.getByTestId(`food-meal-total-${second.name}`).props.children).toBe('300 kcal');
+  expect(within(screen.getByTestId(`food-meal-${second.name}`)).getAllByText('300 kcal')).toHaveLength(2);
 });
 
 test('the day button tells a screen reader which day is showing', async () => {

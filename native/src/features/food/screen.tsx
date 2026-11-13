@@ -139,11 +139,12 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   {mealList.map(meal=>{
    const items=rows.filter(row=>row.data.meal_id===meal.id),quick=favorites(repo,meal.id),menu=mealMenu===meal.id;
    // Items with no calories entered are left out of the sum; a meal with none entered shows a dash, never 0.
+   // The total shows from two items up: with one item it would only repeat that row's number.
    const known=items.map(row=>kcal(row.data.energy_kj)).filter((n):n is number=>n!==null),sum=known.reduce((n,value)=>n+value,0);
    return <Card key={meal.id} style={[card,{gap:tokens.spacing[1]}]} testID={`food-meal-${meal.name}`}>
     <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
      <ThemedText variant="headline" style={{flex:1,fontWeight:'600'}}>{meal.name}</ThemedText>
-     {!!items.length&&<ThemedText muted numeric variant="caption">{known.length?t('foodEnergy').replace('{value}',sum.toLocaleString('en-US')):t('foodEnergyUnknown')}</ThemedText>}
+     {items.length>1&&<ThemedText muted numeric variant="caption" testID={`food-meal-total-${meal.name}`}>{known.length?t('foodEnergy').replace('{value}',sum.toLocaleString('en-US')):t('foodEnergyUnknown')}</ThemedText>}
      <Pressable accessibilityRole="button" accessibilityLabel={t('foodMealOptions').replace('{name}',meal.name)} accessibilityState={{expanded:menu}} onPress={()=>setMealMenu(menu?null:meal.id)}
       style={{width:touchTarget,height:touchTarget,alignItems:'center',justifyContent:'center',marginVertical:-6,marginRight:-6}}>
       <View style={{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors['surface-2']}}>
