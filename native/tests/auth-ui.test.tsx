@@ -172,9 +172,9 @@ test('Delete account needs the typed word, then calls the provider once', async 
   expect(screen.getByText(t('deleteAccountKeeps'))).toBeTruthy();
   const confirm=screen.getByTestId('account-delete-confirm');
   await fireEvent.press(confirm);expect(deleteAccount).not.toHaveBeenCalled();
-  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'delete');
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'DELET');
   await fireEvent.press(screen.getByTestId('account-delete-confirm'));expect(deleteAccount).not.toHaveBeenCalled();
-  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'DELETE');
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),' delete ');
   await act(async()=>{fireEvent.press(screen.getByTestId('account-delete-confirm'));});
   expect(deleteAccount).toHaveBeenCalledTimes(1);
 });
@@ -196,4 +196,16 @@ test('a failed deletion says nothing was erased and can be cancelled', async () 
 test('demo mode shows no Delete account button', async () => {
   await wrap(<Account/>,{...state(),demo:true,deleteAccount:jest.fn(async()=>{})});
   expect(screen.queryByRole('button',{name:t('deleteAccount')})).toBeNull();
+});
+
+test('a failure after the server deleted the account says so and offers to finish', async () => {
+  const { AccountDeletedLocalPending } = require('../src/auth/delete-account') as typeof import('../src/auth/delete-account');
+  const deleteAccount=jest.fn(async()=>{throw new AccountDeletedLocalPending();});
+  const auth={...state(),session:{user:{id:'fixture',email:'fixture@example.test'}} as AuthState['session'],deleteAccount};
+  await wrap(<Account/>,auth);
+  await fireEvent.press(screen.getByRole('button',{name:t('deleteAccount')}));
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'DELETE');
+  await act(async()=>{fireEvent.press(screen.getByTestId('account-delete-confirm'));});
+  expect(screen.getByRole('alert')).toHaveTextContent(t('deleteAccountLocalFailed'));
+  expect(screen.queryByText(t('deleteAccountFailed'))).toBeNull();
 });

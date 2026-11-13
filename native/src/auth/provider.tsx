@@ -14,7 +14,7 @@ import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure } from './sign-out';
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
-import { AccountDeleteFailure, deleteServerAccount } from './delete-account';
+import { AccountDeleteFailure, AccountDeletedLocalPending, deleteServerAccount } from './delete-account';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
@@ -192,6 +192,40 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     if(error||!data?.plan||activeSession.current?.user.id!==currentRepo.owner||departureLocked.current)throw new Error('Import unavailable.');
     return data.plan as ImportPlan;
   },[client,currentRepo,userId]);
+  // Signing out syncs first; deleting an account skips that, since the rows it would send have no account left.
+  const depart=async(discardUnsynced:boolean,skipSync:boolean)=>{
+    authRequest.current++;authInFlight.current=false;if(demoTarget)setDemoTarget(null);if(demoTransferError)setDemoTransferError(false);
+    if(departurePending&&retryDeparture.current)return retryDeparture.current();
+    const prepared=preparedSync.current;preparedSync.current=null;
+    if(!departurePending&&!skipSync)await (prepared?.engine===engine?prepared.flight:syncBeforeSignOut(()=>engine?.sync()??Promise.resolve()));
+    if(currentRepo?.hasUnsynced() && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
+    if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');
+    // Retain the original repository/session even if auth emits SIGNED_OUT before cleanup fails.
+    const leave=async()=>{
+      if(departingOwner.current)throw new Error('Sign-out recovery required.');
+      departingOwner.current=currentRepo.owner;departureLocked.current=true;setDeparturePending(true);
+      engine?.close();
+      client?.auth.stopAutoRefresh();
+      try {
+        await lastOwnerStorage.clear();
+        const marker=await beginSignOut(currentRepo.owner,signOutStorage);
+        await completeSignOut(marker,currentRepo,signOutStorage,async()=>{
+          if(client && session && (!activeSession.current || activeSession.current.user.id===session.user.id)) {
+            client.auth.stopAutoRefresh();
+            // Local scope only. A failed network revocation must still erase this device.
+            try { await client.auth.signOut({scope:'local'}); } catch { /* device cleanup below */ }
+            // A newer auth event owns its own credentials; never erase that session.
+            if(!activeSession.current || activeSession.current.user.id===session.user.id)await clearLocalSession(true);
+          } else if(!session && !activeSession.current)await clearLocalSession();
+        });
+      } catch {retryDeparture.current=leave;departingOwner.current=null;setDataError(true);setRecovery('departure');throw new DepartureFailure();}
+      retryDeparture.current=null;departingOwner.current=null;departureLocked.current=false;setDeparturePending(false);setRecovery(undefined);setDataError(false);
+      setDemo(false);
+      if(activeSession.current?.user.id===session?.user.id)activeSession.current=null;
+      setSession(current => current?.user.id === session?.user.id ? null : current);
+    };
+    await leave();
+  };
   const value: AuthState={legacyImport,initialPullComplete,syncPullRevision,demoTransferError,
     retryDemoTransfer:()=>{if(demoTarget===owner){setDemoTransferError(false);setTransferAttempt(n=>n+1);}},
     blockOnboarding:()=>{ageBlocked.current=true;},
@@ -220,44 +254,14 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     lookAround:()=>{if(bootReady&&!departingOwner.current&&!departureLocked.current)setDemo(true);},
     signIn:(email,password)=>authenticate(email,password),
     createAccount:(email,password,dob)=>authenticate(email,password,dob,true),
-    signOut:async(discardUnsynced=false)=>{
-      authRequest.current++;authInFlight.current=false;if(demoTarget)setDemoTarget(null);if(demoTransferError)setDemoTransferError(false);
-      if(departurePending&&retryDeparture.current)return retryDeparture.current();
-      const prepared=preparedSync.current;preparedSync.current=null;
-      if(!departurePending)await (prepared?.engine===engine?prepared.flight:syncBeforeSignOut(()=>engine?.sync()??Promise.resolve()));
-      if(currentRepo?.hasUnsynced() && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
-      if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');
-      // Retain the original repository/session even if auth emits SIGNED_OUT before cleanup fails.
-      const leave=async()=>{
-        if(departingOwner.current)throw new Error('Sign-out recovery required.');
-        departingOwner.current=currentRepo.owner;departureLocked.current=true;setDeparturePending(true);
-        engine?.close();
-        client?.auth.stopAutoRefresh();
-        try {
-          await lastOwnerStorage.clear();
-          const marker=await beginSignOut(currentRepo.owner,signOutStorage);
-          await completeSignOut(marker,currentRepo,signOutStorage,async()=>{
-            if(client && session && (!activeSession.current || activeSession.current.user.id===session.user.id)) {
-              client.auth.stopAutoRefresh();
-              // Local scope only. A failed network revocation must still erase this device.
-              try { await client.auth.signOut({scope:'local'}); } catch { /* device cleanup below */ }
-              // A newer auth event owns its own credentials; never erase that session.
-              if(!activeSession.current || activeSession.current.user.id===session.user.id)await clearLocalSession(true);
-            } else if(!session && !activeSession.current)await clearLocalSession();
-          });
-        } catch {retryDeparture.current=leave;departingOwner.current=null;setDataError(true);setRecovery('departure');throw new DepartureFailure();}
-        retryDeparture.current=null;departingOwner.current=null;departureLocked.current=false;setDeparturePending(false);setRecovery(undefined);setDataError(false);
-        setDemo(false);
-        if(activeSession.current?.user.id===session?.user.id)activeSession.current=null;
-        setSession(current => current?.user.id === session?.user.id ? null : current);
-      };
-      await leave();
-    },
+    signOut:(discardUnsynced=false)=>depart(discardUnsynced,false),
     deleteAccount:async()=>{
       if(demo||!client||!session||departurePending||departingOwner.current)throw new AccountDeleteFailure();
       await deleteServerAccount(client);
-      // The account is gone; anything still unsynced has nowhere to go, so the phone's copy is erased without asking again.
-      await value.signOut(true);
+      // From here the account is gone: a failure is about this phone's copy, and Delete again finishes it.
+      try {await depart(true,true);}
+      catch(cause) {if(cause instanceof DepartureFailure)throw cause;throw new AccountDeletedLocalPending();}
+      Alert.alert(t('deleteAccountDone'),t('deleteAccountDoneBody'));
     },
     syncNow:()=>engine?.sync()??Promise.resolve(),
   };

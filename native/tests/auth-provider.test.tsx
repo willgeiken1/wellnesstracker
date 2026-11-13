@@ -724,8 +724,12 @@ test('delete account asks the server first, then erases this phone even with uns
   Object.defineProperty(fixture.client,'functions',{value:{invoke}});
   const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
   await waitFor(()=>expect(observed.repository).toBe(a));
+  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});mockPush.mockClear();
   await act(async()=>{await observed.deleteAccount?.();});
-  expect(invoke).toHaveBeenCalledWith('delete-account',{body:{confirm:'DELETE'}});
+  expect(invoke).toHaveBeenCalledWith('delete-account',expect.objectContaining({body:{confirm:'DELETE'}}));
+  // No sync on the way out: the rows it would send have no account left.
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith('Account deleted',expect.any(String));alert.mockRestore();
   expect(invoke.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(a.wipe).mock.invocationCallOrder[0]);
   expect(a.wipe).toHaveBeenCalledTimes(1);
   await waitFor(()=>expect(observed.repository).toBe(guest));expect(observed.session).toBeNull();
@@ -757,4 +761,29 @@ test('demo mode cannot delete an account', async () => {
   await act(async()=>{await expect(observed.deleteAccount?.()).rejects.toThrow();});
   expect(invoke).not.toHaveBeenCalled();expect(demo.wipe).not.toHaveBeenCalled();
   await view.unmount();
+});
+
+test.each([
+  ['the account is confirmed gone',{data:{user:null},error:{code:'user_not_found',message:'private fixture'}},true],
+  ['the check itself fails',{data:{user:null},error:{message:'Failed to fetch'}},false],
+  ['the account still exists',{data:{user:{id:OWNER_A}},error:null},false],
+])('a lost answer is settled by asking the sign-in server: %s', async (_case,answer,gone) => {
+  const a=fixtureRepo(OWNER_A),guest=fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:guest});
+  const fixture=clientFixture();
+  Object.defineProperty(fixture.client,'functions',{value:{invoke:jest.fn(async()=>({data:null,error:{message:'private fixture',context:{status:401}}}))}});
+  Object.assign(fixture.auth,{getUser:jest.fn(async()=>answer)});
+  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
+  const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+  await waitFor(()=>expect(observed.repository).toBe(a));
+  if(gone) {await act(async()=>{await observed.deleteAccount?.();});expect(a.wipe).toHaveBeenCalledTimes(1);}
+  else {await act(async()=>{await expect(observed.deleteAccount?.()).rejects.toThrow('Account deletion did not finish.');});expect(a.wipe).not.toHaveBeenCalled();}
+  alert.mockRestore();await view.unmount();
+});
+
+test('deleting gives up after the time limit and erases nothing', async () => {
+  const { deleteServerAccount } = require('../src/auth/delete-account') as typeof import('../src/auth/delete-account');
+  const invoke=jest.fn((_name:string,options:{signal:AbortSignal})=>new Promise((_resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new Error('aborted')));}));
+  const client={functions:{invoke},auth:{getUser:jest.fn(async()=>({data:{user:null},error:{message:'Failed to fetch'}}))}} as unknown as Parameters<typeof deleteServerAccount>[0];
+  await expect(deleteServerAccount(client,5)).rejects.toThrow('Account deletion did not finish.');
 });
