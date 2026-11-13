@@ -17,7 +17,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>
 // Made-up values only: 8,430 steps a day, and 7 h 12 min asleep each night.
 const fake = (access: HealthAccess): HealthSource => ({
   access: async () => access, request: async () => {}, weights: async () => [],
-  steps: jest.fn(async () => 8430), activeEnergy: jest.fn(async () => 512), exerciseMinutes: jest.fn(async () => 34),
+  steps: jest.fn(async () => 8430), activeEnergy: jest.fn(async () => 512), exerciseMinutes: jest.fn(async () => 34), heart: jest.fn(async () => null), vo2Max: jest.fn(async () => null),
   sleep: jest.fn(async (from: Date, to: Date) => {
     const spans = [];
     for (let day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1); day < to; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {
