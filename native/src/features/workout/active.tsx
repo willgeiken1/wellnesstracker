@@ -33,7 +33,8 @@ import { SetRow } from "./set-row";
 import { UpNext } from "./up-next";
 import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
-import { FinishSheet, summaryHref } from "./finish";
+import { FinishSheet } from "./finish";
+import { WorkoutSummary } from "./summary";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
@@ -47,6 +48,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     // The workout just saved from the Finish sheet. It is no longer live, so without this the logger would drop to the
     // no-workout screen for the frames before the replace to its summary lands, which showed as a flash between them.
     [savedId, setSavedId] = useState<string | null>(null),
+    [summaryId, setSummaryId] = useState<string | null>(null),
     started = useRef(false);
   useEffect(() => {
     let active = true;
@@ -66,6 +68,9 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     };
   }, [store, routine, id, day]);
   const session = savedId ? store?.repo.get("sessions", savedId) : id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
+  // The summary takes the logger's place inside this screen. Navigating to the summary route instead swapped the
+  // full-screen workout modal for a new one on iOS, showing the tab underneath for half a second.
+  if (store && summaryId && store.repo.get("sessions", summaryId)) return <WorkoutSummary store={store} id={summaryId} past={false} />;
   return store && session ? (
     <Logger
       key={session.id}
@@ -76,6 +81,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       status={auth.syncStatus}
       saved={savedId === session.id}
       onSaved={setSavedId}
+      onSummary={setSummaryId}
     />
   ) : (
     <SafeAreaView
@@ -94,11 +100,11 @@ function closeWorkout() {
 }
 /** How long the logger waits for the Finish sheet's native modal to report it is gone before it opens the summary anyway. */
 export const SUMMARY_AFTER_SHEET_MS = 600;
-/** Opens the saved workout's summary, once. */
-function openSummary(left: { current: boolean }, id: string) {
+/** Hands over to the saved workout's summary, once. */
+function openSummary(left: { current: boolean }, show: (id: string) => void, id: string) {
   if (left.current) return;
   left.current = true;
-  router.replace(summaryHref(id));
+  show(id);
 }
 /** The draft field a keypad cursor writes: the right side has its own weight and reps. */
 function draftKey(field: "weight" | "reps", side?: "right"): "weight" | "reps" | "rightWeight" | "rightReps" {
@@ -123,12 +129,15 @@ function Logger({
   fixtureState,
   saved,
   onSaved,
+  onSummary,
 }: {
   store: WorkoutStore;
   fixtureState?: string;
   /** This workout was just saved from the Finish sheet; the logger is waiting to hand over to its summary. */
   saved: boolean;
   onSaved: (id: string) => void;
+  /** Shows the saved workout's summary in this same screen. */
+  onSummary: (id: string) => void;
   session: Row;
   pending: number;
   status: "idle" | "syncing" | "offline";
@@ -144,12 +153,12 @@ function Logger({
     if (!saved) return;
     // iOS reports the dismissal (onDismiss); elsewhere, or if that report never comes, go on without it.
     if (Platform.OS !== "ios") {
-      openSummary(left, session.id);
+      openSummary(left, onSummary, session.id);
       return;
     }
-    const fallback = setTimeout(() => openSummary(left, session.id), SUMMARY_AFTER_SHEET_MS);
+    const fallback = setTimeout(() => openSummary(left, onSummary, session.id), SUMMARY_AFTER_SHEET_MS);
     return () => clearTimeout(fallback);
-  }, [saved, session.id]);
+  }, [saved, onSummary, session.id]);
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -741,7 +750,7 @@ function Logger({
           (!past && !!store.timer() && !store.timer()!.minimized))
         }
         onDismiss={() => {
-          if (saved) openSummary(left, session.id);
+          if (saved) openSummary(left, onSummary, session.id);
         }}
         onClose={() => {
           if (picker) setPicker(false);

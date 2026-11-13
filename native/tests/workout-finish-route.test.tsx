@@ -26,7 +26,7 @@ const focused = (state: State) => state.routes[state.index];
 /** The app's root stack, under the router's own __root wrapper. */
 const appStack = (state: unknown) => focused(state as State).state!;
 
-test('Save swaps the logger for the summary inside the same workout modal, which stays presented over the tabs', async () => {
+test('Save shows the summary in the logger screen itself: no route change, the workout modal stays presented', async () => {
   const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start();
   const bench = store.addExercise(session.id, 'Bench Press', 1);
   store.editDraft(bench.id, 0, { weight: '100', reps: '8' });
@@ -39,13 +39,12 @@ test('Save swaps the logger for the summary inside the same workout modal, which
   expect(before.name).toBe('workout');
   await fireEvent.press(screen.getByTestId('finish-button'));
   await fireEvent.press(screen.getByTestId('save-workout'));
-  await waitFor(() => expect(view.getPathname()).toBe('/workout/summary'));
-  expect(view.getSearchParams()).toEqual({ id: session.id, just: '1' });
+  // No navigation at all: the summary shows inside the same logger screen, so iOS never swaps the modal.
+  await waitFor(() => expect(screen.getByText('Workout complete')).toBeTruthy());
+  expect(view.getPathname()).toBe('/workout');
   const root = appStack(view.getRouterState()), modal = focused(root);
-  // The tabs stay underneath and the workout modal is the same route: it was not dismissed and presented again.
   expect(root.routes.map(route => route.name)).toEqual(['(tabs)', 'workout']);
   expect(modal.key).toBe(before.key);
-  // Inside it, the summary took the logger's place, so back from the summary leaves the modal as before.
-  expect(modal.state!.routes.map(route => route.name)).toEqual(['summary']);
+  expect(modal.state!.routes.map(route => route.name)).toEqual(['index']);
   expect(screen.getByText('Workout complete')).toBeTruthy();
 });

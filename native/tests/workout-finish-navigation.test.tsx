@@ -48,10 +48,12 @@ async function saveFromLogger() {
   await act(async () => {});
   return { store, session, view };
 }
-function expectOnlySummaryReplace(id: string) {
-  expect(router.replace).toHaveBeenCalledTimes(1);
-  expect(router.replace).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id, just: '1' } });
-  for (const call of [router.push, router.back, router.navigate, router.dismiss, router.dismissAll, router.dismissTo]) expect(call).not.toHaveBeenCalled();
+/** The summary has taken the logger's place in the same screen, with no navigation of any kind. */
+function expectSummaryInPlace() {
+  expect(screen.getByText('Workout complete')).toBeTruthy();
+  expect(screen.queryByTestId('finish-button')).toBeNull();
+  expect(screen.queryByText('Close workout')).toBeNull();
+  for (const call of [router.replace, router.push, router.back, router.navigate, router.dismiss, router.dismissAll, router.dismissTo]) expect(call).not.toHaveBeenCalled();
 }
 /** The logger as the summary is about to replace it: this workout, its name and running clock, the sheet closed. */
 function expectLoggerKept() {
@@ -64,7 +66,7 @@ function expectLoggerKept() {
   expect(screen.queryByText(ISO_DAY)).toBeNull();
 }
 
-test('Save keeps the logger and its title, waits for the Finish sheet to close natively, then makes one replace to the summary', async () => {
+test('Save keeps the logger and its title, waits for the Finish sheet to close natively, then shows the summary in place', async () => {
   const { store, session, view } = await saveFromLogger();
   expect(store.repo.get('sessions', session.id)?.data.finished_at).toEqual(expect.any(Number));
   expect(store.active()).toBeUndefined();
@@ -76,24 +78,23 @@ test('Save keeps the logger and its title, waits for the Finish sheet to close n
   await view.rerender(<ActiveWorkout />);
   expectLoggerKept();
   expect(router.replace).not.toHaveBeenCalled();
-  // iOS reports the sheet's modal gone: now, and only now, the summary replaces the logger, once.
+  // iOS reports the sheet's modal gone: now, and only now, the summary takes the logger's place.
   await nativeDismiss();
-  expectOnlySummaryReplace(session.id);
-  expectLoggerKept();
-  await nativeDismiss();
-  expectOnlySummaryReplace(session.id);
+  expectSummaryInPlace();
+  await view.rerender(<ActiveWorkout />);
+  expectSummaryInPlace();
+  expect(screen.queryByText(ISO_DAY)).toBeNull();
 });
 
-test('if the sheet never reports its dismissal, the summary still opens once, after a short wait', async () => {
+test('if the sheet never reports its dismissal, the summary still shows, after a short wait', async () => {
   jest.useFakeTimers();
-  const { session } = await saveFromLogger();
+  await saveFromLogger();
   await act(() => jest.advanceTimersByTime(SUMMARY_AFTER_SHEET_MS - 1));
-  expect(router.replace).not.toHaveBeenCalled();
+  expectLoggerKept();
   await act(() => jest.advanceTimersByTime(1));
-  expectOnlySummaryReplace(session.id);
-  // A late dismissal report does not navigate a second time.
+  expectSummaryInPlace();
+  // A late dismissal report changes nothing.
   await nativeDismiss();
   await act(() => jest.advanceTimersByTime(SUMMARY_AFTER_SHEET_MS));
-  expectOnlySummaryReplace(session.id);
-  expectLoggerKept();
+  expectSummaryInPlace();
 });
