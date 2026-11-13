@@ -10,7 +10,7 @@ const now = new Date(2026, 10, 12, 9, 0);
 const sample = (id: string, day: number, kg: number): WeightSample => ({ id, at: new Date(2026, 10, day, 7, 30), kg });
 const A = 'AAAAAAAA-0000-4000-8000-000000000001', B = 'AAAAAAAA-0000-4000-8000-000000000002';
 const source = (access: HealthAccess, samples: WeightSample[]): HealthSource & { since?: Date } => ({
-  access: async () => access, request: async () => {}, steps: async () => 0, sleep: async () => [],
+  access: async () => access, request: async () => {}, steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0,
   async weights(since) { this.since = since; return samples; },
 });
 
@@ -95,7 +95,7 @@ test('a reading from early on the first day of the window is read and kept, not 
     const repo = new Repository(db, 'guest', fixture.device, randomUUID);
     const start = importStart(now), early = { id: A, at: new Date(start.getTime() + 60_000), kg: 81 };
     const reads = (since: Date) => [early, sample(B, 11, 80.1)].filter(item => item.at >= since);
-    const honest: HealthSource = { access: async () => 'asked', request: async () => {}, steps: async () => 0, sleep: async () => [], weights: async since => reads(since) };
+    const honest: HealthSource = { access: async () => 'asked', request: async () => {}, steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, weights: async since => reads(since) };
     expect(await refreshWeights(repo, honest, now)).toBe(2);
     expect(await refreshWeights(repo, honest, now)).toBe(0);
     expect(repo.list('weigh_ins')).toHaveLength(2);
@@ -107,7 +107,7 @@ test('a read that finishes after the page or account has gone writes nothing', a
   try {
     const repo = new Repository(db, 'guest', fixture.device, randomUUID);
     let live = true;
-    const slow: HealthSource = { access: async () => 'asked', request: async () => {}, steps: async () => 0, sleep: async () => [], weights: async () => { live = false; return [sample(A, 10, 80.4)]; } };
+    const slow: HealthSource = { access: async () => 'asked', request: async () => {}, steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, weights: async () => { live = false; return [sample(A, 10, 80.4)]; } };
     expect(await refreshWeights(repo, slow, now, () => live)).toBe(0);
     expect(repo.list('weigh_ins')).toHaveLength(0);
   } finally { sqlite.close(); }

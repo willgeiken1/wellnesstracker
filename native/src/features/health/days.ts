@@ -1,8 +1,9 @@
 import type { HealthSource, SleepSpan } from './source';
 
-/** Steps and hours asleep for a run of days, oldest first. Held in memory only: never saved, synced or sent.
- * A list is null when today's reading could not be made, so the tile is left out instead of showing a false 0. */
-export type HealthDays = { steps: number[] | null; sleepHours: number[] | null };
+/** Steps, active calories, exercise minutes and hours asleep for a run of days, oldest first. Held in memory
+ * only: never saved, synced or sent. A list is null when today's reading could not be made, so the tile is left
+ * out instead of showing a false 0. */
+export type HealthDays = { steps: number[] | null; sleepHours: number[] | null; activeKcal: number[] | null; exerciseMinutes: number[] | null };
 const HOUR = 3_600_000;
 const parts = (day: string) => day.split('-').map(Number) as [number, number, number];
 /** Local midnight at the start of a `YYYY-MM-DD` day. */
@@ -51,17 +52,25 @@ export function hoursAsleep(spans: readonly SleepSpan[], from: Date, to: Date): 
 export async function readHealthDays(source: HealthSource | null, days: readonly string[], now = new Date()): Promise<HealthDays | null> {
   if (!source || !days.length || await source.access() !== 'asked') return null;
   const last = days.length - 1, cap = (date: Date) => new Date(Math.min(date.getTime(), now.getTime()));
-  const counts = await Promise.all(days.map(async day => {
-    const from = dayStart(day), to = cap(dayEnd(day));
-    if (to <= from) return 0;
-    try { const count = await source.steps(from, to); return Number.isFinite(count) && count > 0 ? Math.round(count) : 0; } catch { return null; }
-  }));
-  // An earlier day that failed only loses its bar. Today failing means there is no honest number to show.
-  const steps = counts[last] === null ? null : counts.map(count => count ?? 0);
+  // One whole number per day from a day total. An earlier day that failed only loses its bar. Today failing
+  // means there is no honest number to show.
+  const totals = async (read: (from: Date, to: Date) => Promise<number>) => {
+    const counts = await Promise.all(days.map(async day => {
+      const from = dayStart(day), to = cap(dayEnd(day));
+      if (to <= from) return 0;
+      try { const count = await read(from, to); return Number.isFinite(count) && count > 0 ? Math.round(count) : 0; } catch { return null; }
+    }));
+    return counts[last] === null ? null : counts.map(count => count ?? 0);
+  };
+  const [steps, activeKcal, exerciseMinutes] = await Promise.all([
+    totals((from, to) => source.steps(from, to)),
+    totals((from, to) => source.activeEnergy(from, to)),
+    totals((from, to) => source.exerciseMinutes(from, to)),
+  ]);
   let sleepHours: number[] | null;
   try {
     const spans = await source.sleep(nightOf(days[0]).from, cap(nightOf(days[last]).to));
     sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to); return to > night.from ? hoursAsleep(spans, night.from, to) : 0; });
   } catch { sleepHours = null; }
-  return { steps, sleepHours };
+  return { steps, sleepHours, activeKcal, exerciseMinutes };
 }

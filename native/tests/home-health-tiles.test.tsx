@@ -17,7 +17,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>
 // Made-up values only: 8,430 steps a day, and 7 h 12 min asleep each night.
 const fake = (access: HealthAccess): HealthSource => ({
   access: async () => access, request: async () => {}, weights: async () => [],
-  steps: jest.fn(async () => 8430),
+  steps: jest.fn(async () => 8430), activeEnergy: jest.fn(async () => 512), exerciseMinutes: jest.fn(async () => 34),
   sleep: jest.fn(async (from: Date, to: Date) => {
     const spans = [];
     for (let day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1); day < to; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {
@@ -46,9 +46,13 @@ test('once Apple Health is connected, Home shows steps and last night\'s sleep, 
   await settle();
   expect(screen.getByRole('button', { name: 'Steps, 8,430 today' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Sleep, 7 h 12 min' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Active calories, 512 kcal · today' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Exercise, 34 min · today' })).toBeTruthy();
   expect(source.steps).toHaveBeenCalledTimes(7);
+  expect(source.activeEnergy).toHaveBeenCalledTimes(7);
+  expect(source.exerciseMinutes).toHaveBeenCalledTimes(7);
   expect(save).not.toHaveBeenCalled();
-  expect(JSON.stringify(local.mock.calls)).not.toMatch(/8430|8,430|7\.2|432/);
+  expect(JSON.stringify(local.mock.calls)).not.toMatch(/8430|8,430|7\.2|432|512|34\b/);
 });
 
 test('before connecting, Home reads nothing from Apple Health and shows no health tiles', async () => {
@@ -61,6 +65,8 @@ test('before connecting, Home reads nothing from Apple Health and shows no healt
   expect(screen.queryByTestId('home-tile-sleep')).toBeNull();
   expect(source.steps).not.toHaveBeenCalled();
   expect(source.sleep).not.toHaveBeenCalled();
+  expect(source.activeEnergy).not.toHaveBeenCalled();
+  expect(source.exerciseMinutes).not.toHaveBeenCalled();
 });
 
 test('with no Apple Health on the device Home is unchanged', async () => {

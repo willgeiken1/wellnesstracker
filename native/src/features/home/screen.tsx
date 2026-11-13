@@ -408,6 +408,9 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
     if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
     if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' });
+    const active = health.activeKcal, exercise = health.exerciseMinutes;
+    if (active) all.push({ id: 'active', label: t('homeActive'), color: pillar.training, value: whole(active[active.length - 1] ?? 0), unit: `kcal · ${t('homeToday')}`, series: active, bars: true, to: '/progress' });
+    if (exercise) all.push({ id: 'exercise', label: t('homeExercise'), color: pillar.training, value: whole(exercise[exercise.length - 1] ?? 0), unit: `min · ${t('homeToday')}`, series: exercise, bars: true, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }
