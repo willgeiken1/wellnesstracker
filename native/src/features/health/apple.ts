@@ -1,12 +1,20 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import type { HealthSource } from './source';
+import type { HealthSource, SleepStage } from './source';
 
 // Only the types Insight has a screen for. A type joins this list in the same change that shows it.
 const READ = ['HKQuantityTypeIdentifierBodyMass', 'HKQuantityTypeIdentifierStepCount', 'HKCategoryTypeIdentifierSleepAnalysis',
-  'HKQuantityTypeIdentifierActiveEnergyBurned', 'HKQuantityTypeIdentifierAppleExerciseTime'] as const;
-// Apple's sleep values: 0 in bed, 2 awake; 1, 3, 4 and 5 are the kinds of asleep.
+  'HKQuantityTypeIdentifierActiveEnergyBurned', 'HKQuantityTypeIdentifierAppleExerciseTime',
+  'HKQuantityTypeIdentifierHeartRate', 'HKQuantityTypeIdentifierRestingHeartRate', 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+  'HKQuantityTypeIdentifierVO2Max'] as const;
+const HEART = {
+  heartRate: ['HKQuantityTypeIdentifierHeartRate', 'count/min'],
+  restingHeartRate: ['HKQuantityTypeIdentifierRestingHeartRate', 'count/min'],
+  hrv: ['HKQuantityTypeIdentifierHeartRateVariabilitySDNN', 'ms'],
+} as const;
+// Apple's sleep values: 0 in bed, 2 awake; 1 is plain asleep, and 3, 4 and 5 are core, deep and REM.
 const ASLEEP = new Set([1, 3, 4, 5]), AWAKE = 2;
+const STAGE: Record<number, SleepStage> = { 3: 'core', 4: 'deep', 5: 'rem' };
 type Kit = typeof import('@kingstinct/react-native-healthkit');
 
 /** Apple Health, read-only. Null where it cannot work: off iPhone, in the phone-only build (which carries
@@ -48,7 +56,20 @@ export function appleHealth(): HealthSource | null {
       const samples = await kit.queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', { limit: 0, ascending: true, filter: { date: { startDate: from, endDate: to } } });
       // Awake stretches are kept so one device's awake time can be taken out of another device's broad asleep block.
       return samples.filter(sample => ASLEEP.has(Number(sample.value)) || Number(sample.value) === AWAKE)
-        .map(sample => ({ start: new Date(sample.startDate), end: new Date(sample.endDate), awake: Number(sample.value) === AWAKE }));
+        .map(sample => {
+          const value = Number(sample.value), stage = STAGE[value];
+          return { start: new Date(sample.startDate), end: new Date(sample.endDate), awake: value === AWAKE, ...(stage ? { stage } : {}) };
+        });
+    },
+    async heart(metric, from, to) {
+      const [type, unit] = HEART[metric];
+      const read = await kit.queryStatisticsForQuantity(type, ['discreteAverage', 'discreteMin', 'discreteMax'], { unit, filter: { date: { startDate: from, endDate: to } } });
+      const average = read.averageQuantity?.quantity, min = read.minimumQuantity?.quantity, max = read.maximumQuantity?.quantity;
+      return average === undefined || min === undefined || max === undefined ? null : { average, min, max };
+    },
+    async vo2Max() {
+      const [latest] = await kit.queryQuantitySamples('HKQuantityTypeIdentifierVO2Max', { unit: 'ml/(kg*min)', limit: 1, ascending: false });
+      return latest ? { value: latest.quantity, at: new Date(latest.startDate) } : null;
     },
   };
 }

@@ -14,6 +14,10 @@ const SHOWN = {
   HKCategoryTypeIdentifierSleepAnalysis: 'sleep',
   HKQuantityTypeIdentifierActiveEnergyBurned: 'active calories',
   HKQuantityTypeIdentifierAppleExerciseTime: 'exercise minutes',
+  HKQuantityTypeIdentifierHeartRate: 'heart rate',
+  HKQuantityTypeIdentifierRestingHeartRate: 'resting heart rate',
+  HKQuantityTypeIdentifierHeartRateVariabilitySDNN: 'heart rate variability',
+  HKQuantityTypeIdentifierVO2Max: 'VO2 max',
 } as const;
 
 test('Apple Health is asked to read only the types Insight shows, and never to write', async () => {
