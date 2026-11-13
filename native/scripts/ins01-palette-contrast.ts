@@ -236,7 +236,7 @@ const HUE_WINDOW: Partial<Record<MeaningRole, [number, number]>> = { training: [
 
 /** Values chosen by hand after the 2026-11 design critique. Each stays at least MIN_DISTINCT_DE from every other
  * pillar and the accent, keeps one hue across both modes, and clears D6 (the graphics and text steps below still run). */
-export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'training'; to: string; reason: string }[]> = {
+export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'training' | 'food' | 'recovery'; to: string; reason: string }[]> = {
   // Training was the accent's gold (dark ΔE 0.028). Green, the training colour most palettes use, in both modes.
   goldenHour: [
     { mode: 'dark', role: 'training', to: '#9CCB5A', reason: 'training read as the accent gold (critique 9)' },
@@ -249,6 +249,25 @@ export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'trai
   // mode's paler training already does, and stays dark enough to carry the white Start label.
   forestEmber: [
     { mode: 'light', role: 'training', to: '#1D4E27', reason: 'training read as the accent green (critique 9)' },
+  ],
+  // The launch review (UX-11): the smallest hue move that puts each pillar at least 0.10 from the accent and
+  // every other pillar, lightness kept, so the palette still looks like itself.
+  mountainMist: [
+    { mode: 'dark', role: 'recovery', to: '#8F90F0', reason: 'recovery read as the accent blue (review UX-11)' },
+    { mode: 'light', role: 'recovery', to: '#2D53A8', reason: 'recovery read as the accent blue (review UX-11)' },
+  ],
+  desertMirage: [
+    // Rose in both modes: the terracotta accent leaves no room for an orange food that is still distinct.
+    { mode: 'dark', role: 'food', to: '#F0849C', reason: 'food in the same rose as light mode (review UX-11)' },
+    { mode: 'light', role: 'food', to: '#B83C56', reason: 'food read as the accent terracotta (review UX-11)' },
+  ],
+  // Lotus Garden's dark food (ΔE 0.086 from the coral accent, 0.083 from the warn yellow) is left alone: it sits
+  // between the two, so any move away from one brings it closer to the other or greys it out.
+  auroraFjord: [
+    { mode: 'dark', role: 'recovery', to: '#75BAEF', reason: 'recovery read as the accent and as water (review UX-11)' },
+  ],
+  glacierBloom: [
+    { mode: 'dark', role: 'recovery', to: '#878DCE', reason: 'recovery sat close to water (review UX-11)' },
   ],
 };
 
