@@ -13,6 +13,7 @@ import { FoodAiResults } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { FoodCalendar } from './calendar';
 import { FoodEntry } from './entry';
+import { sharedReads } from '../../data/read-cache';
 import { useFoodDay } from './use-food-day';
 import { attributedDay, deleteFood, logCombo, meals, saveFood, type Combo, type Food } from './model';
 import { FoodLogModes, type LogMode } from './modes';
@@ -29,7 +30,8 @@ import { useFoodRevision } from './use-food-revision';
 export function FoodLogScreen({ repository }: { repository: Repository }) {
   // Repository reads are mutable method calls; do not memoize derived values by object identity.
   'use no memo';
-  const repo = repository;
+  // One remembering view per repository: this screen redraws on every change and reads the same lists many times.
+  const repo = sharedReads(repository);
   useFoodRevision(repo);
   const { colors } = useTheme();
   const [day, setDay] = useFoodDay(), [calendar, setCalendar] = useState(false);

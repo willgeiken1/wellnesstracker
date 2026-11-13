@@ -89,8 +89,15 @@ export function expireFoodAiPhotos(repo: Repository, now = Date.now()) {
     return;
   }
   const queue = stored.queue.filter(j => Number.isFinite(j.expiresAt) && j.expiresAt > now);
-  if (queue.length !== stored.queue.length) repo.localSave(key, {...stored, queue});
+  // An estimate's note (and its meal thumbnail) goes once its food row has been deleted for a day, well past Undo.
+  const entries = Object.fromEntries(Object.entries(stored.entries).filter(([id]) => {
+    const row = repo.get('food_entries', id);
+    return !row || row.deleted_at === null || now - row.deleted_at < DELETED_KEEP_MS;
+  }));
+  const pruned = Object.keys(entries).length !== Object.keys(stored.entries).length;
+  if (queue.length !== stored.queue.length || pruned) repo.localSave(key, {...stored, queue, entries});
 }
+const DELETED_KEEP_MS = 24 * 60 * 60 * 1000;
 function update(repo: Repository, change: (s: AiState) => AiState) {
   repo.localSave(key, change(aiState(repo)));
 }
