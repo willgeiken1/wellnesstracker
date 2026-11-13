@@ -44,11 +44,6 @@ export function profileErrors(profile: ProfileInput): ProfileErrors {
 export function ProfileFields({ value, onChange, settings = false, errors }: { value: ProfileInput; onChange: (value: ProfileInput) => void; settings?: boolean; errors?: ProfileErrors }) {
   return <>
     <Group testID="profile-basics">
-      <Choice label={t('profileGoal')}>
-        <SegmentedControl label={t('profileGoal')} value={value.goal ?? 'maintain'}
-          options={[{ value: 'lose', label: t('goalLose') }, { value: 'maintain', label: t('goalMaintain') }, { value: 'gain', label: t('goalGain') }]}
-          onChange={goal => onChange({ ...value, goal })} />
-      </Choice>
       {settings && <Field label={t('profileName')} value={value.name} onChange={name => onChange({ ...value, name })}
         input={{ autoCapitalize: 'words', autoComplete: 'name', textContentType: 'name' }} />}
       <Field label={t('birthDate')} value={value.dob} onChange={dob => onChange({ ...value, dob })} helper={t('birthDateHelp')} error={errors?.dob}
@@ -56,6 +51,12 @@ export function ProfileFields({ value, onChange, settings = false, errors }: { v
       <Choice label={t('profileUnits')}>
         <SegmentedControl label={t('profileUnits')} value={value.unit} options={[{ value: 'lb', label: t('imperialUnits') }, { value: 'kg', label: t('metricUnits') }]}
           onChange={unit => onChange(changeUnits(value, unit))} />
+      </Choice>
+      {/* After Units, as in the About you mockup. */}
+      <Choice label={t('profileGoal')}>
+        <SegmentedControl label={t('profileGoal')} value={value.goal ?? 'maintain'}
+          options={[{ value: 'lose', label: t('goalLose') }, { value: 'maintain', label: t('goalMaintain') }, { value: 'gain', label: t('goalGain') }]}
+          onChange={goal => onChange({ ...value, goal })} />
       </Choice>
     </Group>
     <Group testID="profile-stats" title={t('bodyStats')} body={settings ? undefined : t('optionalStats')}>
