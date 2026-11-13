@@ -87,6 +87,21 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
 function closeWorkout() {
   router.replace("/");
 }
+/** The draft field a keypad cursor writes: the right side has its own weight and reps. */
+function draftKey(field: "weight" | "reps", side?: "right"): "weight" | "reps" | "rightWeight" | "rightReps" {
+  return side ? (field === "weight" ? "rightWeight" : "rightReps") : field;
+}
+/** The workout's running time. It ticks on its own, so the logger around it does not redraw every second. */
+function ElapsedClock({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <>{clock((now - startedAt) / 1000)}</>;
+}
 function Logger({
   store,
   session,
@@ -107,8 +122,7 @@ function Logger({
   const params = useLocalSearchParams<{ fixtureState?: string }>();
   const selectedFixture = fixtureState ?? params.fixtureState;
   const focused = useIsFocused();
-  const [now, setNow] = useState(() => Date.now()),
-    [cursor, setCursor] = useState<Cursor | null>(() => {
+  const [cursor, setCursor] = useState<Cursor | null>(() => {
       const fixture =
         __DEV__ && store.repo.owner === "demo"
           ? store.repo.localGet<{ benchId: string; sessionId: string }>(
@@ -131,13 +145,6 @@ function Logger({
     [finish, setFinish] = useState(false),
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState<string[]>([]);
-  useEffect(() => {
-    if (past) return;
-    const timer = setInterval(() => {
-      if (AppState.currentState === "active") setNow(Date.now());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [past]);
   const entries = store.entries(session.id),
     drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
@@ -187,7 +194,7 @@ function Logger({
       store.repo.localGet<string | null>(
         `input:${entryId}:${index}:${side ? "right:" : ""}${field}`,
       ) ??
-        (d[side ? field === "weight" ? "rightWeight" : "rightReps" : field] ||
+        (d[draftKey(field, side)] ||
           (field === "weight"
             ? weightHint(
                 entries.find((e) => e.id === entryId)!,
@@ -199,17 +206,16 @@ function Logger({
   function input(text: string) {
     if (!cursor) return;
     setValue(text);
-    run(() => {
+    const key = draftKey(cursor.field, cursor.side);
+    // One change per digit: the typed value and the draft land together, so open screens redraw once.
+    run(() => store.repo.atomic(() => {
       store.repo.localSave(
         `input:${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`,
         text,
       );
       const d = store.drafts(cursor.entryId)[cursor.index];
-      if (!d.setId)
-        store.editDraft(cursor.entryId, cursor.index, {
-          [cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field]: text,
-        });
-    });
+      if (!d.setId) store.editDraft(cursor.entryId, cursor.index, { [key]: text });
+    }));
   }
   function next() {
     if (!cursor) return;
@@ -225,10 +231,11 @@ function Logger({
       setError(t("invalidSet"));
       return;
     }
-    const commit = () => {
-      try {
+    const key = draftKey(cursor.field, cursor.side);
+    // `run` reports a failed save; keeping try/catch out of this body lets the React Compiler memoise the logger.
+    const commit = () => run(() => {
         if (
-          value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] &&
+          value !== d[draftKey(cursor.field, cursor.side)] &&
           !(
             cursor.field === "weight" &&
             !d.weight &&
@@ -239,9 +246,7 @@ function Logger({
               )
           )
         )
-          store.editDraft(cursor.entryId, cursor.index, {
-            [cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field]: value,
-          });
+          store.editDraft(cursor.entryId, cursor.index, { [key]: value });
         store.repo.localSave(
           `input:${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`,
           null,
@@ -266,11 +271,7 @@ function Logger({
           if (nextEntry) edit(nextEntry.id, 0, "weight");
           else setCursor(null);
         }
-        setError(null);
-      } catch {
-        setError(t("workoutSaveError"));
-      }
-    };
+      });
     const baseline = store.sets(cursor.entryId).find((s) => s.id === d.setId);
     const check = validateSet(
       cursor.field === "weight" ? value : cursor.side ? d.rightWeight ?? "" : d.weight,
@@ -278,7 +279,7 @@ function Logger({
       store.unit(cursor.entryId),
       baseline ? Number(baseline.data.weight_kg) : undefined,
     );
-    if (d.setId && value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] && check.warning)
+    if (d.setId && value !== d[draftKey(cursor.field, cursor.side)] && check.warning)
       Alert.alert(t("checkSet"), t(check.warning), [
         {
           text: t("cancel"),
@@ -397,7 +398,7 @@ function Logger({
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
             <ThemedText muted numeric style={{ fontSize: 15 }}>
-              {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
+              {past ? String(session.data.day) : <ElapsedClock startedAt={Number(session.data.started_at)} />}
             </ThemedText>
           </View>
           <Pill
