@@ -17,7 +17,8 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
     if (__DEV__ && route === '/dev/sample-data') return route;
     if (__DEV__ && route === '/dev/oura-preview') {
       const state = url.searchParams.get('state');
-      return state && (OURA_PREVIEW_STATES as readonly string[]).includes(state) ? `${route}?state=${state}` : '/';
+      // Opened inside Settings, so it has Settings' own back button and Settings underneath.
+      return state && (OURA_PREVIEW_STATES as readonly string[]).includes(state) ? `/settings/dev-oura-preview?state=${state}` : '/';
     }
     if (!allowedRoutes.has(route)) return '/';
     const routine=url.searchParams.get('routine');

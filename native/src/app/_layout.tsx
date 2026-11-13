@@ -33,7 +33,6 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="dev/sample-data" options={{ headerShown: false }} />
-      <Stack.Screen name="dev/oura-preview" />
       <Stack.Screen name="dev/logger-fixture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="workout" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="food/log" options={{ title: t('foodLog') }} />

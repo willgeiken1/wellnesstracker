@@ -51,7 +51,7 @@ test('identical development fixture links receive distinct presentation requests
 });
 
 test('the Oura preview link opens only in development, with one known state and nothing else', () => {
-  expect(redirectSystemPath({ path: 'insight://dev/oura-preview?state=expired&x=1', initial: true })).toBe('/dev/oura-preview?state=expired');
+  expect(redirectSystemPath({ path: 'insight://dev/oura-preview?state=expired&x=1', initial: true })).toBe('/settings/dev-oura-preview?state=expired');
   for (const bad of ['insight://dev/oura-preview', 'insight://dev/oura-preview?state=../x', 'insight://dev/oura-preview?state=ON'])
     expect(redirectSystemPath({ path: bad, initial: true })).toBe('/');
   const original = __DEV__;
