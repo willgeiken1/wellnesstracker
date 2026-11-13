@@ -70,7 +70,7 @@ test('Connect opens Oura\'s page; once approved the row reads Connected, the til
   expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
   expect(JSON.stringify(local.get(HOME_TILES_KEY))).toMatch(/steps.*sleep|sleep.*steps/);
   expect(JSON.stringify([...local.values()])).not.toMatch(/\d{4,}/);
-  expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Check Oura again' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Disconnect Oura' })).toBeTruthy();
 });
 
@@ -127,7 +127,7 @@ test('when the connection cannot be read, the card stays, says so, claims nothin
   await render(<Page source={source} storage={storage} />, { wrapper });
   await settle();
   expect(screen.getByTestId('connect-oura-card')).toBeTruthy();
-  expect(screen.getByText('Oura could not be reached just now. Try again.')).toBeTruthy();
+  expect(screen.getByText('Oura could not be reached just now.')).toBeTruthy();
   expect(within(screen.getByTestId('connect-oura')).getByText('Could not check')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Connect Oura' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Disconnect Oura' })).toBeNull();
@@ -158,7 +158,7 @@ test('a page that is not Oura\'s is never opened, and the failure is said plainl
   await fireEvent.press(screen.getByTestId('connect-oura-button'));
   await settle();
   expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
-  expect(screen.getByText('Oura could not be reached just now. Try again.')).toBeTruthy();
+  expect(screen.getByText('Oura could not be reached just now.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Connect Oura' }).props.accessibilityState?.disabled).toBeFalsy();
 });
 
@@ -167,7 +167,7 @@ test('Check again refreshes; Disconnect asks first, and only the destructive ans
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await render(<Page source={source} storage={storage} />, { wrapper });
   await settle();
-  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Check Oura again' }));
   await settle();
   expect(source.sync).toHaveBeenCalledTimes(1);
   await fireEvent.press(screen.getByRole('button', { name: 'Disconnect Oura' }));
@@ -239,7 +239,7 @@ describe('Home reads both sources', () => {
   });
 });
 
-const PREVIEW_BUTTON = { off: 'Connect Oura', on: 'Check again', expired: 'Reconnect Oura', busy: 'Checking…', failed: 'Connect Oura', unreachable: 'Try again' } as const;
+const PREVIEW_BUTTON = { off: 'Connect Oura', on: 'Check Oura again', expired: 'Reconnect Oura', busy: 'Checking…', failed: 'Connect Oura', unreachable: 'Try again' } as const;
 test.each(OURA_PREVIEW_STATES.map(state => [state, PREVIEW_BUTTON[state]]))('the development preview draws the %s Oura state (%s)', async (state, label) => {
   await render(<ConnectedServices oura={previewOura(state as keyof typeof PREVIEW_BUTTON)} />, { wrapper });
   await settle();

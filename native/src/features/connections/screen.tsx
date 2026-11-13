@@ -79,8 +79,8 @@ export function ConnectedServices({ connected: given = [], apple, oura }: { conn
       <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('ouraTitle')}</ThemedText>
       {!ringUnknown && <ThemedText muted>{t(ringOn ? 'ouraOn' : ringExpired ? 'ouraExpired' : 'ouraOff')}</ThemedText>}
       {oura.failed && <ThemedText testID="connect-oura-failed" accessibilityLiveRegion="polite" style={{ color: colors.warning }}>{t('ouraFailed')}</ThemedText>}
-      <Button testID="connect-oura-button" label={t(oura.busy ? 'appleHealthBusy' : ringOn ? 'appleHealthAgain' : ringExpired ? 'ouraReconnect' : ringUnknown ? 'ouraRetry' : 'ouraConnect')} disabled={oura.busy} variant={ringOn ? 'secondary' : 'primary'} onPress={ringOn || ringUnknown ? oura.refresh : oura.connect} />
-      {ringExpired && <Button testID="connect-oura-again" label={t('appleHealthAgain')} disabled={oura.busy} variant="secondary" onPress={oura.refresh} />}
+      <Button testID="connect-oura-button" label={t(oura.busy ? 'appleHealthBusy' : ringOn ? 'ouraAgain' : ringExpired ? 'ouraReconnect' : ringUnknown ? 'ouraRetry' : 'ouraConnect')} disabled={oura.busy} variant={ringOn ? 'secondary' : 'primary'} onPress={ringOn || ringUnknown ? oura.refresh : oura.connect} />
+      {ringExpired && <Button testID="connect-oura-again" label={t('ouraAgain')} disabled={oura.busy} variant="secondary" onPress={oura.refresh} />}
       {(ringOn || ringExpired) && <Button testID="connect-oura-off" label={t('ouraDisconnect')} disabled={oura.busy} variant="secondary" onPress={confirmOff} />}
       {!ringOn && !ringUnknown && <ThemedText muted variant="caption">{t('ouraReturn')}</ThemedText>}
     </Card>}
