@@ -8,6 +8,7 @@ import { Records } from '../src/features/progress/records-screen';
 import { lifetime, liftRecords } from '../src/features/progress/records';
 import { WorkoutStore } from '../src/data/workout/store';
 import { today } from '../src/features/onboarding/model';
+import { friendlyDay } from '../src/features/body/model';
 import { memoryRepository } from './workout-repository';
 
 const mockRepository = memoryRepository();
@@ -70,7 +71,7 @@ describe('Body', () => {
   test('entries sit in one list, newest first, each with its own delete button', async () => {
     await render(wrap(<Body repository={weighed()} />));
     expect(screen.getByRole('header', { name: 'Entries' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: `Delete weigh-in for ${today()}, 81.1 kg` })).toBeTruthy();
+    expect(screen.getByRole('button', { name: `Delete weigh-in for ${friendlyDay(today())}, 81.1 kg` })).toBeTruthy();
     expect(screen.getAllByText('Delete')).toHaveLength(10);
   });
   test('the previous and next buttons under the trend wrap instead of running off a narrow screen', async () => {

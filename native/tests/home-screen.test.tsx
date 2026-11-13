@@ -158,11 +158,24 @@ describe('add button and the tab bar', () => {
     await render(<ThemeProvider><Home /></ThemeProvider>);
     expect([palette().accent, jest.requireActual('../src/design/tokens').createTheme('light', 'seaGlassTide').accent]).toContain(addColour());
   });
-  test('above the floating bar the + is neutral, so the open tab is the only accent circle', async () => {
+  test('with the floating bar the + rides beside the tabs, neutral, and still opens the quick actions', async () => {
+    const { DockButton, useDockAction } = jest.requireActual('../src/components/floating-tabs') as typeof import('../src/components/floating-tabs');
+    const Beside = () => { const action = useDockAction(); return action ? <DockButton action={action} /> : null; };
     const repo = open();
     repo.save('settings', { theme_override: 'dark', accent: 'seaGlassTide;bar=floating' });
-    await render(<ThemeProvider repository={repo}><Home /></ThemeProvider>);
+    const view = await render(<ThemeProvider repository={repo}><Home /><Beside /></ThemeProvider>);
+    // One + only, and it is the one beside the bar, not a button over the page's cards.
+    expect(screen.getAllByRole('button', { name: 'Add' })).toHaveLength(1);
+    expect(screen.getByTestId('dock-action')).toBeTruthy();
     expect(addColour()).toBe(palette().surface);
+    await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByRole('button', { name: 'Add' }).props.accessibilityState).toEqual({ expanded: true });
+    await fireEvent.press(screen.getByRole('button', { name: 'Start workout' }));
+    expect(router.push).toHaveBeenCalledWith('/workout');
+    // Leaving Home takes the button away again.
+    await view.unmount();
+    await render(<ThemeProvider repository={repo}><Beside /></ThemeProvider>);
+    expect(screen.queryByTestId('dock-action')).toBeNull();
   });
   test.each([[0, 16], [83, 99]])('with a bottom inset of %i the + button sits %i from the bottom', async (bottom, expected) => {
     open();
