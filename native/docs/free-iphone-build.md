@@ -33,7 +33,7 @@ ad-hoc distribution is not a substitute for free personal-team signing.
    npx expo install --check
    node scripts/check-free-iphone.cjs --prebuild
    npx expo prebuild --platform ios --clean
-   open ios/InsightDailyPhone.xcworkspace
+   open ios/InsightWellnessPhone.xcworkspace
    ```
 
    The inspection command exports JS and generates an unsigned iOS project in a
@@ -41,7 +41,7 @@ ad-hoc distribution is not a substitute for free personal-team signing.
    above generates Will's disposable local project and installs pods. Never commit
    `ios/` or `android/`. Do not add a Supabase URL/key for this build.
 3. In **Xcode → Settings → Accounts**, Will adds his Apple Account. Select the
-   **InsightDailyPhone** application target → **Signing & Capabilities** → enable
+   **InsightWellnessPhone** application target → **Signing & Capabilities** → enable
    **Automatically manage signing**, choose Will's **Personal Team**, and select
    his connected iPhone as the run destination. Confirm there is one app target,
    no widget/extension target, and no HealthKit, App Groups, Push Notifications,

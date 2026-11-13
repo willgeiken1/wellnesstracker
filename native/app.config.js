@@ -9,7 +9,7 @@ module.exports = ({ config }) => {
   if (process.env.APP_VARIANT !== 'freeiphone') return config;
   // Rebuild from a known schema, rather than copying future capabilities or backend extras.
   return {
-    name: 'Insight Daily (Phone)', slug: base.slug, version: base.version,
+    name: 'Insight Wellness (Phone)', slug: base.slug, version: base.version,
     orientation: base.orientation, icon: base.icon, scheme: base.scheme,
     userInterfaceStyle: base.userInterfaceStyle,
     ios: {
