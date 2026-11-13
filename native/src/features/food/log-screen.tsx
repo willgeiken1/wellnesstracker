@@ -13,6 +13,7 @@ import { FoodAiResults } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { FoodCalendar } from './calendar';
 import { FoodEntry } from './entry';
+import { useFoodDay } from './use-food-day';
 import { attributedDay, deleteFood, logCombo, meals, saveFood, type Combo, type Food } from './model';
 import { FoodLogModes, type LogMode } from './modes';
 import { dayInSentence, energyText, foodCard, Glyph, GroupLabel, ItemRow, macroText, NoticeRow, semibold } from './parts';
@@ -31,7 +32,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
   const repo = repository;
   useFoodRevision(repo);
   const { colors } = useTheme();
-  const [day, setDay] = useState(() => attributedDay()), [calendar, setCalendar] = useState(false);
+  const [day, setDay] = useFoodDay(), [calendar, setCalendar] = useState(false);
   const mealList = meals(repo), [selectedMeal, setSelectedMeal] = useState(mealList[0].id);
   const [mode, setMode] = useState<LogMode>('search');
   const [entry, setEntry] = useState<{ initial?: Food; id?: string; meal: string } | null>(null);

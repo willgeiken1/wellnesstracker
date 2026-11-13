@@ -19,6 +19,7 @@ import { FoodEntry } from './entry';
 import { FoodTargets } from './targets';
 import { FoodCalendar } from './calendar';
 import { CalorieRing } from './ring';
+import { useFoodDay } from './use-food-day';
 import { allFavorites, attributedDay, combos, copyYesterday, deleteFood, favorites, foodTargets, logCombo, meals, recentFoods, saveCombo, saveFood, saveMeal, saveReusable, shiftDay, toggleFavorite, totals, undoFood, type Food, type Undo } from './model';
 const METHODS=['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const;
 type Method=typeof METHODS[number];
@@ -77,7 +78,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const [aiMode,setAiMode]=useState<'snap'|'describe'|null>(null);
  const [scanning,setScanning]=useState(false);
  const revision=useFoodRevision(repository),repo=repository;
- const [day,setDay]=useState(()=>attributedDay()),[calendar,setCalendar]=useState(false),[fan,setFan]=useState(false);
+ const [day,setDay]=useFoodDay(),[calendar,setCalendar]=useState(false),[fan,setFan]=useState(false);
  const mealList=meals(repo),[selectedMeal,setSelectedMeal]=useState(mealList[0].id);
  const [entry,setEntry]=useState<{initial?:Food;id?:string;meal:string}|null>(initialManual?{meal:mealList[0].id}:null),[library,setLibrary]=useState(false);
  const [rename,setRename]=useState<{id?:string;name:string}|null>(null),[combo,setCombo]=useState<{meal:string;name:string}|null>(null);
