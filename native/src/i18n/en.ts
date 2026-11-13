@@ -774,7 +774,7 @@ export const en = {
   homeTileNextAbout: 'Resume, start today\'s workout or check in on food.', homeTileCaloriesAbout: 'Calories today with the last 7 days.',
   homeTileProteinAbout: 'Protein today with the last 7 days.', homeTileVolumeAbout: 'Weight lifted over the last 7 days.',
   homeTileWeightAbout: 'Your latest weight with its trend.',
-  homeSteps: 'Steps', homeSleep: 'Sleep', homeToday: 'today',
+  homeSteps: 'Steps', homeSleep: 'Sleep', homeToday: 'today', homeSleepNone: 'None', homeSleepNoneUnit: 'recorded',
   homeTileStepsAbout: 'Today\'s steps from Apple Health or Oura. Shows once one of them is connected.', homeTileSleepAbout: 'Last night\'s sleep from Apple Health or Oura. Shows once one of them is connected.',
   scoreTitle: 'Insight Score', scoreNeeds: 'Needs {n} more days', scoreNeedsOne: 'Needs 1 more day',
   scoreNeedsSpoken: 'Needs {n} more days of logging', scoreNeedsOneSpoken: 'Needs 1 more day of logging',
