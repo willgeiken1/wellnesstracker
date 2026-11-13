@@ -98,7 +98,7 @@ test('machine setup shows default Step for each unit and rejects invalid input',
   expect(screen.getByLabelText('Step (kg)').props.placeholder).toBe('5');
   await fireEvent.changeText(screen.getByLabelText('Step (kg)'), '0');
   await fireEvent.press(screen.getByRole('button', { name: 'Save setup' }));
-  expect(screen.getByText('Enter a positive Step and a non-negative bar weight.')).toBeTruthy();
+  expect(screen.getByText('Step must be more than 0, and bar weight 0 or more.')).toBeTruthy();
   expect(store.preferences().machine('Fixture')).toEqual({ text: '' });
 });
 test('saved machine notes remain visible beside the sets without opening the editor', async () => {

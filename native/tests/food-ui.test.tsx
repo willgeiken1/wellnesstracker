@@ -18,7 +18,7 @@ test('four meals, manual entry names day, blank nutrients, edit portions, delete
  await fireEvent.press(screen.getByRole('button',{name:'Save to today'}));
  expect(repo.list('food_entries')).toHaveLength(1);expect(screen.getByText('Synthetic oats')).toBeTruthy();
  await openRow('Synthetic oats');await fireEvent.press(screen.getByRole('button',{name:'Edit Synthetic oats'}));
- await fireEvent.changeText(screen.getByLabelText('Portion multiplier'),'2');await fireEvent.press(screen.getByRole('button',{name:'Save to today'}));
+ await fireEvent.changeText(screen.getByLabelText('Portions'),'2');await fireEvent.press(screen.getByRole('button',{name:'Save to today'}));
  expect(repo.list('food_entries')[0].data.energy_kj).toBeCloseTo(836.8);
  await openRow('Synthetic oats');await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic oats'}));expect(repo.list('food_entries')).toHaveLength(0);
  await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(repo.list('food_entries')).toHaveLength(1);

@@ -142,7 +142,7 @@ Using the same ΔE 0.08 floor, v2 also has many **near**-duplicates that §5 did
 
 Most of the rest are green `training` vs green `success`, or orange `food` vs amber `warn`. Changing these would change what the v2 palettes look like, and that is Will's call, so this proposal **flags them and leaves them unchanged**. Each palette's list is below. See open question O1.
 
-**Fixed after the 2026-11-13 design critique** (`CRITIQUE_FIXES` in the script, checked on the simulator): Golden Hour training moves from the accent's gold to green (#9CCB5A dark, #4C7A24 light), and its light accent darkens to #705200 so links read at 6.6:1 on cream instead of 4.9:1, stronger than the grey captions; Forest Ember light training moves to a lighter green (#3A8F4A) than its accent (#1F6E36), as dark mode already has it. The other near-duplicates are unchanged and still Will's call (O1).
+**Fixed after the 2026-11-13 design critique** (`CRITIQUE_FIXES` in the script, checked on the simulator): Golden Hour training moves from the accent's gold to green (#9CCB5A dark, #3E6F25 light), and its light accent darkens to #705200 so links read at 6.6:1 on cream instead of 4.9:1, stronger than the grey captions; Forest Ember light training moves to a deeper green (#1D4E27) than its accent (#1F6E36), further from the page as dark mode's paler training already is. Both training colours still carry the white Start label at 4.5:1. The other near-duplicates are unchanged and still Will's call (O1).
 
 ## Generated tables
 
@@ -864,7 +864,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | onAccent | `color.text.onAccent` | #111111 | #FFFFFF | #111111 | #FFFFFF |
 | *accentSoft* | `color.accent.soft` | #41361D | #ECE5D2 | #41361D | **#E8E2D2** |
 | *accentOnText* | `color.accent.text` | #F2C14E | #8A6400 | #F2C14E | **#705200** |
-| training | `color.pillar.training` | #E8BD2D | #6F4A15 | **#9CCB5A** | **#4C7A24** |
+| training | `color.pillar.training` | #E8BD2D | #6F4A15 | **#9CCB5A** | **#3E6F25** |
 | food | `color.pillar.food` | #CE3A37 | #CD6D58 | **#D0403D** | #CD6D58 |
 | recovery | `color.pillar.recovery` | #70E5EF | #1990C2 | #70E5EF | #1990C2 |
 | sleep | `color.pillar.sleep` | #784DEB | #4A2AB2 | **#8158EC** | #4A2AB2 |
@@ -897,9 +897,9 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | accent on bg | 3 | 11.24 | 4.89 | 11.24 | 6.60 |
 | accent on surface2 | 3 | 8.42 | 4.84 | 8.42 | 6.52 |
 | accent on surface | 3 | 10.13 | 5.33 | 10.13 | 7.18 |
-| training on bg | 3 | 10.55 | 7.17 | 9.97 | 4.64 |
-| training on surface2 | 3 | 7.90 | 7.08 | 7.47 | 4.59 |
-| training on surface | 3 | 9.51 | 7.80 | 8.99 | 5.05 |
+| training on bg | 3 | 10.55 | 7.17 | 9.97 | 5.45 |
+| training on surface2 | 3 | 7.90 | 7.08 | 7.47 | 5.39 |
+| training on surface | 3 | 9.51 | 7.80 | 8.99 | 5.93 |
 | food on bg | 3 | 3.85 | 3.22 | 4.02 | 3.22 |
 | food on surface2 | 3 | **2.88 FAIL** | 3.19 | 3.01 | 3.19 |
 | food on surface | 3 | 3.47 | 3.51 | 3.63 | 3.51 |
@@ -922,7 +922,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 **Fixes**
 
 - dark `training`: #E8BD2D → #9CCB5A (training read as the accent gold (critique 9))
-- light `training`: #6F4A15 → #4C7A24 (training in the same green as dark mode (critique 9))
+- light `training`: #6F4A15 → #3E6F25 (training in the same green as dark mode (critique 9))
 - light `accent`: #8A6400 → #705200 (accent links read weaker than muted text on cream (critique 9))
 - dark `water`: #4FC3F7 → #7090EF (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - light `water`: #4FC3F7 → #4A72E8 (shared placeholder; per-palette hue distinct from recovery (Q-C))
@@ -932,7 +932,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 **Near-duplicates flagged** (OKLab ΔE < 0.08 after the fixes above; not changed here)
 
 - dark `training` #9CCB5A vs `success` #8FD39A: ΔE 0.068
-- light `training` #4C7A24 vs `success` #2A6F3A: ΔE 0.057
+- light `training` #3E6F25 vs `success` #2A6F3A: ΔE 0.026
 
 ### 10. Glacier Bloom (`glacierBloom`)
 
@@ -1028,7 +1028,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | onAccent | `color.text.onAccent` | #0C120E | #FFFFFF | #0C120E | #FFFFFF |
 | *accentSoft* | `color.accent.soft` | #263D2C | #DBE8DF | #263D2C | #DBE8DF |
 | *accentOnText* | `color.accent.text` | #7CD68E | #1F6E36 | #7CD68E | #1F6E36 |
-| training | `color.pillar.training` | #AEECAD | #255F39 | #AEECAD | **#3A8F4A** |
+| training | `color.pillar.training` | #AEECAD | #255F39 | #AEECAD | **#1D4E27** |
 | food | `color.pillar.food` | #E06245 | #C0502E | #E06245 | #C0502E |
 | recovery | `color.pillar.recovery` | #4D6AEA | #4B92CC | #4D6AEA | #4B92CC |
 | sleep | `color.pillar.sleep` | #ECD358 | #87883A | #ECD358 | #87883A |
@@ -1061,9 +1061,9 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | accent on bg | 3 | 10.70 | 5.64 | 10.70 | 5.64 |
 | accent on surface2 | 3 | 7.82 | 5.69 | 7.82 | 5.69 |
 | accent on surface | 3 | 9.45 | 6.28 | 9.45 | 6.28 |
-| training on bg | 3 | 13.89 | 6.80 | 13.89 | 3.62 |
-| training on surface2 | 3 | 10.15 | 6.86 | 10.15 | 3.65 |
-| training on surface | 3 | 12.27 | 7.56 | 12.27 | 4.03 |
+| training on bg | 3 | 13.89 | 6.80 | 13.89 | 8.69 |
+| training on surface2 | 3 | 10.15 | 6.86 | 10.15 | 8.77 |
+| training on surface | 3 | 12.27 | 7.56 | 12.27 | 9.67 |
 | food on bg | 3 | 5.41 | 4.26 | 5.41 | 4.26 |
 | food on surface2 | 3 | 3.95 | 4.30 | 3.95 | 4.30 |
 | food on surface | 3 | 4.78 | 4.74 | 4.78 | 4.74 |
@@ -1085,7 +1085,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 
 **Fixes**
 
-- light `training`: #255F39 → #3A8F4A (training read as the accent green (critique 9))
+- light `training`: #255F39 → #1D4E27 (training read as the accent green (critique 9))
 - dark `water`: #4FC3F7 → #4DEAE7 (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - light `water`: #4FC3F7 → #2C9B99 (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - light `ai`: #537B38 → #527937 (ai (accent/sleep mix #537B38) worst text pair 4.43:1 < 4.5)

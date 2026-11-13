@@ -384,7 +384,7 @@ test.each([false, true])('workout header only shows an eyebrow for templates: %s
   store.start(routine?.id);
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  if (template) expect(screen.getByText('Template')).toBeTruthy();
+  if (template) expect(screen.getByText('Routine')).toBeTruthy();
   else expect(screen.getAllByText('Workout')).toHaveLength(1);
 });
 
@@ -413,7 +413,7 @@ test('active-workout header row renders Eyebrow with semibold style for template
   store.start(routine.id);
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  const eyebrow = screen.getByText('Template');
+  const eyebrow = screen.getByText('Routine');
   expect(eyebrow).toBeTruthy();
   expect(eyebrow).toHaveStyle({
     fontSize: tokens.type.caption,
@@ -880,13 +880,13 @@ test('template editor saves name/target edits without rest overrides, and only s
   const save = jest.spyOn(repo, 'save');
   try {
     activeRepository(repo); await render(<TemplateEditor />, {wrapper});
-    await fireEvent.changeText(screen.getByLabelText('Template name'), 'Renamed routine');
+    await fireEvent.changeText(screen.getByLabelText('Routine name'), 'Renamed routine');
     await fireEvent.changeText(screen.getByLabelText('Bench Press Target sets'), '4');
-    await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Save routine'}));
     expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(0);
     expect(repo.localGet('rest:bench press')).toBeUndefined();
     await fireEvent.press(screen.getAllByRole('button', {name: '120 seconds'})[1]);
-    await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Save routine'}));
     expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(1);
     expect(JSON.parse(String(repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': {seconds:120,style:'unwind'}});
     expect(repo.localGet('rest:bench press')).toBeUndefined();
@@ -924,7 +924,7 @@ test('M2-07 template range and superset controls save and reload', async () => {
     await fireEvent.press(screen.getByRole('button',{name:'Link superset for Bench Press'}));
     await fireEvent.press(screen.getByRole('button',{name:'Include Dumbbell Row in superset'}));
     await fireEvent.press(screen.getByRole('button',{name:'Save superset'}));
-    await fireEvent.press(screen.getByRole('button',{name:'Save template'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save routine'}));
     const rows = store.templateExercises(routine.id);
     expect(rows[0].data).toMatchObject({rep_min:8,rep_max:10});
     expect(rows[0].data.superset_group).toBe(rows[1].data.superset_group);
@@ -932,7 +932,7 @@ test('M2-07 template range and superset controls save and reload', async () => {
     expect(screen.getByLabelText('Bench Press, Minimum reps').props.value).toBe('8');
     await fireEvent.press(screen.getByRole('button',{name:'Unlink superset for Bench Press'}));
     await fireEvent.press(screen.getByRole('button',{name:'Clear rep range for Bench Press'}));
-    await fireEvent.press(screen.getByRole('button',{name:'Save template'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save routine'}));
     expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:null,rep_max:null,superset_group:null});
   } finally {useLocalSearchParams.mockReturnValue({});}
 });

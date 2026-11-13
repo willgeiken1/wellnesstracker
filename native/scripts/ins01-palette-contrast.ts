@@ -240,13 +240,15 @@ export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'trai
   // Training was the accent's gold (dark ΔE 0.028). Green, the training colour most palettes use, in both modes.
   goldenHour: [
     { mode: 'dark', role: 'training', to: '#9CCB5A', reason: 'training read as the accent gold (critique 9)' },
-    { mode: 'light', role: 'training', to: '#4C7A24', reason: 'training in the same green as dark mode (critique 9)' },
+    // Dark enough to carry the white Start label at 4.5:1, like every other light palette's training colour.
+    { mode: 'light', role: 'training', to: '#3E6F25', reason: 'training in the same green as dark mode (critique 9)' },
     // Links on cream were 4.9:1, weaker than the grey captions (5.8:1). Same gold, darker: 6.6:1.
     { mode: 'light', role: 'accent', to: '#705200', reason: 'accent links read weaker than muted text on cream (critique 9)' },
   ],
-  // Light training was the accent's deep green (ΔE 0.050). Lighter than the accent, as dark mode already has it.
+  // Light training was the accent's deep green (ΔE 0.050). It moves further from the page than the accent, as dark
+  // mode's paler training already does, and stays dark enough to carry the white Start label.
   forestEmber: [
-    { mode: 'light', role: 'training', to: '#3A8F4A', reason: 'training read as the accent green (critique 9)' },
+    { mode: 'light', role: 'training', to: '#1D4E27', reason: 'training read as the accent green (critique 9)' },
   ],
 };
 

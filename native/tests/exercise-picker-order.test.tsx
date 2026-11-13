@@ -38,14 +38,14 @@ test('create is still offered when nothing matches', async () => {
 });
 
 // Cancel moved from the foot of the form into the header bar (owner's ruling for the new look); Save stays the last button.
-test('routine editor has Cancel in its header bar, still leaving the editor, and Save template last', async () => {
+test('routine editor has Cancel in its header bar, still leaving the editor, and Save routine last', async () => {
   await render(<TemplateEditor />, { wrapper });
   const order = names();
   expect(order[0]).toBe('Cancel');
-  expect(order[order.length - 1]).toBe('Save template');
+  expect(order[order.length - 1]).toBe('Save routine');
   expect(order.filter(name => name === 'Cancel')).toHaveLength(1);
   const bar = screen.getByTestId('template-bar');
-  expect(within(bar).getByRole('header')).toHaveTextContent('New template');
+  expect(within(bar).getByRole('header')).toHaveTextContent('New routine');
   await fireEvent.press(within(bar).getByRole('button', { name: 'Cancel' }));
   expect(router.replace).toHaveBeenCalledWith('/workouts');
 });

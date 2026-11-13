@@ -188,7 +188,7 @@ test('History lists finished workouts as rows that open their summary, and says 
 test('routine editor: honest empty state, labelled targets, and reorder controls that know their limits', async () => {
   const { store } = open();
   const view = await render(<TemplateEditor />, { wrapper });
-  expect(screen.getAllByRole('header')[0]).toHaveTextContent('New template');
+  expect(screen.getAllByRole('header')[0]).toHaveTextContent('New routine');
   expect(screen.getByText('No exercises yet')).toBeTruthy();
   await view.unmount();
   const routine = store.saveTemplate('Sample routine', ['Bench Press', 'Dumbbell Row'].map(exercise => ({ exercise, target_sets: 3, target_reps: 8 })));
@@ -200,11 +200,11 @@ test('routine editor: honest empty state, labelled targets, and reorder controls
   expect(screen.getByRole('button', { name: 'Move down, Dumbbell Row' })).toBeDisabled();
   await fireEvent.press(screen.getByRole('button', { name: 'Move down, Bench Press' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Remove, Dumbbell Row' }));
-  await fireEvent.changeText(screen.getByLabelText('Template name'), '');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save template' }));
-  expect(screen.getByRole('alert')).toHaveTextContent(/^Enter a name/);
-  await fireEvent.changeText(screen.getByLabelText('Template name'), 'Sample routine');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save template' }));
+  await fireEvent.changeText(screen.getByLabelText('Routine name'), '');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save routine' }));
+  expect(screen.getByRole('alert')).toHaveTextContent(/^Give the routine a name/);
+  await fireEvent.changeText(screen.getByLabelText('Routine name'), 'Sample routine');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save routine' }));
   expect(store.templateExercises(routine.id).map(row => row.data.exercise)).toEqual(['Bench Press']);
   expect(router.back).toHaveBeenCalledTimes(1);
 });
@@ -218,13 +218,13 @@ test('finish sheet shows what will be saved and its switch still saves the worko
   expect(within(facts).getByLabelText('Sets: 1')).toBeTruthy();
   expect(within(facts).getByLabelText('Exercises: 1')).toBeTruthy();
   expect(screen.queryByText(/No sets are logged yet/)).toBeNull();
-  const toggle = screen.getByRole('switch', { name: 'Save as template' });
+  const toggle = screen.getByRole('switch', { name: 'Save as routine' });
   expect(toggle).toHaveProp('value', false);
   await fireEvent(toggle, 'valueChange', true);
   await fireEvent.changeText(screen.getByLabelText('Workout'), 'Sample session');
   await fireEvent.changeText(screen.getByLabelText('Start date and time'), 'tomorrow');
   await fireEvent.press(screen.getByTestId('save-workout'));
-  expect(screen.getByRole('alert')).toHaveTextContent(/^Enter a valid past date/);
+  expect(screen.getByRole('alert')).toHaveTextContent(/^Use a start time in the past/);
   expect(store.templates()).toHaveLength(0);
 });
 
@@ -233,7 +233,7 @@ test('finish sheet with the switch on saves the template and opens the summary',
   store.addExercise(session.id, 'Bench Press', 1);
   await render(<FinishSheet store={store} session={store.repo.get('sessions', session.id)!} onClose={() => {}} />, { wrapper });
   expect(screen.getByText(/No sets are logged yet/)).toBeTruthy();
-  await fireEvent(screen.getByRole('switch', { name: 'Save as template' }), 'valueChange', true);
+  await fireEvent(screen.getByRole('switch', { name: 'Save as routine' }), 'valueChange', true);
   await fireEvent.changeText(screen.getByLabelText('Workout'), 'Sample session');
   await fireEvent.press(screen.getByTestId('save-workout'));
   expect(store.templates().map(row => row.data.name)).toEqual(['Sample session']);

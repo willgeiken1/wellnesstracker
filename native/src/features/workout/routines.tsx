@@ -1,6 +1,6 @@
 import { readableOn } from '@/core/contrast';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Button } from '@/components/button';
@@ -100,10 +100,22 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
     <Card style={[card, { paddingVertical: tokens.spacing[0], gap: 0 }]}>
       {store && routines.map(r => {
         const name = String(r.data.name), last = lastOf(r.id), expanded = open === r.id;
+        // One set of actions for the row, the long-press menu and VoiceOver. Delete is destructive and asks first.
+        const edit = () => router.push({ pathname: '/workout/template', params: { id: r.id } });
+        const move = (by: number) => run(() => store.moveTemplate(r.id, by));
+        const remove = () => Alert.alert(t('deleteTemplate'), name, [{ text: t('cancel'), style: 'cancel' },
+          { text: t('delete'), style: 'destructive', onPress: () => run(() => { const restore = store.deleteTemplate(r.id); onUndo(restore); }) }]);
+        const menu = () => Platform.OS === 'ios'
+          ? ActionSheetIOS.showActionSheetWithOptions({ title: name, options: [t('edit'), t('moveUp'), t('moveDown'), t('delete'), t('cancel')], destructiveButtonIndex: 3, cancelButtonIndex: 4 },
+            index => [edit, () => move(-1), () => move(1), remove][index]?.())
+          : setOpen(r.id);
         return <View key={r.id} style={{ borderBottomWidth: 1, borderBottomColor: colors['surface-2'], paddingVertical: tokens.spacing[1], gap: tokens.spacing[1] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
             <Pressable accessibilityRole="button" accessibilityLabel={t('routineActions').replace('{name}', name)} accessibilityState={{ expanded }}
-              onPress={() => setOpen(expanded ? null : r.id)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 52 }}>
+              onPress={() => setOpen(expanded ? null : r.id)} onLongPress={menu} delayLongPress={350}
+              accessibilityActions={[{ name: 'edit', label: t('edit') }, { name: 'up', label: t('moveUp') }, { name: 'down', label: t('moveDown') }, { name: 'delete', label: t('delete') }]}
+              onAccessibilityAction={event => ({ edit, up: () => move(-1), down: () => move(1), delete: remove } as Record<string, () => void>)[event.nativeEvent.actionName]?.()}
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 52 }}>
               <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], padding: 4 }}>
                 <Print data={routinePrint(store, r, last)} width={36} height={36} />
               </View>
@@ -118,11 +130,10 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
             </Pressable>
           </View>
           {expanded && <View style={[layout.row, { flexWrap: 'wrap', paddingBottom: tokens.spacing[1] }]}>
-            <Button label={t('edit')} variant="secondary" onPress={() => router.push({ pathname: '/workout/template', params: { id: r.id } })} />
-            <Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveTemplate(r.id, -1))} />
-            <Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveTemplate(r.id, 1))} />
-            <Button label={t('delete')} variant="secondary" onPress={() => Alert.alert(t('deleteTemplate'), name, [{ text: t('cancel'), style: 'cancel' },
-              { text: t('delete'), onPress: () => run(() => { const restore = store.deleteTemplate(r.id); onUndo(restore); }) }])} />
+            <Button label={t('edit')} variant="secondary" onPress={edit} />
+            <Button label={t('moveUp')} variant="secondary" onPress={() => move(-1)} />
+            <Button label={t('moveDown')} variant="secondary" onPress={() => move(1)} />
+            <Button label={t('delete')} variant="secondary" onPress={remove} />
           </View>}
         </View>;
       })}

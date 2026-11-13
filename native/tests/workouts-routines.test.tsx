@@ -36,12 +36,12 @@ test('workout print: same workout draws the same print, bigger share draws more 
   expect(workoutPrint(data, 36, 36).length).toBeLessThan(lines.length);
   expect(workoutPrint(printData('empty', []), 300, 150)).toEqual([]);
 });
-test('a new account sees the routines card with New template and Start empty, and no print cards', async () => {
+test('a new account sees the routines card with New routine and Start empty, and no print cards', async () => {
   open();
   await render(<Workouts />, { wrapper });
   expect(screen.queryByTestId('workouts-latest-print')).toBeNull();
   expect(screen.queryByTestId('workouts-up-next')).toBeNull();
-  await fireEvent.press(screen.getByRole('button', { name: 'New template' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'New routine' }));
   expect(router.push).toHaveBeenCalledWith('/workout/template');
   await fireEvent.press(screen.getByRole('button', { name: 'Start empty workout' }));
   expect(router.push).toHaveBeenCalledWith('/workout');
@@ -95,9 +95,30 @@ test('edit, reorder and delete sit behind the routine row and still work', async
   await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
   expect(new WorkoutStore(repo).templates().map(r => r.data.name)).toEqual(['Sample pull']);
   await view.rerender(<Workouts />);
-  await fireEvent.press(screen.getByRole('button', { name: 'Undo template deletion' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Undo routine deletion' }));
   expect(new WorkoutStore(repo).templates()).toHaveLength(2);
+  // The confirm is the system's destructive style.
+  expect(alert.mock.calls[0][2]?.[1]).toMatchObject({ text: 'Delete', style: 'destructive' });
   alert.mockRestore();
+});
+
+test('a long press opens the iOS action sheet, and VoiceOver gets the same actions', async () => {
+  const { ActionSheetIOS, Platform } = jest.requireActual('react-native');
+  const { repo, store } = open(), a = routine(store, 'Sample push');
+  routine(store, 'Sample pull');
+  const os = Platform.OS; Platform.OS = 'ios';
+  const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation((_options, pick) => (pick as (i: number) => void)(2));
+  const view = await render(<Workouts />, { wrapper });
+  const row = screen.getByRole('button', { name: 'Actions for Sample push' });
+  await fireEvent(row, 'longPress');
+  expect(sheet.mock.calls[0][0]).toMatchObject({ options: ['Edit', 'Move up', 'Move down', 'Delete', 'Cancel'], destructiveButtonIndex: 3, cancelButtonIndex: 4 });
+  expect(new WorkoutStore(repo).templates().map(r => r.data.name)).toEqual(['Sample pull', 'Sample push']);
+  await view.rerender(<Workouts />);
+  const again = screen.getByRole('button', { name: 'Actions for Sample push' });
+  expect(again.props.accessibilityActions.map((x: { name: string }) => x.name)).toEqual(['edit', 'up', 'down', 'delete']);
+  await fireEvent(again, 'accessibilityAction', { nativeEvent: { actionName: 'edit' } });
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/workout/template', params: { id: a.id } });
+  sheet.mockRestore(); Platform.OS = os;
 });
 
 test('the Start routine label keeps 4.5:1 on the training colour in every theme, light and dark', () => {
