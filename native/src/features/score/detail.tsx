@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '@/components/card';
@@ -6,7 +6,8 @@ import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
-import type { WorkoutStore } from '@/data/workout/store';
+import { WorkoutStore } from '@/data/workout/store';
+import { cachedReads } from '@/data/read-cache';
 import { useWorkout } from '@/features/workout/use-workout';
 import { t } from '@/i18n/en';
 import { useHealthDays } from '../health/use-health-days';
@@ -56,7 +57,10 @@ function Detail({ store }: { store: WorkoutStore }) {
   // The weights live in this screen while it is open and on the phone after each change.
   const [held, setHeld] = useState<{ store: WorkoutStore['repo']; weights: Weights } | null>(null);
   const weights = held && held.store === store.repo ? held.weights : readWeights(store);
-  const score = readScore(store, new Date(), health, weights);
+  // Read once per change to the data, the weights or the minute, through a view that fetches each list once.
+  const reader = useMemo(() => new WorkoutStore(cachedReads(store.repo), store.viewRevision), [store]);
+  const minute = Math.floor(new Date().getTime() / 60_000);
+  const score = useMemo(() => readScore(reader, new Date(minute * 60_000), health, weights), [reader, health, weights, minute]);
   const share = shares(weights, score.pillars), line = headline(score);
   const change = (next: Weights) => { if (next === weights) return; setHeld({ store: store.repo, weights: next }); saveWeights(store, next); };
   return <>
