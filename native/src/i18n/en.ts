@@ -858,6 +858,7 @@ export const en = {
   keypadLookTitle: 'Number keys', keypadLookBody: 'The keys you log weight and reps with.',
   lookStandard: 'Standard', lookPlain: 'Plain', lookGlass: 'Glass', lookPills: 'Pills',
   selectorLookTitle: 'Choice buttons', selectorLookBody: 'How choices like 7d, 30d and 90d look. Standard keeps them in one track. Pills gives each its own rounded button in a row you can swipe.',
+  fieldLookTitle: 'Field outlines', fieldLookBody: 'A clear edge around text boxes. It shows on its own when iOS Increase Contrast is on, or you can keep it on all the time.', fieldLookAuto: 'With Increase Contrast', fieldLookAlways: 'Always',
   motionTitle: 'Motion', motionBasic: 'Off', motionCalm: 'Calm', motionLively: 'Lively',
   motionReduced: 'Reduce Motion is on in iOS Settings, so nothing moves.',
   strengthTitle: 'Strength', strengthBody: 'How strong the effects are.',

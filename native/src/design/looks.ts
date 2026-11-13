@@ -20,8 +20,11 @@ export type KeypadLook = (typeof KEYPAD_LOOKS)[number];
  * separate pill chips that scrolls sideways when there are more than fit. */
 export const SELECTOR_LOOKS = ["standard", "pills"] as const;
 export type SelectorLook = (typeof SELECTOR_LOOKS)[number];
-export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook; selector: SelectorLook };
-export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain", selector: "standard" };
+/** Text field edges: a hairline only when iOS Increase Contrast is on (the default), or always (A11Y-09). */
+export const FIELD_LOOKS = ["auto", "outlined"] as const;
+export type FieldLook = (typeof FIELD_LOOKS)[number];
+export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook; selector: SelectorLook; fields: FieldLook };
+export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain", selector: "standard", fields: "auto" };
 
 type PresetLooks = Pick<Looks, "ring" | "motion" | "bar" | "keypad">;
 /** A preset is a starting point that sets several looks at once. It never changes the theme or the strength. */
@@ -57,12 +60,13 @@ export function parseAppearance(saved: unknown): Looks {
     bar: oneOf(BAR_LOOKS, pairs.get("bar"), DEFAULT_APPEARANCE.bar),
     keypad: oneOf(KEYPAD_LOOKS, pairs.get("keypad"), DEFAULT_APPEARANCE.keypad),
     selector: oneOf(SELECTOR_LOOKS, pairs.get("selector"), DEFAULT_APPEARANCE.selector),
+    fields: oneOf(FIELD_LOOKS, pairs.get("fields"), DEFAULT_APPEARANCE.fields),
     intensity: INTENSITIES.find((level) => String(level) === pairs.get("strength")) ?? DEFAULT_APPEARANCE.intensity,
   };
 }
 export function formatAppearance(appearance: Looks): string {
-  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector" } as const;
-  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector"] as const)
+  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector", fields: "fields" } as const;
+  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector", "fields"] as const)
     .filter((key) => appearance[key] !== DEFAULT_APPEARANCE[key])
     .map((key) => `;${saved[key]}=${appearance[key]}`);
   return appearance.palette + extras.join("");
