@@ -1,14 +1,13 @@
 import { router } from 'expo-router';
 import { memoryRepository } from './workout-repository';
 import { act, render, fireEvent } from '@testing-library/react-native';
-import RootLayout from '../src/app/_layout';
+import RootLayout, { SPLASH_LIMIT_MS } from '../src/app/_layout';
+import * as SplashScreen from 'expo-splash-screen';
 import { AuthContext, type AuthState } from '../src/auth/provider';
 jest.mock('expo-router',()=>{const actual=jest.requireActual('expo-router');const Stack=({children}:{children:React.ReactNode})=>children;Stack.Screen=()=>null;Stack.Protected=({children,guard}:{children:React.ReactNode;guard:boolean})=>guard?children:null;return {...actual,Stack,router:{...actual.router,replace:jest.fn()}};});
 jest.mock('expo-network',()=>({getNetworkStateAsync:jest.fn(async()=>({isConnected:false,isInternetReachable:false})),addNetworkStateListener:jest.fn(()=>({remove:jest.fn()}))}));
 jest.mock('expo-font',()=>({useFonts:()=>[true,null]}));
 jest.mock('expo-splash-screen',()=>({preventAutoHideAsync:jest.fn(async()=>{}),hideAsync:jest.fn(async()=>{})}));
-import * as SplashScreen from 'expo-splash-screen';
-import { SPLASH_LIMIT_MS } from '../src/app/_layout';
 jest.mock('../src/auth/provider',()=>{
  const actual=jest.requireActual('../src/auth/provider');
  return {...actual,AuthProvider:({children}:{children:React.ReactNode})=>children};
