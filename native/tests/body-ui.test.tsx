@@ -180,11 +180,22 @@ test('Health weigh-ins are listed with where they came from, and only typed ones
  expect(health).toBeTruthy();
  expect(screen.queryByRole('button',{name:'Delete weigh-in for Nov 10, 80.4 kg'})).toBeNull();
  expect(screen.getByTestId(`body-delete-${typed.id}`)).toBeTruthy();
- expect(screen.getByText(/Readings from a Health app are changed or removed there/)).toBeTruthy();
+ expect(screen.getByText(/Change or remove them there/)).toBeTruthy();
+ // Typed and Health weigh-ins are in separate lists, so Health readings never push typed ones behind Show all.
+ expect(screen.getByTestId('body-entries')).toBeTruthy();expect(screen.getByTestId('body-health-entries')).toBeTruthy();
 });
 test('with only typed weigh-ins there is no Health note',async()=>{
  jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
  const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');saveWeighIn(repo,80.1,'kg','2026-11-12');
  await render(<Body repository={repo}/>,{wrapper});
- expect(screen.queryByText(/Readings from a Health app/)).toBeNull();
+ expect(screen.queryByTestId('body-health-entries')).toBeNull();
+});
+test('only the latest two weeks of Health readings are listed',async()=>{
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');
+ // Made-up readings only: 40 days of a smart scale.
+ for(let i=0;i<40;i++)repo.save('weigh_ins',{day:new Date(Date.UTC(2026,9,5+i)).toISOString().slice(0,10),weight_kg:80+i/100,entered_value:80,entered_unit:'kg',source:'healthkit'});
+ await render(<Body repository={repo}/>,{wrapper});
+ expect(screen.getAllByTestId(/^body-health-/).filter(n=>n.props.testID!=='body-health-entries')).toHaveLength(14);
+ expect(screen.queryByTestId('body-entries')).toBeNull();
 });

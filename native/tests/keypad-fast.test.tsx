@@ -48,3 +48,11 @@ test('a value the store never shows is let go after a moment', async () => {
   expect(onChange).toHaveBeenLastCalledWith('82');
   jest.useRealTimers();
 });
+
+test('touch and hold Backspace clears the field', async () => {
+  const onChange = jest.fn();
+  await render(pad('125', onChange));
+  await fireEvent(screen.getByTestId('keypad-key-backspace'), 'longPress');
+  expect(onChange).toHaveBeenLastCalledWith('');
+  expect(screen.getByTestId('keypad-key-backspace').props.accessibilityHint).toBe('Touch and hold to clear.');
+});

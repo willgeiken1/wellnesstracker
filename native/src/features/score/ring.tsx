@@ -21,6 +21,6 @@ export function ScoreRing({ score, size, stroke = Math.max(3, Math.round(size / 
     </Svg>
     {/* The ring is a fixed size, so this number grows only a little with large text. The same score is always written
         out beside the ring at full size, and the ring's label speaks it. */}
-    {score.value !== null && <Text allowFontScaling maxFontSizeMultiplier={1.2} style={{ color: colors.text, fontFamily: tokens.font.heading, fontSize: type, fontVariant: ['tabular-nums'] }}>{score.value}</Text>}
+    {score.value !== null && <Text allowFontScaling maxFontSizeMultiplier={1.2} style={{ color: colors.text, fontFamily: tokens.font.numeral, fontSize: type, fontVariant: ['tabular-nums'] }}>{score.value}</Text>}
   </View>;
 }

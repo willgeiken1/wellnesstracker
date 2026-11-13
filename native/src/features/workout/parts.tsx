@@ -85,8 +85,8 @@ export function SectionTitle({ children }: PropsWithChildren) {
 
 /** A quiet gray line beside the thing that failed, read out when it appears. Retry is offered when there is something to retry. */
 export function Trouble({ text, onRetry, testID }: { text: string; onRetry?: () => void; testID?: string }) {
-  const { colors } = useTheme();
-  return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderRadius: tokens.radii.card, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[1], backgroundColor: colors['surface-2'] }}>
+  const { colors, radius } = useTheme();
+  return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderRadius: radius.card, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[1], backgroundColor: colors['surface-2'] }}>
     <ThemedText muted accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1 }}>{text}</ThemedText>
     {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={t('tryAgain')} onPress={onRetry} style={{ minHeight: touchTarget, minWidth: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
       <ThemedText style={semibold}>{t('tryAgain')}</ThemedText>
@@ -96,11 +96,11 @@ export function Trouble({ text, onRetry, testID }: { text: string; onRetry?: () 
 
 /** A labelled text field. The label is also what a screen reader says for the field. */
 export function Field({ label, style, inputStyle, onSurface = true, hint, ...input }: Omit<TextInputProps, 'style'> & { label: string; onSurface?: boolean; hint?: string; style?: StyleProp<ViewStyle>; inputStyle?: StyleProp<TextStyle> }) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   return <View style={[{ gap: 6 }, style]}>
     <ThemedText muted variant="caption" style={semibold}>{label}</ThemedText>
     <TextInput accessibilityLabel={label} placeholderTextColor={colors['text-muted']} {...input}
-      style={[{ minHeight: 48, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: tokens.type.body, color: colors.text, backgroundColor: onSurface ? colors['surface-2'] : colors.surface }, inputStyle]} />
+      style={[{ minHeight: 48, borderRadius: radius.card, paddingHorizontal: 12, paddingVertical: 10, fontSize: tokens.type.body, color: colors.text, backgroundColor: onSurface ? colors['surface-2'] : colors.surface }, inputStyle]} />
     {!!hint && <ThemedText muted variant="caption">{hint}</ThemedText>}
   </View>;
 }

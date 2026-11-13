@@ -5,7 +5,7 @@ import { ThemedText } from './themed-text';
 export const touchTarget = Platform.OS === 'ios' ? tokens.touch.ios : tokens.touch.android;
 /**
  * The one button (UX-6). `regular` fills its row, for a screen's main actions. `small` is a compact pill that sits
- * at its own width inside a panel (Home's Start, Log food); its 40 pt height reaches the touch target with hitSlop.
+ * at its own width inside a panel (Home's Start, Log food), at the touch target's height.
  */
 export function Button({ label, onPress, variant = 'primary', size = 'regular', selected, disabled = false, busy = false, testID, accessibilityLabel }: {
   accessibilityLabel?: string; testID?: string; label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'destructive'; size?: 'regular' | 'small'; selected?: boolean; disabled?: boolean; busy?: boolean;
@@ -16,7 +16,6 @@ export function Button({ label, onPress, variant = 'primary', size = 'regular', 
   const small = size === 'small';
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
     accessibilityState={{ disabled, busy, ...(selected === undefined ? {} : { selected }) }} disabled={disabled} onPress={onPress}
-    hitSlop={small ? { top: 4, bottom: 4 } : undefined}
     style={({ pressed }) => [small ? styles.small : styles.button, { borderRadius: small ? radius.card : radius.input, backgroundColor, opacity: disabled ? 0.5 : pressed ? (small ? 0.8 : 0.75) : 1 }]}>
     {busy && <ActivityIndicator accessibilityRole="progressbar" color={color}/> }
     <ThemedText style={[{ color, textAlign: 'center' }, small && { fontSize: 14, fontWeight: '600' }]}>{label}</ThemedText>
@@ -24,4 +23,4 @@ export function Button({ label, onPress, variant = 'primary', size = 'regular', 
 }
 const styles = StyleSheet.create({ button: { minHeight: touchTarget, minWidth: touchTarget,
   justifyContent: 'center', padding: tokens.spacing[2] },
-  small: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 14 } });
+  small: { alignSelf: 'flex-start', minHeight: touchTarget, justifyContent: 'center', paddingHorizontal: 14 } });

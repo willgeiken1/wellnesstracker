@@ -91,7 +91,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
       </View>
       <ThemedText muted variant="caption" style={{ lineHeight: 20 }}>{store.templateExercises(next.id).map(e => String(e.data.exercise)).join(' · ')}</ThemedText>
       <Pressable accessibilityRole="button" accessibilityLabel={t('upNextStart').replace('{name}', String(next.data.name))} onPress={() => run(() => startRoutine(store, next.id))}
-        style={({ pressed }) => ({ marginTop: tokens.spacing[1], minHeight: 48, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: training, opacity: pressed ? 0.8 : 1 })}>
+        style={({ pressed }) => ({ marginTop: tokens.spacing[1], minHeight: 48, borderRadius: radius.card, alignItems: 'center', justifyContent: 'center', backgroundColor: training, opacity: pressed ? 0.8 : 1 })}>
         <ThemedText testID="start-routine-label" style={[semibold, { color: readableOn(training, [colors['on-accent'], colors.text]) }]}>{t('startTemplate').replace('{name}', String(next.data.name))}</ThemedText>
       </Pressable>
     </Panel>}

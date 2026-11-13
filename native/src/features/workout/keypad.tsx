@@ -348,7 +348,9 @@ export function Keypad({
                 accessibilityRole="button"
                 accessibilityLabel={label}
                 disabled={unavailable}
-                onLongPress={key === "wheel" ? openWheel : undefined}
+                // Touch and hold Backspace to clear the field in one go.
+                onLongPress={key === "wheel" ? openWheel : key === "backspace" ? () => { setFresh(false); setLimitHint(false); send(""); } : undefined}
+                accessibilityHint={key === "backspace" ? t("backspaceHint") : undefined}
                 onPress={action}
                 style={[
                   layout.cell,

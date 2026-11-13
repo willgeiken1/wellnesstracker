@@ -302,7 +302,7 @@ function ImportBody() {
                 busy ? BUSY_LABEL[lastAction] : "importBusyAccount",
               )}
               accessibilityLiveRegion="polite"
-              style={[styles.note, { backgroundColor: colors["surface-2"] }]}
+              style={[styles.note, { backgroundColor: colors["surface-2"], borderRadius: radius.input }]}
             >
               <ActivityIndicator color={colors["text-muted"]} />
               <ThemedText muted style={{ flex: 1 }}>
@@ -313,7 +313,7 @@ function ImportBody() {
           {failed && (
             <View
               testID="import-error"
-              style={[styles.note, { backgroundColor: colors["surface-2"] }]}
+              style={[styles.note, { backgroundColor: colors["surface-2"], borderRadius: radius.input }]}
             >
               <ThemedText
                 muted
@@ -457,6 +457,7 @@ function ImportBody() {
                   <View
                     style={[
                       styles.note,
+                      { borderRadius: radius.input },
                       { backgroundColor: colors["surface-2"] },
                     ]}
                   >
@@ -508,6 +509,7 @@ function ImportBody() {
                         style={[
                           styles.option,
                           {
+                            borderRadius: radius.card,
                             borderColor: selected
                               ? colors.accent
                               : colors["hair-2"],

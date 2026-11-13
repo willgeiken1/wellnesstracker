@@ -8,6 +8,7 @@ import { t } from '@/i18n/en';
 import { ThemedText } from './themed-text';
 import { Icon } from './icon';
 import { DOCK_FADE } from './floating-tabs';
+import { touchTarget } from './button';
 /** `endSpace` is extra room after the last row, for a button that floats over the content (Home's +). */
 export function Screen({ children, title, tabHeader = false, topInset = false, endSpace = 0 }: PropsWithChildren<{ title?: string; tabHeader?: boolean; topInset?: boolean; endSpace?: number }>) {
   const { colors, barLook } = useTheme();
@@ -19,15 +20,22 @@ export function Screen({ children, title, tabHeader = false, topInset = false, e
     <ScrollView testID="screen-scroll" contentContainerStyle={[styles.content, tabHeader && { paddingBottom: tokens.spacing[3] + insets.bottom + fade + endSpace }]}>
       {/* REDESIGN §2.1: the avatar (to Settings) sits at the left of the title row, as it does on Home. */}
       {title && <View style={styles.header}>
-        {tabHeader && <Pressable testID="screen-avatar" accessibilityRole="button" accessibilityLabel={t('openSettings')} hitSlop={4}
-          onPress={() => router.push('/settings')} style={[styles.avatar, { backgroundColor: colors.surface as ColorValue }]}><Icon name="avatar" size={22} /></Pressable>}
+        {tabHeader && <AvatarButton testID="screen-avatar" />}
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1 }}>{title}</ThemedText>
       </View>}
       {children}
     </ScrollView>
   </SafeAreaView>;
 }
+/** The avatar that opens Settings: a 40 pt circle inside a full touch target, the same on Home and every tab. */
+export function AvatarButton({ testID }: { testID?: string }) {
+  const { colors } = useTheme();
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')}
+    style={styles.avatar}>
+    <View style={[styles.avatarCircle, { backgroundColor: colors.surface as ColorValue }]}><Icon name="avatar" size={22} /></View>
+  </Pressable>;
+}
 const styles = StyleSheet.create({ content: { padding: tokens.spacing[3], gap: tokens.spacing[3], flexGrow: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] },
-  // 40 pt like Home's avatar; hitSlop brings the target to 48.
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' } });
+  avatar: { minWidth: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' },
+  avatarCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' } });

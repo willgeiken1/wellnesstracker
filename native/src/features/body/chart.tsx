@@ -42,7 +42,8 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
       </Svg>
     </Pressable>
     <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{friendlyDay(points[0].day)}</ThemedText><ThemedText muted variant="caption">{friendlyDay(points.at(-1)!.day)}</ThemedText></View>
-    <ThemedText accessibilityLiveRegion="polite">{label}</ThemedText>
+    {/* No live region: the chart carries this as its value, so a screen reader hears each step once, from the chart. */}
+    <ThemedText>{label}</ThemedText>
     <View testID="body-chart-steps" style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
       {/* Equal halves, so Previous and Next read as a pair; each takes a full row once large text needs it. */}
       <View testID="body-chart-step-previous" style={{flex:1,minWidth:140}}><Button label={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>step(-1)}/></View>

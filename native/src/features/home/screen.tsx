@@ -3,11 +3,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
-import { Screen } from '@/components/screen';
+import { AvatarButton, Screen } from '@/components/screen';
 import { setDockAction } from '@/components/floating-tabs';
 import { Button } from '@/components/button';
 import { Card, Panel, PROTOTYPE_RADIUS } from '@/components/card';
-import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg, localDay } from '@/core/workout/rules';
 import { WorkoutStore } from '@/data/workout/store';
@@ -180,10 +179,7 @@ export function Home() {
     {/* With the Standard bar the + floats over the content, so the last card can always scroll clear of it. */}
     <Screen tabHeader endSpace={floating ? 0 : ADD_SIZE + tokens.spacing[2]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')} hitSlop={4}
-          style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }}>
-          <Icon name="avatar" size={22} />
-        </Pressable>
+        <AvatarButton />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
@@ -286,9 +282,9 @@ function ExampleChip() {
 
 /** The greeting in two weights, light then strong, so the time of day is the word that lands. */
 function Greeting({ text }: { text: string }) {
-  const cut = text.indexOf(' ');
+  const cut = text.indexOf(' '), { headingFont } = useTheme();
   return <ThemedText variant="title" accessibilityRole="header" accessibilityLabel={text} style={semibold}>
-    {cut > 0 && <ThemedText muted variant="title" style={{ fontFamily: 'Lexend_300Light', fontWeight: '300' }}>{text.slice(0, cut + 1)}</ThemedText>}
+    {cut > 0 && <ThemedText muted variant="title" style={{ fontFamily: headingFont ? 'Lexend_300Light' : undefined, fontWeight: '300' }}>{text.slice(0, cut + 1)}</ThemedText>}
     {cut > 0 ? text.slice(cut + 1) : text}
   </ThemedText>;
 }
@@ -447,7 +443,6 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }
 function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
-  const { headingFont } = useTheme();
   return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"
     accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
     style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
@@ -457,7 +452,8 @@ function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
         <ThemedText muted variant="caption">{tile.label}</ThemedText>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-        <ThemedText style={[{ fontFamily: headingFont, fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
+        {/* A number, so it keeps the numeral font whatever the heading look. */}
+        <ThemedText style={{ fontFamily: tokens.font.numeral, fontSize: 24, fontVariant: ['tabular-nums'] }}>{tile.value}</ThemedText>
         <ThemedText muted variant="caption">{tile.unit}</ThemedText>
       </View>
       <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} partial={tile.partial} /></View>

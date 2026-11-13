@@ -1,10 +1,10 @@
-import { Alert, Pressable, View } from 'react-native';
+import { AccessibilityInfo, Alert, Pressable, View } from 'react-native';
 import { useState } from 'react';
 import Svg from 'react-native-svg';
 import { RingArc } from '@/components/ring-arc';
-import { BAR_LOOKS, CORNER_LOOKS, HEADING_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, SURFACE_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
+import { BAR_LOOKS, CORNER_LOOKS, DEFAULT_APPEARANCE, HEADING_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, SURFACE_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
 import { Screen } from '@/components/screen';
-import { Panel } from '@/components/card';
+import { Card, Panel } from '@/components/card';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -79,8 +79,10 @@ function PresetTile({ id, selected, onPress }: { id: Preset; selected: boolean; 
 const MOTION_NAME = { basic: 'motionBasic', calm: 'motionCalm', lively: 'motionLively' } as const;
 const STRENGTH_NAME = { 1: 'strengthSubtle', 2: 'strengthMedium', 3: 'strengthFull' } as const;
 
+const { ring, motion, intensity: strength, bar, keypad, selector, surface, corners, heading } = DEFAULT_APPEARANCE;
+const DEFAULT_LOOKS = [ring, motion, strength, bar, keypad, selector, surface, corners, heading].join();
 const CORNER_NAME = { soft: 'lookSoft', round: 'lookRound', square: 'lookSquare' } as const;
-/** The current looks on a sample panel, a raised card and a button, so each change shows before leaving. */
+/** The current looks on a sample panel with a button, and a raised card, so each change shows before leaving. */
 function Preview() {
   const { colors, mode, ringLook, ringMotion, intensity } = useTheme();
   return <View testID="appearance-preview" accessible accessibilityLabel={t('appearancePreview')} style={{ gap: tokens.spacing[1] }}>
@@ -96,6 +98,11 @@ function Preview() {
       </View>
       <View pointerEvents="none" accessible={false}><Button size="small" label={t('appearancePreviewStart')} onPress={() => {}} /></View>
     </Panel>
+    {/* A raised card beside the panel, so Flat and Raised show their difference here. */}
+    <Card testID="appearance-preview-card" style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <ThemedText variant="headline" style={{ flex: 1 }}>{t('appearancePreviewCard')}</ThemedText>
+      <ThemedText muted variant="caption">{t('appearancePreviewCardBody')}</ThemedText>
+    </Card>
   </View>;
 }
 
@@ -104,10 +111,12 @@ export default function Appearance() {
     preset, applyPreset, motionStyle, setMotionStyle, intensity, setIntensity, reduceMotion, reduceMotionReady,
     barLook, setBarLook, keypadLook, setKeypadLook, selectorLook, setSelectorLook,
     surfaceLook, setSurfaceLook, cornerLook, setCornerLook, headingLook, setHeadingLook, resetAppearance } = useTheme();
-  const [reset, setReset] = useState(false);
+  // The note shows only while the looks are still the ones the reset left, and is spoken once on iOS too.
+  const looks = [ringLook, motionStyle, intensity, barLook, keypadLook, selectorLook, surfaceLook, cornerLook, headingLook].join();
+  const [resetTo, setResetTo] = useState<string | null>(null);
   const confirmReset = () => Alert.alert(t('appearanceResetConfirm'), t('appearanceResetBody'), [
     { text: t('cancel'), style: 'cancel' },
-    { text: t('appearanceReset'), style: 'destructive', onPress: () => { resetAppearance(); setReset(true); } },
+    { text: t('appearanceReset'), style: 'destructive', onPress: () => { resetAppearance(); setResetTo(DEFAULT_LOOKS); AccessibilityInfo.announceForAccessibility(t('appearanceResetDone')); } },
   ]);
   return <Screen><Preview /><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('themeMode')}</ThemedText>
@@ -171,6 +180,6 @@ export default function Appearance() {
     {persistenceError && <ThemedText accessibilityRole="alert">{t('preferenceError')}</ThemedText>}
   </Panel>
   <Button variant="secondary" label={t('appearanceReset')} accessibilityLabel={`${t('appearanceReset')}. ${t('appearanceResetBody')}`} onPress={confirmReset} />
-  {reset && <ThemedText accessibilityLiveRegion="polite" muted variant="caption">{t('appearanceResetDone')}</ThemedText>}
+  {resetTo === looks && <ThemedText testID="appearance-reset-done" muted variant="caption">{t('appearanceResetDone')}</ThemedText>}
   </Screen>;
 }

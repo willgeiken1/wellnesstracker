@@ -73,11 +73,27 @@ describe('panels, cards and buttons follow the looks', () => {
     // Panels drawn with the prototype's larger corners keep them a step rounder than the rest.
     expect(flat('big').borderRadius).toBe(26);
   });
-  test('the small button sits at its own width and still reaches the touch target with its slop', async () => {
+  test('the small button sits at its own width at the full touch target, with no slop to fall outside its parent', async () => {
     await blocks();
-    const small = screen.getByTestId('small');
-    expect(flat('small')).toMatchObject({ alignSelf: 'flex-start', minHeight: 40 });
-    expect(40 + small.props.hitSlop.top + small.props.hitSlop.bottom).toBeGreaterThanOrEqual(tokens.touch.ios);
+    expect(flat('small')).toMatchObject({ alignSelf: 'flex-start', minHeight: tokens.touch.ios });
+    expect(screen.getByTestId('small').props.hitSlop).toBeUndefined();
+  });
+  test('the card is raised with a shadow on iOS and elevation on Android, on the same surface as panels', async () => {
+    const { Platform } = require('react-native');
+    await blocks();
+    expect(flat('card').shadowOpacity).toBeGreaterThan(0);
+    expect(flat('card').backgroundColor).toBe(flat('panel').backgroundColor);
+    const os = Platform.OS; Platform.OS = 'android';
+    try {
+      await blocks();
+      expect(StyleSheet.flatten(screen.getAllByTestId('card').at(-1)!.props.style).elevation).toBeGreaterThan(0);
+      expect(StyleSheet.flatten(screen.getAllByTestId('card').at(-1)!.props.style).backgroundColor).toBe(StyleSheet.flatten(screen.getAllByTestId('panel').at(-1)!.props.style).backgroundColor);
+    } finally { Platform.OS = os; }
+  });
+  test('raised: a prototype panel keeps its larger corners as well as the shadow', async () => {
+    await blocks('seaGlassTide;surface=raised');
+    expect(flat('big')).toMatchObject({ borderRadius: 18 });
+    expect(flat('big').shadowOpacity).toBeGreaterThan(0);
   });
   test('the heading look switches titles between Lexend and the system font', async () => {
     const view = await blocks();
@@ -111,6 +127,9 @@ describe('Appearance', () => {
     expect(alert.mock.calls[0][2]?.[1]).toMatchObject({ style: 'destructive' });
     expect(savedAccent(repository)).toBe('forestEmber');
     expect(screen.getByText('Looks reset to the default.')).toBeTruthy();
+    // The note goes as soon as a look changes again.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Round' }));
+    expect(screen.queryByText('Looks reset to the default.')).toBeNull();
   });
   test('the Floating preset is offered with the others', async () => {
     const repository = settingsRepository();
