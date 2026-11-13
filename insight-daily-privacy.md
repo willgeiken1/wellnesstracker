@@ -34,7 +34,7 @@ Only if you turn on Share usage analytics. A short list of feature-use events, s
 
 ## Who handles your data
 
-Supabase stores accounts and synced data in the United States (Ohio). Open Food Facts handles barcode lookups. Sentry receives crash reports and PostHog receives usage analytics. Oura supplies your ring data when you connect it.
+Supabase stores accounts and synced data in the United States (Ohio). Open Food Facts handles barcode lookups. Sentry receives crash reports and PostHog receives usage analytics, in the United States. Oura supplies your ring data when you connect it.
 
 ## What we don't do
 
