@@ -169,3 +169,22 @@ test('Log weigh-in never starts from an Apple Health reading, so a Health value 
  await act(async()=>{});await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
  expect(screen.getByRole('adjustable',{name:'Weight wheel (kg)'})).toHaveAccessibilityValue({text:'80.0 kg'});
 });
+test('Health weigh-ins are listed with where they came from, and only typed ones offer Delete',async()=>{
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');
+ // Made-up readings only.
+ repo.save('weigh_ins',{day:'2026-11-10',weight_kg:80.4,entered_value:80.4,entered_unit:'kg',source:'healthkit'});
+ const typed=saveWeighIn(repo,80.1,'kg','2026-11-12');
+ await render(<Body repository={repo}/>,{wrapper});
+ const health=screen.getByLabelText('Nov 10, 80.4 kg, from Apple Health');
+ expect(health).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'Delete weigh-in for Nov 10, 80.4 kg'})).toBeNull();
+ expect(screen.getByTestId(`body-delete-${typed.id}`)).toBeTruthy();
+ expect(screen.getByText(/Readings from a Health app are changed or removed there/)).toBeTruthy();
+});
+test('with only typed weigh-ins there is no Health note',async()=>{
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');saveWeighIn(repo,80.1,'kg','2026-11-12');
+ await render(<Body repository={repo}/>,{wrapper});
+ expect(screen.queryByText(/Readings from a Health app/)).toBeNull();
+});
