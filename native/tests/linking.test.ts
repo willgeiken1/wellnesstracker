@@ -49,3 +49,12 @@ test('identical development fixture links receive distinct presentation requests
  const input={path:'insight://dev/logger-fixture?state=logger',initial:false};
  expect(redirectSystemPath(input)).not.toBe(redirectSystemPath(input));
 });
+
+test('the sample data link opens only in development, and carries nothing with it', () => {
+  expect(redirectSystemPath({ path: 'insight://dev/sample-data?x=1', initial: true })).toBe('/dev/sample-data');
+  const original = __DEV__;
+  try {
+    Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true, writable: true });
+    expect(redirectSystemPath({ path: 'insight://dev/sample-data', initial: true })).toBe('/');
+  } finally { Object.defineProperty(globalThis, '__DEV__', { value: original, configurable: true, writable: true }); }
+});

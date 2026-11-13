@@ -108,7 +108,7 @@ export default function Appearance() {
     <ThemedText variant="headline" accessibilityRole="header">{t('barLookTitle')}</ThemedText>
     <ThemedText muted variant="caption">{t('barLookBody')}</ThemedText>
     <SegmentedControl label={t('barLookTitle')} value={barLook} onChange={setBarLook}
-      options={BAR_LOOKS.map(value => ({ value, label: t(value === 'glass' ? 'lookGlass' : 'lookStandard') }))} />
+      options={BAR_LOOKS.map(value => ({ value, label: t(value === 'glass' ? 'lookGlass' : value === 'floating' ? 'lookFloating' : 'lookStandard') }))} />
     <ThemedText variant="headline" accessibilityRole="header">{t('keypadLookTitle')}</ThemedText>
     <ThemedText muted variant="caption">{t('keypadLookBody')}</ThemedText>
     <SegmentedControl label={t('keypadLookTitle')} value={keypadLook} onChange={setKeypadLook}

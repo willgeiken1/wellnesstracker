@@ -9,8 +9,9 @@ export type Motion = (typeof MOTIONS)[number];
 /** How strong the effects are: 1 subtle, 2 medium, 3 full. */
 export const INTENSITIES = [1, 2, 3] as const;
 export type Intensity = (typeof INTENSITIES)[number];
-/** The tab bar: tinted with the theme's background, or left as clear system glass. */
-export const BAR_LOOKS = ["standard", "glass"] as const;
+/** The tab bar: tinted with the theme's background, left as clear system glass, or a floating bar where the
+ * open tab stands apart in the accent colour. */
+export const BAR_LOOKS = ["standard", "glass", "floating"] as const;
 export type BarLook = (typeof BAR_LOOKS)[number];
 /** The number keys in the logger: solid, or glass keys with a light rim. */
 export const KEYPAD_LOOKS = ["plain", "glass"] as const;

@@ -852,7 +852,7 @@ export const en = {
   presetCalm: 'Calm', presetCalmSub: 'Gently moving',
   presetFluid: 'Fluid', presetFluidSub: 'Liquid rings, lively',
   presetGlass: 'Glass', presetGlassSub: 'Glass rings, bar and keys',
-  barLookTitle: 'Tab bar', barLookBody: 'Standard takes the theme colour. Glass stays clear, so the screen shows through.',
+  barLookTitle: 'Tab bar', barLookBody: 'Standard takes the theme colour. Glass stays clear, so the screen shows through. Floating lifts the open tab out in your accent colour.', lookFloating: 'Floating',
   keypadLookTitle: 'Number keys', keypadLookBody: 'The keys you log weight and reps with.',
   lookStandard: 'Standard', lookPlain: 'Plain', lookGlass: 'Glass',
   motionTitle: 'Motion', motionBasic: 'Off', motionCalm: 'Calm', motionLively: 'Lively',

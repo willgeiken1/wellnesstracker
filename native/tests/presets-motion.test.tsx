@@ -148,7 +148,10 @@ describe('tab bar and keypad looks', () => {
     await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
     await fireEvent.press(screen.getAllByLabelText('Glass').find(node => node.props.accessibilityRole === 'tab')!);
     expect(savedAccent(repository)).toBe('seaGlassTide;bar=glass');
-    expect(parseAppearance(savedAccent(repository))).toMatchObject({ bar: 'glass', keypad: 'plain' });
+    expect(parseAppearance(savedAccent(repository))).toMatchObject({ bar: 'glass', keypad: 'plain' });    // Floating is the third choice: the open tab stands apart in the accent colour.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Floating' }));
+    expect(savedAccent(repository)).toBe('seaGlassTide;bar=floating');
+    expect(parseAppearance('goldenHour;bar=floating').bar).toBe('floating');
   });
   test('the Glass preset turns on glass rings, bar and keys together, and Calm turns them all back', async () => {
     const repository = settingsRepository('berryMeadow');

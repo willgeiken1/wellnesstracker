@@ -18,6 +18,8 @@ jest.mock('expo-router/native-tabs', () => {
   NativeTabs.Trigger = Trigger;
   return { NativeTabs };
 });
+// The floating bar is covered in floating-tabs.test; here only the system bar's looks are checked.
+jest.mock('expo-router', () => ({ Tabs: () => null }));
 const mockLiquid = jest.fn(() => false);
 jest.mock('expo-glass-effect', () => {
   const React = require('react');

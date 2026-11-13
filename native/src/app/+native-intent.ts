@@ -13,6 +13,7 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
       if (!state || !['logger','keypad','rest','summary'].includes(state)) return '/';
       return `${route}?state=${state}&offline=${url.searchParams.get('offline') === '0' ? '0' : '1'}&request=${++fixtureRequest}`;
     }
+    if (__DEV__ && route === '/dev/sample-data') return route;
     if (!allowedRoutes.has(route)) return '/';
     const routine=url.searchParams.get('routine');
     return route==='/workout/start' && routine && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(routine) ? `${route}?routine=${routine}` : route;
