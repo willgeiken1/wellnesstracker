@@ -175,7 +175,7 @@ export function Home() {
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
             {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
           </View>
-          <ThemedText variant="title" accessibilityRole="header" style={semibold}>{greeting(now.getHours())}</ThemedText>
+          <Greeting text={greeting(now.getHours())} />
         </View>
         {store && <Pressable testID="home-edit" accessibilityRole="button" accessibilityLabel={t('homeEdit')} onPress={() => setEditing(true)} hitSlop={4}
           style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
@@ -244,6 +244,15 @@ function Body({ store, now, selected, onPick, tiles, onEdit, health, score }: { 
     })}
     {wanted.length > 0 && !shownNumbers.length && <ThemedText muted variant="caption" style={{ width: '100%' }}>{t('homeTilesEmpty')}</ThemedText>}
   </View>;
+}
+
+/** The greeting in two tones, quiet then strong, so the time of day is the word that lands. */
+function Greeting({ text }: { text: string }) {
+  const cut = text.indexOf(' ');
+  return <ThemedText variant="title" accessibilityRole="header" accessibilityLabel={text} style={semibold}>
+    {cut > 0 && <ThemedText muted variant="title" style={semibold}>{text.slice(0, cut + 1)}</ThemedText>}
+    {cut > 0 ? text.slice(cut + 1) : text}
+  </ThemedText>;
 }
 
 function EmptyMap() {

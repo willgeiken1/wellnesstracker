@@ -44,7 +44,8 @@ export function createSampleDays(store: WorkoutStore, context: FixtureContext, n
       menu.slice(0, ago === 0 ? 2 : menu.length).forEach((item, i) => saveFood(repo, day, slots[Math.min(i, slots.length - 1)].id, item, ago % 5 === 2 ? 0.85 : 1, undefined, today));
       saveWeighIn(repo, Math.round((181.8 - (SAMPLE_DAYS - 1 - ago) * 0.14 + (ago % 3 === 0 ? 0.3 : ago % 3 === 1 ? -0.2 : 0)) * 10) / 10, "lb", day);
       if (!TRAINED.has(ago)) continue;
-      const pick = turn++ % ROUTINES.length, start = Math.min(at(ago, 7), now - 3_600_000), session = store.start(routines[pick].id, start, ago > 0);
+      const pick = turn++ % ROUTINES.length, start = Math.min(at(ago, 7), now - 3_600_000), session = store.start(routines[pick].id, start);
+      // Logged as a live workout and finished once: editing a finished workout set by set recomputes all history each time.
       for (const entry of store.entries(session.id)) {
         const lift = ROUTINES[pick].lifts.find(([name]) => name === entry.data.exercise);
         if (!lift) continue;
