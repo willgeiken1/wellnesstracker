@@ -12,6 +12,7 @@ import { readProfile } from '@/features/onboarding/model';
 import { Group, NavRow, SectionLabel, SettingsIcon, semibold } from '@/features/settings/parts';
 import { searchSettings, type SettingsRow } from '@/features/settings/sections';
 import { t } from '@/i18n/en';
+import { useFieldOutline } from '@/components/field-outline';
 
 const open = (route: SettingsRow['route']) => route === 'appearance' ? router.push('/settings/appearance')
   : route === 'account' ? router.push('/settings/account')
@@ -48,6 +49,7 @@ function ProfileCard() {
 
 export default function Settings() {
   const { colors, palette } = useTheme();
+  const outline = useFieldOutline();
   const [query, setQuery] = useState('');
   const groups = searchSettings(query, row => t(row.label));
   const value = (row: SettingsRow) => row.route === 'appearance' ? tokens.palettes[palette].name : undefined;
@@ -57,7 +59,7 @@ export default function Settings() {
       contentContainerStyle={{ padding: tokens.spacing[3], gap: tokens.spacing[3], flexGrow: 1 }}>
     <ThemedText variant="title" accessibilityRole="header">{t('settings')}</ThemedText>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, paddingHorizontal: tokens.spacing[2],
-      borderRadius: 12, backgroundColor: colors.surface }}>
+      borderRadius: 12, backgroundColor: colors.surface, ...outline }}>
       <SettingsIcon name="search" size={18} color={colors['text-muted']} />
       <TextInput testID="settings-search" accessibilityLabel={t('settingsSearch')} placeholder={t('settingsSearchHint')}
         placeholderTextColor={colors['text-muted']} value={query} onChangeText={setQuery} autoCorrect={false} autoCapitalize="none"

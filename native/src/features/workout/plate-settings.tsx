@@ -9,6 +9,7 @@ import type { Unit } from '@/core/workout/rules';
 import { Group, semibold } from '@/features/settings/parts';
 import { t } from '@/i18n/en';
 import { layout } from './primitives';
+import { useFieldOutline } from '@/components/field-outline';
 const UNITS = ['lb', 'kg'] as const;
 /** Typed text to plate sizes, or null when any part is not a plain positive number with at most two decimals. */
 function parsePlates(text: string): number[] | null {
@@ -18,6 +19,7 @@ function parsePlates(text: string): number[] | null {
 /** Both plate lists, one Save. Only a list that was edited and reads correctly is written; the other is left alone. */
 export function PlateSettings({ store }: { store: WorkoutStore }) {
   const { colors } = useTheme();
+  const outline = useFieldOutline();
   const read = () => ({ lb: store.preferences().plateSet('lb').join(', '), kg: store.preferences().plateSet('kg').join(', ') });
   const [saved, setSaved] = useState(read);
   const [text, setText] = useState(saved);
@@ -46,7 +48,7 @@ export function PlateSettings({ store }: { store: WorkoutStore }) {
           <ThemedText style={semibold}>{label}</ThemedText>
           <TextInput accessibilityLabel={label} value={text[unit]} keyboardType="numbers-and-punctuation" autoCorrect={false}
             onChangeText={value => { setText(current => ({ ...current, [unit]: value })); setDone(false); setInvalid(current => current.filter(item => item !== unit)); }}
-            style={[layout.input, { color: colors.text, backgroundColor: colors['surface-2'], fontSize: tokens.type.body, borderWidth: 1, borderColor: wrong ? colors.danger : colors['surface-2'] }]} />
+            style={[layout.input, { color: colors.text, backgroundColor: colors['surface-2'], fontSize: tokens.type.body, borderWidth: 1, borderColor: wrong ? colors.danger : outline?.borderColor ?? colors['surface-2'] }]} />
           {wrong && <ThemedText testID={`plates-error-${unit}`} muted variant="caption" accessibilityRole="alert">{t('invalidPlates')}</ThemedText>}
         </View>;
       })}

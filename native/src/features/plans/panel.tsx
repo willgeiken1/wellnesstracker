@@ -10,6 +10,7 @@ import { t } from '../../i18n/en';
 import { Panel, layout } from '../workout/primitives';
 import { PlanStore } from './store';
 import { FixedWeekdaysError, type Plan } from './schedule';
+import { useFieldOutline } from '@/components/field-outline';
 const weekdayKeys = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const;
 function Choice({label, checked, onPress}:{label:string;checked:boolean;onPress:()=>void}) {
   return <Pressable accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{checked}}
@@ -40,6 +41,7 @@ export function PlansPanel({store}:{store:WorkoutStore}) {
 }
 function PlanEditor({store,initial,onClose}:{store:WorkoutStore;initial:Plan;onClose:()=>void}) {
   const {colors}=useTheme();
+ const outline=useFieldOutline();
   const [mode,setMode]=useState(initial.mode),[target,setTarget]=useState(String(initial.daysPerWeek)),
     [days,setDays]=useState(initial.days),[error,setError]=useState<'invalidPlan' | 'fixedWeekdaysRequired' | 'workoutSaveError' | null>(null);
   const enabled=store.repo.syncFlags?.syncedV1Columns;
@@ -48,7 +50,7 @@ function PlanEditor({store,initial,onClose}:{store:WorkoutStore;initial:Plan;onC
       <SegmentedControl label={t('planMode')} options={[{value:'rotation',label:t('rotation')},{value:'fixed',label:t('fixedWeekdays')}]} value={mode} onChange={setMode}/>
       <ThemedText>{t('daysPerWeek')}</ThemedText>
       <TextInput accessibilityLabel={t('daysPerWeek')} keyboardType="number-pad" value={target} onChangeText={setTarget}
-        style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']}]} />
+        style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']},outline]} />
     </> : <ThemedText muted>{t('planFlagOff')}</ThemedText>}
     <ThemedText muted>{t('planLocal')}</ThemedText>
     <ThemedText muted>{t('planEmpty')}</ThemedText>

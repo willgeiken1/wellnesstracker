@@ -35,6 +35,7 @@ import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
+import { useStacked } from "@/components/text-size";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
     { routine, id, day } = useLocalSearchParams<{
@@ -103,6 +104,7 @@ function Logger({
   const past = store.pastMode(session.id);
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
+  const stacked = useStacked();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ fixtureState?: string }>();
   const selectedFixture = fixtureState ?? params.fixtureState;
@@ -363,17 +365,22 @@ function Logger({
     setReplacement({ entryId, mode });
     setPicker(true);
   };
-  return (
-    <SafeAreaView
-      testID="logger-safe-area"
-      edges={["left", "right", "bottom"]}
-      style={{
-        flex: 1,
-        backgroundColor: colors.bg,
-        // A full-screen presentation can initially report a zero top inset.
-        paddingTop: insets.top || initialWindowMetrics?.insets.top || 0,
+  // The header stays above the sets at normal sizes. At accessibility sizes it would fill most of the screen, so it
+  // scrolls away with the sets instead.
+  const finishButton = (
+    <Pill
+      compact
+      testID="finish-button"
+      label={t("finish")}
+      onPress={() => {
+        if (!past) store.updateTimer({
+          minimized: true,
+        });
+        setFinish(true);
       }}
-    >
+    />
+  );
+  const header = (
       <View
         testID="logger-header"
         style={[
@@ -386,34 +393,26 @@ function Logger({
           },
         ]}
       >
-        <View style={[layout.row, { gap: 4 }]}>
+        <View style={[layout.row, { gap: 4 }, stacked && { flexWrap: "wrap", justifyContent: "space-between" }]}>
           <IconButton
             name="down"
             label={t("closeWorkout")}
             onPress={closeWorkout}
           />
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-            <ThemedText variant="title" numberOfLines={1} style={{ fontWeight: "600", flexShrink: 1 }}>
+          {stacked && finishButton}
+          {/* At accessibility sizes the name gets its own line under the buttons, so it is never squeezed. */}
+          <View style={stacked ? { flexBasis: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 8 } : { flex: 1, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+            <ThemedText variant="title" numberOfLines={stacked ? undefined : 1} style={{ fontWeight: "600", flexShrink: 1 }}>
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
             <ThemedText muted numeric style={{ fontSize: 15 }}>
               {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
             </ThemedText>
           </View>
-          <Pill
-            compact
-            testID="finish-button"
-            label={t("finish")}
-            onPress={() => {
-              if (!past) store.updateTimer({
-                minimized: true,
-              });
-              setFinish(true);
-            }}
-          />
+          {!stacked && finishButton}
         </View>
         <View style={[layout.row, { justifyContent: "space-between", flexWrap: "wrap", gap: 6 }]}>
-          <View style={[layout.row, { gap: 6 }]}>
+          <View style={[layout.row, { gap: 6, flexShrink: 1, flexWrap: "wrap" }]}>
             {session.data.origin === "template" && <Eyebrow>{t("template")}</Eyebrow>}
             {total > 0 && (
               <ThemedText muted variant="caption">
@@ -462,6 +461,19 @@ function Logger({
           </ThemedText>
         )}
       </View>
+  );
+  return (
+    <SafeAreaView
+      testID="logger-safe-area"
+      edges={["left", "right", "bottom"]}
+      style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        // A full-screen presentation can initially report a zero top inset.
+        paddingTop: insets.top || initialWindowMetrics?.insets.top || 0,
+      }}
+    >
+      {!stacked && header}
       <ScrollView
         testID="logger-exercises"
         style={{ flex: 1 }}
@@ -469,6 +481,7 @@ function Logger({
         automaticallyAdjustContentInsets={false}
         contentContainerStyle={[layout.content, { paddingTop: 12 }]}
       >
+        {stacked && <View style={{ marginHorizontal: -layout.content.padding }}>{header}</View>}
         {upcoming && upcomingEntry && (
           <UpNext
             name={String(upcomingEntry.data.exercise)}
@@ -502,7 +515,7 @@ function Logger({
             pendingIndex = Math.max(0, ds.findIndex((d) => !d.setId));
           return (
             <Panel key={e.id} testID={`logger-card-${exerciseIndex}`} style={{borderRadius: 18, ...(collapsed ? {paddingVertical:8} : {}), ...(store.skipped(e.id) ? {opacity:0.45} : {})}}>
-              <View style={layout.row}>
+              <View style={[layout.row, stacked && { flexWrap: "wrap" }]}>
                 {compact && (
                   <View
                     style={{
@@ -518,6 +531,7 @@ function Logger({
                   </View>
                 )}
                 <Pressable
+                  testID={`exercise-name-${exerciseIndex}`}
                   disabled={!compact}
                   accessible={false}
                   importantForAccessibility="no"
@@ -533,7 +547,12 @@ function Logger({
                         : [...ids, e.id],
                     )
                   }
-                  style={{ flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
+                  // At accessibility sizes the name takes the whole line, so it breaks between words, and the Plates and
+                  // collapse buttons move under it. A fixed width, not a shrinking percentage basis, which the device
+                  // ignored in this wrapping row.
+                  style={stacked
+                    ? { width: "100%", minHeight: compact ? 44 : undefined, justifyContent: "center" }
+                    : { flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
                 >
                   <ThemedText
                     variant="headline"
@@ -561,6 +580,7 @@ function Logger({
                   <IconButton
                     name="down"
                     label={t(collapsed ? "expandExercise" : "collapseExercise")}
+                    expanded={!collapsed}
                     onPress={() =>
                       setOpen((ids) =>
                         ids.includes(e.id)
@@ -600,19 +620,18 @@ function Logger({
               {!collapsed && !store.skipped(e.id) && (
                 <>
                   {!!setupNote && <ThemedText muted variant="caption">{setupNote}</ThemedText>}
-                  <View style={layout.row}>
+                  {/* At the largest text sizes the set rows stack and label their own boxes, so the column heads go. */}
+                  {!stacked && <View testID={`logger-columns-${exerciseIndex}`} style={layout.row}>
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
-                      style={{ width: 26, textAlign: "center", fontSize: tokens.type.caption, fontWeight: "600" }}
+                      style={{ minWidth: 26, textAlign: "center", fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("setHeader")}
                     </ThemedText>
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
                       style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("previous")}
@@ -620,7 +639,6 @@ function Logger({
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
                       style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {store.unit(e.id)}
@@ -628,13 +646,12 @@ function Logger({
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
                       style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("repsHeader")}
                     </ThemedText>
                     <View style={{ width: 40 }} />
-                  </View>
+                  </View>}
                   <View>
                     {ds.map((d, i) => (
                       <Fragment key={i}>
@@ -644,6 +661,7 @@ function Logger({
                           exercise={String(e.data.exercise)}
                           index={i}
                           side={store.isUnilateral(e.id) ? 'left' : undefined}
+                          unit={store.unit(e.id)}
                           onTag={tag => run(() => store.editDraft(e.id, i, {tag}))}
                           draft={d}
                           previous={
@@ -657,7 +675,7 @@ function Logger({
                           onDone={() => mark(e, i)}
                           onRemove={() => confirmRemoveSet(e.id,i)}
                         />
-                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => confirmRemoveSet(e.id,i)} />}
+                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" unit={store.unit(e.id)} draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => confirmRemoveSet(e.id,i)} />}
                         {i ===
                           Math.max(
                             0,

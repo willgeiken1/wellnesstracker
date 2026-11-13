@@ -3,15 +3,18 @@ import { tokens } from '@/design/tokens';
 import { useTheme } from '@/design/theme-provider';
 import { ThemedText } from './themed-text';
 import { touchTarget } from './button';
+import { useStacked } from './text-size';
 /** Space between the track's edge and the choices, and between the choices. */
 const TRACK_GAP = 3;
 export function SegmentedControl<T extends string>({ label, options, value, onChange }: {
   label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void;
 }) {
   const { colors, selectorLook } = useTheme();
+  const stacked = useStacked();
   if (selectorLook === 'pills') return <Pills label={label} options={options} value={value} onChange={onChange} />;
-  // Four choices sit two by two, so no label is cut short at large text sizes. Three stay in one row.
-  const four = options.length === 4;
+  // Four choices sit two by two, three in one row. At accessibility text sizes each choice takes its own line,
+  // so a word like "Routines" is never broken across lines.
+  const basis = stacked ? '100%' : options.length === 4 ? '45%' : '28%';
   // One track holds the choices, so the ones not chosen still read as part of a control on any background:
   // the fill shows on a card, the hairline on the page.
   return <View accessibilityRole="tablist" accessibilityLabel={label}
@@ -19,7 +22,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
       backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
     {options.map(option => <Pressable key={option.value} accessibilityRole="tab" accessibilityLabel={option.label}
       accessibilityState={{ selected: option.value === value }} onPress={() => onChange(option.value)}
-      style={{ flexGrow: 1, flexBasis: four ? '45%' : '28%', minHeight: touchTarget, minWidth: touchTarget, justifyContent: 'center',
+      style={{ flexGrow: 1, flexBasis: basis, minHeight: touchTarget, minWidth: touchTarget, justifyContent: 'center',
         padding: tokens.spacing[1], borderRadius: tokens.radii.card - TRACK_GAP,
         backgroundColor: option.value === value ? colors.accent : 'transparent' }}>
       <ThemedText style={{ color: option.value === value ? colors['on-accent'] : colors.text, textAlign: 'center', fontWeight: option.value === value ? '600' : '400' }}>{option.label}</ThemedText>

@@ -5,12 +5,15 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import { SwipeStops } from './swipe-stops';
+import { useStacked } from '@/components/text-size';
 
 export { SWIPE_COMMIT, SWIPE_REVEAL } from './swipe-stops';
 /** The card at the top of the logger: the exercise with the next open set. Tap to log that set,
  * swipe right to skip the exercise, swipe left to swap it. Screen readers get the same two as actions. */
 export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string; detail: string; onPress: () => void; onSkip?: () => void; onSwap: () => void }) {
   const { colors } = useTheme(), training = colors.training;
+  // A long name wraps at the largest text sizes instead of being cut off.
+  const stacked = useStacked();
   const actions = [...(onSkip ? [{ name: 'skip', label: t('skipExercise') }] : []), { name: 'swap', label: t('swapExercise') }];
   return <View testID="logger-up-next" style={{ gap: tokens.spacing[1] }}>
     <ThemedText muted variant="caption" style={{ paddingHorizontal: tokens.spacing[0] }}>{t(onSkip ? 'upNextSwipe' : 'upNextSwipeSwap')}</ThemedText>
@@ -29,7 +32,7 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
               </LinearGradient></Defs>
               <Rect x="0" y="0" width="100" height="100" fill="url(#upNext)" />
             </Svg>
-            <ThemedText variant="title" numberOfLines={1} style={{ fontWeight: '600' }}>{name}</ThemedText>
+            <ThemedText variant="title" numberOfLines={stacked ? undefined : 1} style={{ fontWeight: '600' }}>{name}</ThemedText>
             <ThemedText muted numeric>{detail}</ThemedText>
           </Pressable>
       </SwipeStops>

@@ -3,6 +3,7 @@ import { Alert, Pressable, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Card } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
+import { IN_RING_MAX } from '../../components/text-size';
 import type { Repository } from '../../data/repository';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
@@ -39,8 +40,10 @@ function WeeklyRing({ minutes, goal }: { minutes: number; goal: number }) {
         <Circle cx={38} cy={38} r={30} fill="none" stroke={colors['surface-2']} strokeWidth={8} />
         <Circle cx={38} cy={38} r={30} fill="none" stroke={colors.training} strokeWidth={8} strokeLinecap="round" strokeDasharray={[circumference * Math.min(1, minutes / goal), circumference]} rotation={-90} origin="38,38" />
       </Svg>
-      <ThemedText numeric style={{ fontSize: 22, lineHeight: 26 }}>{Math.round(minutes)}</ThemedText>
-      <ThemedText muted variant="caption">{t('cardioMin')}</ThemedText>
+      {/* The ring is a fixed size, so its middle grows only a little with large text; the line beside it says the
+          same minutes at full size. */}
+      <ThemedText numeric maxFontSizeMultiplier={IN_RING_MAX} numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 22, lineHeight: 26, maxWidth: 60 }}>{Math.round(minutes)}</ThemedText>
+      <ThemedText muted variant="caption" maxFontSizeMultiplier={IN_RING_MAX}>{t('cardioMin')}</ThemedText>
     </View>
     <View style={{ flex: 1, gap: 2 }}><ThemedText variant="headline" style={semibold}>{t('cardioWeeklyGoal')}</ThemedText><ThemedText muted>{label}</ThemedText></View>
   </View>;
@@ -94,7 +97,7 @@ export function Cardio({ repository }: { repository: Repository }) {
       {!live && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>{machines.map(value => { const on = machine === value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={machineName(value)} accessibilityState={{ selected: on }} onPress={() => { setMachine(value); fillSettings(machineDefaults(value)); }} style={({ pressed }) => ({ flexGrow: 1, flexBasis: '45%', minHeight: 76, padding: 12, gap: 6, borderRadius: 14, backgroundColor: colors['surface-2'], borderWidth: 2, borderColor: on ? colors.accent : colors['surface-2'], opacity: pressed ? 0.7 : 1 })}><MachineIcon machine={value} color={on ? colors.accent : undefined} /><ThemedText style={on ? semibold : undefined}>{machineName(value)}</ThemedText></Pressable>; })}</View>}
       {live && <View style={{ alignItems: 'center', gap: 2 }}>
         <View style={[layout.row, { gap: tokens.spacing[1] }]}><MachineIcon machine={live.machine} /><ThemedText variant="headline" style={semibold}>{machineName(live.machine)}</ThemedText></View>
-        <ThemedText accessibilityLabel={t('cardioElapsed')} variant="headline" style={{ fontSize: 48, lineHeight: 56, fontVariant: ['tabular-nums'] }}>{clock(elapsedMs(live, now) / 1000)}</ThemedText>
+        <ThemedText accessibilityLabel={`${t('cardioElapsed')}, ${clock(elapsedMs(live, now) / 1000)}`} variant="headline" style={{ fontSize: 48, lineHeight: 56, fontVariant: ['tabular-nums'] }}>{clock(elapsedMs(live, now) / 1000)}</ThemedText>
         <ThemedText muted>{t(live.pausedAt === null ? 'cardioInProgress' : 'cardioPaused')}</ThemedText>
       </View>}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing[2] }}>

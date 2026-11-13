@@ -4,12 +4,14 @@ import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import { touchTarget } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
+import { StatusText } from '@/components/status-text';
 import type { WorkoutStore } from '@/data/workout/store';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { printData, workoutPrint, type PrintData } from '@/features/home/contour';
 import { t } from '@/i18n/en';
 import { entryVolumeKg } from './volume';
+import { useFieldOutline } from '@/components/field-outline';
 
 /** Shared parts for the screens around the logger (summary, day, routine editor, cardio), so they read as one app. */
 export const semibold = { fontWeight: '600' } as const;
@@ -87,7 +89,7 @@ export function SectionTitle({ children }: PropsWithChildren) {
 export function Trouble({ text, onRetry, testID }: { text: string; onRetry?: () => void; testID?: string }) {
   const { colors } = useTheme();
   return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderRadius: tokens.radii.card, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[1], backgroundColor: colors['surface-2'] }}>
-    <ThemedText muted accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1 }}>{text}</ThemedText>
+    <StatusText muted accessibilityRole="alert" style={{ flex: 1 }}>{text}</StatusText>
     {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={t('tryAgain')} onPress={onRetry} style={{ minHeight: touchTarget, minWidth: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
       <ThemedText style={semibold}>{t('tryAgain')}</ThemedText>
     </Pressable>}
@@ -97,10 +99,11 @@ export function Trouble({ text, onRetry, testID }: { text: string; onRetry?: () 
 /** A labelled text field. The label is also what a screen reader says for the field. */
 export function Field({ label, style, inputStyle, onSurface = true, hint, ...input }: Omit<TextInputProps, 'style'> & { label: string; onSurface?: boolean; hint?: string; style?: StyleProp<ViewStyle>; inputStyle?: StyleProp<TextStyle> }) {
   const { colors } = useTheme();
+  const outline = useFieldOutline();
   return <View style={[{ gap: 6 }, style]}>
     <ThemedText muted variant="caption" style={semibold}>{label}</ThemedText>
     <TextInput accessibilityLabel={label} placeholderTextColor={colors['text-muted']} {...input}
-      style={[{ minHeight: 48, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: tokens.type.body, color: colors.text, backgroundColor: onSurface ? colors['surface-2'] : colors.surface }, inputStyle]} />
+      style={[{ minHeight: 48, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: tokens.type.body, color: colors.text, backgroundColor: onSurface ? colors['surface-2'] : colors.surface }, outline, inputStyle]} />
     {!!hint && <ThemedText muted variant="caption">{hint}</ThemedText>}
   </View>;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { Button } from "../../../components/button";
-import { ThemedText } from "../../../components/themed-text";
+import { StatusText } from "../../../components/status-text";
 import type { Repository } from "../../../data/repository";
 import { t } from "../../../i18n/en";
 import { Field } from "../../onboarding/fields";
@@ -168,18 +168,14 @@ export function FoodAiEntry({
         </>
       )}
       {busy && (
-        <ThemedText accessibilityLiveRegion="polite">
-          {t("foodAiReading")}
-        </ThemedText>
+        <StatusText>{t("foodAiReading")}</StatusText>
       )}
       {!busy && status && (
-        <ThemedText accessibilityRole="alert">{status}</ThemedText>
+        <StatusText accessibilityRole="alert">{status}</StatusText>
       )}
       {!!s.queue.length && (
         <>
-          <ThemedText accessibilityLiveRegion="polite">
-            {t("foodAiQueued")}
-          </ThemedText>
+          <StatusText>{t("foodAiQueued")}</StatusText>
           <Button
             label={t("foodAiRetry")}
             disabled={busy}

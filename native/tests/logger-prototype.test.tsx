@@ -92,11 +92,13 @@ test('Plates shows on barbell lifts only and opens the weight keypad with the pl
 test('tapping the set number opens the tags, which also hold Remove set', async () => {
   const { deadlift, store } = sample();
   await render(<ActiveWorkout />, { wrapper });
-  await fireEvent.press(screen.getAllByRole('button', { name: 'Deadlift, Set 1, Remove set' })[0]);
+  // Hidden from screen readers (the tag button beside it does the same), still there for a finger.
+  await fireEvent.press(within(screen.getByTestId('set-row-0-0')).getByText('1', { includeHiddenElements: true }));
+  expect(screen.getByRole('button', { name: 'Remove set' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Warm-up' }));
   expect(store.drafts(deadlift.id)[0].tag).toBe('warmup');
   await screen.rerender(<ActiveWorkout />);
-  expect(within(screen.getByTestId('set-row-0-0')).getByText('W')).toBeTruthy();
+  expect(within(screen.getByTestId('set-row-0-0')).getByText('W', { includeHiddenElements: true })).toBeTruthy();
   expect(within(screen.getByTestId('set-row-0-0')).getByText('Warm-up')).toBeTruthy();
 });
 
@@ -105,6 +107,20 @@ test('the set tag button reads the previous weight and reps to a screen reader',
   await render(<ActiveWorkout />, { wrapper });
   const tag = screen.getAllByRole('button', { name: /^Deadlift, Set 1, .*tag/i })[0];
   expect(tag.props.accessibilityValue).toEqual({ text: expect.stringMatching(/^Last time: 285 .*3$/) });
+});
+
+test('VoiceOver meets the set once: the number is skipped, and the tag button opens the tags and carries Remove set', async () => {
+  sample();
+  const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+  await render(<ActiveWorkout />, { wrapper });
+  // The number used to be labelled "Remove set" although a tap opened the tags.
+  expect(screen.queryAllByRole('button', { name: /Remove set$/ })).toHaveLength(0);
+  const tag = within(screen.getByTestId('set-row-0-0')).getByRole('button', { name: /^Deadlift, Set 1, Set tag/ });
+  expect(tag.props.accessibilityState).toMatchObject({ expanded: false });
+  expect(tag.props.accessibilityActions).toEqual([{ name: 'delete', label: 'Remove set' }]);
+  await fireEvent(tag, 'accessibilityAction', { nativeEvent: { actionName: 'delete' } });
+  expect(alert).toHaveBeenCalledWith('Remove set', undefined, expect.any(Array));
+  alert.mockRestore();
 });
 
 describe('swiping the Up next card', () => {

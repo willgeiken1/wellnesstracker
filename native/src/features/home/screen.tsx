@@ -8,6 +8,7 @@ import { setDockAction } from '@/components/floating-tabs';
 import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
+import { useStacked } from '@/components/text-size';
 import { fromKg, localDay } from '@/core/workout/rules';
 import { WorkoutStore } from '@/data/workout/store';
 import { cachedReads } from '@/data/read-cache';
@@ -162,6 +163,8 @@ export function Home() {
   };
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
+  // At accessibility text sizes the date and greeting get their own line under the buttons, so their words stay whole.
+  const stacked = useStacked();
   // With the floating bar the + rides in line with the tabs while Home is open, so it never covers a card.
   const [toggleAdd] = useState(() => () => setAdding(open => !open));
   useEffect(() => {
@@ -178,30 +181,38 @@ export function Home() {
   const reader = useMemo(() => store ? new WorkoutStore(cachedReads(store.repo), store.viewRevision) : null, [store]);
   const scoreOn = tiles.order.includes('score'), minute = Math.floor(now.getTime() / 60_000);
   const score = useMemo(() => reader && scoreOn ? readScore(reader, new Date(minute * 60_000), health) : null, [reader, scoreOn, health, minute]);
-  return <View style={{ flex: 1 }}>
+  const headerText = <View testID="home-heading" style={stacked ? { flexBasis: '100%' } : { flex: 1 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+      <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
+      {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
+    </View>
+    <Greeting text={greeting(now.getHours())} />
+  </View>;
+  // While the + menu is open VoiceOver reaches only the menu, its Close area and the tab bar (A11Y-15): the screen
+  // behind is hidden, and the escape gesture (two-finger Z) closes the menu like a tap outside it. The gesture is
+  // handled on the root, which holds both the menu and its Close area; the floating bar's + handles it too. The dock is not
+  // marked modal, because with the floating bar the + that closes the menu sits in the tab bar.
+  return <View style={{ flex: 1 }} testID="home-root" onAccessibilityEscape={adding ? () => setAdding(false) : undefined}>
+    <View style={{ flex: 1 }} testID="home-behind-menu" accessibilityElementsHidden={adding} importantForAccessibility={adding ? 'no-hide-descendants' : 'auto'}>
     <Screen tabHeader>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
+      <View testID="home-header" style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: tokens.spacing[2] }}>
         <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')} hitSlop={4}
           style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }}>
           <Icon name="avatar" size={22} />
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
-            {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
-          </View>
-          <Greeting text={greeting(now.getHours())} />
-        </View>
+        {stacked ? <View style={{ flex: 1 }} /> : headerText}
         {store && <Pressable testID="home-edit" accessibilityRole="button" accessibilityLabel={t('homeEdit')} onPress={() => setEditing(true)} hitSlop={4}
           style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
           <ThemedText style={[semibold, { fontSize: 14 }]}>{t('edit')}</ThemedText>
         </Pressable>}
         {score && <HeaderScore score={score} />}
+        {stacked && headerText}
       </View>
       {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
     </Screen>
+    </View>
     <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
-    {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
+    {adding && <Pressable accessibilityRole="button" accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
     <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>
         <SmallButton label={t('logFood')} onPress={() => { setAdding(false); router.push('/food'); }} />
@@ -301,7 +312,7 @@ function MapCard({ day, today, values }: { day: string; today: string; values: R
   const empty = values.training === 0 && values.food === 0;
   const amount = (day === today ? t('homePercentToday') : '{n}%').replace('{n}', String(percent(values)));
   return <Card style={card} testID="home-map">
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: tokens.spacing[2] }}>
       <ThemedText muted variant="caption">{dayName(day, today)}</ThemedText>
       <ThemedText muted numeric variant="caption">{amount}</ThemedText>
     </View>
@@ -312,7 +323,7 @@ function MapCard({ day, today, values }: { day: string; today: string; values: R
           : <Contours values={values} width={340} height={170} />}
       </Svg>
     </View>
-    <View style={{ flexDirection: 'row', gap: tokens.spacing[2] }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[2] }}>
       {PILLARS.map(kind => <View key={kind} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         <Shape kind={kind} color={colors[kind]} />
         <ThemedText muted variant="caption">{t(kind === 'training' ? 'homeTraining' : 'homeFood')}</ThemedText>
@@ -412,15 +423,18 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }
 function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
+  // At accessibility text sizes a tile takes the whole row and its number and unit may wrap, so nothing runs out
+  // of the card (A11Y-08). The saved half or full width comes back at smaller sizes.
+  const stacked = useStacked();
   return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"
     accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
-    style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
+    style={({ pressed }) => ({ width: wide || stacked ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
     <Card style={[card, { minHeight: 108, gap: 2 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}
         <ThemedText muted variant="caption">{tile.label}</ThemedText>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 4 }}>
         <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
         <ThemedText muted variant="caption">{tile.unit}</ThemedText>
       </View>

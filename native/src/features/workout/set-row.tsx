@@ -8,6 +8,7 @@ import type { Draft } from "@/data/workout/store";
 import { t } from "@/i18n/en";
 import { tokens } from "@/design/tokens";
 import { Line, layout } from "./primitives";
+import { useStacked } from "@/components/text-size";
 /** A faded hint is a suggestion, so screen readers say so instead of "blank". */
 function spoken(hint: string) {
   return hint && hint !== "—" ? `${t("suggested")} ${hint}` : t("blank");
@@ -25,7 +26,10 @@ export function SetRow({
   onRemove,
   onTag,
   side,
+  unit,
 }: {
+  /** Shown over the weight box when the row stacks at large text (the column heads are hidden then). */
+  unit?: string;
   exerciseIndex?: number;
   side?: "left" | "right";
   onTag?: (tag: Draft["tag"]) => void;
@@ -41,6 +45,11 @@ export function SetRow({
 }) {
   const { colors } = useTheme();
   const [tagsOpen, setTagsOpen] = useState(false);
+  // At the largest text sizes the row stacks: the set number, last time and the check on one line, then a line
+  // naming the two boxes, then the boxes. Wrapping keeps one row of controls, so swipe and focus order stay the same.
+  const stacked = useStacked();
+  const removeAction = [{ name: "delete", label: t("removeSet") }];
+  const onRemoveAction = (e: { nativeEvent: { actionName: string } }) => { if (e.nativeEvent.actionName === "delete") onRemove(); };
   const label = `${exercise}, ${t("set")} ${index + 1}${side ? `, ${t(side === "left" ? "leftSide" : "rightSide")}` : ""}`;
   const suffix = side === "right" ? "-right" : "";
   const done = !!draft.setId;
@@ -51,11 +60,41 @@ export function SetRow({
         {previous || "—"}
       </ThemedText>
       {!!draft.tag && onTag && (
-        <ThemedText variant="caption" style={{ color: colors.accent, fontWeight: "600" }}>
+        <ThemedText variant="caption" style={{ color: done ? colors["accent-2"] : colors.accent, fontWeight: "600" }}>
           {t(draft.tag)}
         </ThemedText>
       )}
     </>
+  );
+  const checkCell = (
+    <Pressable
+      testID={`set-${exerciseIndex}-${index}${suffix}-done`}
+      accessibilityRole="checkbox"
+      accessibilityLabel={`${label}, ${t("done")}`}
+      accessibilityState={{
+        checked: done,
+      }}
+      hitSlop={{ top: 4, bottom: 4, right: 6 }}
+      onPress={onDone}
+      style={[
+        layout.cell,
+        {
+          width: 40,
+          minWidth: 40,
+          minHeight: 40,
+          borderRadius: 12,
+          borderWidth: 1.5,
+          borderColor: done ? colors.accent : `${colors["text-muted"]}55`,
+          backgroundColor: done ? colors.accent : colors.surface,
+        },
+      ]}
+    >
+      <Line
+        name="check"
+        size={18}
+        color={done ? colors["on-accent"] : colors.text}
+      />
+    </Pressable>
   );
   return (
     <>
@@ -78,33 +117,32 @@ export function SetRow({
           paddingHorizontal: 14,
           borderRadius: 0,
           backgroundColor: done ? colors["accent-tint"] : undefined,
+          flexWrap: stacked ? "wrap" : undefined,
+          rowGap: stacked ? 6 : undefined,
         },
       ]}
     >
       <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label}, ${t("removeSet")}`}
+        // With tags, the tag button beside this one (last time) opens the same menu and carries Remove set, so this
+        // copy is skipped by screen readers instead of being read twice. Without tags it only removes, by long press
+        // or the Remove set action, so it is not called a button.
+        accessible={!onTag}
+        importantForAccessibility={onTag ? "no-hide-descendants" : "yes"}
+        accessibilityElementsHidden={!!onTag}
+        accessibilityLabel={label}
         hitSlop={{ left: 9, right: 9, top: 4, bottom: 4 }}
         onLongPress={onRemove}
-        onPress={() => { if (onTag) setTagsOpen(!tagsOpen); }}
-        accessibilityActions={[
-          {
-            name: "delete",
-            label: t("removeSet"),
-          },
-        ]}
-        onAccessibilityAction={(e) => {
-          if (e.nativeEvent.actionName === "delete") onRemove();
-        }}
+        onPress={onTag ? () => setTagsOpen(!tagsOpen) : undefined}
+        accessibilityActions={removeAction}
+        onAccessibilityAction={onRemoveAction}
         style={[
           layout.cell,
           {
-            width: 26,
             minWidth: 26,
           },
         ]}
       >
-        <ThemedText numeric muted={!tagLetter} style={tagLetter ? { color: colors.accent, fontWeight: "700" } : undefined}>
+        <ThemedText numeric muted={!tagLetter} style={tagLetter ? { color: done ? colors["accent-2"] : colors.accent, fontWeight: "700" } : undefined}>
           {tagLetter || index + 1}
         </ThemedText>
       </Pressable>
@@ -115,6 +153,8 @@ export function SetRow({
           // The label names the button, so the previous weight and reps it shows are read as its value.
           accessibilityValue={previous ? { text: `${t('lastTime')}: ${previous}` } : undefined}
           accessibilityState={{ expanded: tagsOpen }}
+          accessibilityActions={removeAction}
+          onAccessibilityAction={onRemoveAction}
           onPress={() => setTagsOpen(!tagsOpen)}
           style={{ flex: 1, minHeight: 44, justifyContent: "center" }}
         >
@@ -123,6 +163,16 @@ export function SetRow({
       ) : (
         <View style={{ flex: 1, justifyContent: "center" }}>{prev}</View>
       )}
+      {stacked && <>
+        {checkCell}
+        {/* Starts the second line: a name over each box, since the column heads are hidden at this size. Screen
+            readers skip it; each box already says what it holds. */}
+        <View testID={`set-row-${exerciseIndex}-${index}${suffix}-names`} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+          style={[layout.row, { flexBasis: "100%" }]}>
+          <ThemedText muted variant="caption" style={{ flex: 1 }}>{unit ?? t("weight")}</ThemedText>
+          <ThemedText muted variant="caption" style={{ flex: 1 }}>{t("repsHeader")}</ThemedText>
+        </View>
+      </>}
       {(["weight", "reps"] as const).map((field) => (
         <Pressable
           testID={`set-${exerciseIndex}-${index}${suffix}-${field}`}
@@ -148,34 +198,7 @@ export function SetRow({
           </ThemedText>
         </Pressable>
       ))}
-      <Pressable
-        testID={`set-${exerciseIndex}-${index}${suffix}-done`}
-        accessibilityRole="checkbox"
-        accessibilityLabel={`${label}, ${t("done")}`}
-        accessibilityState={{
-          checked: done,
-        }}
-        hitSlop={{ top: 4, bottom: 4, right: 6 }}
-        onPress={onDone}
-        style={[
-          layout.cell,
-          {
-            width: 40,
-            minWidth: 40,
-            minHeight: 40,
-            borderRadius: 12,
-            borderWidth: 1.5,
-            borderColor: done ? colors.accent : `${colors["text-muted"]}55`,
-            backgroundColor: done ? colors.accent : colors.surface,
-          },
-        ]}
-      >
-        <Line
-          name="check"
-          size={18}
-          color={done ? colors["on-accent"] : colors.text}
-        />
-      </Pressable>
+      {!stacked && checkCell}
     </View>
     </SwipeStops>
     {tagsOpen && onTag && <View style={[layout.row, {flexWrap:'wrap', paddingBottom: 6}]}>

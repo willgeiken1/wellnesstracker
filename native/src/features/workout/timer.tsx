@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppState, Pressable, View } from "react-native";
+import { AppState, Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import type { WorkoutStore } from "@/data/workout/store";
 import { remainingSeconds } from "@/core/workout/rules";
@@ -10,6 +10,8 @@ import { ThemedText } from "@/components/themed-text";
 import { t } from "@/i18n/en";
 import { clock, Eyebrow, Pill, layout, Sheet } from "./primitives";
 import { restBuzz } from "./haptics";
+import { announce } from "@/components/announce";
+import { IN_RING_MAX, useOutgrowsRing, useStacked } from "@/components/text-size";
 import { useWorkoutStore } from "./use-workout";
 // Smooth synthetic geometry starts at twelve o'clock; all rings share it.
 const outline = "M150 8C218 6 294 64 294 146C294 197 281 258 238 282C199 306 83 295 48 266C13 238 -8 169 11 125C29 83 105 8 150 8Z";
@@ -96,6 +98,7 @@ export function RestTimer({
   presentation?: "all" | "mini" | "sheet";
 }) {
   const store = useWorkoutStore(source.repo);
+  const outgrown = useOutgrowsRing(), stacked = useStacked();
   const { reduceMotion, colors } = useTheme(),
     [now, setNow] = useState(() => Date.now()),
     timer = store.timer();
@@ -121,6 +124,8 @@ export function RestTimer({
           minimized: true,
         });
         restBuzz(store.repo);
+        // The buzz is off when haptics are off and is never heard; VoiceOver users also hear that rest is over.
+        announce(t("restReady"));
       }
     };
     const interval = setInterval(update, reduceMotion ? 1000 : 50),
@@ -160,16 +165,21 @@ export function RestTimer({
         }}
       >
         {/* Wraps: at the largest text sizes the chips drop under the clock instead of pushing Skip off the edge. */}
-        <View testID="rest-bar-row" style={[layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }]}>
+        {/* At accessibility sizes the bar is a column: the words take the full width on top and the chips sit in their
+            own row under them. A wrapping row squeezed "Rest complete" into one letter per line on the device. */}
+        <View testID="rest-bar-row" style={stacked
+          ? { flexDirection: "column", alignItems: "stretch", paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6 }
+          : [layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("expandRest")}
             accessibilityValue={{ text: timer.ended ? t("restReady") : clock(seconds) }}
             onPress={() => store.updateTimer({ minimized: false })}
-            style={{ flexGrow: 1, flexShrink: 1, flexBasis: 96, minHeight: touchTarget, justifyContent: "center" }}
+            style={stacked ? { width: "100%", minHeight: touchTarget, justifyContent: "center" }
+              : { flexGrow: 1, flexShrink: 1, flexBasis: 96, minHeight: touchTarget, justifyContent: "center" }}
           >
             {timer.ended ? (
-              <ThemedText numberOfLines={2}>{t("restReady")}</ThemedText>
+              <ThemedText>{t("restReady")}</ThemedText>
             ) : (
               <ThemedText muted>
                 {t("rest")}{"  "}
@@ -179,9 +189,11 @@ export function RestTimer({
               </ThemedText>
             )}
           </Pressable>
-          {!timer.ended && <Chip label={t("minus15")} onPress={() => store.adjustTimer(-15)} />}
-          <Chip label={t("plus15")} onPress={() => store.adjustTimer(15)} />
-          <Chip label={t(timer.ended ? "done" : "skip")} onPress={() => store.skipTimer()} />
+          <View testID="rest-bar-chips" style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+            {!timer.ended && <Chip label={t("minus15")} onPress={() => store.adjustTimer(-15)} />}
+            <Chip label={t("plus15")} onPress={() => store.adjustTimer(15)} />
+            <Chip label={t(timer.ended ? "done" : "skip")} onPress={() => store.skipTimer()} />
+          </View>
         </View>
         <View accessible={false} style={{ height: 3, backgroundColor: colors["surface-2"] }}>
           <View testID="rest-bar-progress" style={{ height: 3, width: `${Math.round(left * 1000) / 10}%`, backgroundColor: colors.accent }} />
@@ -189,20 +201,8 @@ export function RestTimer({
       </View>
     );
   }
-  return (
-    <Sheet
-      minimal
-      tall
-      onDecrease={() => store.adjustTimer(-15)}
-      onSkip={() => store.skipTimer()}
-      testID="rest-sheet"
-      label={t("rest")}
-      onClose={() =>
-        store.updateTimer({
-          minimized: true,
-        })
-      }
-    >
+  const body = (
+    <>
       <Eyebrow center>{t("rest")}</Eyebrow>
       <ThemedText
         style={{
@@ -249,14 +249,21 @@ export function RestTimer({
             alignItems: "center",
           }}
         >
-          <ThemedText numeric style={{ fontSize: tokens.logger.timer, fontWeight: "700" }}>
+          {/* The contours are a fixed size, so the clock inside grows only a little with large text; past that the
+              same time is written in full under them. */}
+          <ThemedText testID="rest-clock" numeric maxFontSizeMultiplier={IN_RING_MAX} style={{ fontSize: tokens.logger.timer, fontWeight: "700" }}>
             {clock(seconds)}
           </ThemedText>
-          <ThemedText muted>
+          <ThemedText muted maxFontSizeMultiplier={IN_RING_MAX}>
             {t("of")} {clock(timer.duration)}
           </ThemedText>
         </View>
       </View>
+      {outgrown && (
+        <ThemedText testID="rest-clock-full" numeric style={{ textAlign: "center", fontWeight: "700" }}>
+          {clock(seconds)} <ThemedText muted>{t("of")} {clock(timer.duration)}</ThemedText>
+        </ThemedText>
+      )}
       <View style={{ flex: 1, minHeight: 12 }} />
       <ThemedText
         muted
@@ -279,6 +286,26 @@ export function RestTimer({
           <Pill secondary label={t("skip")} onPress={() => store.skipTimer()} />
         </View>
       </View>
+      {stacked && <Pill secondary testID="rest-minimize" label={t("minimizeRest")} onPress={() => store.updateTimer({ minimized: true })} />}
+    </>
+  );
+  return (
+    <Sheet
+      minimal
+      tall
+      onDecrease={() => store.adjustTimer(-15)}
+      onSkip={() => store.skipTimer()}
+      testID="rest-sheet"
+      label={t("rest")}
+      onClose={() =>
+        store.updateTimer({
+          minimized: true,
+        })
+      }
+    >
+      {/* At accessibility sizes the sheet's content is taller than the screen: it scrolls, so the contours keep their
+          size instead of being squeezed to nothing, and a visible Minimize joins the drag handle. */}
+      {stacked ? <ScrollView testID="rest-sheet-scroll" style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 8 }}>{body}</ScrollView> : body}
     </Sheet>
   );
 }

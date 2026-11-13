@@ -3,9 +3,11 @@ import { ActivityIndicator, Pressable, TextInput, View, type KeyboardTypeOptions
 import Svg, { Path } from 'react-native-svg';
 import { touchTarget } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
+import { StatusText } from '@/components/status-text';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import { en, foodDayLabel, t } from '../../i18n/en';
+import { useFieldOutline } from '@/components/field-outline';
 
 /** Shared parts for the food logging screens: one look for fields, rows, notices and actions. */
 export const semibold = { fontWeight: '600' } as const;
@@ -62,6 +64,7 @@ export function FieldRow({ label, title, unit, value, onChange, placeholder, num
   placeholder?: string; numeric?: boolean; integer?: boolean; first?: boolean; disabled?: boolean; problem?: string; autoFocus?: boolean;
 }) {
   const { colors } = useTheme();
+  const outline = useFieldOutline();
   const keyboard: KeyboardTypeOptions = integer ? 'number-pad' : numeric ? 'decimal-pad' : 'default';
   return <View style={{ borderTopWidth: first ? 0 : 1, borderTopColor: colors['hair-2'], paddingHorizontal: tokens.spacing[2] }}>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: tokens.spacing[1], minHeight: 50 }}>
@@ -71,7 +74,8 @@ export function FieldRow({ label, title, unit, value, onChange, placeholder, num
           placeholder={placeholder} placeholderTextColor={colors['text-muted']} keyboardType={keyboard}
           autoCapitalize={numeric ? 'none' : 'sentences'} autoCorrect={false} returnKeyType="done"
           style={{ flex: 1, minHeight: touchTarget, paddingVertical: 8, color: colors.text, fontSize: 16, textAlign: 'right',
-            fontFamily: numeric ? tokens.font.numeral : undefined, fontVariant: numeric ? ['tabular-nums'] : undefined, opacity: disabled ? 0.5 : 1 }} />
+            fontFamily: numeric ? tokens.font.numeral : undefined, fontVariant: numeric ? ['tabular-nums'] : undefined, opacity: disabled ? 0.5 : 1,
+            ...(outline && { ...outline, borderRadius: 8, paddingHorizontal: 8 }) }} />
         {!!unit && <ThemedText muted variant="caption" accessible={false} style={{ minWidth: 30 }}>{unit}</ThemedText>}
       </View>
     </View>
@@ -87,8 +91,8 @@ export function NoticeRow({ text, alert = false, busy = false, action, testID }:
   return <View testID={testID} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: tokens.spacing[1], borderRadius: 12,
     backgroundColor: colors['surface-2'], paddingHorizontal: tokens.spacing[2], paddingVertical: 6, minHeight: touchTarget }}>
     {busy && <ActivityIndicator color={colors['text-muted']} />}
-    <ThemedText variant="caption" accessibilityRole={alert ? 'alert' : undefined} accessibilityLiveRegion="polite"
-      style={{ flexGrow: 1, flexShrink: 1, flexBasis: 160, fontSize: 14, paddingVertical: 4 }}>{text}</ThemedText>
+    <StatusText variant="caption" accessibilityRole={alert ? 'alert' : undefined}
+      style={{ flexGrow: 1, flexShrink: 1, flexBasis: 160, fontSize: 14, paddingVertical: 4 }}>{text}</StatusText>
     {action && <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={6}
       style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 14, borderRadius: 99, justifyContent: 'center', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 })}>
       <ThemedText style={[semibold, { fontSize: 14 }]}>{action.label}</ThemedText>

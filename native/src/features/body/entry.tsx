@@ -8,8 +8,10 @@ import { t } from '../../i18n/en';
 import type { Unit } from '../onboarding/model';
 import { layout, Panel } from '../workout/primitives';
 import { unusualWeight } from './model';
+import { useFieldOutline } from '@/components/field-outline';
 export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;unit:Unit;onSave:(value:number)=>void;onClose:()=>void}) {
   const {colors,reduceMotion}=useTheme();
+ const outline=useFieldOutline();
   const [value,setValue]=useState(initial===null?'':initial.toFixed(1));
   const [keypad,setKeypad]=useState(initial===null),[base,setBase]=useState(initial??0);
   const [error,setError]=useState<'bodyInvalid'|'bodySaveFailed'|null>(null);
@@ -19,7 +21,7 @@ export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;u
   const initialIndex=Math.round((Math.max(0.1,base)-start)*10);
   const scrollChange=(offset:number)=>change((start+Math.min(100,Math.max(0,Math.round(offset/48)))/10).toFixed(1));
   return <Panel>
-    {keypad?<TextInput autoFocus accessibilityLabel={t('bodyWeightInput').replace('{unit}',unit)} keyboardType="decimal-pad" value={value} onChangeText={change} style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']}]} />:<>
+    {keypad?<TextInput autoFocus accessibilityLabel={t('bodyWeightInput').replace('{unit}',unit)} keyboardType="decimal-pad" value={value} onChangeText={change} style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']},outline]} />:<>
       <Pressable accessible onPress={()=>setKeypad(true)} accessibilityRole="adjustable" accessibilityLabel={t('bodyWheel').replace('{unit}',unit)} accessibilityValue={{text:`${value} ${unit}`}}
         accessibilityActions={[{name:'increment',label:t('bodyIncrease')},{name:'decrement',label:t('bodyDecrease')}]}
         onAccessibilityAction={e=>adjust(e.nativeEvent.actionName==='increment'?0.1:-0.1)}>
