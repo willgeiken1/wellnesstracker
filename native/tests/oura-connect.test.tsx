@@ -166,6 +166,34 @@ describe('Home reads both sources', () => {
     expect(screen.getByTestId('read').props.children).toBe('6100 steps, 7.5 h');
     spy.mockRestore();
   });
+  test('Apple Health shows at once while Oura is still answering, and Oura joins when it lands', async () => {
+    const spy = sub();
+    let answer: (rows: { day: string; sleepSeconds: number | null; steps: number | null }[]) => void = () => {};
+    const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [] };
+    await render(<Probe apple={apple} ring={ringWith(() => new Promise(done => { answer = done; }))} />);
+    await settle();
+    expect(screen.getByTestId('read').props.children).toBe('4200 steps, 0 h');
+    await act(async () => { answer([{ day: today(), sleepSeconds: 27000, steps: 6100 }]); });
+    await settle();
+    expect(screen.getByTestId('read').props.children).toBe('4200 steps, 7.5 h');
+    spy.mockRestore();
+  });
+  test('once a refresh from Oura lands, its days are read again', async () => {
+    const spy = sub();
+    let land: () => void = () => {}, synced = false;
+    const worn: OuraSource = {
+      status: async () => ({ connected: true, lastSync: synced ? new Date().toISOString() : null }), connectUrl: async () => '',
+      sync: () => new Promise<void>(done => { land = () => { synced = true; done(); }; }),
+      days: async () => [{ day: today(), sleepSeconds: synced ? 27000 : 3600, steps: 100 }], disconnect: async () => {},
+    };
+    await render(<Probe apple={null} ring={worn} />);
+    await settle();
+    expect(screen.getByTestId('read').props.children).toBe('100 steps, 1 h');
+    await act(async () => { land(); });
+    await settle();
+    expect(screen.getByTestId('read').props.children).toBe('100 steps, 7.5 h');
+    spy.mockRestore();
+  });
   test('Oura failing never hides Apple Health', async () => {
     const spy = sub();
     const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [] };

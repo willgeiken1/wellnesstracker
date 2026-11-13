@@ -1,4 +1,6 @@
-import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, isExpired, isOuraUrl, mergeHealthDays, readOuraDays, refreshOura, resetOuraAsk, type OuraDay, type OuraSource, type OuraStatus } from '../src/features/health/oura';
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { join } from 'path';
+import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, SYNC_TIMEOUT, isExpired, isOuraUrl, syncOura, mergeHealthDays, readOuraDays, refreshOura, resetOuraAsk, type OuraDay, type OuraSource, type OuraStatus } from '../src/features/health/oura';
 
 // Made-up values only.
 const NOW = new Date(2026, 10, 13, 9, 0, 0);
@@ -45,6 +47,52 @@ describe('asking the server to refresh', () => {
   });
 });
 
+describe('a slow or hung Oura never holds anything back', () => {
+  test('the stored days come back while the refresh is still running, and onFresh follows once it lands', async () => {
+    let land: () => void = () => {};
+    const source = ring({ connected: true, lastSync: null }, [{ day: '2026-11-12', sleepSeconds: 25200, steps: 100 }]);
+    source.sync.mockImplementation(() => new Promise<void>(done => { land = done; }));
+    const fresh = jest.fn();
+    expect(await readOuraDays(source, DAYS, NOW, fresh)).toEqual({ steps: [0, 100, 0], sleepHours: [0, 7, 0] });
+    expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
+    expect(fresh).not.toHaveBeenCalled();
+    land();
+    await new Promise(done => setTimeout(done, 0));
+    expect(fresh).toHaveBeenCalledTimes(1);
+  });
+  test('a refresh that fails or is skipped does not ask for a second read', async () => {
+    const failing = ring({ connected: true, lastSync: null }), fresh = jest.fn();
+    failing.sync.mockRejectedValue(new Error('made-up failure'));
+    await readOuraDays(failing, DAYS, NOW, fresh);
+    await readOuraDays(ring({ connected: true, lastSync: NOW.toISOString() }), DAYS, NOW, fresh);
+    await new Promise(done => setTimeout(done, 0));
+    expect(fresh).not.toHaveBeenCalled();
+  });
+  test('a refresh that never answers is given up on', async () => {
+    jest.useFakeTimers({ now: NOW });
+    try {
+      const source = ring({ connected: true, lastSync: null });
+      source.sync.mockImplementation(() => new Promise<void>(() => {}));
+      const asked = syncOura(source, LATER_SYNC_DAYS).then(() => 'answered', () => 'gave up');
+      await jest.advanceTimersByTimeAsync(SYNC_TIMEOUT - 1);
+      let settled = false; void asked.then(() => { settled = true; });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(await asked).toBe('gave up');
+    } finally { jest.useRealTimers(); }
+  });
+  test('each account on the phone has its own ten-minute retry gap', async () => {
+    const stale = new Date(NOW.getTime() - 2 * 3_600_000).toISOString();
+    const first = ring({ connected: true, lastSync: stale, account: 'made-up-a' }), second = ring({ connected: true, lastSync: stale, account: 'made-up-b' });
+    await refreshOura(first, (await first.status())!, NOW);
+    await refreshOura(second, (await second.status())!, new Date(NOW.getTime() + 60_000));
+    await refreshOura(first, (await first.status())!, new Date(NOW.getTime() + 120_000));
+    expect(first.sync).toHaveBeenCalledTimes(1);
+    expect(second.sync).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('when Oura has signed Insight out', () => {
   test('the server\'s expired and missing sign-in messages are recognised, other failures are not', () => {
     expect(isExpired('Oura login expired. Reconnect Oura in the app. (401)')).toBe(true);
@@ -71,6 +119,17 @@ describe('two sources, one day', () => {
   test('a list one source could not read comes from the other', () => {
     expect(mergeHealthDays({ steps: null, sleepHours: [6, 6, 6] }, worn)).toEqual({ steps: worn.steps, sleepHours: [7.25, 6, 8] });
   });
+});
+
+test('Oura values never reach the phone\'s database: the unused local cache is not called from the app', () => {
+  // The repository keeps an old oura_days table and cacheOura() for its sign-out and purge tests. Nothing in the app may write to it.
+  const files = (dir: string): string[] => readdirSync(dir).flatMap(name => { const path = join(dir, name); return statSync(path).isDirectory() ? files(path) : [path]; });
+  const src = join(__dirname, '../src');
+  const callers = files(src).filter(path => /\.(ts|tsx)$/.test(path) && !path.endsWith(join('data', 'repository.ts')) && readFileSync(path, 'utf8').includes('cacheOura'));
+  expect(callers).toEqual([]);
+  // The Oura files hold values in memory only: no database, no local saves, no logs, no error or analytics reporting.
+  for (const name of ['oura.ts', 'use-oura.ts', 'use-health-days.ts'])
+    expect(readFileSync(join(src, 'features/health', name), 'utf8')).not.toMatch(/data\/repository|localSave|console\.|Sentry|posthog/i);
 });
 
 test('only Oura\'s own approval page may be opened', () => {

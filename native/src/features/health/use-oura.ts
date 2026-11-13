@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { addHealthTiles, type TileStorage } from '../home/tiles';
-import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, oura, type OuraSource, type OuraStatus } from './oura';
+import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, oura, syncOura, type OuraSource, type OuraStatus } from './oura';
 
 const stateOf = (status: OuraStatus | null): OuraState['state'] => !status ? 'unavailable' : !status.connected ? 'off' : status.expired ? 'expired' : 'on';
 
@@ -43,9 +43,9 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     if (!await check(from)) return;
     // Connecting puts the Steps and Sleep tiles on Home. They can be removed again from Home's Edit.
     if (live.current) addHealthTiles(storage);
-    await from.sync(FIRST_SYNC_DAYS);
+    await syncOura(from, FIRST_SYNC_DAYS);
   });
-  const refresh = () => run(async from => { if (await check(from)) await from.sync(LATER_SYNC_DAYS); });
+  const refresh = () => run(async from => { if (await check(from)) await syncOura(from, LATER_SYNC_DAYS); });
   const disconnect = () => run(async from => { await from.disconnect(); await check(from); });
   return { state: source ? state : 'unavailable', busy, failed, connect, refresh, disconnect };
 }
