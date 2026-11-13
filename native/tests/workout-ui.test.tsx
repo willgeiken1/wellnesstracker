@@ -376,7 +376,14 @@ test('plate line groups duplicates on one line and hides oversized drafts', asyn
   expect(screen.getByTestId('plate-line')).toHaveTextContent(/45 × 3 \+ 10 \+ 2.5/);
   expect(screen.getByTestId('plate-line')).toHaveProp('numberOfLines', 1);
   await view.rerender(<Keypad {...props} value="135135" />);
-  expect(screen.queryByText(/Plates per side/)).toBeNull();
+  // An oversized draft shows no plates, but the line keeps its place so the keys below never move.
+  expect(screen.getByTestId('plate-line')).toHaveTextContent(/Plates per side: —/);
+  expect(screen.getByTestId('plate-line')).not.toHaveTextContent(/45 ×/);
+  await view.rerender(<Keypad {...props} value="" />);
+  expect(screen.getByTestId('plate-line')).toHaveTextContent(/Plates per side: —/);
+  // The limit hint has a line kept for it before it appears.
+  expect(screen.getByTestId('keypad-hint-slot').props.style).toMatchObject({ minHeight: 18 });
+  expect(screen.queryByTestId('keypad-limit-hint')).toBeNull();
 });
 test.each([false, true])('workout header only shows an eyebrow for templates: %s', async template => {
   const repo = memoryRepository(), store = new WorkoutStore(repo);

@@ -24,6 +24,8 @@ export interface Cursor {
 }
 /** How long a tap waits for the store to show it before the keypad trusts the store again. */
 const SETTLE_MS = 800;
+/** One caption line, kept for the limit hint. */
+const HINT_LINE = 18;
 /** Only ever called from a tap, never while drawing. */
 const tapTime = () => Date.now();
 export function Keypad({
@@ -88,7 +90,12 @@ export function Keypad({
     onChange(next);
   };
   const increment = field === "reps" ? 1 : step(equipment, unit, setupStep),
-    p = plates(Number(value), unit, barWeight, plateSet);
+    p = plates(Number(value), unit, barWeight, plateSet),
+    platesValid =
+      value !== "" &&
+      Number.isFinite(Number(value)) &&
+      Number(value) >= 0 &&
+      toKg(Number(value), unit) <= 1000;
   const change = (next: string) => {
     if (!validKeypadValue(next, field === "weight", unit)) {
       setLimitHint(true);
@@ -180,12 +187,10 @@ export function Keypad({
             </ThemedText>
           </View>
         </View>
+        {/* The plate line stays in place while typing (a dash until the weight is valid), and the limit hint has a
+            line kept for it, so the keys never move under a finger as these come and go. */}
         {equipment === "barbell" &&
-          field === "weight" &&
-          value !== "" &&
-          Number.isFinite(Number(value)) &&
-          Number(value) >= 0 &&
-          toKg(Number(value), unit) <= 1000 && (
+          field === "weight" && (
             <View
               style={[
                 layout.input,
@@ -209,35 +214,37 @@ export function Keypad({
                   <ThemedText style={{ fontSize: 13, fontWeight: "600" }}>
                     {t("platesPerSide")}:
                   </ThemedText>{" "}
-                  {plateLine || "—"}{" "}
+                  {(platesValid && plateLine) || "—"}{" "}
                   {t("onBar")
                     .replace("{weight}", String(p.bar))
                     .replace("{unit}", unit)}
                 </ThemedText>
               </View>
-              {p.remainder !== 0 && (
+              {platesValid && p.remainder !== 0 && (
                 <ThemedText muted variant="caption">
                   {t("plateRemainder")}
                 </ThemedText>
               )}
             </View>
           )}
-        {limitHint && (
-          <ThemedText
-            testID="keypad-limit-hint"
-            muted
-            variant="caption"
-            accessibilityLiveRegion="polite"
-          >
-            {t(
-              field === "reps"
-                ? "keypadRepsLimit"
-                : unit === "lb"
-                  ? "keypadLbLimit"
-                  : "keypadKgLimit",
-            )}
-          </ThemedText>
-        )}
+        <View testID="keypad-hint-slot" style={{ minHeight: HINT_LINE }}>
+          {limitHint && (
+            <ThemedText
+              testID="keypad-limit-hint"
+              muted
+              variant="caption"
+              accessibilityLiveRegion="polite"
+            >
+              {t(
+                field === "reps"
+                  ? "keypadRepsLimit"
+                  : unit === "lb"
+                    ? "keypadLbLimit"
+                    : "keypadKgLimit",
+              )}
+            </ThemedText>
+          )}
+        </View>
         {wheel && (
           <ScrollView
             horizontal

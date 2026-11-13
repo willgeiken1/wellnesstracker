@@ -54,6 +54,13 @@ test('a bar sparkline draws today hollow and dashed, and keeps a sliver when not
   expect(Number(today.props.height)).toBeGreaterThan(0);
 });
 
+test('finished days in a bar sparkline are solid, so a sparse week such as two nights of sleep still reads', async () => {
+  await render(<Spark values={[0, 0, 0, 0, 0, 7.2, 6.8]} color="#E9B2EC" bars />);
+  const bars = screen.getAllByTestId('spark-bar');
+  expect(bars).toHaveLength(7);
+  for (const bar of bars) expect(bar.props.opacity ?? 1).toBe(1);
+});
+
 test('the calorie and protein tiles mark today as open', async () => {
   const repo = open();
   const view = await render(<Home />, { wrapper });

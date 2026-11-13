@@ -660,7 +660,7 @@ export const en = {
   repsHeader: "Reps",
   emptyWorkout: "Add an exercise to begin. Every completed set is saved on this phone.",
   jumpLead: "Try {weight} {unit}.",
-  jumpExplanation: "Try {weight} {unit}. You hit {reps} at {previous} {workingSets}. The weight is filled in. Reps stay blank until you type them.",
+  jumpExplanation: "Try {weight} {unit}. You hit {reps} at {previous} {workingSets}. The weight is filled in. The grey reps are a suggestion until you type your own.",
   dismissSuggestion: "Dismiss weight suggestion",
   finishWorkout: "Finish workout",
   duration: "Duration",

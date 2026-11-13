@@ -409,7 +409,8 @@ export function Spark({ values, color, bars, partial }: { values: number[]; colo
         const last = i === list.length - 1, height = Math.max((v / max) * (h - 2), last && open ? 2 : 0);
         return last && open
           ? <Rect key={i} testID="spark-today" x={i * bw + 1.75} y={h - height + 0.75} width={bw - 3.5} height={Math.max(height - 1.5, 0.5)} rx={1.5} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.5} strokeDasharray="2.5 2" />
-          : <Rect key={i} x={i * bw + 1} y={h - height} width={bw - 2} height={height} rx={1.5} fill={color} opacity={last ? 1 : 0.45} />;
+          // Every finished day's bar is solid: a faded bar falls under 3:1 on the panel in most themes.
+          : <Rect key={i} testID="spark-bar" x={i * bw + 1} y={h - height} width={bw - 2} height={height} rx={1.5} fill={color} />;
       })}
     </Svg>;
   }
