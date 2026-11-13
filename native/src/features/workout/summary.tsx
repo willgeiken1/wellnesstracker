@@ -1,4 +1,5 @@
 import { WorkoutAiCard } from "./ai/card";
+import { AI_FEATURES_ENABLED } from "../ai-launch";
 import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -425,7 +426,7 @@ export function WorkoutSummary({
           </View>
         </Panel>
       ))}
-      <WorkoutAiCard store={store} id={id} />
+      {AI_FEATURES_ENABLED && <WorkoutAiCard store={store} id={id} />}
       {milestones.length > 0 && (
       <Panel testID="summary-shelf">
         <View style={[layout.row, { justifyContent: "space-between" }]}>

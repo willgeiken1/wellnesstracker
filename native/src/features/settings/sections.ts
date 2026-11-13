@@ -12,7 +12,7 @@ export const settingsGroups = [
     { route: 'notifications', label: 'notifications', icon: 'notifications', keywords: 'reminders alerts' },
   ] },
   { title: 'settingsGroupData', rows: [
-    { route: 'privacy', label: 'privacy', icon: 'privacy', keywords: 'ai photos thumbnails permission' },
+    { route: 'privacy', label: 'privacy', icon: 'privacy', keywords: 'ai photos thumbnails permission crash reports analytics sentry posthog' },
     { route: 'data', label: 'data', icon: 'data', keywords: 'import backup file restore' },
   ] },
   { title: 'settingsGroupAbout', rows: [

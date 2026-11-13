@@ -1,5 +1,7 @@
 import { useContext, useState } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
+import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
+import { PrivacySwitches } from '@/features/settings/privacy-switches';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Card } from '@/components/card';
@@ -49,7 +51,8 @@ export default function SettingsSection() {
   if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><HealthAndDevices /></Screen></>;
   if (section === 'score') return <>{named}<Screen title={title}><ScoreSettings /></Screen></>;
   if (section === 'data') return <>{named}<ImportScreen /></>;
-  if (section === 'privacy') return <>{named}<FoodPrivacyScreen /></>;
+  // While AI is off for launch, Privacy holds only the crash-report and analytics switches.
+  if (section === 'privacy') return <>{named}{AI_FEATURES_ENABLED ? <FoodPrivacyScreen /> : <Screen title={title}><PrivacySwitches /></Screen>}</>;
   if (section === 'profile') return <>{named}<Profile /></>;
   if (section === 'workout') return <>{named}<WorkoutSettings /></>;
   if (section === 'about') {
