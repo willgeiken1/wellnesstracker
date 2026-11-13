@@ -13,6 +13,16 @@ test('five accessible machines, default weekly ring and fallback est. label', as
   expect(screen.getByText(/est\./)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Log finished cardio' })).toBeTruthy();
 });
+
+test('the stand-in weight is shown in the unit the person uses', async () => {
+  const lb = memoryRepository();
+  await render(<Cardio repository={lb} />, { wrapper });
+  expect(screen.getByText('est. · Using 176 lb until you type a weigh-in on Progress.')).toBeTruthy();
+  const kg = memoryRepository();
+  kg.save('profile', { weight_unit: 'kg' });
+  await render(<Cardio repository={kg} />, { wrapper });
+  expect(screen.getByText('est. · Using 80 kg until you type a weigh-in on Progress.')).toBeTruthy();
+});
 test('live timer pauses, resumes and saves exactly one session with fallback label', async () => {
   jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
   const repository = memoryRepository();

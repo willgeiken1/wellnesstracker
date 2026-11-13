@@ -106,7 +106,7 @@ export function Cardio({ repository }: { repository: Repository }) {
       </View>
       <View style={{ gap: 2 }}>
         {Number.isFinite(estimate) && <ThemedText numeric style={semibold}>{kcalText(estimate)}</ThemedText>}
-        <ThemedText muted variant="caption">{t(weight.fallback ? 'cardioFallback' : 'cardioEstimateHint')}</ThemedText>
+        <ThemedText muted variant="caption">{weight.fallback ? t('cardioFallback').replace('{weight}', metric ? `${Math.round(weight.kg)} kg` : `${Math.round(weight.kg * 2.20462)} lb`) : t('cardioEstimateHint')}</ThemedText>
       </View>
       {live ? <>
         <Primary label={t('finish')} onPress={() => run(() => { store.finish(); setNow(Date.now()); })} />

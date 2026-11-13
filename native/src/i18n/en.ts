@@ -591,7 +591,7 @@ export const en = {
   cardioGoalMinutes: 'Weekly goal (minutes)',
   cardioSaveGoal: 'Save goal',
   cardioLocalSettings: 'Machine settings and the weekly goal are saved on this phone only.',
-  cardioFallback: 'est. · Using 80 kg until you log a weigh-in.',
+  cardioFallback: 'est. · Using {weight} until you type a weigh-in on Progress.',
   cardioEstimateHint: 'Calories are estimates from machine settings and your latest weigh-in.',
   cardioKcal: '{kcal} kcal · estimate',
   cardioUnknownKcal: 'Calorie estimate unavailable: machine settings are not on this phone.',
