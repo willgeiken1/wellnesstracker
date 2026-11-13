@@ -37,15 +37,15 @@ afterEach(() => hours.mockRestore());
 describe('home tile layout', () => {
   test('starts with every tile, in the starting order, none wide', () => {
     // The Apple Health tiles start off Home; connecting Apple Health adds them.
-    expect(defaultTiles()).toEqual({ order: TILE_IDS.filter(id => !['steps', 'sleep', 'active', 'exercise'].includes(id)), wide: [] });
+    expect(defaultTiles()).toEqual({ order: TILE_IDS.filter(id => !['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful'].includes(id)), wide: [] });
     expect(loadTiles(null)).toEqual(defaultTiles());
-    expect(offHome(defaultTiles())).toEqual(['steps', 'sleep', 'active', 'exercise']);
+    expect(offHome(defaultTiles())).toEqual(['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful']);
   });
   test('add, remove, move and resize return new layouts and ignore no-ops', () => {
     const start = defaultTiles();
     const without = removeTile(start, 'week');
     expect(without.order).not.toContain('week');
-    expect(offHome(without)).toEqual(['week', 'steps', 'sleep', 'active', 'exercise']);
+    expect(offHome(without)).toEqual(['week', 'steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful']);
     expect(removeTile(without, 'week')).toBe(without);
     expect(addTile(without, 'week').order.at(-1)).toBe('week');
     expect(addTile(start, 'week')).toBe(start);

@@ -17,7 +17,7 @@ function fakes(start: HealthAccess, list = samples) {
     access: jest.fn(async () => access),
     request: jest.fn(async () => { access = 'asked'; }),
     weights: jest.fn(async () => list),
-    steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null,
+    steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [],
   };
   const local = new Map<string, unknown>();
   const repo = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); } } as unknown as Repository;
@@ -59,7 +59,7 @@ test('connecting puts the Steps and Sleep tiles on Home by id only; a quiet visi
   expect(first.local.size).toBe(0);
   await fireEvent.press(screen.getByTestId('connect-apple-button'));
   await settle();
-  expect(first.local.get('homeTiles')).toEqual({ order: ['map', 'score', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep', 'active', 'exercise'], wide: [], v: 2 });
+  expect(first.local.get('homeTiles')).toEqual({ order: ['map', 'score', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful'], wide: [], v: 2 });
   const second = fakes('asked');
   await render(<Page repo={second.repo} source={second.source} />, { wrapper });
   await settle();

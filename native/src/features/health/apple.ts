@@ -6,7 +6,8 @@ import type { HealthSource, SleepStage } from './source';
 const READ = ['HKQuantityTypeIdentifierBodyMass', 'HKQuantityTypeIdentifierStepCount', 'HKCategoryTypeIdentifierSleepAnalysis',
   'HKQuantityTypeIdentifierActiveEnergyBurned', 'HKQuantityTypeIdentifierAppleExerciseTime',
   'HKQuantityTypeIdentifierHeartRate', 'HKQuantityTypeIdentifierRestingHeartRate', 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-  'HKQuantityTypeIdentifierVO2Max'] as const;
+  'HKQuantityTypeIdentifierVO2Max',
+  'HKQuantityTypeIdentifierBodyFatPercentage', 'HKQuantityTypeIdentifierDietaryWater', 'HKCategoryTypeIdentifierMindfulSession'] as const;
 const HEART = {
   heartRate: ['HKQuantityTypeIdentifierHeartRate', 'count/min'],
   restingHeartRate: ['HKQuantityTypeIdentifierRestingHeartRate', 'count/min'],
@@ -66,6 +67,19 @@ export function appleHealth(): HealthSource | null {
       const read = await kit.queryStatisticsForQuantity(type, ['discreteAverage', 'discreteMin', 'discreteMax'], { unit, filter: { date: { startDate: from, endDate: to } } });
       const average = read.averageQuantity?.quantity, min = read.minimumQuantity?.quantity, max = read.maximumQuantity?.quantity;
       return average === undefined || min === undefined || max === undefined ? null : { average, min, max };
+    },
+    async water(from, to) {
+      const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierDietaryWater', ['cumulativeSum'], { unit: 'mL', filter: { date: { startDate: from, endDate: to } } });
+      return total.sumQuantity?.quantity ?? 0;
+    },
+    async mindful(from, to) {
+      const samples = await kit.queryCategorySamples('HKCategoryTypeIdentifierMindfulSession', { limit: 0, ascending: true, filter: { date: { startDate: from, endDate: to } } });
+      return samples.map(sample => ({ start: new Date(sample.startDate), end: new Date(sample.endDate) }));
+    },
+    async bodyFat(since) {
+      // Apple keeps percentages as fractions of 1.
+      const samples = await kit.queryQuantitySamples('HKQuantityTypeIdentifierBodyFatPercentage', { unit: '%', limit: 0, ascending: true, filter: { date: { startDate: since } } });
+      return samples.map(sample => ({ at: new Date(sample.startDate), percent: sample.quantity * 100 }));
     },
     async vo2Max() {
       const [latest] = await kit.queryQuantitySamples('HKQuantityTypeIdentifierVO2Max', { unit: 'ml/(kg*min)', limit: 1, ascending: false });
