@@ -95,3 +95,21 @@ test('the day button tells a screen reader which day is showing', async () => {
   await render(<FoodScreen repository={memoryRepository()} />, { wrapper });
   expect(screen.getByRole('button', { name: 'Open food calendar' }).props.accessibilityValue).toEqual({ text: `Food for ${attributedDay()}` });
 });
+
+test('the log buttons never cut their words, and wrap three to a row at large text', async () => {
+  const rn = jest.requireActual('react-native');
+  const dims = jest.spyOn(rn, 'useWindowDimensions');
+  for (const fontScale of [1, 2]) {
+    dims.mockReturnValue({ width: 390, height: 844, scale: 3, fontScale });
+    const view = await render(<FoodScreen repository={memoryRepository()} />, { wrapper });
+    const row = screen.getByTestId('food-log-row');
+    for (const name of ['Snap', 'Describe', 'Scan', 'Manual', 'Saved']) {
+      const button = within(row).getByRole('button', { name });
+      expect(within(button).getByText(name).props.numberOfLines).toBeUndefined();
+      const style = button.props.style;
+      expect([style].flat().find((s: { flexBasis?: unknown }) => s && 'flexBasis' in s)?.flexBasis ?? style.flexBasis).toBe(fontScale >= 1.3 ? '30%' : 0);
+    }
+    await view.unmount();
+  }
+  dims.mockRestore();
+});

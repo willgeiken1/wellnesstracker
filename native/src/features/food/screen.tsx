@@ -2,7 +2,7 @@ import { FoodAiEntry } from './ai/entry';
 import { FoodAiResults, FoodAiMorningReview, LocalMealThumbnail } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { useEffect, useState } from 'react';
-import { AppState, Pressable, View } from 'react-native';
+import { AppState, Pressable, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '../../components/card';
 import { useTheme } from '../../design/theme-provider';
@@ -88,6 +88,8 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const chooseDay=(value:string)=>{setAiMode(null);setScanning(false);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
  const run=(action:()=>void)=>{try{action();setStatus(null);}catch{setStatus(t('foodFailure'));}};
  const {colors}=useTheme(),foodColor=colors.food;
+ // From about 130% text the five log buttons wrap to rows of three, so their words fit.
+ const bigText=useWindowDimensions().fontScale>=1.3;
  const [openEntry,setOpenEntry]=useState<string|null>(null),[mealMenu,setMealMenu]=useState<string|null>(null);
  const choose=(method:Method)=>{setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else{setLibrary(!library);setEntry(null);}};
  const log=(food:Food)=>run(()=>{saveFood(repo,day,selectedMeal,food);setLibrary(false);});
@@ -106,11 +108,12 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    <CalorieRing total={total} target={targets.targets} logged={rows.length>0} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/>
    <ThemedText muted variant="caption">{t('foodBurned')}</ThemedText>
   </Card>
-  <View style={{flexDirection:'row',gap:6}} testID="food-log-row">
+  {/* Five in a row at normal text sizes; with large text they wrap three to a row and the words wrap, never cut. */}
+  <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}} testID="food-log-row">
    {METHODS.map(method=><Pressable key={method} accessibilityRole="button" accessibilityLabel={t(method)} onPress={()=>choose(method)}
-    style={({pressed})=>({flex:1,minHeight:64,borderRadius:14,alignItems:'center',justifyContent:'center',gap:4,backgroundColor:colors.surface,opacity:pressed?0.7:1})}>
+    style={({pressed})=>({flexGrow:1,flexBasis:bigText?'30%':0,minHeight:64,paddingHorizontal:2,paddingVertical:6,borderRadius:14,alignItems:'center',justifyContent:'center',gap:4,backgroundColor:colors.surface,opacity:pressed?0.7:1})}>
     <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}><Path d={METHOD_ICON[method]} fill="none" stroke={foodColor} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"/></Svg>
-    <ThemedText variant="caption" numberOfLines={1}>{t(method)}</ThemedText>
+    <ThemedText variant="caption" style={{textAlign:'center'}}>{t(method)}</ThemedText>
    </Pressable>)}
   </View>
   <FoodAiMorningReview key={reviewClock} repo={repo}/>
