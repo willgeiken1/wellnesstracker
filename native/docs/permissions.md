@@ -4,15 +4,16 @@ Recorded October 22, 2026 at base `f016079`. This is an inventory, not a permiss
 
 ## iOS usage descriptions
 
-These are every `*UsageDescription` key emitted by current configuration/plugins. Strings below are exact, including the build-time product-name placeholder.
+Updated November 13, 2026 (App Store path) from `expo config --type introspect`; the table below replaces the October 22 inventory for iOS. Strings are exact.
 
 | Key | Exact configured string | Feature/source | Still needed? |
 | --- | --- | --- | --- |
 | `NSLocalNetworkUsageDescription` | `Expo Dev Launcher uses the local network to discover and connect to development servers running on your computer.` | `expo-dev-launcher`; Metro discovery/connection | Debug only. Our build phase removes it in non-debug builds. |
-| `NSFaceIDUsageDescription` | `Allow $(PRODUCT_NAME) to access your Face ID biometric data.` | Default `expo-secure-store` plugin string | Not currently used: session storage does not set `requireAuthentication`. Retained unchanged; confirm at M4-06. Keychain storage itself does not need Face ID permission. |
-| `NSCameraUsageDescription` | `Allow Insight Daily to scan food barcodes when you choose Scan.` | M2-14 `expo-camera` plugin | Barcode scanning only. Requested when the user chooses “Open barcode camera”; manual code entry needs no camera permission. |
+| `NSCameraUsageDescription` | `Insight Daily uses the camera only when you choose to scan a food barcode or take a meal photo for an estimate.` | `expo-camera` (barcode scan) and `expo-image-picker` (meal photo); both plugins carry the same string, because only one key reaches Info.plist | Yes. Asked only when the person chooses Scan or Snap; typing a code or entering food manually needs no camera. |
+| `NSHealthShareUsageDescription` | `Insight Daily reads your body weight, steps and sleep from Apple Health to show them beside your training and food. They stay on this phone.` | `@kingstinct/react-native-healthkit`; read types in `src/features/health/apple.ts` | Yes. Read-only. |
+| `NSHealthUpdateUsageDescription` | `Insight Daily never writes to Apple Health. It only reads your body weight, steps and sleep.` | Same plugin. The app requests no write types; the string is there because the HealthKit library links the write APIs, and an upload without the key can be rejected (ITMS-90683). | Safeguard only. |
 
-M2-14 adds camera permission; no microphone, photo-library, location, tracking or HealthKit read/write usage-description keys are configured. The camera plugin disables microphone permission and Android audio recording. Planned Health/notification features do not imply permissions in this build.
+`NSFaceIDUsageDescription` is no longer emitted: `expo-secure-store` is configured with `faceIDPermission: false`, because session storage never sets `requireAuthentication`. No microphone, photo-library, location or tracking keys are configured: the camera and image-picker plugins switch microphone and photo-library access off.
 
 Related local-network keys are `NSBonjourServices = ["_expo._tcp"]` and, when supplied by the native template/build, `NSAppTransportSecurity.NSAllowsLocalNetworking = true`. They are not purpose strings. `withStripLocalNetworkingRelease` removes both plus the local-network description unless a complete `DEBUG=1` preprocessor token is present (configuration names alone do not grant access). Current introspection emits the Bonjour and description keys, but does not emit `NSAllowsLocalNetworking`. Introspection's `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` comes from the placeholder `Info.plist`; the Release-build plist check is in M4-06.
 

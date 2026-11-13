@@ -60,7 +60,12 @@
       "./plugins/withDevSchemeDebugOnly",
       "expo-font",
       "expo-sqlite",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       [
         "expo-sharing",
         {
@@ -86,7 +91,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Insight Daily to take a meal photo you choose for an estimate.",
+          "cameraPermission": "Insight Daily uses the camera only when you choose to scan a food barcode or take a meal photo for an estimate.",
           "photosPermission": false,
           "microphonePermission": false
         }
@@ -94,7 +99,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Insight Daily to scan food barcodes when you choose Scan.",
+          "cameraPermission": "Insight Daily uses the camera only when you choose to scan a food barcode or take a meal photo for an estimate.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
@@ -104,7 +109,7 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": "Insight Daily reads your body weight, steps and sleep from Apple Health to show them beside your training and food. They stay on this phone.",
-          "NSHealthUpdateUsageDescription": false,
+          "NSHealthUpdateUsageDescription": "Insight Daily never writes to Apple Health. It only reads your body weight, steps and sleep.",
           "background": false
         }
       ]
