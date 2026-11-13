@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { SegmentedControl } from '@/components/segmented-control';
-import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
-import { ThemedText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
 import { useWorkout } from '@/features/workout/use-workout';
 import { BodyAtlas } from '@/features/atlas/body-atlas';
 import { atlasSessions } from '@/features/atlas/read-logs';
 import { Trends, Weekly } from '@/features/insights/trends';
+import { Recovery } from '@/features/insights/recovery';
 const SECTIONS = ['trends', 'recovery', 'muscles', 'weekly'] as const;
 export default function Page() {
  const {store}=useWorkout();
@@ -28,9 +27,6 @@ export default function Page() {
   {section==='trends'&&store&&<Trends store={store} now={today}/>}
   {section==='weekly'&&store&&<Weekly store={store} now={today}/>}
   {section==='muscles'&&<BodyAtlas sessions={sessions} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>}
-  {section==='recovery'&&<Card testID="recovery-later">
-   <ThemedText variant="headline" accessibilityRole="header">{t('recoveryLaterTitle')}</ThemedText>
-   <ThemedText muted>{t('recoveryLaterBody')}</ThemedText>
-  </Card>}
+  {section==='recovery'&&<Recovery now={today}/>}
  </Screen>;
 }
