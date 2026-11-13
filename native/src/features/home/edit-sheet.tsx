@@ -9,12 +9,12 @@ import { t } from '@/i18n/en';
 import { appleHealth } from '../health/apple';
 import { HEALTH_TILES, addTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTiles, type TileId } from './tiles';
 
-export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep'> = {
-  map: 'homeTileMap', week: 'homeTileWeek', next: 'homeTileNext', calories: 'homeCalories', protein: 'homeProtein', volume: 'volume', weight: 'weight',
+export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileScore' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep'> = {
+  map: 'homeTileMap', score: 'homeTileScore', week: 'homeTileWeek', next: 'homeTileNext', calories: 'homeCalories', protein: 'homeProtein', volume: 'volume', weight: 'weight',
   steps: 'homeSteps', sleep: 'homeSleep',
 };
-const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileWeekAbout' | 'homeTileNextAbout' | 'homeTileCaloriesAbout' | 'homeTileProteinAbout' | 'homeTileVolumeAbout' | 'homeTileWeightAbout' | 'homeTileStepsAbout' | 'homeTileSleepAbout'> = {
-  map: 'homeTileMapAbout', week: 'homeTileWeekAbout', next: 'homeTileNextAbout', calories: 'homeTileCaloriesAbout', protein: 'homeTileProteinAbout',
+const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileScoreAbout' | 'homeTileWeekAbout' | 'homeTileNextAbout' | 'homeTileCaloriesAbout' | 'homeTileProteinAbout' | 'homeTileVolumeAbout' | 'homeTileWeightAbout' | 'homeTileStepsAbout' | 'homeTileSleepAbout'> = {
+  map: 'homeTileMapAbout', score: 'homeTileScoreAbout', week: 'homeTileWeekAbout', next: 'homeTileNextAbout', calories: 'homeTileCaloriesAbout', protein: 'homeTileProteinAbout',
   volume: 'homeTileVolumeAbout', weight: 'homeTileWeightAbout', steps: 'homeTileStepsAbout', sleep: 'homeTileSleepAbout',
 };
 const GLYPH = { up: 'M6 14l6-6 6 6', down: 'M6 10l6 6 6-6', remove: 'M6 12h12', add: 'M12 6v12M6 12h12' } as const;

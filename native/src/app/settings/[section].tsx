@@ -1,11 +1,12 @@
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { tokens } from '@/design/tokens';
-import { Group, InfoRow, NavRow, QuietCard } from '@/features/settings/parts';
+import { Group, InfoRow, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
+import { scoreOn, setScoreOn } from '@/features/home/tiles';
 import { settingsSections } from '@/features/settings/sections';
 import { Profile } from '@/features/onboarding/profile';
 import { WorkoutSettings } from '@/features/workout/settings';
@@ -20,6 +21,19 @@ function HealthAndDevices() {
   const repository = useContext(AuthContext)?.repository;
   return <ConnectedServices apple={useAppleHealth(repository)} />;
 }
+/** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
+function ScoreSettings() {
+  const repository = useContext(AuthContext)?.repository;
+  const [on, setOn] = useState(() => scoreOn(repository));
+  if (!repository) return <QuietCard title={t('notInVersion')} />;
+  return <Group testID="settings-score">
+    <ToggleRow testID="settings-score-switch" label={t('scoreSettingShow')} hint={t('scoreSettingHint')} value={on} onValueChange={next => {
+      // The switch only moves once the layout is saved, so it never shows something Home will not.
+      try { setScoreOn(repository, next); setOn(next); } catch { /* left as it was */ }
+    }} />
+    <NavRow label={t('scoreHow')} onPress={() => router.push('/score')} />
+  </Group>;
+}
 /** One Settings page. The bar shows only Back; every page carries its own single title. */
 export default function SettingsSection() {
   const { section } = useLocalSearchParams<{ section: string }>();
@@ -33,6 +47,7 @@ export default function SettingsSection() {
     <QuietCard testID="settings-notifications-empty" title={t('settingsNotificationsEmpty')} body={t('notInVersion')} /></Screen></>;
   // Health & devices opens with its own headline, so the bar names the page here.
   if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><HealthAndDevices /></Screen></>;
+  if (section === 'score') return <>{named}<Screen title={title}><ScoreSettings /></Screen></>;
   if (section === 'data') return <>{named}<ImportScreen /></>;
   if (section === 'privacy') return <>{named}<FoodPrivacyScreen /></>;
   if (section === 'profile') return <>{named}<Profile /></>;

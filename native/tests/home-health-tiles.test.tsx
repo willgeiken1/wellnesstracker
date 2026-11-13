@@ -26,6 +26,9 @@ const fake = (access: HealthAccess): HealthSource => ({
     return spans;
   }),
 });
+// A fixed afternoon: before 6 a.m. the real clock would cut last night's sleep short at "now".
+beforeEach(() => { jest.useFakeTimers({ now: new Date(2026, 4, 12, 15, 0, 0), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] }); });
+afterEach(() => { jest.useRealTimers(); });
 const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
 function open() {
   const repo = memoryRepository();

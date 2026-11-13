@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
@@ -52,7 +52,9 @@ describe('contour engine', () => {
 test('a new account sees the empty map, a way to start, and no placeholder copy', async () => {
   open();
   await render(<Home />, { wrapper });
-  expect(screen.queryByText(/M2\/M3|Your daily space|Score/)).toBeNull();
+  expect(screen.queryByText(/M2\/M3|Your daily space/)).toBeNull();
+  // The Insight Score is on from day 1, counting down to its first 7 days.
+  expect(within(screen.getByTestId('home-score')).getByText('Needs 7 more days')).toBeTruthy();
   expect(screen.getByText('Your map fills in as you log')).toBeTruthy();
   expect(screen.queryByTestId('home-map')).toBeNull();
   expect(screen.getByText(/^Tiles appear here/)).toBeTruthy();

@@ -59,7 +59,7 @@ test('connecting puts the Steps and Sleep tiles on Home by id only; a quiet visi
   expect(first.local.size).toBe(0);
   await fireEvent.press(screen.getByTestId('connect-apple-button'));
   await settle();
-  expect(first.local.get('homeTiles')).toEqual({ order: ['map', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep'], wide: [] });
+  expect(first.local.get('homeTiles')).toEqual({ order: ['map', 'score', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep'], wide: [], v: 2 });
   const second = fakes('asked');
   await render(<Page repo={second.repo} source={second.source} />, { wrapper });
   await settle();

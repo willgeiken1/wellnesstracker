@@ -47,7 +47,7 @@ describe('Settings home', () => {
     expect(screen.getByLabelText('Search settings')).toBeTruthy();
     expect(screen.getByTestId('settings-profile')).toBeTruthy();
     for (const title of ['You', 'App', 'Data & privacy', 'About']) expect(screen.getAllByText(title).length).toBeGreaterThan(0);
-    expect(settingsSections.map(row => row.route)).toEqual(['account', 'profile', 'appearance', 'workout', 'health', 'notifications', 'privacy', 'data', 'about']);
+    expect(settingsSections.map(row => row.route)).toEqual(['account', 'profile', 'appearance', 'workout', 'score', 'health', 'notifications', 'privacy', 'data', 'about']);
     for (const row of settingsSections) expect(screen.getByRole('button', { name: t(row.label) })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
   });
@@ -78,7 +78,7 @@ describe('Settings home', () => {
     await fireEvent.changeText(screen.getByLabelText('Search settings'), '  ');
     expect(screen.getAllByRole('button').length).toBe(settingsSections.length + 1);
     expect(searchSettings('units', row => t(row.label)).flatMap(group => group.rows.map(row => row.route))).toEqual(['profile']);
-    expect(settingsGroups.map(group => group.rows.length)).toEqual([2, 4, 2, 1]);
+    expect(settingsGroups.map(group => group.rows.length)).toEqual([2, 5, 2, 1]);
   });
   test('the profile card states only what is known', async () => {
     const signedIn = await show(<Settings />, { ...base(), session: { user: { id: 'fixture', email: 'fixture@example.test' } } as AuthState['session'], pending: 2 });
