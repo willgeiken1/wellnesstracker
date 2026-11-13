@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Screen } from '../components/screen';
 import { ThemedText } from '../components/themed-text';
+import { StatusText } from '@/components/status-text';
 import { Button } from '../components/button';
 import { useAuth } from './provider';
 import { exportPhoneBackup } from './export';
@@ -33,7 +34,7 @@ export function Account() {
           .catch(() => setStatus('Backup could not be exported. Please try again.'))
           .finally(() => setBusy(false));
       }} />
-        {!!status && <ThemedText muted variant="caption" accessibilityLiveRegion="polite">{status}</ThemedText>}
+        {!!status && <StatusText muted variant="caption">{status}</StatusText>}
       </Card>
       <Button label="Look around first" variant="secondary" onPress={auth.lookAround} />
     </>}

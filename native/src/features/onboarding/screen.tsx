@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ThemedText } from '../../components/themed-text';
 import { useAuth } from '../../auth/provider';
 import { tokens } from '../../design/tokens';
+import { useTheme } from '../../design/theme-provider';
 import { t } from '../../i18n/en';
 import { ProfileFields, Field, PreferenceFields, profileErrors } from './fields';
 import { AuthForm } from './auth-form';
@@ -25,6 +26,7 @@ export function Onboarding() {
 }
 function Flow({draft}:{draft:Draft}) {
   const auth=useAuth();const {profile,setProfile,step,setStep,reset,blocked}=draft;
+  const {reduceMotion}=useTheme();
   const [error,setError]=useState(false);
   // The button sits below a long form, so a failed check scrolls back up to the field that carries the message.
   const scroll=useRef<ShellScroll>(null);
@@ -33,7 +35,7 @@ function Flow({draft}:{draft:Draft}) {
   const validate=()=>{
     const age=ageOn(profile.dob);
     if(age!==null&&age<13){reset();draft.block();auth.blockOnboarding?.();return false;}
-    if(!validProfile(profile)){setError(true);scroll.current?.scrollTo({y:0,animated:true});return false;}
+    if(!validProfile(profile)){setError(true);scroll.current?.scrollTo({y:0,animated:!reduceMotion});return false;}
     setError(false);return true;
   };
   if(step===1)return <Shell step={2} scrollRef={scroll} onBack={()=>{reset();router.replace(auth.demo?'/settings/account':'/auth');}}>

@@ -35,6 +35,7 @@ import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
+import { useStacked } from "@/components/text-size";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
     { routine, id, day } = useLocalSearchParams<{
@@ -103,6 +104,7 @@ function Logger({
   const past = store.pastMode(session.id);
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
+  const stacked = useStacked();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ fixtureState?: string }>();
   const selectedFixture = fixtureState ?? params.fixtureState;
@@ -393,7 +395,7 @@ function Logger({
             onPress={closeWorkout}
           />
           <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-            <ThemedText variant="title" numberOfLines={1} style={{ fontWeight: "600", flexShrink: 1 }}>
+            <ThemedText variant="title" numberOfLines={stacked ? undefined : 1} style={{ fontWeight: "600", flexShrink: 1 }}>
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
             <ThemedText muted numeric style={{ fontSize: 15 }}>
@@ -561,6 +563,7 @@ function Logger({
                   <IconButton
                     name="down"
                     label={t(collapsed ? "expandExercise" : "collapseExercise")}
+                    expanded={!collapsed}
                     onPress={() =>
                       setOpen((ids) =>
                         ids.includes(e.id)
@@ -600,19 +603,18 @@ function Logger({
               {!collapsed && !store.skipped(e.id) && (
                 <>
                   {!!setupNote && <ThemedText muted variant="caption">{setupNote}</ThemedText>}
-                  <View style={layout.row}>
+                  {/* At the largest text sizes the set rows stack and label their own boxes, so the column heads go. */}
+                  {!stacked && <View testID={`logger-columns-${exerciseIndex}`} style={layout.row}>
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
-                      style={{ width: 26, textAlign: "center", fontSize: tokens.type.caption, fontWeight: "600" }}
+                      style={{ minWidth: 26, textAlign: "center", fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("setHeader")}
                     </ThemedText>
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
                       style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("previous")}
@@ -620,7 +622,6 @@ function Logger({
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
                       style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {store.unit(e.id)}
@@ -628,13 +629,12 @@ function Logger({
                     <ThemedText
                       muted
                       variant="caption"
-                      numberOfLines={1}
                       style={{ flex: 1, fontSize: tokens.type.caption, fontWeight: "600" }}
                     >
                       {t("repsHeader")}
                     </ThemedText>
                     <View style={{ width: 40 }} />
-                  </View>
+                  </View>}
                   <View>
                     {ds.map((d, i) => (
                       <Fragment key={i}>
@@ -644,6 +644,7 @@ function Logger({
                           exercise={String(e.data.exercise)}
                           index={i}
                           side={store.isUnilateral(e.id) ? 'left' : undefined}
+                          unit={store.unit(e.id)}
                           onTag={tag => run(() => store.editDraft(e.id, i, {tag}))}
                           draft={d}
                           previous={
@@ -657,7 +658,7 @@ function Logger({
                           onDone={() => mark(e, i)}
                           onRemove={() => confirmRemoveSet(e.id,i)}
                         />
-                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => confirmRemoveSet(e.id,i)} />}
+                        {store.isUnilateral(e.id) && <SetRow exerciseIndex={exerciseIndex} exercise={String(e.data.exercise)} index={i} side="right" unit={store.unit(e.id)} draft={{...d, weight:d.rightWeight ?? '', reps:d.rightReps ?? ''}} previous="" hint="" onEdit={field => edit(e.id, i, field, 'right')} onDone={() => mark(e,i)} onRemove={() => confirmRemoveSet(e.id,i)} />}
                         {i ===
                           Math.max(
                             0,

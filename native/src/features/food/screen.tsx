@@ -10,6 +10,8 @@ import { tokens } from '../../design/tokens';
 import type { Repository } from '../../data/repository';
 import { Button, touchTarget } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
+import { StatusText } from '../../components/status-text';
+import { useScreenReader } from '../../components/use-accessibility';
 import { t } from '../../i18n/en';
 import { today } from '../onboarding/model';
 import { Field } from '../onboarding/fields';
@@ -82,7 +84,9 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const [entry,setEntry]=useState<{initial?:Food;id?:string;meal:string}|null>(initialManual?{meal:mealList[0].id}:null),[library,setLibrary]=useState(false);
  const [rename,setRename]=useState<{id?:string;name:string}|null>(null),[combo,setCombo]=useState<{meal:string;name:string}|null>(null);
  const [undo,setUndo]=useState<Undo|null>(null),[status,setStatus]=useState<string|null>(null);
- useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>setUndo(null),8000);return ()=>clearTimeout(timer);},[undo]);
+ const screenReader=useScreenReader();
+ // Undo stays while VoiceOver is on: 8 seconds is not enough to find the button by swiping.
+ useEffect(()=>{if(!undo||screenReader)return;const timer=setTimeout(()=>setUndo(null),8000);return ()=>clearTimeout(timer);},[undo,screenReader]);
  const rows=repo.list('food_entries').filter(r=>r.data.day===day),total=totals(rows),targets=foodTargets(repo,day);
  const early=attributedDay()!==today();
  const chooseDay=(value:string)=>{setAiMode(null);setScanning(false);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
@@ -123,8 +127,8 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    <View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6}}>{mealList.map(meal=><Pick key={meal.id} label={meal.name} selected={selectedMeal===meal.id} onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
    {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
   </View>
-  {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
-  {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
+  {status&&<StatusText>{status}</StatusText>}
+  {undo&&<Card style={card}><StatusText>{t('foodDeleted')}</StatusText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
   {scanning&&<Card style={card}><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Card>}
   {aiMode&&<Card style={card}><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Card>}
   {entry&&<Card style={card}><FoodEntry key={entry.id??'new'} initial={entry.initial} editing={entry.id!==undefined} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{const row=saveFood(repo,day,entry.meal,food,multiple,entry.id);if(fallbackId!==undefined){attachFallback(repo,row.id,fallbackId);setFallbackId(undefined);}if(entry.id&&aiState(repo).entries[entry.id])confirmEstimate(repo,entry.id);setEntry(null);}}/></Card>}

@@ -146,16 +146,20 @@ export function IconButton({
   label,
   onPress,
   name,
+  expanded,
 }: {
   label: string;
   onPress: () => void;
   name: Parameters<typeof Line>[0]["name"];
+  /** For a button that shows or hides something: screen readers say "expanded" or "collapsed". */
+  expanded?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={expanded === undefined ? undefined : { expanded }}
       onPress={onPress}
       style={layout.cell}
     >

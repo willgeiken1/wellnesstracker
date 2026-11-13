@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Card } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
+import { StatusText } from '@/components/status-text';
 import { touchTarget } from '../../components/button';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
@@ -93,7 +94,7 @@ export function Notice({ text, onRetry, retryLabel, testID }: { text: string; on
       <Path d="M8 4.5V8.5" stroke={colors['text-muted']} strokeWidth={1.6} strokeLinecap="round" />
       <Circle cx={8} cy={11.2} r={0.9} fill={colors['text-muted']} />
     </Svg>
-    <ThemedText accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1, fontSize: 14, lineHeight: 19, paddingVertical: tokens.spacing[1] }}>{text}</ThemedText>
+    <StatusText accessibilityRole="alert" style={{ flex: 1, fontSize: 14, lineHeight: 19, paddingVertical: tokens.spacing[1] }}>{text}</StatusText>
     {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={retryLabel ?? t('bootRetry')} onPress={onRetry}
       style={({ pressed }) => ({ minHeight: touchTarget, minWidth: touchTarget, paddingHorizontal: tokens.spacing[2], alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
       <ThemedText style={[semibold, { fontSize: 14, color: colors.accent }]}>{retryLabel ?? t('bootRetry')}</ThemedText>

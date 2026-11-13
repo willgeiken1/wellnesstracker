@@ -46,8 +46,10 @@ describe('swiping a set row right to mark it done', () => {
   });
   test('the revealed Done word is not an extra control: weight, reps, the number and the checkbox only', async () => {
     await render(row(), { wrapper });
-    expect(screen.getAllByRole('button')).toHaveLength(3);
+    // Weight and reps are buttons. Without tags the number only removes (long press or the action), so it is not a button.
+    expect(screen.getAllByRole('button')).toHaveLength(2);
     expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(screen.getByLabelText('Sample lift, Set 2').props.accessibilityActions).toEqual([{ name: 'delete', label: 'Remove set' }]);
   });
 });
 

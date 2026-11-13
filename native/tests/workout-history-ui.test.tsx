@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import { render, screen, fireEvent, act, within } from '@testing-library/react-native';
 import { Alert, AccessibilityInfo } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
@@ -96,7 +96,8 @@ for (const side of ['left','right'] as const) test(`history ${side} set deletion
  const alert = jest.spyOn(Alert,'alert').mockImplementation(()=>{});
  await render(<ActiveWorkout/>,{wrapper});
  await fireEvent.press(screen.getByRole('button',{name:'Expand exercise'}));
- const remove = screen.getAllByRole('button',{name:/Remove set/})[side === 'left' ? 0 : 1];
+ // The set number removes on a long press (screen readers use the Remove set action on the row instead).
+ const remove = within(screen.getByTestId(side === 'left' ? 'set-row-0-0' : 'set-row-0-0-right')).getByText('1',{includeHiddenElements:true});
  await fireEvent(remove,'longPress');
  expect(alert).toHaveBeenLastCalledWith('Remove set',undefined,expect.any(Array));
  expect(store.sets(entry.id)).toHaveLength(1);

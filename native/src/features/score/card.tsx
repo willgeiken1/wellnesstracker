@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
+import { useStacked } from '@/components/text-size';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
@@ -14,14 +15,26 @@ export const openScore = () => router.push('/score');
 
 export function PillarRow({ pillar, value }: { pillar: ScorePillar; value: number | null }) {
   const { colors } = useTheme();
+  // At the largest text sizes the name and number sit on their own line above a full-width bar.
+  const stacked = useStacked();
   const name = t(PILLAR_NAME[pillar]);
-  return <View testID={`score-pillar-${pillar}`} accessible accessibilityLabel={`${name}, ${value === null ? t('scoreNoSleep') : t('scoreOutOf').replace('{n}', String(value))}`}
-    style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: 24 }}>
-    <ThemedText variant="caption" style={{ width: 72 }}>{name}</ThemedText>
-    <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: colors['surface-2'], overflow: 'hidden' }}>
-      {value !== null && value > 0 && <View style={{ width: `${Math.min(100, value)}%`, height: 6, borderRadius: 3, backgroundColor: colors[pillar] }} />}
+  const bar = <View style={{ flex: stacked ? undefined : 1, alignSelf: stacked ? 'stretch' : undefined, height: 6, borderRadius: 3, backgroundColor: colors['surface-2'], overflow: 'hidden' }}>
+    {value !== null && value > 0 && <View style={{ width: `${Math.min(100, value)}%`, height: 6, borderRadius: 3, backgroundColor: colors[pillar] }} />}
+  </View>;
+  const number = <ThemedText muted={value === null} numeric variant="caption" style={{ minWidth: 28, textAlign: 'right' }}>{value === null ? '–' : String(value)}</ThemedText>;
+  const label = `${name}, ${value === null ? t('scoreNoSleep') : t('scoreOutOf').replace('{n}', String(value))}`;
+  if (stacked) return <View testID={`score-pillar-${pillar}`} accessible accessibilityLabel={label} style={{ gap: 4, paddingVertical: 2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: tokens.spacing[1] }}>
+      <ThemedText variant="caption" style={{ flexShrink: 1 }}>{name}</ThemedText>
+      {number}
     </View>
-    <ThemedText muted={value === null} numeric variant="caption" style={{ minWidth: 28, textAlign: 'right' }}>{value === null ? '–' : String(value)}</ThemedText>
+    {bar}
+  </View>;
+  return <View testID={`score-pillar-${pillar}`} accessible accessibilityLabel={label}
+    style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: 24 }}>
+    <ThemedText variant="caption" style={{ minWidth: 72 }}>{name}</ThemedText>
+    {bar}
+    {number}
   </View>;
 }
 

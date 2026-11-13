@@ -10,6 +10,8 @@ import { ThemedText } from "@/components/themed-text";
 import { t } from "@/i18n/en";
 import { clock, Eyebrow, Pill, layout, Sheet } from "./primitives";
 import { restBuzz } from "./haptics";
+import { announce } from "@/components/announce";
+import { IN_RING_MAX, useOutgrowsRing } from "@/components/text-size";
 import { useWorkoutStore } from "./use-workout";
 // Smooth synthetic geometry starts at twelve o'clock; all rings share it.
 const outline = "M150 8C218 6 294 64 294 146C294 197 281 258 238 282C199 306 83 295 48 266C13 238 -8 169 11 125C29 83 105 8 150 8Z";
@@ -96,6 +98,7 @@ export function RestTimer({
   presentation?: "all" | "mini" | "sheet";
 }) {
   const store = useWorkoutStore(source.repo);
+  const outgrown = useOutgrowsRing();
   const { reduceMotion, colors } = useTheme(),
     [now, setNow] = useState(() => Date.now()),
     timer = store.timer();
@@ -121,6 +124,8 @@ export function RestTimer({
           minimized: true,
         });
         restBuzz(store.repo);
+        // The buzz is off when haptics are off and is never heard; VoiceOver users also hear that rest is over.
+        announce(t("restReady"));
       }
     };
     const interval = setInterval(update, reduceMotion ? 1000 : 50),
@@ -169,7 +174,7 @@ export function RestTimer({
             style={{ flexGrow: 1, flexShrink: 1, flexBasis: 96, minHeight: touchTarget, justifyContent: "center" }}
           >
             {timer.ended ? (
-              <ThemedText numberOfLines={2}>{t("restReady")}</ThemedText>
+              <ThemedText>{t("restReady")}</ThemedText>
             ) : (
               <ThemedText muted>
                 {t("rest")}{"  "}
@@ -249,14 +254,21 @@ export function RestTimer({
             alignItems: "center",
           }}
         >
-          <ThemedText numeric style={{ fontSize: tokens.logger.timer, fontWeight: "700" }}>
+          {/* The contours are a fixed size, so the clock inside grows only a little with large text; past that the
+              same time is written in full under them. */}
+          <ThemedText testID="rest-clock" numeric maxFontSizeMultiplier={IN_RING_MAX} style={{ fontSize: tokens.logger.timer, fontWeight: "700" }}>
             {clock(seconds)}
           </ThemedText>
-          <ThemedText muted>
+          <ThemedText muted maxFontSizeMultiplier={IN_RING_MAX}>
             {t("of")} {clock(timer.duration)}
           </ThemedText>
         </View>
       </View>
+      {outgrown && (
+        <ThemedText testID="rest-clock-full" numeric style={{ textAlign: "center", fontWeight: "700" }}>
+          {clock(seconds)} <ThemedText muted>{t("of")} {clock(timer.duration)}</ThemedText>
+        </ThemedText>
+      )}
       <View style={{ flex: 1, minHeight: 12 }} />
       <ThemedText
         muted

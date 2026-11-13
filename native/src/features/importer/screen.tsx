@@ -26,6 +26,7 @@ import { Screen } from "../../components/screen";
 import { Button } from "../../components/button";
 import { Card } from "../../components/card";
 import { ThemedText } from "../../components/themed-text";
+import { Announce } from "@/components/status-text";
 import { t as message, type MessageKey } from "../../i18n/en";
 import { exerciseLibrary } from "../../core/workout/library";
 import {
@@ -36,6 +37,7 @@ import {
 } from "./local";
 import { pickBackup, readBackup } from "./files";
 import { ImportPreviewConflict } from "./errors";
+import { useFieldOutline } from "@/components/field-outline";
 const t = (key: MessageKey, values: Record<string, string | number> = {}) =>
   message(key).replace(/\{(\w+)\}/g, (token, key) =>
     String(values[key] ?? token),
@@ -48,7 +50,8 @@ export function ImportScreen() {
 function ImportBody() {
   const auth = useAuth(),
     repo = auth.repository,
-    { colors } = useTheme();
+    { colors } = useTheme(),
+    outline = useFieldOutline();
   const { source } = useLocalSearchParams<{ source?: string }>();
   const accountLoaded = useRef(false);
   const [serverMapping, setServerMapping] = useState("{}");
@@ -264,6 +267,7 @@ function ImportBody() {
     paddingHorizontal: tokens.spacing[2],
     paddingVertical: tokens.spacing[1],
     fontSize: tokens.type.body,
+    ...outline,
   };
   return (
     <>
@@ -304,6 +308,7 @@ function ImportBody() {
               accessibilityLiveRegion="polite"
               style={[styles.note, { backgroundColor: colors["surface-2"] }]}
             >
+              <Announce message={t(busy ? BUSY_LABEL[lastAction] : "importBusyAccount")} />
               <ActivityIndicator color={colors["text-muted"]} />
               <ThemedText muted style={{ flex: 1 }}>
                 {t(busy ? BUSY_LABEL[lastAction] : "importBusyAccount")}

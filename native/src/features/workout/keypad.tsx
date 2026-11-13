@@ -1,6 +1,6 @@
 import { View, Pressable, ScrollView, StyleSheet } from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { equipmentLabel, pluralize, t } from "@/i18n/en";
 import {
   keypad,
@@ -13,6 +13,8 @@ import {
   type Unit,
 } from "@/core/workout/rules";
 import { ThemedText } from "@/components/themed-text";
+import { StatusText } from "@/components/status-text";
+import { announce } from "@/components/announce";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
 import { Eyebrow, Line, Sheet, layout } from "./primitives";
@@ -92,6 +94,15 @@ export function Keypad({
     setWheelBase(Number(value || 0));
     setWheel((w) => !w);
   };
+  // VoiceOver says the name of the key pressed; the value it made is queued after it, since the number on screen
+  // changes without focus moving. It follows the value the logger now holds, and stays quiet when the field changes.
+  const heard = useRef({ focus, value });
+  useEffect(() => {
+    const before = heard.current;
+    heard.current = { focus, value };
+    if (before.focus !== focus || before.value === value) return;
+    announce(value === "" ? t("blank") : field === "weight" ? `${value} ${unit}` : pluralize(Number(value) || 0, "rep"), { queue: true });
+  }, [focus, value, field, unit]);
   const repUnit = pluralize(Number(value) || 0, "rep").split(" ")[1];
   const repLabel = repUnit ? repUnit[0].toUpperCase() + repUnit.slice(1) : "";
   const nextLabel = field === "weight" ? t("nextReps") : t("nextSet");
@@ -203,11 +214,10 @@ export function Keypad({
             </View>
           )}
         {limitHint && (
-          <ThemedText
+          <StatusText
             testID="keypad-limit-hint"
             muted
             variant="caption"
-            accessibilityLiveRegion="polite"
           >
             {t(
               field === "reps"
@@ -216,7 +226,7 @@ export function Keypad({
                   ? "keypadLbLimit"
                   : "keypadKgLimit",
             )}
-          </ThemedText>
+          </StatusText>
         )}
         {wheel && (
           <ScrollView
@@ -290,9 +300,8 @@ export function Keypad({
             const label =
               key === "backspace"
                 ? t("backspace")
-                : unavailable
-                  ? t("blankKey")
-                  : text;
+                : text;
+            const pm = key === "minus" || key === "plus";
             const action = () => {
               if (key === "minus") adjust(-increment);
               else if (key === "plus") adjust(increment);
@@ -318,8 +327,12 @@ export function Keypad({
               <Pressable
                 testID={key === "next" ? "keypad-next" : `keypad-key-${key}`}
                 key={`${key}${i}`}
-                accessibilityRole="button"
-                accessibilityLabel={label}
+                // A blank key is only there to keep the grid; screen readers skip it.
+                accessible={!unavailable}
+                importantForAccessibility={unavailable ? "no-hide-descendants" : "yes"}
+                accessibilityElementsHidden={unavailable}
+                accessibilityRole={unavailable ? undefined : "button"}
+                accessibilityLabel={unavailable ? undefined : label}
                 disabled={unavailable}
                 onLongPress={key === "wheel" ? openWheel : undefined}
                 onPress={action}
@@ -355,9 +368,10 @@ export function Keypad({
                       key === "wheel" || key === "next" ? "body" : "title"
                     }
                     // The two word keys shrink to fit and may take two lines, so a label is never cut off by the key.
+                    // The ± keys shrink further, so "−2.5" is never cut off at the largest text sizes; the label speaks it.
                     numberOfLines={key === "wheel" || key === "next" ? 2 : 1}
-                    adjustsFontSizeToFit={key === "wheel" || key === "next"}
-                    minimumFontScale={0.75}
+                    adjustsFontSizeToFit={key === "wheel" || key === "next" || pm}
+                    minimumFontScale={pm ? 0.4 : 0.75}
                     style={{
                       textAlign: "center",
                       paddingHorizontal: key === "wheel" || key === "next" ? 4 : 0,

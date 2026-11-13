@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { View } from 'react-native';
 import { Button } from '../../../components/button';
 import { ThemedText } from '../../../components/themed-text';
+import { StatusText } from '@/components/status-text';
 import { useTheme } from '../../../design/theme-provider';
 import type { WorkoutStore } from '../../../data/workout/store';
 import { t } from '../../../i18n/en';
@@ -69,8 +70,8 @@ export function WorkoutAiCard({ store, id }: {
     </>}
     <SummaryLengthPicker repo={repo} disabled={busy}/>
     <ThemedText variant="caption">{t('workoutAiLimitHint')}</ThemedText>
-    {busy && <ThemedText accessibilityLiveRegion="polite">{t('workoutAiReading')}</ThemedText>}
-    {error && <ThemedText accessibilityRole="alert">{error}</ThemedText>}
+    {busy && <StatusText>{t('workoutAiReading')}</StatusText>}
+    {error && <StatusText accessibilityRole="alert">{error}</StatusText>}
     <Button label={t(saved ? 'workoutAiRegenerate' : 'workoutAiGenerate')} disabled={busy} onPress={() => {
             if (aiState(repo).consent)
                 void run();
