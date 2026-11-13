@@ -44,7 +44,7 @@ test('ranges, tap and accessible chart navigation expose points; live profile un
  await render(<Body repository={repo}/>,{wrapper});
  for(const name of ['7d','30d','90d','1y'])expect(screen.getByRole('tab',{name})).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Previous trend point'}));expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/Oct 27 · Trend/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/Oct 27 · Trend/)).toBeTruthy(); expect(screen.getByText('Previous')).toBeTruthy();expect(screen.getByText('Next')).toBeTruthy();expect(screen.queryByText('Previous trend point')).toBeNull();
  await fireEvent.press(screen.getByTestId('body-chart'),{nativeEvent:{locationX:0}});expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
  // VoiceOver: the chart is adjustable, swipe up and down step through the points, and its value reads the point.
  const chart=screen.getByTestId('body-chart');expect(chart.props.accessibilityRole).toBe('adjustable');

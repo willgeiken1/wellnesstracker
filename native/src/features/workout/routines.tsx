@@ -105,15 +105,19 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
         const move = (by: number) => run(() => store.moveTemplate(r.id, by));
         const remove = () => Alert.alert(t('deleteTemplate'), name, [{ text: t('cancel'), style: 'cancel' },
           { text: t('delete'), style: 'destructive', onPress: () => run(() => { const restore = store.deleteTemplate(r.id); onUndo(restore); }) }]);
+        // Move up is hidden for the first routine and Move down for the last, so a lone routine shows neither.
+        const index = routines.indexOf(r), canUp = index > 0, canDown = index < routines.length - 1;
+        const actions = [{ label: t('edit'), run: edit }, ...(canUp ? [{ label: t('moveUp'), run: () => move(-1) }] : []),
+          ...(canDown ? [{ label: t('moveDown'), run: () => move(1) }] : []), { label: t('delete'), run: remove, destructive: true }];
         const menu = () => Platform.OS === 'ios'
-          ? ActionSheetIOS.showActionSheetWithOptions({ title: name, options: [t('edit'), t('moveUp'), t('moveDown'), t('delete'), t('cancel')], destructiveButtonIndex: 3, cancelButtonIndex: 4 },
-            index => [edit, () => move(-1), () => move(1), remove][index]?.())
+          ? ActionSheetIOS.showActionSheetWithOptions({ title: name, options: [...actions.map(a => a.label), t('cancel')], destructiveButtonIndex: actions.length - 1, cancelButtonIndex: actions.length },
+            choice => actions[choice]?.run())
           : setOpen(r.id);
         return <View key={r.id} style={{ borderBottomWidth: 1, borderBottomColor: colors['surface-2'], paddingVertical: tokens.spacing[1], gap: tokens.spacing[1] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
             <Pressable accessibilityRole="button" accessibilityLabel={t('routineActions').replace('{name}', name)} accessibilityState={{ expanded }}
               onPress={() => setOpen(expanded ? null : r.id)} onLongPress={menu} delayLongPress={350}
-              accessibilityActions={[{ name: 'edit', label: t('edit') }, { name: 'up', label: t('moveUp') }, { name: 'down', label: t('moveDown') }, { name: 'delete', label: t('delete') }]}
+              accessibilityActions={[{ name: 'edit', label: t('edit') }, ...(canUp ? [{ name: 'up', label: t('moveUp') }] : []), ...(canDown ? [{ name: 'down', label: t('moveDown') }] : []), { name: 'delete', label: t('delete') }]}
               onAccessibilityAction={event => ({ edit, up: () => move(-1), down: () => move(1), delete: remove } as Record<string, () => void>)[event.nativeEvent.actionName]?.()}
               style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 52 }}>
               <View style={{ width: 44, height: 44, borderRadius: radius.card, backgroundColor: colors['surface-2'], padding: 4 }}>
@@ -131,8 +135,8 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
           </View>
           {expanded && <View style={[layout.row, { flexWrap: 'wrap', paddingBottom: tokens.spacing[1] }]}>
             <Button label={t('edit')} variant="secondary" onPress={edit} />
-            <Button label={t('moveUp')} variant="secondary" onPress={() => move(-1)} />
-            <Button label={t('moveDown')} variant="secondary" onPress={() => move(1)} />
+            {canUp && <Button label={t('moveUp')} variant="secondary" onPress={() => move(-1)} />}
+            {canDown && <Button label={t('moveDown')} variant="secondary" onPress={() => move(1)} />}
             <Button label={t('delete')} variant="secondary" onPress={remove} />
           </View>}
         </View>;

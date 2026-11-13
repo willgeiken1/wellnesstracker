@@ -28,6 +28,9 @@ export type SurfaceLook = (typeof SURFACE_LOOKS)[number];
 export const CORNER_LOOKS = ["soft", "round", "square"] as const;
 export type CornerLook = (typeof CORNER_LOOKS)[number];
 export const CORNER_RADIUS: Record<CornerLook, number> = { soft: 12, round: 20, square: 6 };
+/** The larger corners of the prototype's blocks (Home's cards, sheets' rows). Square is kept well under Soft's 18,
+ * so choosing it reads as square on Home at a glance, not as a slightly smaller round. */
+export const PANEL_RADIUS: Record<CornerLook, number> = { soft: 18, round: 28, square: 8 };
 /** The font for titles and headings: Lexend, the plan's, or the phone's own system font. */
 export const HEADING_LOOKS = ["lexend", "system"] as const;
 export type HeadingLook = (typeof HEADING_LOOKS)[number];

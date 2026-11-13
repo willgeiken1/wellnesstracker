@@ -82,15 +82,26 @@ export function Keypad({
   // the last tap. The last value sent is kept here and used until the store shows it (or shows something else,
   // which then wins), and only for a moment, so a value the store refused never lingers unseen.
   // Without this, a quick second digit replaced the first instead of joining it.
-  const sent = useRef<{ visit: number; before: string; typed: string; at: number } | null>(null);
-  const live = () => {
+  // `seen` holds every value this burst of typing has passed through, so a redraw that shows one of the in-between
+  // values (the store catching up one tap behind) is still recognised as our own typing, not a change from elsewhere.
+  const sent = useRef<{ visit: number; seen: string[]; typed: string; at: number } | null>(null);
+  const pending = () => {
     const last = sent.current;
-    return last && last.visit === visit && tapTime() - last.at < SETTLE_MS && (value === last.before || value === last.typed) ? { value: last.typed, fresh: false } : { value, fresh };
+    return last && last.visit === visit && tapTime() - last.at < SETTLE_MS && last.seen.includes(value) ? last : null;
+  };
+  const live = () => {
+    const last = pending();
+    return last ? { value: last.typed, fresh: false } : { value, fresh };
   };
   const send = (next: string) => {
-    sent.current = { visit, before: value, typed: next, at: tapTime() };
+    const last = pending();
+    sent.current = { visit, seen: last ? [...last.seen, next] : [value, next], typed: next, at: tapTime() };
     onChange(next);
   };
+  // A touch that lands while another key is still held never reaches its own key: React Native gives every touch
+  // to the key already held. So a quick typist's 1-0-5 lost the 5. When a second finger lands on a key, the held key
+  // is typed at once (and skipped when it lifts) and then this one, keeping the order the fingers went down.
+  const held = useRef<{ key: string; act: () => void; typed: boolean; down: boolean } | null>(null);
   const increment = field === "reps" ? 1 : step(equipment, unit, setupStep),
     p = plates(Number(value), unit, barWeight, plateSet),
     platesValid =
@@ -159,15 +170,20 @@ export function Keypad({
         keyboardShouldPersistTaps="handled"
       >
         <View
+          testID="keypad-header"
           style={[
             layout.row,
             {
               justifyContent: "space-between",
+              // At the largest text sizes "Last time" drops under the number instead of running off the edge.
+              flexWrap: "wrap",
+              rowGap: 4,
             },
           ]}
         >
           <ThemedText
             numeric
+            maxFontSizeMultiplier={KEY_TEXT_MAX}
             style={{ fontSize: tokens.logger.value, lineHeight: 52 }}
           >
             {value || "—"}{" "}
@@ -185,7 +201,7 @@ export function Keypad({
               marginRight: "auto",
             }}
           />
-          <View style={{ alignItems: "flex-end" }}>
+          <View testID="keypad-last-time" style={{ alignItems: "flex-end", flexShrink: 1 }}>
             <Eyebrow>{t("lastTime")}</Eyebrow>
             <ThemedText numeric muted style={{ fontSize: 16 }}>
               {previous || "—"}
@@ -225,11 +241,14 @@ export function Keypad({
                     .replace("{unit}", unit)}
                 </ThemedText>
               </View>
-              {platesValid && p.remainder !== 0 && (
-                <ThemedText muted variant="caption">
-                  {t("plateRemainder")}
-                </ThemedText>
-              )}
+              {/* A line kept for the note, so the sheet's top edge doesn't move when it comes and goes. */}
+              <View testID="plate-remainder-slot" style={{ minHeight: HINT_LINE }}>
+                {platesValid && p.remainder !== 0 && (
+                  <ThemedText muted variant="caption">
+                    {t("plateRemainder")}
+                  </ThemedText>
+                )}
+              </View>
             </View>
           )}
         <View testID="keypad-hint-slot" style={{ minHeight: HINT_LINE }}>
@@ -356,7 +375,19 @@ export function Keypad({
                 // Touch and hold Backspace to clear the field in one go.
                 onLongPress={key === "wheel" ? openWheel : key === "backspace" ? () => { setFresh(false); setLimitHint(false); send(""); } : undefined}
                 accessibilityHint={key === "backspace" ? t("backspaceHint") : undefined}
-                onPress={action}
+                onPressIn={() => { held.current = { key, act: action, typed: false, down: true }; }}
+                onPressOut={() => { if (held.current?.key === key) held.current.down = false; }}
+                onPress={() => {
+                  const mine = held.current?.key === key ? held.current : null;
+                  held.current = null;
+                  if (!mine?.typed) action();
+                }}
+                onTouchStart={(e) => {
+                  const other = held.current;
+                  if (e.nativeEvent.touches.length < 2 || !other?.down || other.key === key || unavailable) return;
+                  if (!other.typed) { other.typed = true; other.act(); }
+                  action();
+                }}
                 style={[
                   layout.cell,
                   {

@@ -304,6 +304,8 @@ export const en = {
   bodyPoint: '{day} · Trend {trend} {unit} · Average {average} {unit} · Readings: {count}',
   bodyPrevious: 'Previous trend point',
   bodyNext: 'Next trend point',
+  bodyPreviousShort: 'Previous',
+  bodyNextShort: 'Next',
   bodyRangeEmpty: 'No weigh-ins in this range.',
   bodyIncrease: 'Increase weight', bodyDecrease: 'Decrease weight',
 

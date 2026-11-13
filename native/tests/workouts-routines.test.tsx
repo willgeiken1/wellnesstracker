@@ -104,21 +104,58 @@ test('edit, reorder and delete sit behind the routine row and still work', async
 
 test('a long press opens the iOS action sheet, and VoiceOver gets the same actions', async () => {
   const { ActionSheetIOS, Platform } = jest.requireActual('react-native');
-  const { repo, store } = open(), a = routine(store, 'Sample push');
-  routine(store, 'Sample pull');
+  const { repo, store } = open();
+  routine(store, 'Sample push');
+  const b = routine(store, 'Sample pull');
+  routine(store, 'Sample legs');
   const os = Platform.OS; Platform.OS = 'ios';
   const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation((_options, pick) => (pick as (i: number) => void)(2));
   const view = await render(<Workouts />, { wrapper });
-  const row = screen.getByRole('button', { name: 'Actions for Sample push' });
+  const row = screen.getByRole('button', { name: 'Actions for Sample pull' });
   await fireEvent(row, 'longPress');
   expect(sheet.mock.calls[0][0]).toMatchObject({ options: ['Edit', 'Move up', 'Move down', 'Delete', 'Cancel'], destructiveButtonIndex: 3, cancelButtonIndex: 4 });
-  expect(new WorkoutStore(repo).templates().map(r => r.data.name)).toEqual(['Sample pull', 'Sample push']);
+  expect(new WorkoutStore(repo).templates().map(r => r.data.name)).toEqual(['Sample push', 'Sample legs', 'Sample pull']);
   await view.rerender(<Workouts />);
-  const again = screen.getByRole('button', { name: 'Actions for Sample push' });
-  expect(again.props.accessibilityActions.map((x: { name: string }) => x.name)).toEqual(['edit', 'up', 'down', 'delete']);
+  const again = screen.getByRole('button', { name: 'Actions for Sample pull' });
+  expect(again.props.accessibilityActions.map((x: { name: string }) => x.name)).toEqual(['edit', 'up', 'delete']);
   await fireEvent(again, 'accessibilityAction', { nativeEvent: { actionName: 'edit' } });
-  expect(router.push).toHaveBeenCalledWith({ pathname: '/workout/template', params: { id: a.id } });
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/workout/template', params: { id: b.id } });
   sheet.mockRestore(); Platform.OS = os;
+});
+
+test('the long-press sheet hides Move up for the first routine, Move down for the last, and both for a lone routine', async () => {
+  const { ActionSheetIOS, Platform } = jest.requireActual('react-native');
+  const { store } = open();
+  routine(store, 'Sample push'); routine(store, 'Sample pull'); routine(store, 'Sample legs');
+  const os = Platform.OS; Platform.OS = 'ios';
+  const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
+  const view = await render(<Workouts />, { wrapper });
+  const options = async (name: string) => {
+    sheet.mockClear();
+    await fireEvent(screen.getByRole('button', { name: `Actions for ${name}` }), 'longPress');
+    return sheet.mock.calls[0][0];
+  };
+  expect(await options('Sample push')).toMatchObject({ options: ['Edit', 'Move down', 'Delete', 'Cancel'], destructiveButtonIndex: 2, cancelButtonIndex: 3 });
+  expect(await options('Sample legs')).toMatchObject({ options: ['Edit', 'Move up', 'Delete', 'Cancel'], destructiveButtonIndex: 2, cancelButtonIndex: 3 });
+  await view.unmount();
+  const lone = open().store;
+  routine(lone, 'Sample solo');
+  await render(<Workouts />, { wrapper });
+  expect(await options('Sample solo')).toMatchObject({ options: ['Edit', 'Delete', 'Cancel'], destructiveButtonIndex: 1, cancelButtonIndex: 2 });
+  sheet.mockRestore(); Platform.OS = os;
+});
+
+test('the Android row menu hides Move up for the first routine and Move down for the last', async () => {
+  const { store } = open();
+  routine(store, 'Sample push'); routine(store, 'Sample pull');
+  await render(<Workouts />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Actions for Sample push' }));
+  expect(screen.queryByRole('button', { name: 'Move up' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Move down' })).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Actions for Sample push' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Actions for Sample pull' }));
+  expect(screen.getByRole('button', { name: 'Move up' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Move down' })).toBeNull();
 });
 
 test('the Start routine label keeps 4.5:1 on the training colour in every theme, light and dark', () => {

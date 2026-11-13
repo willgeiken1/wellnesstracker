@@ -71,7 +71,7 @@ describe('panels, cards and buttons follow the looks', () => {
     expect(flat('small').borderRadius).toBe(20);
     expect(flat('button').borderRadius).toBe(13);
     // Panels drawn with the prototype's larger corners keep them a step rounder than the rest.
-    expect(flat('big').borderRadius).toBe(26);
+    expect(flat('big').borderRadius).toBe(28);
   });
   test('the small button sits at its own width at the full touch target, with no slop to fall outside its parent', async () => {
     await blocks();
@@ -94,6 +94,11 @@ describe('panels, cards and buttons follow the looks', () => {
     await blocks('seaGlassTide;surface=raised');
     expect(flat('big')).toMatchObject({ borderRadius: 18 });
     expect(flat('big').shadowOpacity).toBeGreaterThan(0);
+  });
+  test('square corners make the prototype panels clearly square too', async () => {
+    await blocks('seaGlassTide;corners=square');
+    expect(flat('panel').borderRadius).toBe(6);
+    expect(flat('big').borderRadius).toBe(8);
   });
   test('the heading look switches titles between Lexend and the system font', async () => {
     const view = await blocks();

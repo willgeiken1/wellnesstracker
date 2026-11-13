@@ -5,15 +5,16 @@ import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import type { Repository } from '../../data/repository';
 import { t } from '../../i18n/en';
+import { RING_PILLAR } from './ring';
 import { foodTargets, setTargets, resetFoodTargets } from './model';
 import { FieldRow, Group, NoticeRow, PanelHeader, PrimaryAction, QuietAction, semibold, SoftAction } from './parts';
 
 /** Spoken label, short name, unit and the ring colour each target shares with the calorie ring. */
 const ROWS = [
-  ['foodTargetCalories', 'foodFieldCalories', 'foodUnitKcal', 'food'],
-  ['foodTargetProtein', 'foodMacroProtein', 'foodUnitG', 'training'],
-  ['foodTargetCarbs', 'foodMacroCarbs', 'foodUnitG', 'food'],
-  ['foodTargetFat', 'foodMacroFat', 'foodUnitG', 'sleep'],
+  ['foodTargetCalories', 'foodFieldCalories', 'foodUnitKcal', RING_PILLAR.energy_kj, 'energy_kj'],
+  ['foodTargetProtein', 'foodMacroProtein', 'foodUnitG', RING_PILLAR.protein_g, 'protein_g'],
+  ['foodTargetCarbs', 'foodMacroCarbs', 'foodUnitG', RING_PILLAR.carbs_g, 'carbs_g'],
+  ['foodTargetFat', 'foodMacroFat', 'foodUnitG', RING_PILLAR.fat_g, 'fat_g'],
 ] as const;
 const ACTIVITY = { sitting: 'activitySitting', light: 'activityLight', active: 'activityActive', very: 'activityVery' } as const;
 
@@ -46,9 +47,9 @@ export function FoodTargets({ repo, day, revision }: { repo: Repository; day: st
     {shown
       ? <View accessible accessibilityLabel={t('foodTargetSummary').replace('{calories}', String(shown[0])).replace('{protein}', String(shown[1])).replace('{carbs}', String(shown[2])).replace('{fat}', String(shown[3]))}
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {ROWS.map(([, title, unit, pillar], i) => <View key={title} style={{ flexGrow: 1, flexBasis: '45%', borderRadius: 14, backgroundColor: colors['surface-2'], paddingHorizontal: 10, paddingVertical: 10, gap: 2 }}>
+          {ROWS.map(([, title, unit, pillar, key], i) => <View key={title} style={{ flexGrow: 1, flexBasis: '45%', borderRadius: 14, backgroundColor: colors['surface-2'], paddingHorizontal: 10, paddingVertical: 10, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[pillar] }} />
+              <View testID={`food-target-dot-${key}`} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[pillar] }} />
               <ThemedText muted variant="caption" style={[semibold, { flexShrink: 1 }]}>{t(title)}</ThemedText>
             </View>
             <ThemedText numeric style={{ fontSize: 19, lineHeight: 24, fontWeight: '600' }}>{Math.round(shown[i]).toLocaleString('en-US')}

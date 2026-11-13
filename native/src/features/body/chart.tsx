@@ -46,8 +46,8 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
     <ThemedText>{label}</ThemedText>
     <View testID="body-chart-steps" style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
       {/* Equal halves, so Previous and Next read as a pair; each takes a full row once large text needs it. */}
-      <View testID="body-chart-step-previous" style={{flex:1,minWidth:140}}><Button label={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>step(-1)}/></View>
-      <View testID="body-chart-step-next" style={{flex:1,minWidth:140}}><Button label={t('bodyNext')} variant="secondary" disabled={index===points.length-1} onPress={()=>step(1)}/></View>
+      <View testID="body-chart-step-previous" style={{flex:1,minWidth:140}}><Button label={t('bodyPreviousShort')} accessibilityLabel={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>step(-1)}/></View>
+      <View testID="body-chart-step-next" style={{flex:1,minWidth:140}}><Button label={t('bodyNextShort')} accessibilityLabel={t('bodyNext')} variant="secondary" disabled={index===points.length-1} onPress={()=>step(1)}/></View>
     </View>
   </View>;
 }
