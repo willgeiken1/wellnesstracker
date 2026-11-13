@@ -4,17 +4,24 @@
  */
 export const HOME_TILES_KEY = 'homeTiles';
 /** Full-width sections first, then the small number tiles. This is also the starting order. */
-export const TILE_IDS = ['map', 'week', 'next', 'calories', 'protein', 'volume', 'weight'] as const;
+export const TILE_IDS = ['map', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep'] as const;
 export type TileId = typeof TILE_IDS[number];
 /** Small tiles are half width unless made wide. The others are always full width. */
-export const SMALL_TILES: readonly TileId[] = ['calories', 'protein', 'volume', 'weight'];
+export const SMALL_TILES: readonly TileId[] = ['calories', 'protein', 'volume', 'weight', 'steps', 'sleep'];
 export interface HomeTiles { order: TileId[]; wide: TileId[] }
 export interface TileStorage { localGet<T>(key: string): T | undefined; localSave(key: string, value: unknown): void }
 
 const isTile = (value: unknown): value is TileId => (TILE_IDS as readonly unknown[]).includes(value);
 const clean = (value: unknown) => Array.isArray(value) ? [...new Set(value.filter(isTile))] : null;
 export const isSmall = (id: TileId) => SMALL_TILES.includes(id);
-export const defaultTiles = (): HomeTiles => ({ order: [...TILE_IDS], wide: [] });
+/** Tiles fed by Apple Health. They start off Home and are added when the person connects it. */
+export const HEALTH_TILES: readonly TileId[] = ['steps', 'sleep'];
+export const defaultTiles = (): HomeTiles => ({ order: TILE_IDS.filter(id => !HEALTH_TILES.includes(id)), wide: [] });
+/** Puts the Apple Health tiles on Home, after whatever is there. Tile ids only: no health value is stored. */
+export function addHealthTiles(storage: TileStorage | null | undefined): void {
+  const next = HEALTH_TILES.reduce(addTile, loadTiles(storage));
+  try { storage?.localSave(HOME_TILES_KEY, next); } catch { /* the tiles can still be added from Edit */ }
+}
 
 /** Reads a saved layout. Unknown ids are dropped and a missing or damaged save gives the starting layout, so Home never breaks. */
 export function loadTiles(storage: TileStorage | null | undefined): HomeTiles {

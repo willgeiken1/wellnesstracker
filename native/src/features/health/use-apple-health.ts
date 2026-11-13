@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Repository } from '../../data/repository';
+import { addHealthTiles } from '../home/tiles';
 import { appleHealth } from './apple';
 import type { HealthAccess, HealthSource } from './source';
 import { refreshWeights } from './weights';
@@ -37,7 +38,11 @@ export function useAppleHealth(repo: Repository | null | undefined, injected?: H
       const now = await source.access();
       if (!live()) return;
       setAccess(now);
-      if (now === 'asked') { const count = await refreshWeights(repo, source, new Date(), live); if (live()) setAdded(count); }
+      if (now === 'asked') {
+        // Connecting puts the Steps and Sleep tiles on Home. They can be removed again from Home's Edit.
+        addHealthTiles(repo);
+        const count = await refreshWeights(repo, source, new Date(), live); if (live()) setAdded(count);
+      }
     })().catch(() => { if (current.current === repo) setFailed(true); }).finally(() => { if (current.current === repo) setBusy(false); });
   };
   return { access: source && repo ? access : 'unavailable', busy, added, failed, connect };

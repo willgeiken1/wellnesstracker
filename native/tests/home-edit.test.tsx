@@ -36,15 +36,16 @@ afterEach(() => hours.mockRestore());
 
 describe('home tile layout', () => {
   test('starts with every tile, in the starting order, none wide', () => {
-    expect(defaultTiles()).toEqual({ order: [...TILE_IDS], wide: [] });
+    // The two Apple Health tiles start off Home; connecting Apple Health adds them.
+    expect(defaultTiles()).toEqual({ order: TILE_IDS.filter(id => id !== 'steps' && id !== 'sleep'), wide: [] });
     expect(loadTiles(null)).toEqual(defaultTiles());
-    expect(offHome(defaultTiles())).toEqual([]);
+    expect(offHome(defaultTiles())).toEqual(['steps', 'sleep']);
   });
   test('add, remove, move and resize return new layouts and ignore no-ops', () => {
     const start = defaultTiles();
     const without = removeTile(start, 'week');
     expect(without.order).not.toContain('week');
-    expect(offHome(without)).toEqual(['week']);
+    expect(offHome(without)).toEqual(['week', 'steps', 'sleep']);
     expect(removeTile(without, 'week')).toBe(without);
     expect(addTile(without, 'week').order.at(-1)).toBe('week');
     expect(addTile(start, 'week')).toBe(start);
@@ -72,7 +73,7 @@ test('Edit opens a sheet listing what is on Home, and Done closes it', async () 
   expect(screen.queryByText('On Home')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
   expect(screen.getByRole('header', { name: 'Edit Home' })).toBeTruthy();
-  for (const id of TILE_IDS) expect(screen.getByTestId(`edit-on-${id}`)).toBeTruthy();
+  for (const id of defaultTiles().order) expect(screen.getByTestId(`edit-on-${id}`)).toBeTruthy();
   expect(screen.getByText('Every tile is on Home.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Move up, Today map' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Move down, Weight' })).toBeDisabled();

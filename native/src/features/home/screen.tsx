@@ -1,6 +1,6 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, View, type ViewStyle } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
@@ -20,6 +20,9 @@ import { useWorkout } from '@/features/workout/use-workout';
 import { pluralize, t } from '@/i18n/en';
 import { MINI, terrain } from './contour';
 import { EditHome } from './edit-sheet';
+import { type HealthDays } from '../health/days';
+import { useHealthDays } from '../health/use-health-days';
+import { useFocused } from './use-focused';
 import { HOME_TILES_KEY, isSmall, loadTiles, type HomeTiles, type TileId } from './tiles';
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
@@ -126,6 +129,12 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
 export function Home() {
   const { store, auth } = useWorkout();
   const { colors } = useTheme();
+  // Reopening the app draws Home again, so "today" is the real day even if the app sat open overnight.
+  const [, setWoken] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') setWoken(n => n + 1); });
+    return () => sub?.remove();
+  }, []);
   const now = new Date(), today = localDay(now);
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -134,6 +143,11 @@ export function Home() {
   // The saved layout is read once per repository; edits update this state and the saved copy together.
   const [layout, setLayout] = useState<{ repo: typeof repo; tiles: HomeTiles }>(() => ({ repo, tiles: loadTiles(repo) }));
   const tiles = layout.repo === repo ? layout.tiles : loadTiles(repo);
+  // Coming back to Home re-reads the saved layout, so tiles added elsewhere (connecting Apple Health) show at
+  // once and a later edit here cannot overwrite them.
+  const focused = useFocused();
+  const [wasFocused, setWasFocused] = useState(focused);
+  if (focused !== wasFocused) { setWasFocused(focused); if (focused) setLayout({ repo, tiles: loadTiles(repo) }); }
   const change = (next: HomeTiles) => {
     setLayout({ repo, tiles: next });
     // Home still shows the new layout this session if the local write fails.
@@ -187,8 +201,10 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
   const recent = Array.from({ length: 7 }, (_, i) => localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i)));
   const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
+  // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else.
+  const health = useHealthDays(useFocused());
   const active = !!store.active();
-  const pillar = usePillarColors(), accent = useTheme().colors.accent;
+  const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const dayTargets = readDayTargets(store, days, today, foodDay, revision);
   const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
   if (!tiles.order.length) return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
@@ -198,7 +214,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
   </Card>;
   // A new account has nothing to draw yet, but the layout the person chose still applies: only what they kept
   // on Home shows, in their order. The week strip waits for data, like the number tiles.
-  if (!hasAnything(store, revision)) return <>
+  if (!hasAnything(store, revision) && !health) return <>
     {tiles.order.map(id => id === 'map' ? <EmptyMap key={id} />
       : id === 'next' ? <Next key={id} store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /> : null)}
     {tiles.order.some(id => id !== 'map' && id !== 'next') && <>
@@ -206,7 +222,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
       <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
     </>}
   </>;
-  const numbers = numberTiles(store, recent.map(day => facts.get(day) ?? NONE), pillar, accent);
+  const numbers = numberTiles(store, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
   const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
   // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
   return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
@@ -341,7 +357,7 @@ function Spark({ values, color, bars }: { values: number[]; color: string; bars?
 interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
 
 /** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
-function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string): Partial<Record<TileId, TileData>> {
+function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent): Partial<Record<TileId, TileData>> {
   const unit = store.unit(), last = facts[facts.length - 1], weights = readWeights(store).map(kg => fromKg(kg, unit));
   const volumes = facts.map(f => fromKg(f.volumeKg, unit));
   const all: TileData[] = [
@@ -350,6 +366,11 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     { id: 'volume', label: t('volume'), kind: 'training', color: pillar.training, value: whole(volumes.reduce((a, b) => a + b, 0)), unit: `${unit} · ${t('homeSevenDays')}`, series: volumes, bars: true, to: '/workouts' },
     { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
   ];
+  if (health) {
+    const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
+    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
+    if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' });
+  }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }
 function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {

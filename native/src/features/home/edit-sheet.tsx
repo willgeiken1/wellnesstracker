@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -5,14 +6,16 @@ import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
-import { addTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTiles, type TileId } from './tiles';
+import { appleHealth } from '../health/apple';
+import { HEALTH_TILES, addTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTiles, type TileId } from './tiles';
 
-export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight'> = {
+export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep'> = {
   map: 'homeTileMap', week: 'homeTileWeek', next: 'homeTileNext', calories: 'homeCalories', protein: 'homeProtein', volume: 'volume', weight: 'weight',
+  steps: 'homeSteps', sleep: 'homeSleep',
 };
-const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileWeekAbout' | 'homeTileNextAbout' | 'homeTileCaloriesAbout' | 'homeTileProteinAbout' | 'homeTileVolumeAbout' | 'homeTileWeightAbout'> = {
+const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileWeekAbout' | 'homeTileNextAbout' | 'homeTileCaloriesAbout' | 'homeTileProteinAbout' | 'homeTileVolumeAbout' | 'homeTileWeightAbout' | 'homeTileStepsAbout' | 'homeTileSleepAbout'> = {
   map: 'homeTileMapAbout', week: 'homeTileWeekAbout', next: 'homeTileNextAbout', calories: 'homeTileCaloriesAbout', protein: 'homeTileProteinAbout',
-  volume: 'homeTileVolumeAbout', weight: 'homeTileWeightAbout',
+  volume: 'homeTileVolumeAbout', weight: 'homeTileWeightAbout', steps: 'homeTileStepsAbout', sleep: 'homeTileSleepAbout',
 };
 const GLYPH = { up: 'M6 14l6-6 6 6', down: 'M6 10l6 6 6-6', remove: 'M6 12h12', add: 'M12 6v12M6 12h12' } as const;
 
@@ -29,7 +32,9 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
 /** Edit Home: what is on Home (reorder, resize, remove) and what can be added. Every change applies at once; Done only closes. */
 export function EditHome({ visible, tiles, onChange, onClose }: { visible: boolean; tiles: HomeTiles; onChange: (next: HomeTiles) => void; onClose: () => void }) {
   const { colors } = useTheme();
-  const rest = offHome(tiles);
+  // The Apple Health tiles are offered only where Apple Health can exist.
+  const healthHere = useMemo(() => !!appleHealth(), []);
+  const rest = offHome(tiles).filter(id => !HEALTH_TILES.includes(id) || healthHere);
   const row = { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], padding: tokens.spacing[2], borderRadius: 18, backgroundColor: colors.surface } as const;
   const name = (id: TileId) => t(TILE_NAME[id]);
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
