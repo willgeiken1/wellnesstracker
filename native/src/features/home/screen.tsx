@@ -180,7 +180,7 @@ export function Home() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
-            {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
+            {auth.demo && <ExampleChip />}
           </View>
           <Greeting text={greeting(now.getHours())} />
         </View>
@@ -259,6 +259,15 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   </View>;
 }
 
+/** A chip on the header row, the same in light and dark: the header buttons' surface with a hairline edge,
+ * so it never melts into the page the way a panel tone does in light themes. */
+function ExampleChip() {
+  const { colors } = useTheme();
+  return <View testID="home-example-chip" style={{ borderRadius: 10, paddingHorizontal: 8, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'] }}>
+    <ThemedText muted variant="caption" style={semibold}>{t('exampleData')}</ThemedText>
+  </View>;
+}
+
 /** The greeting in two weights, light then strong, so the time of day is the word that lands. */
 function Greeting({ text }: { text: string }) {
   const cut = text.indexOf(' ');
@@ -323,13 +332,16 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
       return <Pressable key={day} accessibilityRole="button" disabled={future} onPress={() => onPick(day)}
         accessibilityLabel={`${name}${day === today ? `, ${t('today')}` : ''}${values ? `, ${spoken(values)}` : ''}`}
         accessibilityState={{ selected: isSelected, disabled: future }}
-        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: tokens.radii.card, opacity: future ? 0.35 : 1,
+        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 4, paddingBottom: 3, borderRadius: tokens.radii.card, opacity: future ? 0.35 : 1,
           backgroundColor: isSelected ? colors['surface-2'] : 'transparent', borderWidth: 1.5, borderColor: day === today ? colors.accent : 'transparent' }}>
-        <Svg width={38} height={28} viewBox="0 0 40 30" accessible={false}>
-          {values && (values.training > 0 || values.food > 0)
-            ? <Contours values={values} width={40} height={30} mini />
-            : <Circle cx={20} cy={15} r={2} fill={colors['text-muted']} opacity={0.5} />}
-        </Svg>
+        {/* The mini map fills the day's width, so it reads at a glance on every phone size. */}
+        <View style={{ width: '100%', aspectRatio: 4 / 3, paddingHorizontal: 2 }}>
+          <Svg width="100%" height="100%" viewBox="0 0 40 30" accessible={false}>
+            {values && (values.training > 0 || values.food > 0)
+              ? <Contours values={values} width={40} height={30} mini />
+              : <Circle cx={20} cy={15} r={1.8} fill={colors['text-muted']} opacity={0.5} />}
+          </Svg>
+        </View>
         <ThemedText muted={!isSelected} variant="caption" style={{ fontWeight: isSelected ? '700' : '400' }}>{name.slice(0, 1)}</ThemedText>
       </Pressable>;
     })}
@@ -368,37 +380,51 @@ function Next({ store, facts = NONE, targets = null, hour = 12 }: { store?: Work
     }} />} />;
 }
 
-function Spark({ values, color, bars }: { values: number[]; color: string; bars?: boolean }) {
+/** A week of values, oldest first. `partial` marks the last value as today, still being logged: its line is dashed
+ * and its bar hollow, so a half-logged day never reads as a drop. */
+export function Spark({ values, color, bars, partial }: { values: number[]; color: string; bars?: boolean; partial?: boolean }) {
   const w = 140, h = 30, list = values.length > 1 ? values : [...values, ...values];
   const max = Math.max(...list, 1), min = bars ? 0 : Math.min(...list), span = max - min || 1;
+  const open = partial && values.length > 1;
   if (bars) {
     const bw = w / list.length;
     return <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" accessible={false}>
-      {list.map((v, i) => <Rect key={i} x={i * bw + 1} y={h - (v / max) * (h - 2)} width={bw - 2} height={(v / max) * (h - 2)} rx={1.5} fill={color} opacity={i === list.length - 1 ? 1 : 0.45} />)}
+      {list.map((v, i) => {
+        const last = i === list.length - 1, height = Math.max((v / max) * (h - 2), last && open ? 2 : 0);
+        return last && open
+          ? <Rect key={i} testID="spark-today" x={i * bw + 1.75} y={h - height + 0.75} width={bw - 3.5} height={Math.max(height - 1.5, 0.5)} rx={1.5} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.5} strokeDasharray="2.5 2" />
+          : <Rect key={i} x={i * bw + 1} y={h - height} width={bw - 2} height={height} rx={1.5} fill={color} opacity={last ? 1 : 0.45} />;
+      })}
     </Svg>;
   }
-  const d = list.map((v, i) => `${i ? 'L' : 'M'}${(i / (list.length - 1) * w).toFixed(1)} ${(h - 3 - (v - min) / span * (h - 6)).toFixed(1)}`).join('');
+  const points = list.map((v, i) => [i / (list.length - 1) * w, h - 3 - (v - min) / span * (h - 6)] as const);
+  const line = (from: number, to: number) => points.slice(from, to).map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
+  // With today open, the filled area and solid line stop at yesterday; today's stretch is a dashed line to a hollow dot.
+  const solid = line(0, open ? points.length - 1 : points.length), end = points[open ? points.length - 2 : points.length - 1][0];
+  const [tx, ty] = points[points.length - 1];
   return <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" accessible={false}>
-    <Path d={`${d} L${w} ${h} L0 ${h}Z`} fill={color} opacity={0.12} />
-    <Path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+    <Path d={`${solid} L${end.toFixed(1)} ${h} L0 ${h}Z`} fill={color} opacity={0.12} />
+    <Path testID="spark-line" d={solid} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+    {open && <Path testID="spark-today" d={line(points.length - 2, points.length)} fill="none" stroke={color} strokeWidth={2} strokeDasharray="3 3" strokeLinecap="round" opacity={0.8} />}
+    {open && <Circle cx={tx} cy={ty} r={2.2} fill="none" stroke={color} strokeWidth={1.5} />}
   </Svg>;
 }
 
-interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
+interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; partial?: boolean; to: '/food' | '/workouts' | '/progress' }
 
 /** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
 function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent): Partial<Record<TileId, TileData>> {
   const unit = store.unit(), last = facts[facts.length - 1], weights = readWeights(store).map(kg => fromKg(kg, unit));
   const volumes = facts.map(f => fromKg(f.volumeKg, unit));
   const all: TileData[] = [
-    { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), to: '/food' },
-    { id: 'protein', label: t('homeProtein'), kind: 'food', color: pillar.food, value: whole(last.protein ?? 0), unit: 'g', series: facts.map(f => f.protein ?? 0), to: '/food' },
+    { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), partial: true, to: '/food' },
+    { id: 'protein', label: t('homeProtein'), kind: 'food', color: pillar.food, value: whole(last.protein ?? 0), unit: 'g', series: facts.map(f => f.protein ?? 0), partial: true, to: '/food' },
     { id: 'volume', label: t('volume'), kind: 'training', color: pillar.training, value: whole(volumes.reduce((a, b) => a + b, 0)), unit: `${unit} · ${t('homeSevenDays')}`, series: volumes, bars: true, to: '/workouts' },
     { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
   ];
   if (health) {
     const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
-    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
+    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, partial: true, to: '/progress' });
     if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
@@ -416,7 +442,7 @@ function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
         <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
         <ThemedText muted variant="caption">{tile.unit}</ThemedText>
       </View>
-      <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} /></View>
+      <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} partial={tile.partial} /></View>
     </Card>
   </Pressable>;
 }
