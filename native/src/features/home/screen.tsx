@@ -1,5 +1,5 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -163,7 +163,7 @@ export function Home() {
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
   // With the floating bar the + rides in line with the tabs while Home is open, so it never covers a card.
-  const toggleAdd = useCallback(() => setAdding(open => !open), []);
+  const [toggleAdd] = useState(() => () => setAdding(open => !open));
   useEffect(() => {
     if (!floating || !focused) return;
     setDockAction({ label: t('homeAdd'), expanded: adding, onPress: toggleAdd });
