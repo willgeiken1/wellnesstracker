@@ -46,6 +46,13 @@ test('ranges, tap and accessible chart navigation expose points; live profile un
  await fireEvent.press(screen.getByRole('button',{name:'Previous trend point'}));expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/Oct 27 · Trend/)).toBeTruthy();
  await fireEvent.press(screen.getByTestId('body-chart'),{nativeEvent:{locationX:0}});expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
+ // VoiceOver: the chart is adjustable, swipe up and down step through the points, and its value reads the point.
+ const chart=screen.getByTestId('body-chart');expect(chart.props.accessibilityRole).toBe('adjustable');
+ await fireEvent(chart,'accessibilityAction',{nativeEvent:{actionName:'increment'}});expect(screen.getByTestId('body-chart').props.accessibilityValue.text).toMatch(/^Oct 27 · Trend/);
+ await fireEvent(screen.getByTestId('body-chart'),'accessibilityAction',{nativeEvent:{actionName:'increment'}});expect(screen.getByTestId('body-chart').props.accessibilityValue.text).toMatch(/^Oct 27 · Trend/);
+ await fireEvent(screen.getByTestId('body-chart'),'accessibilityAction',{nativeEvent:{actionName:'decrement'}});expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
+ // Previous and Next share the row equally.
+ for(const id of ['body-chart-step-previous','body-chart-step-next'])expect(screen.getByTestId(id).props.style).toMatchObject({flex:1,minWidth:140});
  await fireEvent.press(screen.getByRole('tab',{name:'7d'}));expect(screen.queryByText(/Oct 1 · Trend/)).toBeNull();
  const before=JSON.stringify(repo.list('weigh_ins'));await act(()=>{repo.save('profile',{weight_unit:'lb'},'profile');});
  expect(screen.getByText(/Trend: .* lb/)).toBeTruthy();expect(JSON.stringify(repo.list('weigh_ins'))).toBe(before);
