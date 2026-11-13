@@ -14,6 +14,7 @@ import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure } from './sign-out';
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
+import { AccountDeleteFailure, deleteServerAccount } from './delete-account';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
@@ -36,6 +37,8 @@ export interface AuthState {
   recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string,dob?: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  /** Deletes the account on the server, then erases this phone's copy the way signing out does. */
+  deleteAccount?(): Promise<void>;
 }
 export const AuthContext = createContext<AuthState | null>(null);
 export function useAuth() { const value=useContext(AuthContext);if(!value)throw new Error('AuthProvider is required.');return value; }
@@ -249,6 +252,12 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         setSession(current => current?.user.id === session?.user.id ? null : current);
       };
       await leave();
+    },
+    deleteAccount:async()=>{
+      if(demo||!client||!session||departurePending||departingOwner.current)throw new AccountDeleteFailure();
+      await deleteServerAccount(client);
+      // The account is gone; anything still unsynced has nowhere to go, so the phone's copy is erased without asking again.
+      await value.signOut(true);
     },
     syncNow:()=>engine?.sync()??Promise.resolve(),
   };

@@ -716,3 +716,45 @@ test.each([true,false])('demo promotion shows a notice only for skipped weigh-in
  await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(1);
  alert.mockRestore();promotion.mockReset();
 });
+
+test('delete account asks the server first, then erases this phone even with unsynced rows', async () => {
+  const a=fixtureRepo(OWNER_A),guest=fixtureRepo('guest');mockPush.mockRejectedValue(new Error('offline fixture'));
+  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:guest});
+  const fixture=clientFixture(),invoke=jest.fn(async()=>({data:{ok:true},error:null}));
+  Object.defineProperty(fixture.client,'functions',{value:{invoke}});
+  const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+  await waitFor(()=>expect(observed.repository).toBe(a));
+  await act(async()=>{await observed.deleteAccount?.();});
+  expect(invoke).toHaveBeenCalledWith('delete-account',{body:{confirm:'DELETE'}});
+  expect(invoke.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(a.wipe).mock.invocationCallOrder[0]);
+  expect(a.wipe).toHaveBeenCalledTimes(1);
+  await waitFor(()=>expect(observed.repository).toBe(guest));expect(observed.session).toBeNull();
+  await view.unmount();
+});
+
+test.each<[string,()=>Promise<unknown>]>([
+  ['the server says no',async()=>({data:null,error:{message:'private fixture'}})],
+  ['the server answers without ok',async()=>({data:{},error:null})],
+  ['the network fails',async()=>{throw new Error('private fixture');}],
+])('delete account erases nothing when %s', async (_case,answer) => {
+  const a=fixtureRepo(OWNER_A);
+  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+  const fixture=clientFixture();Object.defineProperty(fixture.client,'functions',{value:{invoke:jest.fn(answer)}});
+  const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+  await waitFor(()=>expect(observed.repository).toBe(a));
+  await act(async()=>{await expect(observed.deleteAccount?.()).rejects.toThrow('Account deletion did not finish.');});
+  expect(a.wipe).not.toHaveBeenCalled();expect(fixture.auth.signOut).not.toHaveBeenCalled();expect(observed.session).not.toBeNull();
+  await view.unmount();
+});
+
+test('demo mode cannot delete an account', async () => {
+  const demo=fixtureRepo('demo'),guest=fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner==='demo'?demo:guest});
+  const fixture=clientFixture(null),invoke=jest.fn();Object.defineProperty(fixture.client,'functions',{value:{invoke}});
+  const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+  await waitFor(()=>expect(observed.ready).toBe(true));
+  await act(async()=>{observed.lookAround();});await waitFor(()=>expect(observed.repository).toBe(demo));
+  await act(async()=>{await expect(observed.deleteAccount?.()).rejects.toThrow();});
+  expect(invoke).not.toHaveBeenCalled();expect(demo.wipe).not.toHaveBeenCalled();
+  await view.unmount();
+});

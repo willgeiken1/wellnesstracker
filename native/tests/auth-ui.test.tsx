@@ -162,3 +162,38 @@ test('Wait dismisses the offline loss sheet and preserves edits',async()=>{
  expect(screen.queryByRole('button',{name:'Sign out anyway'})).toBeNull();
  expect(auth.signOut).not.toHaveBeenCalled();
 });
+
+test('Delete account needs the typed word, then calls the provider once', async () => {
+  const deleteAccount=jest.fn(async()=>{});
+  const auth={...state(),session:{user:{id:'fixture',email:'fixture@example.test'}} as AuthState['session'],deleteAccount};
+  await wrap(<Account/>,auth);
+  await fireEvent.press(screen.getByRole('button',{name:t('deleteAccount')}));
+  expect(screen.getByText(t('deleteAccountBody'))).toBeTruthy();
+  expect(screen.getByText(t('deleteAccountKeeps'))).toBeTruthy();
+  const confirm=screen.getByTestId('account-delete-confirm');
+  await fireEvent.press(confirm);expect(deleteAccount).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'delete');
+  await fireEvent.press(screen.getByTestId('account-delete-confirm'));expect(deleteAccount).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'DELETE');
+  await act(async()=>{fireEvent.press(screen.getByTestId('account-delete-confirm'));});
+  expect(deleteAccount).toHaveBeenCalledTimes(1);
+});
+
+test('a failed deletion says nothing was erased and can be cancelled', async () => {
+  const { AccountDeleteFailure } = require('../src/auth/delete-account') as typeof import('../src/auth/delete-account');
+  const deleteAccount=jest.fn(async()=>{throw new AccountDeleteFailure();});
+  const auth={...state(),session:{user:{id:'fixture',email:'fixture@example.test'}} as AuthState['session'],deleteAccount};
+  await wrap(<Account/>,auth);
+  await fireEvent.press(screen.getByRole('button',{name:t('deleteAccount')}));
+  await fireEvent.press(screen.getByRole('button',{name:t('cancel')}));
+  expect(screen.queryByTestId('account-delete-sheet')).toBeNull();expect(deleteAccount).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button',{name:t('deleteAccount')}));
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountType')),'DELETE');
+  await act(async()=>{fireEvent.press(screen.getByTestId('account-delete-confirm'));});
+  expect(screen.getByRole('alert')).toHaveTextContent(t('deleteAccountFailed'));
+});
+
+test('demo mode shows no Delete account button', async () => {
+  await wrap(<Account/>,{...state(),demo:true,deleteAccount:jest.fn(async()=>{})});
+  expect(screen.queryByRole('button',{name:t('deleteAccount')})).toBeNull();
+});

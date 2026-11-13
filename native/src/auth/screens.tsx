@@ -1,11 +1,12 @@
 import { SyncRecovery } from './sync-recovery';
 import { BootRecovery } from './boot-recovery';
 import { DepartureFailure } from './sign-out';
+import { AccountDeleteFailure, DELETE_WORD } from './delete-account';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ageOn, onboardingProgress } from '../features/onboarding/model';
 import { PreferenceFields } from '../features/onboarding/fields';
 import { useDevicePreferences } from '../features/onboarding/device-preferences';
-import { TextInput, Alert, Modal, View } from 'react-native';
+import { TextInput, Alert, Modal, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../components/screen';
 import { ThemedText } from '../components/themed-text';
@@ -74,7 +75,16 @@ export function AuthForm({create=false,dob,progress,onCreated,embedded=false,bef
 export function Account() {
   const {colors}=useTheme();
   const [lossCount,setLossCount]=useState<number|null>(null);
-  const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|null>(null),[busy,setBusy]=useState(false);
+  const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|'deleteAccountFailed'|null>(null),[busy,setBusy]=useState(false);
+  const [deleting,setDeleting]=useState(false),[typed,setTyped]=useState('');
+  const closeDelete=()=>{if(!submitting.current){setDeleting(false);setTyped('');}};
+  const deleteAccount=async()=>{
+    if(submitting.current||typed.trim()!==DELETE_WORD||!auth.deleteAccount)return;
+    submitting.current=true;setBusy(true);setError(null);
+    try {await auth.deleteAccount();}
+    catch(cause) {setError(cause instanceof AccountDeleteFailure?'deleteAccountFailed':cause instanceof DepartureFailure?'signOutFailed':'deleteAccountFailed');}
+    finally {submitting.current=false;setBusy(false);setDeleting(false);setTyped('');}
+  };
   const submitting=useRef(false);
   const leave=async(discardUnsynced=false)=>{
     if(submitting.current)return;
@@ -109,6 +119,7 @@ export function Account() {
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
       </Card>
       <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
+      {auth.deleteAccount&&<Button testID="account-delete" label={t('deleteAccount')} variant="secondary" disabled={busy} onPress={()=>{setError(null);setDeleting(true);}}/>}
     </>}
     {error&&<ThemedText muted accessibilityRole="alert">{t(error)}</ThemedText>}
     <Modal transparent visible={lossCount!==null} animationType="none" onRequestClose={()=>{if(!submitting.current)setLossCount(null);}}>
@@ -121,6 +132,21 @@ export function Account() {
           <Button label={t('signOutAnyway')} disabled={busy} busy={busy} variant="destructive" onPress={()=>{void leave(true);}}/>
         </View>
       </View>}
+    </Modal>
+    <Modal transparent visible={deleting} animationType="none" onRequestClose={closeDelete}>
+      {deleting&&<KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1,justifyContent:'flex-end',backgroundColor:colors.scrim}}>
+        <View testID="account-delete-sheet" accessibilityViewIsModal onAccessibilityEscape={closeDelete}
+          style={{backgroundColor:colors.surface,padding:24,paddingBottom:40,gap:16,borderTopLeftRadius:24,borderTopRightRadius:24}}>
+          <ThemedText accessibilityRole="header" variant="headline" style={{fontWeight:'600'}}>{t('deleteAccountTitle')}</ThemedText>
+          <ThemedText>{t('deleteAccountBody')}</ThemedText>
+          <ThemedText muted>{t('deleteAccountKeeps')}</ThemedText>
+          <TextInput testID="account-delete-word" accessibilityLabel={t('deleteAccountType')} placeholder={t('deleteAccountType')} placeholderTextColor={colors['text-muted']}
+            style={{color:colors.text,backgroundColor:colors['surface-2'],borderRadius:8,minHeight:touchTarget,padding:12,fontSize:16}}
+            value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} autoComplete="off" editable={!busy}/>
+          <Button label={t('cancel')} variant="secondary" disabled={busy} onPress={closeDelete}/>
+          <Button testID="account-delete-confirm" label={t('deleteAccountConfirm')} variant="destructive" disabled={busy||typed.trim()!==DELETE_WORD} busy={busy} onPress={()=>{void deleteAccount();}}/>
+        </View>
+      </KeyboardAvoidingView>}
     </Modal>
   </Screen>;
 }
