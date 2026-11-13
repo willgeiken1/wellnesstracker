@@ -7,6 +7,7 @@ import { ConnectedServices } from '../src/features/connections/screen';
 import { HOME_TILES_KEY } from '../src/features/home/tiles';
 import { FIRST_SYNC_DAYS, resetOuraAsk, type OuraSource } from '../src/features/health/oura';
 import { useOura } from '../src/features/health/use-oura';
+import { OURA_PREVIEW_STATES, previewOura } from '../src/features/health/oura-preview';
 import { useHealthDays } from '../src/features/health/use-health-days';
 import type { HealthSource } from '../src/features/health/source';
 
@@ -202,4 +203,12 @@ describe('Home reads both sources', () => {
     expect(String(screen.getByTestId('read').props.children)).toMatch(/^4200 steps/);
     spy.mockRestore();
   });
+});
+
+const PREVIEW_BUTTON = { off: 'Connect Oura', on: 'Check again', expired: 'Reconnect Oura', busy: 'Checking…', failed: 'Connect Oura' } as const;
+test.each(OURA_PREVIEW_STATES.map(state => [state, PREVIEW_BUTTON[state]]))('the development preview draws the %s Oura state (%s)', async (state, label) => {
+  await render(<ConnectedServices oura={previewOura(state as keyof typeof PREVIEW_BUTTON)} />, { wrapper });
+  await settle();
+  expect(screen.getByRole('button', { name: label })).toBeTruthy();
+  expect(!!screen.queryByTestId('connect-oura-failed')).toBe(state === 'failed');
 });
