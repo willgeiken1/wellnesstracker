@@ -63,11 +63,13 @@ export function Cardio({ repository }: { repository: Repository }) {
   const [goal, setGoal] = useState(String(store.goal()));
   const [error, setError] = useState<MessageKey | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  // Wall-clock timer catches up after backgrounding; intervals are display-only.
+  // Wall-clock timer catches up after backgrounding; intervals are display-only. The clock only needs every second
+  // while a session runs; otherwise once a minute keeps "this week" right across midnight.
+  const running = !!live;
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(Date.now()), running ? 1000 : 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [running]);
   // Typed weigh-ins only. A saved session syncs, so its calorie estimate must not come from an Apple Health reading.
   const weight = bodyWeight(repository.list('weigh_ins').filter(row => row.data.source === 'app'), localDay(now));
   const settings: Settings = { mph: speed.trim() ? Number(speed) / (metric ? 1.609344 : 1) : NaN, incline: incline.trim() ? Number(incline) : NaN, level: level.trim() ? Number(level) : NaN };

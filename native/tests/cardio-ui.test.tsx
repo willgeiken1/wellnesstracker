@@ -104,3 +104,13 @@ test('a new latest weigh-in recomputes estimates while the Cardio screen stays m
   expect(screen.getByText(/434 kcal/)).toBeTruthy();
   expect(screen.queryByText(/est\./)).toBeNull();
 });
+
+test('with no session running the screen ticks once a minute, and every second while one runs', async () => {
+  const ticks = jest.spyOn(global, 'setInterval');
+  try {
+    await render(<Cardio repository={memoryRepository()} />, { wrapper });
+    expect(ticks.mock.calls.map(call => call[1])).toEqual([60000]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Start timer' }));
+    expect(ticks.mock.calls.at(-1)?.[1]).toBe(1000);
+  } finally { ticks.mockRestore(); }
+});
