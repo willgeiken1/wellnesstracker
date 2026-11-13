@@ -5,7 +5,7 @@ import type { HealthAccess, HealthSource, SleepSpan } from '../src/features/heal
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 10, day, hour, minute);
 const span = (a: Date, b: Date): SleepSpan => ({ start: a, end: b });
 const source = (access: HealthAccess, over: Partial<HealthSource> = {}): HealthSource => ({
-  access: async () => access, request: async () => {}, weights: async () => [], steps: async () => 0, sleep: async () => [], ...over,
+  access: async () => access, request: async () => {}, weights: async () => [], steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, ...over,
 });
 
 test('a night runs from 6 pm the evening before to noon and belongs to the day you wake on', () => {
@@ -41,16 +41,31 @@ test('once asked, each day gets its steps up to now and its night of sleep', asy
   expect(windows).toEqual([[at(11, 0), at(12, 0)], [at(12, 0), at(12, 15)]]);
 });
 
+test('active calories and exercise minutes are read per day like steps, up to now, and each stands alone', async () => {
+  const windows: [Date, Date][] = [];
+  const read = await readHealthDays(source('asked', {
+    activeEnergy: async (from, to) => { windows.push([from, to]); return from.getDate() === 11 ? 612.6 : 240.2; },
+    exerciseMinutes: async from => { if (from.getDate() === 12) throw new Error('made-up failure'); return 41; },
+  }), ['2026-11-11', '2026-11-12'], at(12, 15));
+  expect(read!.activeKcal).toEqual([613, 240]);
+  expect(windows).toEqual([[at(11, 0), at(12, 0)], [at(12, 0), at(12, 15)]]);
+  // Today's exercise failing leaves that tile out and nothing else.
+  expect(read!.exerciseMinutes).toBeNull();
+  expect(read!.steps).toEqual([0, 0]);
+  const odd = await readHealthDays(source('asked', { activeEnergy: async () => Number.NaN, exerciseMinutes: async () => -3 }), ['2026-11-12'], at(12, 15));
+  expect(odd).toMatchObject({ activeKcal: [0], exerciseMinutes: [0] });
+});
+
 test('an earlier day that fails only loses its bar; today failing leaves the number out instead of showing 0', async () => {
   const early = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 11) throw new Error('made-up failure'); return 3000; },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(early).toEqual({ steps: [0, 3000], sleepHours: [0, 0] });
+  expect(early).toEqual({ steps: [0, 3000], sleepHours: [0, 0], activeKcal: [0, 0], exerciseMinutes: [0, 0] });
   const today = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 12) throw new Error('made-up failure'); return 3000; },
     sleep: async () => { throw new Error('made-up failure'); },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(today).toEqual({ steps: null, sleepHours: null });
+  expect(today).toEqual({ steps: null, sleepHours: null, activeKcal: [0, 0], exerciseMinutes: [0, 0] });
 });
 
 test('days and nights follow the clock on the wall across a clock change', () => {

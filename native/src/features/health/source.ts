@@ -13,5 +13,9 @@ export interface HealthSource {
   weights(since: Date): Promise<WeightSample[]>;
   /** Steps between two instants, counted once even when a phone and a watch both recorded them. */
   steps(from: Date, to: Date): Promise<number>;
+  /** Active calories (kcal) between two instants, counted once across a phone and a watch. */
+  activeEnergy(from: Date, to: Date): Promise<number>;
+  /** Exercise minutes between two instants, as Apple counts them for the green ring. */
+  exerciseMinutes(from: Date, to: Date): Promise<number>;
   sleep(from: Date, to: Date): Promise<SleepSpan[]>;
 }
