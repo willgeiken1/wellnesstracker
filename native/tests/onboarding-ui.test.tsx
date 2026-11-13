@@ -35,11 +35,11 @@ test('full stats produce editable targets visibly labeled est. on the third and 
  expect(auth.createAccount).toHaveBeenCalledWith('synthetic@example.test','synthetic-password','2000-01-01');
  expect(screen.getByText('Step 3 of 3')).toBeTruthy();expect(screen.getByText(t('estimatedTargets'))).toBeTruthy();
  await fireEvent.changeText(screen.getByLabelText(t('targetCalories')),'2300');expect(screen.getByLabelText(t('targetCalories'))).toHaveDisplayValue('2300');
- expect(screen.getByRole('switch',{name:t('crashReportsPref')})).toBeChecked();
- expect(screen.getByRole('switch',{name:t('analyticsPref')})).not.toBeChecked();
+ // No crash-report or analytics service is in the app, so there is no switch to show.
+ expect(screen.queryByRole('switch')).toBeNull();
 });
 
-test('signed-in setup finishes locally with no stats, a starter routine, and device-only preferences',async()=>{
+test('signed-in setup finishes locally with no stats, a starter routine, and no consent saved',async()=>{
  const {memoryRepository}=require('./workout-repository') as typeof import('./workout-repository');
  const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
  const repository=memoryRepository(),device=memoryRepository();
@@ -55,7 +55,8 @@ test('signed-in setup finishes locally with no stats, a starter routine, and dev
  expect(repository.list('routines')).toHaveLength(1);expect(repository.list('routine_exercises')).toHaveLength(3);
  expect(repository.list('food_targets')).toHaveLength(0);
  expect(repository.localGet('devicePreferences')).toBeUndefined();
- expect(device.localGet('devicePreferences')).toEqual({crashReports:true,analytics:false});
+ // Nothing is saved for consent the person was never asked for.
+ expect(device.localGet('devicePreferences')).toBeUndefined();
 });
 test('Settings profile edits persist, preserve historical rows, and never require optional stats',async()=>{
  const {memoryRepository}=require('./workout-repository') as typeof import('./workout-repository');

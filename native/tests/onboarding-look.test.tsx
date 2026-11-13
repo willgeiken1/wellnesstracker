@@ -28,8 +28,9 @@ describe('Welcome',()=>{
   expect(screen.getAllByTestId('onboarding-progress-todo')).toHaveLength(2);
   expect(screen.getByRole('image',{name:t('welcomeMapLabel')})).toBeTruthy();
   for(const key of ['welcomeWorkouts','welcomeFood','welcomeHealth'] as const)expect(screen.getByText(t(key))).toBeTruthy();
-  // Services cannot be connected yet, and the screen says so.
-  expect(screen.getByText(/Connecting opens in a later update/)).toBeTruthy();
+  // The health strand says what connects today and makes no promise about later updates (App Review 2.1).
+  expect(screen.getByText(t('welcomeHealthBody'))).toHaveTextContent(/Apple Health brings in your weight, steps and sleep/);
+  expect(screen.queryByText(/later update|coming soon/i)).toBeNull();
  });
  test('one main button and three quieter ways in, each firing its own handler',async()=>{
   const auth=await wrap(<Welcome/>);
@@ -105,16 +106,17 @@ describe('Sign in',()=>{
   await fireEvent.press(screen.getByRole('button',{name:t('bootRetry')}));
   expect(auth.signIn).toHaveBeenCalledTimes(1);
  });
- test('sign-in keeps an earlier device choice when the switches are untouched, and saves a changed one',async()=>{
+ test('sign-in shows no crash or analytics switches while neither service is in the app, and saves no consent',async()=>{
   const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
   const device=memoryRepository();device.localSave('devicePreferences',{crashReports:false,analytics:true});
   jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>device,wipeAll:jest.fn()});
   await wrap(<AuthForm/>);
-  expect(await screen.findByRole('switch',{name:t('analyticsPref')})).toBeChecked();
-  await fireEvent(screen.getByRole('switch',{name:t('crashReportsPref')}),'valueChange',true);
+  expect(screen.queryByRole('switch')).toBeNull();
+  expect(screen.queryByText(t('devicePrefs'))).toBeNull();
   await fireEvent.changeText(screen.getByLabelText(t('email')),'fixture@example.test');await fireEvent.changeText(screen.getByLabelText(t('password')),'synthetic');
   await fireEvent.press(screen.getByRole('button',{name:t('signIn')}));
-  expect(device.localGet('devicePreferences')).toEqual({crashReports:true,analytics:true});
+  // An earlier stored answer is left exactly as it was.
+  expect(device.localGet('devicePreferences')).toEqual({crashReports:false,analytics:true});
  });
  test('Back returns to the welcome screen',async()=>{
   await wrap(<AuthForm/>);await fireEvent.press(screen.getByRole('button',{name:t('onboardingBack')}));

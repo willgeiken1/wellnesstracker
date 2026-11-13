@@ -1,10 +1,10 @@
-import { router } from 'expo-router';
-import { EmptyState } from '@/components/empty-state';
 import { useAuth } from '@/auth/provider';
+import { LoadingPanel } from '@/components/loading-panel';
 import { Screen } from '@/components/screen';
 import { t } from '@/i18n/en';
 import { FoodScreen } from '@/features/food/screen';
 export default function Food() {
  const {repository}=useAuth();
- return <Screen title={t('food')} tabHeader>{repository?<FoodScreen key={repository.owner} repository={repository}/>:<EmptyState title={t('food')} action={{label:t('logFood'),onPress:()=>router.push('/food/log')}}/>}</Screen>;
+ // The repository opens with the account; until it does there is nothing to log into yet, so the tab waits quietly.
+ return <Screen title={t('food')} tabHeader>{repository?<FoodScreen key={repository.owner} repository={repository}/>:<LoadingPanel testID="food-loading"/>}</Screen>;
 }

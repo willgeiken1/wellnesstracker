@@ -4,7 +4,9 @@ import PaywallRoute from '../src/app/paywall';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { mockPurchaseProvider } from '../src/features/paywall/purchase-provider';
 
-jest.mock('expo-router', () => ({ router: { canGoBack: jest.fn(), back: jest.fn(), replace: jest.fn() } }));
+const mockRedirect = jest.fn();
+jest.mock('expo-router', () => ({ router: { canGoBack: jest.fn(), back: jest.fn(), replace: jest.fn() },
+  Redirect: ({ href }: { href: string }) => { mockRedirect(href); return null; } }));
 const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 
 test('the route shows the provider prices in plain words, with purchases off and no network requests', async () => {
@@ -48,4 +50,29 @@ test.each([true, false])('close dismisses the preview when history is %s', async
     expect(router.replace).toHaveBeenCalledWith('/');
     expect(router.back).not.toHaveBeenCalled();
   }
+});
+
+test('release builds never show the preview: the route goes Home', async () => {
+  const dev = (global as unknown as { __DEV__: boolean }).__DEV__;
+  (global as unknown as { __DEV__: boolean }).__DEV__ = false;
+  try {
+    await render(<PaywallRoute />, { wrapper });
+    expect(mockRedirect).toHaveBeenCalledWith('/');
+    expect(screen.queryByText('Insight Plus')).toBeNull();
+    expect(screen.queryByText(/\$\d/)).toBeNull();
+  } finally { (global as unknown as { __DEV__: boolean }).__DEV__ = dev; }
+});
+
+test('the legal links are the published pages, never placeholders', async () => {
+  const { Linking } = require('react-native') as typeof import('react-native');
+  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  try {
+    await render(<PaywallRoute />, { wrapper });
+    await fireEvent.press(screen.getByRole('link', { name: 'Terms of use' }));
+    await fireEvent.press(screen.getByRole('link', { name: 'Privacy policy' }));
+    expect(open.mock.calls.map(call => call[0])).toEqual([
+      'https://willgeiken1.github.io/wellnesstracker/insight-daily-terms',
+      'https://willgeiken1.github.io/wellnesstracker/insight-daily-privacy',
+    ]);
+  } finally { open.mockRestore(); }
 });

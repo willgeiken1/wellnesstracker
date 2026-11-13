@@ -41,11 +41,12 @@ const t = (key: MessageKey, values: Record<string, string | number> = {}) =>
     String(values[key] ?? token),
   );
 const bank = exerciseLibrary.map((e) => e.name);
-export function ImportScreen() {
+/** `inSettings`: opened as Settings › Data, where the page carries its own title and the header's Back is the way out. */
+export function ImportScreen({ inSettings = false }: { inSettings?: boolean }) {
   const { repository } = useAuth();
-  return <ImportBody key={repository?.owner ?? "unavailable"} />;
+  return <ImportBody key={repository?.owner ?? "unavailable"} inSettings={inSettings} />;
 }
-function ImportBody() {
+function ImportBody({ inSettings }: { inSettings: boolean }) {
   const auth = useAuth(),
     repo = auth.repository,
     { colors } = useTheme();
@@ -267,8 +268,8 @@ function ImportBody() {
   };
   return (
     <>
-      <Stack.Screen options={{ title: t("importTitle") }} />
-      <Screen>
+      {!inSettings && <Stack.Screen options={{ title: t("importTitle") }} />}
+      <Screen title={inSettings ? t("importTitle") : undefined}>
         <ThemedText muted>{t("importIntro")}</ThemedText>
         <Card testID="import-step-source" style={card}>
           <StepTitle step={1} label={t("importStepSource")} />
@@ -566,7 +567,8 @@ function ImportBody() {
             </Card>
           </>
         )}
-        <Pressable
+        {/* In Settings the header's Back already leaves; only Done after an import earns its own button. */}
+        {(!inSettings || done) && <Pressable
           accessibilityRole="button"
           accessibilityLabel={t(done ? "importFinish" : "importClose")}
           onPress={() => router.replace(auth.session ? "/settings" : "/auth")}
@@ -575,7 +577,7 @@ function ImportBody() {
           <ThemedText style={{ color: colors.accent, fontWeight: "600" }}>
             {t(done ? "importFinish" : "importClose")}
           </ThemedText>
-        </Pressable>
+        </Pressable>}
       </Screen>
     </>
   );

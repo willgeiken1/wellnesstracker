@@ -29,6 +29,9 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => ({ section: mockSection }) };
 });
 jest.mock('../src/auth/client', () => ({ getAuthClient: () => null }));
+const mockBrowser = jest.fn(async (_url: string) => ({ type: 'opened' }));
+jest.mock('expo-sharing', () => ({ getSharedPayloads: () => [], clearSharedPayloads: () => {} }));
+jest.mock('expo-web-browser', () => ({ openBrowserAsync: (url: string) => mockBrowser(url) }));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../src/phone-only/provider', () => ({ useAuth: () => mockPhoneAuth }));
 jest.mock('../src/phone-only/export', () => ({ exportPhoneBackup: jest.fn(async () => {}) }));
@@ -47,7 +50,9 @@ describe('Settings home', () => {
     expect(screen.getByLabelText('Search settings')).toBeTruthy();
     expect(screen.getByTestId('settings-profile')).toBeTruthy();
     for (const title of ['You', 'App', 'Data & privacy', 'About']) expect(screen.getAllByText(title).length).toBeGreaterThan(0);
-    expect(settingsSections.map(row => row.route)).toEqual(['account', 'profile', 'appearance', 'workout', 'score', 'health', 'notifications', 'privacy', 'data', 'about']);
+    // Notifications has no row until reminders exist (App Review 2.1); its page still answers if opened.
+    expect(settingsSections.map(row => row.route)).toEqual(['account', 'profile', 'appearance', 'workout', 'score', 'health', 'privacy', 'data', 'about']);
+    expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull();
     for (const row of settingsSections) expect(screen.getByRole('button', { name: t(row.label) })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
   });
@@ -57,7 +62,7 @@ describe('Settings home', () => {
     expect(router.push).toHaveBeenLastCalledWith('/settings/appearance');
     await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
     expect(router.push).toHaveBeenLastCalledWith('/settings/account');
-    for (const route of ['profile', 'workout', 'health', 'notifications', 'privacy', 'data', 'about'] as const) {
+    for (const route of ['profile', 'workout', 'health', 'privacy', 'data', 'about'] as const) {
       await fireEvent.press(screen.getByTestId(`settings-row-${route}`));
       expect(router.push).toHaveBeenLastCalledWith({ pathname: '/settings/[section]', params: { section: route } });
     }
@@ -78,7 +83,7 @@ describe('Settings home', () => {
     await fireEvent.changeText(screen.getByLabelText('Search settings'), '  ');
     expect(screen.getAllByRole('button').length).toBe(settingsSections.length + 1);
     expect(searchSettings('units', row => t(row.label)).flatMap(group => group.rows.map(row => row.route))).toEqual(['profile']);
-    expect(settingsGroups.map(group => group.rows.length)).toEqual([2, 5, 2, 1]);
+    expect(settingsGroups.map(group => group.rows.length)).toEqual([2, 4, 2, 1]);
   });
   test('the profile card states only what is known', async () => {
     const signedIn = await show(<Settings />, { ...base(), session: { user: { id: 'fixture', email: 'fixture@example.test' } } as AuthState['session'], pending: 2 });
@@ -117,8 +122,10 @@ describe('Settings pages', () => {
   ])('%s has one title and no Back to Settings button', async (section, title) => {
     mockSection = section;
     await show(<Section />);
-    expect(screen.getAllByRole('header')).toHaveLength(1);
-    expect(screen.getByRole('header', { name: title })).toBeTruthy();
+    // One page title, first on the page; Licenses also has small section headings under it.
+    expect(screen.getAllByRole('header', { name: title })).toHaveLength(1);
+    expect(screen.getAllByRole('header')[0]).toHaveTextContent(title);
+    if (section !== 'licenses') expect(screen.getAllByRole('header')).toHaveLength(1);
     expect(mockScreens.at(-1)!.options.title).toBe(title);
     expect(screen.queryByRole('button', { name: 'Back to Settings' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
@@ -129,6 +136,29 @@ describe('Settings pages', () => {
     expect(screen.getByText('1.0.0')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Licenses' }));
     expect(router.push).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'licenses' } });
+  });
+  test('About links the published privacy policy, terms and support pages, and says when one fails to open', async () => {
+    mockSection = 'about';
+    await show(<Section />);
+    for (const [name, page] of [['Privacy policy', 'insight-daily-privacy'], ['Terms of use', 'insight-daily-terms'], ['Help and support', 'insight-daily-support']]) {
+      await fireEvent.press(screen.getByRole('button', { name }));
+      expect(mockBrowser).toHaveBeenLastCalledWith(`https://willgeiken1.github.io/wellnesstracker/${page}`);
+    }
+    expect(screen.getByTestId('settings-about-disclaimer')).toHaveTextContent(/not medical advice/);
+    expect(screen.queryByTestId('settings-about-link-failed')).toBeNull();
+    const { Linking } = require('react-native') as typeof import('react-native');
+    const safari = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('synthetic'));
+    mockBrowser.mockRejectedValueOnce(new Error('synthetic'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Privacy policy' }));
+    expect(await screen.findByTestId('settings-about-link-failed')).toHaveTextContent(t('linkFailed'));
+    safari.mockRestore();
+  });
+  test('Data carries its own title, no Close beside Back, and no Oura promise', async () => {
+    mockSection = 'data';
+    await show(<Section />);
+    expect(screen.getByRole('header', { name: 'Import your data' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    expect(screen.queryByText(/Your Oura connection stays connected/)).toBeNull();
   });
   test('Health without Health access says so plainly', async () => {
     Constants.expoConfig!.extra!.phoneOnly = true;

@@ -9,7 +9,7 @@ export const settingsGroups = [
     { route: 'workout', label: 'workoutSettings', icon: 'workout', keywords: 'rest timer plates bar haptics summary' },
     { route: 'score', label: 'scoreSetting', icon: 'score', keywords: 'insight ring weights pillars training food recovery hide' },
     { route: 'health', label: 'health', icon: 'health', keywords: 'apple oura fitbit whoop watch connect' },
-    { route: 'notifications', label: 'notifications', icon: 'notifications', keywords: 'reminders alerts' },
+    // Notifications has no row until reminders exist: an empty page in a shipped app reads as unfinished (App Review 2.1).
   ] },
   { title: 'settingsGroupData', rows: [
     { route: 'privacy', label: 'privacy', icon: 'privacy', keywords: 'ai photos thumbnails permission' },
