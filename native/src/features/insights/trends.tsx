@@ -43,13 +43,13 @@ export function Trends({ store, now }: { store: WorkoutStore; now: Date }) {
   };
   return <View style={{ gap: tokens.spacing[3] }}>
     <ChartCard testID="trend-calories" title={t('insightsCalories')} summary={`${of(t('insightsAverage'), kcal, 'kcal')} · ${t('insightsDaysLogged').replace('{count}', String(logged)).replace('{days}', '14')}`}>
-      <MiniChart values={kcal} goal={today.targetKcal} color={food} first={first} last={last} />
+      <MiniChart values={kcal} goal={today.targetKcal} color={food} first={first} last={last} unit="kcal" />
     </ChartCard>
     <ChartCard testID="trend-volume" title={t('insightsVolume')} summary={sessions ? `${t('insightsWorkouts').replace('{count}', String(sessions))} · ${whole(fromKg(points.reduce((n, p) => n + p.volumeKg, 0), unit))} ${unit}` : t('insightsNoneLogged')}>
-      <MiniChart values={volume} bars color={training} first={first} last={last} />
+      <MiniChart values={volume} bars color={training} first={first} last={last} unit={unit} />
     </ChartCard>
     <ChartCard testID="trend-protein" title={t('insightsProtein')} summary={of(t('insightsAverage'), protein, 'g')}>
-      <MiniChart values={protein} goal={today.targetProtein} color={food} first={first} last={last} />
+      <MiniChart values={protein} goal={today.targetProtein} color={food} first={first} last={last} unit="g" />
     </ChartCard>
     <ThemedText muted variant="caption">{t('insightsGoalHint')}</ThemedText>
   </View>;

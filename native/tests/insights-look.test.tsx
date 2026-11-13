@@ -3,7 +3,7 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { saveFood, setTargets, meals } from '../src/features/food/model';
 import { dayPoints, hasAny, lastDays, onTarget, weekDays, weekReport } from '../src/features/insights/model';
-import { linePath, MiniChart } from '../src/features/insights/mini-chart';
+import { axisNumber, linePath, MiniChart, niceStep } from '../src/features/insights/mini-chart';
 import { Trends, Weekly } from '../src/features/insights/trends';
 import Insights from '../src/app/(tabs)/insights';
 import { useAuth } from '../src/auth/provider';
@@ -169,4 +169,26 @@ test('the tab has four sections; Muscles holds the body map and Recovery says pl
   expect(screen.queryByText('M2/M3 placeholder')).toBeNull();
   await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' }));
   expect(screen.getByTestId('weekly-report')).toBeTruthy();
+});
+
+describe('chart scale and goal label', () => {
+  test('gridlines fall on round numbers', () => {
+    expect([2600, 180, 9000, 45, 0.5].map(niceStep)).toEqual([1000, 100, 5000, 20, 0.2]);
+    expect(axisNumber(2500)).toBe('2,500');
+    expect(axisNumber(12000)).toBe('12k');
+  });
+  test('the scale shows 0 and round values, and the dashed goal says what it is', async () => {
+    await render(wrap(<MiniChart values={[1800, null, 2100, 2600]} goal={2300} color="#F2A65A" first="Nov 1" last="Nov 4" unit="kcal" />));
+    expect(screen.getByTestId('chart-goal-label').props.children).toBe('Goal 2,300 kcal');
+    const axis = screen.getByTestId('chart-axis');
+    const labels = axis.props.children.map((child: { props: { children: string } }) => child.props.children);
+    expect(labels).toContain('0');
+    expect(labels).toContain('1,000');
+    expect(labels).not.toContain('2,000'); // it would sit on the goal label's row, so the goal wins it
+    expect(screen.getAllByTestId('chart-grid').length).toBeGreaterThan(0);
+  });
+  test('no goal, no goal label', async () => {
+    await render(wrap(<MiniChart values={[3, 5, 4]} bars color="#93E07A" first="a" last="b" />));
+    expect(screen.queryByTestId('chart-goal-label')).toBeNull();
+  });
 });

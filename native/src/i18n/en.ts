@@ -805,7 +805,7 @@ export const en = {
   insightsCalories: 'Calories', insightsVolume: 'Training volume', insightsProtein: 'Protein',
   insightsAverage: 'Average {value}', insightsDaysLogged: '{count} of {days} days logged', insightsWorkouts: 'Workouts: {count}',
   insightsNoneLogged: 'Nothing logged in the last 14 days',
-  insightsGoalHint: 'The dashed line is today\u2019s target. A day with nothing logged leaves a gap.',
+  insightsGoalHint: 'The dashed line is today\u2019s target. A day with nothing logged leaves a gap.', chartGoal: 'Goal {value}',
   weeklyOfDate: 'Week of {day}', weeklyHeadline: 'Workouts: {workouts} · Food logged on {days} days', weeklyNothing: 'Nothing logged yet this week',
   weeklyWorkouts: 'Workouts', weeklyVolume: 'Volume lifted', weeklyFoodDays: 'Days with food logged', weeklyOnTarget: 'Days on calorie target',
   weeklyAvgKcal: 'Average calories', weeklyAvgProtein: 'Average protein', weeklyOf: '{count} of {days}',
