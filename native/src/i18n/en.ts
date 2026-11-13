@@ -346,7 +346,7 @@ export const en = {
   activityLight: "Lightly active",
   activityActive: "Active",
   activityVery: "Very active",
-  profileLocalExtras: "Weight goal, sex and activity level are saved on this device for now.",
+  profileLocalExtras: "Weight goal, sex and activity level are kept on this phone only.",
   welcomeTitle: "Your workouts, food and health services in one place",
   welcomeIntro: "Log training and food here. Health services join them as connections open.",
   welcomeMapLabel: "Drawing of three hills joined into one map: workouts, food and health services",
