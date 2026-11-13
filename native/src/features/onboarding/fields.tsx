@@ -8,6 +8,7 @@ import { SegmentedControl } from '../../components/segmented-control';
 import { t } from '../../i18n/en';
 import { ageOn, changeUnits, type ProfileInput, type DevicePreferences } from './model';
 import { Group, semibold } from './parts';
+import { TELEMETRY_IN_BUILD } from './device-preferences';
 
 type FieldProps = { label: string; value: string; onChange: (text: string) => void; numeric?: boolean; disabled?: boolean;
   /** A plain line under the box saying what to type. */ helper?: string;
@@ -43,6 +44,11 @@ export function profileErrors(profile: ProfileInput): ProfileErrors {
 export function ProfileFields({ value, onChange, settings = false, errors }: { value: ProfileInput; onChange: (value: ProfileInput) => void; settings?: boolean; errors?: ProfileErrors }) {
   return <>
     <Group testID="profile-basics">
+      <Choice label={t('profileGoal')}>
+        <SegmentedControl label={t('profileGoal')} value={value.goal ?? 'maintain'}
+          options={[{ value: 'lose', label: t('goalLose') }, { value: 'maintain', label: t('goalMaintain') }, { value: 'gain', label: t('goalGain') }]}
+          onChange={goal => onChange({ ...value, goal })} />
+      </Choice>
       {settings && <Field label={t('profileName')} value={value.name} onChange={name => onChange({ ...value, name })}
         input={{ autoCapitalize: 'words', autoComplete: 'name', textContentType: 'name' }} />}
       <Field label={t('birthDate')} value={value.dob} onChange={dob => onChange({ ...value, dob })} helper={t('birthDateHelp')} error={errors?.dob}
@@ -80,7 +86,9 @@ function Toggle({ label, value, onChange, first = false }: { label: string; valu
     <Switch hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ true: colors.accent, false: colors['hair-2'] }} />
   </View>;
 }
+/** Crash-report and analytics consent. Hidden while neither service is in the app (see TELEMETRY_IN_BUILD). */
 export function PreferenceFields({ value, onChange }: { value: DevicePreferences; onChange: (value: DevicePreferences) => void }) {
+  if (!TELEMETRY_IN_BUILD) return null;
   return <Group testID="device-preferences" title={t('devicePrefs')} body={t('devicePrefsHelp')}>
     <View>
       <Toggle first label={t('crashReportsPref')} value={value.crashReports} onChange={crashReports => onChange({ ...value, crashReports })} />
