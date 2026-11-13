@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { tabs } from '@/features/shell/tabs';
@@ -16,6 +16,39 @@ export const dockBottom = (inset: number) => Math.max(inset - 10, 12);
 export const dockSpace = (inset: number) => dockBottom(inset) + DOCK_ACTIVE + 2 * DOCK_GAP;
 /** The pill in dark themes: darker than any card, so the bar stands off the page as it does in light themes. */
 export const DOCK_NIGHT = '#08090B';
+/** How far the fade behind the bar reaches above the room left for it. Screens leave this much more at their end,
+ * so a last button can rest clear of the fade, not only clear of the bar. */
+export const DOCK_FADE = 24;
+
+/** A screen's own round button that rides beside the floating bar while that screen is open, like Home's +.
+ * It sits in line with the tabs, so it never covers a card the way a button floating over the page does. */
+export interface DockAction { label: string; expanded: boolean; onPress: () => void }
+let dockAction: DockAction | null = null;
+const dockListeners = new Set<() => void>();
+export function setDockAction(next: DockAction | null) {
+  const same = next === dockAction || (!!next && !!dockAction && next.label === dockAction.label && next.expanded === dockAction.expanded && next.onPress === dockAction.onPress);
+  if (same) return;
+  dockAction = next;
+  dockListeners.forEach(listener => listener());
+}
+const subscribeDock = (listener: () => void) => { dockListeners.add(listener); return () => { dockListeners.delete(listener); }; };
+export const useDockAction = () => useSyncExternalStore(subscribeDock, () => dockAction, () => dockAction);
+
+/** The button beside the bar: the size of the other tabs, neutral, so the open tab stays the only accent circle. */
+export function DockButton({ action }: { action: DockAction }) {
+  const { colors } = useTheme();
+  return <Pressable testID="dock-action" accessibilityRole="button" accessibilityLabel={action.label} accessibilityState={{ expanded: action.expanded }}
+    onPress={action.onPress} style={({ pressed }) => [{ width: DOCK_ITEM + 2 * DOCK_PAD, height: DOCK_ITEM + 2 * DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2,
+      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 }, tokens.elevation.ios]}>
+    <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
+      <Path d="M12 5v14M5 12h14" stroke={colors.text} strokeWidth={2} strokeLinecap="round" transform={action.expanded ? 'rotate(45 12 12)' : undefined} />
+    </Svg>
+  </Pressable>;
+}
+function DockRow({ children }: { children: ReactNode }) {
+  const action = useDockAction();
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: DOCK_GAP }}>{children}{action && <DockButton action={action} />}</View>;
+}
 
 export interface DockItem { key: string; label: string; icon: IconName }
 
@@ -73,13 +106,13 @@ export function FloatingTabs() {
   const insets = useSafeAreaInsets();
   const items: DockItem[] = tabs.map(tab => ({ key: tab.route, label: t(tab.label), icon: tab.label }));
   return <Tabs screenOptions={{ headerShown: false, animation: 'none' }} screenLayout={({ children }) => <DockInsets>{children}</DockInsets>}
-    tabBar={({ state, emitter, navigateToTab }) => <><DockFade height={dockSpace(insets.bottom) + 24} /><View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: dockBottom(insets.bottom), alignItems: 'center' }}>
-      <TabDock items={items} active={state.index} onPress={index => {
+    tabBar={({ state, emitter, navigateToTab }) => <><DockFade height={dockSpace(insets.bottom) + DOCK_FADE} /><View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: dockBottom(insets.bottom), alignItems: 'center' }}>
+      <DockRow><TabDock items={items} active={state.index} onPress={index => {
         const route = state.routes[index];
         if (!route) return;
         const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
         if (state.index !== index && !event.defaultPrevented) navigateToTab(route.key);
-      }} />
+      }} /></DockRow>
     </View></>}>
     {tabs.map(tab => <Tabs.Screen key={tab.route} name={tab.route} options={{ title: t(tab.label) }} />)}
   </Tabs>;

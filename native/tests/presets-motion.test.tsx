@@ -161,6 +161,19 @@ describe('tab bar and keypad looks', () => {
     await fireEvent.press(screen.getByTestId('preset-calm'));
     expect(savedAccent(repository)).toBe('berryMeadow');
   });
+  test('choice buttons save on their own as Pills, keep the preset, and older saved text stays Standard', async () => {
+    expect(parseAppearance('goldenHour;bar=floating').selector).toBe('standard');
+    expect(parseAppearance('goldenHour;selector=chips').selector).toBe('standard');
+    const repository = settingsRepository('berryMeadow');
+    await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
+    await fireEvent.press(screen.getByRole('tab', { name: 'Pills' }));
+    expect(savedAccent(repository)).toBe('berryMeadow;selector=pills');
+    expect(parseAppearance(savedAccent(repository)).selector).toBe('pills');
+    // Appearance itself now shows its choices as pills.
+    expect(screen.getAllByTestId('selector-pills').length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByTestId('preset-glass'));
+    expect(savedAccent(repository)).toBe('berryMeadow;ring=glass;motion=lively;bar=glass;keypad=glass;selector=pills');
+  });
   test('a glass ring with a standard bar is your own mix', () => {
     expect(presetOf({ ...PRESETS.glass, bar: 'standard' })).toBeNull();
   });

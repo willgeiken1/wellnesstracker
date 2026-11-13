@@ -3,9 +3,15 @@ import { AccessibilityInfo, Alert } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { Body } from '../src/features/body/screen';
 import { memoryRepository } from './workout-repository';
-import { saveWeighIn } from '../src/features/body/model';
+import { friendlyDay, saveWeighIn } from '../src/features/body/model';
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
 afterEach(()=>jest.useRealTimers());
+test('days read as people say them, with the year only when it is not this year',()=>{
+ const now=new Date(2026,10,13);
+ expect(friendlyDay('2026-11-13',now)).toBe('Nov 13');
+ expect(friendlyDay('2025-12-31',now)).toBe('Dec 31, 2025');
+ expect(friendlyDay('not a day',now)).toBe('not a day');
+});
 test('empty state opens decimal keypad, rejects invalid weight, saves and averages repeated readings',async()=>{
  const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
  await render(<Body repository={repo}/>,{wrapper});
@@ -37,10 +43,10 @@ test('ranges, tap and accessible chart navigation expose points; live profile un
  const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');saveWeighIn(repo,80,'kg','2026-10-01');saveWeighIn(repo,79,'kg','2026-10-27');
  await render(<Body repository={repo}/>,{wrapper});
  for(const name of ['7d','30d','90d','1y'])expect(screen.getByRole('tab',{name})).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'Previous trend point'}));expect(screen.getByText(/2026-10-01 · Trend/)).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/2026-10-27 · Trend/)).toBeTruthy();
- await fireEvent.press(screen.getByTestId('body-chart'),{nativeEvent:{locationX:0}});expect(screen.getByText(/2026-10-01 · Trend/)).toBeTruthy();
- await fireEvent.press(screen.getByRole('tab',{name:'7d'}));expect(screen.queryByText(/2026-10-01 · Trend/)).toBeNull();
+ await fireEvent.press(screen.getByRole('button',{name:'Previous trend point'}));expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/Oct 27 · Trend/)).toBeTruthy();
+ await fireEvent.press(screen.getByTestId('body-chart'),{nativeEvent:{locationX:0}});expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('tab',{name:'7d'}));expect(screen.queryByText(/Oct 1 · Trend/)).toBeNull();
  const before=JSON.stringify(repo.list('weigh_ins'));await act(()=>{repo.save('profile',{weight_unit:'lb'},'profile');});
  expect(screen.getByText(/Trend: .* lb/)).toBeTruthy();expect(JSON.stringify(repo.list('weigh_ins'))).toBe(before);
 });
@@ -108,24 +114,28 @@ test('delete confirmation cancels safely and removes only the selected entry',as
 });
 
 test('delete buttons identify the date and lb value and confirmation includes the date',async()=>{
+ // Dates read as "Oct 1" in the current year, so the clock is pinned.
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-10-27T12:00:00Z'));
  const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});
  const repo=memoryRepository();repo.save('profile',{weight_unit:'lb'});
  saveWeighIn(repo,180,'lb','2026-10-01');
  await render(<Body repository={repo}/>,{wrapper});
- await fireEvent.press(screen.getByRole('button',{name:'Delete weigh-in for 2026-10-01, 180.0 lb'}));
- expect(alert.mock.calls.at(-1)![0]).toBe('Delete weigh-in for 2026-10-01?');
+ await fireEvent.press(screen.getByRole('button',{name:'Delete weigh-in for Oct 1, 180.0 lb'}));
+ expect(alert.mock.calls.at(-1)![0]).toBe('Delete weigh-in for Oct 1?');
  await act(()=>{alert.mock.calls.at(-1)![2]!.find(b=>b.style==='destructive')!.onPress!();});
  expect(repo.list('weigh_ins')).toEqual([]);alert.mockRestore();
 });
 
 test('delete list initially shows the 30 most recent readings and Show all expands it',async()=>{
+ // Dates read as "Oct 1" in the current year, so the clock is pinned.
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-10-27T12:00:00Z'));
  const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
  // Reverse insertion makes chronology, rather than repository order, observable.
  for(let day=31;day>=1;day--)saveWeighIn(repo,80,'kg',`2026-08-${String(day).padStart(2,'0')}`);
  await render(<Body repository={repo}/>,{wrapper});
  expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})).toHaveLength(30);
- expect(screen.queryByRole('button',{name:'Delete weigh-in for 2026-08-01, 80.0 kg'})).toBeNull();
- expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})[0].props.accessibilityLabel).toContain('2026-08-31');
+ expect(screen.queryByRole('button',{name:'Delete weigh-in for Aug 1, 80.0 kg'})).toBeNull();
+ expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})[0].props.accessibilityLabel).toContain("Aug 31");
  await fireEvent.press(screen.getByRole('button',{name:'Show all'}));
  expect(screen.getAllByRole('button',{name:/Delete weigh-in for/})).toHaveLength(31);
 });
