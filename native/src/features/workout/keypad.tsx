@@ -24,6 +24,8 @@ export interface Cursor {
 }
 /** How long a tap waits for the store to show it before the keypad trusts the store again. */
 const SETTLE_MS = 800;
+/** Only ever called from a tap, never while drawing. */
+const tapTime = () => Date.now();
 export function Keypad({
   label,
   inputId = label,
@@ -79,10 +81,10 @@ export function Keypad({
   const sent = useRef<{ visit: number; before: string; typed: string; at: number } | null>(null);
   const live = () => {
     const last = sent.current;
-    return last && last.visit === visit && Date.now() - last.at < SETTLE_MS && (value === last.before || value === last.typed) ? { value: last.typed, fresh: false } : { value, fresh };
+    return last && last.visit === visit && tapTime() - last.at < SETTLE_MS && (value === last.before || value === last.typed) ? { value: last.typed, fresh: false } : { value, fresh };
   };
   const send = (next: string) => {
-    sent.current = { visit, before: value, typed: next, at: Date.now() };
+    sent.current = { visit, before: value, typed: next, at: tapTime() };
     onChange(next);
   };
   const increment = field === "reps" ? 1 : step(equipment, unit, setupStep),
