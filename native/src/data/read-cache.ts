@@ -27,3 +27,47 @@ export function cachedReads<T extends object>(repo: T): T {
     },
   });
 }
+
+/** Calls that only look. Anything else might write, so it empties what {@link liveReads} remembers. */
+const LOOKS = new Set([
+  ...READS, 'getRevision', 'subscribe', 'pending', 'conflicts', 'unsyncedCount', 'hasUnsynced', 'cursor',
+  'syncTables', 'localSnapshot', 'canPromotePreferences',
+]);
+type Revisioned = { getRevision(): number };
+
+/**
+ * The same remembering as {@link cachedReads}, but safe for a store that also saves.
+ *
+ * History, a past workout and the charts ask for the same whole lists inside nested loops, which is thousands
+ * of database reads per draw once there are weeks of training. This view answers each list or value once and
+ * forgets everything the moment something could have changed: when the repository's revision moves (any
+ * committed change, from any writer), and around every call made through it that is not a plain read (so a
+ * save inside an open atomic block, where the revision has not moved yet, is seen at once, and so is a block
+ * that was rolled back).
+ */
+export function liveReads<T extends Revisioned>(repo: T): T {
+  const seen = new Map<string, unknown>();
+  let revision = repo.getRevision();
+  return new Proxy(repo, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target) as unknown;
+      if (typeof value !== 'function') return value;
+      const call = value as (...args: unknown[]) => unknown;
+      if (typeof prop !== 'string' || !LOOKS.has(prop)) {
+        return (...args: unknown[]) => {
+          seen.clear();
+          try { return call.apply(target, args); } finally { seen.clear(); }
+        };
+      }
+      if (!READS.has(prop)) return call.bind(target);
+      return (...args: unknown[]) => {
+        const now = target.getRevision();
+        if (now !== revision) { seen.clear(); revision = now; }
+        const key = `${prop}:${JSON.stringify(args)}`;
+        if (!seen.has(key)) seen.set(key, call.apply(target, args));
+        const answer = seen.get(key);
+        return Array.isArray(answer) ? [...answer] : answer;
+      };
+    },
+  });
+}
