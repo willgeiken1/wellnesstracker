@@ -47,7 +47,7 @@ We don't sell your data, show ads, use it for advertising or track you across ot
 
 ## Your choices
 
-You can edit or delete anything you log, turn Apple Health access off, withdraw permission for AI estimates, and sign out. To delete your account and everything stored with it, including Oura data and tokens, email us from the address you signed up with (below); we delete it and confirm by email.
+You can edit or delete anything you log, turn Apple Health access off, withdraw permission for AI estimates, and sign out. To delete your account, go to Settings, Account, Delete account in the app and type DELETE to confirm. This removes your sign-in and everything stored with the account, including Oura data and tokens, and erases the copy on your iPhone. You can also email us from the address you signed up with (below); we delete it and confirm by email.
 
 ## How long we keep data
 

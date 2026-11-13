@@ -6,7 +6,9 @@ Insight Daily is built and run by one developer. If something isn't working, or 
 
 ## Delete your account
 
-Email insight.wellnessos@gmail.com from the address you signed up with and ask for your account to be deleted. This permanently removes your sign-in and everything stored with the account, including Oura data, and we confirm by email. To clear the copy on your iPhone, sign out (Settings, Account) or delete the app.
+In the app, go to Settings, Account, Delete account, and type DELETE to confirm. This permanently removes your sign-in and everything stored with the account, including Oura data and tokens, and erases the copy on your iPhone.
+
+If you can't open the app, email insight.wellnessos@gmail.com from the address you signed up with and ask for your account to be deleted. We delete it and confirm by email.
 
 ## Questions
 

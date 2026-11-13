@@ -30,7 +30,7 @@ To the extent the law allows, we are not liable for injury, loss or damage from 
 
 ## Ending
 
-You can stop using the app at any time and ask us to delete your account, as the [Privacy Policy](insight-daily-privacy) describes.
+You can stop using the app at any time and delete your account in Settings, Account, or ask us to, as the [Privacy Policy](insight-daily-privacy) describes.
 
 ## Changes and contact
 
