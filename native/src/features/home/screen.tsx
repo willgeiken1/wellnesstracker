@@ -132,7 +132,9 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
  * the existing stores. The Insight Score is worked out here from what is logged and, when connected, Apple Health. */
 export function Home() {
   const { store, auth } = useWorkout();
-  const { colors } = useTheme();
+  const { colors, barLook } = useTheme();
+  // Above the floating bar the + is neutral, so the open tab's circle stays the only accent circle down there.
+  const floating = barLook === 'floating';
   // Reopening the app draws Home again, so "today" is the real day even if the app sat open overnight.
   const [, setWoken] = useState(0);
   useEffect(() => {
@@ -198,9 +200,9 @@ export function Home() {
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
       </>}
       <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={() => setAdding(open => !open)}
-        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
+        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: floating ? colors.surface : colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
         <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
-          <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
+          <Path d="M12 5v14M5 12h14" stroke={floating ? colors.text : colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
         </Svg>
       </Pressable>
     </View>
@@ -257,11 +259,11 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   </View>;
 }
 
-/** The greeting in two tones, quiet then strong, so the time of day is the word that lands. */
+/** The greeting in two weights, light then strong, so the time of day is the word that lands. */
 function Greeting({ text }: { text: string }) {
   const cut = text.indexOf(' ');
   return <ThemedText variant="title" accessibilityRole="header" accessibilityLabel={text} style={semibold}>
-    {cut > 0 && <ThemedText muted variant="title" style={semibold}>{text.slice(0, cut + 1)}</ThemedText>}
+    {cut > 0 && <ThemedText muted variant="title" style={{ fontFamily: 'Lexend_300Light', fontWeight: '300' }}>{text.slice(0, cut + 1)}</ThemedText>}
     {cut > 0 ? text.slice(cut + 1) : text}
   </ThemedText>;
 }

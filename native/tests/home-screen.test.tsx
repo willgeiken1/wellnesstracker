@@ -151,6 +151,19 @@ test('greeting follows the time of day, the header keeps settings, and demo mode
 
 describe('add button and the tab bar', () => {
   const { SafeAreaProvider } = jest.requireActual('react-native-safe-area-context');
+  const addColour = () => jest.requireActual('react-native').StyleSheet.flatten(screen.getByRole('button', { name: 'Add' }).props.style).backgroundColor;
+  const palette = () => jest.requireActual('../src/design/tokens').createTheme('dark', 'seaGlassTide');
+  test('the + is the accent colour with the standard bar', async () => {
+    open();
+    await render(<ThemeProvider><Home /></ThemeProvider>);
+    expect([palette().accent, jest.requireActual('../src/design/tokens').createTheme('light', 'seaGlassTide').accent]).toContain(addColour());
+  });
+  test('above the floating bar the + is neutral, so the open tab is the only accent circle', async () => {
+    const repo = open();
+    repo.save('settings', { theme_override: 'dark', accent: 'seaGlassTide;bar=floating' });
+    await render(<ThemeProvider repository={repo}><Home /></ThemeProvider>);
+    expect(addColour()).toBe(palette().surface);
+  });
   test.each([[0, 16], [83, 99]])('with a bottom inset of %i the + button sits %i from the bottom', async (bottom, expected) => {
     open();
     const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 59, left: 0, right: 0, bottom } };

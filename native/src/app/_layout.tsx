@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import { Lexend_300Light } from '@expo-google-fonts/lexend/300Light';
 import { Lexend_500Medium } from '@expo-google-fonts/lexend/500Medium';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '@/design/theme-provider';
@@ -61,7 +62,7 @@ function Application() {
   </ThemeProvider>;
 }
 export default function RootLayout() {
-  const [loaded, error] = useFonts({ Lexend_500Medium });
+  const [loaded, error] = useFonts({ Lexend_300Light, Lexend_500Medium });
   useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
   if (!loaded && !error) return null;
   return <OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider>;

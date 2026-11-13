@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import AppTabs from '../src/components/app-tabs';
-import { DOCK_ACTIVE, DOCK_ITEM, TabDock, dockBottom, dockSpace, type DockItem } from '../src/components/floating-tabs';
+import { DOCK_ACTIVE, DOCK_ITEM, DOCK_NIGHT, TabDock, dockBottom, dockSpace, type DockItem } from '../src/components/floating-tabs';
 import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
 import { syntheticRow } from '../fixtures/sync';
@@ -48,7 +48,9 @@ describe('the floating tab bar', () => {
     expect(style('tab-food')).toMatchObject({ width: DOCK_ITEM, height: DOCK_ITEM });
     expect(style('tab-food').backgroundColor).not.toBe(dark.accent);
     expect(screen.getAllByTestId('tab-pill')).toHaveLength(1);
-    expect(style('tab-pill')).toMatchObject({ backgroundColor: dark['surface-2'] });
+    // Near-black, darker than any card, so it stands off the page in dark themes too.
+    expect(style('tab-pill')).toMatchObject({ backgroundColor: DOCK_NIGHT });
+    expect(style('tab-food').backgroundColor).toBe('transparent');
     // The open tab is outside the pill.
     expect(screen.getByTestId('tab-index').parent).not.toBe(screen.getByTestId('tab-pill'));
   });
@@ -108,5 +110,11 @@ describe('choosing the bar in Appearance', () => {
     // Pressing the open tab tells the screen, but does not navigate again.
     await fireEvent.press(screen.getByRole('tab', { name: 'Workouts' }));
     expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+  test('a fade of the page colour sits behind the bar and never takes a touch', async () => {
+    await render(<ThemeProvider repository={saved('seaGlassTide;bar=floating')}><AppTabs /></ThemeProvider>);
+    const fade = screen.getByTestId('tab-fade');
+    expect(fade.props.pointerEvents).toBe('none');
+    expect(StyleSheet.flatten(fade.props.style).height).toBeGreaterThan(dockSpace(0));
   });
 });
