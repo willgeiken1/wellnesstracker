@@ -236,7 +236,7 @@ const HUE_WINDOW: Partial<Record<MeaningRole, [number, number]>> = { training: [
 
 /** Values chosen by hand after the 2026-11 design critique. Each stays at least MIN_DISTINCT_DE from every other
  * pillar and the accent, keeps one hue across both modes, and clears D6 (the graphics and text steps below still run). */
-export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'training' | 'food' | 'recovery'; to: string; reason: string }[]> = {
+export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'training' | 'food' | 'recovery' | 'sleep'; to: string; reason: string }[]> = {
   // Training was the accent's gold (dark ΔE 0.028). Green, the training colour most palettes use, in both modes.
   goldenHour: [
     { mode: 'dark', role: 'training', to: '#9CCB5A', reason: 'training read as the accent gold (critique 9)' },
@@ -265,6 +265,18 @@ export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'trai
   // between the two, so any move away from one brings it closer to the other or greys it out.
   auroraFjord: [
     { mode: 'dark', role: 'recovery', to: '#75BAEF', reason: 'recovery read as the accent and as water (review UX-11)' },
+  ],
+  // The simulator sweep: Spring Citrus training and food were both orange on Home (ΔE 0.11), and green is taken by
+  // the lime accent and success, so training moves to blossom pink in both modes, dark enough in light mode for white.
+  springCitrus: [
+    { mode: 'dark', role: 'training', to: '#FFB0D8', reason: 'training and food were both orange on Home (sweep)' },
+    { mode: 'light', role: 'training', to: '#C03C80', reason: 'training in the same pink as dark mode (sweep)' },
+  ],
+  // Moonlight Dusk dark: the carbs (recovery) and fat (sleep) rings were close, and recovery sat 0.07 from the accent.
+  // Recovery moves towards sky, sleep towards orchid, each away from the periwinkle accent between them.
+  moonlightDusk: [
+    { mode: 'dark', role: 'recovery', to: '#80C8F0', reason: 'recovery read as the accent and as sleep (sweep)' },
+    { mode: 'dark', role: 'sleep', to: '#E0A6F5', reason: 'sleep read as recovery on the Food rings (sweep)' },
   ],
   glacierBloom: [
     { mode: 'dark', role: 'recovery', to: '#878DCE', reason: 'recovery sat close to water (review UX-11)' },

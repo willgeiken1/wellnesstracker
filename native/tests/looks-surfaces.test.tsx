@@ -138,3 +138,13 @@ describe('Appearance', () => {
     expect(savedAccent(repository)).toBe('seaGlassTide;bar=floating');
   });
 });
+
+test('in dark mode a raised card also takes a hairline edge, since a shadow barely shows there', async () => {
+  const { Appearance } = require('react-native');
+  jest.spyOn(Appearance, 'getColorScheme').mockReturnValue('dark');
+  const repository = settingsRepository();
+  repository.save('settings', { theme_override: 'dark' } as never);
+  await render(<ThemeProvider repository={repository}><Panel testID="panel" /><Card testID="card" /></ThemeProvider>);
+  expect(flat('card')).toMatchObject({ borderWidth: 1 });
+  expect(flat('panel').borderWidth).toBeUndefined();
+});

@@ -15,8 +15,11 @@ export const PROTOTYPE_RADIUS = 18;
 const ANDROID_ELEVATION = 3;
 const corners = (style: ViewProps['style'], panel: number) => StyleSheet.flatten(style)?.borderRadius === PROTOTYPE_RADIUS ? { borderRadius: panel } : null;
 export function Card({ style, ...props }: ViewProps) {
-  const { colors, radius } = useTheme();
+  const { colors, radius, mode } = useTheme();
+  // A shadow barely shows on a dark page, so in dark mode the card also takes a hairline edge (REDESIGN 1.2's
+  // "shadow, or a hairline"), and raised reads as raised at a glance.
   return <View {...props} style={[{ backgroundColor: colors.surface, padding: tokens.spacing[3], borderRadius: radius.card, gap: tokens.spacing[2] },
+    mode === 'dark' && { borderWidth: 1, borderColor: colors['hair-2'] },
     Platform.OS === 'ios' ? tokens.elevation.ios : { elevation: ANDROID_ELEVATION }, style, corners(style, radius.panel)]} />;
 }
 
