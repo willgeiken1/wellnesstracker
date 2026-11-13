@@ -15,7 +15,8 @@ export default function Page() {
  const [now,setNow]=useState(Date.now);
  const [section,setSection]=useState<(typeof SECTIONS)[number]>('trends');
  // useWorkout returns a new facade on repository revisions, including history edits.
- const sessions=useMemo(()=>atlasSessions(store),[store]);
+ // The muscle map reads all history, so it is worked out only while Muscles is showing.
+ const sessions=useMemo(()=>section==='muscles'?atlasSessions(store):[],[store,section]);
  useEffect(()=>{
   const timer=setInterval(()=>setNow(Date.now()),60000);
   const sub=AppState.addEventListener('change',state=>{if(state==='active') setNow(Date.now());});
