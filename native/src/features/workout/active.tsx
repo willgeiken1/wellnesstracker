@@ -44,6 +44,9 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     }>(),
     [error, setError] = useState(false),
     [pastId, setPastId] = useState<string | null>(null),
+    // The workout just saved from the Finish sheet. It is no longer live, so without this the logger would drop to the
+    // no-workout screen for the frames before the replace to its summary lands, which showed as a flash between them.
+    [savedId, setSavedId] = useState<string | null>(null),
     started = useRef(false);
   useEffect(() => {
     let active = true;
@@ -62,7 +65,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       active = false;
     };
   }, [store, routine, id, day]);
-  const session = id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
+  const session = savedId ? store?.repo.get("sessions", savedId) : id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
   return store && session ? (
     <Logger
       key={session.id}
@@ -71,6 +74,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       session={session}
       pending={auth.pending}
       status={auth.syncStatus}
+      onSaved={setSavedId}
     />
   ) : (
     <SafeAreaView
@@ -108,9 +112,11 @@ function Logger({
   pending,
   status,
   fixtureState,
+  onSaved,
 }: {
   store: WorkoutStore;
   fixtureState?: string;
+  onSaved: (id: string) => void;
   session: Row;
   pending: number;
   status: "idle" | "syncing" | "offline";
@@ -760,6 +766,12 @@ function Logger({
             store={store}
             session={session}
             onClose={() => setFinish(false)}
+            onSaved={() => {
+              // Close the sheet and keep this workout on screen in the same render as the save, so the logger stays
+              // until the summary replaces it.
+              setFinish(false);
+              onSaved(session.id);
+            }}
           />
         )}
       </SheetHost>

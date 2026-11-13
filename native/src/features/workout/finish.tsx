@@ -25,11 +25,14 @@ export function formatLocalDateTime(stamp: number) {
 export function FinishSheet({
   store,
   session,
-  onClose
+  onClose,
+  onSaved
 }: {
   store: WorkoutStore;
   session: Row;
   onClose: () => void;
+  /** Called once the workout is saved, just before the replace to its summary. */
+  onSaved?: () => void;
 }) {
   const {
     colors
@@ -80,6 +83,7 @@ export function FinishSheet({
               name,
               saveTemplate
             });
+            onSaved?.();
             router.replace({
               pathname: '/workout/summary',
               params: {
