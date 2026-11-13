@@ -580,6 +580,7 @@ export const en = {
   deleteTemplate: "Delete template?",
   undoDelete: "Undo template deletion",
   historyEmpty: "Finished workouts will appear here.",
+  historyShowAll: "Show all workouts",
   cardio_treadmill: 'Incline treadmill',
   cardio_stair: 'StairMaster',
   cardio_elliptical: 'Elliptical',

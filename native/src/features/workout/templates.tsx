@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
@@ -20,11 +20,8 @@ import { ExercisePicker } from './picker';
 import { Routines } from './routines';
 import { PastDayChoice } from './days';
 import { Cardio } from '../cardio/screen';
-/** A finished workout's print at thumbnail size. Worked out once per saved change, not on every redraw of the list. */
-function Thumb({ store, id }: { store: WorkoutStore; id: string }) {
-  const data = useMemo(() => sessionPrint(store, id).data, [store, id]);
-  return <Print data={data} width={36} height={36} />;
-}
+/** How many past workouts History draws before "Show all": a year of training is hundreds of rows. */
+export const HISTORY_PAGE = 30;
 export function Workouts() {
   const {
       store
@@ -32,6 +29,7 @@ export function Workouts() {
     [segment, setSegment] = useState<'routines' | 'history' | 'cardio'>('routines'),
     [undo, setUndo] = useState<(() => void) | null>(null),
     [error, setError] = useState(false),
+    [showAll, setShowAll] = useState(false),
     { colors } = useTheme();
   function run(action: () => void) {
     try {
@@ -42,6 +40,10 @@ export function Workouts() {
     }
   }
   const history = store?.history() ?? [];
+  // Rows are worked out in one read-only pass, so each workout's print and "edited" check reuse grouped sets.
+  const rows = store && segment === 'history' ? store.reading(() => (showAll ? history : history.slice(0, HISTORY_PAGE)).map(s => ({
+    session: s, edited: store.edited(s.id), print: sessionPrint(store, s.id).data,
+  }))) : [];
   return <Screen title={t('workouts')} tabHeader>
     <SegmentedControl label={t('segments')} options={(['routines', 'history', 'cardio'] as const).map(value => ({
       value,
@@ -56,8 +58,8 @@ export function Workouts() {
         <ThemedText muted>{t('historyEmpty')}</ThemedText>
       </Card>}
       {store && history.length > 0 && <Card testID="history-list" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
-        {history.map((s, index) => {
-          const name = String(s.data.name ?? t('workoutName')), edited = store.edited(s.id);
+        {rows.map(({ session: s, edited, print }, index) => {
+          const name = String(s.data.name ?? t('workoutName'));
           const facts = [dayLabel(s.data.day), minutesLabel(Number(s.data.duration_ms)), edited ? t('edited') : ''].filter(Boolean).join(' · ');
           return <Pressable key={s.id} accessibilityRole="button" accessibilityLabel={`${name}, ${facts}`} onPress={() => router.push({
             pathname: '/workout/summary',
@@ -66,7 +68,7 @@ export function Workouts() {
             }
           })} style={({ pressed }) => ({ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[1], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'], opacity: pressed ? 0.7 : 1 })}>
             <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], padding: 4 }}>
-              <Thumb store={store} id={s.id} />
+              <Print data={print} width={36} height={36} />
             </View>
             <View style={{ flex: 1 }}>
               <ThemedText variant="headline">{name}</ThemedText>
@@ -76,6 +78,7 @@ export function Workouts() {
           </Pressable>;
         })}
       </Card>}
+      {store && !showAll && history.length > HISTORY_PAGE && <Secondary label={t('historyShowAll')} onPress={() => setShowAll(true)} />}
       <PastDayChoice />
     </>}
     {segment === 'cardio' && (store ? <Cardio key={store.repo.owner} repository={store.repo} /> : <Trouble text={t('localError')} />)}
