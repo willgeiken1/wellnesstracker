@@ -11,7 +11,10 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.insightwellness.app",
       "supportsTablet": false,
-      "deploymentTarget": "17.0"
+      "deploymentTarget": "17.0",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "blockedPermissions": [
