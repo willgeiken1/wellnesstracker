@@ -51,9 +51,10 @@ export function ConnectedServices({ connected: given = [], apple, oura }: { conn
   const { colors } = useTheme();
   const live = !!apple && apple.access !== 'unavailable';
   // Oura is offered only to a signed-in account, which is where its connection lives.
-  const ring = !!oura && oura.state !== 'unavailable', ringOn = ring && oura.state === 'on';
+  // "Expired" is still connected (the stored days still show) but needs Oura's page again for new ones.
+  const ring = !!oura && oura.state !== 'unavailable', ringOn = ring && oura.state === 'on', ringExpired = ring && oura.state === 'expired';
   const connected = [...given, ...(live && apple.access === 'asked' && !given.includes('appleHealth') ? ['appleHealth' as const] : []),
-    ...(ringOn && !given.includes('oura') ? ['oura' as const] : [])];
+    ...((ringOn || ringExpired) && !given.includes('oura') ? ['oura' as const] : [])];
   // Disconnecting removes the Oura login and the stored Oura days from the account, so the system asks first.
   const confirmOff = () => Alert.alert(t('ouraOffTitle'), t('ouraOffBody'), [
     { text: t('cancel'), style: 'cancel' },
@@ -66,7 +67,7 @@ export function ConnectedServices({ connected: given = [], apple, oura }: { conn
     </View>
     <Card style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-services">
       {SERVICES.map((service, index) => {
-        const adds = unlocks(service), state = connected.includes(service) ? 'connectOn' : ready(service) ? 'connectOff' : 'connectLater';
+        const adds = unlocks(service), state = service === 'oura' && ringExpired ? 'connectAgain' : connected.includes(service) ? 'connectOn' : ready(service) ? 'connectOff' : 'connectLater';
         return <View key={service} testID={`connect-${service}`} accessible accessibilityLabel={`${NAMES[service]}, ${t(state)}. ${t('connectAdds')} ${adds.join(', ')}`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[2], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'] }}>
           <Monogram service={service} />
@@ -90,10 +91,10 @@ export function ConnectedServices({ connected: given = [], apple, oura }: { conn
     </Card>}
     {ring && <Card style={card} testID="connect-oura-card">
       <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('ouraTitle')}</ThemedText>
-      <ThemedText muted>{t(ringOn ? 'ouraOn' : 'ouraOff')}</ThemedText>
+      <ThemedText muted>{t(ringOn ? 'ouraOn' : ringExpired ? 'ouraExpired' : 'ouraOff')}</ThemedText>
       {oura.failed && <ThemedText testID="connect-oura-failed" accessibilityLiveRegion="polite" style={{ color: colors.warning }}>{t('ouraFailed')}</ThemedText>}
-      <Button testID="connect-oura-button" label={t(oura.busy ? 'appleHealthBusy' : ringOn ? 'appleHealthAgain' : 'ouraConnect')} disabled={oura.busy} variant={ringOn ? 'secondary' : 'primary'} onPress={ringOn ? oura.refresh : oura.connect} />
-      {ringOn && <Button testID="connect-oura-off" label={t('ouraDisconnect')} disabled={oura.busy} variant="secondary" onPress={confirmOff} />}
+      <Button testID="connect-oura-button" label={t(oura.busy ? 'appleHealthBusy' : ringOn ? 'appleHealthAgain' : ringExpired ? 'ouraReconnect' : 'ouraConnect')} disabled={oura.busy} variant={ringOn ? 'secondary' : 'primary'} onPress={ringOn ? oura.refresh : oura.connect} />
+      {(ringOn || ringExpired) && <Button testID="connect-oura-off" label={t('ouraDisconnect')} disabled={oura.busy} variant="secondary" onPress={confirmOff} />}
       {!ringOn && <ThemedText muted variant="caption">{t('ouraReturn')}</ThemedText>}
     </Card>}
     <ThemedText muted variant="caption">{t(live && ring ? 'connectSoonBoth' : ring ? 'connectSoonOura' : live ? 'connectSoonOthers' : 'connectSoon')}</ThemedText>

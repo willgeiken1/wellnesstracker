@@ -6,7 +6,8 @@ import type { HealthDays } from './days';
  * day for the signed-in person; this only asks it to refresh and reads those rows back. On the phone the
  * values live in memory: they are never written to local storage, the sync queue, logs, AI or analytics.
  */
-export interface OuraStatus { connected: boolean; lastSync: string | null }
+/** `expired`: still connected, but Oura no longer accepts the sign-in, so new days cannot come in until the person reconnects. */
+export interface OuraStatus { connected: boolean; expired?: boolean; lastSync: string | null }
 export interface OuraDay { day: string; sleepSeconds: number | null; steps: number | null }
 export interface OuraSource {
   /** Null when nobody is signed in. Never prompts. */
@@ -20,6 +21,8 @@ export interface OuraSource {
   disconnect(): Promise<void>;
 }
 
+/** The server's own words when Oura has signed Insight out (`oura-sync`). Only used to choose the state; the text is never shown or logged. */
+export const isExpired = (error: unknown) => typeof error === 'string' && /login expired|isn't connected/i.test(error);
 const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 /** Only Oura's own approval page is ever opened, whatever the server answers. */
 export const isOuraUrl = (url: unknown): url is string => typeof url === 'string' && url.startsWith('https://cloud.ouraring.com/oauth/authorize?');
@@ -40,9 +43,9 @@ export function oura(): OuraSource | null {
     async status() {
       const id = await user();
       if (!id) return null;
-      const { data, error } = await client.from('oura_connections').select('last_sync').eq('user_id', id).maybeSingle();
+      const { data, error } = await client.from('oura_connections').select('last_sync, last_error').eq('user_id', id).maybeSingle();
       if (error) throw new Error('Oura status failed.');
-      return { connected: !!data, lastSync: typeof data?.last_sync === 'string' ? data.last_sync : null };
+      return { connected: !!data, expired: !!data && isExpired(data.last_error), lastSync: typeof data?.last_sync === 'string' ? data.last_sync : null };
     },
     async connectUrl() {
       const url = (await invoke('oura-connect', {}))?.url;
@@ -75,6 +78,8 @@ export const resetOuraAsk = () => { lastAsk = 0; };
 /** Asks the server to refresh from Oura when its copy is over an hour old. A failed refresh is not an error
  * here: the days already stored still show. */
 export async function refreshOura(source: OuraSource, status: OuraStatus, now = new Date()): Promise<void> {
+  // An expired sign-in cannot refresh; asking again would only fail. Reconnecting starts it again.
+  if (status.expired) return;
   const synced = status.lastSync ? Date.parse(status.lastSync) : NaN;
   if (Number.isFinite(synced) && now.getTime() - synced < SYNC_EVERY) return;
   if (now.getTime() - lastAsk < RETRY_AFTER) return;

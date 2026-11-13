@@ -14,15 +14,15 @@ jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn(async () => ({ 
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 const URL = 'https://cloud.ouraring.com/oauth/authorize?client_id=made-up';
 /** A made-up account: `approve` is what happens on Oura's page while the browser is open. */
-function fakes(start: 'signed-out' | 'off' | 'on', approve = true) {
+function fakes(start: 'signed-out' | 'off' | 'on' | 'expired', approve = true) {
   let state = start;
   const local = new Map<string, unknown>();
   const source = {
-    status: jest.fn(async () => state === 'signed-out' ? null : { connected: state === 'on', lastSync: null }),
+    status: jest.fn(async () => state === 'signed-out' ? null : { connected: state !== 'off', expired: state === 'expired', lastSync: null }),
     connectUrl: jest.fn(async () => URL), sync: jest.fn(async () => {}), days: jest.fn(async () => []),
     disconnect: jest.fn(async () => { state = 'off'; }),
   } satisfies OuraSource;
-  jest.mocked(WebBrowser.openBrowserAsync).mockImplementation(async () => { if (approve && state === 'off') state = 'on'; return { type: 'cancel' } as never; });
+  jest.mocked(WebBrowser.openBrowserAsync).mockImplementation(async () => { if (approve && (state === 'off' || state === 'expired')) state = 'on'; return { type: 'cancel' } as never; });
   const storage = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); } };
   return { source, storage, local };
 }
@@ -71,6 +71,36 @@ test('Connect opens Oura\'s page; once approved the row reads Connected, the til
   expect(JSON.stringify([...local.values()])).not.toMatch(/\d{4,}/);
   expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Disconnect Oura' })).toBeTruthy();
+});
+
+test('two quick presses open Oura\'s page once', async () => {
+  const { source, storage } = fakes('off');
+  let close: () => void = () => {};
+  jest.mocked(WebBrowser.openBrowserAsync).mockImplementation(() => new Promise(done => { close = () => done({ type: 'cancel' } as never); }));
+  await render(<Page source={source} storage={storage} />, { wrapper });
+  await settle();
+  const button = screen.getByTestId('connect-oura-button');
+  await act(async () => { fireEvent.press(button); fireEvent.press(button); });
+  await settle();
+  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledTimes(1);
+  await act(async () => { close(); });
+  await settle();
+  expect(screen.getByRole('button', { name: 'Connect Oura' }).props.accessibilityState?.disabled).toBeFalsy();
+});
+
+test('when Oura has signed Insight out, the row says Reconnect and Reconnect goes back through Oura\'s page', async () => {
+  const { source, storage } = fakes('expired');
+  await render(<Page source={source} storage={storage} />, { wrapper });
+  await settle();
+  expect(within(screen.getByTestId('connect-oura')).getByText('Reconnect')).toBeTruthy();
+  expect(screen.getByText(/Oura signed Insight out/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Disconnect Oura' })).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Reconnect Oura' }));
+  await settle();
+  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(URL);
+  expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
+  expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
+  expect(screen.queryByText(/Oura signed Insight out/)).toBeNull();
 });
 
 test('closing Oura\'s page without approving changes nothing', async () => {

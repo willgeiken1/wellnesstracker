@@ -1,4 +1,4 @@
-import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, isOuraUrl, mergeHealthDays, readOuraDays, refreshOura, resetOuraAsk, type OuraDay, type OuraSource, type OuraStatus } from '../src/features/health/oura';
+import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, isExpired, isOuraUrl, mergeHealthDays, readOuraDays, refreshOura, resetOuraAsk, type OuraDay, type OuraSource, type OuraStatus } from '../src/features/health/oura';
 
 // Made-up values only.
 const NOW = new Date(2026, 10, 13, 9, 0, 0);
@@ -42,6 +42,19 @@ describe('asking the server to refresh', () => {
     source.sync.mockRejectedValue(new Error('made-up failure'));
     expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [0, 100, 0], sleepHours: [0, 7, 0] });
     expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
+  });
+});
+
+describe('when Oura has signed Insight out', () => {
+  test('the server\'s expired and missing sign-in messages are recognised, other failures are not', () => {
+    expect(isExpired('Oura login expired. Reconnect Oura in the app. (401)')).toBe(true);
+    expect(isExpired('Oura isn\'t connected')).toBe(true);
+    for (const other of ['Oura daily_sleep request failed (500)', '', null, undefined, 401]) expect(isExpired(other)).toBe(false);
+  });
+  test('no refresh is asked for, and the days already stored still show', async () => {
+    const source = ring({ connected: true, expired: true, lastSync: '2026-11-01T08:00:00.000Z' }, [{ day: '2026-11-11', sleepSeconds: 25200, steps: 8000 }]);
+    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [8000, 0, 0], sleepHours: [7, 0, 0] });
+    expect(source.sync).not.toHaveBeenCalled();
   });
 });
 
