@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { Card } from '../../components/card';
+import { Panel } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import type { Repository } from '../../data/repository';
 import { useTheme } from '../../design/theme-provider';
@@ -49,7 +49,7 @@ export function Cardio({ repository }: { repository: Repository }) {
   const facade = useWorkoutStore(repository);
   const store = useMemo(() => new CardioStore(facade.repo, facade.viewRevision), [facade]);
   const live = store.live();
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   const [machine, setMachine] = useState<Machine>(live?.machine ?? 'treadmill');
   const initial = live?.segments.at(-1)?.settings ?? machineDefaults(machine);
   const metric = repository.list('profile')[0]?.data.weight_unit === 'kg';
@@ -82,15 +82,15 @@ export function Cardio({ repository }: { repository: Repository }) {
   const kcalText = (kcal: number) => t('cardioKcal').replace('{kcal}', String(Math.round(kcal)));
   const sessions = store.sessions();
   return <View style={layout.stack}>
-    <Card testID="cardio-week" style={[card, { gap: tokens.spacing[2] }]}><WeeklyRing minutes={weeklyMinutes(sessions, repository.list('pauses'), localDay(now))} goal={store.goal()} />
+    <Panel testID="cardio-week" style={[card, { gap: tokens.spacing[2] }]}><WeeklyRing minutes={weeklyMinutes(sessions, repository.list('pauses'), localDay(now))} goal={store.goal()} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: tokens.spacing[1] }}>
         <Field grow label={t('cardioGoalMinutes')} value={goal} onChangeText={setGoal} decimal />
         <View style={{ minHeight: 48, justifyContent: 'center' }}><Pick onSurface text={t('cardioSaveGoal')} onPress={() => run(() => store.setGoal(Number(goal)), 'cardioGoalError')} /></View>
       </View>
-    </Card>
+    </Panel>
     {error && <Trouble text={t(error)} />}
     <SectionTitle>{t(live ? 'cardioNow' : 'cardioChoose')}</SectionTitle>
-    <Card testID="cardio-session" style={[card, { gap: tokens.spacing[2] }]}>
+    <Panel testID="cardio-session" style={[card, { gap: tokens.spacing[2] }]}>
       {!live && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>{machines.map(value => { const on = machine === value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={machineName(value)} accessibilityState={{ selected: on }} onPress={() => { setMachine(value); fillSettings(machineDefaults(value)); }} style={({ pressed }) => ({ flexGrow: 1, flexBasis: '45%', minHeight: 76, padding: 12, gap: 6, borderRadius: 14, backgroundColor: colors['surface-2'], borderWidth: 2, borderColor: on ? colors.accent : colors['surface-2'], opacity: pressed ? 0.7 : 1 })}><MachineIcon machine={value} color={on ? colors.accent : undefined} /><ThemedText style={on ? semibold : undefined}>{machineName(value)}</ThemedText></Pressable>; })}</View>}
       {live && <View style={{ alignItems: 'center', gap: 2 }}>
         <View style={[layout.row, { gap: tokens.spacing[1] }]}><MachineIcon machine={live.machine} /><ThemedText variant="headline" style={semibold}>{machineName(live.machine)}</ThemedText></View>
@@ -125,20 +125,20 @@ export function Cardio({ repository }: { repository: Repository }) {
         <Primary label={t('cardioStart')} onPress={() => run(() => { store.start(machine, settings); setNow(Date.now()); })} />
         <Secondary onSurface label={t('cardioLogFinished')} onPress={() => { setDay(localDay()); setLogging(true); }} />
       </>}
-    </Card>
+    </Panel>
     <ThemedText muted variant="caption">{t('cardioLocalSettings')}</ThemedText>
     <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { marginTop: tokens.spacing[1] }]}>{t('cardioSaved')}</ThemedText>
-    {sessions.length === 0 && <Card testID="cardio-empty" style={card}>
+    {sessions.length === 0 && <Panel testID="cardio-empty" style={card}>
       <ThemedText style={semibold}>{t('cardioEmptyTitle')}</ThemedText>
       <ThemedText muted>{t('cardioEmpty')}</ThemedText>
-    </Card>}
+    </Panel>}
     {sessions.map(row => {
       const kind = row.data.kind as Machine;
       const known = machines.includes(kind);
       const kcal = store.sessionKcal(row, weight.kg);
-      return <Card key={row.id} testID={`cardio-session-${row.id}`} style={[card, { gap: tokens.spacing[1] }]}>
+      return <Panel key={row.id} testID={`cardio-session-${row.id}`} style={[card, { gap: tokens.spacing[1] }]}>
         <View style={[layout.row, { gap: tokens.spacing[2] }]}>
-          {known && <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}><MachineIcon machine={kind} /></View>}
+          {known && <View style={{ width: 44, height: 44, borderRadius: radius.card, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}><MachineIcon machine={kind} /></View>}
           <View style={{ flex: 1 }}>
             <ThemedText variant="headline" style={semibold}>{known ? machineName(kind) : t('cardio')}</ThemedText>
             <ThemedText muted numeric variant="caption">{t('cardioSessionSummary').replace('{day}', dayLabel(row.data.day)).replace('{minutes}', String(Math.round(Number(row.data.duration_ms) / 60000)))}</ThemedText>
@@ -147,7 +147,7 @@ export function Cardio({ repository }: { repository: Repository }) {
         <ThemedText muted={kcal === null} numeric={kcal !== null}>{kcal === null ? t('cardioUnknownKcal') : kcalText(kcal)}</ThemedText>
         {!!row.data.notes && <ThemedText>{row.data.notes}</ThemedText>}
         {known && !live && <View style={{ alignSelf: 'flex-start' }}><Pick onSurface text={t('cardioAgain')} label={t('cardioRestart').replace('{machine}', machineName(kind))} onPress={() => run(() => { const settings = store.segments(row.id)?.[0]?.settings ?? machineDefaults(kind); fillSettings(settings); setMachine(kind); store.start(kind, settings); setNow(Date.now()); })} /></View>}
-      </Card>;
+      </Panel>;
     })}
   </View>;
 }

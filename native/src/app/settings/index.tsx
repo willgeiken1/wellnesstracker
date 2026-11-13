@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Card } from '@/components/card';
+import { Panel, PROTOTYPE_RADIUS } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { touchTarget } from '@/components/button';
 import { useAuth } from '@/auth/provider';
@@ -32,7 +32,7 @@ function ProfileCard() {
   const initial = (name || email).charAt(0).toUpperCase();
   return <Pressable testID="settings-profile" accessibilityRole="button" accessibilityLabel={[title, sub].filter(Boolean).join(', ')}
     accessibilityHint={t('account')} onPress={() => open('account')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-    <Card style={{ borderRadius: 18, padding: tokens.spacing[3], flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
+    <Panel style={{ borderRadius: PROTOTYPE_RADIUS, padding: tokens.spacing[3], flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
       <View style={{ minWidth: 52, minHeight: 52, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['accent-tint'] }}>
         {initial ? <ThemedText variant="title" style={{ color: colors.text }}>{initial}</ThemedText>
           : <SettingsIcon name="account" size={26} color={colors.accent} />}
@@ -42,7 +42,7 @@ function ProfileCard() {
         {!!sub && <ThemedText muted variant="caption">{sub}</ThemedText>}
       </View>
       <SettingsIcon name="forward" size={14} color={colors['text-muted']} />
-    </Card>
+    </Panel>
   </Pressable>;
 }
 

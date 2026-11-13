@@ -2,7 +2,7 @@ import { Children, type PropsWithChildren } from 'react';
 import { Platform, Pressable, Switch, View, type ColorValue } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import Svg, { Path } from 'react-native-svg';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { touchTarget } from '@/components/button';
 import { useTheme } from '@/design/theme-provider';
@@ -52,10 +52,10 @@ export function SectionLabel({ children }: { children: string }) {
 /** An inset list: one rounded surface, a hairline between rows. */
 export function Group({ children, testID }: PropsWithChildren<{ testID?: string }>) {
   const { colors } = useTheme();
-  return <Card testID={testID} style={{ borderRadius: 18, gap: 0, paddingVertical: 0, paddingHorizontal: tokens.spacing[3] }}>
+  return <Panel testID={testID} style={{ borderRadius: 18, gap: 0, paddingVertical: 0, paddingHorizontal: tokens.spacing[3] }}>
     {Children.toArray(children).map((child, index) =>
       <View key={index} style={{ borderTopWidth: index ? 1 : 0, borderTopColor: colors.hair }}>{child}</View>)}
-  </Card>;
+  </Panel>;
 }
 
 /** A row that opens something: icon, label, an optional current value, chevron. */
@@ -144,10 +144,10 @@ function ChipCheck({ color }: { color: ColorValue }) {
 
 /** A quiet card for a screen that has nothing to show yet. States the fact, no badge, no button. */
 export function QuietCard({ title, body, testID }: { title: string; body?: string; testID?: string }) {
-  return <Card testID={testID} style={{ borderRadius: 18, padding: tokens.spacing[3], gap: tokens.spacing[0] }}>
+  return <Panel testID={testID} style={{ borderRadius: 18, padding: tokens.spacing[3], gap: tokens.spacing[0] }}>
     <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
     {!!body && <ThemedText muted>{body}</ThemedText>}
-  </Card>;
+  </Panel>;
 }
 
 /** m:ss for a rest length, so 90 reads 1:30. */

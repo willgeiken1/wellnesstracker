@@ -13,7 +13,7 @@ import Svg, {
   Path,
 } from "react-native-svg";
 import { Screen } from "@/components/screen";
-import { Card } from "@/components/card";
+import { Panel as SurfacePanel } from "@/components/card";
 import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
@@ -197,12 +197,12 @@ export function Summary() {
         title={t("summaryTitle")}
         left={<Round glyph="back" label={t("flowBack")} onPress={leave} />}
       />
-      <Card testID="summary-missing" style={card}>
+      <SurfacePanel testID="summary-missing" style={card}>
         <ThemedText style={semibold}>
           {t(store ? "summaryMissing" : "localError")}
         </ThemedText>
         {store && <ThemedText muted>{t("summaryMissingBody")}</ThemedText>}
-      </Card>
+      </SurfacePanel>
       <View style={{ flex: 1 }} />
       <Primary
         testID="summary-done"
@@ -353,14 +353,14 @@ export function WorkoutSummary({
       {print.data.names.length > 0 && (
         <>
           <SectionTitle>{t("summaryPrint")}</SectionTitle>
-          <Card testID="summary-print" style={[card, { gap: tokens.spacing[1] }]}>
+          <SurfacePanel testID="summary-print" style={[card, { gap: tokens.spacing[1] }]}>
             <View style={{ width: "100%", aspectRatio: 2 }}>
               <Print data={print.data} width={300} height={150} />
             </View>
             <ThemedText muted variant="caption">
               {t("printCaption")}
             </ThemedText>
-          </Card>
+          </SurfacePanel>
         </>
       )}
       {muscles.main.length + muscles.helpers.length > 0 && (
@@ -491,11 +491,11 @@ export function WorkoutSummary({
       )}
       <SectionTitle>{t("summaryExercises")}</SectionTitle>
       {entries.length === 0 ? (
-        <Card testID="summary-no-exercises" style={card}>
+        <SurfacePanel testID="summary-no-exercises" style={card}>
           <ThemedText muted>{t("summaryNoExercises")}</ThemedText>
-        </Card>
+        </SurfacePanel>
       ) : (
-        <Card testID="summary-exercises" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
+        <SurfacePanel testID="summary-exercises" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
           {entries.map((e, index) => {
             const sets = store.sets(e.id), unit = store.unit(e.id);
             return (
@@ -532,14 +532,14 @@ export function WorkoutSummary({
               </View>
             );
           })}
-        </Card>
+        </SurfacePanel>
       )}
       {!!s.data.notes && (
         <>
           <SectionTitle>{t("notes")}</SectionTitle>
-          <Card style={card}>
+          <SurfacePanel style={card}>
             <ThemedText>{String(s.data.notes)}</ThemedText>
-          </Card>
+          </SurfacePanel>
         </>
       )}
       <View style={{ flex: 1 }} />
@@ -585,7 +585,7 @@ function MusclesCard({
     helped = new Set(helpers),
     most = Math.max(1, ...main.map((m) => m.sets));
   return (
-    <Card testID="summary-muscles" style={[card, { gap: tokens.spacing[2] }]}>
+    <SurfacePanel testID="summary-muscles" style={[card, { gap: tokens.spacing[2] }]}>
       <View
         style={{ flexDirection: "row", justifyContent: "center", gap: tokens.spacing[4] }}
       >
@@ -675,6 +675,6 @@ function MusclesCard({
           {t("summaryHelpers").replace("{muscles}", helpers.map(muscleLabel).join(", "))}
         </ThemedText>
       )}
-    </Card>
+    </SurfacePanel>
   );
 }

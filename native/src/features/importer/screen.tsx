@@ -24,7 +24,7 @@ import { useTheme } from "../../design/theme-provider";
 import { tokens } from "../../design/tokens";
 import { Screen } from "../../components/screen";
 import { Button } from "../../components/button";
-import { Card } from "../../components/card";
+import { Panel } from "../../components/card";
 import { ThemedText } from "../../components/themed-text";
 import { t as message, type MessageKey } from "../../i18n/en";
 import { exerciseLibrary } from "../../core/workout/library";
@@ -48,7 +48,7 @@ export function ImportScreen() {
 function ImportBody() {
   const auth = useAuth(),
     repo = auth.repository,
-    { colors } = useTheme();
+    { colors, radius } = useTheme();
   const { source } = useLocalSearchParams<{ source?: string }>();
   const accountLoaded = useRef(false);
   const [serverMapping, setServerMapping] = useState("{}");
@@ -259,7 +259,7 @@ function ImportBody() {
   const field = {
     color: colors.text,
     backgroundColor: colors["surface-2"],
-    borderRadius: tokens.radii.input,
+    borderRadius: radius.input,
     minHeight: 48,
     paddingHorizontal: tokens.spacing[2],
     paddingVertical: tokens.spacing[1],
@@ -270,7 +270,7 @@ function ImportBody() {
       <Stack.Screen options={{ title: t("importTitle") }} />
       <Screen>
         <ThemedText muted>{t("importIntro")}</ThemedText>
-        <Card testID="import-step-source" style={card}>
+        <Panel testID="import-step-source" style={card}>
           <StepTitle step={1} label={t("importStepSource")} />
           <ThemedText muted variant="caption">
             {t("importSourceBody")}
@@ -302,7 +302,7 @@ function ImportBody() {
                 busy ? BUSY_LABEL[lastAction] : "importBusyAccount",
               )}
               accessibilityLiveRegion="polite"
-              style={[styles.note, { backgroundColor: colors["surface-2"] }]}
+              style={[styles.note, { backgroundColor: colors["surface-2"], borderRadius: radius.input }]}
             >
               <ActivityIndicator color={colors["text-muted"]} />
               <ThemedText muted style={{ flex: 1 }}>
@@ -313,7 +313,7 @@ function ImportBody() {
           {failed && (
             <View
               testID="import-error"
-              style={[styles.note, { backgroundColor: colors["surface-2"] }]}
+              style={[styles.note, { backgroundColor: colors["surface-2"], borderRadius: radius.input }]}
             >
               <ThemedText
                 muted
@@ -337,9 +337,9 @@ function ImportBody() {
               </Pressable>
             </View>
           )}
-        </Card>
+        </Panel>
         {done && (
-          <Card testID="import-result" style={card}>
+          <Panel testID="import-result" style={card}>
             <ThemedText
               variant="headline"
               accessibilityRole="alert"
@@ -362,11 +362,11 @@ function ImportBody() {
                 </View>
               </>
             )}
-          </Card>
+          </Panel>
         )}
         {preview && !done && (
           <>
-            <Card testID="import-step-review" style={card}>
+            <Panel testID="import-step-review" style={card}>
               <StepTitle step={2} label={t("importStepReview")} />
               {preview.plan.rows.length === 0 && (
                 <ThemedText muted>{t("importNothing")}</ThemedText>
@@ -422,9 +422,9 @@ function ImportBody() {
                   {t("importIssue", { path: issue.path, reason: issue.reason })}
                 </ThemedText>
               ))}
-            </Card>
+            </Panel>
             {derived.names.length > 0 && (
-              <Card testID="import-match" style={card}>
+              <Panel testID="import-match" style={card}>
                 <ThemedText
                   variant="headline"
                   accessibilityRole="header"
@@ -457,6 +457,7 @@ function ImportBody() {
                   <View
                     style={[
                       styles.note,
+                      { borderRadius: radius.input },
                       { backgroundColor: colors["surface-2"] },
                     ]}
                   >
@@ -477,9 +478,9 @@ function ImportBody() {
                     onPress={fromAccount}
                   />
                 )}
-              </Card>
+              </Panel>
             )}
-            <Card testID="import-step-confirm" style={card}>
+            <Panel testID="import-step-confirm" style={card}>
               <StepTitle step={3} label={t("importStepConfirm")} />
               {!server && (
                 <View
@@ -508,6 +509,7 @@ function ImportBody() {
                         style={[
                           styles.option,
                           {
+                            borderRadius: radius.card,
                             borderColor: selected
                               ? colors.accent
                               : colors["hair-2"],
@@ -563,7 +565,7 @@ function ImportBody() {
                   {t("importMappingChanged")}
                 </ThemedText>
               )}
-            </Card>
+            </Panel>
           </>
         )}
         <Pressable

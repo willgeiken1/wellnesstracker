@@ -376,7 +376,14 @@ test('plate line groups duplicates on one line and hides oversized drafts', asyn
   expect(screen.getByTestId('plate-line')).toHaveTextContent(/45 × 3 \+ 10 \+ 2.5/);
   expect(screen.getByTestId('plate-line')).toHaveProp('numberOfLines', 1);
   await view.rerender(<Keypad {...props} value="135135" />);
-  expect(screen.queryByText(/Plates per side/)).toBeNull();
+  // An oversized draft shows no plates, but the line keeps its place so the keys below never move.
+  expect(screen.getByTestId('plate-line')).toHaveTextContent(/Plates per side: —/);
+  expect(screen.getByTestId('plate-line')).not.toHaveTextContent(/45 ×/);
+  await view.rerender(<Keypad {...props} value="" />);
+  expect(screen.getByTestId('plate-line')).toHaveTextContent(/Plates per side: —/);
+  // The limit hint has a line kept for it before it appears.
+  expect(screen.getByTestId('keypad-hint-slot').props.style).toMatchObject({ minHeight: 18 });
+  expect(screen.queryByTestId('keypad-limit-hint')).toBeNull();
 });
 test.each([false, true])('workout header only shows an eyebrow for templates: %s', async template => {
   const repo = memoryRepository(), store = new WorkoutStore(repo);
@@ -384,7 +391,7 @@ test.each([false, true])('workout header only shows an eyebrow for templates: %s
   store.start(routine?.id);
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  if (template) expect(screen.getByText('Template')).toBeTruthy();
+  if (template) expect(screen.getByText('Routine')).toBeTruthy();
   else expect(screen.getAllByText('Workout')).toHaveLength(1);
 });
 
@@ -413,7 +420,7 @@ test('active-workout header row renders Eyebrow with semibold style for template
   store.start(routine.id);
   activeRepository(repo);
   await render(<ActiveWorkout />, { wrapper });
-  const eyebrow = screen.getByText('Template');
+  const eyebrow = screen.getByText('Routine');
   expect(eyebrow).toBeTruthy();
   expect(eyebrow).toHaveStyle({
     fontSize: tokens.type.caption,
@@ -632,6 +639,14 @@ test('completed rows fill the card width and pending inputs remain borderless', 
   expect(screen.getByTestId('set-row-0-0')).toHaveStyle({paddingHorizontal:14,borderRadius:0});
   await view.rerender(<SetRow {...props} draft={{weight:'',reps:''}} />);
   expect(screen.getByTestId('set-0-0-weight')).toHaveStyle({borderWidth:0});
+});
+test('a suggested number is a faded placeholder, and a typed one is full strength', async () => {
+  const props = { exercise: 'Bench Press', index: 0, previous: '185 × 8', hint: '190', onEdit: jest.fn(), onDone: jest.fn(), onRemove: jest.fn() };
+  const view = await render(<SetRow {...props} draft={{weight:'',reps:''}} />, {wrapper});
+  expect(screen.getByTestId('set-0-0-weight-text')).toHaveTextContent('190');
+  expect(screen.getByTestId('set-0-0-weight-text')).toHaveStyle({opacity:0.55,fontWeight:'400'});
+  await view.rerender(<SetRow {...props} draft={{weight:'190',reps:''}} />);
+  expect(screen.getByTestId('set-0-0-weight-text')).toHaveStyle({opacity:1,fontWeight:'600'});
 });
 test('completed exercises collapse with volume and expand on tap', async () => {
   const repo=memoryRepository(), store=new WorkoutStore(repo), s=store.start();
@@ -872,13 +887,13 @@ test('template editor saves name/target edits without rest overrides, and only s
   const save = jest.spyOn(repo, 'save');
   try {
     activeRepository(repo); await render(<TemplateEditor />, {wrapper});
-    await fireEvent.changeText(screen.getByLabelText('Template name'), 'Renamed routine');
+    await fireEvent.changeText(screen.getByLabelText('Routine name'), 'Renamed routine');
     await fireEvent.changeText(screen.getByLabelText('Bench Press Target sets'), '4');
-    await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Save routine'}));
     expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(0);
     expect(repo.localGet('rest:bench press')).toBeUndefined();
     await fireEvent.press(screen.getAllByRole('button', {name: '120 seconds'})[1]);
-    await fireEvent.press(screen.getByRole('button', {name: 'Save template'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Save routine'}));
     expect(save.mock.calls.filter(([table]) => table === 'settings')).toHaveLength(1);
     expect(JSON.parse(String(repo.list('settings')[0].data.rest_per_exercise))).toEqual({'dumbbell row': {seconds:120,style:'unwind'}});
     expect(repo.localGet('rest:bench press')).toBeUndefined();
@@ -916,7 +931,7 @@ test('M2-07 template range and superset controls save and reload', async () => {
     await fireEvent.press(screen.getByRole('button',{name:'Link superset for Bench Press'}));
     await fireEvent.press(screen.getByRole('button',{name:'Include Dumbbell Row in superset'}));
     await fireEvent.press(screen.getByRole('button',{name:'Save superset'}));
-    await fireEvent.press(screen.getByRole('button',{name:'Save template'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save routine'}));
     const rows = store.templateExercises(routine.id);
     expect(rows[0].data).toMatchObject({rep_min:8,rep_max:10});
     expect(rows[0].data.superset_group).toBe(rows[1].data.superset_group);
@@ -924,7 +939,7 @@ test('M2-07 template range and superset controls save and reload', async () => {
     expect(screen.getByLabelText('Bench Press, Minimum reps').props.value).toBe('8');
     await fireEvent.press(screen.getByRole('button',{name:'Unlink superset for Bench Press'}));
     await fireEvent.press(screen.getByRole('button',{name:'Clear rep range for Bench Press'}));
-    await fireEvent.press(screen.getByRole('button',{name:'Save template'}));
+    await fireEvent.press(screen.getByRole('button',{name:'Save routine'}));
     expect(store.templateExercises(routine.id)[0].data).toMatchObject({rep_min:null,rep_max:null,superset_group:null});
   } finally {useLocalSearchParams.mockReturnValue({});}
 });

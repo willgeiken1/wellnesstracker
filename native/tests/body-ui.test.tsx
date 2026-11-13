@@ -44,8 +44,15 @@ test('ranges, tap and accessible chart navigation expose points; live profile un
  await render(<Body repository={repo}/>,{wrapper});
  for(const name of ['7d','30d','90d','1y'])expect(screen.getByRole('tab',{name})).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Previous trend point'}));expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
- await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/Oct 27 · Trend/)).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Next trend point'}));expect(screen.getByText(/Oct 27 · Trend/)).toBeTruthy(); expect(screen.getByText('Previous')).toBeTruthy();expect(screen.getByText('Next')).toBeTruthy();expect(screen.queryByText('Previous trend point')).toBeNull();
  await fireEvent.press(screen.getByTestId('body-chart'),{nativeEvent:{locationX:0}});expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
+ // VoiceOver: the chart is adjustable, swipe up and down step through the points, and its value reads the point.
+ const chart=screen.getByTestId('body-chart');expect(chart.props.accessibilityRole).toBe('adjustable');
+ await fireEvent(chart,'accessibilityAction',{nativeEvent:{actionName:'increment'}});expect(screen.getByTestId('body-chart').props.accessibilityValue.text).toMatch(/^Oct 27 · Trend/);
+ await fireEvent(screen.getByTestId('body-chart'),'accessibilityAction',{nativeEvent:{actionName:'increment'}});expect(screen.getByTestId('body-chart').props.accessibilityValue.text).toMatch(/^Oct 27 · Trend/);
+ await fireEvent(screen.getByTestId('body-chart'),'accessibilityAction',{nativeEvent:{actionName:'decrement'}});expect(screen.getByText(/Oct 1 · Trend/)).toBeTruthy();
+ // Previous and Next share the row equally.
+ for(const id of ['body-chart-step-previous','body-chart-step-next'])expect(screen.getByTestId(id).props.style).toMatchObject({flex:1,minWidth:140});
  await fireEvent.press(screen.getByRole('tab',{name:'7d'}));expect(screen.queryByText(/Oct 1 · Trend/)).toBeNull();
  const before=JSON.stringify(repo.list('weigh_ins'));await act(()=>{repo.save('profile',{weight_unit:'lb'},'profile');});
  expect(screen.getByText(/Trend: .* lb/)).toBeTruthy();expect(JSON.stringify(repo.list('weigh_ins'))).toBe(before);
@@ -161,4 +168,34 @@ test('Log weigh-in never starts from an Apple Health reading, so a Health value 
  saveWeighIn(repo,80,'kg','2026-01-04');
  await act(async()=>{});await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
  expect(screen.getByRole('adjustable',{name:'Weight wheel (kg)'})).toHaveAccessibilityValue({text:'80.0 kg'});
+});
+test('Health weigh-ins are listed with where they came from, and only typed ones offer Delete',async()=>{
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');
+ // Made-up readings only.
+ repo.save('weigh_ins',{day:'2026-11-10',weight_kg:80.4,entered_value:80.4,entered_unit:'kg',source:'healthkit'});
+ const typed=saveWeighIn(repo,80.1,'kg','2026-11-12');
+ await render(<Body repository={repo}/>,{wrapper});
+ const health=screen.getByLabelText('Nov 10, 80.4 kg, from Apple Health');
+ expect(health).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'Delete weigh-in for Nov 10, 80.4 kg'})).toBeNull();
+ expect(screen.getByTestId(`body-delete-${typed.id}`)).toBeTruthy();
+ expect(screen.getByText(/Change or remove them there/)).toBeTruthy();
+ // Typed and Health weigh-ins are in separate lists, so Health readings never push typed ones behind Show all.
+ expect(screen.getByTestId('body-entries')).toBeTruthy();expect(screen.getByTestId('body-health-entries')).toBeTruthy();
+});
+test('with only typed weigh-ins there is no Health note',async()=>{
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');saveWeighIn(repo,80.1,'kg','2026-11-12');
+ await render(<Body repository={repo}/>,{wrapper});
+ expect(screen.queryByTestId('body-health-entries')).toBeNull();
+});
+test('only the latest two weeks of Health readings are listed',async()=>{
+ jest.useFakeTimers();jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'},'profile');
+ // Made-up readings only: 40 days of a smart scale.
+ for(let i=0;i<40;i++)repo.save('weigh_ins',{day:new Date(Date.UTC(2026,9,5+i)).toISOString().slice(0,10),weight_kg:80+i/100,entered_value:80,entered_unit:'kg',source:'healthkit'});
+ await render(<Body repository={repo}/>,{wrapper});
+ expect(screen.getAllByTestId(/^body-health-/).filter(n=>n.props.testID!=='body-health-entries')).toHaveLength(14);
+ expect(screen.queryByTestId('body-entries')).toBeNull();
 });

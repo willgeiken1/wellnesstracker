@@ -2,7 +2,7 @@ import { useMemo, type ComponentRef, type PropsWithChildren, type ReactNode, typ
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, type ColorValue, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { Card } from '../../components/card';
+import { Panel } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import { touchTarget } from '../../components/button';
 import { useTheme } from '../../design/theme-provider';
@@ -63,13 +63,13 @@ export function Heading({ title, body }: { title: string; body?: string }) {
 
 /** A titled group of fields or choices. */
 export function Group({ title, body, children, testID }: PropsWithChildren<{ title?: string; body?: string; testID?: string }>) {
-  return <Card style={panel} testID={testID}>
+  return <Panel style={panel} testID={testID}>
     {(title || body) && <View style={{ gap: 2 }}>
       {title && <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{title}</ThemedText>}
       {body && <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{body}</ThemedText>}
     </View>}
     {children}
-  </Card>;
+  </Panel>;
 }
 
 /** The single main action of a screen. */
@@ -85,9 +85,9 @@ export function PrimaryButton({ label, onPress, disabled = false, busy = false, 
 
 /** A quiet gray row beside what went wrong. No colour alarm, no popup; Retry only when there is something to retry. */
 export function Notice({ text, onRetry, retryLabel, testID }: { text: string; onRetry?: () => void; retryLabel?: string; testID?: string }) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], paddingLeft: tokens.spacing[2], paddingRight: onRetry ? tokens.spacing[0] : tokens.spacing[2],
-    minHeight: touchTarget, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
+    minHeight: touchTarget, borderRadius: radius.card, backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
     <Svg width={16} height={16} viewBox="0 0 16 16" accessible={false}>
       <Circle cx={8} cy={8} r={7} fill="none" stroke={colors['text-muted']} strokeWidth={1.5} />
       <Path d="M8 4.5V8.5" stroke={colors['text-muted']} strokeWidth={1.6} strokeLinecap="round" />
@@ -151,7 +151,7 @@ const HILLS = [1, 0.82, 0.9] as const;
 export function ContourArt({ label, footer }: { label: string; footer?: ReactNode }) {
   const { colors } = useTheme();
   const map = useMemo(() => terrain(HILLS, 340, 150, { sd: 0.19, wobble: 0.2, positions: [[0.24, 0.44], [0.52, 0.6], [0.78, 0.4]] }), []);
-  return <Card style={[panel, { gap: tokens.spacing[1], padding: tokens.spacing[2] }]} testID="onboarding-contour">
+  return <Panel style={[panel, { gap: tokens.spacing[1], padding: tokens.spacing[2] }]} testID="onboarding-contour">
     <View accessible accessibilityRole="image" accessibilityLabel={label} style={{ width: '100%', aspectRatio: 340 / 150 }}>
       <Svg width="100%" height="100%" viewBox="0 0 340 150" accessible={false}>
         {map.lines.map((line, index) => <Path key={index} d={line.d} fill="none" stroke={colors[STRANDS[line.hill]]} strokeWidth={line.width} opacity={line.opacity} strokeLinecap="round" />)}
@@ -159,5 +159,5 @@ export function ContourArt({ label, footer }: { label: string; footer?: ReactNod
       </Svg>
     </View>
     {footer}
-  </Card>;
+  </Panel>;
 }

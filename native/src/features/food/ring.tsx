@@ -9,11 +9,15 @@ import type { Targets } from '../onboarding/model';
 import type { Nutrient } from './model';
 
 const SIZE = 200, CENTER = SIZE / 2;
+/** The pillar colour each nutrient wears, shared by the rings, their legend and the Daily targets card. */
+export const RING_PILLAR = { energy_kj: 'food', protein_g: 'training', carbs_g: 'recovery', fat_g: 'sleep' } as const;
+// Each ring has its own colour, so carbs never reads as the calorie ring around it. Carbs takes recovery, the one
+// pillar colour that is distinct from food, training and sleep in every theme and never appears on the Food tab.
 const RINGS = [
- { key: 'energy_kj', radius: 88, width: 12, pillar: 'food' },
- { key: 'protein_g', radius: 71, width: 5, pillar: 'training' },
- { key: 'carbs_g', radius: 62, width: 5, pillar: 'food' },
- { key: 'fat_g', radius: 53, width: 5, pillar: 'sleep' },
+ { key: 'energy_kj', radius: 88, width: 12, pillar: RING_PILLAR.energy_kj },
+ { key: 'protein_g', radius: 71, width: 5, pillar: RING_PILLAR.protein_g },
+ { key: 'carbs_g', radius: 62, width: 5, pillar: RING_PILLAR.carbs_g },
+ { key: 'fat_g', radius: 53, width: 5, pillar: RING_PILLAR.fat_g },
 ] as const;
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
 
@@ -25,7 +29,7 @@ export function CalorieRing({total,target,estimated=false,logged=false}:{total:R
  const label=t('foodRing').replace('{calories}',value(eaten)).replace('{target}',goal===null?'—':String(Math.round(goal))).replace('{protein}',value(total.protein_g)).replace('{carbs}',value(total.carbs_g)).replace('{fat}',value(total.fat_g));
  const unknown=logged&&eaten===null;
  const left=goal===null||unknown?null:Math.round(goal)-Math.round(eaten??0);
- const macros=[['foodMacroProtein','protein_g','training'],['foodMacroCarbs','carbs_g','food'],['foodMacroFat','fat_g','sleep']] as const;
+ const macros=[['foodMacroProtein','protein_g','training'],['foodMacroCarbs','carbs_g','recovery'],['foodMacroFat','fat_g','sleep']] as const;
  return <View accessible accessibilityRole="image" accessibilityLabel={label} style={{alignItems:'center',gap:tokens.spacing[2]}}>
   <View style={{width:SIZE,height:SIZE,alignItems:'center',justifyContent:'center'}}>
    <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} accessible={false} style={{position:'absolute'}}>

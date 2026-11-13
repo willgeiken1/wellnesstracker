@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { router } from 'expo-router';
-import { Card } from '../../components/card';
+import { Panel } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import { useAuth } from '../../auth/provider';
 import { tokens } from '../../design/tokens';
@@ -26,10 +26,10 @@ export function Welcome() {
     {!auth.configured && <Notice testID="welcome-unavailable" text={t('accountsUnavailable')} />}
     {auth.configError && <Notice testID="welcome-config-error" text={auth.configError} />}
     <PrimaryButton testID="welcome-get-started" label={t('getStarted')} disabled={!auth.configured} onPress={() => router.push('/onboarding')} />
-    <Card style={[panel, { gap: 0, paddingVertical: tokens.spacing[0] }]} testID="welcome-other-ways">
+    <Panel style={[panel, { gap: 0, paddingVertical: tokens.spacing[0] }]} testID="welcome-other-ways">
       <LinkRow first testID="welcome-sign-in" label={t('haveAccount')} body={t('haveAccountBody')} disabled={!auth.configured} onPress={() => router.push('/auth/sign-in')} />
       <LinkRow testID="welcome-look-around" label={t('lookAround')} body={t('lookAroundBody')} onPress={auth.lookAround} />
       <LinkRow testID="welcome-import" label={t('importChoose')} body={t('welcomeImportBody')} onPress={() => router.push('/import')} />
-    </Card>
+    </Panel>
   </Shell>;
 }

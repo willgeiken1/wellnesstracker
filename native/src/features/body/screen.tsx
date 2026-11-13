@@ -17,16 +17,24 @@ import { useWorkoutStore } from '../workout/use-workout';
 import { BodyChart } from './chart';
 import { WeightEntry } from './entry';
 import { deleteWeighIn, dailyWeights, friendlyDay, inRange, lastWeight, saveWeighIn, trendWeights, weeklyChange, type BodyRange } from './model';
+/** Health readings shown on Body: the latest two weeks' worth. The rest stay in the Health app. */
+const HEALTH_SHOWN=14;
 export function Body({repository}:{repository:Repository}) {
-  const facade=useWorkoutStore(repository),{colors,selectorLook}=useTheme();
+  const facade=useWorkoutStore(repository),{colors,selectorLook,radius}=useTheme();
   const repo=facade.repo,unit=readProfile(repo).unit;
   // Once Apple Health is connected, opening Body quietly picks up new readings. It never prompts from here.
   useEffect(()=>{let live=true;void refreshWeights(repo,appleHealth(),new Date(),()=>live).catch(()=>{});return()=>{live=false;};},[repo]);
   const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false),[deleteFailed,setDeleteFailed]=useState(false);
   const [showAll,setShowAll]=useState(false);
   const rows=repo.list('weigh_ins').filter(r=>String(r.data.day)<=today());
-  const deletable=rows.filter(row=>row.data.source==='app').sort((a,b)=>String(b.data.day).localeCompare(String(a.data.day)) || compareRows(b,a) || b.id.localeCompare(a.id));
-  const deleteRows=showAll?deletable:deletable.slice(0,30);
+  // Typed weigh-ins are listed newest first and can be deleted here. Health readings get their own short list that
+  // says where they came from: they are changed in the Health app, and years of daily scale readings would bury the
+  // typed ones, so only the latest few show.
+  const newest=(a:typeof rows[number],b:typeof rows[number])=>String(b.data.day).localeCompare(String(a.data.day)) || compareRows(b,a) || b.id.localeCompare(a.id);
+  const weighed=rows.filter(row=>typeof row.data.weight_kg==='number'&&Number.isFinite(row.data.weight_kg)&&row.data.weight_kg>0);
+  const fromHealth=(row:typeof rows[number])=>row.data.source==='healthkit'?t('appleHealthTitle'):row.data.source==='health_connect'?t('healthConnectTitle'):null;
+  const deletable=weighed.filter(row=>row.data.source==='app').sort(newest),deleteRows=showAll?deletable:deletable.slice(0,30);
+  const healthRows=weighed.filter(row=>fromHealth(row)).sort(newest).slice(0,HEALTH_SHOWN);
   const trend=trendWeights(dailyWeights(rows)),visible=inRange(trend,range),last=trend.at(-1),change=weeklyChange(trend);
   // The entry starts from the last weight typed here, never from a Health reading: saving a typed weigh-in
   // syncs, and a Health value must not ride along with it.
@@ -49,7 +57,7 @@ export function Body({repository}:{repository:Repository}) {
         options={([7,30,90,365] as const).map(n=>({value:String(n),label:t(`bodyRange${n}`)}))}/>:
       <View testID="body-ranges" accessibilityRole="tablist" accessibilityLabel={t('bodyRanges')} style={{flexDirection:'row',gap:tokens.spacing[0]}}>
         {([7,30,90,365] as const).map(n=>{const on=n===range;return <Pressable key={n} accessibilityRole="tab" accessibilityLabel={t(`bodyRange${n}`)} accessibilityState={{selected:on}} onPress={()=>setRange(n)}
-          style={{flex:1,minHeight:touchTarget,justifyContent:'center',paddingHorizontal:tokens.spacing[0],paddingVertical:tokens.spacing[1],borderRadius:tokens.radii.input,backgroundColor:on?colors.accent:colors['surface-2']}}>
+          style={{flex:1,minHeight:touchTarget,justifyContent:'center',paddingHorizontal:tokens.spacing[0],paddingVertical:tokens.spacing[1],borderRadius:radius.input,backgroundColor:on?colors.accent:colors['surface-2']}}>
           <ThemedText style={{color:on?colors['on-accent']:colors.text,textAlign:'center'}}>{t(`bodyRange${n}`)}</ThemedText>
         </Pressable>;})}
       </View>}
@@ -84,5 +92,16 @@ export function Body({repository}:{repository:Repository}) {
         </View>;})}
     </Panel>}
     {!showAll&&deletable.length>30&&<Button label={t('bodyShowAll')} onPress={()=>setShowAll(true)}/>}
+    {healthRows.length>0&&<Panel testID="body-health-entries" style={{gap:0}}>
+      <ThemedText variant="headline" accessibilityRole="header">{t('bodyFromHealthTitle')}</ThemedText>
+      {healthRows.map((row,index)=>{
+        const value=fromKg(Number(row.data.weight_kg),unit).toFixed(1),day=friendlyDay(String(row.data.day)),source=fromHealth(row)!;
+        return <View key={row.id} testID={`body-health-${row.id}`} accessible accessibilityLabel={t('bodyFromHealthLabel').replace('{day}',day).replace('{value}',value).replace('{unit}',unit).replace('{source}',source)}
+          style={{flexDirection:'row',alignItems:'center',minHeight:48,borderTopWidth:index?1:0,borderColor:colors['surface-2']}}>
+          <ThemedText numeric style={{flex:1}}>{day} · {value} {unit}</ThemedText>
+          <ThemedText muted variant="caption">{source}</ThemedText>
+        </View>;})}
+      <ThemedText muted variant="caption" style={{paddingTop:tokens.spacing[1]}}>{t('bodyFromHealthHint')}</ThemedText>
+    </Panel>}
   </View>;
 }

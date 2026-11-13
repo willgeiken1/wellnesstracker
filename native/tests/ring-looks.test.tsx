@@ -5,6 +5,7 @@ import { DEFAULT_APPEARANCE, formatAppearance, parseAppearance, RING_LOOKS } fro
 import { arcPath, RingArc } from '../src/components/ring-arc';
 import Appearance from '../src/features/settings/appearance';
 import { CalorieRing } from '../src/features/food/ring';
+import { createTheme, palettes } from '../src/design/tokens';
 import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
 import { syntheticRow } from '../fixtures/sync';
@@ -84,6 +85,21 @@ test('an estimated day stays dashed in every look', async () => {
     const view = await render(<ThemeProvider repository={settingsRepository({ accent: `seaGlassTide;ring=${look}` })}><CalorieRing total={total} target={target} estimated /></ThemeProvider>);
     const dashed = screen.getByTestId('food-ring-energy_kj').queryAll(node => (node.type as unknown as string) === 'RNSVGPath' && !!node.props.strokeDasharray);
     expect(dashed.length).toBeGreaterThan(0);
+    await view.unmount();
+  }
+});
+
+test('every food ring has its own colour, so carbs never matches the calorie ring around it', async () => {
+  for (const palette of palettes) for (const mode of ['dark', 'light'] as const) {
+    const view = await render(<ThemeProvider repository={settingsRepository({ theme_override: mode, accent: palette })}><CalorieRing total={total} target={target} /></ThemeProvider>);
+    const colors = createTheme(mode, palette);
+    const strokes = ['energy_kj', 'protein_g', 'carbs_g', 'fat_g'].map(key => {
+      // react-native-svg hands strokes to native as ARGB numbers, so compare in that form.
+      const used = new Set(screen.getByTestId(`food-ring-${key}`).queryAll(node => (node.type as unknown as string) === 'RNSVGPath').map(node => node.props.stroke?.payload));
+      return [colors.food, colors.training, colors.recovery, colors.sleep].find(color => used.has((0xff000000 | parseInt(color.slice(1), 16)) >>> 0));
+    });
+    expect({ palette, mode, strokes }).toEqual({ palette, mode, strokes: [colors.food, colors.training, colors.recovery, colors.sleep] });
+    expect(new Set(strokes).size).toBe(4);
     await view.unmount();
   }
 });

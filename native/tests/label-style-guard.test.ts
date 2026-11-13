@@ -215,7 +215,7 @@ describe("label style guard (INS-03)", () => {
     expect(en.previous).toBe("Previous");
     expect(en.repsHeader).toBe("Reps");
     expect(en.lastTime).toBe("Last time");
-    expect(en.template).toBe("Template");
+    expect(en.template).toBe("Routine");
     expect(en.workoutComplete).toBe("Workout complete");
     // True acronyms are preserved
     expect(en.prs).toBe("PR");

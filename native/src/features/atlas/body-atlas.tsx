@@ -4,7 +4,7 @@ import Svg, { G, Path } from 'react-native-svg';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import { router } from 'expo-router';
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { muscleLabel, t } from '@/i18n/en';
@@ -46,7 +46,7 @@ export function deepCasing(line: string, colors: Record<'text'|'bg', string>) {
 export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
  sessions: AtlasSession[]; now: number; compact?: boolean; haptics?: boolean;
 }) {
- const { colors, mode }=useTheme();
+ const { colors, mode, radius }=useTheme();
  const [body,setBody]=useState<BodyType>('male'),[side,setSide]=useState<Side>('front');
  const [list,setList]=useState(false),[selected,setSelected]=useState<string|null>(null);
  useEffect(()=>{
@@ -110,18 +110,18 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
   <ThemedText muted>{t('atlasLegend')}</ThemedText>
   {list && values.map(value=><Pressable key={value.key} testID={`atlas-row-${value.key}`}
    accessibilityRole="button" accessibilityLabel={atlasLabel(value,now)} accessibilityState={{selected:selected===value.key}}
-   onPress={()=>select(value.key)} style={{minHeight:48,padding:12,borderRadius:12,backgroundColor:colors.surface,borderWidth:selected===value.key?2:0,borderColor:colors.text}}>
+   onPress={()=>select(value.key)} style={{minHeight:48,padding:12,borderRadius:radius.card,backgroundColor:colors.surface,borderWidth:selected===value.key?2:0,borderColor:colors.text}}>
     <View style={{flexDirection:'row',gap:8}}><View style={{width:12,height:12,marginTop:5,backgroundColor:heatFill(value,mode==='dark')}}/><ThemedText>{muscleByKey.get(value.key)!.name}</ThemedText></View>
     <ThemedText muted>{atlasValue(value,now)}</ThemedText>
    </Pressable>)}
-  {current && <Card>
+  {current && <Panel>
    <ThemedText accessibilityRole="header">{muscleByKey.get(current.key)!.name}</ThemedText>
    <ThemedText>{muscleByKey.get(current.key)!.scientific}</ThemedText>
    <ThemedText>{atlasValue(current,now)}</ThemedText>
    <Button label={t('atlasOpen')} onPress={()=>router.push({pathname:'/muscle/[key]',params:{key:current.key}})}/>
-  </Card>}
-  {!compact && <Card><ThemedText accessibilityRole="header">{t('atlasGroups')}</ThemedText>
+  </Panel>}
+  {!compact && <Panel><ThemedText accessibilityRole="header">{t('atlasGroups')}</ThemedText>
    {Object.entries(rollup(values)).map(([group,sets])=><ThemedText key={group}>{muscleLabel(group)} · {sets}</ThemedText>)}
-  </Card>}
+  </Panel>}
  </View>;
 }

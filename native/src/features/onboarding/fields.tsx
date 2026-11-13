@@ -16,7 +16,7 @@ type FieldProps = { label: string; value: string; onChange: (text: string) => vo
 export type FieldInput = ComponentRef<typeof TextInput>;
 /** One labelled text box. The border turns to the accent colour while it has focus. */
 export const Field = forwardRef<FieldInput, FieldProps>(function Field({ label, value, onChange, numeric = false, disabled = false, helper, error, input }, ref) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   const [focused, setFocused] = useState(false);
   return <View style={{ gap: 6 }}>
     <ThemedText style={[semibold, { fontSize: 14 }]}>{label}</ThemedText>
@@ -25,7 +25,7 @@ export const Field = forwardRef<FieldInput, FieldProps>(function Field({ label, 
       placeholderTextColor={colors['text-muted']} selectionColor={colors.accent} {...input}
       onFocus={event => { setFocused(true); input?.onFocus?.(event); }} onBlur={event => { setFocused(false); input?.onBlur?.(event); }}
       style={{ color: colors.text, backgroundColor: colors['surface-2'], minHeight: Math.max(touchTarget, 48), paddingHorizontal: 14, paddingVertical: tokens.spacing[2],
-        borderRadius: tokens.radii.card, fontSize: 16, borderWidth: 1.5, borderColor: focused ? colors.accent : colors['hair-2'], opacity: disabled ? 0.6 : 1 }} />
+        borderRadius: radius.card, fontSize: 16, borderWidth: 1.5, borderColor: focused ? colors.accent : colors['hair-2'], opacity: disabled ? 0.6 : 1 }} />
     {helper && <ThemedText muted variant="caption" style={{ lineHeight: 18 }}>{helper}</ThemedText>}
     {error && <ThemedText accessibilityRole="alert" accessibilityLiveRegion="polite" variant="caption" style={[semibold, { lineHeight: 18 }]}>{error}</ThemedText>}
   </View>;

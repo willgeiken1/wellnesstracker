@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Screen } from '@/components/screen';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { SegmentedControl } from '@/components/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { tokens } from '@/design/tokens';
@@ -11,10 +11,10 @@ export function TabPlaceholder({ title, segments }: { title: MessageKey; segment
   return <Screen title={t(title)} tabHeader>
     {segments && selected && <SegmentedControl label={t('segments')}
       options={segments.map(value => ({ value, label: t(value) }))} value={selected} onChange={setSelected} />}
-    <Card testID="tab-empty" style={{ borderRadius: 18, padding: tokens.spacing[3] }}>
+    <Panel testID="tab-empty" style={{ borderRadius: 18, padding: tokens.spacing[3] }}>
       {/* The screen title already names the tab, so a heading appears only for a chosen section. */}
       {selected && <ThemedText variant="headline" accessibilityRole="header" style={{ fontWeight: '600' }}>{t(selected)}</ThemedText>}
       <ThemedText muted>{t('placeholderBody')}</ThemedText>
-    </Card>
+    </Panel>
   </Screen>;
 }

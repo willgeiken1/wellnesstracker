@@ -98,7 +98,7 @@ test('machine setup shows default Step for each unit and rejects invalid input',
   expect(screen.getByLabelText('Step (kg)').props.placeholder).toBe('5');
   await fireEvent.changeText(screen.getByLabelText('Step (kg)'), '0');
   await fireEvent.press(screen.getByRole('button', { name: 'Save setup' }));
-  expect(screen.getByText('Enter a positive Step and a non-negative bar weight.')).toBeTruthy();
+  expect(screen.getByText('Step must be more than 0, and bar weight 0 or more.')).toBeTruthy();
   expect(store.preferences().machine('Fixture')).toEqual({ text: '' });
 });
 test('saved machine notes remain visible beside the sets without opening the editor', async () => {
@@ -130,6 +130,8 @@ test('custom Other uses the accessible setup Step for keypad plus and minus', as
   await view.rerender(<Keypad label={name} field="weight" equipment={preferences.exercise(name).equipment} unit="lb" value="100" previous="" setupStep={preferences.increment(name,'lb')} onChange={change} onNext={() => {}} onClose={() => {}} />);
   await fireEvent.press(screen.getByRole('button', {name:'+2.5'}));
   expect(change).toHaveBeenLastCalledWith('102.5');
+  // The store shows the new value, then minus steps back from it.
+  await view.rerender(<Keypad label={name} field="weight" equipment={preferences.exercise(name).equipment} unit="lb" value="102.5" previous="" setupStep={preferences.increment(name,'lb')} onChange={change} onNext={() => {}} onClose={() => {}} />);
   await fireEvent.press(screen.getByRole('button', {name:'−2.5'}));
-  expect(change).toHaveBeenLastCalledWith('97.5');
+  expect(change).toHaveBeenLastCalledWith('100');
 });

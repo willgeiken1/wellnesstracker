@@ -143,7 +143,10 @@ export function SetRow({
             },
           ]}
         >
-          <ThemedText numeric muted={!draft[field]} style={{ fontSize: 17 }}>
+          {/* An empty cell shows last time's number as a hint, faded and light like an iOS placeholder; a typed
+              value is full strength and semibold. So a suggestion never looks like something already logged. */}
+          <ThemedText testID={`set-${exerciseIndex}-${index}${suffix}-${field}-text`} numeric muted={!draft[field]}
+            style={{ fontSize: 17, fontWeight: draft[field] ? "600" : "400", opacity: draft[field] ? 1 : 0.55 }}>
             {draft[field] || (field === "weight" ? hint : repsHint) || "–"}
           </ThemedText>
         </Pressable>

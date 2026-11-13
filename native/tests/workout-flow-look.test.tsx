@@ -188,7 +188,7 @@ test('History lists finished workouts as rows that open their summary, and says 
 test('routine editor: honest empty state, labelled targets, and reorder controls that know their limits', async () => {
   const { store } = open();
   const view = await render(<TemplateEditor />, { wrapper });
-  expect(screen.getAllByRole('header')[0]).toHaveTextContent('New template');
+  expect(screen.getAllByRole('header')[0]).toHaveTextContent('New routine');
   expect(screen.getByText('No exercises yet')).toBeTruthy();
   await view.unmount();
   const routine = store.saveTemplate('Sample routine', ['Bench Press', 'Dumbbell Row'].map(exercise => ({ exercise, target_sets: 3, target_reps: 8 })));
@@ -200,11 +200,11 @@ test('routine editor: honest empty state, labelled targets, and reorder controls
   expect(screen.getByRole('button', { name: 'Move down, Dumbbell Row' })).toBeDisabled();
   await fireEvent.press(screen.getByRole('button', { name: 'Move down, Bench Press' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Remove, Dumbbell Row' }));
-  await fireEvent.changeText(screen.getByLabelText('Template name'), '');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save template' }));
-  expect(screen.getByRole('alert')).toHaveTextContent(/^Enter a name/);
-  await fireEvent.changeText(screen.getByLabelText('Template name'), 'Sample routine');
-  await fireEvent.press(screen.getByRole('button', { name: 'Save template' }));
+  await fireEvent.changeText(screen.getByLabelText('Routine name'), '');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save routine' }));
+  expect(screen.getByRole('alert')).toHaveTextContent(/^Give the routine a name/);
+  await fireEvent.changeText(screen.getByLabelText('Routine name'), 'Sample routine');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save routine' }));
   expect(store.templateExercises(routine.id).map(row => row.data.exercise)).toEqual(['Bench Press']);
   expect(router.back).toHaveBeenCalledTimes(1);
 });
@@ -218,13 +218,13 @@ test('finish sheet shows what will be saved and its switch still saves the worko
   expect(within(facts).getByLabelText('Sets: 1')).toBeTruthy();
   expect(within(facts).getByLabelText('Exercises: 1')).toBeTruthy();
   expect(screen.queryByText(/No sets are logged yet/)).toBeNull();
-  const toggle = screen.getByRole('switch', { name: 'Save as template' });
+  const toggle = screen.getByRole('switch', { name: 'Save as routine' });
   expect(toggle).toHaveProp('value', false);
   await fireEvent(toggle, 'valueChange', true);
   await fireEvent.changeText(screen.getByLabelText('Workout'), 'Sample session');
   await fireEvent.changeText(screen.getByLabelText('Start date and time'), 'tomorrow');
   await fireEvent.press(screen.getByTestId('save-workout'));
-  expect(screen.getByRole('alert')).toHaveTextContent(/^Enter a valid past date/);
+  expect(screen.getByRole('alert')).toHaveTextContent(/^Use a start time in the past/);
   expect(store.templates()).toHaveLength(0);
 });
 
@@ -233,7 +233,7 @@ test('finish sheet with the switch on saves the template and opens the summary',
   store.addExercise(session.id, 'Bench Press', 1);
   await render(<FinishSheet store={store} session={store.repo.get('sessions', session.id)!} onClose={() => {}} />, { wrapper });
   expect(screen.getByText(/No sets are logged yet/)).toBeTruthy();
-  await fireEvent(screen.getByRole('switch', { name: 'Save as template' }), 'valueChange', true);
+  await fireEvent(screen.getByRole('switch', { name: 'Save as routine' }), 'valueChange', true);
   await fireEvent.changeText(screen.getByLabelText('Workout'), 'Sample session');
   await fireEvent.press(screen.getByTestId('save-workout'));
   expect(store.templates().map(row => row.data.name)).toEqual(['Sample session']);
@@ -284,4 +284,18 @@ test('durations read as minutes, never as a made-up zero', () => {
   expect(minutesLabel(45 * 60000)).toBe('45 min');
   expect(minutesLabel(72 * 60000)).toBe('1 h 12 min');
   expect(minutesLabel(NaN)).toBe('');
+});
+
+test('day screen header keeps Back apart from the day arrows, which sit together in one stepper', async () => {
+  const { store } = open(); workout(store, 2);
+  const picked: string[] = [];
+  await render(<DaySummary store={store} day={dayAgo(2)} onDay={day => picked.push(day)} />, { wrapper });
+  const stepper = screen.getByTestId('day-stepper');
+  expect(within(stepper).getByRole('button', { name: 'Previous day' })).toBeTruthy();
+  expect(within(stepper).getByRole('button', { name: 'Next day' })).toBeTruthy();
+  expect(within(stepper).queryByRole('button', { name: 'Back' })).toBeNull();
+  expect(within(screen.getByTestId('day-bar')).getAllByRole('button', { name: 'Back' })).toHaveLength(1);
+  await fireEvent.press(screen.getByTestId('day-previous'));
+  await fireEvent.press(screen.getByTestId('day-next'));
+  expect(picked).toEqual([dayAgo(3), dayAgo(1)]);
 });

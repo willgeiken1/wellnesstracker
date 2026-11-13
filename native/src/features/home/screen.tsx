@@ -3,10 +3,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
-import { Screen } from '@/components/screen';
+import { AvatarButton, Screen } from '@/components/screen';
 import { setDockAction } from '@/components/floating-tabs';
-import { Card } from '@/components/card';
-import { Icon } from '@/components/icon';
+import { Button } from '@/components/button';
+import { Card, Panel, PROTOTYPE_RADIUS } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg, localDay } from '@/core/workout/rules';
 import { WorkoutStore } from '@/data/workout/store';
@@ -29,14 +29,15 @@ import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './ti
 import { HeaderScore, ScoreCard } from '../score/card';
 import { readScore } from '../score/read';
 import type { Score } from '../score/model';
+/** Home's + button with the Standard bar. */
+const ADD_SIZE = 56;
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
 const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(low, n));
-const heading = { fontFamily: tokens.font.heading } as const;
 const semibold = { fontWeight: '600' } as const;
 // The prototype's card: softer corners and tighter padding than the shared Card default.
-const card: ViewStyle = { borderRadius: 18, padding: tokens.spacing[2] };
+const card: ViewStyle = { borderRadius: PROTOTYPE_RADIUS, padding: tokens.spacing[2] };
 // Two hills until a recovery source exists in this build; the prototype's third hill sits below these.
 const HILLS = [[0.36, 0.42], [0.63, 0.60]] as const;
 // Wider, wobblier hills than the prototype default so two hills still merge into one piece of terrain.
@@ -119,13 +120,9 @@ function Contours({ values, width, height, mini }: { values: Record<Pillar, numb
   </>;
 }
 
+/** Home's compact buttons: the shared Button at its small size, secondary when `ghost`. */
 function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: string; accessibilityLabel?: string; onPress: () => void; ghost?: boolean }) {
-  const { colors } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} hitSlop={{ top: 4, bottom: 4 }}
-    style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: tokens.radii.card,
-      backgroundColor: ghost ? colors['surface-2'] : colors.accent, opacity: pressed ? 0.8 : 1 })}>
-    <ThemedText style={[semibold, { fontSize: 14, color: ghost ? colors.text : colors['on-accent'] }]}>{label}</ThemedText>
-  </Pressable>;
+  return <Button size="small" variant={ghost ? 'secondary' : 'primary'} label={label} accessibilityLabel={accessibilityLabel} onPress={onPress} />;
 }
 
 /** Home, ported from the prototype: header, contour map of today, week of mini maps, one card for
@@ -179,16 +176,14 @@ export function Home() {
   const scoreOn = tiles.order.includes('score'), minute = Math.floor(now.getTime() / 60_000);
   const score = useMemo(() => reader && scoreOn ? readScore(reader, new Date(minute * 60_000), health) : null, [reader, scoreOn, health, minute]);
   return <View style={{ flex: 1 }}>
-    <Screen tabHeader>
+    {/* With the Standard bar the + floats over the content, so the last card can always scroll clear of it. */}
+    <Screen tabHeader endSpace={floating ? 0 : ADD_SIZE + tokens.spacing[2]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')} hitSlop={4}
-          style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }}>
-          <Icon name="avatar" size={22} />
-        </Pressable>
+        <AvatarButton />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
-            {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
+            {auth.demo && <ExampleChip />}
           </View>
           <Greeting text={greeting(now.getHours())} />
         </View>
@@ -208,7 +203,7 @@ export function Home() {
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
       </>}
       {!floating && <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={toggleAdd}
-        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
+        style={({ pressed }) => [{ width: ADD_SIZE, height: ADD_SIZE, borderRadius: ADD_SIZE / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
         <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
           <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
         </Svg>
@@ -234,11 +229,11 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   const { recent, facts, targets, dayTargets, active } = data;
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
-  if (!tiles.order.length) return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
+  if (!tiles.order.length) return <Panel style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
     <ThemedText variant="headline" style={semibold}>{t('homeNothingOn')}</ThemedText>
     <ThemedText muted variant="caption" style={{ textAlign: 'center' }}>{t('homeNothingOnBody')}</ThemedText>
     <View style={{ marginTop: tokens.spacing[1] }}><SmallButton label={t('homeEdit')} onPress={onEdit} /></View>
-  </Card>;
+  </Panel>;
   // A new account has nothing to draw yet, but the layout the person chose still applies: only what they kept
   // on Home shows, in their order. The week strip waits for data, like the number tiles.
   if (!data.any && !health) return <>
@@ -252,8 +247,17 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   </>;
   const numbers = numberTiles(reader, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
   const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
-  // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
-  return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
+  // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up. A small
+  // tile left without a partner (before a section, or last) takes the full row too, so no half-width tile stands alone.
+  const shown = tiles.order.filter(id => isSmall(id) ? !!numbers[id] : id !== 'score' || !!score);
+  const alone = new Set<TileId>();
+  let run: TileId[] = [];
+  for (const id of [...shown, null]) {
+    if (id && isSmall(id) && !tiles.wide.includes(id)) { run.push(id); continue; }
+    if (run.length % 2) alone.add(run[run.length - 1]);
+    run = [];
+  }
+  return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3] }}>
     {tiles.order.map(id => {
       const full = { width: '100%' } as const;
       if (id === 'map') return <View key={id} style={full}><MapCard day={selected} today={today} values={of(selected)} /></View>;
@@ -261,17 +265,26 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
       if (id === 'week') return <View key={id} style={full}><Week week={week} today={today} selected={selected} onPick={onPick} of={of} /></View>;
       if (id === 'next') return <View key={id} style={full}><Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /></View>;
       const tile = numbers[id];
-      return tile ? <NumberTile key={id} tile={tile} wide={tiles.wide.includes(id)} /> : null;
+      return tile ? <NumberTile key={id} tile={tile} wide={tiles.wide.includes(id) || alone.has(id)} /> : null;
     })}
     {wanted.length > 0 && !shownNumbers.length && <ThemedText muted variant="caption" style={{ width: '100%' }}>{t('homeTilesEmpty')}</ThemedText>}
   </View>;
 }
 
+/** A chip on the header row, the same in light and dark: the header buttons' surface with a hairline edge,
+ * so it never melts into the page the way a panel tone does in light themes. */
+function ExampleChip() {
+  const { colors } = useTheme();
+  return <View testID="home-example-chip" style={{ borderRadius: 10, paddingHorizontal: 8, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'] }}>
+    <ThemedText muted variant="caption" style={semibold}>{t('exampleData')}</ThemedText>
+  </View>;
+}
+
 /** The greeting in two weights, light then strong, so the time of day is the word that lands. */
 function Greeting({ text }: { text: string }) {
-  const cut = text.indexOf(' ');
+  const cut = text.indexOf(' '), { headingFont } = useTheme();
   return <ThemedText variant="title" accessibilityRole="header" accessibilityLabel={text} style={semibold}>
-    {cut > 0 && <ThemedText muted variant="title" style={{ fontFamily: 'Lexend_300Light', fontWeight: '300' }}>{text.slice(0, cut + 1)}</ThemedText>}
+    {cut > 0 && <ThemedText muted variant="title" style={{ fontFamily: headingFont ? 'Lexend_300Light' : undefined, fontWeight: '300' }}>{text.slice(0, cut + 1)}</ThemedText>}
     {cut > 0 ? text.slice(cut + 1) : text}
   </ThemedText>;
 }
@@ -323,7 +336,7 @@ function MapCard({ day, today, values }: { day: string; today: string; values: R
 
 /** Monday to Sunday as mini maps. Tapping a day shows it on the big map; days ahead are dimmed. */
 function Week({ week, today, selected, onPick, of }: { week: Date[]; today: string; selected: string; onPick: (day: string) => void; of: (day: string) => Record<Pillar, number> }) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   return <View accessibilityLabel={t('homeThisWeek')} style={{ flexDirection: 'row', gap: 4 }}>
     {week.map(date => {
       const day = localDay(date), future = day > today, isSelected = day === selected, values = future ? null : of(day);
@@ -331,13 +344,16 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
       return <Pressable key={day} accessibilityRole="button" disabled={future} onPress={() => onPick(day)}
         accessibilityLabel={`${name}${day === today ? `, ${t('today')}` : ''}${values ? `, ${spoken(values)}` : ''}`}
         accessibilityState={{ selected: isSelected, disabled: future }}
-        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: tokens.radii.card, opacity: future ? 0.35 : 1,
+        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 4, paddingBottom: 3, borderRadius: radius.card, opacity: future ? 0.35 : 1,
           backgroundColor: isSelected ? colors['surface-2'] : 'transparent', borderWidth: 1.5, borderColor: day === today ? colors.accent : 'transparent' }}>
-        <Svg width={38} height={28} viewBox="0 0 40 30" accessible={false}>
-          {values && (values.training > 0 || values.food > 0)
-            ? <Contours values={values} width={40} height={30} mini />
-            : <Circle cx={20} cy={15} r={2} fill={colors['text-muted']} opacity={0.5} />}
-        </Svg>
+        {/* The mini map fills the day's width, so it reads at a glance on every phone size. */}
+        <View style={{ width: '100%', aspectRatio: 4 / 3, paddingHorizontal: 2 }}>
+          <Svg width="100%" height="100%" viewBox="0 0 40 30" accessible={false}>
+            {values && (values.training > 0 || values.food > 0)
+              ? <Contours values={values} width={40} height={30} mini />
+              : <Circle cx={20} cy={15} r={1.8} fill={colors['text-muted']} opacity={0.5} />}
+          </Svg>
+        </View>
         <ThemedText muted={!isSelected} variant="caption" style={{ fontWeight: isSelected ? '700' : '400' }}>{name.slice(0, 1)}</ThemedText>
       </Pressable>;
     })}
@@ -345,11 +361,11 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
 }
 
 function Brief({ title, body, action }: { title: string; body: string; action: ReactNode }) {
-  return <Card style={[card, { padding: tokens.spacing[3], gap: tokens.spacing[1] }]} testID="home-next">
+  return <Panel style={[card, { padding: tokens.spacing[3], gap: tokens.spacing[1] }]} testID="home-next">
     <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
     <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{body}</ThemedText>
     <View style={{ marginTop: 6 }}>{action}</View>
-  </Card>;
+  </Panel>;
 }
 
 /** One card for what's next: resume, today's planned workout, or the evening food check-in.
@@ -376,37 +392,52 @@ function Next({ store, facts = NONE, targets = null, hour = 12 }: { store?: Work
     }} />} />;
 }
 
-function Spark({ values, color, bars }: { values: number[]; color: string; bars?: boolean }) {
+/** A week of values, oldest first. `partial` marks the last value as today, still being logged: its line is dashed
+ * and its bar hollow, so a half-logged day never reads as a drop. */
+export function Spark({ values, color, bars, partial }: { values: number[]; color: string; bars?: boolean; partial?: boolean }) {
   const w = 140, h = 30, list = values.length > 1 ? values : [...values, ...values];
   const max = Math.max(...list, 1), min = bars ? 0 : Math.min(...list), span = max - min || 1;
+  const open = partial && values.length > 1;
   if (bars) {
     const bw = w / list.length;
     return <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" accessible={false}>
-      {list.map((v, i) => <Rect key={i} x={i * bw + 1} y={h - (v / max) * (h - 2)} width={bw - 2} height={(v / max) * (h - 2)} rx={1.5} fill={color} opacity={i === list.length - 1 ? 1 : 0.45} />)}
+      {list.map((v, i) => {
+        const last = i === list.length - 1, height = Math.max((v / max) * (h - 2), last && open ? 2 : 0);
+        return last && open
+          ? <Rect key={i} testID="spark-today" x={i * bw + 1.75} y={h - height + 0.75} width={bw - 3.5} height={Math.max(height - 1.5, 0.5)} rx={1.5} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.5} strokeDasharray="2.5 2" />
+          // Every finished day's bar is solid: a faded bar falls under 3:1 on the panel in most themes.
+          : <Rect key={i} testID="spark-bar" x={i * bw + 1} y={h - height} width={bw - 2} height={height} rx={1.5} fill={color} />;
+      })}
     </Svg>;
   }
-  const d = list.map((v, i) => `${i ? 'L' : 'M'}${(i / (list.length - 1) * w).toFixed(1)} ${(h - 3 - (v - min) / span * (h - 6)).toFixed(1)}`).join('');
+  const points = list.map((v, i) => [i / (list.length - 1) * w, h - 3 - (v - min) / span * (h - 6)] as const);
+  const line = (from: number, to: number) => points.slice(from, to).map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
+  // With today open, the filled area and solid line stop at yesterday; today's stretch is a dashed line to a hollow dot.
+  const solid = line(0, open ? points.length - 1 : points.length), end = points[open ? points.length - 2 : points.length - 1][0];
+  const [tx, ty] = points[points.length - 1];
   return <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" accessible={false}>
-    <Path d={`${d} L${w} ${h} L0 ${h}Z`} fill={color} opacity={0.12} />
-    <Path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+    <Path d={`${solid} L${end.toFixed(1)} ${h} L0 ${h}Z`} fill={color} opacity={0.12} />
+    <Path testID="spark-line" d={solid} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+    {open && <Path testID="spark-today" d={line(points.length - 2, points.length)} fill="none" stroke={color} strokeWidth={2} strokeDasharray="3 3" strokeLinecap="round" opacity={0.8} />}
+    {open && <Circle cx={tx} cy={ty} r={2.2} fill="none" stroke={color} strokeWidth={1.5} />}
   </Svg>;
 }
 
-interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
+interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; partial?: boolean; to: '/food' | '/workouts' | '/progress' }
 
 /** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
 function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent): Partial<Record<TileId, TileData>> {
   const unit = store.unit(), last = facts[facts.length - 1], weights = readWeights(store).map(kg => fromKg(kg, unit));
   const volumes = facts.map(f => fromKg(f.volumeKg, unit));
   const all: TileData[] = [
-    { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), to: '/food' },
-    { id: 'protein', label: t('homeProtein'), kind: 'food', color: pillar.food, value: whole(last.protein ?? 0), unit: 'g', series: facts.map(f => f.protein ?? 0), to: '/food' },
+    { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), partial: true, to: '/food' },
+    { id: 'protein', label: t('homeProtein'), kind: 'food', color: pillar.food, value: whole(last.protein ?? 0), unit: 'g', series: facts.map(f => f.protein ?? 0), partial: true, to: '/food' },
     { id: 'volume', label: t('volume'), kind: 'training', color: pillar.training, value: whole(volumes.reduce((a, b) => a + b, 0)), unit: `${unit} · ${t('homeSevenDays')}`, series: volumes, bars: true, to: '/workouts' },
     { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
   ];
   if (health) {
     const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
-    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
+    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, partial: true, to: '/progress' });
     if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
@@ -415,16 +446,17 @@ function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
   return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"
     accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
     style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
-    <Card style={[card, { minHeight: 108, gap: 2 }]}>
+    <Panel style={[card, { minHeight: 108, gap: 2 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}
         <ThemedText muted variant="caption">{tile.label}</ThemedText>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-        <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
+        {/* A number, so it keeps the numeral font whatever the heading look. */}
+        <ThemedText style={{ fontFamily: tokens.font.numeral, fontSize: 24, fontVariant: ['tabular-nums'] }}>{tile.value}</ThemedText>
         <ThemedText muted variant="caption">{tile.unit}</ThemedText>
       </View>
-      <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} /></View>
-    </Card>
+      <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} partial={tile.partial} /></View>
+    </Panel>
   </Pressable>;
 }

@@ -234,6 +234,55 @@ type MeaningRole = (typeof MEANING_ROLES)[number];
 /** Hue windows: training goes warm (design/tokens.ts base training is orange), food stays orange, water stays cyan-blue. */
 const HUE_WINDOW: Partial<Record<MeaningRole, [number, number]>> = { training: [20, 60], food: [15, 40], water: [175, 225] };
 
+/** Values chosen by hand after the 2026-11 design critique. Each stays at least MIN_DISTINCT_DE from every other
+ * pillar and the accent, keeps one hue across both modes, and clears D6 (the graphics and text steps below still run). */
+export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'training' | 'food' | 'recovery' | 'sleep'; to: string; reason: string }[]> = {
+  // Training was the accent's gold (dark ΔE 0.028). Green, the training colour most palettes use, in both modes.
+  goldenHour: [
+    { mode: 'dark', role: 'training', to: '#9CCB5A', reason: 'training read as the accent gold (critique 9)' },
+    // Dark enough to carry the white Start label at 4.5:1, like every other light palette's training colour.
+    { mode: 'light', role: 'training', to: '#3E6F25', reason: 'training in the same green as dark mode (critique 9)' },
+    // Links on cream were 4.9:1, weaker than the grey captions (5.8:1). Same gold, darker: 6.6:1.
+    { mode: 'light', role: 'accent', to: '#705200', reason: 'accent links read weaker than muted text on cream (critique 9)' },
+  ],
+  // Light training was the accent's deep green (ΔE 0.050). It moves further from the page than the accent, as dark
+  // mode's paler training already does, and stays dark enough to carry the white Start label.
+  forestEmber: [
+    { mode: 'light', role: 'training', to: '#1D4E27', reason: 'training read as the accent green (critique 9)' },
+  ],
+  // The launch review (UX-11): the smallest hue move that puts each pillar at least 0.10 from the accent and
+  // every other pillar, lightness kept, so the palette still looks like itself.
+  mountainMist: [
+    { mode: 'dark', role: 'recovery', to: '#8F90F0', reason: 'recovery read as the accent blue (review UX-11)' },
+    { mode: 'light', role: 'recovery', to: '#2D53A8', reason: 'recovery read as the accent blue (review UX-11)' },
+  ],
+  desertMirage: [
+    // Rose in both modes: the terracotta accent leaves no room for an orange food that is still distinct.
+    { mode: 'dark', role: 'food', to: '#F0849C', reason: 'food in the same rose as light mode (review UX-11)' },
+    { mode: 'light', role: 'food', to: '#B83C56', reason: 'food read as the accent terracotta (review UX-11)' },
+  ],
+  // Lotus Garden's dark food (ΔE 0.086 from the coral accent, 0.083 from the warn yellow) is left alone: it sits
+  // between the two, so any move away from one brings it closer to the other or greys it out.
+  auroraFjord: [
+    { mode: 'dark', role: 'recovery', to: '#75BAEF', reason: 'recovery read as the accent and as water (review UX-11)' },
+  ],
+  // The simulator sweep: Spring Citrus training and food were both orange on Home (ΔE 0.11), and green is taken by
+  // the lime accent and success, so training moves to blossom pink in both modes, dark enough in light mode for white.
+  springCitrus: [
+    { mode: 'dark', role: 'training', to: '#FFB0D8', reason: 'training and food were both orange on Home (sweep)' },
+    { mode: 'light', role: 'training', to: '#C03C80', reason: 'training in the same pink as dark mode (sweep)' },
+  ],
+  // Moonlight Dusk dark: the carbs (recovery) and fat (sleep) rings were close, and recovery sat 0.07 from the accent.
+  // Recovery moves towards sky, sleep towards orchid, each away from the periwinkle accent between them.
+  moonlightDusk: [
+    { mode: 'dark', role: 'recovery', to: '#80C8F0', reason: 'recovery read as the accent and as sleep (sweep)' },
+    { mode: 'dark', role: 'sleep', to: '#E0A6F5', reason: 'sleep read as recovery on the Food rings (sweep)' },
+  ],
+  glacierBloom: [
+    { mode: 'dark', role: 'recovery', to: '#878DCE', reason: 'recovery sat close to water (review UX-11)' },
+  ],
+};
+
 /** Pairs of meaning colours closer than MIN_DISTINCT_DE in OKLab: flagged for review, not auto-fixed (v2 identity is Will's call). */
 export const nearDuplicates = (colors: { dark: FullColors; light: FullColors }) =>
   MODES.flatMap(mode =>
@@ -302,6 +351,9 @@ export const proposePalette = (p: Palette): Proposal => {
       for (const mode of MODES) set(mode, role, colors[mode], `${role} duplicated accent ${w[mode].accent} (CHECKLIST M2)`);
     }
   }
+  // Hand-picked fixes from the design critique (2026-11-13), checked on the simulator: a pillar that read as the accent,
+  // and a light accent that read weaker than grey caption text as a link. The accent keeps the palette's signature.
+  for (const fix of CRITIQUE_FIXES[p.id] ?? []) set(fix.mode, fix.role, fix.to, fix.reason);
   const water = pickHue(w, 'water', { dark: w.dark.recovery, light: w.light.recovery });
   for (const mode of MODES) set(mode, 'water', water.colors[mode], 'shared placeholder; per-palette hue distinct from recovery (Q-C)');
 

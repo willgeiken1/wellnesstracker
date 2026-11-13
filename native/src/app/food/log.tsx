@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { router, Stack, useNavigation } from 'expo-router';
 import { useAuth } from '@/auth/provider';
 import { touchTarget } from '@/components/button';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
@@ -29,10 +29,10 @@ export default function FoodLog() {
   return <>
     <Stack.Screen options={{ title: t('foodLogTitle'), headerBackButtonDisplayMode: 'minimal', headerLeft: cold ? () => <Close /> : undefined }} />
     <Screen>
-      {repository ? <FoodLogScreen key={repository.owner} repository={repository} /> : <Card testID="food-log-unavailable">
+      {repository ? <FoodLogScreen key={repository.owner} repository={repository} /> : <Panel testID="food-log-unavailable">
         <ThemedText variant="headline" style={{ fontWeight: '600' }}>{t('foodLogUnavailable')}</ThemedText>
         <ThemedText muted>{t('foodLogUnavailableBody')}</ThemedText>
-      </Card>}
+      </Panel>}
     </Screen>
   </>;
 }

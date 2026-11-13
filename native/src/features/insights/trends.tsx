@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg } from '@/core/workout/rules';
 import type { WorkoutStore } from '@/data/workout/store';
@@ -15,17 +15,17 @@ const short = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('e
 const semibold = { fontWeight: '600' } as const;
 
 function Empty() {
-  return <Card testID="insights-empty">
+  return <Panel testID="insights-empty">
     <ThemedText variant="headline" style={semibold}>{t('insightsEmpty')}</ThemedText>
     <ThemedText muted>{t('insightsEmptyBody')}</ThemedText>
-  </Card>;
+  </Panel>;
 }
 function ChartCard({ title, summary, children, testID }: { title: string; summary: string; children: React.ReactNode; testID: string }) {
-  return <Card testID={testID} accessible accessibilityRole="image" accessibilityLabel={`${title}. ${summary}`} style={{ gap: tokens.spacing[1] }}>
+  return <Panel testID={testID} accessible accessibilityRole="image" accessibilityLabel={`${title}. ${summary}`} style={{ gap: tokens.spacing[1] }}>
     <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
     <ThemedText muted numeric variant="caption">{summary}</ThemedText>
     {children}
-  </Card>;
+  </Panel>;
 }
 
 /** Trends: the last 14 days of calories, training volume and protein, from what was logged. */
@@ -43,13 +43,13 @@ export function Trends({ store, now }: { store: WorkoutStore; now: Date }) {
   };
   return <View style={{ gap: tokens.spacing[3] }}>
     <ChartCard testID="trend-calories" title={t('insightsCalories')} summary={`${of(t('insightsAverage'), kcal, 'kcal')} · ${t('insightsDaysLogged').replace('{count}', String(logged)).replace('{days}', '14')}`}>
-      <MiniChart values={kcal} goal={today.targetKcal} color={food} first={first} last={last} />
+      <MiniChart values={kcal} goal={today.targetKcal} color={food} first={first} last={last} unit="kcal" />
     </ChartCard>
     <ChartCard testID="trend-volume" title={t('insightsVolume')} summary={sessions ? `${t('insightsWorkouts').replace('{count}', String(sessions))} · ${whole(fromKg(points.reduce((n, p) => n + p.volumeKg, 0), unit))} ${unit}` : t('insightsNoneLogged')}>
-      <MiniChart values={volume} bars color={training} first={first} last={last} />
+      <MiniChart values={volume} bars color={training} first={first} last={last} unit={unit} />
     </ChartCard>
     <ChartCard testID="trend-protein" title={t('insightsProtein')} summary={of(t('insightsAverage'), protein, 'g')}>
-      <MiniChart values={protein} goal={today.targetProtein} color={food} first={first} last={last} />
+      <MiniChart values={protein} goal={today.targetProtein} color={food} first={first} last={last} unit="g" />
     </ChartCard>
     <ThemedText muted variant="caption">{t('insightsGoalHint')}</ThemedText>
   </View>;
@@ -70,7 +70,7 @@ export function Weekly({ store, now }: { store: WorkoutStore; now: Date }) {
   ] as const;
   const { colors } = useTheme();
   return <View style={{ gap: tokens.spacing[3] }}>
-    <Card testID="weekly-report" style={{ gap: 0 }}>
+    <Panel testID="weekly-report" style={{ gap: 0 }}>
       <ThemedText muted variant="caption">{t('weeklyOfDate').replace('{day}', short(days[0]))}</ThemedText>
       <ThemedText variant="headline" style={[semibold, { marginBottom: tokens.spacing[1] }]}>
         {hasAny(points) ? t('weeklyHeadline').replace('{workouts}', String(report.workouts)).replace('{days}', String(report.foodDays)) : t('weeklyNothing')}
@@ -80,7 +80,7 @@ export function Weekly({ store, now }: { store: WorkoutStore; now: Date }) {
         <ThemedText style={{ flex: 1 }}>{t(label)}</ThemedText>
         <ThemedText numeric style={semibold}>{value}</ThemedText>
       </View>)}
-    </Card>
+    </Panel>
     <ThemedText muted variant="caption">{t('weeklyHint')}</ThemedText>
   </View>;
 }

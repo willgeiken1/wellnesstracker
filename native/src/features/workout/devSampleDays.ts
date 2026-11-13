@@ -4,6 +4,7 @@ import type { WorkoutStore } from "@/data/workout/store";
 import { saveWeighIn } from "@/features/body/model";
 import { meals, saveFood, setTargets } from "@/features/food/model";
 import type { FixtureContext } from "./devFixture";
+import { DEMO_ROUTINE_ID, DEMO_SESSION_ID } from "../../../fixtures/demo";
 
 const DAY = 86_400_000, KJ = 4.184;
 export const SAMPLE_DAYS = 14;
@@ -32,6 +33,12 @@ export function createSampleDays(store: WorkoutStore, context: FixtureContext, n
   const repo = store.repo;
   if (repo.localGet("demoSampleDays")) return true;
   return repo.atomic(() => {
+    // The example account's two placeholders (an empty "Demo full body" routine and a "Demo workout" dated 1 Jan
+    // with nothing in it) would sit beside the real-looking weeks as "Up next" and a blank History row. They go,
+    // but only while still empty, so anything someone built on them stays.
+    const live = (table: "routines" | "sessions", id: string) => { const row = repo.get(table, id); return !!row && !row.deleted_at; };
+    if (live("routines", DEMO_ROUTINE_ID) && !store.templateExercises(DEMO_ROUTINE_ID).length) store.deleteTemplate(DEMO_ROUTINE_ID);
+    if (live("sessions", DEMO_SESSION_ID) && !store.entries(DEMO_SESSION_ID).length) repo.remove("sessions", DEMO_SESSION_ID);
     const before = new Set(syncedTables.flatMap(table => repo.list(table, true)).map(row => row.id));
     const at = (daysAgo: number, hour: number) => { const d = new Date(now - daysAgo * DAY); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour).getTime(); };
     const today = localDay(new Date(now)), slots = meals(repo);

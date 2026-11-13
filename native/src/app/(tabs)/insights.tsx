@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { SegmentedControl } from '@/components/segmented-control';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
@@ -27,9 +27,9 @@ export default function Page() {
   {section==='trends'&&store&&<Trends store={store} now={today}/>}
   {section==='weekly'&&store&&<Weekly store={store} now={today}/>}
   {section==='muscles'&&<BodyAtlas sessions={sessions} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>}
-  {section==='recovery'&&<Card testID="recovery-later">
+  {section==='recovery'&&<Panel testID="recovery-later">
    <ThemedText variant="headline" accessibilityRole="header">{t('recoveryLaterTitle')}</ThemedText>
    <ThemedText muted>{t('recoveryLaterBody')}</ThemedText>
-  </Card>}
+  </Panel>}
  </Screen>;
 }

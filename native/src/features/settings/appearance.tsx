@@ -1,9 +1,11 @@
-import { Pressable, View } from 'react-native';
+import { AccessibilityInfo, Alert, Pressable, View } from 'react-native';
+import { useState } from 'react';
 import Svg from 'react-native-svg';
 import { RingArc } from '@/components/ring-arc';
-import { BAR_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
+import { BAR_LOOKS, CORNER_LOOKS, DEFAULT_APPEARANCE, HEADING_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, SURFACE_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
 import { Screen } from '@/components/screen';
-import { Card } from '@/components/card';
+import { Card, Panel } from '@/components/card';
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedControl } from '@/components/segmented-control';
 import { useTheme } from '@/design/theme-provider';
@@ -12,15 +14,15 @@ import { t } from '@/i18n/en';
 
 /** One theme, drawn in its own colours for the current light or dark mode: a small card, the accent and the three pillar colours. */
 function ThemeTile({ id, selected, onPress }: { id: Palette; selected: boolean; onPress: () => void }) {
-  const { mode, colors } = useTheme();
+  const { mode, colors, radius } = useTheme();
   const palette = tokens.palettes[id], c = palette[mode], locked = paletteLocked(id);
   return <Pressable testID={`theme-${id}`} accessibilityRole="button"
     accessibilityLabel={locked ? `${palette.name}, ${t('themeLocked')}` : palette.name}
     accessibilityState={{ selected, disabled: locked }} disabled={locked} onPress={onPress}
     style={{ flexGrow: 1, flexBasis: '45%', minHeight: 112, padding: tokens.spacing[2], gap: tokens.spacing[1],
-      borderRadius: tokens.radii.card, backgroundColor: c.bg, opacity: locked ? 0.5 : 1,
+      borderRadius: radius.card, backgroundColor: c.bg, opacity: locked ? 0.5 : 1,
       borderWidth: 2, borderColor: selected ? colors.accent : c['hair-2'] }}>
-    <View accessible={false} style={{ backgroundColor: c.surface, borderRadius: tokens.radii.input, padding: tokens.spacing[1], gap: tokens.spacing[1] }}>
+    <View accessible={false} style={{ backgroundColor: c.surface, borderRadius: radius.input, padding: tokens.spacing[1], gap: tokens.spacing[1] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[0] }}>
         <View style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
         <View style={{ width: 18, height: 8, borderRadius: 4, backgroundColor: c['surface-2'] }} />
@@ -40,11 +42,11 @@ function ThemeTile({ id, selected, onPress }: { id: Palette; selected: boolean; 
 const RING_NAME = { contour: 'ringContour', liquid: 'ringLiquid', glass: 'ringGlass' } as const;
 /** One ring look, shown as a small ring at 70 percent in the accent colour. */
 function RingTile({ look, selected, onPress }: { look: RingLook; selected: boolean; onPress: () => void }) {
-  const { colors, mode, ringMotion, intensity } = useTheme();
+  const { colors, radius, mode, ringMotion, intensity } = useTheme();
   return <Pressable testID={`ring-look-${look}`} accessibilityRole="button" accessibilityLabel={t(RING_NAME[look])}
     accessibilityState={{ selected }} onPress={onPress}
     style={{ flexGrow: 1, flexBasis: '28%', minHeight: 112, alignItems: 'center', justifyContent: 'center', padding: tokens.spacing[1],
-      gap: tokens.spacing[1], borderRadius: tokens.radii.card, backgroundColor: colors.bg,
+      gap: tokens.spacing[1], borderRadius: radius.card, backgroundColor: colors.bg,
       borderWidth: 2, borderColor: selected ? colors.accent : colors['hair-2'] }}>
     <Svg width={64} height={64} viewBox="0 0 64 64" accessible={false}>
       <RingArc look={look} cx={32} cy={32} r={22} width={10} progress={0.7} color={colors.accent} track={colors['surface-2']}
@@ -54,15 +56,15 @@ function RingTile({ look, selected, onPress }: { look: RingLook; selected: boole
   </Pressable>;
 }
 
-const PRESET_NAME = { basic: ['presetBasic', 'presetBasicSub'], calm: ['presetCalm', 'presetCalmSub'], fluid: ['presetFluid', 'presetFluidSub'], glass: ['presetGlass', 'presetGlassSub'] } as const;
+const PRESET_NAME = { basic: ['presetBasic', 'presetBasicSub'], calm: ['presetCalm', 'presetCalmSub'], fluid: ['presetFluid', 'presetFluidSub'], glass: ['presetGlass', 'presetGlassSub'], floating: ['presetFloating', 'presetFloatingSub'] } as const;
 /** One preset: its ring, still, with its name and a line on what it sets. */
 function PresetTile({ id, selected, onPress }: { id: Preset; selected: boolean; onPress: () => void }) {
-  const { colors, mode, intensity } = useTheme();
+  const { colors, radius, mode, intensity } = useTheme();
   const [name, sub] = PRESET_NAME[id];
   return <Pressable testID={`preset-${id}`} accessibilityRole="button" accessibilityLabel={`${t(name)}. ${t(sub)}`}
     accessibilityState={{ selected }} onPress={onPress}
     style={{ flexGrow: 1, flexBasis: '45%', minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: tokens.spacing[1],
-      gap: tokens.spacing[1], borderRadius: tokens.radii.card, backgroundColor: colors.bg,
+      gap: tokens.spacing[1], borderRadius: radius.card, backgroundColor: colors.bg,
       borderWidth: 2, borderColor: selected ? colors.accent : colors['hair-2'] }}>
     <Svg width={44} height={44} viewBox="0 0 64 64" accessible={false}>
       <RingArc look={PRESETS[id].ring} cx={32} cy={32} r={22} width={10} progress={0.7} color={colors.accent} track={colors['surface-2']}
@@ -77,34 +79,69 @@ function PresetTile({ id, selected, onPress }: { id: Preset; selected: boolean; 
 const MOTION_NAME = { basic: 'motionBasic', calm: 'motionCalm', lively: 'motionLively' } as const;
 const STRENGTH_NAME = { 1: 'strengthSubtle', 2: 'strengthMedium', 3: 'strengthFull' } as const;
 
+const { ring, motion, intensity: strength, bar, keypad, selector, surface, corners, heading } = DEFAULT_APPEARANCE;
+const DEFAULT_LOOKS = [ring, motion, strength, bar, keypad, selector, surface, corners, heading].join();
+const CORNER_NAME = { soft: 'lookSoft', round: 'lookRound', square: 'lookSquare' } as const;
+/** The current looks on a sample panel with a button, and a raised card, so each change shows before leaving. */
+function Preview() {
+  const { colors, mode, ringLook, ringMotion, intensity } = useTheme();
+  return <View testID="appearance-preview" accessible accessibilityLabel={t('appearancePreview')} style={{ gap: tokens.spacing[1] }}>
+    <ThemedText muted variant="caption">{t('appearancePreview')}</ThemedText>
+    <Panel style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Svg width={44} height={44} viewBox="0 0 64 64" accessible={false}>
+        <RingArc look={ringLook} cx={32} cy={32} r={22} width={10} progress={0.7} color={colors.accent} track={colors['surface-2']}
+          ink={colors.text} dark={mode === 'dark'} motion={ringMotion} intensity={intensity} />
+      </Svg>
+      <View style={{ flex: 1 }}>
+        <ThemedText variant="headline">{t('appearancePreviewTitle')}</ThemedText>
+        <ThemedText muted variant="caption">{t('appearancePreviewBody')}</ThemedText>
+      </View>
+      <View pointerEvents="none" accessible={false}><Button size="small" label={t('appearancePreviewStart')} onPress={() => {}} /></View>
+    </Panel>
+    {/* A raised card beside the panel, so Flat and Raised show their difference here. */}
+    <Card testID="appearance-preview-card" style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <ThemedText variant="headline" style={{ flex: 1 }}>{t('appearancePreviewCard')}</ThemedText>
+      <ThemedText muted variant="caption">{t('appearancePreviewCardBody')}</ThemedText>
+    </Card>
+  </View>;
+}
+
 export default function Appearance() {
   const { override, setOverride, palette, setPalette, ringLook, setRingLook, persistenceError,
     preset, applyPreset, motionStyle, setMotionStyle, intensity, setIntensity, reduceMotion, reduceMotionReady,
-    barLook, setBarLook, keypadLook, setKeypadLook, selectorLook, setSelectorLook } = useTheme();
-  return <Screen><Card>
+    barLook, setBarLook, keypadLook, setKeypadLook, selectorLook, setSelectorLook,
+    surfaceLook, setSurfaceLook, cornerLook, setCornerLook, headingLook, setHeadingLook, resetAppearance } = useTheme();
+  // The note shows only while the looks are still the ones the reset left, and is spoken once on iOS too.
+  const looks = [ringLook, motionStyle, intensity, barLook, keypadLook, selectorLook, surfaceLook, cornerLook, headingLook].join();
+  const [resetTo, setResetTo] = useState<string | null>(null);
+  const confirmReset = () => Alert.alert(t('appearanceResetConfirm'), t('appearanceResetBody'), [
+    { text: t('cancel'), style: 'cancel' },
+    { text: t('appearanceReset'), style: 'destructive', onPress: () => { resetAppearance(); setResetTo(DEFAULT_LOOKS); AccessibilityInfo.announceForAccessibility(t('appearanceResetDone')); } },
+  ]);
+  return <Screen><Preview /><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('themeMode')}</ThemedText>
     <SegmentedControl label={t('themeMode')} value={override} onChange={setOverride}
       options={(['system', 'light', 'dark'] as ThemeOverride[]).map(value => ({ value, label: t(value) }))} />
-  </Card><Card>
+  </Panel><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('presets')}</ThemedText>
     <ThemedText muted variant="caption">{t(preset ? 'presetsBody' : 'presetsCustom')}</ThemedText>
     <View testID="preset-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
       {PRESET_IDS.map(id => <PresetTile key={id} id={id} selected={preset === id} onPress={() => applyPreset(id)} />)}
     </View>
-  </Card><Card>
+  </Panel><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('theme')}</ThemedText>
     <ThemedText muted variant="caption">{t('themeBody')}</ThemedText>
     <View testID="theme-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
       {palettes.map(id => <ThemeTile key={id} id={id} selected={palette === id} onPress={() => setPalette(id)} />)}
       {palettes.length % 2 === 1 && <View style={{ flexGrow: 1, flexBasis: '45%' }} />}
     </View>
-  </Card><Card>
+  </Panel><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('ringLooks')}</ThemedText>
     <ThemedText muted variant="caption">{t('ringLooksBody')}</ThemedText>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
       {RING_LOOKS.map(look => <RingTile key={look} look={look} selected={ringLook === look} onPress={() => setRingLook(look)} />)}
     </View>
-  </Card><Card>
+  </Panel><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('barLookTitle')}</ThemedText>
     <ThemedText muted variant="caption">{t('barLookBody')}</ThemedText>
     <SegmentedControl label={t('barLookTitle')} value={barLook} onChange={setBarLook}
@@ -117,7 +154,20 @@ export default function Appearance() {
     <ThemedText muted variant="caption">{t('selectorLookBody')}</ThemedText>
     <SegmentedControl label={t('selectorLookTitle')} value={selectorLook} onChange={setSelectorLook}
       options={SELECTOR_LOOKS.map(value => ({ value, label: t(value === 'pills' ? 'lookPills' : 'lookStandard') }))} />
-  </Card><Card>
+  </Panel><Panel>
+    <ThemedText variant="headline" accessibilityRole="header">{t('surfaceLookTitle')}</ThemedText>
+    <ThemedText muted variant="caption">{t('surfaceLookBody')}</ThemedText>
+    <SegmentedControl label={t('surfaceLookTitle')} value={surfaceLook} onChange={setSurfaceLook}
+      options={SURFACE_LOOKS.map(value => ({ value, label: t(value === 'raised' ? 'lookRaised' : 'lookFlat') }))} />
+    <ThemedText variant="headline" accessibilityRole="header">{t('cornerLookTitle')}</ThemedText>
+    <ThemedText muted variant="caption">{t('cornerLookBody')}</ThemedText>
+    <SegmentedControl label={t('cornerLookTitle')} value={cornerLook} onChange={setCornerLook}
+      options={CORNER_LOOKS.map(value => ({ value, label: t(CORNER_NAME[value]) }))} />
+    <ThemedText variant="headline" accessibilityRole="header">{t('headingLookTitle')}</ThemedText>
+    <ThemedText muted variant="caption">{t('headingLookBody')}</ThemedText>
+    <SegmentedControl label={t('headingLookTitle')} value={headingLook} onChange={setHeadingLook}
+      options={HEADING_LOOKS.map(value => ({ value, label: t(value === 'system' ? 'lookSystem' : 'lookLexend') }))} />
+  </Panel><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('motionTitle')}</ThemedText>
     <SegmentedControl label={t('motionTitle')} value={motionStyle} onChange={setMotionStyle}
       options={MOTIONS.map((value: Motion) => ({ value, label: t(MOTION_NAME[value]) }))} />
@@ -128,5 +178,8 @@ export default function Appearance() {
       options={INTENSITIES.map(value => ({ value: String(value), label: t(STRENGTH_NAME[value]) }))} />
     <ThemedText muted variant="caption">{t('appearanceHint')}</ThemedText>
     {persistenceError && <ThemedText accessibilityRole="alert">{t('preferenceError')}</ThemedText>}
-  </Card></Screen>;
+  </Panel>
+  <Button variant="secondary" label={t('appearanceReset')} accessibilityLabel={`${t('appearanceReset')}. ${t('appearanceResetBody')}`} onPress={confirmReset} />
+  {resetTo === looks && <ThemedText testID="appearance-reset-done" muted variant="caption">{t('appearanceResetDone')}</ThemedText>}
+  </Screen>;
 }

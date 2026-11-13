@@ -167,7 +167,7 @@ describe('entry form', () => {
   test('a rejected save points at the fields inline and saves nothing', async () => {
     const { onSave } = await open();
     await fireEvent.changeText(screen.getByLabelText('Carbs (g)'), 'lots');
-    await fireEvent.changeText(screen.getByLabelText('Portion multiplier'), '0');
+    await fireEvent.changeText(screen.getByLabelText('Portions'), '0');
     await fireEvent.press(screen.getByRole('button', { name: 'Save to today' }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toBeTruthy();

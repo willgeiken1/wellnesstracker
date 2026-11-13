@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
-import { Card } from '@/components/card';
+import { Panel, PROTOTYPE_RADIUS } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { tokens } from '@/design/tokens';
 import { Group, InfoRow, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
@@ -66,10 +66,10 @@ export default function SettingsSection() {
   }
   // TODO: About > Licenses must list full Lexend (OFL 1.1) and RepDB notices before release.
   if (section === 'licenses') return <>{named}<Screen title={title}>
-    <Card style={{ borderRadius: 18, padding: tokens.spacing[3], gap: tokens.spacing[2] }}>
+    <Panel style={{ borderRadius: PROTOTYPE_RADIUS, padding: tokens.spacing[3], gap: tokens.spacing[2] }}>
       <ThemedText>{t('licensesHint')}</ThemedText>
       <ThemedText muted>{t('atlasPaletteCredit')}</ThemedText>
-    </Card>
+    </Panel>
   </Screen></>;
   return <>{named}<Screen title={title}><QuietCard title={t('notInVersion')} /></Screen></>;
 }

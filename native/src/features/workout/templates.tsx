@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -32,7 +32,7 @@ export function Workouts() {
     [segment, setSegment] = useState<'routines' | 'history' | 'cardio'>('routines'),
     [undo, setUndo] = useState<(() => void) | null>(null),
     [error, setError] = useState(false),
-    { colors } = useTheme();
+    { colors, radius } = useTheme();
   function run(action: () => void) {
     try {
       action();
@@ -51,11 +51,11 @@ export function Workouts() {
     {store?.active() && <Primary label={t('resumeWorkout')} onPress={() => router.push('/workout')} />}
     {segment === 'routines' && <Routines store={store} run={run} undo={undo} onUndo={restore => setUndo(() => restore)} />}
     {segment === 'history' && <>
-      {store && history.length === 0 && <Card testID="history-empty" style={card}>
+      {store && history.length === 0 && <Panel testID="history-empty" style={card}>
         <ThemedText style={semibold}>{t('historyEmptyTitle')}</ThemedText>
         <ThemedText muted>{t('historyEmpty')}</ThemedText>
-      </Card>}
-      {store && history.length > 0 && <Card testID="history-list" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
+      </Panel>}
+      {store && history.length > 0 && <Panel testID="history-list" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
         {history.map((s, index) => {
           const name = String(s.data.name ?? t('workoutName')), edited = store.edited(s.id);
           const facts = [dayLabel(s.data.day), minutesLabel(Number(s.data.duration_ms)), edited ? t('edited') : ''].filter(Boolean).join(' · ');
@@ -65,7 +65,7 @@ export function Workouts() {
               id: s.id
             }
           })} style={({ pressed }) => ({ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[1], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'], opacity: pressed ? 0.7 : 1 })}>
-            <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], padding: 4 }}>
+            <View style={{ width: 44, height: 44, borderRadius: radius.card, backgroundColor: colors['surface-2'], padding: 4 }}>
               <Thumb store={store} id={s.id} />
             </View>
             <View style={{ flex: 1 }}>
@@ -75,7 +75,7 @@ export function Workouts() {
             <Icon name="chevron" size={18} color={colors['text-muted']} />
           </Pressable>;
         })}
-      </Card>}
+      </Panel>}
       <PastDayChoice />
     </>}
     {segment === 'cardio' && (store ? <Cardio key={store.repo.owner} repository={store.repo} /> : <Trouble text={t('localError')} />)}
@@ -130,11 +130,11 @@ function Editor({
     }} />} />
     <Field onSurface={false} label={t('templateName')} placeholder={t('templateNameHint')} value={name} onChangeText={setName} />
     <SectionTitle>{t('summaryExercises')}</SectionTitle>
-    {exercises.length === 0 && <Card testID="template-empty" style={card}>
+    {exercises.length === 0 && <Panel testID="template-empty" style={card}>
       <ThemedText style={semibold}>{t('templateEmpty')}</ThemedText>
       <ThemedText muted>{t('templateEmptyBody')}</ThemedText>
-    </Card>}
-    {exercises.map((e, i) => <Card key={e.id ?? i} testID={`template-exercise-${i}`} style={[card, { gap: tokens.spacing[2] }]}>
+    </Panel>}
+    {exercises.map((e, i) => <Panel key={e.id ?? i} testID={`template-exercise-${i}`} style={[card, { gap: tokens.spacing[2] }]}>
       <View style={[layout.row, { alignItems: 'flex-start' }]}>
         <View style={{ minWidth: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
           <ThemedText muted numeric variant="caption" style={semibold}>{i + 1}</ThemedText>
@@ -159,7 +159,7 @@ function Editor({
       <Pick onSurface text={t('moveUp')} label={`${t('moveUp')}, ${e.exercise}`} disabled={i === 0} onPress={() => move(i, -1)} />
       <Pick onSurface text={t('moveDown')} label={`${t('moveDown')}, ${e.exercise}`} disabled={i === exercises.length - 1} onPress={() => move(i, 1)} />
       <Pick onSurface text={t('remove')} label={`${t('remove')}, ${e.exercise}`} onPress={() => setExercises(es => es.filter((_, j) => j !== i).map(v => v.superset_group && es.filter(x => x.superset_group === v.superset_group).length === 2 && v.superset_group === e.superset_group ? {...v,superset_group:null} : v))} />
-    </View></Card>)}
+    </View></Panel>)}
     <Secondary label={t('addExercise')} onPress={() => setPicker(true)} />
     {error && <Trouble text={t('invalidTemplate')} />}
     <Primary label={t('saveTemplate')} onPress={() => {

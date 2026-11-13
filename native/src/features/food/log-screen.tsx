@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { touchTarget } from '../../components/button';
-import { Card } from '../../components/card';
+import { Panel } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
@@ -59,7 +59,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
   });
   const undo = () => { const ids = added?.ids ?? []; attempt(() => { repo.atomic(() => ids.forEach(id => { deleteFood(repo, id); })); setAdded(null); }); };
   return <View style={{ gap: tokens.spacing[3] }} testID="food-log">
-    <Card style={[foodCard, { gap: tokens.spacing[1] }]} testID="food-log-where">
+    <Panel style={[foodCard, { gap: tokens.spacing[1] }]} testID="food-log-where">
       <Pressable accessibilityRole="button" accessibilityLabel={t('foodLogDayPick')} accessibilityValue={{ text: foodDayLabel(day, now) }} accessibilityState={{ expanded: calendar }} onPress={() => setCalendar(!calendar)}
         style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, opacity: pressed ? 0.6 : 1 })}>
         <ThemedText muted variant="caption" style={[semibold, { flex: 1 }]}>{t('foodLogDay')}</ThemedText>
@@ -81,13 +81,13 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
           })}
         </ScrollView>
       </View>
-    </Card>
+    </Panel>
     {early && (day === attributedDay() || day === now) && <NoticeRow text={t('foodEarly').replace('{day}', dayInSentence(day, now))}
       action={{ label: t(day === now ? 'foodUsePrevious' : 'foodUseToday'), onPress: () => chooseDay(day === now ? attributedDay() : now) }} />}
     <FoodLogModes value={mode} onChange={chooseMode} />
     {failed && <NoticeRow alert text={t('foodFailure')} action={{ label: t('foodRetry'), onPress: failed.retry }} />}
     {added && <NoticeRow testID="food-log-added" text={added.text} action={added.ids.length ? { label: t('foodUndoAdd'), onPress: undo } : undefined} />}
-    <Card style={foodCard} testID="food-log-panel">
+    <Panel style={foodCard} testID="food-log-panel">
       {entry
         ? <FoodEntry key={entry.id ?? 'new'} editing={!!entry.id} initial={entry.initial} day={day} onClose={() => setEntry(null)} onSave={(food, multiple) => {
             const row = saveFood(repo, day, entry.meal, food, multiple, entry.id);
@@ -103,13 +103,13 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
         : mode === 'saved' ? <FoodSaved repo={repo} meal={selectedMeal} mealName={mealName(selectedMeal)} onLog={log} onLogCombo={logSet} />
         : <FoodAiEntry key={mode + day + selectedMeal} repo={repo} fallbackId={fallbackId} mode={mode} day={day} meal={selectedMeal}
             onClose={() => chooseMode('search')} onManual={() => setEntry({ meal: selectedMeal })} />}
-    </Card>
-    {(!!ai.ready.length || !!ai.fallback.length) && <Card style={foodCard}>
+    </Panel>
+    {(!!ai.ready.length || !!ai.fallback.length) && <Panel style={foodCard}>
       <FoodAiResults repo={repo}
-        onDescribe={id => { const job = aiState(repo).fallback.find(j => j.id === id)!; setEntry(null); setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setMode('describe'); }}
-        onManual={id => { const job = aiState(repo).fallback.find(j => j.id === id)!; setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setEntry({ meal: job.meal }); }} />
-    </Card>}
-    <Card style={foodCard} testID="food-log-day-list">
+        onDescribe={id => { const job = aiState(repo).fallback.find(j => j.id === id); if (!job) return; setEntry(null); setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setMode('describe'); }}
+        onManual={id => { const job = aiState(repo).fallback.find(j => j.id === id); if (!job) return; setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setEntry({ meal: job.meal }); }} />
+    </Panel>}
+    <Panel style={foodCard} testID="food-log-day-list">
       <GroupLabel>{t('foodLoggedDay').replace('{day}', dayInSentence(day, now))}</GroupLabel>
       {!rows.length && <ThemedText muted style={{ paddingVertical: 6 }}>{t('foodLoggedNone').replace('{day}', dayInSentence(day, now))}</ThemedText>}
       {rows.map((row, index) => {
@@ -118,6 +118,6 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
           detail={[mealName(String(row.data.meal_id)), macroText(row.data), pending ? t('foodEstimateChip') : null].filter(Boolean).join(' · ')}
           value={energyText(row.data.energy_kj)} onPress={() => { setSelectedMeal(String(row.data.meal_id)); setEntry({ id: row.id, initial: row.data, meal: String(row.data.meal_id) }); }} />;
       })}
-    </Card>
+    </Panel>
   </View>;
 }

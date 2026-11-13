@@ -1,3 +1,4 @@
+import { PROTOTYPE_RADIUS } from '../../components/card';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -9,7 +10,7 @@ import { en, foodDayLabel, t } from '../../i18n/en';
 
 /** Shared parts for the food logging screens: one look for fields, rows, notices and actions. */
 export const semibold = { fontWeight: '600' } as const;
-export const foodCard = { borderRadius: 18, padding: tokens.spacing[3] } as const;
+export const foodCard = { borderRadius: PROTOTYPE_RADIUS, padding: tokens.spacing[3] } as const;
 
 export const GLYPH = {
   search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13M15.5 15.5L20 20',

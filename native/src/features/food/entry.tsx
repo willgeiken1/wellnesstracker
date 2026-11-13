@@ -33,7 +33,7 @@ const number = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
  */
 export function FoodEntry({ initial, day, onSave, onClose, editing = false }: { initial?: Food; day: string; onSave: (food: Food, multiple: number) => void; onClose: () => void; editing?: boolean }) {
   const [values, setValues] = useState(() => Object.fromEntries(keys.map(k => [k, initial?.[k] == null ? '' : k === 'energy_kj' ? String(Math.round(Number(initial[k]) / 4.184 * 1000000) / 1000000) : String(initial[k])])));
-  const [multiple, setMultiple] = useState('1'), [error, setError] = useState<'foodInvalid' | 'foodFailure' | null>(null);
+  const [multiple, setMultiple] = useState('1'), [error, setError] = useState<'foodCheckMarked' | 'foodFailure' | null>(null);
   // Which fields to point at after a rejected save. A field is cleared as soon as it is edited.
   const [flagged, setFlagged] = useState<ReadonlySet<string>>(new Set());
   const unflag = (key: string) => { if (flagged.has(key)) setFlagged(new Set([...flagged].filter(k => k !== key))); };
@@ -51,7 +51,7 @@ export function FoodEntry({ initial, day, onSave, onClose, editing = false }: { 
       if (numeric.some(v => v.trim() !== '' && !number.test(v.trim()))) throw new Error();
       count = Number(multiple); food = { ...initial, name: values.name, ...Object.fromEntries(keys.filter(k => k !== 'name').map(k => [k, values[k].trim() === '' ? null : Number(values[k]) * (k === 'energy_kj' ? 4.184 : 1)])) };
       portion(food, count);
-    } catch { setFlagged(problems()); setError('foodInvalid'); return; }
+    } catch { setFlagged(problems()); setError('foodCheckMarked'); return; }
     setFlagged(new Set());
     try { onSave(food, count); } catch { setError('foodFailure'); }
   };

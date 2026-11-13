@@ -31,11 +31,11 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
 
 /** Edit Home: what is on Home (reorder, resize, remove) and what can be added. Every change applies at once; Done only closes. */
 export function EditHome({ visible, tiles, onChange, onClose }: { visible: boolean; tiles: HomeTiles; onChange: (next: HomeTiles) => void; onClose: () => void }) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   // The Apple Health tiles are offered only where Apple Health can exist.
   const healthHere = useMemo(() => !!appleHealth(), []);
   const rest = offHome(tiles).filter(id => !HEALTH_TILES.includes(id) || healthHere);
-  const row = { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], padding: tokens.spacing[2], borderRadius: 18, backgroundColor: colors.surface } as const;
+  const row = { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], padding: tokens.spacing[2], borderRadius: radius.panel, backgroundColor: colors.surface } as const;
   const name = (id: TileId) => t(TILE_NAME[id]);
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'left', 'right', 'bottom']}>
