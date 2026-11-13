@@ -7,7 +7,7 @@ import { useAppleHealth } from '@/features/health/use-apple-health';
 import { OURA_PREVIEW_STATES, previewOura } from '@/features/health/oura-preview';
 import { t } from '@/i18n/en';
 
-/** insight://dev/oura-preview?state=off|on|expired|busy|failed (opens as /settings/dev-oura-preview)
+/** insight://dev/oura-preview?state=off|on|expired|busy|failed|unreachable (opens as /settings/dev-oura-preview)
  * Development only: Health & devices with the Oura card in one state, for screenshots on a build with no
  * signed-in account. The Apple Health card is the real one. */
 export default function OuraPreviewRoute() {

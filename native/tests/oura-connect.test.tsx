@@ -94,14 +94,48 @@ test('when Oura has signed Insight out, the row says Reconnect and Reconnect goe
   await render(<Page source={source} storage={storage} />, { wrapper });
   await settle();
   expect(within(screen.getByTestId('connect-oura')).getByText('Reconnect')).toBeTruthy();
-  expect(screen.getByText(/Oura signed Insight out/)).toBeTruthy();
+  expect(screen.getByText(/not accepting Insight/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Disconnect Oura' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Reconnect Oura' }));
   await settle();
   expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(URL);
   expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
   expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
-  expect(screen.queryByText(/Oura signed Insight out/)).toBeNull();
+  expect(screen.queryByText(/not accepting Insight/)).toBeNull();
+});
+
+test('when the sign-in is refused, Check again tries a refresh, and one that works brings the card back to Connected', async () => {
+  const { source, storage } = fakes('expired');
+  source.sync.mockImplementation(async () => { /* the server clears the refusal on a refresh that works */ });
+  const status = source.status.getMockImplementation()!;
+  let cleared = false;
+  source.status.mockImplementation(async () => cleared ? { connected: true, expired: false, lastSync: null } : status());
+  source.sync.mockImplementation(async () => { cleared = true; });
+  await render(<Page source={source} storage={storage} />, { wrapper });
+  await settle();
+  await fireEvent.press(screen.getByTestId('connect-oura-again'));
+  await settle();
+  expect(source.sync).toHaveBeenCalledTimes(1);
+  expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+  expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
+});
+
+test('when the connection cannot be read, the card stays, says so, claims nothing, and Try again reads it again', async () => {
+  const { source, storage } = fakes('on');
+  const status = source.status.getMockImplementation()!;
+  source.status.mockRejectedValueOnce(new Error('made-up failure'));
+  await render(<Page source={source} storage={storage} />, { wrapper });
+  await settle();
+  expect(screen.getByTestId('connect-oura-card')).toBeTruthy();
+  expect(screen.getByText('Oura could not be reached just now. Try again.')).toBeTruthy();
+  expect(within(screen.getByTestId('connect-oura')).getByText('Could not check')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Connect Oura' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Disconnect Oura' })).toBeNull();
+  source.status.mockImplementation(status);
+  await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+  await settle();
+  expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
+  expect(screen.queryByTestId('connect-oura-failed')).toBeNull();
 });
 
 test('closing Oura\'s page without approving changes nothing', async () => {
@@ -205,10 +239,10 @@ describe('Home reads both sources', () => {
   });
 });
 
-const PREVIEW_BUTTON = { off: 'Connect Oura', on: 'Check again', expired: 'Reconnect Oura', busy: 'Checking…', failed: 'Connect Oura' } as const;
+const PREVIEW_BUTTON = { off: 'Connect Oura', on: 'Check again', expired: 'Reconnect Oura', busy: 'Checking…', failed: 'Connect Oura', unreachable: 'Try again' } as const;
 test.each(OURA_PREVIEW_STATES.map(state => [state, PREVIEW_BUTTON[state]]))('the development preview draws the %s Oura state (%s)', async (state, label) => {
   await render(<ConnectedServices oura={previewOura(state as keyof typeof PREVIEW_BUTTON)} />, { wrapper });
   await settle();
   expect(screen.getByRole('button', { name: label })).toBeTruthy();
-  expect(!!screen.queryByTestId('connect-oura-failed')).toBe(state === 'failed');
+  expect(!!screen.queryByTestId('connect-oura-failed')).toBe(state === 'failed' || state === 'unreachable');
 });

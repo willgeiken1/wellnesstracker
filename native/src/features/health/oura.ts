@@ -28,13 +28,17 @@ export const isOuraUrl = (url: unknown): url is string => typeof url === 'string
 const HOUR = 3_600_000;
 /** How long a refresh from Oura is trusted before the server is asked again, and how soon a failed ask is retried. */
 export const SYNC_EVERY = HOUR, RETRY_AFTER = 10 * 60_000;
+/** When Oura is refusing the sign-in, it is still tried now and then: a brief outage at Oura looks the same. */
+export const EXPIRED_RETRY_AFTER = 3 * HOUR;
 export const FIRST_SYNC_DAYS = 120, LATER_SYNC_DAYS = 14;
 /** How long a refresh may take before it is given up on, so nothing waits on a request that never answers. */
 export const SYNC_TIMEOUT = 60_000;
-/** When the server was last asked to refresh, per account, so a second account on the same phone is not skipped. */
+/** Per account: when the server was last asked to refresh, and the refresh still running, so every screen (and
+ * Settings) shares one refresh at a time and a second account on the same phone is never skipped. */
 const lastAsk = new Map<string, number>();
+const running = new Map<string, Promise<boolean>>();
 /** For tests: forget when the server was last asked. */
-export const resetOuraAsk = () => { lastAsk.clear(); };
+export const resetOuraAsk = () => { lastAsk.clear(); running.clear(); };
 
 /** Asks the server to fetch the last `days` days from Oura, giving up after `SYNC_TIMEOUT`. */
 export function syncOura(source: OuraSource, days: number): Promise<void> {
@@ -43,17 +47,27 @@ export function syncOura(source: OuraSource, days: number): Promise<void> {
   return Promise.race([source.sync(days), late]).finally(() => clearTimeout(timer));
 }
 
-/** Asks the server to refresh from Oura when its copy is over an hour old. True once a refresh has landed.
- * A failed refresh is not an error here: the days already stored still show. */
-export async function refreshOura(source: OuraSource, status: OuraStatus, now = new Date()): Promise<boolean> {
-  // An expired sign-in cannot refresh; asking again would only fail. Reconnecting starts it again.
-  if (status.expired) return false;
-  const synced = status.lastSync ? Date.parse(status.lastSync) : NaN;
-  if (Number.isFinite(synced) && now.getTime() - synced < SYNC_EVERY) return false;
-  const account = status.account ?? '';
-  if (now.getTime() - (lastAsk.get(account) ?? 0) < RETRY_AFTER) return false;
+/** Refreshes now, or joins the refresh already running for this account. True once a refresh has landed.
+ * Used by the Settings buttons, which say when it fails. */
+export function syncNow(source: OuraSource, status: OuraStatus, now = new Date()): Promise<boolean> {
+  const account = status.account ?? '', already = running.get(account);
+  if (already) return already;
   lastAsk.set(account, now.getTime());
-  try { await syncOura(source, status.lastSync ? LATER_SYNC_DAYS : FIRST_SYNC_DAYS); return true; } catch { return false; }
+  const work = syncOura(source, status.lastSync ? LATER_SYNC_DAYS : FIRST_SYNC_DAYS).then(() => true)
+    .finally(() => { running.delete(account); });
+  running.set(account, work);
+  return work;
+}
+
+/** Asks the server to refresh from Oura when its copy is over an hour old, or joins a refresh already running.
+ * True once a refresh has landed. A failed refresh is not an error here: the days already stored still show. */
+export async function refreshOura(source: OuraSource, status: OuraStatus, now = new Date()): Promise<boolean> {
+  const account = status.account ?? '', already = running.get(account);
+  if (already) return already.catch(() => false);
+  const synced = status.lastSync ? Date.parse(status.lastSync) : NaN;
+  if (!status.expired && Number.isFinite(synced) && now.getTime() - synced < SYNC_EVERY) return false;
+  if (now.getTime() - (lastAsk.get(account) ?? 0) < (status.expired ? EXPIRED_RETRY_AFTER : RETRY_AFTER)) return false;
+  return syncNow(source, status, now).catch(() => false);
 }
 
 /** Steps and sleep for the given days from Oura, or null when Oura is not connected. A day Oura has nothing for is 0.

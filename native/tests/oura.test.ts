@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, SYNC_TIMEOUT, isExpired, isOuraUrl, syncOura, mergeHealthDays, readOuraDays, refreshOura, resetOuraAsk, type OuraDay, type OuraSource, type OuraStatus } from '../src/features/health/oura';
+import { EXPIRED_RETRY_AFTER, FIRST_SYNC_DAYS, LATER_SYNC_DAYS, SYNC_TIMEOUT, syncNow, isExpired, isOuraUrl, syncOura, mergeHealthDays, readOuraDays, refreshOura, resetOuraAsk, type OuraDay, type OuraSource, type OuraStatus } from '../src/features/health/oura';
 
 // Made-up values only.
 const NOW = new Date(2026, 10, 13, 9, 0, 0);
@@ -68,6 +68,35 @@ describe('a slow or hung Oura never holds anything back', () => {
     await new Promise(done => setTimeout(done, 0));
     expect(fresh).not.toHaveBeenCalled();
   });
+  test('every screen shares one running refresh, and each hears when it lands', async () => {
+    let land: () => void = () => {};
+    const source = ring({ connected: true, lastSync: null, account: 'made-up-a' }, []);
+    source.sync.mockImplementation(() => new Promise<void>(done => { land = done; }));
+    const home = jest.fn(), score = jest.fn();
+    await readOuraDays(source, DAYS, NOW, home);
+    await readOuraDays(source, DAYS, new Date(NOW.getTime() + 1000), score);
+    expect(source.sync).toHaveBeenCalledTimes(1);
+    land();
+    await new Promise(done => setTimeout(done, 0));
+    expect(home).toHaveBeenCalledTimes(1);
+    expect(score).toHaveBeenCalledTimes(1);
+  });
+  test('Check again joins a refresh already running instead of sending a second one', async () => {
+    let land: () => void = () => {};
+    const source = ring({ connected: true, lastSync: null, account: 'made-up-a' }, []);
+    source.sync.mockImplementation(() => new Promise<void>(done => { land = done; }));
+    await readOuraDays(source, DAYS, NOW);
+    const pressed = syncNow(source, (await source.status())!, NOW);
+    expect(source.sync).toHaveBeenCalledTimes(1);
+    land();
+    expect(await pressed).toBe(true);
+    source.sync.mockResolvedValue(undefined);
+    // A press with nothing running sends one at once, and the gap then holds back the next screen's refresh.
+    const after = new Date(NOW.getTime() + 2 * 60 * 60_000);
+    await syncNow(source, (await source.status())!, after);
+    await readOuraDays(source, DAYS, after);
+    expect(source.sync).toHaveBeenCalledTimes(2);
+  });
   test('a refresh that never answers is given up on', async () => {
     jest.useFakeTimers({ now: NOW });
     try {
@@ -99,10 +128,16 @@ describe('when Oura has signed Insight out', () => {
     expect(isExpired('Oura isn\'t connected')).toBe(true);
     for (const other of ['Oura daily_sleep request failed (500)', '', null, undefined, 401]) expect(isExpired(other)).toBe(false);
   });
-  test('no refresh is asked for, and the days already stored still show', async () => {
-    const source = ring({ connected: true, expired: true, lastSync: '2026-11-01T08:00:00.000Z' }, [{ day: '2026-11-11', sleepSeconds: 25200, steps: 8000 }]);
+  test('the days already stored still show, and a refresh is still tried now and then in case it was a brief outage', async () => {
+    const source = ring({ connected: true, expired: true, lastSync: NOW.toISOString() }, [{ day: '2026-11-11', sleepSeconds: 25200, steps: 8000 }]);
+    source.sync.mockRejectedValue(new Error('made-up refusal'));
     expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [8000, 0, 0], sleepHours: [7, 0, 0] });
-    expect(source.sync).not.toHaveBeenCalled();
+    expect(source.sync).toHaveBeenCalledTimes(1);
+    await new Promise(done => setTimeout(done, 0));
+    await readOuraDays(source, DAYS, new Date(NOW.getTime() + EXPIRED_RETRY_AFTER - 60_000));
+    expect(source.sync).toHaveBeenCalledTimes(1);
+    await readOuraDays(source, DAYS, new Date(NOW.getTime() + EXPIRED_RETRY_AFTER + 60_000));
+    expect(source.sync).toHaveBeenCalledTimes(2);
   });
 });
 

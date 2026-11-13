@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { addHealthTiles, type TileStorage } from '../home/tiles';
 import { oura } from './oura-client';
-import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, syncOura, type OuraSource, type OuraStatus } from './oura';
+import { syncNow, type OuraSource, type OuraStatus } from './oura';
 
 const stateOf = (status: OuraStatus | null): OuraState['state'] => !status ? 'unavailable' : !status.connected ? 'off' : status.expired ? 'expired' : 'on';
 
-export type OuraState = { state: 'unavailable' | 'off' | 'on' | 'expired'; busy: boolean; failed: boolean; connect: () => void; refresh: () => void; disconnect: () => void };
+export type OuraState = { state: 'unavailable' | 'unreachable' | 'off' | 'on' | 'expired'; busy: boolean; failed: boolean; connect: () => void; refresh: () => void; disconnect: () => void };
 
 /** The Oura connection for the signed-in account: whether it is on, and connecting, refreshing and disconnecting it.
  * It holds no Oura values; those are read where they are shown. */
@@ -23,7 +23,8 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     (async () => {
       const status = await source.status();
       if (mine) setState(stateOf(status));
-    })().catch(() => { if (mine) setFailed(true); });
+      // Not knowing is not the same as not connected: the card stays, says so, and offers to try again.
+    })().catch(() => { if (mine) { setState('unreachable'); setFailed(true); } });
     return () => { mine = false; };
   }, [source]);
   // Runs one action at a time. It is only ever called from a press, never while drawing.
@@ -32,21 +33,29 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     working.current = true; setBusy(true); setFailed(false);
     work(source).catch(() => { if (live.current) setFailed(true); }).finally(() => { working.current = false; if (live.current) setBusy(false); });
   };
+  /** Reads the connection again and shows it. The status, or null when nobody is signed in. */
   const check = async (from: OuraSource) => {
-    const next = stateOf(await from.status());
-    if (live.current) setState(next);
-    return next === 'on';
+    const status = await from.status();
+    if (live.current) setState(stateOf(status));
+    return status;
   };
   const connect = () => run(async from => {
     // Oura's own page opens in the in-app browser. Closing it comes back here, and the account is checked again.
     // Reconnecting after Oura signed Insight out is the same path.
     await WebBrowser.openBrowserAsync(await from.connectUrl());
-    if (!await check(from)) return;
+    const status = await check(from);
+    if (!status?.connected || status.expired) return;
     // Connecting puts the Steps and Sleep tiles on Home. They can be removed again from Home's Edit.
     if (live.current) addHealthTiles(storage);
-    await syncOura(from, FIRST_SYNC_DAYS);
+    await syncNow(from, status);
   });
-  const refresh = () => run(async from => { if (await check(from)) await syncOura(from, LATER_SYNC_DAYS); });
+  // Check again also tries a refused sign-in: a brief outage at Oura looks the same, and a refresh that works clears it.
+  const refresh = () => run(async from => {
+    const status = await check(from);
+    if (!status?.connected) return;
+    await syncNow(from, status);
+    if (status.expired) await check(from);
+  });
   const disconnect = () => run(async from => { await from.disconnect(); await check(from); });
   return { state: source ? state : 'unavailable', busy, failed, connect, refresh, disconnect };
 }
