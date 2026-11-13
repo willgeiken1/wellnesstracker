@@ -17,7 +17,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>
 // Made-up values only: 8,430 steps a day, and 7 h 12 min asleep each night.
 const fake = (access: HealthAccess): HealthSource => ({
   access: async () => access, request: async () => {}, weights: async () => [],
-  steps: jest.fn(async () => 8430), activeEnergy: jest.fn(async () => 512), exerciseMinutes: jest.fn(async () => 34), heart: jest.fn(async () => null), vo2Max: jest.fn(async () => null),
+  steps: jest.fn(async () => 8430), activeEnergy: jest.fn(async () => 512), exerciseMinutes: jest.fn(async () => 34), heart: jest.fn(async () => null), vo2Max: jest.fn(async () => null), water: jest.fn(async () => 1800), mindful: jest.fn(async (from: Date) => [{ start: new Date(from.getTime() + 8 * 3_600_000), end: new Date(from.getTime() + 8 * 3_600_000 + 10 * 60_000) }]), bodyFat: jest.fn(async () => [{ at: new Date(2026, 4, 10, 7), percent: 21.44 }]),
   sleep: jest.fn(async (from: Date, to: Date) => {
     const spans = [];
     for (let day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1); day < to; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {
@@ -48,11 +48,14 @@ test('once Apple Health is connected, Home shows steps and last night\'s sleep, 
   expect(screen.getByRole('button', { name: 'Sleep, 7 h 12 min' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Active calories, 512 kcal · today' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Exercise, 34 min · today' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Water, 61 fl oz · today' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Mindful minutes, 10 min · today' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Body fat, 21.4 %' })).toBeTruthy();
   expect(source.steps).toHaveBeenCalledTimes(7);
   expect(source.activeEnergy).toHaveBeenCalledTimes(7);
   expect(source.exerciseMinutes).toHaveBeenCalledTimes(7);
   expect(save).not.toHaveBeenCalled();
-  expect(JSON.stringify(local.mock.calls)).not.toMatch(/8430|8,430|7\.2|432|512|34\b/);
+  expect(JSON.stringify(local.mock.calls)).not.toMatch(/8430|8,430|7\.2|432|512|34\b|1800|21\.4/);
 });
 
 test('before connecting, Home reads nothing from Apple Health and shows no health tiles', async () => {
