@@ -138,3 +138,19 @@ test('a pulled past workout finish sheet keeps its synced zero duration', async 
  await fireEvent.press(screen.getByTestId('save-workout'));
  expect(store.repo.get('sessions',session.id)?.data.duration_ms).toBe(0);
 });
+test('a workout opened from History reads as a past workout, and only a just-finished one says complete', async () => {
+ const {Summary} = jest.requireActual('../src/features/workout/summary') as typeof import('../src/features/workout/summary');
+ const {store,session} = fixture();
+ jest.mocked(useAuth).mockReturnValue({repository:store.repo,pending:0,syncStatus:'idle'} as ReturnType<typeof useAuth>);
+ jest.mocked(useLocalSearchParams).mockReturnValue({id:session.id});
+ const view = await render(<Summary/>,{wrapper});
+ expect(screen.getByText('Past workout')).toBeTruthy();
+ expect(screen.getByText('From History')).toBeTruthy();
+ expect(screen.queryByText('Workout complete')).toBeNull();
+ expect(screen.queryByText('Saved to History')).toBeNull();
+ await view.unmount();
+ jest.mocked(useLocalSearchParams).mockReturnValue({id:session.id,just:'1'});
+ await render(<Summary/>,{wrapper});
+ expect(screen.getByText('Workout complete')).toBeTruthy();
+ expect(screen.getByText('Saved to History')).toBeTruthy();
+});
