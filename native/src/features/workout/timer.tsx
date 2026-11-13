@@ -165,15 +165,18 @@ export function RestTimer({
         }}
       >
         {/* Wraps: at the largest text sizes the chips drop under the clock instead of pushing Skip off the edge. */}
-        <View testID="rest-bar-row" style={[layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }]}>
+        {/* At accessibility sizes the bar is a column: the words take the full width on top and the chips sit in their
+            own row under them. A wrapping row squeezed "Rest complete" into one letter per line on the device. */}
+        <View testID="rest-bar-row" style={stacked
+          ? { flexDirection: "column", alignItems: "stretch", paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6 }
+          : [layout.row, { paddingLeft: 14, paddingRight: 8, paddingVertical: 8, gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("expandRest")}
             accessibilityValue={{ text: timer.ended ? t("restReady") : clock(seconds) }}
             onPress={() => store.updateTimer({ minimized: false })}
-            // At accessibility sizes the words take the whole first line and the chips sit under them; squeezed
-            // beside the chips, "Rest complete" broke into one letter per line.
-            style={{ flexGrow: 1, flexShrink: 1, flexBasis: stacked ? "100%" : 96, minHeight: touchTarget, justifyContent: "center" }}
+            style={stacked ? { width: "100%", minHeight: touchTarget, justifyContent: "center" }
+              : { flexGrow: 1, flexShrink: 1, flexBasis: 96, minHeight: touchTarget, justifyContent: "center" }}
           >
             {timer.ended ? (
               <ThemedText>{t("restReady")}</ThemedText>
@@ -186,9 +189,11 @@ export function RestTimer({
               </ThemedText>
             )}
           </Pressable>
-          {!timer.ended && <Chip label={t("minus15")} onPress={() => store.adjustTimer(-15)} />}
-          <Chip label={t("plus15")} onPress={() => store.adjustTimer(15)} />
-          <Chip label={t(timer.ended ? "done" : "skip")} onPress={() => store.skipTimer()} />
+          <View testID="rest-bar-chips" style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+            {!timer.ended && <Chip label={t("minus15")} onPress={() => store.adjustTimer(-15)} />}
+            <Chip label={t("plus15")} onPress={() => store.adjustTimer(15)} />
+            <Chip label={t(timer.ended ? "done" : "skip")} onPress={() => store.skipTimer()} />
+          </View>
         </View>
         <View accessible={false} style={{ height: 3, backgroundColor: colors["surface-2"] }}>
           <View testID="rest-bar-progress" style={{ height: 3, width: `${Math.round(left * 1000) / 10}%`, backgroundColor: colors.accent }} />

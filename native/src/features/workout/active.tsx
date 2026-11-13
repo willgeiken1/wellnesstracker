@@ -547,10 +547,11 @@ function Logger({
                         : [...ids, e.id],
                     )
                   }
-                  // At accessibility sizes the name keeps (nearly) the whole line, so it breaks between words, and the
-                  // Plates and collapse buttons move under it.
+                  // At accessibility sizes the name takes the whole line, so it breaks between words, and the Plates and
+                  // collapse buttons move under it. A fixed width, not a shrinking percentage basis, which the device
+                  // ignored in this wrapping row.
                   style={stacked
-                    ? { flexGrow: 1, flexShrink: 1, flexBasis: compact ? "80%" : "100%", minHeight: compact ? 44 : undefined, justifyContent: "center" }
+                    ? { width: "100%", minHeight: compact ? 44 : undefined, justifyContent: "center" }
                     : { flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
                 >
                   <ThemedText

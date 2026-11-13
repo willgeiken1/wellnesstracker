@@ -1,5 +1,5 @@
 // The rest timer for VoiceOver and large text (A11Y-01, A11Y-02). Made-up workout data only.
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { AccessibilityInfo, AppState, Dimensions } from 'react-native';
 import { memoryRepository } from './workout-repository';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -121,19 +121,30 @@ describe('the logger and rest sheet at the largest text size (simulator AX5 find
 
 describe('the minimized rest bar and exercise names at the largest text size (AX5 re-shoot)', () => {
   const { StyleSheet } = require('react-native') as typeof import('react-native');
-  test.each([[1, 96], [3, '100%']] as const)('at %sx the rest words in the bar have basis %s, so the chips sit under them', async (scale, basis) => {
+  // The device ignored a shrinking percentage basis inside a wrapping row, so at large sizes the bar must not depend
+  // on wrapping at all: a column, the words at full width, and the chips in their own row.
+  test.each([[1, false], [3, true]] as const)('at %sx the bar is a column with the words at full width: %s', async (scale, column) => {
     setFontScale(scale);
     await logger();
     await fireEvent.press(screen.getByTestId('set-0-0-done'));
-    const words = screen.getByRole('button', { name: 'Expand rest timer' });
-    expect(StyleSheet.flatten(words.props.style).flexBasis).toBe(basis);
-    expect(StyleSheet.flatten(screen.getByTestId('rest-bar-row').props.style).flexWrap).toBe('wrap');
+    const words = StyleSheet.flatten(screen.getByRole('button', { name: 'Expand rest timer' }).props.style);
+    const row = StyleSheet.flatten(screen.getByTestId('rest-bar-row').props.style);
+    expect(row.flexDirection).toBe(column ? 'column' : 'row');
+    if (column) {
+      expect(row.flexWrap).toBeUndefined();
+      expect(words).toMatchObject({ width: '100%' });
+      expect(words.flexBasis).toBeUndefined();
+      expect(words.flexShrink).toBeUndefined();
+    } else expect(words).toMatchObject({ flexBasis: 96, flexGrow: 1 });
+    expect(within(screen.getByTestId('rest-bar-chips')).getAllByRole('button').map(chip => chip.props.accessibilityLabel)).toHaveLength(3);
   });
-  test.each([[1, undefined], [3, '100%']] as const)('at %sx the exercise name has basis %s, so it breaks between words', async (scale, basis) => {
+  test.each([[1, undefined], [3, '100%']] as const)('at %sx the exercise name has width %s, so it breaks between words', async (scale, width) => {
     setFontScale(scale);
     await logger();
     const name = screen.getByTestId('exercise-name-0');
     expect(name).toHaveTextContent(/Close-Grip Bench Press/);
-    expect(StyleSheet.flatten(name.props.style)?.flexBasis).toBe(basis);
+    const style = StyleSheet.flatten(name.props.style);
+    expect(style?.width).toBe(width);
+    if (width) { expect(style?.flexBasis).toBeUndefined(); expect(style?.flexShrink).toBeUndefined(); }
   });
 });

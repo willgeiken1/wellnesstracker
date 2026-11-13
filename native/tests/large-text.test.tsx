@@ -88,6 +88,13 @@ function sweep(root: TestInstance) {
     // A line limit cuts words off unless the text shrinks to fit instead.
     if (node.props.numberOfLines !== undefined && !node.props.adjustsFontSizeToFit) problems.push(`${where} is cut to ${node.props.numberOfLines} line(s)`);
   }
+  // On the device a percentage basis that may also shrink was ignored inside a wrapping row, squeezing words to one
+  // letter per line (the rest bar and exercise names at AX5). Stacked layouts use a column or a fixed width instead.
+  for (const node of root.queryAll(item => item.type === 'View')) {
+    const style = StyleSheet.flatten(node.props.style) ?? {};
+    if (typeof style.flexBasis === 'string' && style.flexBasis.endsWith('%') && ((style.flexShrink ?? 0) > 0 || (style.flex ?? 0) > 0))
+      problems.push(`${node.props.testID ?? 'a view'} has a shrinking percentage basis (${style.flexBasis})`);
+  }
   return problems;
 }
 
