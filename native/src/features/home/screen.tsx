@@ -4,11 +4,13 @@ import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
+import { setDockAction } from '@/components/floating-tabs';
 import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg, localDay } from '@/core/workout/rules';
-import type { WorkoutStore } from '@/data/workout/store';
+import { WorkoutStore } from '@/data/workout/store';
+import { cachedReads } from '@/data/read-cache';
 import { entryVolumeKg } from '@/features/workout/volume';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
@@ -131,7 +133,9 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
  * the existing stores. The Insight Score is worked out here from what is logged and, when connected, Apple Health. */
 export function Home() {
   const { store, auth } = useWorkout();
-  const { colors } = useTheme();
+  const { colors, barLook } = useTheme();
+  // With the floating bar the + is neutral and sits beside the tabs, so the open tab's circle stays the only accent circle.
+  const floating = barLook === 'floating';
   // Reopening the app draws Home again, so "today" is the real day even if the app sat open overnight.
   const [, setWoken] = useState(0);
   useEffect(() => {
@@ -158,11 +162,22 @@ export function Home() {
   };
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
+  // With the floating bar the + rides in line with the tabs while Home is open, so it never covers a card.
+  const [toggleAdd] = useState(() => () => setAdding(open => !open));
+  useEffect(() => {
+    if (!floating || !focused) return;
+    setDockAction({ label: t('homeAdd'), expanded: adding, onPress: toggleAdd });
+    return () => setDockAction(null);
+  }, [floating, focused, adding, toggleAdd]);
   const selected = picked && picked <= today ? picked : today;
   // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else,
   // and so does the Insight Score worked out from them.
   const health = useHealthDays(focused);
-  const score = store && tiles.order.includes('score') ? readScore(store, now, health) : null;
+  // Home only reads here, so each list is fetched once per change to the data, and the sums are kept until the
+  // data, the day or the minute changes. Without this Home re-ran thousands of queries on every draw.
+  const reader = useMemo(() => store ? new WorkoutStore(cachedReads(store.repo), store.viewRevision) : null, [store]);
+  const scoreOn = tiles.order.includes('score'), minute = Math.floor(now.getTime() / 60_000);
+  const score = useMemo(() => reader && scoreOn ? readScore(reader, new Date(minute * 60_000), health) : null, [reader, scoreOn, health, minute]);
   return <View style={{ flex: 1 }}>
     <Screen tabHeader>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
@@ -175,7 +190,7 @@ export function Home() {
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
             {auth.demo && <ThemedText muted style={{ fontSize: tokens.type.caption, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: colors['surface-2'] }}>{t('exampleData')}</ThemedText>}
           </View>
-          <ThemedText variant="title" accessibilityRole="header" style={semibold}>{greeting(now.getHours())}</ThemedText>
+          <Greeting text={greeting(now.getHours())} />
         </View>
         {store && <Pressable testID="home-edit" accessibilityRole="button" accessibilityLabel={t('homeEdit')} onPress={() => setEditing(true)} hitSlop={4}
           style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
@@ -183,7 +198,7 @@ export function Home() {
         </Pressable>}
         {score && <HeaderScore score={score} />}
       </View>
-      {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
+      {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
     </Screen>
     <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
@@ -192,26 +207,32 @@ export function Home() {
         <SmallButton label={t('logFood')} onPress={() => { setAdding(false); router.push('/food'); }} />
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
       </>}
-      <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={() => setAdding(open => !open)}
+      {!floating && <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={toggleAdd}
         style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
         <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
           <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
         </Svg>
-      </Pressable>
+      </Pressable>}
     </View>
   </View>;
 }
 
-function Body({ store, now, selected, onPick, tiles, onEdit, health, score }: { store: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null }) {
-  const revision = useFoodRevision(store.repo), today = localDay(now), foodDay = attributedDay();
+function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, score }: { store: WorkoutStore; reader: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null }) {
+  const today = localDay(now), foodDay = attributedDay();
+  useFoodRevision(store.repo);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   const week = Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
-  const recent = Array.from({ length: 7 }, (_, i) => localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i)));
-  const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
-  const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
-  const active = !!store.active();
+  // Everything read from the data, worked out once per change to it or to the day.
+  const data = useMemo(() => {
+    const [y, m, d] = today.split('-').map(Number), start = new Date(y, m - 1, d - ((new Date(y, m - 1, d).getDay() + 6) % 7));
+    const thisWeek = Array.from({ length: 7 }, (_, i) => localDay(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)));
+    const recent = Array.from({ length: 7 }, (_, i) => localDay(new Date(y, m - 1, d - 6 + i)));
+    const days = [...new Set([...thisWeek.filter(day => day <= today), ...recent])];
+    return { recent, facts: readDays(reader, days, today, foodDay, reader.viewRevision), targets: readTargets(reader, foodDay, reader.viewRevision),
+      dayTargets: readDayTargets(reader, days, today, foodDay, reader.viewRevision), active: !!reader.active(), any: hasAnything(reader, reader.viewRevision) };
+  }, [reader, today, foodDay]);
+  const { recent, facts, targets, dayTargets, active } = data;
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
-  const dayTargets = readDayTargets(store, days, today, foodDay, revision);
   const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
   if (!tiles.order.length) return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
     <ThemedText variant="headline" style={semibold}>{t('homeNothingOn')}</ThemedText>
@@ -220,7 +241,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit, health, score }: { 
   </Card>;
   // A new account has nothing to draw yet, but the layout the person chose still applies: only what they kept
   // on Home shows, in their order. The week strip waits for data, like the number tiles.
-  if (!hasAnything(store, revision) && !health) return <>
+  if (!data.any && !health) return <>
     {tiles.order.map(id => id === 'map' ? <EmptyMap key={id} />
       : id === 'score' ? score && <ScoreCard key={id} score={score} />
       : id === 'next' ? <Next key={id} store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /> : null)}
@@ -229,7 +250,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit, health, score }: { 
       <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
     </>}
   </>;
-  const numbers = numberTiles(store, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
+  const numbers = numberTiles(reader, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
   const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
   // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
   return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
@@ -244,6 +265,15 @@ function Body({ store, now, selected, onPick, tiles, onEdit, health, score }: { 
     })}
     {wanted.length > 0 && !shownNumbers.length && <ThemedText muted variant="caption" style={{ width: '100%' }}>{t('homeTilesEmpty')}</ThemedText>}
   </View>;
+}
+
+/** The greeting in two weights, light then strong, so the time of day is the word that lands. */
+function Greeting({ text }: { text: string }) {
+  const cut = text.indexOf(' ');
+  return <ThemedText variant="title" accessibilityRole="header" accessibilityLabel={text} style={semibold}>
+    {cut > 0 && <ThemedText muted variant="title" style={{ fontFamily: 'Lexend_300Light', fontWeight: '300' }}>{text.slice(0, cut + 1)}</ThemedText>}
+    {cut > 0 ? text.slice(cut + 1) : text}
+  </ThemedText>;
 }
 
 function EmptyMap() {

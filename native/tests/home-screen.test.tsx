@@ -151,6 +151,32 @@ test('greeting follows the time of day, the header keeps settings, and demo mode
 
 describe('add button and the tab bar', () => {
   const { SafeAreaProvider } = jest.requireActual('react-native-safe-area-context');
+  const addColour = () => jest.requireActual('react-native').StyleSheet.flatten(screen.getByRole('button', { name: 'Add' }).props.style).backgroundColor;
+  const palette = () => jest.requireActual('../src/design/tokens').createTheme('dark', 'seaGlassTide');
+  test('the + is the accent colour with the standard bar', async () => {
+    open();
+    await render(<ThemeProvider><Home /></ThemeProvider>);
+    expect([palette().accent, jest.requireActual('../src/design/tokens').createTheme('light', 'seaGlassTide').accent]).toContain(addColour());
+  });
+  test('with the floating bar the + rides beside the tabs, neutral, and still opens the quick actions', async () => {
+    const { DockButton, useDockAction } = jest.requireActual('../src/components/floating-tabs') as typeof import('../src/components/floating-tabs');
+    const Beside = () => { const action = useDockAction(); return action ? <DockButton action={action} /> : null; };
+    const repo = open();
+    repo.save('settings', { theme_override: 'dark', accent: 'seaGlassTide;bar=floating' });
+    const view = await render(<ThemeProvider repository={repo}><Home /><Beside /></ThemeProvider>);
+    // One + only, and it is the one beside the bar, not a button over the page's cards.
+    expect(screen.getAllByRole('button', { name: 'Add' })).toHaveLength(1);
+    expect(screen.getByTestId('dock-action')).toBeTruthy();
+    expect(addColour()).toBe(palette().surface);
+    await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByRole('button', { name: 'Add' }).props.accessibilityState).toEqual({ expanded: true });
+    await fireEvent.press(screen.getByRole('button', { name: 'Start workout' }));
+    expect(router.push).toHaveBeenCalledWith('/workout');
+    // Leaving Home takes the button away again.
+    await view.unmount();
+    await render(<ThemeProvider repository={repo}><Beside /></ThemeProvider>);
+    expect(screen.queryByTestId('dock-action')).toBeNull();
+  });
   test.each([[0, 16], [83, 99]])('with a bottom inset of %i the + button sits %i from the bottom', async (bottom, expected) => {
     open();
     const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 59, left: 0, right: 0, bottom } };

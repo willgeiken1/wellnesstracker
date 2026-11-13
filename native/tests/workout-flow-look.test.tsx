@@ -237,7 +237,7 @@ test('finish sheet with the switch on saves the template and opens the summary',
   await fireEvent.changeText(screen.getByLabelText('Workout'), 'Sample session');
   await fireEvent.press(screen.getByTestId('save-workout'));
   expect(store.templates().map(row => row.data.name)).toEqual(['Sample session']);
-  expect(router.replace).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id: session.id } });
+  expect(router.replace).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id: session.id, just: '1' } });
 });
 
 test('muscle and equipment choices show the short name, say the full one, and mark the selection', async () => {

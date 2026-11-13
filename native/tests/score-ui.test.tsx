@@ -129,8 +129,8 @@ test('the detail screen shows the sums with the person\'s numbers, the weights, 
   await render(<ScoreDetail />, { wrapper });
   await settle();
   expect(screen.getByRole('header', { name: 'Insight Score' })).toBeTruthy();
-  expect(screen.getByText('Score = each pillar × its weight, added up, ÷ the weights added up')).toBeTruthy();
-  expect(screen.getByText('Workouts in the last 7 days ÷ your weekly plan: 1 of 3.')).toBeTruthy();
+  expect(screen.getByText('Your score is the average of the pillars below, with each one counted by its weight.')).toBeTruthy();
+  expect(screen.getByText('Workouts in the last 7 days: 1, against a plan of 3 a week.')).toBeTruthy();
   expect(screen.getByText('A quarter of this pillar is steps: you average 6,000 a day against 8,000.')).toBeTruthy();
   expect(screen.getByText('Food logged on 6 of 6 days. A day with nothing logged scores 0.')).toBeTruthy();
   expect(screen.getByText('Average sleep: 5 h 30 min over 7 nights.')).toBeTruthy();
@@ -210,4 +210,22 @@ test('the Settings switch and the Home tile are one state', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'How it\'s worked out' }));
   expect(router.push).toHaveBeenCalledWith('/score');
   await view.unmount();
+});
+
+describe('review fixes: the ring and the training sum', () => {
+  const { ScoreRing } = jest.requireActual('../src/features/score/ring') as typeof import('../src/features/score/ring');
+  const base = readScore(new WorkoutStore(memoryRepository()), NOW, null);
+  test.each([[0, 0], [72, 1], [100, 1]])('a score of %i draws %i arc from 12 o\'clock, never a dashed circle', async (value, arcs) => {
+    await render(<ThemeProvider><ScoreRing score={{ ...base, ready: true, value }} size={96} /></ThemeProvider>);
+    expect(screen.queryAllByTestId('score-ring-arc')).toHaveLength(arcs);
+    for (const arc of screen.queryAllByTestId('score-ring-arc')) expect(arc.props.strokeDasharray).toBeUndefined();
+  });
+  test('more workouts than the plan reads as covering it, not "5 of 3"', async () => {
+    const repo = open();
+    for (let i = 0; i < 4; i++) workout(repo);
+    await render(<ScoreDetail />, { wrapper });
+    await settle();
+    expect(screen.queryByText(/ of 3\.$/)).toBeNull();
+    expect(screen.getByText(/which covers your plan of 3 a week\.$/)).toBeTruthy();
+  });
 });

@@ -148,7 +148,10 @@ describe('tab bar and keypad looks', () => {
     await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
     await fireEvent.press(screen.getAllByLabelText('Glass').find(node => node.props.accessibilityRole === 'tab')!);
     expect(savedAccent(repository)).toBe('seaGlassTide;bar=glass');
-    expect(parseAppearance(savedAccent(repository))).toMatchObject({ bar: 'glass', keypad: 'plain' });
+    expect(parseAppearance(savedAccent(repository))).toMatchObject({ bar: 'glass', keypad: 'plain' });    // Floating is the third choice: the open tab stands apart in the accent colour.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Floating' }));
+    expect(savedAccent(repository)).toBe('seaGlassTide;bar=floating');
+    expect(parseAppearance('goldenHour;bar=floating').bar).toBe('floating');
   });
   test('the Glass preset turns on glass rings, bar and keys together, and Calm turns them all back', async () => {
     const repository = settingsRepository('berryMeadow');
@@ -157,6 +160,19 @@ describe('tab bar and keypad looks', () => {
     expect(savedAccent(repository)).toBe('berryMeadow;ring=glass;motion=lively;bar=glass;keypad=glass');
     await fireEvent.press(screen.getByTestId('preset-calm'));
     expect(savedAccent(repository)).toBe('berryMeadow');
+  });
+  test('choice buttons save on their own as Pills, keep the preset, and older saved text stays Standard', async () => {
+    expect(parseAppearance('goldenHour;bar=floating').selector).toBe('standard');
+    expect(parseAppearance('goldenHour;selector=chips').selector).toBe('standard');
+    const repository = settingsRepository('berryMeadow');
+    await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
+    await fireEvent.press(screen.getByRole('tab', { name: 'Pills' }));
+    expect(savedAccent(repository)).toBe('berryMeadow;selector=pills');
+    expect(parseAppearance(savedAccent(repository)).selector).toBe('pills');
+    // Appearance itself now shows its choices as pills.
+    expect(screen.getAllByTestId('selector-pills').length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByTestId('preset-glass'));
+    expect(savedAccent(repository)).toBe('berryMeadow;ring=glass;motion=lively;bar=glass;keypad=glass;selector=pills');
   });
   test('a glass ring with a standard bar is your own mix', () => {
     expect(presetOf({ ...PRESETS.glass, bar: 'standard' })).toBeNull();
