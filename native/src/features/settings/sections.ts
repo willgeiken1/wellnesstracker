@@ -7,6 +7,7 @@ export const settingsGroups = [
   { title: 'settingsGroupApp', rows: [
     { route: 'appearance', label: 'appearance', icon: 'appearance', keywords: 'theme dark light mode colour color ring motion glass' },
     { route: 'workout', label: 'workoutSettings', icon: 'workout', keywords: 'rest timer plates bar haptics summary' },
+    { route: 'score', label: 'scoreSetting', icon: 'score', keywords: 'insight ring weights pillars training food recovery hide' },
     { route: 'health', label: 'health', icon: 'health', keywords: 'apple oura fitbit whoop watch connect' },
     { route: 'notifications', label: 'notifications', icon: 'notifications', keywords: 'reminders alerts' },
   ] },

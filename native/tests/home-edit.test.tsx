@@ -49,7 +49,7 @@ describe('home tile layout', () => {
     expect(removeTile(without, 'week')).toBe(without);
     expect(addTile(without, 'week').order.at(-1)).toBe('week');
     expect(addTile(start, 'week')).toBe(start);
-    expect(moveTile(start, 'week', -1).order.slice(0, 2)).toEqual(['week', 'map']);
+    expect(moveTile(start, 'score', -1).order.slice(0, 2)).toEqual(['score', 'map']);
     expect(moveTile(start, 'map', -1)).toBe(start);
     expect(moveTile(start, 'weight', 1)).toBe(start);
     expect(setWide(start, 'calories', true).wide).toEqual(['calories']);
@@ -61,8 +61,11 @@ describe('home tile layout', () => {
     const storage = (value: unknown) => ({ localGet: () => value as never, localSave: jest.fn() });
     expect(loadTiles(storage('nonsense'))).toEqual(defaultTiles());
     expect(loadTiles(storage({ order: 'map' }))).toEqual(defaultTiles());
-    expect(loadTiles(storage({ order: ['weight', 'gone', 'weight', 'map'], wide: ['map', 'weight', 7] }))).toEqual({ order: ['weight', 'map'], wide: ['weight'] });
-    expect(loadTiles(storage({ order: [] }))).toEqual({ order: [], wide: [] });
+    expect(loadTiles(storage({ order: ['weight', 'gone', 'weight', 'map'], wide: ['map', 'weight', 7], v: 2 }))).toEqual({ order: ['weight', 'map'], wide: ['weight'] });
+    expect(loadTiles(storage({ order: [], v: 2 }))).toEqual({ order: [], wide: [] });
+    // A layout saved before the Score existed gets it once, under the map; a newer save keeps it off.
+    expect(loadTiles(storage({ order: ['weight', 'map', 'next'] })).order).toEqual(['weight', 'map', 'score', 'next']);
+    expect(loadTiles(storage({ order: ['next'] })).order).toEqual(['score', 'next']);
     expect(loadTiles({ localGet: () => { throw new Error('locked'); }, localSave: jest.fn() })).toEqual(defaultTiles());
   });
 });
@@ -89,13 +92,13 @@ test('removing, adding and reordering change Home at once and are saved on the p
   await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
   expect(screen.queryByTestId('home-map')).toBeNull();
   expect(screen.getByTestId('edit-off-map')).toBeTruthy();
-  expect(repo.localGet(HOME_TILES_KEY)).toMatchObject({ order: ['week', 'next', 'calories', 'protein', 'volume', 'weight'] });
+  expect(repo.localGet(HOME_TILES_KEY)).toMatchObject({ order: ['score', 'week', 'next', 'calories', 'protein', 'volume', 'weight'], v: 2 });
   await fireEvent.press(screen.getByRole('button', { name: 'Add, Today map' }));
   expect(screen.getByTestId('home-map')).toBeTruthy();
   expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order.at(-1)).toBe('map');
   await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
-  expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order).toEqual(['week', 'next', 'volume', 'calories', 'protein', 'weight', 'map']);
+  expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order).toEqual(['score', 'week', 'next', 'volume', 'calories', 'protein', 'weight', 'map']);
   const shown = order().filter(id => id.startsWith('home-tile-'));
   expect(shown).toEqual(['home-tile-volume', 'home-tile-calories', 'home-tile-protein']);
 });
@@ -118,7 +121,7 @@ test('a small tile can be made full width and back', async () => {
 
 test('a saved layout is used on the next open', async () => {
   const repo = seeded();
-  repo.localSave(HOME_TILES_KEY, { order: ['next', 'weight', 'calories'], wide: ['calories'] });
+  repo.localSave(HOME_TILES_KEY, { order: ['next', 'weight', 'calories'], wide: ['calories'], v: 2 });
   await render(<Home />, { wrapper });
   expect(screen.queryByTestId('home-map')).toBeNull();
   expect(screen.getByTestId('home-next')).toBeTruthy();
@@ -130,7 +133,7 @@ test('a saved layout is used on the next open', async () => {
 
 test('with every tile removed Home says so and offers Edit', async () => {
   const repo = seeded();
-  repo.localSave(HOME_TILES_KEY, { order: [], wide: [] });
+  repo.localSave(HOME_TILES_KEY, { order: [], wide: [], v: 2 });
   await render(<Home />, { wrapper });
   expect(screen.getByText('Home is empty')).toBeTruthy();
   await fireEvent.press(within(screen.getByTestId('home-nothing-on')).getByRole('button', { name: 'Edit Home' }));
@@ -149,7 +152,7 @@ describe('a new account, before anything is logged', () => {
   });
   test('keeps only what the person left on Home, in their order', async () => {
     const repo = open();
-    repo.localSave(HOME_TILES_KEY, { order: ['next'], wide: [] });
+    repo.localSave(HOME_TILES_KEY, { order: ['next'], wide: [], v: 2 });
     await render(<Home />, { wrapper });
     expect(screen.getByTestId('home-next')).toBeTruthy();
     expect(screen.queryByTestId('home-empty-map')).toBeNull();
@@ -165,7 +168,7 @@ describe('a new account, before anything is logged', () => {
   });
   test('with every tile removed it says Home is empty, the same as an account with data', async () => {
     const repo = open();
-    repo.localSave(HOME_TILES_KEY, { order: [], wide: [] });
+    repo.localSave(HOME_TILES_KEY, { order: [], wide: [], v: 2 });
     await render(<Home />, { wrapper });
     expect(screen.getByTestId('home-nothing-on')).toBeTruthy();
     expect(screen.queryByTestId('home-next')).toBeNull();

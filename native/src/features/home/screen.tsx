@@ -23,7 +23,10 @@ import { EditHome } from './edit-sheet';
 import { type HealthDays } from '../health/days';
 import { useHealthDays } from '../health/use-health-days';
 import { useFocused } from './use-focused';
-import { HOME_TILES_KEY, isSmall, loadTiles, type HomeTiles, type TileId } from './tiles';
+import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './tiles';
+import { HeaderScore, ScoreCard } from '../score/card';
+import { readScore } from '../score/read';
+import type { Score } from '../score/model';
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -125,7 +128,7 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
 
 /** Home, ported from the prototype: header, contour map of today, week of mini maps, one card for
  * what's next, tiles, and the + button. Read-only apart from starting or resuming a workout through
- * the existing stores. Recovery and Score are left out until this build has data for them. */
+ * the existing stores. The Insight Score is worked out here from what is logged and, when connected, Apple Health. */
 export function Home() {
   const { store, auth } = useWorkout();
   const { colors } = useTheme();
@@ -151,11 +154,15 @@ export function Home() {
   const change = (next: HomeTiles) => {
     setLayout({ repo, tiles: next });
     // Home still shows the new layout this session if the local write fails.
-    try { repo?.localSave(HOME_TILES_KEY, next); } catch { /* saved again on the next change */ }
+    try { saveTiles(repo, next); } catch { /* saved again on the next change */ }
   };
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
   const selected = picked && picked <= today ? picked : today;
+  // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else,
+  // and so does the Insight Score worked out from them.
+  const health = useHealthDays(focused);
+  const score = store && tiles.order.includes('score') ? readScore(store, now, health) : null;
   return <View style={{ flex: 1 }}>
     <Screen tabHeader>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
@@ -174,8 +181,9 @@ export function Home() {
           style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
           <ThemedText style={[semibold, { fontSize: 14 }]}>{t('edit')}</ThemedText>
         </Pressable>}
+        {score && <HeaderScore score={score} />}
       </View>
-      {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} /> : <Next />}
+      {store ? <Body store={store} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
     </Screen>
     <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
@@ -194,15 +202,13 @@ export function Home() {
   </View>;
 }
 
-function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void }) {
+function Body({ store, now, selected, onPick, tiles, onEdit, health, score }: { store: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null }) {
   const revision = useFoodRevision(store.repo), today = localDay(now), foodDay = attributedDay();
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   const week = Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
   const recent = Array.from({ length: 7 }, (_, i) => localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i)));
   const days = [...new Set([...week.map(d => localDay(d)).filter(day => day <= today), ...recent])];
   const facts = readDays(store, days, today, foodDay, revision), targets = readTargets(store, foodDay, revision);
-  // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else.
-  const health = useHealthDays(useFocused());
   const active = !!store.active();
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const dayTargets = readDayTargets(store, days, today, foodDay, revision);
@@ -216,8 +222,9 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
   // on Home shows, in their order. The week strip waits for data, like the number tiles.
   if (!hasAnything(store, revision) && !health) return <>
     {tiles.order.map(id => id === 'map' ? <EmptyMap key={id} />
+      : id === 'score' ? score && <ScoreCard key={id} score={score} />
       : id === 'next' ? <Next key={id} store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /> : null)}
-    {tiles.order.some(id => id !== 'map' && id !== 'next') && <>
+    {tiles.order.some(id => id !== 'map' && id !== 'next' && id !== 'score') && <>
       <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('homeTiles')}</ThemedText>
       <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
     </>}
@@ -229,6 +236,7 @@ function Body({ store, now, selected, onPick, tiles, onEdit }: { store: WorkoutS
     {tiles.order.map(id => {
       const full = { width: '100%' } as const;
       if (id === 'map') return <View key={id} style={full}><MapCard day={selected} today={today} values={of(selected)} /></View>;
+      if (id === 'score') return score ? <View key={id} style={full}><ScoreCard score={score} /></View> : null;
       if (id === 'week') return <View key={id} style={full}><Week week={week} today={today} selected={selected} onPick={onPick} of={of} /></View>;
       if (id === 'next') return <View key={id} style={full}><Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /></View>;
       const tile = numbers[id];

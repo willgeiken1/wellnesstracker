@@ -13,7 +13,7 @@ export const semibold = { fontWeight: '600' } as const;
 const ROW_HEIGHT = 52;
 
 const symbols = {
-  account: 'person.crop.circle', profile: 'ruler', appearance: 'paintpalette', workout: 'dumbbell', health: 'heart',
+  account: 'person.crop.circle', profile: 'ruler', appearance: 'paintpalette', workout: 'dumbbell', health: 'heart', score: 'target',
   notifications: 'bell', privacy: 'lock', data: 'square.and.arrow.down', about: 'info.circle',
   search: 'magnifyingglass', back: 'chevron.left', forward: 'chevron.right',
 } as const;
@@ -23,6 +23,7 @@ const paths = {
   appearance: 'M12 3A9 9 0 1 0 12 21Q14 21 14 19Q14 17.5 15.5 17.5H17A4 4 0 0 0 21 13.5Q21 3 12 3M8 10.5V10.6M12 7.5V7.6M16 10.5V10.6',
   workout: 'M3 7V17M6 5V19M18 5V19M21 7V17M6 12H18',
   health: 'M12 20Q4 14 4 9A4 4 0 0 1 12 7A4 4 0 0 1 20 9Q20 14 12 20Z',
+  score: 'M12 3A9 9 0 1 0 12 21A9 9 0 1 0 12 3M12 8A4 4 0 1 0 12 16A4 4 0 1 0 12 8',
   notifications: 'M6 17V11A6 6 0 0 1 18 11V17L20 19H4ZM10 21H14',
   privacy: 'M6 11H18V20H6ZM8 11V8A4 4 0 0 1 16 8V11',
   data: 'M12 3V15M7 10L12 15L17 10M4 20H20',
