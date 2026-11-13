@@ -7,7 +7,7 @@ import type { TestInstance } from 'test-renderer';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { createSampleDays } from '../src/features/workout/devSampleDays';
-import { IN_RING_MAX } from '../src/components/text-size';
+import { HEADING_MAX, IN_RING_MAX } from '../src/components/text-size';
 import { memoryRepository } from './workout-repository';
 
 let mockRepository: ReturnType<typeof memoryRepository>;
@@ -78,8 +78,11 @@ function sweep(root: TestInstance) {
     }
     if (boxed && !(cap > 0 && cap <= IN_RING_MAX)) problems.push(`${where} sits in a fixed-height box but grows without limit`);
     // ...and whatever is held back is also written somewhere at full size.
-    if (cap !== 0 && !(cap > 0 && cap <= IN_RING_MAX)) problems.push(`${where} has maxFontSizeMultiplier ${cap}`);
-    if (cap > 0 && text && !full.some(other => other.includes(text))) problems.push(`${where} is capped with no full-size copy`);
+    // Title and display styles stop at HEADING_MAX (twice the size or more), like iOS's own large titles, so a long
+    // word never breaks in the middle. They still grow, and nothing else may stop there.
+    const heading = !boxed && (Object.values(HEADING_MAX) as number[]).includes(cap);
+    if (cap !== 0 && !heading && !(cap > 0 && cap <= IN_RING_MAX)) problems.push(`${where} has maxFontSizeMultiplier ${cap}`);
+    if (cap > 0 && !heading && text && !full.some(other => other.includes(text))) problems.push(`${where} is capped with no full-size copy`);
     // A line limit cuts words off unless the text shrinks to fit instead.
     if (node.props.numberOfLines !== undefined && !node.props.adjustsFontSizeToFit) problems.push(`${where} is cut to ${node.props.numberOfLines} line(s)`);
   }

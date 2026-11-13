@@ -6,6 +6,8 @@ import { AccessibilityInfo, Dimensions, Platform, StyleSheet } from 'react-nativ
 import { ThemeProvider } from '../src/design/theme-provider';
 import { announce } from '../src/components/announce';
 import { StatusText } from '../src/components/status-text';
+import { ThemedText } from '../src/components/themed-text';
+import { HEADING_MAX } from '../src/components/text-size';
 import { CalorieRing } from '../src/features/food/ring';
 import { PillarRow } from '../src/features/score/card';
 import { SetRow } from '../src/features/workout/set-row';
@@ -216,4 +218,24 @@ test.each([[false, 'slide'], [true, 'none']] as const)('Edit Home with Reduce Mo
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduce);
   await render(<EditHome visible tiles={loadTiles(null)} onChange={() => {}} onClose={() => {}} />, { wrapper });
   await waitFor(() => expect(screen.getByTestId('home-edit-sheet', { includeHiddenElements: true })).toHaveProp('animationType', animation));
+});
+
+describe('headings at the largest text size (AX5 sweep)', () => {
+  test('title and display stop at HEADING_MAX so a long word stays whole; other text and caller caps are untouched', async () => {
+    await render(<>
+      <ThemedText variant="title">Workouts</ThemedText>
+      <ThemedText variant="display">Welcome</ThemedText>
+      <ThemedText variant="headline">Up next</ThemedText>
+      <ThemedText>Body copy</ThemedText>
+      <ThemedText variant="title" maxFontSizeMultiplier={1.2}>120</ThemedText>
+    </>, { wrapper });
+    expect(screen.getByText('Workouts').props.maxFontSizeMultiplier).toBe(HEADING_MAX.title);
+    expect(screen.getByText('Welcome').props.maxFontSizeMultiplier).toBe(HEADING_MAX.display);
+    expect(screen.getByText('Up next').props.maxFontSizeMultiplier).toBe(0);
+    expect(screen.getByText('Body copy').props.maxFontSizeMultiplier).toBe(0);
+    expect(screen.getByText('120').props.maxFontSizeMultiplier).toBe(1.2);
+    // Still grows a lot: at least double a 22 pt title, about 60 pt for the 34 pt display.
+    expect(HEADING_MAX.title).toBeGreaterThanOrEqual(2);
+    expect(HEADING_MAX.display * 34).toBeGreaterThanOrEqual(59);
+  });
 });

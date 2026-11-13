@@ -15,6 +15,7 @@ import Settings from '../src/app/settings/index';
 import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import Appearance from '../src/features/settings/appearance';
 import AppTabs from '../src/components/app-tabs';
+import { HEADING_MAX } from '../src/components/text-size';
 
 // The native host is unavailable in Jest. Keep the real tab declarations and labels.
 jest.mock('expo-router/native-tabs', () => {
@@ -90,7 +91,11 @@ test.each([
     expect(texts.length).toBeGreaterThan(0);
     for (const node of texts) {
       expect(node.props.allowFontScaling).toBe(true);
-      expect(node.props.maxFontSizeMultiplier).toBe(0);
+      // Only headings stop growing, and only at twice the size or more (see HEADING_MAX); everything else is unlimited.
+      if (node.props.maxFontSizeMultiplier !== 0) {
+        expect(Object.values(HEADING_MAX)).toContain(node.props.maxFontSizeMultiplier);
+        expect(node.props.maxFontSizeMultiplier).toBeGreaterThanOrEqual(1.75);
+      }
       expect(node.props.numberOfLines).toBeUndefined();
       // Any fixed-height text ancestor could clip large type; decorative swatches aren't ancestors.
       for (let ancestor: TestInstance | null = node; ancestor; ancestor = ancestor.parent) {
