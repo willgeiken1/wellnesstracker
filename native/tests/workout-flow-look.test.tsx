@@ -285,3 +285,17 @@ test('durations read as minutes, never as a made-up zero', () => {
   expect(minutesLabel(72 * 60000)).toBe('1 h 12 min');
   expect(minutesLabel(NaN)).toBe('');
 });
+
+test('day screen header keeps Back apart from the day arrows, which sit together in one stepper', async () => {
+  const { store } = open(); workout(store, 2);
+  const picked: string[] = [];
+  await render(<DaySummary store={store} day={dayAgo(2)} onDay={day => picked.push(day)} />, { wrapper });
+  const stepper = screen.getByTestId('day-stepper');
+  expect(within(stepper).getByRole('button', { name: 'Previous day' })).toBeTruthy();
+  expect(within(stepper).getByRole('button', { name: 'Next day' })).toBeTruthy();
+  expect(within(stepper).queryByRole('button', { name: 'Back' })).toBeNull();
+  expect(within(screen.getByTestId('day-bar')).getAllByRole('button', { name: 'Back' })).toHaveLength(1);
+  await fireEvent.press(screen.getByTestId('day-previous'));
+  await fireEvent.press(screen.getByTestId('day-next'));
+  expect(picked).toEqual([dayAgo(3), dayAgo(1)]);
+});

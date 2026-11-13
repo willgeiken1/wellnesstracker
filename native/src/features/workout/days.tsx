@@ -11,7 +11,7 @@ import type { WorkoutStore } from '@/data/workout/store';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { pluralize, t } from '@/i18n/en';
-import { Field, PageBar, Primary, Round, Secondary, SectionTitle, Trouble, card, dayLabel, leave, minutesLabel, semibold, sessionPrint, whole } from './parts';
+import { Field, PageBar, Primary, Round, Secondary, Stepper, SectionTitle, Trouble, card, dayLabel, leave, minutesLabel, semibold, sessionPrint, whole } from './parts';
 import { useWorkout } from './use-workout';
 
 export function validPastDay(day: string) {
@@ -120,8 +120,8 @@ export function DaySummary({store,day,onDay,note}: {store:WorkoutStore;day:strin
   const others = [...new Set(history.map(s => String(s.data.day)))].filter(other => other !== day && (validPastDay(other) || other === today)).slice(0, 5);
   return <Screen topInset>
     <PageBar testID="day-bar" title={dayTitle(day)} left={<Round glyph="back" label={t('flowBack')} onPress={leave} />}
-      right={<><Round testID="day-previous" glyph="back" label={t('dayPrevious')} onPress={() => go(shiftDay(day,-1))} />
-        <Round testID="day-next" glyph="forward" label={t('dayNext')} disabled={day >= today} onPress={() => go(shiftDay(day,1))} /></>} />
+      right={<Stepper testID="day-stepper" previous={{testID:'day-previous',label:t('dayPrevious'),onPress:() => go(shiftDay(day,-1))}}
+        next={{testID:'day-next',label:t('dayNext'),disabled:day >= today,onPress:() => go(shiftDay(day,1))}} />} />
     {dayTitle(day) !== dayLabel(day) && <ThemedText muted style={{marginTop:-tokens.spacing[1]}}>{dayLabel(day)}</ThemedText>}
     {!!note && <Trouble testID="day-note" text={note} />}
     <WeekStrip selected={day} onSelect={go} store={store} />

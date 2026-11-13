@@ -34,6 +34,21 @@ export function Round({ label, glyph, disabled = false, onSurface = false, onPre
   </Pressable>;
 }
 
+/** Earlier and later as one joined capsule, so a day stepper never reads as a second Back button beside the real one. */
+export function Stepper({ previous, next, testID }: { previous: { label: string; onPress: () => void; disabled?: boolean; testID?: string }; next: { label: string; onPress: () => void; disabled?: boolean; testID?: string }; testID?: string }) {
+  const { colors, radius } = useTheme();
+  const half = (side: typeof previous, glyph: 'back' | 'forward') => <Pressable testID={side.testID} accessibilityRole="button" accessibilityLabel={side.label}
+    accessibilityState={{ disabled: !!side.disabled }} disabled={side.disabled} onPress={side.onPress}
+    style={({ pressed }) => ({ width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', opacity: side.disabled ? 0.35 : pressed ? 0.7 : 1 })}>
+    <Svg width={16} height={16} viewBox="0 0 24 24" accessible={false}><Path d={GLYPHS[glyph]} fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+  </Pressable>;
+  return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', borderRadius: radius.card, backgroundColor: colors['surface-2'] }}>
+    {half(previous, 'back')}
+    <View style={{ width: 1, height: 20, backgroundColor: colors['hair-2'] }} />
+    {half(next, 'forward')}
+  </View>;
+}
+
 /** The bar at the top of a pushed screen: one way out on the left, the screen's only title, and room for one action. */
 export function PageBar({ title, left, right, testID }: { title: string; left: ReactNode; right?: ReactNode; testID?: string }) {
   return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget }}>
