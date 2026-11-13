@@ -3,7 +3,7 @@ import { AccessibilityInfo, Appearance, useColorScheme } from 'react-native';
 import type { Repository } from '../data/repository';
 import { compareRows } from '../data/rows';
 import { createTheme, paletteLocked, tokens, type Palette, type ThemeOverride } from './tokens';
-import { DEFAULT_APPEARANCE, formatAppearance, parseAppearance, PRESETS, presetOf, type BarLook, type Intensity, type KeypadLook, type Looks, type Motion, type Preset, type RingLook, type SelectorLook } from './looks';
+import { CORNER_RADIUS, DEFAULT_APPEARANCE, formatAppearance, parseAppearance, PRESETS, presetOf, resetLooks, type BarLook, type CornerLook, type HeadingLook, type SurfaceLook, type Intensity, type KeypadLook, type Looks, type Motion, type Preset, type RingLook, type SelectorLook } from './looks';
 
 function useThemeState(repository?: Repository | null) {
   const [override, updateOverride] = useState<ThemeOverride>('system');
@@ -40,6 +40,10 @@ function useThemeState(repository?: Repository | null) {
   const setKeypadLook = (keypad: KeypadLook) => persist(override, { ...appearance, keypad });
   const setSelectorLook = (selector: SelectorLook) => persist(override, { ...appearance, selector });
   const applyPreset = (preset: Preset) => persist(override, { ...appearance, ...PRESETS[preset] });
+  const setSurfaceLook = (surface: SurfaceLook) => persist(override, { ...appearance, surface });
+  const setCornerLook = (corners: CornerLook) => persist(override, { ...appearance, corners });
+  const setHeadingLook = (heading: HeadingLook) => persist(override, { ...appearance, heading });
+  const resetAppearance = () => persist(override, resetLooks(appearance));
   useEffect(() => {
     Appearance.setColorScheme(override === 'system' ? 'auto' : override);
     return () => Appearance.setColorScheme('auto');
@@ -64,7 +68,11 @@ function useThemeState(repository?: Repository | null) {
   return { persistenceError, override, setOverride, palette, setPalette, ringLook: appearance.ring, setRingLook,
     // The saved choice, and what actually plays: iOS Reduce Motion always wins.
     motionStyle: appearance.motion, setMotionStyle, ringMotion: (reduceMotion ? 'basic' : appearance.motion) as Motion,
-    intensity: appearance.intensity, setIntensity, barLook: appearance.bar, setBarLook, keypadLook: appearance.keypad, setKeypadLook, selectorLook: appearance.selector, setSelectorLook, preset: presetOf(appearance), applyPreset, mode, colors: createTheme(mode, palette),
+    intensity: appearance.intensity, setIntensity, barLook: appearance.bar, setBarLook, keypadLook: appearance.keypad, setKeypadLook, selectorLook: appearance.selector, setSelectorLook, preset: presetOf(appearance), applyPreset, mode,
+    surfaceLook: appearance.surface, setSurfaceLook, cornerLook: appearance.corners, setCornerLook, headingLook: appearance.heading, setHeadingLook, resetAppearance,
+    // Panel and card corners follow the corner look; inputs and chips scale with it, so the app stays of a piece.
+    radius: { card: CORNER_RADIUS[appearance.corners], input: Math.round(CORNER_RADIUS[appearance.corners] * 2 / 3), panel: CORNER_RADIUS[appearance.corners] + 6 },
+    headingFont: appearance.heading === 'system' ? undefined : tokens.font.heading, colors: createTheme(mode, palette),
     reduceMotion, reduceMotionReady, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
 }
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);

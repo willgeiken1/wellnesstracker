@@ -4,7 +4,7 @@ import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg } from '@/core/workout/rules';
@@ -71,7 +71,7 @@ function Print({ data, width, height }: { data: PrintData; width: number; height
  * the plan, then the routines. Every action the old list had is still here; edit, reorder and
  * delete sit behind each routine's row. */
 export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | null; run: (action: () => void) => void; undo: (() => void) | null; onUndo: (restore: (() => void) | null) => void }) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   const [open, setOpen] = useState<string | null>(null);
   const routines = store?.templates() ?? [], history = store?.history() ?? [];
   // The latest print is the newest workout with a counted set. A workout saved with nothing in it has no print
@@ -81,7 +81,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
   const lastOf = (id: string) => history.find(s => s.data.routine_id === id);
   return <>
     {store && latest && <LatestPrint store={store} session={latest} />}
-    {store && next && !store.active() && <Card style={[card, { gap: tokens.spacing[1] }]} testID="workouts-up-next">
+    {store && next && !store.active() && <Panel style={[card, { gap: tokens.spacing[1] }]} testID="workouts-up-next">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
         <View style={{ flex: 1 }}>
           <ThemedText muted variant="caption">{t('upNext')}</ThemedText>
@@ -94,10 +94,10 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
         style={({ pressed }) => ({ marginTop: tokens.spacing[1], minHeight: 48, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: training, opacity: pressed ? 0.8 : 1 })}>
         <ThemedText testID="start-routine-label" style={[semibold, { color: readableOn(training, [colors['on-accent'], colors.text]) }]}>{t('startTemplate').replace('{name}', String(next.data.name))}</ThemedText>
       </Pressable>
-    </Card>}
+    </Panel>}
     {store && <PlansPanel store={store} />}
     <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('routines')}</ThemedText>
-    <Card style={[card, { paddingVertical: tokens.spacing[0], gap: 0 }]}>
+    <Panel style={[card, { paddingVertical: tokens.spacing[0], gap: 0 }]}>
       {store && routines.map(r => {
         const name = String(r.data.name), last = lastOf(r.id), expanded = open === r.id;
         // One set of actions for the row, the long-press menu and VoiceOver. Delete is destructive and asks first.
@@ -116,7 +116,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
               accessibilityActions={[{ name: 'edit', label: t('edit') }, { name: 'up', label: t('moveUp') }, { name: 'down', label: t('moveDown') }, { name: 'delete', label: t('delete') }]}
               onAccessibilityAction={event => ({ edit, up: () => move(-1), down: () => move(1), delete: remove } as Record<string, () => void>)[event.nativeEvent.actionName]?.()}
               style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 52 }}>
-              <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], padding: 4 }}>
+              <View style={{ width: 44, height: 44, borderRadius: radius.card, backgroundColor: colors['surface-2'], padding: 4 }}>
                 <Print data={routinePrint(store, r, last)} width={36} height={36} />
               </View>
               <View style={{ flex: 1 }}>
@@ -139,7 +139,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
       })}
       <RowLink label={t('newTemplate')} onPress={() => router.push('/workout/template')} />
       <RowLink label={t('startEmpty')} last onPress={() => run(() => { store?.start(); router.push('/workout'); })} />
-    </Card>
+    </Panel>
     {undo && <Button label={t('undoDelete')} variant="secondary" onPress={() => run(() => { undo(); onUndo(null); })} />}
   </>;
 }
@@ -158,7 +158,7 @@ function LatestPrint({ store, session }: { store: WorkoutStore; session: Row }) 
   const volume = `${whole(fromKg(print.totalKg, unit))} ${unit}`;
   return <Pressable accessibilityRole="button" accessibilityLabel={`${t('latestPrint')}: ${name}, ${dayLabel(session.data.day)}, ${volume}`}
     onPress={() => router.push({ pathname: '/workout/summary', params: { id: session.id } })} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
-    <Card style={[card, { gap: tokens.spacing[1] }]} testID="workouts-latest-print">
+    <Panel style={[card, { gap: tokens.spacing[1] }]} testID="workouts-latest-print">
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
           <ThemedText muted variant="caption">{t('latestPrint')}</ThemedText>
@@ -171,6 +171,6 @@ function LatestPrint({ store, session }: { store: WorkoutStore; session: Row }) 
       </View>
       <View style={{ width: '100%', aspectRatio: 2 }}><Print data={print.data} width={300} height={150} /></View>
       <ThemedText muted variant="caption">{t('printCaption')}</ThemedText>
-    </Card>
+    </Panel>
   </Pressable>;
 }

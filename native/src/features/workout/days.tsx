@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -61,7 +61,7 @@ export function PastDayChoice() {
   const [error,setError] = useState(false);
   const base = validPastDay(day) ? day : yesterday;
   const move = (by: number) => { setDay(shiftDay(base, by)); setError(false); };
-  return <Card testID="past-day-choice" style={[card,{gap:tokens.spacing[2]}]}>
+  return <Panel testID="past-day-choice" style={[card,{gap:tokens.spacing[2]}]}>
     <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('logPastWorkout')}</ThemedText>
     <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
       <Round onSurface glyph="back" label={t('dayPrevious')} onPress={() => move(-1)} />
@@ -76,7 +76,7 @@ export function PastDayChoice() {
       if (!validPastDay(day)) {setError(true); return;}
       router.push({pathname:'/workout/day',params:{day}});
     }} />
-  </Card>;
+  </Panel>;
 }
 /** One finished workout on the day screen: its facts, then each exercise with its sets. The top row opens the summary. */
 function SessionCard({store,session}: {store:WorkoutStore;session:Row}) {
@@ -85,7 +85,7 @@ function SessionCard({store,session}: {store:WorkoutStore;session:Row}) {
   const count = entries.reduce((n, e) => n + store.sets(e.id).length, 0), unit = store.unit();
   const volume = fromKg(sessionPrint(store, session.id).totalKg, unit);
   const facts = [minutesLabel(Number(session.data.duration_ms)), count ? pluralize(count, 'set') : '', volume > 0 ? `${whole(volume)} ${unit}` : ''].filter(Boolean).join(' · ');
-  return <Card testID={`day-session-${session.id}`} style={[card,{gap:0,paddingVertical:tokens.spacing[1]}]}>
+  return <Panel testID={`day-session-${session.id}`} style={[card,{gap:0,paddingVertical:tokens.spacing[1]}]}>
     <Pressable accessibilityRole="button" accessibilityLabel={t('dayOpenSummary').replace('{name}',name)} accessibilityValue={facts ? {text:facts} : undefined}
       onPress={() => router.push({pathname:'/workout/summary',params:{id:session.id}})}
       style={({pressed}) => ({flexDirection:'row',alignItems:'center',gap:tokens.spacing[1],minHeight:56,opacity:pressed ? 0.7 : 1})}>
@@ -108,7 +108,7 @@ function SessionCard({store,session}: {store:WorkoutStore;session:Row}) {
           : t('summaryNoSets')}</ThemedText>
       </View>;
     })}
-  </Card>;
+  </Panel>;
 }
 /** One day of workouts. The bar steps a day at a time, the strip jumps within the week, and a short list jumps
  * to other days that have a workout. A day with nothing says so. */
@@ -125,16 +125,16 @@ export function DaySummary({store,day,onDay,note}: {store:WorkoutStore;day:strin
     {dayTitle(day) !== dayLabel(day) && <ThemedText muted style={{marginTop:-tokens.spacing[1]}}>{dayLabel(day)}</ThemedText>}
     {!!note && <Trouble testID="day-note" text={note} />}
     <WeekStrip selected={day} onSelect={go} store={store} />
-    {sessions.length === 0 && <Card testID="day-empty" style={card}>
+    {sessions.length === 0 && <Panel testID="day-empty" style={card}>
       <ThemedText style={semibold}>{t('noDayWorkouts')}</ThemedText>
       <ThemedText muted>{t(day === today ? 'dayEmptyToday' : 'dayEmptyPast')}</ThemedText>
-    </Card>}
+    </Panel>}
     {sessions.map(s => <SessionCard key={s.id} store={store} session={s} />)}
     {validPastDay(day) && <Primary label={t('logDayWorkout')} onPress={() => router.push({pathname:'/workout',params:{day}})} />}
     {day === today && <Secondary label={t('flowWorkouts')} onPress={() => router.replace('/workouts')} />}
     {others.length > 0 && <>
       <SectionTitle>{t('dayOthers')}</SectionTitle>
-      <Card testID="day-others" style={[card,{gap:0,paddingVertical:tokens.spacing[0]}]}>
+      <Panel testID="day-others" style={[card,{gap:0,paddingVertical:tokens.spacing[0]}]}>
         {others.map((other, index) => {
           const count = history.filter(s => s.data.day === other).length;
           return <Pressable key={other} accessibilityRole="button" accessibilityLabel={t('viewDayWorkouts').replace('{day}',dayLabel(other))}
@@ -145,7 +145,7 @@ export function DaySummary({store,day,onDay,note}: {store:WorkoutStore;day:strin
             <Icon name="chevron" size={18} color={colors['text-muted']} />
           </Pressable>;
         })}
-      </Card>
+      </Panel>
     </>}
   </Screen>;
 }

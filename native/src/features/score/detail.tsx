@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
@@ -64,7 +64,7 @@ function Detail({ store }: { store: WorkoutStore }) {
   const share = shares(weights, score.pillars), line = headline(score);
   const change = (next: Weights) => { if (next === weights) return; setHeld({ store: store.repo, weights: next }); saveWeights(store, next); };
   return <>
-    <Card testID="score-summary" style={[card, { alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[4] }]}>
+    <Panel testID="score-summary" style={[card, { alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[4] }]}>
       <View accessible accessibilityLabel={spokenScore(score)} style={{ alignItems: 'center', gap: tokens.spacing[1] }}>
         <ScoreRing score={score} size={112} stroke={10} />
         <ThemedText muted variant="caption" style={{ fontSize: 13, fontWeight: '600', textAlign: 'center' }}>{line}</ThemedText>
@@ -72,15 +72,15 @@ function Detail({ store }: { store: WorkoutStore }) {
       <View style={{ alignSelf: 'stretch', gap: 6 }}>
         {SCORE_PILLARS.map(pillar => <PillarRow key={pillar} pillar={pillar} value={score.pillars[pillar]} />)}
       </View>
-    </Card>
+    </Panel>
     <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('scoreHow')}</ThemedText>
-    <Card testID="score-equation" style={card}>
+    <Panel testID="score-equation" style={card}>
       <ThemedText style={semibold}>{t('scoreEquation')}</ThemedText>
       <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{t(score.ready ? 'scoreEquationBody' : 'scoreEquationWait')}</ThemedText>
-    </Card>
+    </Panel>
     {SCORE_PILLARS.map(pillar => {
       const name = t(PILLAR_NAME[pillar]), value = score.pillars[pillar];
-      return <Card key={pillar} testID={`score-detail-${pillar}`} style={card}>
+      return <Panel key={pillar} testID={`score-detail-${pillar}`} style={card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1] }}>
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors[pillar] }} />
           <ThemedText style={[semibold, { flex: 1 }]}>{name}</ThemedText>
@@ -95,7 +95,7 @@ function Detail({ store }: { store: WorkoutStore }) {
           <Step glyph="minus" label={fill(t('scoreWeightLess'), { name })} disabled={nudgeWeight(weights, pillar, -1) === weights} onPress={() => change(nudgeWeight(weights, pillar, -1))} />
           <Step glyph="plus" label={fill(t('scoreWeightMore'), { name })} disabled={weights[pillar] >= WEIGHT_MAX} onPress={() => change(nudgeWeight(weights, pillar, 1))} />
         </View>
-      </Card>;
+      </Panel>;
     })}
     {!sameWeights(weights, DEFAULT_WEIGHTS) && <Pressable testID="score-reset" accessibilityRole="button" accessibilityLabel={t('scoreReset')} onPress={() => change({ ...DEFAULT_WEIGHTS })}
       style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 })}>

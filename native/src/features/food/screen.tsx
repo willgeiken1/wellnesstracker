@@ -4,7 +4,7 @@ import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { useEffect, useState } from 'react';
 import { AppState, Pressable, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Card } from '../../components/card';
+import { Panel, PROTOTYPE_RADIUS } from '../../components/card';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import type { Repository } from '../../data/repository';
@@ -29,7 +29,7 @@ const METHOD_ICON:Record<Method,string>={
  foodManual:'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
  foodSaved:'M12 4l2.5 5.2 5.5.8-4 4 1 5.6-5-2.7-5 2.7 1-5.6-4-4 5.5-.8z',
 };
-const card={borderRadius:18,padding:tokens.spacing[3]} as const;
+const card={borderRadius:PROTOTYPE_RADIUS,padding:tokens.spacing[3]} as const;
 const kcal=(kj:unknown)=>kj==null?null:Math.round(Number(kj)/4.184);
 const gram=(value:unknown)=>value==null?'—':String(Math.round(Number(value)));
 function dayTitle(day:string){
@@ -102,12 +102,12 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    </Pressable>
    <Round label={t('foodNext')} glyph="M9 5l7 7-7 7" disabled={day>=today()} onPress={()=>chooseDay(shiftDay(day,1))}/>
   </View>
-  {calendar&&<Card style={card}><FoodCalendar day={day} today={today()} onSelect={chooseDay} repo={repo}/></Card>}
-  {early&&(day===attributedDay()||day===today())&&<Card style={card}><ThemedText>{t('foodEarly').replace('{day}',day)}</ThemedText><Button variant="secondary" label={t(day===today()?'foodUsePrevious':'foodUseToday')} onPress={()=>chooseDay(day===today()?attributedDay():today())}/></Card>}
-  <Card style={[card,{alignItems:'center',paddingVertical:tokens.spacing[4]}]} testID="food-ring-card">
+  {calendar&&<Panel style={card}><FoodCalendar day={day} today={today()} onSelect={chooseDay} repo={repo}/></Panel>}
+  {early&&(day===attributedDay()||day===today())&&<Panel style={card}><ThemedText>{t('foodEarly').replace('{day}',day)}</ThemedText><Button variant="secondary" label={t(day===today()?'foodUsePrevious':'foodUseToday')} onPress={()=>chooseDay(day===today()?attributedDay():today())}/></Panel>}
+  <Panel style={[card,{alignItems:'center',paddingVertical:tokens.spacing[4]}]} testID="food-ring-card">
    <CalorieRing total={total} target={targets.targets} logged={rows.length>0} estimated={rows.some(row=>aiState(repo).entries[row.id]?.confirmed===false)}/>
    <ThemedText muted variant="caption">{t('foodBurned')}</ThemedText>
-  </Card>
+  </Panel>
   {/* Five in a row at normal text sizes; with large text they wrap three to a row and the words wrap, never cut. */}
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}} testID="food-log-row">
    {METHODS.map(method=><Pressable key={method} accessibilityRole="button" accessibilityLabel={t(method)} onPress={()=>choose(method)}
@@ -127,24 +127,24 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
   </View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
-  {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
-  {scanning&&<Card style={card}><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Card>}
-  {aiMode&&<Card style={card}><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Card>}
-  {entry&&<Card style={card}><FoodEntry key={entry.id??'new'} initial={entry.initial} editing={entry.id!==undefined} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{const row=saveFood(repo,day,entry.meal,food,multiple,entry.id);if(fallbackId!==undefined){attachFallback(repo,row.id,fallbackId);setFallbackId(undefined);}if(entry.id&&aiState(repo).entries[entry.id])confirmEstimate(repo,entry.id);setEntry(null);}}/></Card>}
-  {library&&<Card style={card}>
+  {undo&&<Panel style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Panel>}
+  {scanning&&<Panel style={card}><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Panel>}
+  {aiMode&&<Panel style={card}><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Panel>}
+  {entry&&<Panel style={card}><FoodEntry key={entry.id??'new'} initial={entry.initial} editing={entry.id!==undefined} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{const row=saveFood(repo,day,entry.meal,food,multiple,entry.id);if(fallbackId!==undefined){attachFallback(repo,row.id,fallbackId);setFallbackId(undefined);}if(entry.id&&aiState(repo).entries[entry.id])confirmEstimate(repo,entry.id);setEntry(null);}}/></Panel>}
+  {library&&<Panel style={card}>
    {([{title:'foodSaved',foods:repo.list('saved_foods').map((r):Food=>({...r.data,saved_food_id:r.id,amount_g:r.data.serving_g??null}))},{title:'foodRecent',foods:recentFoods(repo)},{title:'foodFavorites',foods:allFavorites(repo,selectedMeal)}] as const).map(section=><View key={section.title} style={{gap:6}}><ThemedText variant="headline">{t(section.title)}</ThemedText>{!section.foods.length&&<ThemedText muted>{t('foodNoSaved')}</ThemedText>}{section.foods.map((food,i)=><Button key={i} variant="secondary" label={t('foodLogSaved').replace('{name}',String(food['name']))} onPress={()=>log(food)}/>)}</View>)}
    <ThemedText variant="headline">{t('foodCombos')}</ThemedText>{combos(repo).map((item,i)=><Button key={i} variant="secondary" label={t('foodLogSaved').replace('{name}',item.name)} onPress={()=>run(()=>{logCombo(repo,item,day,selectedMeal);setLibrary(false);})}/>)}
-  </Card>}
-  {!rows.length&&<Card style={[card,{alignItems:'center',paddingVertical:tokens.spacing[4]}]} testID="food-empty">
+  </Panel>}
+  {!rows.length&&<Panel style={[card,{alignItems:'center',paddingVertical:tokens.spacing[4]}]} testID="food-empty">
    <ThemedText variant="headline" style={{fontWeight:'600'}}>{t('foodNothing')}</ThemedText>
    <ThemedText muted variant="caption" style={{textAlign:'center'}}>{t('foodNothingBody')}</ThemedText>
-  </Card>}
+  </Panel>}
   {mealList.map(meal=>{
    const items=rows.filter(row=>row.data.meal_id===meal.id),quick=favorites(repo,meal.id),menu=mealMenu===meal.id;
    // Items with no calories entered are left out of the sum; a meal with none entered shows a dash, never 0.
    // The total shows from two items up: with one item it would only repeat that row's number.
    const known=items.map(row=>kcal(row.data.energy_kj)).filter((n):n is number=>n!==null),sum=known.reduce((n,value)=>n+value,0);
-   return <Card key={meal.id} style={[card,{gap:tokens.spacing[1]}]} testID={`food-meal-${meal.name}`}>
+   return <Panel key={meal.id} style={[card,{gap:tokens.spacing[1]}]} testID={`food-meal-${meal.name}`}>
     <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
      <ThemedText variant="headline" style={{flex:1,fontWeight:'600'}}>{meal.name}</ThemedText>
      {items.length>1&&<ThemedText muted numeric variant="caption" testID={`food-meal-total-${meal.name}`}>{known.length?t('foodEnergy').replace('{value}',sum.toLocaleString('en-US')):t('foodEnergyUnknown')}</ThemedText>}
@@ -185,16 +185,16 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
      </View>;
     })}
     {!items.length&&<ThemedText muted variant="caption">{t('foodEmptyMeal')}</ThemedText>}
-   </Card>;
+   </Panel>;
   })}
   <Button label={t('foodAddMeal')} variant="secondary" onPress={()=>setRename({name:''})}/>
-  {rename&&<Card style={card}><Field label={t('foodMealName')} value={rename.name} onChange={name=>setRename({...rename,name})}/><Button label={t('foodSaveMeal')} onPress={()=>run(()=>{saveMeal(repo,rename.name,rename.id);setRename(null);})}/><Button label={t('cancel')} variant="secondary" onPress={()=>setRename(null)}/></Card>}
-  {combo&&<Card style={card}><Field label={t('foodComboName')} value={combo.name} onChange={name=>setCombo({...combo,name})}/><Button label={t('foodComboSave')} onPress={()=>run(()=>{saveCombo(repo,day,combo.meal,combo.name);setCombo(null);})}/><Button label={t('cancel')} variant="secondary" onPress={()=>setCombo(null)}/></Card>}
-  <Card style={card}><FoodTargets key={day} repo={repo} day={day} revision={revision}/></Card>
-  <Card style={[card,{gap:tokens.spacing[1]}]}>
+  {rename&&<Panel style={card}><Field label={t('foodMealName')} value={rename.name} onChange={name=>setRename({...rename,name})}/><Button label={t('foodSaveMeal')} onPress={()=>run(()=>{saveMeal(repo,rename.name,rename.id);setRename(null);})}/><Button label={t('cancel')} variant="secondary" onPress={()=>setRename(null)}/></Panel>}
+  {combo&&<Panel style={card}><Field label={t('foodComboName')} value={combo.name} onChange={name=>setCombo({...combo,name})}/><Button label={t('foodComboSave')} onPress={()=>run(()=>{saveCombo(repo,day,combo.meal,combo.name);setCombo(null);})}/><Button label={t('cancel')} variant="secondary" onPress={()=>setCombo(null)}/></Panel>}
+  <Panel style={card}><FoodTargets key={day} repo={repo} day={day} revision={revision}/></Panel>
+  <Panel style={[card,{gap:tokens.spacing[1]}]}>
    <ThemedText variant="headline" style={{fontWeight:'600'}}>{t('foodTotals')}</ThemedText>
    {(['fiber_g','sugar_g','sodium_mg'] as const).map((key,i)=><View key={key} style={{flexDirection:'row'}}><ThemedText style={{flex:1}}>{t((['foodFiber','foodSugar','foodSodium'] as const)[i])}</ThemedText><ThemedText numeric muted={total[key]===null}>{total[key]===null?'—':String(Math.round(total[key]! *10)/10)}</ThemedText></View>)}
    <ThemedText muted variant="caption">{t('foodUnknown')}</ThemedText>
-  </Card>
+  </Panel>
  </View>;
 }

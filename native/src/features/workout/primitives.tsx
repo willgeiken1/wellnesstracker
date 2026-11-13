@@ -78,17 +78,15 @@ export function Panel({
   testID?: string;
   style?: ViewStyle;
 }>) {
-  const { colors } = useTheme();
+  const { colors, surfaceLook, radius } = useTheme();
+  // Flat by default (REDESIGN 1.2); the Raised surface look keeps the soft shadow this panel had before.
   return (
     <View
       testID={testID}
       style={[
         layout.card,
-        {
-          backgroundColor: colors.surface,
-          ...tokens.elevation.ios,
-          shadowOpacity: 0.08,
-        },
+        { backgroundColor: colors.surface, borderRadius: radius.card },
+        surfaceLook === "raised" && { ...tokens.elevation.ios, shadowOpacity: 0.08 },
         style,
       ]}
     >

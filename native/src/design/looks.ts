@@ -20,8 +20,23 @@ export type KeypadLook = (typeof KEYPAD_LOOKS)[number];
  * separate pill chips that scrolls sideways when there are more than fit. */
 export const SELECTOR_LOOKS = ["standard", "pills"] as const;
 export type SelectorLook = (typeof SELECTOR_LOOKS)[number];
-export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook; selector: SelectorLook };
-export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain", selector: "standard" };
+/** Surfaces: the plan's flat panels (REDESIGN 1.2: no shadow, raised cards only for the body map and the Score),
+ * or every block raised with a soft shadow, the look from before. */
+export const SURFACE_LOOKS = ["flat", "raised"] as const;
+export type SurfaceLook = (typeof SURFACE_LOOKS)[number];
+/** How round the corners of panels and cards are. Soft is the plan's 12 pt. */
+export const CORNER_LOOKS = ["soft", "round", "square"] as const;
+export type CornerLook = (typeof CORNER_LOOKS)[number];
+export const CORNER_RADIUS: Record<CornerLook, number> = { soft: 12, round: 20, square: 6 };
+/** The font for titles and headings: Lexend, the plan's, or the phone's own system font. */
+export const HEADING_LOOKS = ["lexend", "system"] as const;
+export type HeadingLook = (typeof HEADING_LOOKS)[number];
+export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook; selector: SelectorLook;
+  surface: SurfaceLook; corners: CornerLook; heading: HeadingLook };
+export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain", selector: "standard",
+  surface: "flat", corners: "soft", heading: "lexend" };
+/** Every look back to the default, keeping the theme the person picked. */
+export const resetLooks = (looks: Looks): Looks => ({ ...DEFAULT_APPEARANCE, palette: looks.palette });
 
 type PresetLooks = Pick<Looks, "ring" | "motion" | "bar" | "keypad">;
 /** A preset is a starting point that sets several looks at once. It never changes the theme or the strength. */
@@ -30,6 +45,7 @@ export const PRESETS = {
   calm: { ring: "contour", motion: "calm", bar: "standard", keypad: "plain" },
   fluid: { ring: "liquid", motion: "lively", bar: "standard", keypad: "plain" },
   glass: { ring: "glass", motion: "lively", bar: "glass", keypad: "glass" },
+  floating: { ring: "contour", motion: "calm", bar: "floating", keypad: "plain" },
 } as const satisfies Record<string, PresetLooks>;
 export type Preset = keyof typeof PRESETS;
 export const PRESET_IDS = Object.keys(PRESETS) as Preset[];
@@ -58,11 +74,14 @@ export function parseAppearance(saved: unknown): Looks {
     keypad: oneOf(KEYPAD_LOOKS, pairs.get("keypad"), DEFAULT_APPEARANCE.keypad),
     selector: oneOf(SELECTOR_LOOKS, pairs.get("selector"), DEFAULT_APPEARANCE.selector),
     intensity: INTENSITIES.find((level) => String(level) === pairs.get("strength")) ?? DEFAULT_APPEARANCE.intensity,
+    surface: oneOf(SURFACE_LOOKS, pairs.get("surface"), DEFAULT_APPEARANCE.surface),
+    corners: oneOf(CORNER_LOOKS, pairs.get("corners"), DEFAULT_APPEARANCE.corners),
+    heading: oneOf(HEADING_LOOKS, pairs.get("heading"), DEFAULT_APPEARANCE.heading),
   };
 }
 export function formatAppearance(appearance: Looks): string {
-  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector" } as const;
-  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector"] as const)
+  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector", surface: "surface", corners: "corners", heading: "heading" } as const;
+  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector", "surface", "corners", "heading"] as const)
     .filter((key) => appearance[key] !== DEFAULT_APPEARANCE[key])
     .map((key) => `;${saved[key]}=${appearance[key]}`);
   return appearance.palette + extras.join("");

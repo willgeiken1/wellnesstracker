@@ -5,7 +5,8 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { setDockAction } from '@/components/floating-tabs';
-import { Card } from '@/components/card';
+import { Button } from '@/components/button';
+import { Card, Panel, PROTOTYPE_RADIUS } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { fromKg, localDay } from '@/core/workout/rules';
@@ -35,10 +36,9 @@ const ADD_SIZE = 56;
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
 const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(low, n));
-const heading = { fontFamily: tokens.font.heading } as const;
 const semibold = { fontWeight: '600' } as const;
 // The prototype's card: softer corners and tighter padding than the shared Card default.
-const card: ViewStyle = { borderRadius: 18, padding: tokens.spacing[2] };
+const card: ViewStyle = { borderRadius: PROTOTYPE_RADIUS, padding: tokens.spacing[2] };
 // Two hills until a recovery source exists in this build; the prototype's third hill sits below these.
 const HILLS = [[0.36, 0.42], [0.63, 0.60]] as const;
 // Wider, wobblier hills than the prototype default so two hills still merge into one piece of terrain.
@@ -121,13 +121,9 @@ function Contours({ values, width, height, mini }: { values: Record<Pillar, numb
   </>;
 }
 
+/** Home's compact buttons: the shared Button at its small size, secondary when `ghost`. */
 function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: string; accessibilityLabel?: string; onPress: () => void; ghost?: boolean }) {
-  const { colors } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} hitSlop={{ top: 4, bottom: 4 }}
-    style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: tokens.radii.card,
-      backgroundColor: ghost ? colors['surface-2'] : colors.accent, opacity: pressed ? 0.8 : 1 })}>
-    <ThemedText style={[semibold, { fontSize: 14, color: ghost ? colors.text : colors['on-accent'] }]}>{label}</ThemedText>
-  </Pressable>;
+  return <Button size="small" variant={ghost ? 'secondary' : 'primary'} label={label} accessibilityLabel={accessibilityLabel} onPress={onPress} />;
 }
 
 /** Home, ported from the prototype: header, contour map of today, week of mini maps, one card for
@@ -237,11 +233,11 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   const { recent, facts, targets, dayTargets, active } = data;
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
-  if (!tiles.order.length) return <Card style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
+  if (!tiles.order.length) return <Panel style={[card, { alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[4] }]} testID="home-nothing-on">
     <ThemedText variant="headline" style={semibold}>{t('homeNothingOn')}</ThemedText>
     <ThemedText muted variant="caption" style={{ textAlign: 'center' }}>{t('homeNothingOnBody')}</ThemedText>
     <View style={{ marginTop: tokens.spacing[1] }}><SmallButton label={t('homeEdit')} onPress={onEdit} /></View>
-  </Card>;
+  </Panel>;
   // A new account has nothing to draw yet, but the layout the person chose still applies: only what they kept
   // on Home shows, in their order. The week strip waits for data, like the number tiles.
   if (!data.any && !health) return <>
@@ -344,7 +340,7 @@ function MapCard({ day, today, values }: { day: string; today: string; values: R
 
 /** Monday to Sunday as mini maps. Tapping a day shows it on the big map; days ahead are dimmed. */
 function Week({ week, today, selected, onPick, of }: { week: Date[]; today: string; selected: string; onPick: (day: string) => void; of: (day: string) => Record<Pillar, number> }) {
-  const { colors } = useTheme();
+  const { colors, radius } = useTheme();
   return <View accessibilityLabel={t('homeThisWeek')} style={{ flexDirection: 'row', gap: 4 }}>
     {week.map(date => {
       const day = localDay(date), future = day > today, isSelected = day === selected, values = future ? null : of(day);
@@ -352,7 +348,7 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
       return <Pressable key={day} accessibilityRole="button" disabled={future} onPress={() => onPick(day)}
         accessibilityLabel={`${name}${day === today ? `, ${t('today')}` : ''}${values ? `, ${spoken(values)}` : ''}`}
         accessibilityState={{ selected: isSelected, disabled: future }}
-        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 4, paddingBottom: 3, borderRadius: tokens.radii.card, opacity: future ? 0.35 : 1,
+        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 4, paddingBottom: 3, borderRadius: radius.card, opacity: future ? 0.35 : 1,
           backgroundColor: isSelected ? colors['surface-2'] : 'transparent', borderWidth: 1.5, borderColor: day === today ? colors.accent : 'transparent' }}>
         {/* The mini map fills the day's width, so it reads at a glance on every phone size. */}
         <View style={{ width: '100%', aspectRatio: 4 / 3, paddingHorizontal: 2 }}>
@@ -369,11 +365,11 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
 }
 
 function Brief({ title, body, action }: { title: string; body: string; action: ReactNode }) {
-  return <Card style={[card, { padding: tokens.spacing[3], gap: tokens.spacing[1] }]} testID="home-next">
+  return <Panel style={[card, { padding: tokens.spacing[3], gap: tokens.spacing[1] }]} testID="home-next">
     <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
     <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{body}</ThemedText>
     <View style={{ marginTop: 6 }}>{action}</View>
-  </Card>;
+  </Panel>;
 }
 
 /** One card for what's next: resume, today's planned workout, or the evening food check-in.
@@ -450,19 +446,20 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }
 function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
+  const { headingFont } = useTheme();
   return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"
     accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
     style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
-    <Card style={[card, { minHeight: 108, gap: 2 }]}>
+    <Panel style={[card, { minHeight: 108, gap: 2 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}
         <ThemedText muted variant="caption">{tile.label}</ThemedText>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-        <ThemedText style={[heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
+        <ThemedText style={[{ fontFamily: headingFont, fontSize: 24, fontVariant: ['tabular-nums'] }]}>{tile.value}</ThemedText>
         <ThemedText muted variant="caption">{tile.unit}</ThemedText>
       </View>
       <View style={{ marginTop: 'auto' }}><Spark values={tile.series} color={tile.color} bars={tile.bars} partial={tile.partial} /></View>
-    </Card>
+    </Panel>
   </Pressable>;
 }

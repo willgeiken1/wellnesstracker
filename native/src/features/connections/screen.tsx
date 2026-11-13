@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
@@ -55,7 +55,7 @@ export function ConnectedServices({ connected: given = [], apple }: { connected?
       <ThemedText variant="title" accessibilityRole="header" style={semibold}>{t('connectTitle')}</ThemedText>
       <ThemedText muted>{t('connectBody')}</ThemedText>
     </View>
-    <Card style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-services">
+    <Panel style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-services">
       {SERVICES.map((service, index) => {
         const adds = unlocks(service), state = connected.includes(service) ? 'connectOn' : ready(service) ? 'connectOff' : 'connectLater';
         return <View key={service} testID={`connect-${service}`} accessible accessibilityLabel={`${NAMES[service]}, ${t(state)}. ${t('connectAdds')} ${adds.join(', ')}`}
@@ -70,15 +70,15 @@ export function ConnectedServices({ connected: given = [], apple }: { connected?
           </View>
         </View>;
       })}
-    </Card>
-    {live && <Card style={card} testID="connect-apple-card">
+    </Panel>
+    {live && <Panel style={card} testID="connect-apple-card">
       <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('appleHealthTitle')}</ThemedText>
       <ThemedText muted>{t(apple.access === 'asked' ? 'appleHealthOn' : 'appleHealthOff')}</ThemedText>
       {apple.added !== null && <ThemedText testID="connect-apple-added" accessibilityLiveRegion="polite">{apple.added === 0 ? t('appleHealthNone') : apple.added === 1 ? t('appleHealthOne') : t('appleHealthMany').replace('{n}', String(apple.added))}</ThemedText>}
       {apple.failed && <ThemedText testID="connect-apple-failed" accessibilityLiveRegion="polite" style={{ color: colors.warning }}>{t('appleHealthFailed')}</ThemedText>}
       <Button testID="connect-apple-button" label={t(apple.busy ? 'appleHealthBusy' : apple.access === 'asked' ? 'appleHealthAgain' : 'appleHealthConnect')} disabled={apple.busy} variant={apple.access === 'asked' ? 'secondary' : 'primary'} onPress={apple.connect} />
       {apple.access === 'asked' && <ThemedText muted variant="caption">{t('appleHealthStop')}</ThemedText>}
-    </Card>}
+    </Panel>}
     <ThemedText muted variant="caption">{t(live ? 'connectSoonOthers' : 'connectSoon')}</ThemedText>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1] }}>
       <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { flex: 1 }]}>{t('connectDayTitle')}</ThemedText>
@@ -86,7 +86,7 @@ export function ConnectedServices({ connected: given = [], apple }: { connected?
         <ThemedText muted variant="caption">{t('exampleOnly')}</ThemedText>
       </View>
     </View>
-    <Card style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-example-day">
+    <Panel style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-example-day">
       {EXAMPLE_DAY.map((row, index) => <View key={row.label} style={{ paddingVertical: tokens.spacing[2], gap: 6, borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'] }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
           <ThemedText style={{ flex: 1 }}>{row.label}</ThemedText>
@@ -95,12 +95,12 @@ export function ConnectedServices({ connected: given = [], apple }: { connected?
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{row.sources.map(source => <Badge key={source} source={source} />)}</View>
         {row.note && <ThemedText muted variant="caption">{row.note}</ThemedText>}
       </View>)}
-    </Card>
-    <Card style={card} testID="connect-example-pattern">
+    </Panel>
+    <Panel style={card} testID="connect-example-pattern">
       <ThemedText muted variant="caption">{t('connectPatternLabel')}</ThemedText>
       <ThemedText>{t('connectPattern')}</ThemedText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}><Badge source="oura" /><Badge source="insight" /></View>
-    </Card>
+    </Panel>
     <ThemedText muted variant="caption">{t('connectPrivacy')}</ThemedText>
   </View>;
 }

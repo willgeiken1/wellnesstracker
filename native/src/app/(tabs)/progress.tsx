@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/auth/provider';
-import { Card } from '@/components/card';
+import { Panel } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import { ThemedText } from '@/components/themed-text';
@@ -14,9 +14,9 @@ export default function Page() {
     <SegmentedControl label={t('segments')} value={selected} options={(['body','photos','goals'] as const).map(value=>({value,label:t(value)}))} onChange={setSelected}/>
     {selected==='body' && repository && <Body key={repository.owner} repository={repository}/>}
     {selected==='goals' && repository && <Records key={repository.owner} repository={repository}/>}
-    {selected==='photos' && <Card testID="photos-later">
+    {selected==='photos' && <Panel testID="photos-later">
       <ThemedText variant="headline" accessibilityRole="header">{t('photosLaterTitle')}</ThemedText>
       <ThemedText muted>{t('photosLaterBody')}</ThemedText>
-    </Card>}
+    </Panel>}
   </Screen>;
 }
