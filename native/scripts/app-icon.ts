@@ -4,6 +4,7 @@
 // app.json expects; tests/app-icon.test.ts checks the sources stay in step with this script.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+// @ts-expect-error TS5097: Node runs this script with type stripping, which needs the file extension.
 import { terrain } from '../src/features/home/contour.ts';
 
 const S = 1024;
