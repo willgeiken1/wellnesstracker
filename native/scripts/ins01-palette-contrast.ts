@@ -234,6 +234,22 @@ type MeaningRole = (typeof MEANING_ROLES)[number];
 /** Hue windows: training goes warm (design/tokens.ts base training is orange), food stays orange, water stays cyan-blue. */
 const HUE_WINDOW: Partial<Record<MeaningRole, [number, number]>> = { training: [20, 60], food: [15, 40], water: [175, 225] };
 
+/** Values chosen by hand after the 2026-11 design critique. Each stays at least MIN_DISTINCT_DE from every other
+ * pillar and the accent, keeps one hue across both modes, and clears D6 (the graphics and text steps below still run). */
+export const CRITIQUE_FIXES: Record<string, { mode: Mode; role: 'accent' | 'training'; to: string; reason: string }[]> = {
+  // Training was the accent's gold (dark ΔE 0.028). Green, the training colour most palettes use, in both modes.
+  goldenHour: [
+    { mode: 'dark', role: 'training', to: '#9CCB5A', reason: 'training read as the accent gold (critique 9)' },
+    { mode: 'light', role: 'training', to: '#4C7A24', reason: 'training in the same green as dark mode (critique 9)' },
+    // Links on cream were 4.9:1, weaker than the grey captions (5.8:1). Same gold, darker: 6.6:1.
+    { mode: 'light', role: 'accent', to: '#705200', reason: 'accent links read weaker than muted text on cream (critique 9)' },
+  ],
+  // Light training was the accent's deep green (ΔE 0.050). Lighter than the accent, as dark mode already has it.
+  forestEmber: [
+    { mode: 'light', role: 'training', to: '#3A8F4A', reason: 'training read as the accent green (critique 9)' },
+  ],
+};
+
 /** Pairs of meaning colours closer than MIN_DISTINCT_DE in OKLab: flagged for review, not auto-fixed (v2 identity is Will's call). */
 export const nearDuplicates = (colors: { dark: FullColors; light: FullColors }) =>
   MODES.flatMap(mode =>
@@ -302,6 +318,9 @@ export const proposePalette = (p: Palette): Proposal => {
       for (const mode of MODES) set(mode, role, colors[mode], `${role} duplicated accent ${w[mode].accent} (CHECKLIST M2)`);
     }
   }
+  // Hand-picked fixes from the design critique (2026-11-13), checked on the simulator: a pillar that read as the accent,
+  // and a light accent that read weaker than grey caption text as a link. The accent keeps the palette's signature.
+  for (const fix of CRITIQUE_FIXES[p.id] ?? []) set(fix.mode, fix.role, fix.to, fix.reason);
   const water = pickHue(w, 'water', { dark: w.dark.recovery, light: w.light.recovery });
   for (const mode of MODES) set(mode, 'water', water.colors[mode], 'shared placeholder; per-palette hue distinct from recovery (Q-C)');
 

@@ -137,10 +137,12 @@ Using the same ΔE 0.08 floor, v2 also has many **near**-duplicates that §5 did
 - Holographic Chrome light `accent` vs `sleep` (ΔE 0.016);
 - Mountain Mist light `training` vs `success` (0.009);
 - Forest Ember light `accent` vs `success` (0.013);
-- Golden Hour dark `accent` vs `training` (0.028);
+- Golden Hour dark `accent` vs `training` (0.028), since fixed (below);
 - Desert Mirage light `accent` vs `food` (0.034).
 
 Most of the rest are green `training` vs green `success`, or orange `food` vs amber `warn`. Changing these would change what the v2 palettes look like, and that is Will's call, so this proposal **flags them and leaves them unchanged**. Each palette's list is below. See open question O1.
+
+**Fixed after the 2026-11-13 design critique** (`CRITIQUE_FIXES` in the script, checked on the simulator): Golden Hour training moves from the accent's gold to green (#9CCB5A dark, #4C7A24 light), and its light accent darkens to #705200 so links read at 6.6:1 on cream instead of 4.9:1, stronger than the grey captions; Forest Ember light training moves to a lighter green (#3A8F4A) than its accent (#1F6E36), as dark mode already has it. The other near-duplicates are unchanged and still Will's call (O1).
 
 ## Generated tables
 
@@ -160,9 +162,9 @@ Pairs graded per mode: 15 text pairs (4.5:1) and 24 graphics pairs (3:1), 39 per
 | 6 | Lotus Garden | `lotusGarden` | no | 0 / 3 | 0 | 4 | 2 |
 | 7 | Aurora Fjord | `auroraFjord` | no | 0 / 3 | 0 | 2 | 3 |
 | 8 | Berry Meadow | `berryMeadow` | no | 2 / 3 | 0 | 4 | 1 |
-| 9 | Golden Hour | `goldenHour` | no | 2 / 3 | 0 | 4 | 2 |
+| 9 | Golden Hour | `goldenHour` | no | 2 / 3 | 0 | 7 | 2 |
 | 10 | Glacier Bloom | `glacierBloom` | no | 0 / 3 | 0 | 2 | 1 |
-| 11 | Forest Ember | `forestEmber` | no | 0 / 5 | 0 | 3 | 6 |
+| 11 | Forest Ember | `forestEmber` | no | 0 / 5 | 0 | 4 | 4 |
 | 12 | Midnight Neon | `midnightNeon` | neon | 0 / 4 | 0 | 3 | 1 |
 | 13 | Holographic Chrome | `holographicChrome` | holo | 0 / 3 | 0 | 2 | 4 |
 
@@ -858,11 +860,11 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | surface | `color.surface.card` | #1F1C14 | #FFFEFA | #1F1C14 | #FFFEFA |
 | text | `color.text.primary` | #F8F3E6 | #241E10 | #F8F3E6 | #241E10 |
 | muted | `color.text.secondary` | #B9AF96 | #685F48 | #B9AF96 | #685F48 |
-| accent | `color.accent.default` | #F2C14E | #8A6400 | #F2C14E | #8A6400 |
+| accent | `color.accent.default` | #F2C14E | #8A6400 | #F2C14E | **#705200** |
 | onAccent | `color.text.onAccent` | #111111 | #FFFFFF | #111111 | #FFFFFF |
-| *accentSoft* | `color.accent.soft` | #41361D | #ECE5D2 | #41361D | #ECE5D2 |
-| *accentOnText* | `color.accent.text` | #F2C14E | #8A6400 | #F2C14E | #8A6400 |
-| training | `color.pillar.training` | #E8BD2D | #6F4A15 | #E8BD2D | #6F4A15 |
+| *accentSoft* | `color.accent.soft` | #41361D | #ECE5D2 | #41361D | **#E8E2D2** |
+| *accentOnText* | `color.accent.text` | #F2C14E | #8A6400 | #F2C14E | **#705200** |
+| training | `color.pillar.training` | #E8BD2D | #6F4A15 | **#9CCB5A** | **#4C7A24** |
 | food | `color.pillar.food` | #CE3A37 | #CD6D58 | **#D0403D** | #CD6D58 |
 | recovery | `color.pillar.recovery` | #70E5EF | #1990C2 | #70E5EF | #1990C2 |
 | sleep | `color.pillar.sleep` | #784DEB | #4A2AB2 | **#8158EC** | #4A2AB2 |
@@ -871,7 +873,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | warn | `color.status.warning` | #F59E58 | #9A4A0C | #F59E58 | #9A4A0C |
 | *hair* | `color.separator.default` | #28251F | #E5E1D6 | #28251F | #E5E1D6 |
 | *hair2* | `color.separator.strong` | #413E37 | #CEC9BE | #413E37 | #CEC9BE |
-| *ai* | `color.ai.estimate` | #B5879D | #6A4759 | **#BA8D9D** | #6A4759 |
+| *ai* | `color.ai.estimate` | #B5879D | #6A4759 | **#BA8D9D** | **#5D3E59** |
 
 **Contrast** (ratio to 1, rounded down; v2 water = shared placeholder #4FC3F7)
 
@@ -880,24 +882,24 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | text on bg | 4.5 | 17.03 | 15.07 | 17.03 | 15.07 |
 | text on surface2 | 4.5 | 12.75 | 14.90 | 12.75 | 14.90 |
 | text on surface | 4.5 | 15.35 | 16.40 | 15.35 | 16.40 |
-| text on accentSoft | 4.5 | 10.70 | 13.17 | 10.70 | 13.17 |
+| text on accentSoft | 4.5 | 10.70 | 13.17 | 10.70 | 12.80 |
 | muted on bg | 4.5 | 8.65 | 5.76 | 8.65 | 5.76 |
 | muted on surface2 | 4.5 | 6.48 | 5.69 | 6.48 | 5.69 |
 | muted on surface | 4.5 | 7.80 | 6.26 | 7.80 | 6.26 |
-| muted on accentSoft | 4.5 | 5.44 | 5.03 | 5.44 | 5.03 |
-| accentOnText on bg | 4.5 | 11.24 | 4.89 | 11.24 | 4.89 |
-| accentOnText on surface2 | 4.5 | 8.42 | 4.84 | 8.42 | 4.84 |
-| accentOnText on surface | 4.5 | 10.13 | 5.33 | 10.13 | 5.33 |
-| ai on bg | 4.5 | 6.21 | 7.19 | 6.63 | 7.19 |
-| ai on surface2 | 4.5 | 4.65 | 7.11 | 4.96 | 7.11 |
-| ai on surface | 4.5 | 5.60 | 7.82 | 5.98 | 7.82 |
-| onAccent on accent | 4.5 | 11.25 | 5.37 | 11.25 | 5.37 |
-| accent on bg | 3 | 11.24 | 4.89 | 11.24 | 4.89 |
-| accent on surface2 | 3 | 8.42 | 4.84 | 8.42 | 4.84 |
-| accent on surface | 3 | 10.13 | 5.33 | 10.13 | 5.33 |
-| training on bg | 3 | 10.55 | 7.17 | 10.55 | 7.17 |
-| training on surface2 | 3 | 7.90 | 7.08 | 7.90 | 7.08 |
-| training on surface | 3 | 9.51 | 7.80 | 9.51 | 7.80 |
+| muted on accentSoft | 4.5 | 5.44 | 5.03 | 5.44 | 4.89 |
+| accentOnText on bg | 4.5 | 11.24 | 4.89 | 11.24 | 6.60 |
+| accentOnText on surface2 | 4.5 | 8.42 | 4.84 | 8.42 | 6.52 |
+| accentOnText on surface | 4.5 | 10.13 | 5.33 | 10.13 | 7.18 |
+| ai on bg | 4.5 | 6.21 | 7.19 | 6.63 | 8.31 |
+| ai on surface2 | 4.5 | 4.65 | 7.11 | 4.96 | 8.22 |
+| ai on surface | 4.5 | 5.60 | 7.82 | 5.98 | 9.05 |
+| onAccent on accent | 4.5 | 11.25 | 5.37 | 11.25 | 7.25 |
+| accent on bg | 3 | 11.24 | 4.89 | 11.24 | 6.60 |
+| accent on surface2 | 3 | 8.42 | 4.84 | 8.42 | 6.52 |
+| accent on surface | 3 | 10.13 | 5.33 | 10.13 | 7.18 |
+| training on bg | 3 | 10.55 | 7.17 | 9.97 | 4.64 |
+| training on surface2 | 3 | 7.90 | 7.08 | 7.47 | 4.59 |
+| training on surface | 3 | 9.51 | 7.80 | 8.99 | 5.05 |
 | food on bg | 3 | 3.85 | 3.22 | 4.02 | 3.22 |
 | food on surface2 | 3 | **2.88 FAIL** | 3.19 | 3.01 | 3.19 |
 | food on surface | 3 | 3.47 | 3.51 | 3.63 | 3.51 |
@@ -919,6 +921,9 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 
 **Fixes**
 
+- dark `training`: #E8BD2D → #9CCB5A (training read as the accent gold (critique 9))
+- light `training`: #6F4A15 → #4C7A24 (training in the same green as dark mode (critique 9))
+- light `accent`: #8A6400 → #705200 (accent links read weaker than muted text on cream (critique 9))
 - dark `water`: #4FC3F7 → #7090EF (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - light `water`: #4FC3F7 → #4A72E8 (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - dark `food`: #CE3A37 → #D0403D (food worst graphics pair 2.88:1 < 3)
@@ -926,8 +931,8 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 
 **Near-duplicates flagged** (OKLab ΔE < 0.08 after the fixes above; not changed here)
 
-- dark `accent` #F2C14E vs `training` #E8BD2D: ΔE 0.028
-- light `accent` #8A6400 vs `warn` #9A4A0C: ΔE 0.071
+- dark `training` #9CCB5A vs `success` #8FD39A: ΔE 0.068
+- light `training` #4C7A24 vs `success` #2A6F3A: ΔE 0.057
 
 ### 10. Glacier Bloom (`glacierBloom`)
 
@@ -1023,7 +1028,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | onAccent | `color.text.onAccent` | #0C120E | #FFFFFF | #0C120E | #FFFFFF |
 | *accentSoft* | `color.accent.soft` | #263D2C | #DBE8DF | #263D2C | #DBE8DF |
 | *accentOnText* | `color.accent.text` | #7CD68E | #1F6E36 | #7CD68E | #1F6E36 |
-| training | `color.pillar.training` | #AEECAD | #255F39 | #AEECAD | #255F39 |
+| training | `color.pillar.training` | #AEECAD | #255F39 | #AEECAD | **#3A8F4A** |
 | food | `color.pillar.food` | #E06245 | #C0502E | #E06245 | #C0502E |
 | recovery | `color.pillar.recovery` | #4D6AEA | #4B92CC | #4D6AEA | #4B92CC |
 | sleep | `color.pillar.sleep` | #ECD358 | #87883A | #ECD358 | #87883A |
@@ -1056,9 +1061,9 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 | accent on bg | 3 | 10.70 | 5.64 | 10.70 | 5.64 |
 | accent on surface2 | 3 | 7.82 | 5.69 | 7.82 | 5.69 |
 | accent on surface | 3 | 9.45 | 6.28 | 9.45 | 6.28 |
-| training on bg | 3 | 13.89 | 6.80 | 13.89 | 6.80 |
-| training on surface2 | 3 | 10.15 | 6.86 | 10.15 | 6.86 |
-| training on surface | 3 | 12.27 | 7.56 | 12.27 | 7.56 |
+| training on bg | 3 | 13.89 | 6.80 | 13.89 | 3.62 |
+| training on surface2 | 3 | 10.15 | 6.86 | 10.15 | 3.65 |
+| training on surface | 3 | 12.27 | 7.56 | 12.27 | 4.03 |
 | food on bg | 3 | 5.41 | 4.26 | 5.41 | 4.26 |
 | food on surface2 | 3 | 3.95 | 4.30 | 3.95 | 4.30 |
 | food on surface | 3 | 4.78 | 4.74 | 4.78 | 4.74 |
@@ -1080,6 +1085,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 
 **Fixes**
 
+- light `training`: #255F39 → #3A8F4A (training read as the accent green (critique 9))
 - dark `water`: #4FC3F7 → #4DEAE7 (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - light `water`: #4FC3F7 → #2C9B99 (shared placeholder; per-palette hue distinct from recovery (Q-C))
 - light `ai`: #537B38 → #527937 (ai (accent/sleep mix #537B38) worst text pair 4.43:1 < 4.5)
@@ -1089,9 +1095,7 @@ Shared v2 placeholder #4FC3F7 replaced per palette. ΔE is OKLab distance to rec
 - dark `accent` #7CD68E vs `success` #8CDCA0: ΔE 0.032
 - dark `training` #AEECAD vs `success` #8CDCA0: ΔE 0.060
 - dark `sleep` #ECD358 vs `warn` #FFB34D: ΔE 0.080
-- light `accent` #1F6E36 vs `training` #255F39: ΔE 0.050
 - light `accent` #1F6E36 vs `success` #246B3A: ΔE 0.013
-- light `training` #255F39 vs `success` #246B3A: ΔE 0.039
 
 ### 12. Midnight Neon (`midnightNeon`)
 

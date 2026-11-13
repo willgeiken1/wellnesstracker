@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   BASE_ROLES,
+  CRITIQUE_FIXES,
   GENERATED_END,
   GRAPHIC_PAIRS,
   GENERATED_START,
@@ -162,6 +163,20 @@ describe('INS-01 palettes', () => {
         }
       }
     }
+  });
+
+  it('applies the critique fixes: training never reads as the accent, and Golden Hour links outrank grey captions', () => {
+    for (const id of Object.keys(CRITIQUE_FIXES)) {
+      const proposed = proposePalette(PALETTES.find(p => p.id === id)!);
+      for (const mode of ['dark', 'light'] as const) {
+        const c = proposed[mode];
+        for (const other of ['accent', 'food', 'recovery', 'sleep', 'water'] as const)
+          expect({ id, mode, other, distinct: deltaE(c.training, c[other]) >= MIN_DISTINCT_DE }).toEqual({ id, mode, other, distinct: true });
+      }
+      for (const fix of CRITIQUE_FIXES[id]) expect(proposed[fix.mode][fix.role]).toBe(fix.to);
+    }
+    const golden = proposePalette(PALETTES.find(p => p.id === 'goldenHour')!).light;
+    for (const under of ['bg', 'surface2', 'surface'] as const) expect(contrast(golden.accentOnText, golden[under])).toBeGreaterThan(contrast(golden.muted, golden[under]));
   });
 
   it('flags near-duplicate meaning colours it does not fix', () => {
