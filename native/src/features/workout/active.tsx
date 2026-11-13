@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Pressable, ScrollView, View } from "react-native";
+import { Alert, AppState, Platform, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import { router, useIsFocused, useLocalSearchParams } from "expo-router";
@@ -33,7 +33,7 @@ import { SetRow } from "./set-row";
 import { UpNext } from "./up-next";
 import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
-import { FinishSheet } from "./finish";
+import { FinishSheet, summaryHref } from "./finish";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
@@ -74,6 +74,7 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       session={session}
       pending={auth.pending}
       status={auth.syncStatus}
+      saved={savedId === session.id}
       onSaved={setSavedId}
     />
   ) : (
@@ -90,6 +91,14 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
 }
 function closeWorkout() {
   router.replace("/");
+}
+/** How long the logger waits for the Finish sheet's native modal to report it is gone before it opens the summary anyway. */
+export const SUMMARY_AFTER_SHEET_MS = 600;
+/** Opens the saved workout's summary, once. */
+function openSummary(left: { current: boolean }, id: string) {
+  if (left.current) return;
+  left.current = true;
+  router.replace(summaryHref(id));
 }
 /** The draft field a keypad cursor writes: the right side has its own weight and reps. */
 function draftKey(field: "weight" | "reps", side?: "right"): "weight" | "reps" | "rightWeight" | "rightReps" {
@@ -112,16 +121,35 @@ function Logger({
   pending,
   status,
   fixtureState,
+  saved,
   onSaved,
 }: {
   store: WorkoutStore;
   fixtureState?: string;
+  /** This workout was just saved from the Finish sheet; the logger is waiting to hand over to its summary. */
+  saved: boolean;
   onSaved: (id: string) => void;
   session: Row;
   pending: number;
   status: "idle" | "syncing" | "offline";
 }) {
-  const past = store.pastMode(session.id);
+  // Saving makes the workout history, which would turn the header's running clock into the raw ISO day for the frames
+  // before the summary; until then the logger keeps showing it the way it opened.
+  const [openedPast] = useState(() => store.pastMode(session.id));
+  const past = saved ? openedPast : store.pastMode(session.id);
+  // The summary opens only once the Finish sheet's native modal has finished closing. Replacing the screen under a
+  // modal that is still being dismissed showed the tab under the workout modal on iOS before the summary arrived.
+  const left = useRef(false);
+  useEffect(() => {
+    if (!saved) return;
+    // iOS reports the dismissal (onDismiss); elsewhere, or if that report never comes, go on without it.
+    if (Platform.OS !== "ios") {
+      openSummary(left, session.id);
+      return;
+    }
+    const fallback = setTimeout(() => openSummary(left, session.id), SUMMARY_AFTER_SHEET_MS);
+    return () => clearTimeout(fallback);
+  }, [saved, session.id]);
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -712,6 +740,9 @@ function Logger({
           finish ||
           (!past && !!store.timer() && !store.timer()!.minimized))
         }
+        onDismiss={() => {
+          if (saved) openSummary(left, session.id);
+        }}
         onClose={() => {
           if (picker) setPicker(false);
           else if (cursor) setCursor(null);
@@ -767,8 +798,8 @@ function Logger({
             session={session}
             onClose={() => setFinish(false)}
             onSaved={() => {
-              // Close the sheet and keep this workout on screen in the same render as the save, so the logger stays
-              // until the summary replaces it.
+              // Close the sheet and keep this workout on screen in the same render as the save. The summary replaces
+              // the logger once the sheet is gone (see onDismiss above).
               setFinish(false);
               onSaved(session.id);
             }}
