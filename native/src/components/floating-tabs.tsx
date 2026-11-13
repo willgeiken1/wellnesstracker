@@ -38,7 +38,8 @@ export const useDockAction = () => useSyncExternalStore(subscribeDock, () => doc
 export function DockButton({ action }: { action: DockAction }) {
   const { colors } = useTheme();
   return <Pressable testID="dock-action" accessibilityRole="button" accessibilityLabel={action.label} accessibilityState={{ expanded: action.expanded }}
-    onPress={action.onPress} style={({ pressed }) => [{ width: DOCK_ITEM + 2 * DOCK_PAD, height: DOCK_ITEM + 2 * DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2,
+    onPress={action.onPress} onAccessibilityEscape={action.expanded ? action.onPress : undefined}
+    style={({ pressed }) => [{ width: DOCK_ITEM + 2 * DOCK_PAD, height: DOCK_ITEM + 2 * DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2,
       alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 }, tokens.elevation.ios]}>
     <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
       <Path d="M12 5v14M5 12h14" stroke={colors.text} strokeWidth={2} strokeLinecap="round" transform={action.expanded ? 'rotate(45 12 12)' : undefined} />

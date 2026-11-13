@@ -40,7 +40,7 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
     </Pressable>
     <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{friendlyDay(points[0].day)}</ThemedText><ThemedText muted variant="caption">{friendlyDay(points.at(-1)!.day)}</ThemedText></View>
     {/* The chosen point is spoken when it changes (A11Y-01), not when the chart first appears. */}
-    <StatusText testID="body-chart-point" announceOnMount={false}>{label}</StatusText>
+    <StatusText testID="body-chart-point" announceOnMount={false} queue>{label}</StatusText>
     <View testID="body-chart-steps" style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
       <Button label={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>setSelected(points[index-1].day)}/>
       <Button label={t('bodyNext')} variant="secondary" disabled={index===points.length-1} onPress={()=>setSelected(points[index+1].day)}/>

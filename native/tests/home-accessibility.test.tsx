@@ -72,13 +72,22 @@ describe('the + menu with VoiceOver (A11Y-15)', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
     expect(behind.props.accessibilityElementsHidden).toBe(true);
     expect(behind.props.importantForAccessibility).toBe('no-hide-descendants');
-    const dock = screen.getByTestId('home-add-dock');
+    // iOS sends the escape gesture to the focused element and then up its parents: from a menu item and from
+    // the Close area it must reach a view that closes the menu.
+    const escapeFrom = (node: { parent: unknown; props: Record<string, unknown> }) => {
+      for (let up: typeof node | null = node; up; up = up.parent as typeof node | null) if (typeof up.props.onAccessibilityEscape === 'function') return up;
+      return null;
+    };
+    expect(escapeFrom(screen.getByRole('button', { name: 'Close' }) as never)?.props.testID).toBe('home-root');
+    expect(escapeFrom(screen.getByRole('button', { name: 'Log food' }) as never)?.props.testID).toBe('home-root');
     expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start workout' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open settings' })).toBeNull();
-    await act(async () => { dock.props.onAccessibilityEscape(); });
+    const close = escapeFrom(screen.getByRole('button', { name: 'Close' }) as never)!;
+    await act(async () => { (close.props.onAccessibilityEscape as () => void)(); });
     expect(screen.queryByRole('button', { name: 'Start workout' })).toBeNull();
     expect(behind.props.accessibilityElementsHidden).toBe(false);
+    expect(screen.getByTestId('home-root').props.onAccessibilityEscape).toBeUndefined();
   });
 });
 
@@ -133,7 +142,8 @@ describe('the body chart point with VoiceOver (A11Y-01)', () => {
   test('moving to another point says it once; the first draw stays quiet', async () => {
     const { AccessibilityInfo } = require('react-native') as typeof import('react-native');
     const { BodyChart } = require('../src/features/body/chart') as typeof import('../src/features/body/chart');
-    const spoken = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+    // Queued, so it waits for VoiceOver to finish the button's name and state instead of cutting it off.
+    const spoken = jest.spyOn(AccessibilityInfo, 'announceForAccessibilityWithOptions').mockImplementation(() => {});
     spoken.mockClear();
     const points = [
       { day: '2026-10-01', kg: 80, count: 1, trendKg: 80 },
@@ -143,8 +153,18 @@ describe('the body chart point with VoiceOver (A11Y-01)', () => {
     expect(spoken).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: 'Previous trend point' }));
     const said = screen.getByTestId('body-chart-point');
-    expect(spoken.mock.calls).toEqual([[expect.stringMatching(/^Oct 1 · Trend 80\.0 kg/)]]);
+    expect(spoken.mock.calls).toEqual([[expect.stringMatching(/^Oct 1 · Trend 80\.0 kg/), { queue: true }]]);
     expect(said).toHaveTextContent(spoken.mock.calls[0][0] as string);
     spoken.mockRestore();
   });
+});
+
+test('with the floating bar, the escape gesture on the + closes the open menu', async () => {
+  const { DockButton } = require('../src/components/floating-tabs') as typeof import('../src/components/floating-tabs');
+  const onPress = jest.fn();
+  const view = await render(<DockButton action={{ label: 'Add', expanded: false, onPress }} />, { wrapper });
+  expect(screen.getByTestId('dock-action').props.onAccessibilityEscape).toBeUndefined();
+  await view.rerender(<DockButton action={{ label: 'Add', expanded: true, onPress }} />);
+  await act(async () => { screen.getByTestId('dock-action').props.onAccessibilityEscape(); });
+  expect(onPress).toHaveBeenCalledTimes(1);
 });

@@ -189,9 +189,10 @@ export function Home() {
     <Greeting text={greeting(now.getHours())} />
   </View>;
   // While the + menu is open VoiceOver reaches only the menu, its Close area and the tab bar (A11Y-15): the screen
-  // behind is hidden, and the escape gesture (two-finger Z) closes the menu like a tap outside it. The dock is not
+  // behind is hidden, and the escape gesture (two-finger Z) closes the menu like a tap outside it. The gesture is
+  // handled on the root, which holds both the menu and its Close area; the floating bar's + handles it too. The dock is not
   // marked modal, because with the floating bar the + that closes the menu sits in the tab bar.
-  return <View style={{ flex: 1 }}>
+  return <View style={{ flex: 1 }} testID="home-root" onAccessibilityEscape={adding ? () => setAdding(false) : undefined}>
     <View style={{ flex: 1 }} testID="home-behind-menu" accessibilityElementsHidden={adding} importantForAccessibility={adding ? 'no-hide-descendants' : 'auto'}>
     <Screen tabHeader>
       <View testID="home-header" style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: tokens.spacing[2] }}>
@@ -212,8 +213,7 @@ export function Home() {
     </View>
     <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
     {adding && <Pressable accessibilityRole="button" accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
-    <View pointerEvents="box-none" testID="home-add-dock"
-      onAccessibilityEscape={adding ? () => setAdding(false) : undefined} style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
+    <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>
         <SmallButton label={t('logFood')} onPress={() => { setAdding(false); router.push('/food'); }} />
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
