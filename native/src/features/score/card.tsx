@@ -34,7 +34,7 @@ export function ScoreCard({ score }: { score: Score }) {
       <ScoreRing score={score} size={56} />
       <View style={{ flex: 1, gap: 2 }}>
         <ThemedText variant="headline" style={semibold}>{t('scoreTitle')}</ThemedText>
-        <ThemedText muted variant="caption" style={line ? { fontSize: 13, fontWeight: '600' } : undefined}>{line || t('scoreLastSeven')}</ThemedText>
+        <ThemedText muted variant="caption" style={{ fontSize: 13, fontWeight: '600' }}>{line}</ThemedText>
       </View>
     </View>
     <View style={{ gap: 6 }}>

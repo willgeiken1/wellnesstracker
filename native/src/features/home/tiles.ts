@@ -53,7 +53,8 @@ export function loadTiles(storage: TileStorage | null | undefined): HomeTiles {
 }
 export const offHome = (tiles: HomeTiles): TileId[] => TILE_IDS.filter(id => !tiles.order.includes(id));
 export function addTile(tiles: HomeTiles, id: TileId): HomeTiles {
-  return tiles.order.includes(id) ? tiles : { ...tiles, order: [...tiles.order, id] };
+  // The Score always comes back under the map, from Edit and from the Settings switch alike.
+  return tiles.order.includes(id) ? tiles : id === 'score' ? withScore(tiles) : { ...tiles, order: [...tiles.order, id] };
 }
 export function removeTile(tiles: HomeTiles, id: TileId): HomeTiles {
   return tiles.order.includes(id) ? { ...tiles, order: tiles.order.filter(item => item !== id) } : tiles;

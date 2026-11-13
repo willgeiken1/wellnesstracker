@@ -1,6 +1,5 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import type { Score } from './model';
@@ -14,10 +13,12 @@ export function ScoreRing({ score, size, stroke = Math.max(3, Math.round(size / 
   const fill = score.value !== null ? score.value / 100 : score.ready ? 0 : score.progress;
   return <View accessible={false} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
     <Svg width={size} height={size} accessible={false} style={{ position: 'absolute' }}>
-      <Circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors['surface-2']} strokeWidth={stroke} />
+      <Circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors['hair-2']} strokeWidth={stroke} />
       {fill > 0 && <Circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors.accent} strokeWidth={stroke} strokeLinecap="round"
         strokeDasharray={`${around * Math.min(1, fill)} ${around}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />}
     </Svg>
-    {score.value !== null && <ThemedText style={{ fontFamily: tokens.font.heading, fontSize: type, fontVariant: ['tabular-nums'] }}>{score.value}</ThemedText>}
+    {/* The ring is a fixed size, so this number grows only a little with large text. The same score is always written
+        out beside the ring at full size, and the ring's label speaks it. */}
+    {score.value !== null && <Text allowFontScaling maxFontSizeMultiplier={1.2} style={{ color: colors.text, fontFamily: tokens.font.heading, fontSize: type, fontVariant: ['tabular-nums'] }}>{score.value}</Text>}
   </View>;
 }

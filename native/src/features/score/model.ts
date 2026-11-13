@@ -31,6 +31,8 @@ export interface ScoreInput {
   /** Steps per day and hours asleep per night for the same 7 days, or null when there is no source. Held in memory only. */
   steps: number[] | null;
   sleepHours: number[] | null;
+  /** True while last night may still be going (before noon). Until then it counts only once it reaches full marks. */
+  sleepOpen?: boolean;
   weights: Weights;
 }
 export interface Score {
@@ -46,7 +48,7 @@ export interface Score {
   parts: {
     workouts: number; workoutGoal: number; stepsAverage: number | null;
     foodDays: number; foodLogged: number; todayCounted: boolean;
-    sleepAverage: number | null; nights: number;
+    sleepAverage: number | null; nights: number; lastNightCounted: boolean;
   };
 }
 
@@ -96,14 +98,20 @@ export const sameWeights = (a: Weights, b: Weights) => SCORE_PILLARS.every(pilla
 /** Each pillar's share of the score in whole percent, among the pillars that have data. */
 export function shares(weights: Weights, pillars: Record<ScorePillar, number | null>): Record<ScorePillar, number> {
   const total = SCORE_PILLARS.reduce((sum, pillar) => sum + (pillars[pillar] === null ? 0 : weights[pillar]), 0);
-  return Object.fromEntries(SCORE_PILLARS.map(pillar => [pillar, pillars[pillar] === null || !total ? 0 : Math.round(100 * weights[pillar] / total)])) as Record<ScorePillar, number>;
+  const exact = SCORE_PILLARS.map(pillar => pillars[pillar] === null || !total ? 0 : 100 * weights[pillar] / total);
+  const out = exact.map(Math.floor);
+  // Hand the leftover points to the largest remainders, so the shares always add up to 100.
+  const order = exact.map((value, i) => ({ i, rest: value - out[i] })).sort((a, b) => b.rest - a.rest || a.i - b.i);
+  for (let left = Math.round(exact.reduce((a, b) => a + b, 0)) - out.reduce((a, b) => a + b, 0), k = 0; left > 0 && k < order.length; left--, k++) out[order[k].i]++;
+  return Object.fromEntries(SCORE_PILLARS.map((pillar, i) => [pillar, out[i]])) as Record<ScorePillar, number>;
 }
 
 export function insightScore(input: ScoreInput): Score {
   const daysLogged = Math.max(0, Math.floor(input.daysLogged)), daysLeft = Math.max(0, BASELINE_DAYS - daysLogged);
   const goal = Math.min(7, Math.max(1, Math.round(input.workoutGoal) || 3)), workouts = Math.max(0, input.workouts);
 
-  // Today's steps are still climbing, so only the days before today are averaged.
+  // Today's steps are still climbing, so only the days before today are averaged. A day with no steps at all is
+  // treated as a day with no reading (the phone was not carried), not as a day of zero.
   const walked = (input.steps ?? []).slice(0, -1).filter(n => finite(n) && n > 0);
   const stepsAverage = walked.length ? mean(walked) : null;
   const lifted = clamp01(workouts / goal);
@@ -113,7 +121,10 @@ export function insightScore(input: ScoreInput): Score {
   const counted = todayCounted ? input.food : input.food.slice(0, -1);
   const food = counted.length ? 100 * mean(counted.map(foodDayScore)) : 0;
 
-  const nights = (input.sleepHours ?? []).filter(n => finite(n) && n > 0);
+  // Before noon last night may not be over, so a short reading is left out rather than scored as a short night.
+  const slept = input.sleepHours ?? [], lastNight = slept[slept.length - 1];
+  const lastNightCounted = !input.sleepOpen || (finite(lastNight) && lastNight >= SLEEP_FULL);
+  const nights = (lastNightCounted ? slept : slept.slice(0, -1)).filter(n => finite(n) && n > 0);
   const recovery = nights.length ? 100 * mean(nights.map(sleepScore)) : null;
 
   const pillars = { training: Math.round(training), food: Math.round(food), recovery: recovery === null ? null : Math.round(recovery) };
@@ -129,6 +140,6 @@ export function insightScore(input: ScoreInput): Score {
     value: daysLeft === 0 && weight > 0 ? Math.round(total / weight) : null, pillars,
     parts: { workouts, workoutGoal: goal, stepsAverage: stepsAverage === null ? null : Math.round(stepsAverage),
       foodDays: counted.length, foodLogged: counted.filter(day => day.logged).length, todayCounted,
-      sleepAverage: nights.length ? mean(nights) : null, nights: nights.length },
+      sleepAverage: nights.length ? mean(nights) : null, nights: nights.length, lastNightCounted },
   };
 }

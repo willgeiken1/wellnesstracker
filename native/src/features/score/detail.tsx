@@ -33,9 +33,10 @@ function workings(pillar: ScorePillar, score: Score): string[] {
     fill(t('scoreFoodSum'), { logged: p.foodLogged, days: p.foodDays }),
     t('scoreFoodHow'), t(p.todayCounted ? 'scoreFoodTodayIn' : 'scoreFoodTodayOut'),
   ];
-  return p.sleepAverage === null ? [t('scoreRecoveryNone')] : [
-    fill(t('scoreRecoverySum'), { hours: Math.floor(p.sleepAverage), minutes: String(Math.round((p.sleepAverage % 1) * 60)).padStart(2, '0'), nights: p.nights }),
-    t('scoreRecoveryHow'),
+  const minutes = Math.round((p.sleepAverage ?? 0) * 60);
+  return p.sleepAverage === null ? [t(p.lastNightCounted ? 'scoreRecoveryNone' : 'scoreRecoveryOpen')] : [
+    fill(t(p.nights === 1 ? 'scoreRecoverySumOne' : 'scoreRecoverySum'), { hours: Math.floor(minutes / 60), minutes: String(minutes % 60).padStart(2, '0'), nights: p.nights }),
+    t('scoreRecoveryHow'), ...(p.lastNightCounted ? [] : [t('scoreRecoveryOpen')]),
   ];
 }
 
@@ -62,7 +63,7 @@ function Detail({ store }: { store: WorkoutStore }) {
     <Card testID="score-summary" style={[card, { alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[4] }]}>
       <View accessible accessibilityLabel={spokenScore(score)} style={{ alignItems: 'center', gap: tokens.spacing[1] }}>
         <ScoreRing score={score} size={112} stroke={10} />
-        <ThemedText muted variant="caption" style={{ fontSize: 13, fontWeight: '600', textAlign: 'center' }}>{line || t('scoreLastSeven')}</ThemedText>
+        <ThemedText muted variant="caption" style={{ fontSize: 13, fontWeight: '600', textAlign: 'center' }}>{line}</ThemedText>
       </View>
       <View style={{ alignSelf: 'stretch', gap: 6 }}>
         {SCORE_PILLARS.map(pillar => <PillarRow key={pillar} pillar={pillar} value={score.pillars[pillar]} />)}
@@ -93,7 +94,7 @@ function Detail({ store }: { store: WorkoutStore }) {
       </Card>;
     })}
     {!sameWeights(weights, DEFAULT_WEIGHTS) && <Pressable testID="score-reset" accessibilityRole="button" accessibilityLabel={t('scoreReset')} onPress={() => change({ ...DEFAULT_WEIGHTS })}
-      style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors['surface-2'], opacity: pressed ? 0.8 : 1 })}>
+      style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 })}>
       <ThemedText style={semibold}>{t('scoreReset')}</ThemedText>
     </Pressable>}
     <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{t('scorePrivate')}</ThemedText>

@@ -102,6 +102,8 @@ test('removing the tile in Edit takes the card and the header ring away together
   expect(scoreOn(repo)).toBe(false);
   await fireEvent.press(screen.getByRole('button', { name: 'Add, Insight Score' }));
   expect(screen.getByTestId('home-score-ring')).toBeTruthy();
+  // It comes back under the map, where the Settings switch puts it too.
+  expect(loadTiles(repo).order.slice(0, 2)).toEqual(['map', 'score']);
 });
 
 test('steps and sleep from Apple Health feed the score in memory, and nothing about them is saved', async () => {
@@ -152,6 +154,37 @@ test('the detail screen shows the sums with the person\'s numbers, the weights, 
   await fireEvent.press(screen.getByTestId('score-reset'));
   expect(repo.localGet(SCORE_WEIGHTS_KEY)).toEqual({ training: 40, food: 35, recovery: 25 });
   expect(screen.queryByTestId('score-reset')).toBeNull();
+});
+
+test('food keeps the Food tab\'s day: nothing shifts at midnight, and the day changes at 4 a.m.', () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo);
+  // Food on each of the seven days up to and including the 12th.
+  logFood(repo, [6, 5, 4, 3, 2, 1, 0]);
+  const at = (day: number, hour: number) => readScore(store, new Date(2026, 4, day, hour, 0, 0), null);
+  const evening = at(12, 23), small = at(13, 2), morning = at(13, 5);
+  expect(evening.parts).toMatchObject({ foodDays: 7, foodLogged: 7 });
+  // 2 a.m. is still the 12th for food, so the same seven days are measured.
+  expect(small.pillars.food).toBe(evening.pillars.food);
+  expect(small.parts).toMatchObject({ foodDays: 7, foodLogged: 7 });
+  // After 4 a.m. the 13th is the open day and is left out until it is logged.
+  expect(morning.parts).toMatchObject({ foodDays: 6, foodLogged: 6, todayCounted: false });
+  expect(morning.pillars.food).toBe(evening.pillars.food);
+});
+
+test('one night of sleep reads as one night', async () => {
+  const repo = open();
+  const source = health();
+  let first = true;
+  (source.sleep as jest.Mock).mockImplementation(async (_from: Date, to: Date) => {
+    if (!first) return []; first = false;
+    const wake = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 6, 30);
+    return [{ start: new Date(wake.getTime() - 391 * 60_000), end: wake }];
+  });
+  jest.mocked(appleHealth).mockReturnValue(source);
+  void repo;
+  await render(<ScoreDetail />, { wrapper });
+  await settle();
+  expect(screen.getByText('Sleep: 6 h 31 min over 1 night.')).toBeTruthy();
 });
 
 test('without sleep data the detail screen says recovery is left out', async () => {

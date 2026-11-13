@@ -81,6 +81,27 @@ describe('the score', () => {
     expect(score.value).toBe(Math.round((100 * 40 + 100 * 35 + 75 * 25) / 100));
     expect(insightScore({ ...base, sleepHours: [0, 0, 0, 0, 0, 0, 0] }).pillars.recovery).toBeNull();
   });
+  test('before noon a short last night is left out, since it may not be over; a full one counts at once', () => {
+    const six = [7, 7, 7, 7, 7, 7];
+    const early = insightScore({ ...base, sleepHours: [...six, 2], sleepOpen: true });
+    expect(early.pillars.recovery).toBe(100);
+    expect(early.parts).toMatchObject({ nights: 6, lastNightCounted: false });
+    expect(insightScore({ ...base, sleepHours: [...six, 7.5], sleepOpen: true }).parts).toMatchObject({ nights: 7, lastNightCounted: true });
+    // After noon the night is over, so a short one counts.
+    const late = insightScore({ ...base, sleepHours: [...six, 2], sleepOpen: false });
+    expect(late.parts.nights).toBe(7);
+    expect(late.pillars.recovery).toBe(Math.round(100 * 6 / 7));
+    expect(insightScore({ ...base, sleepHours: [0, 0, 0, 0, 0, 0, 3], sleepOpen: true }).pillars.recovery).toBeNull();
+  });
+  test('the shares always add up to 100', () => {
+    const all = { training: 50, food: 50, recovery: 50 };
+    for (const weights of [{ training: 40, food: 35, recovery: 30 }, { training: 5, food: 5, recovery: 5 }, { training: 100, food: 95, recovery: 5 }, { training: 15, food: 0, recovery: 30 }]) {
+      const share = shares(weights, all);
+      expect(share.training + share.food + share.recovery).toBe(100);
+    }
+    expect(shares({ training: 5, food: 5, recovery: 5 }, all)).toEqual({ training: 34, food: 33, recovery: 33 });
+    expect(shares(DEFAULT_WEIGHTS, { training: null, food: null, recovery: null })).toEqual({ training: 0, food: 0, recovery: 0 });
+  });
   test('the weights change the score and a zero weight drops a pillar', () => {
     const input = { ...base, workouts: 0, sleepHours: [7, 7, 7, 7, 7, 7, 7] };
     expect(insightScore(input).value).toBe(60);
