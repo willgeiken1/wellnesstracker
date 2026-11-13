@@ -121,12 +121,12 @@ describe('two sources, one day', () => {
   });
 });
 
-test('Oura values never reach the phone\'s database: the unused local cache is not called from the app', () => {
-  // The repository keeps an old oura_days table and cacheOura() for its sign-out and purge tests. Nothing in the app may write to it.
+test('Oura values never reach the phone\'s database: nothing in the app writes the old local Oura table', () => {
+  // An old oura_days table remains (migrations are not changed) so sign-out and purge keep clearing it. Nothing may write to it.
   const files = (dir: string): string[] => readdirSync(dir).flatMap(name => { const path = join(dir, name); return statSync(path).isDirectory() ? files(path) : [path]; });
   const src = join(__dirname, '../src');
-  const callers = files(src).filter(path => /\.(ts|tsx)$/.test(path) && !path.endsWith(join('data', 'repository.ts')) && readFileSync(path, 'utf8').includes('cacheOura'));
-  expect(callers).toEqual([]);
+  const writers = files(src).filter(path => /\.(ts|tsx)$/.test(path) && /cacheOura|(insert\s+into|update|replace\s+into)\s+oura_days/i.test(readFileSync(path, 'utf8')));
+  expect(writers).toEqual([]);
   // The Oura files hold values in memory only: no database, no local saves, no logs, no error or analytics reporting.
   for (const name of ['oura.ts', 'use-oura.ts', 'use-health-days.ts'])
     expect(readFileSync(join(src, 'features/health', name), 'utf8')).not.toMatch(/data\/repository|localSave|console\.|Sentry|posthog/i);

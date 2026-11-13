@@ -20,7 +20,8 @@ test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (
   for(const owner of [OWNER_A,OWNER_B,'demo','guest']){
    const repo=database.forOwner(owner);
    for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});if(repo.syncTables().includes(table))repo.applyPage(table,[],'17');}
-   repo.cacheOura('2026-01-01',{fixture:true});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
+   // An old build's Oura copy, so the wipe is shown to clear it.
+   sqlite.prepare('INSERT INTO oura_days(owner_id,day,cache) VALUES(?,?,?)').run(owner,'2026-01-01','{"fixture":true}');if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
   }
   // Legacy pull-only markers must not inflate the all-owner recovery warning.
   for(const owner of [OWNER_A,OWNER_B])sqlite.prepare('INSERT INTO sync_outbox(owner_id,table_name,row_id,revision) VALUES(?,?,?,?)').run(owner,'purges',syntheticRow('purges').id,'100:fixture');
