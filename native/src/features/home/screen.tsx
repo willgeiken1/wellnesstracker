@@ -29,6 +29,8 @@ import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './ti
 import { HeaderScore, ScoreCard } from '../score/card';
 import { readScore } from '../score/read';
 import type { Score } from '../score/model';
+/** Home's + button with the Standard bar. */
+const ADD_SIZE = 56;
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -179,7 +181,8 @@ export function Home() {
   const scoreOn = tiles.order.includes('score'), minute = Math.floor(now.getTime() / 60_000);
   const score = useMemo(() => reader && scoreOn ? readScore(reader, new Date(minute * 60_000), health) : null, [reader, scoreOn, health, minute]);
   return <View style={{ flex: 1 }}>
-    <Screen tabHeader>
+    {/* With the Standard bar the + floats over the content, so the last card can always scroll clear of it. */}
+    <Screen tabHeader endSpace={floating ? 0 : ADD_SIZE + tokens.spacing[2]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
         <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')} hitSlop={4}
           style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }}>
@@ -208,7 +211,7 @@ export function Home() {
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
       </>}
       {!floating && <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={toggleAdd}
-        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
+        style={({ pressed }) => [{ width: ADD_SIZE, height: ADD_SIZE, borderRadius: ADD_SIZE / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
         <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
           <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
         </Svg>

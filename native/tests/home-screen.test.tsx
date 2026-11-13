@@ -183,6 +183,15 @@ describe('add button and the tab bar', () => {
     await render(<SafeAreaProvider initialMetrics={metrics}><ThemeProvider><Home /></ThemeProvider></SafeAreaProvider>);
     expect(screen.getByTestId('home-add-dock')).toHaveStyle({ bottom: expected });
   });
+  test('with the Standard bar the last card can scroll clear of the + button', async () => {
+    open();
+    const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 59, left: 0, right: 0, bottom: 83 } };
+    await render(<SafeAreaProvider initialMetrics={metrics}><ThemeProvider><Home /></ThemeProvider></SafeAreaProvider>);
+    const { StyleSheet } = require('react-native');
+    const end = StyleSheet.flatten(screen.getByTestId('screen-scroll').props.contentContainerStyle).paddingBottom;
+    const dock = StyleSheet.flatten(screen.getByTestId('home-add-dock').props.style).bottom;
+    expect(end).toBeGreaterThanOrEqual(dock + 56);
+  });
 });
 
 describe('review fixes: volume, targets and the hours after midnight', () => {
