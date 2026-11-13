@@ -830,6 +830,7 @@ export const en = {
   recoveryAbove: 'above', recoveryBelow: 'below', recoveryAtAverage: 'Same as your 7-night average.',
   recoverySleepAverage: 'Sleep, 7-night average', recoveryStepsToday: 'Steps today', recoveryStepsAverage: 'Steps, 7-day average',
   recoverySleepMonth: 'Sleep, last 30 nights', recoveryNights: '{count} of 30 nights recorded',
+  recoveryGoalLine: 'Dashed line: 7 h',
   recoverySource: 'From Apple Health. Read on this phone and kept in memory only.',
   recoveryHoursMinutes: '{h} h {m} min', recoveryHours: '{h} h',
   account: 'Account', profile: 'Profile & units', appearance: 'Appearance', workoutSettings: 'Workout',

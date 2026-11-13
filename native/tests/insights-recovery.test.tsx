@@ -29,7 +29,7 @@ test('last night, the week and 30 nights of sleep, with steps, in plain facts', 
   expect(screen.getByLabelText('Steps today: 4,321')).toBeTruthy();
   expect(screen.getByLabelText(/^Sleep, 7-night average: 7 h \d+ min$/)).toBeTruthy();
   expect(screen.getByLabelText(/^Steps, 7-day average: /)).toBeTruthy();
-  expect(screen.getByLabelText('Sleep, last 30 nights. 30 of 30 nights recorded')).toBeTruthy();
+  expect(screen.getByLabelText('Sleep, last 30 nights. 30 of 30 nights recorded. Dashed line: 7 h')).toBeTruthy();
   expect(screen.getByText('From Apple Health. Read on this phone and kept in memory only.')).toBeTruthy();
 });
 
@@ -48,4 +48,11 @@ test('a night with nothing recorded is unknown, not zero', () => {
   expect(lastNightLine([7, 8, 6.5])).toBe('1 h below your 7-night average.');
   expect(lastNightLine([7.5, 7.5])).toBe('Same as your 7-night average.');
   expect(hoursLabel(7.7)).toBe('7 h 42 min');
+});
+
+test('a week average needs three recorded days, and skips the days with nothing', () => {
+  const { weekAverage } = require('../src/features/insights/recovery') as typeof import('../src/features/insights/recovery');
+  expect(weekAverage([null, null, null, null, null, null, 6.5])).toBeNull();
+  expect(weekAverage([0, 0, 0, 0, 7, 6, 8])).toBe(7);
+  expect(weekAverage([9, 9, 9, 9, null, null, null, null, null, null, 6])).toBeNull();
 });

@@ -24,6 +24,13 @@ export function hoursLabel(hours: number) {
 const mean = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 /** A night with no sleep recorded is unknown, not zero hours. */
 const nights = (hours: number[]) => hours.map(h => h > 0 ? h : null);
+/** A week's average needs at least this many recorded days, or it would pass one night off as a week. */
+export const WEEK_MIN = 3;
+/** The average of the recorded days in the last 7, or null when fewer than WEEK_MIN were recorded. */
+export function weekAverage(values: (number | null)[]) {
+  const known = values.slice(-7).filter((v): v is number => v !== null && v > 0);
+  return known.length >= WEEK_MIN ? mean(known) : null;
+}
 
 /** Plain facts about last night against the nights before it (Q20: no praise or judgement words). */
 export function lastNightLine(sleep: (number | null)[]) {
@@ -59,8 +66,10 @@ export function Recovery({ now, source }: { now: Date; source?: HealthSource | n
   }
   const sleep = health.sleepHours ? nights(health.sleepHours) : null, steps = health.steps;
   const days = lastDays(now, NIGHTS), last = sleep?.at(-1) ?? null;
-  const week = sleep ? mean(sleep.slice(-7).filter((h): h is number => h !== null)) : null;
-  const stepsWeek = steps ? mean(steps.slice(-7)) : null, recorded = sleep ? sleep.filter(h => h !== null).length : 0;
+  const week = sleep ? weekAverage(sleep) : null;
+  // A day with no steps recorded is unknown too, so it shows a dash rather than 0.
+  const stepsToday = steps?.at(-1) ?? 0, stepsWeek = steps ? weekAverage(steps) : null;
+  const recorded = sleep ? sleep.filter(h => h !== null).length : 0;
   const compare = sleep ? lastNightLine(sleep) : null;
   return <View style={{ gap: tokens.spacing[3] }}>
     <Card testID="recovery-last-night" accessible accessibilityLabel={last === null ? `${t('recoveryLastNight')}: ${t('recoveryNoData')}` : `${t('recoveryLastNight')}: ${hoursLabel(last)}. ${compare ?? ''}`} style={{ gap: 4 }}>
@@ -74,13 +83,13 @@ export function Recovery({ now, source }: { now: Date; source?: HealthSource | n
     </Card>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[2] }}>
       <Tile testID="recovery-sleep-week" label={t('recoverySleepAverage')} value={week === null ? '—' : hoursLabel(week)} />
-      <Tile testID="recovery-steps-today" label={t('recoveryStepsToday')} value={steps ? Math.round(steps.at(-1) ?? 0).toLocaleString('en-US') : '—'} />
+      <Tile testID="recovery-steps-today" label={t('recoveryStepsToday')} value={stepsToday > 0 ? Math.round(stepsToday).toLocaleString('en-US') : '—'} />
       <Tile testID="recovery-steps-week" label={t('recoveryStepsAverage')} value={stepsWeek === null ? '—' : Math.round(stepsWeek).toLocaleString('en-US')} />
     </View>
     {sleep && recorded > 0 && <Card testID="recovery-sleep-month" accessible accessibilityRole="image"
-      accessibilityLabel={`${t('recoverySleepMonth')}. ${t('recoveryNights').replace('{count}', String(recorded))}`} style={{ gap: tokens.spacing[1] }}>
+      accessibilityLabel={`${t('recoverySleepMonth')}. ${t('recoveryNights').replace('{count}', String(recorded))}. ${t('recoveryGoalLine')}`} style={{ gap: tokens.spacing[1] }}>
       <ThemedText variant="headline" style={semibold}>{t('recoverySleepMonth')}</ThemedText>
-      <ThemedText muted numeric variant="caption">{t('recoveryNights').replace('{count}', String(recorded))}</ThemedText>
+      <ThemedText muted numeric variant="caption">{`${t('recoveryNights').replace('{count}', String(recorded))} · ${t('recoveryGoalLine')}`}</ThemedText>
       <MiniChart values={sleep} goal={7} color={colors.sleep} first={short(days[0])} last={short(days.at(-1)!)} />
     </Card>}
     <ThemedText muted variant="caption">{t('recoverySource')}</ThemedText>
