@@ -1,7 +1,7 @@
 /** Settings home: the groups, their rows, and the extra words Search matches besides the label. */
 export const settingsGroups = [
   { title: 'settingsGroupYou', rows: [
-    { route: 'account', label: 'account', icon: 'account', keywords: 'sign in out email sync backup export' },
+    { route: 'account', label: 'account', icon: 'account', keywords: 'sign in out email sync backup export delete account' },
     { route: 'profile', label: 'profile', icon: 'profile', keywords: 'name lb kg weight height birthday' },
   ] },
   { title: 'settingsGroupApp', rows: [

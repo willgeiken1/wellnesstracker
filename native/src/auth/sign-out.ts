@@ -30,6 +30,8 @@ export async function completeSignOut(marker: SignOutMarker, repo: Repository, s
   await storage.remove();
 }
 export class DepartureFailure extends Error { constructor(){super('Sign-out recovery required.');} }
+/** The server did not confirm the deletion. Nothing on this phone was erased. */
+export class AccountDeletionFailed extends Error { constructor(){super('Account deletion did not finish.');} }
 export class CorruptSignOutMarker extends Error { constructor(){super('Sign-out recovery unavailable.');} }
 export class UnreadableSignOutMarker extends Error {
   constructor(){super('Sign-out recovery unavailable.');}
