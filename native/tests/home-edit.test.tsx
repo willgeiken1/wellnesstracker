@@ -119,6 +119,22 @@ test('a small tile can be made full width and back', async () => {
   expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '48.5%' });
 });
 
+test('a small tile left without a partner takes the full row instead of standing alone at half width', async () => {
+  const repo = seeded();
+  // Calories, protein and volume have data here (weight has none): the pair stays half width, volume takes the row.
+  const view = await render(<Home />, { wrapper });
+  expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '48.5%' });
+  expect(screen.getByTestId('home-tile-protein')).toHaveStyle({ width: '48.5%' });
+  expect(screen.getByTestId('home-tile-volume')).toHaveStyle({ width: '100%' });
+  await view.unmount();
+  // A section between small tiles breaks the pairs: calories sits alone before it, protein and volume pair after.
+  repo.localSave(HOME_TILES_KEY, { order: ['calories', 'next', 'protein', 'volume', 'weight'], wide: [], v: 2 });
+  await render(<Home />, { wrapper });
+  expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '100%' });
+  expect(screen.getByTestId('home-tile-protein')).toHaveStyle({ width: '48.5%' });
+  expect(screen.getByTestId('home-tile-volume')).toHaveStyle({ width: '48.5%' });
+});
+
 test('a saved layout is used on the next open', async () => {
   const repo = seeded();
   repo.localSave(HOME_TILES_KEY, { order: ['next', 'weight', 'calories'], wide: ['calories'], v: 2 });

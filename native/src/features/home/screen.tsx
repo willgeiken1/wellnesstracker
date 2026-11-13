@@ -255,8 +255,17 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   </>;
   const numbers = numberTiles(reader, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
   const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
-  // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
-  return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
+  // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up. A small
+  // tile left without a partner (before a section, or last) takes the full row too, so no half-width tile stands alone.
+  const shown = tiles.order.filter(id => isSmall(id) ? !!numbers[id] : id !== 'score' || !!score);
+  const alone = new Set<TileId>();
+  let run: TileId[] = [];
+  for (const id of [...shown, null]) {
+    if (id && isSmall(id) && !tiles.wide.includes(id)) { run.push(id); continue; }
+    if (run.length % 2) alone.add(run[run.length - 1]);
+    run = [];
+  }
+  return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3] }}>
     {tiles.order.map(id => {
       const full = { width: '100%' } as const;
       if (id === 'map') return <View key={id} style={full}><MapCard day={selected} today={today} values={of(selected)} /></View>;
@@ -264,7 +273,7 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
       if (id === 'week') return <View key={id} style={full}><Week week={week} today={today} selected={selected} onPick={onPick} of={of} /></View>;
       if (id === 'next') return <View key={id} style={full}><Next store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /></View>;
       const tile = numbers[id];
-      return tile ? <NumberTile key={id} tile={tile} wide={tiles.wide.includes(id)} /> : null;
+      return tile ? <NumberTile key={id} tile={tile} wide={tiles.wide.includes(id) || alone.has(id)} /> : null;
     })}
     {wanted.length > 0 && !shownNumbers.length && <ThemedText muted variant="caption" style={{ width: '100%' }}>{t('homeTilesEmpty')}</ThemedText>}
   </View>;
