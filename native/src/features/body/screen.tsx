@@ -31,7 +31,8 @@ export function Body({repository}:{repository:Repository}) {
   // The entry starts from the last weight typed here, never from a Health reading: saving a typed weigh-in
   // syncs, and a Health value must not ride along with it.
   const lastKg=lastWeight(rows.filter(row=>row.data.source==='app'));
-  const raw=rows.filter(r=>visible.some(p=>p.day===r.data.day) && typeof r.data.weight_kg==='number' && Number.isFinite(r.data.weight_kg) && r.data.weight_kg>0).map(r=>({day:String(r.data.day),kg:Number(r.data.weight_kg)}));
+  const shown=new Set(visible.map(p=>p.day));
+  const raw=rows.filter(r=>shown.has(String(r.data.day)) && typeof r.data.weight_kg==='number' && Number.isFinite(r.data.weight_kg) && r.data.weight_kg>0).map(r=>({day:String(r.data.day),kg:Number(r.data.weight_kg)}));
   const delta=(kg:number|null)=>kg===null?'—':`${kg>0?'+':''}${fromKg(kg,unit).toFixed(1)} ${unit}`;
   const stats=[
     [t('bodyStatChange').replace('{range}',t(`bodyRange${range}`)),delta(visible.length>1?visible.at(-1)!.trendKg-visible[0].trendKg:null)],
