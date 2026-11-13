@@ -9,6 +9,11 @@ export type SleepSpan = { start: Date; end: Date; awake?: boolean; stage?: Sleep
 export type HeartMetric = 'heartRate' | 'restingHeartRate' | 'hrv';
 /** Average, lowest and highest of a reading in a window. */
 export type Spread = { average: number; min: number; max: number };
+/** What kind of workout Apple Health recorded, in the few groups Insight shows. */
+export type WorkoutKind = 'run' | 'walk' | 'hike' | 'cycle' | 'row' | 'elliptical' | 'stairs' | 'swim' | 'hiit' | 'mixed' | 'strength' | 'yoga' | 'other';
+/** One workout as Apple Health recorded it. `minutes` leaves out time the workout was paused. `kcal` is the
+ * active energy the recording app measured, null when it measured none. `app` is the recording app's name. */
+export type HealthWorkout = { id: string; kind: WorkoutKind; start: Date; end: Date; minutes: number; kcal: number | null; app: string };
 /** `ask`: Insight has not asked yet. `asked`: the person has seen Apple's sheet. iOS never says which
  * types they allowed to be read, so "asked" is as much as an app can know. */
 export type HealthAccess = 'unavailable' | 'ask' | 'asked';
@@ -35,4 +40,6 @@ export interface HealthSource {
   bodyFat(since: Date): Promise<{ at: Date; percent: number }[]>;
   /** The newest VO2 max estimate, in mL/(kg·min), with when it was recorded. Null when there is none. */
   vo2Max(): Promise<{ value: number; at: Date } | null>;
+  /** Workouts that started between two instants, oldest first. */
+  workouts(from: Date, to: Date): Promise<HealthWorkout[]>;
 }

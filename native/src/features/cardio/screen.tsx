@@ -12,6 +12,9 @@ import { clock, layout } from '../workout/primitives';
 import { Field as Input, Pick, Primary, Secondary, SectionTitle, Trouble, card, dayLabel, semibold } from '../workout/parts';
 import { useWorkoutStore } from '../workout/use-workout';
 import { CardioStore, machineDefaults } from './store';
+import type { HealthSource } from '../health/source';
+import { healthWeek } from './health';
+import { useHealthWorkouts } from './use-health-workouts';
 
 const machineName = (machine: Machine) => t(`cardio_${machine}`);
 const iconPaths: Record<Machine, string> = {
@@ -45,7 +48,8 @@ function WeeklyRing({ minutes, goal }: { minutes: number; goal: number }) {
     <View style={{ flex: 1, gap: 2 }}><ThemedText variant="headline" style={semibold}>{t('cardioWeeklyGoal')}</ThemedText><ThemedText muted>{label}</ThemedText></View>
   </View>;
 }
-export function Cardio({ repository }: { repository: Repository }) {
+/** `health` replaces Apple Health in tests; null turns it off. */
+export function Cardio({ repository, health }: { repository: Repository; health?: HealthSource | null }) {
   const facade = useWorkoutStore(repository);
   const store = useMemo(() => new CardioStore(facade.repo, facade.viewRevision), [facade]);
   const live = store.live();
@@ -81,8 +85,13 @@ export function Cardio({ repository }: { repository: Repository }) {
   const estimate = live ? store.liveKcal(weight.kg, now) : kcalPerMin(machine, settings, weight.kg) * (Number(minutes) || 0);
   const kcalText = (kcal: number) => t('cardioKcal').replace('{kcal}', String(Math.round(kcal)));
   const sessions = store.sessions();
+  const pauses = repository.list('pauses');
+  const healthWorkouts = useHealthWorkouts(true, health);
+  // Apple Health workouts stay in memory: they add to the ring here and are never written to a cardio row.
+  const fromHealth = healthWorkouts ? healthWeek(healthWorkouts, sessions, pauses, localDay(now)) : null;
   return <View style={layout.stack}>
-    <Card testID="cardio-week" style={[card, { gap: tokens.spacing[2] }]}><WeeklyRing minutes={weeklyMinutes(sessions, repository.list('pauses'), localDay(now))} goal={store.goal()} />
+    <Card testID="cardio-week" style={[card, { gap: tokens.spacing[2] }]}><WeeklyRing minutes={weeklyMinutes(sessions, pauses, localDay(now)) + (fromHealth?.minutes ?? 0)} goal={store.goal()} />
+      {!!fromHealth && fromHealth.minutes > 0 && <ThemedText muted variant="caption">{t('cardioHealthIncluded').replace('{minutes}', String(Math.round(fromHealth.minutes)))}</ThemedText>}
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: tokens.spacing[1] }}>
         <Field grow label={t('cardioGoalMinutes')} value={goal} onChangeText={setGoal} decimal />
         <View style={{ minHeight: 48, justifyContent: 'center' }}><Pick onSurface text={t('cardioSaveGoal')} onPress={() => run(() => store.setGoal(Number(goal)), 'cardioGoalError')} /></View>
@@ -127,6 +136,17 @@ export function Cardio({ repository }: { repository: Repository }) {
       </>}
     </Card>
     <ThemedText muted variant="caption">{t('cardioLocalSettings')}</ThemedText>
+    {!!fromHealth && fromHealth.workouts.length > 0 && <>
+      <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { marginTop: tokens.spacing[1] }]}>{t('cardioHealthTitle')}</ThemedText>
+      {fromHealth.workouts.map(w => <Card key={w.id} testID={`cardio-health-${w.id}`} style={[card, { gap: 2 }]}>
+        <ThemedText variant="headline" style={semibold}>{t(`workoutKind_${w.kind}`)}</ThemedText>
+        <ThemedText muted numeric variant="caption">{t('cardioHealthSummary').replace('{day}', dayLabel(w.day)).replace('{minutes}', String(Math.round(w.minutes)))}</ThemedText>
+        {w.kcal !== null && <ThemedText numeric>{t('cardioHealthKcal').replace('{kcal}', String(Math.round(w.kcal)))}</ThemedText>}
+        {!!w.app && <ThemedText muted variant="caption">{t('cardioHealthFrom').replace('{app}', w.app)}</ThemedText>}
+        <ThemedText muted={w.status !== 'counted'} variant="caption">{t(`cardioHealthStatus_${w.status}`)}</ThemedText>
+      </Card>)}
+      <ThemedText muted variant="caption">{t('cardioHealthNote')}</ThemedText>
+    </>}
     <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { marginTop: tokens.spacing[1] }]}>{t('cardioSaved')}</ThemedText>
     {sessions.length === 0 && <Card testID="cardio-empty" style={card}>
       <ThemedText style={semibold}>{t('cardioEmptyTitle')}</ThemedText>
