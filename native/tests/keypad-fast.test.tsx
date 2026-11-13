@@ -56,3 +56,10 @@ test('touch and hold Backspace clears the field', async () => {
   expect(onChange).toHaveBeenLastCalledWith('');
   expect(screen.getByTestId('keypad-key-backspace').props.accessibilityHint).toBe('Touch and hold to clear.');
 });
+
+test('key labels grow with text size only up to 1.4x, and the sheet scrolls rather than run off the screen', async () => {
+  const { StyleSheet } = require('react-native');
+  await render(pad('', jest.fn()));
+  for (const text of ['0', '7', '9']) expect(screen.getByText(text).props.maxFontSizeMultiplier).toBe(1.4);
+  expect(StyleSheet.flatten(screen.getByTestId('keypad-scroll').props.style)).toMatchObject({ flexShrink: 1 });
+});

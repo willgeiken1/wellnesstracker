@@ -26,6 +26,8 @@ export interface Cursor {
 const SETTLE_MS = 800;
 /** One caption line, kept for the limit hint. */
 const HINT_LINE = 18;
+/** The largest text scale a key label takes. */
+export const KEY_TEXT_MAX = 1.4;
 /** Only ever called from a tap, never while drawing. */
 const tapTime = () => Date.now();
 export function Keypad({
@@ -149,7 +151,10 @@ export function Keypad({
       onClose={onClose}
     >
       <Eyebrow>{label}</Eyebrow>
+      {/* Shrinks to the sheet and scrolls, so at the largest text sizes the bottom row is never under the edge. */}
       <ScrollView
+        testID="keypad-scroll"
+        style={{ flexShrink: 1 }}
         contentContainerStyle={[layout.stack, { gap: 12 }]}
         keyboardShouldPersistTaps="handled"
       >
@@ -387,6 +392,9 @@ export function Keypad({
                     numberOfLines={key === "wheel" || key === "next" ? 2 : 1}
                     adjustsFontSizeToFit={key === "wheel" || key === "next"}
                     minimumFontScale={0.75}
+                    // The keys are fixed-size boxes: labels grow with text size up to 1.4x, then the key's own
+                    // accessibility label (spoken in full) carries the rest.
+                    maxFontSizeMultiplier={KEY_TEXT_MAX}
                     style={{
                       textAlign: "center",
                       paddingHorizontal: key === "wheel" || key === "next" ? 4 : 0,
