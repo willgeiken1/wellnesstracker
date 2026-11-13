@@ -1,9 +1,10 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
+import { setDockAction } from '@/components/floating-tabs';
 import { Card } from '@/components/card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
@@ -133,7 +134,7 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
 export function Home() {
   const { store, auth } = useWorkout();
   const { colors, barLook } = useTheme();
-  // Above the floating bar the + is neutral, so the open tab's circle stays the only accent circle down there.
+  // With the floating bar the + is neutral and sits beside the tabs, so the open tab's circle stays the only accent circle.
   const floating = barLook === 'floating';
   // Reopening the app draws Home again, so "today" is the real day even if the app sat open overnight.
   const [, setWoken] = useState(0);
@@ -161,6 +162,13 @@ export function Home() {
   };
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
+  // With the floating bar the + rides in line with the tabs while Home is open, so it never covers a card.
+  const toggleAdd = useCallback(() => setAdding(open => !open), []);
+  useEffect(() => {
+    if (!floating || !focused) return;
+    setDockAction({ label: t('homeAdd'), expanded: adding, onPress: toggleAdd });
+    return () => setDockAction(null);
+  }, [floating, focused, adding, toggleAdd]);
   const selected = picked && picked <= today ? picked : today;
   // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else,
   // and so does the Insight Score worked out from them.
@@ -199,12 +207,12 @@ export function Home() {
         <SmallButton label={t('logFood')} onPress={() => { setAdding(false); router.push('/food'); }} />
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
       </>}
-      <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={() => setAdding(open => !open)}
-        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: floating ? colors.surface : colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
+      {!floating && <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={toggleAdd}
+        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
         <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
-          <Path d="M12 5v14M5 12h14" stroke={floating ? colors.text : colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
+          <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
         </Svg>
-      </Pressable>
+      </Pressable>}
     </View>
   </View>;
 }

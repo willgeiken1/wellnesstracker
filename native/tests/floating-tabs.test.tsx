@@ -1,9 +1,12 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, View } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import AppTabs from '../src/components/app-tabs';
-import { DOCK_ACTIVE, DOCK_ITEM, DOCK_NIGHT, TabDock, dockBottom, dockSpace, type DockItem } from '../src/components/floating-tabs';
+import { Screen } from '../src/components/screen';
+import { Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { DOCK_ACTIVE, DOCK_FADE, DOCK_ITEM, DOCK_NIGHT, TabDock, setDockAction, dockBottom, dockSpace, type DockItem } from '../src/components/floating-tabs';
 import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
 import { syntheticRow } from '../fixtures/sync';
@@ -110,6 +113,28 @@ describe('choosing the bar in Appearance', () => {
     // Pressing the open tab tells the screen, but does not navigate again.
     await fireEvent.press(screen.getByRole('tab', { name: 'Workouts' }));
     expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+  test('a screen can put its own button in line with the tabs, and take it away again', async () => {
+    const onPress = jest.fn();
+    await render(<ThemeProvider repository={saved('seaGlassTide;bar=floating')}><AppTabs /></ThemeProvider>);
+    expect(screen.queryByTestId('dock-action')).toBeNull();
+    await act(() => setDockAction({ label: 'Add', expanded: false, onPress }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+    // Same size as the pills, so the row reads as one bar.
+    expect(StyleSheet.flatten(screen.getByTestId('dock-action').props.style).height).toBe(StyleSheet.flatten(screen.getAllByTestId('tab-pill')[0].props.style).borderRadius * 2);
+    await act(() => setDockAction(null));
+    expect(screen.queryByTestId('dock-action')).toBeNull();
+  });
+  test('tab screens leave room past the fade as well as the bar, so a last button rests in the clear', async () => {
+    const metrics = { frame: { x: 0, y: 0, width: 402, height: 874 }, insets: { top: 62, left: 0, right: 0, bottom: 34 } };
+    const padding = async (accent: string) => {
+      const view = await render(<SafeAreaProvider initialMetrics={metrics}><ThemeProvider repository={saved(accent)}><Screen tabHeader><Text>Log weigh-in</Text></Screen></ThemeProvider></SafeAreaProvider>);
+      const value = StyleSheet.flatten(screen.getByTestId('screen-scroll').props.contentContainerStyle).paddingBottom;
+      await view.unmount();
+      return value;
+    };
+    expect(await padding('seaGlassTide;bar=floating') - await padding('seaGlassTide')).toBe(DOCK_FADE);
   });
   test('a fade of the page colour sits behind the bar and never takes a touch', async () => {
     await render(<ThemeProvider repository={saved('seaGlassTide;bar=floating')}><AppTabs /></ThemeProvider>);
