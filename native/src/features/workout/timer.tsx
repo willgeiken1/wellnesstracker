@@ -123,13 +123,17 @@ export function RestTimer({
         restBuzz(store.repo);
       }
     };
-    const interval = setInterval(update, reduceMotion ? 1000 : 50),
+    // The full sheet draws its contours smoothly; the bar under the logger only needs a few steps a second, so the
+    // logger is not redrawn twenty times a second while someone types the next set. The end is caught on time either way.
+    const interval = setInterval(update, reduceMotion ? 1000 : minimized ? 250 : 50),
+      ending = setTimeout(update, Math.max(0, endAt - Date.now()) + 20),
       subscription = AppState.addEventListener("change", (state) => {
         if (state === "active") update();
       });
     update();
     return () => {
       clearInterval(interval);
+      clearTimeout(ending);
       subscription.remove();
     };
   }, [store, endAt, ended, reduceMotion, minimized, presentation]);
