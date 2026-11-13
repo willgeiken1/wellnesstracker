@@ -118,3 +118,22 @@ describe('the logger and rest sheet at the largest text size (simulator AX5 find
     expect(store.timer()!.minimized).toBe(true);
   });
 });
+
+describe('the minimized rest bar and exercise names at the largest text size (AX5 re-shoot)', () => {
+  const { StyleSheet } = require('react-native') as typeof import('react-native');
+  test.each([[1, 96], [3, '100%']] as const)('at %sx the rest words in the bar have basis %s, so the chips sit under them', async (scale, basis) => {
+    setFontScale(scale);
+    await logger();
+    await fireEvent.press(screen.getByTestId('set-0-0-done'));
+    const words = screen.getByRole('button', { name: 'Expand rest timer' });
+    expect(StyleSheet.flatten(words.props.style).flexBasis).toBe(basis);
+    expect(StyleSheet.flatten(screen.getByTestId('rest-bar-row').props.style).flexWrap).toBe('wrap');
+  });
+  test.each([[1, undefined], [3, '100%']] as const)('at %sx the exercise name has basis %s, so it breaks between words', async (scale, basis) => {
+    setFontScale(scale);
+    await logger();
+    const name = screen.getByTestId('exercise-name-0');
+    expect(name).toHaveTextContent(/Close-Grip Bench Press/);
+    expect(StyleSheet.flatten(name.props.style)?.flexBasis).toBe(basis);
+  });
+});

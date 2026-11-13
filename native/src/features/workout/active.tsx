@@ -412,7 +412,7 @@ function Logger({
           {!stacked && finishButton}
         </View>
         <View style={[layout.row, { justifyContent: "space-between", flexWrap: "wrap", gap: 6 }]}>
-          <View style={[layout.row, { gap: 6 }]}>
+          <View style={[layout.row, { gap: 6, flexShrink: 1, flexWrap: "wrap" }]}>
             {session.data.origin === "template" && <Eyebrow>{t("template")}</Eyebrow>}
             {total > 0 && (
               <ThemedText muted variant="caption">
@@ -515,7 +515,7 @@ function Logger({
             pendingIndex = Math.max(0, ds.findIndex((d) => !d.setId));
           return (
             <Panel key={e.id} testID={`logger-card-${exerciseIndex}`} style={{borderRadius: 18, ...(collapsed ? {paddingVertical:8} : {}), ...(store.skipped(e.id) ? {opacity:0.45} : {})}}>
-              <View style={layout.row}>
+              <View style={[layout.row, stacked && { flexWrap: "wrap" }]}>
                 {compact && (
                   <View
                     style={{
@@ -531,6 +531,7 @@ function Logger({
                   </View>
                 )}
                 <Pressable
+                  testID={`exercise-name-${exerciseIndex}`}
                   disabled={!compact}
                   accessible={false}
                   importantForAccessibility="no"
@@ -546,7 +547,11 @@ function Logger({
                         : [...ids, e.id],
                     )
                   }
-                  style={{ flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
+                  // At accessibility sizes the name keeps (nearly) the whole line, so it breaks between words, and the
+                  // Plates and collapse buttons move under it.
+                  style={stacked
+                    ? { flexGrow: 1, flexShrink: 1, flexBasis: compact ? "80%" : "100%", minHeight: compact ? 44 : undefined, justifyContent: "center" }
+                    : { flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
                 >
                   <ThemedText
                     variant="headline"

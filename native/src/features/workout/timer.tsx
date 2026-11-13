@@ -171,7 +171,9 @@ export function RestTimer({
             accessibilityLabel={t("expandRest")}
             accessibilityValue={{ text: timer.ended ? t("restReady") : clock(seconds) }}
             onPress={() => store.updateTimer({ minimized: false })}
-            style={{ flexGrow: 1, flexShrink: 1, flexBasis: 96, minHeight: touchTarget, justifyContent: "center" }}
+            // At accessibility sizes the words take the whole first line and the chips sit under them; squeezed
+            // beside the chips, "Rest complete" broke into one letter per line.
+            style={{ flexGrow: 1, flexShrink: 1, flexBasis: stacked ? "100%" : 96, minHeight: touchTarget, justifyContent: "center" }}
           >
             {timer.ended ? (
               <ThemedText>{t("restReady")}</ThemedText>
