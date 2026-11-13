@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { addHealthTiles, type TileStorage } from '../home/tiles';
-import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, oura, syncOura, type OuraSource, type OuraStatus } from './oura';
+import { oura } from './oura-client';
+import { FIRST_SYNC_DAYS, LATER_SYNC_DAYS, syncOura, type OuraSource, type OuraStatus } from './oura';
 
 const stateOf = (status: OuraStatus | null): OuraState['state'] => !status ? 'unavailable' : !status.connected ? 'off' : status.expired ? 'expired' : 'on';
 

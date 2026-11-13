@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { appleHealth } from './apple';
 import { lastDays, readHealthDays, type HealthDays } from './days';
-import { mergeHealthDays, oura, readOuraDays, type OuraSource } from './oura';
+import { mergeHealthDays, readOuraDays, type OuraSource } from './oura';
+import { oura } from './oura-client';
 import type { HealthSource } from './source';
 
 type Read = { source: HealthSource | null; ring: OuraSource | null; days: string; apple?: HealthDays | null; worn?: HealthDays | null };

@@ -128,7 +128,7 @@ test('Oura values never reach the phone\'s database: nothing in the app writes t
   const writers = files(src).filter(path => /\.(ts|tsx)$/.test(path) && /cacheOura|(insert\s+into|update|replace\s+into)\s+oura_days/i.test(readFileSync(path, 'utf8')));
   expect(writers).toEqual([]);
   // The Oura files hold values in memory only: no database, no local saves, no logs, no error or analytics reporting.
-  for (const name of ['oura.ts', 'use-oura.ts', 'use-health-days.ts'])
+  for (const name of ['oura.ts', 'oura-client.ts', 'use-oura.ts', 'use-health-days.ts'])
     expect(readFileSync(join(src, 'features/health', name), 'utf8')).not.toMatch(/data\/repository|localSave|console\.|Sentry|posthog/i);
 });
 
