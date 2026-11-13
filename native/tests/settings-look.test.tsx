@@ -30,6 +30,7 @@ jest.mock('expo-router', () => {
 });
 jest.mock('../src/auth/client', () => ({ getAuthClient: () => null }));
 const mockBrowser = jest.fn(async (_url: string) => ({ type: 'opened' }));
+jest.mock('expo-sharing', () => ({ getSharedPayloads: () => [], clearSharedPayloads: () => {} }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: (url: string) => mockBrowser(url) }));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../src/phone-only/provider', () => ({ useAuth: () => mockPhoneAuth }));
@@ -151,6 +152,13 @@ describe('Settings pages', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Privacy policy' }));
     expect(await screen.findByTestId('settings-about-link-failed')).toHaveTextContent(t('linkFailed'));
     safari.mockRestore();
+  });
+  test('Data carries its own title, no Close beside Back, and no Oura promise', async () => {
+    mockSection = 'data';
+    await show(<Section />);
+    expect(screen.getByRole('header', { name: 'Import your data' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    expect(screen.queryByText(/Your Oura connection stays connected/)).toBeNull();
   });
   test('Health without Health access says so plainly', async () => {
     Constants.expoConfig!.extra!.phoneOnly = true;

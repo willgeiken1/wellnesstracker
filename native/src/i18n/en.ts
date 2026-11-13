@@ -19,7 +19,7 @@ export const en = {
   importCount_settings: 'Settings: {count}',
   importCount_photos: 'Photos: {count}',
   importTitle: 'Import your data',
-  importIntro: 'Bring in your data from the Insight web app. You see what was found first, and nothing changes until you confirm. Photos stay in your account and download only when opened. Your Oura connection stays connected.',
+  importIntro: 'Bring in your data from the Insight web app. You see what was found first, and nothing changes until you confirm. Photos stay in your account and download only when opened. If you connected Oura in the web app, it stays connected.',
   importChoose: 'Choose a backup file',
   importAccount: 'Use my web app account',
   importSignedOut: 'You can preview and import on this device before signing in. Create an account to sync your data.',

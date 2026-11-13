@@ -2,6 +2,7 @@ import { useContext, useState } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
+import { LoadingPanel } from '@/components/loading-panel';
 import { ThemedText } from '@/components/themed-text';
 import { Group, InfoRow, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
 import { scoreOn, setScoreOn } from '@/features/home/tiles';
@@ -25,7 +26,8 @@ function HealthAndDevices() {
 function ScoreSettings() {
   const repository = useContext(AuthContext)?.repository;
   const [on, setOn] = useState(() => scoreOn(repository));
-  if (!repository) return <QuietCard title={t('notInVersion')} />;
+  // The account data is still opening: wait quietly rather than say the feature is missing.
+  if (!repository) return <LoadingPanel testID="settings-score-loading" />;
   return <Group testID="settings-score">
     <ToggleRow testID="settings-score-switch" label={t('scoreSettingShow')} hint={t('scoreSettingHint')} value={on} onValueChange={next => {
       // The switch only moves once the layout is saved, so it never shows something Home will not.
@@ -72,7 +74,7 @@ export default function SettingsSection() {
   // Health & devices opens with its own headline, so the bar names the page here.
   if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><HealthAndDevices /></Screen></>;
   if (section === 'score') return <>{named}<Screen title={title}><ScoreSettings /></Screen></>;
-  if (section === 'data') return <>{named}<ImportScreen /></>;
+  if (section === 'data') return <>{named}<ImportScreen inSettings /></>;
   if (section === 'privacy') return <>{named}<FoodPrivacyScreen /></>;
   if (section === 'profile') return <>{named}<Profile /></>;
   if (section === 'workout') return <>{named}<WorkoutSettings /></>;
