@@ -365,17 +365,22 @@ function Logger({
     setReplacement({ entryId, mode });
     setPicker(true);
   };
-  return (
-    <SafeAreaView
-      testID="logger-safe-area"
-      edges={["left", "right", "bottom"]}
-      style={{
-        flex: 1,
-        backgroundColor: colors.bg,
-        // A full-screen presentation can initially report a zero top inset.
-        paddingTop: insets.top || initialWindowMetrics?.insets.top || 0,
+  // The header stays above the sets at normal sizes. At accessibility sizes it would fill most of the screen, so it
+  // scrolls away with the sets instead.
+  const finishButton = (
+    <Pill
+      compact
+      testID="finish-button"
+      label={t("finish")}
+      onPress={() => {
+        if (!past) store.updateTimer({
+          minimized: true,
+        });
+        setFinish(true);
       }}
-    >
+    />
+  );
+  const header = (
       <View
         testID="logger-header"
         style={[
@@ -388,13 +393,15 @@ function Logger({
           },
         ]}
       >
-        <View style={[layout.row, { gap: 4 }]}>
+        <View style={[layout.row, { gap: 4 }, stacked && { flexWrap: "wrap", justifyContent: "space-between" }]}>
           <IconButton
             name="down"
             label={t("closeWorkout")}
             onPress={closeWorkout}
           />
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+          {stacked && finishButton}
+          {/* At accessibility sizes the name gets its own line under the buttons, so it is never squeezed. */}
+          <View style={stacked ? { flexBasis: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 8 } : { flex: 1, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
             <ThemedText variant="title" numberOfLines={stacked ? undefined : 1} style={{ fontWeight: "600", flexShrink: 1 }}>
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
@@ -402,17 +409,7 @@ function Logger({
               {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
             </ThemedText>
           </View>
-          <Pill
-            compact
-            testID="finish-button"
-            label={t("finish")}
-            onPress={() => {
-              if (!past) store.updateTimer({
-                minimized: true,
-              });
-              setFinish(true);
-            }}
-          />
+          {!stacked && finishButton}
         </View>
         <View style={[layout.row, { justifyContent: "space-between", flexWrap: "wrap", gap: 6 }]}>
           <View style={[layout.row, { gap: 6 }]}>
@@ -464,6 +461,19 @@ function Logger({
           </ThemedText>
         )}
       </View>
+  );
+  return (
+    <SafeAreaView
+      testID="logger-safe-area"
+      edges={["left", "right", "bottom"]}
+      style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        // A full-screen presentation can initially report a zero top inset.
+        paddingTop: insets.top || initialWindowMetrics?.insets.top || 0,
+      }}
+    >
+      {!stacked && header}
       <ScrollView
         testID="logger-exercises"
         style={{ flex: 1 }}
@@ -471,6 +481,7 @@ function Logger({
         automaticallyAdjustContentInsets={false}
         contentContainerStyle={[layout.content, { paddingTop: 12 }]}
       >
+        {stacked && <View style={{ marginHorizontal: -layout.content.padding }}>{header}</View>}
         {upcoming && upcomingEntry && (
           <UpNext
             name={String(upcomingEntry.data.exercise)}

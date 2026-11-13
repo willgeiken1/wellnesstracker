@@ -86,3 +86,35 @@ test('the cardio clock is read with its time, and the weekly ring number is held
   await fireEvent.press(screen.getByRole('button', { name: 'Start timer' }));
   expect(screen.getByLabelText(/^Elapsed time, \d+:\d\d$/)).toBeTruthy();
 });
+
+describe('the logger and rest sheet at the largest text size (simulator AX5 findings)', () => {
+  const { StyleSheet } = require('react-native') as typeof import('react-native');
+  const inside = (node: { parent: unknown; props: Record<string, unknown> } | null, testID: string) => {
+    for (let up = node; up; up = up.parent as typeof node) if (up.props.testID === testID) return true;
+    return false;
+  };
+
+  test.each([[1, false], [3, true]] as const)('at %sx the header scrolls with the sets: %s', async (scale, scrolls) => {
+    setFontScale(scale);
+    await logger();
+    const header = screen.getByTestId('logger-header');
+    expect(inside(header as never, 'logger-exercises')).toBe(scrolls);
+    // The finish button stays in the first row; the name takes its own line only at large sizes.
+    const name = screen.getByText('Workout');
+    let row = name.parent as unknown as { type: unknown; parent: unknown; props: { style?: unknown } };
+    while (row.type !== 'View') row = row.parent as typeof row;
+    expect(StyleSheet.flatten(row.props.style as never)?.flexBasis).toBe(scrolls ? '100%' : undefined);
+    expect(screen.getByTestId('finish-button')).toBeTruthy();
+  });
+
+  test.each([[1, false], [3, true]] as const)('at %sx the full rest sheet scrolls and shows Minimize: %s', async (scale, large) => {
+    setFontScale(scale);
+    const { store } = await logger(repo => repo.localSave('restOpens', 'full'));
+    await fireEvent.press(screen.getByTestId('set-0-0-done'));
+    expect(!!screen.queryByTestId('rest-sheet-scroll')).toBe(large);
+    expect(inside(screen.getByTestId('rest-contours') as never, 'rest-sheet-scroll')).toBe(large);
+    if (!large) { expect(screen.queryByTestId('rest-minimize')).toBeNull(); return; }
+    await fireEvent.press(screen.getByRole('button', { name: 'Minimize rest timer' }));
+    expect(store.timer()!.minimized).toBe(true);
+  });
+});

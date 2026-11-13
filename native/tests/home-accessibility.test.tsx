@@ -168,3 +168,13 @@ test('with the floating bar, the escape gesture on the + closes the open menu', 
   await act(async () => { screen.getByTestId('dock-action').props.onAccessibilityEscape(); });
   expect(onPress).toHaveBeenCalledTimes(1);
 });
+
+test.each([[1, 56, 'nowrap'], [3, 96, 'wrap']] as const)('at %sx the Score card ring is %i pt and its title row is %s', async (scale, size, wrap) => {
+  setFontScale(scale);
+  open();
+  await render(<Home />, { wrapper });
+  const top = screen.getByTestId('home-score-top');
+  expect(flat(top).flexWrap).toBe(wrap);
+  const ring = top.queryAll((node: { type: unknown; props: { style?: unknown } }) => node.type === 'View' && flat(node).width === size && flat(node).height === size);
+  expect(ring.length).toBeGreaterThan(0);
+});

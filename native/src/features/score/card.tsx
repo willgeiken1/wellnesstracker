@@ -41,11 +41,12 @@ export function PillarRow({ pillar, value }: { pillar: ScorePillar; value: numbe
 /** The Insight Score card on Home: the ring, the score or the countdown, the three pillars, and the way to how it is worked out. */
 export function ScoreCard({ score }: { score: Score }) {
   const { colors } = useTheme();
-  const line = headline(score);
+  const line = headline(score), stacked = useStacked();
+  // At accessibility sizes the title would dwarf a 56 pt ring beside it: the ring grows and the words go under it.
   return <Card testID="home-score" style={{ borderRadius: 18, padding: tokens.spacing[3], gap: tokens.spacing[2] }}>
-    <View accessible accessibilityLabel={spokenScore(score)} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
-      <ScoreRing score={score} size={56} />
-      <View style={{ flex: 1, gap: 2 }}>
+    <View testID="home-score-top" accessible accessibilityLabel={spokenScore(score)} style={{ flexDirection: 'row', flexWrap: stacked ? 'wrap' : 'nowrap', alignItems: 'center', gap: tokens.spacing[2] }}>
+      <View style={{ flexShrink: 0 }}><ScoreRing score={score} size={stacked ? 96 : 56} /></View>
+      <View style={stacked ? { flexBasis: '100%', gap: 2 } : { flex: 1, gap: 2 }}>
         <ThemedText variant="headline" style={semibold}>{t('scoreTitle')}</ThemedText>
         <ThemedText muted variant="caption" style={{ fontSize: 13, fontWeight: '600' }}>{line}</ThemedText>
       </View>

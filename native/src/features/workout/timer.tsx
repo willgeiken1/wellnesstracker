@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppState, Pressable, View } from "react-native";
+import { AppState, Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import type { WorkoutStore } from "@/data/workout/store";
 import { remainingSeconds } from "@/core/workout/rules";
@@ -11,7 +11,7 @@ import { t } from "@/i18n/en";
 import { clock, Eyebrow, Pill, layout, Sheet } from "./primitives";
 import { restBuzz } from "./haptics";
 import { announce } from "@/components/announce";
-import { IN_RING_MAX, useOutgrowsRing } from "@/components/text-size";
+import { IN_RING_MAX, useOutgrowsRing, useStacked } from "@/components/text-size";
 import { useWorkoutStore } from "./use-workout";
 // Smooth synthetic geometry starts at twelve o'clock; all rings share it.
 const outline = "M150 8C218 6 294 64 294 146C294 197 281 258 238 282C199 306 83 295 48 266C13 238 -8 169 11 125C29 83 105 8 150 8Z";
@@ -98,7 +98,7 @@ export function RestTimer({
   presentation?: "all" | "mini" | "sheet";
 }) {
   const store = useWorkoutStore(source.repo);
-  const outgrown = useOutgrowsRing();
+  const outgrown = useOutgrowsRing(), stacked = useStacked();
   const { reduceMotion, colors } = useTheme(),
     [now, setNow] = useState(() => Date.now()),
     timer = store.timer();
@@ -194,20 +194,8 @@ export function RestTimer({
       </View>
     );
   }
-  return (
-    <Sheet
-      minimal
-      tall
-      onDecrease={() => store.adjustTimer(-15)}
-      onSkip={() => store.skipTimer()}
-      testID="rest-sheet"
-      label={t("rest")}
-      onClose={() =>
-        store.updateTimer({
-          minimized: true,
-        })
-      }
-    >
+  const body = (
+    <>
       <Eyebrow center>{t("rest")}</Eyebrow>
       <ThemedText
         style={{
@@ -291,6 +279,26 @@ export function RestTimer({
           <Pill secondary label={t("skip")} onPress={() => store.skipTimer()} />
         </View>
       </View>
+      {stacked && <Pill secondary testID="rest-minimize" label={t("minimizeRest")} onPress={() => store.updateTimer({ minimized: true })} />}
+    </>
+  );
+  return (
+    <Sheet
+      minimal
+      tall
+      onDecrease={() => store.adjustTimer(-15)}
+      onSkip={() => store.skipTimer()}
+      testID="rest-sheet"
+      label={t("rest")}
+      onClose={() =>
+        store.updateTimer({
+          minimized: true,
+        })
+      }
+    >
+      {/* At accessibility sizes the sheet's content is taller than the screen: it scrolls, so the contours keep their
+          size instead of being squeezed to nothing, and a visible Minimize joins the drag handle. */}
+      {stacked ? <ScrollView testID="rest-sheet-scroll" style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 8 }}>{body}</ScrollView> : body}
     </Sheet>
   );
 }
