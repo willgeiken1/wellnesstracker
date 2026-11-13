@@ -69,6 +69,8 @@ test('existing lb account beats a newer kg demo profile and demo storage is full
  try {
   const account=repo.save('profile',{weight_unit:'lb'});
   const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+  // A fresh demo seeds almost nothing now, so make sure the clock has moved before the newer save.
+  while(Date.now()<=Number(account.updated_at)){ /* wait out the millisecond */ }
   const newer=demo.save('profile',{weight_unit:'kg'});
   expect(newer.updated_at).toBeGreaterThan(account.updated_at);
   saveWeighIn(demo,80,'kg','2026-10-27');
