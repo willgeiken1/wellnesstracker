@@ -1,6 +1,6 @@
 import { View, Pressable, ScrollView, StyleSheet } from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { equipmentLabel, pluralize, t } from "@/i18n/en";
 import {
   keypad,
@@ -22,6 +22,8 @@ export interface Cursor {
   index: number;
   field: "weight" | "reps";
 }
+/** How long a tap waits for the store to show it before the keypad trusts the store again. */
+const SETTLE_MS = 800;
 export function Keypad({
   label,
   inputId = label,
@@ -59,14 +61,30 @@ export function Keypad({
     [wheel, setWheel] = useState(false),
     [wheelBase, setWheelBase] = useState(0),
     [fresh, setFresh] = useState(true),
-    [limitHint, setLimitHint] = useState(false);
+    [limitHint, setLimitHint] = useState(false),
+    // Counts arrivals at a field, so coming back to the same field starts fresh again.
+    [visit, setVisit] = useState(0);
   // Reset selection when moving fields without remounting the numeric keys.
   if (selectedInput !== focus) {
     setSelectedInput(focus);
+    setVisit(visit + 1);
     setFresh(true);
     setLimitHint(false);
     setWheel(false);
   }
+  // Taps can land faster than the store redraws this keypad, so `value` and `fresh` may still be from before
+  // the last tap. The last value sent is kept here and used until the store shows it (or shows something else,
+  // which then wins), and only for a moment, so a value the store refused never lingers unseen.
+  // Without this, a quick second digit replaced the first instead of joining it.
+  const sent = useRef<{ visit: number; before: string; typed: string; at: number } | null>(null);
+  const live = () => {
+    const last = sent.current;
+    return last && last.visit === visit && Date.now() - last.at < SETTLE_MS && (value === last.before || value === last.typed) ? { value: last.typed, fresh: false } : { value, fresh };
+  };
+  const send = (next: string) => {
+    sent.current = { visit, before: value, typed: next, at: Date.now() };
+    onChange(next);
+  };
   const increment = field === "reps" ? 1 : step(equipment, unit, setupStep),
     p = plates(Number(value), unit, barWeight, plateSet);
   const change = (next: string) => {
@@ -76,10 +94,10 @@ export function Keypad({
     }
     setFresh(false);
     setLimitHint(false);
-    onChange(next);
+    send(next);
   };
   const adjust = (n: number) =>
-    change(String(rounded(Math.max(0, Number(value || 0) + n))));
+    change(String(rounded(Math.max(0, Number(live().value || 0) + n))));
   const grouped = new Map<number, number>();
   for (const plate of p.plates)
     grouped.set(plate, (grouped.get(plate) ?? 0) + 1);
@@ -299,7 +317,7 @@ export function Keypad({
               else if (key === "wheel") openWheel();
               else if (key === "next") onNext();
               else {
-                const base = fresh && key !== "backspace" ? "" : value;
+                const now = live(), base = now.fresh && key !== "backspace" ? "" : now.value;
                 const next = keypad(base, key, field === "weight", unit);
                 if (
                   key !== "backspace" &&
@@ -310,7 +328,7 @@ export function Keypad({
                 else {
                   setFresh(false);
                   setLimitHint(false);
-                  onChange(next);
+                  send(next);
                 }
               }
             };

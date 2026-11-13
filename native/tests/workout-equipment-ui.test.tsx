@@ -130,6 +130,8 @@ test('custom Other uses the accessible setup Step for keypad plus and minus', as
   await view.rerender(<Keypad label={name} field="weight" equipment={preferences.exercise(name).equipment} unit="lb" value="100" previous="" setupStep={preferences.increment(name,'lb')} onChange={change} onNext={() => {}} onClose={() => {}} />);
   await fireEvent.press(screen.getByRole('button', {name:'+2.5'}));
   expect(change).toHaveBeenLastCalledWith('102.5');
+  // The store shows the new value, then minus steps back from it.
+  await view.rerender(<Keypad label={name} field="weight" equipment={preferences.exercise(name).equipment} unit="lb" value="102.5" previous="" setupStep={preferences.increment(name,'lb')} onChange={change} onNext={() => {}} onClose={() => {}} />);
   await fireEvent.press(screen.getByRole('button', {name:'−2.5'}));
-  expect(change).toHaveBeenLastCalledWith('97.5');
+  expect(change).toHaveBeenLastCalledWith('100');
 });

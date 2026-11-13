@@ -633,6 +633,14 @@ test('completed rows fill the card width and pending inputs remain borderless', 
   await view.rerender(<SetRow {...props} draft={{weight:'',reps:''}} />);
   expect(screen.getByTestId('set-0-0-weight')).toHaveStyle({borderWidth:0});
 });
+test('a suggested number is a faded placeholder, and a typed one is full strength', async () => {
+  const props = { exercise: 'Bench Press', index: 0, previous: '185 × 8', hint: '190', onEdit: jest.fn(), onDone: jest.fn(), onRemove: jest.fn() };
+  const view = await render(<SetRow {...props} draft={{weight:'',reps:''}} />, {wrapper});
+  expect(screen.getByTestId('set-0-0-weight-text')).toHaveTextContent('190');
+  expect(screen.getByTestId('set-0-0-weight-text')).toHaveStyle({opacity:0.55,fontWeight:'400'});
+  await view.rerender(<SetRow {...props} draft={{weight:'190',reps:''}} />);
+  expect(screen.getByTestId('set-0-0-weight-text')).toHaveStyle({opacity:1,fontWeight:'600'});
+});
 test('completed exercises collapse with volume and expand on tap', async () => {
   const repo=memoryRepository(), store=new WorkoutStore(repo), s=store.start();
   const e=store.addExercise(s.id,'Overhead Press',1);
