@@ -35,6 +35,7 @@ import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { WorkoutSummary } from "./summary";
+import { friendlyDay } from "@/features/body/model";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
@@ -441,7 +442,7 @@ function Logger({
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
             <ThemedText muted numeric style={{ fontSize: 15 }}>
-              {past ? String(session.data.day) : <ElapsedClock startedAt={Number(session.data.started_at)} />}
+              {past ? friendlyDay(String(session.data.day)) : <ElapsedClock startedAt={Number(session.data.started_at)} />}
             </ThemedText>
           </View>
           <Pill
