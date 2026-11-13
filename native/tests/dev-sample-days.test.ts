@@ -2,6 +2,7 @@ import { WorkoutStore } from '../src/data/workout/store';
 import { createSampleDays, SAMPLE_DAYS } from '../src/features/workout/devSampleDays';
 import { dailyWeights } from '../src/features/body/model';
 import { memoryRepository } from './workout-repository';
+import { seedDemo, DEMO_ROUTINE_ID, DEMO_SESSION_ID } from '../fixtures/demo';
 
 const NOW = new Date(2026, 4, 12, 15, 0, 0).getTime();
 const dev = { isDev: true, demo: true, signedIn: false };
@@ -46,4 +47,26 @@ test('does nothing when the build is not a development build, whatever it is tol
     expect(createSampleDays(new WorkoutStore(repo), dev, NOW)).toBe(false);
     expect(rows(repo)).toHaveLength(0);
   } finally { Object.defineProperty(globalThis, '__DEV__', { value: original, configurable: true, writable: true }); }
+});
+
+test('clears the empty example placeholders, so Up next and History show the sample weeks', () => {
+  const repo = memoryRepository();
+  seedDemo(repo);
+  expect(repo.get('routines', DEMO_ROUTINE_ID)).toBeTruthy();
+  const store = new WorkoutStore(repo);
+  expect(createSampleDays(store, dev, NOW)).toBe(true);
+  expect(repo.get('routines', DEMO_ROUTINE_ID)?.deleted_at).toBeTruthy();
+  expect(repo.get('sessions', DEMO_SESSION_ID)?.deleted_at).toBeTruthy();
+  const after = new WorkoutStore(repo);
+  expect(after.templates().map(row => row.data.name)).toEqual(['Push day', 'Pull day', 'Leg day']);
+  expect(after.history().some(row => row.data.day === '2026-01-01')).toBe(false);
+});
+
+test('keeps the placeholder routine once someone has put exercises in it', () => {
+  const repo = memoryRepository();
+  seedDemo(repo);
+  const store = new WorkoutStore(repo);
+  store.saveTemplate('Demo full body', [{ exercise: 'Squat', target_sets: 3, target_reps: 5 }], DEMO_ROUTINE_ID);
+  createSampleDays(store, dev, NOW);
+  expect(repo.get('routines', DEMO_ROUTINE_ID)?.deleted_at).toBeFalsy();
 });
