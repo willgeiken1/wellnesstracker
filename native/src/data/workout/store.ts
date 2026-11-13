@@ -163,7 +163,10 @@ export class WorkoutStore {
       this.recompute();
     });
   }
-  trainingHistory() { return this.reading(() => this.history().filter(s => this.entries(s.id).some(e => this.working(e).some(s => !s.warmup && s.reps > 0)))); }
+  trainingHistory() { return this.reading(() => this.history().filter(s => this.trained(s))); }
+  /** Whether a finished workout counts as training: at least one working set with reps. A past-day draft that was
+   * opened and left empty does not. Call it inside {@link reading} when checking more than a few workouts. */
+  trained(session: Row) { return this.entries(session.id).some(e => this.working(e).some(s => !s.warmup && s.reps > 0)); }
   replaceExercise(entryId: string, name: string, mode: 'swap' | 'replace' = 'replace') {
     const entry = this.repo.get('entries', entryId);
     if (!entry || !name.trim() || !['swap','replace'].includes(mode)) throw Error('Invalid exercise.');
