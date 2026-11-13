@@ -7,7 +7,7 @@ import { useTheme } from '../../design/theme-provider';
 import { t } from '../../i18n/en';
 import { fromKg } from '../../core/workout/rules';
 import type { Unit } from '../onboarding/model';
-import { dayStamp, type TrendWeight } from './model';
+import { dayStamp, friendlyDay, type TrendWeight } from './model';
 export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:string;kg:number}[];unit:Unit}) {
   const {colors}=useTheme();
   const [selected,setSelected]=useState<string|null>(null),[width,setWidth]=useState(300);
@@ -18,7 +18,7 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
   const low=Math.min(...values)-0.5,high=Math.max(...values)+0.5;
   const x=(day:string)=>16+(dayStamp(day)-first)/Math.max(86400000,last-first)*268;
   const y=(kg:number)=>164-(kg-low)/(high-low)*144;
-  const label=t('bodyPoint').replace('{day}',point.day).replace('{trend}',fromKg(point.trendKg,unit).toFixed(1)).replace('{average}',fromKg(point.kg,unit).toFixed(1)).replaceAll('{unit}',unit).replace('{count}',String(point.count));
+  const label=t('bodyPoint').replace('{day}',friendlyDay(point.day)).replace('{trend}',fromKg(point.trendKg,unit).toFixed(1)).replace('{average}',fromKg(point.kg,unit).toFixed(1)).replaceAll('{unit}',unit).replace('{count}',String(point.count));
   // No animations, transitions or programmatic scrolling, including Reduce Motion.
   return <View style={{gap:8}}>
     <Pressable testID="body-chart" accessibilityRole="button" accessibilityLabel={t('bodyChart')}
@@ -37,7 +37,7 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
         <Circle cx={x(point.day)} cy={y(point.trendKg)} r={5} fill={colors.recovery}/>
       </Svg>
     </Pressable>
-    <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{points[0].day}</ThemedText><ThemedText muted variant="caption">{points.at(-1)!.day}</ThemedText></View>
+    <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{friendlyDay(points[0].day)}</ThemedText><ThemedText muted variant="caption">{friendlyDay(points.at(-1)!.day)}</ThemedText></View>
     <ThemedText accessibilityLiveRegion="polite">{label}</ThemedText>
     <View testID="body-chart-steps" style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
       <Button label={t('bodyPrevious')} variant="secondary" disabled={index===0} onPress={()=>setSelected(points[index-1].day)}/>
