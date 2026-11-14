@@ -1,4 +1,7 @@
 {
+  "cli": {
+    "appVersionSource": "remote"
+  },
   "build": {
     "free-iphone": {
       "developmentClient": true,
@@ -11,6 +14,16 @@
       },
       "ios": {
         "buildConfiguration": "Debug"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
       }
     }
   }
