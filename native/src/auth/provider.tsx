@@ -11,7 +11,7 @@ import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
-import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure } from './sign-out';
+import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed } from './sign-out';
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
@@ -36,6 +36,8 @@ export interface AuthState {
   recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
   createAccount(email: string,password: string,dob?: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  /** Permanently deletes the signed-in account on the server, then erases this phone's copy. */
+  deleteAccount?(): Promise<void>;
 }
 export const AuthContext = createContext<AuthState | null>(null);
 export function useAuth() { const value=useContext(AuthContext);if(!value)throw new Error('AuthProvider is required.');return value; }
@@ -223,6 +225,25 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       const prepared=preparedSync.current;preparedSync.current=null;
       if(!departurePending)await (prepared?.engine===engine?prepared.flight:syncBeforeSignOut(()=>engine?.sync()??Promise.resolve()));
       if(currentRepo?.hasUnsynced() && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
+      await depart();
+    },
+    deleteAccount:async()=>{
+      // Only a signed-in owner whose repository is loaded. Demo and guest data never reach the server.
+      if(!bootReady||!client||!session||!currentRepo||currentRepo.owner!==session.user.id||activeSession.current?.user.id!==session.user.id||departingOwner.current||departurePending||departureLocked.current)throw new AccountDeletionFailed();
+      authRequest.current++;authInFlight.current=false;if(demoTarget)setDemoTarget(null);if(demoTransferError)setDemoTransferError(false);
+      let confirmed=false;
+      try {
+        // The server deletes stored files, every row and the sign-in, then checks nothing is left.
+        const {data,error}=await client.functions.invoke('delete-account',{body:{confirm:'DELETE'}});
+        confirmed=!error&&data?.ok===true;
+      } catch {confirmed=false;}
+      if(!confirmed)throw new AccountDeletionFailed();
+      // The account is gone: there is nothing to sync, so erase this phone's copy without the unsynced check.
+      await depart();
+    },
+    syncNow:()=>engine?.sync()??Promise.resolve(),
+  };
+  async function depart() {
       if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');
       // Retain the original repository/session even if auth emits SIGNED_OUT before cleanup fails.
       const leave=async()=>{
@@ -249,8 +270,6 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         setSession(current => current?.user.id === session?.user.id ? null : current);
       };
       await leave();
-    },
-    syncNow:()=>engine?.sync()??Promise.resolve(),
-  };
+  }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
