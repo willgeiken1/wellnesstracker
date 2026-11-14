@@ -1,63 +1,59 @@
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import type { AppleHealthState } from '@/features/health/use-apple-health';
-import { SERVICES, WIDGETS, type ServiceId } from '@/features/home-widgets/registry';
+import type { OuraState } from '@/features/health/use-oura';
+import { WIDGETS, type ServiceId } from '@/features/home-widgets/registry';
 import { t } from '@/i18n/en';
 
 const card = { borderRadius: 18, padding: tokens.spacing[3], gap: tokens.spacing[1] } as const;
 const semibold = { fontWeight: '600' } as const;
 
-const NAMES: Record<ServiceId | 'insight', string> = { oura: 'Oura', appleHealth: 'Apple Health', fitbit: 'Fitbit', whoop: 'WHOOP', insight: 'Insight' };
-const PILLAR: Record<ServiceId | 'insight', 'training' | 'food' | 'sleep'> = { oura: 'sleep', appleHealth: 'food', fitbit: 'training', whoop: 'sleep', insight: 'training' };
+const NAMES: Record<ServiceId, string> = { oura: 'Oura', appleHealth: 'Apple Health', fitbit: 'Fitbit', whoop: 'WHOOP' };
+const PILLAR: Record<ServiceId, 'training' | 'food' | 'sleep'> = { oura: 'sleep', appleHealth: 'food', fitbit: 'training', whoop: 'sleep' };
+/** The services Insight can connect today. Others join this list only once they can really connect. */
+export const SHOWN: readonly ServiceId[] = ['appleHealth', 'oura'];
 /** What each service adds, read from the Home widget catalogue so the two never drift apart. */
 export const unlocks = (service: ServiceId) => WIDGETS.filter(widget => (widget.services as readonly ServiceId[]).includes(service)).map(widget => widget.title);
 /** A service is ready to connect once at least one of its widgets is built. */
 export const ready = (service: ServiceId) => WIDGETS.some(widget => widget.available && (widget.services as readonly ServiceId[]).includes(service));
 
-/** Made-up numbers that show how one day reads when several services feed it. Never real data. */
-export const EXAMPLE_DAY: readonly { label: string; value: string; sources: readonly (ServiceId | 'insight')[]; note?: string }[] = [
-  { label: 'Sleep', value: '7 h 12 min', sources: ['oura', 'appleHealth'], note: 'Oura 7 h 12 min · Apple Health 7 h 05 min. Insight uses the ring you wear to bed.' },
-  { label: 'Recovery', value: '82%', sources: ['whoop'] },
-  { label: 'Heart rate variability', value: '48 ms', sources: ['oura'] },
-  { label: 'Resting heart rate', value: '54 bpm', sources: ['oura', 'whoop'] },
-  { label: 'Steps', value: '8,430', sources: ['appleHealth', 'fitbit'] },
-  { label: 'Training', value: '12,400 lb', sources: ['insight'] },
-  { label: 'Food', value: '2,180 kcal', sources: ['insight'] },
-];
-
-function Badge({ source }: { source: ServiceId | 'insight' }) {
-  const { colors } = useTheme();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: 22, borderRadius: 99, backgroundColor: colors['surface-2'] }}>
-    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors[PILLAR[source]] }} />
-    <ThemedText variant="caption">{NAMES[source]}</ThemedText>
-  </View>;
-}
-
 function Monogram({ service }: { service: ServiceId }) {
   const { colors } = useTheme();
-  return <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
-    <ThemedText style={[semibold, { color: colors[PILLAR[service]] }]}>{NAMES[service].charAt(0)}</ThemedText>
+  // The letter is in the text colour so it reads in every theme; the service's pillar colour is the ring around it.
+  return <View style={{ width: 40, height: 40, borderRadius: 12, borderWidth: 2, borderColor: colors[PILLAR[service]], alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
+    <ThemedText style={semibold}>{NAMES[service].charAt(0)}</ThemedText>
   </View>;
 }
 
-/** Health & devices: which services Insight can bring together and what one combined day looks like.
- * A preview only. It connects nothing, stores nothing and reads no health data; the example numbers are made up. */
-export function ConnectedServices({ connected: given = [], apple }: { connected?: readonly ServiceId[]; apple?: AppleHealthState }) {
+/** Health & devices: the services Insight can connect, each with its status, and the Apple Health and Oura cards
+ * that connect them. With neither card given it only lists them and connects nothing. */
+export function ConnectedServices({ connected: given = [], apple, oura }: { connected?: readonly ServiceId[]; apple?: AppleHealthState; oura?: OuraState }) {
   const { colors } = useTheme();
   const live = !!apple && apple.access !== 'unavailable';
-  const connected = live && apple.access === 'asked' && !given.includes('appleHealth') ? [...given, 'appleHealth' as const] : given;
+  // Oura is offered only to a signed-in account, which is where its connection lives.
+  // "Expired" is still connected (the stored days still show) but needs Oura's page again for new ones.
+  const ring = !!oura && oura.state !== 'unavailable', ringOn = ring && oura.state === 'on', ringExpired = ring && oura.state === 'expired';
+  // Unreachable: the connection could not be read, so nothing is claimed either way; the only button tries again.
+  const ringUnknown = ring && oura.state === 'unreachable';
+  const connected = [...given, ...(live && apple.access === 'asked' && !given.includes('appleHealth') ? ['appleHealth' as const] : []),
+    ...((ringOn || ringExpired) && !given.includes('oura') ? ['oura' as const] : [])];
+  // Disconnecting removes the Oura login and the stored Oura days from the account, so the system asks first.
+  const confirmOff = () => Alert.alert(t('ouraOffTitle'), t('ouraOffBody'), [
+    { text: t('cancel'), style: 'cancel' },
+    { text: t('ouraDisconnect'), style: 'destructive', onPress: () => oura?.disconnect() },
+  ]);
   return <View style={{ gap: tokens.spacing[3] }}>
     <View style={{ gap: tokens.spacing[0] }}>
       <ThemedText variant="title" accessibilityRole="header" style={semibold}>{t('connectTitle')}</ThemedText>
       <ThemedText muted>{t('connectBody')}</ThemedText>
     </View>
     <Card style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-services">
-      {SERVICES.map((service, index) => {
-        const adds = unlocks(service), state = connected.includes(service) ? 'connectOn' : ready(service) ? 'connectOff' : 'connectLater';
+      {SHOWN.map((service, index) => {
+        const adds = unlocks(service), state = service === 'oura' && ringExpired ? 'connectAgain' : service === 'oura' && ringUnknown ? 'connectUnknown' : connected.includes(service) ? 'connectOn' : ready(service) ? 'connectOff' : 'connectLater';
         return <View key={service} testID={`connect-${service}`} accessible accessibilityLabel={`${NAMES[service]}, ${t(state)}. ${t('connectAdds')} ${adds.join(', ')}`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[2], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'] }}>
           <Monogram service={service} />
@@ -66,7 +62,7 @@ export function ConnectedServices({ connected: given = [], apple }: { connected?
             <ThemedText muted variant="caption">{adds.join(' · ')}</ThemedText>
           </View>
           <View style={{ paddingHorizontal: 10, minHeight: 26, borderRadius: 99, justifyContent: 'center', backgroundColor: state === 'connectOn' ? colors['accent-tint'] : colors['surface-2'] }}>
-            <ThemedText variant="caption" style={[semibold, state === 'connectOn' ? { color: colors.accent } : { color: colors['text-muted'] }]}>{t(state)}</ThemedText>
+            <ThemedText variant="caption" style={[semibold, { color: state === 'connectOn' ? colors.text : colors['text-muted'] }]}>{t(state)}</ThemedText>
           </View>
         </View>;
       })}
@@ -79,28 +75,16 @@ export function ConnectedServices({ connected: given = [], apple }: { connected?
       <Button testID="connect-apple-button" label={t(apple.busy ? 'appleHealthBusy' : apple.access === 'asked' ? 'appleHealthAgain' : 'appleHealthConnect')} disabled={apple.busy} variant={apple.access === 'asked' ? 'secondary' : 'primary'} onPress={apple.connect} />
       {apple.access === 'asked' && <ThemedText muted variant="caption">{t('appleHealthStop')}</ThemedText>}
     </Card>}
-    <ThemedText muted variant="caption">{t(live ? 'connectSoonOthers' : 'connectSoon')}</ThemedText>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1] }}>
-      <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { flex: 1 }]}>{t('connectDayTitle')}</ThemedText>
-      <View style={{ paddingHorizontal: 10, minHeight: 24, borderRadius: 99, justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
-        <ThemedText muted variant="caption">{t('exampleOnly')}</ThemedText>
-      </View>
-    </View>
-    <Card style={[card, { gap: 0, paddingVertical: tokens.spacing[1] }]} testID="connect-example-day">
-      {EXAMPLE_DAY.map((row, index) => <View key={row.label} style={{ paddingVertical: tokens.spacing[2], gap: 6, borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'] }}>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-          <ThemedText style={{ flex: 1 }}>{row.label}</ThemedText>
-          <ThemedText numeric style={semibold}>{row.value}</ThemedText>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{row.sources.map(source => <Badge key={source} source={source} />)}</View>
-        {row.note && <ThemedText muted variant="caption">{row.note}</ThemedText>}
-      </View>)}
-    </Card>
-    <Card style={card} testID="connect-example-pattern">
-      <ThemedText muted variant="caption">{t('connectPatternLabel')}</ThemedText>
-      <ThemedText>{t('connectPattern')}</ThemedText>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}><Badge source="oura" /><Badge source="insight" /></View>
-    </Card>
-    <ThemedText muted variant="caption">{t('connectPrivacy')}</ThemedText>
+    {ring && <Card style={card} testID="connect-oura-card">
+      <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('ouraTitle')}</ThemedText>
+      {!ringUnknown && <ThemedText muted>{t(ringOn ? 'ouraOn' : ringExpired ? 'ouraExpired' : 'ouraOff')}</ThemedText>}
+      {oura.failed && <ThemedText testID="connect-oura-failed" accessibilityLiveRegion="polite" style={{ color: colors.warning }}>{t('ouraFailed')}</ThemedText>}
+      <Button testID="connect-oura-button" label={t(oura.busy ? 'appleHealthBusy' : ringOn ? 'ouraAgain' : ringExpired ? 'ouraReconnect' : ringUnknown ? 'ouraRetry' : 'ouraConnect')} disabled={oura.busy} variant={ringOn ? 'secondary' : 'primary'} onPress={ringOn || ringUnknown ? oura.refresh : oura.connect} />
+      {ringExpired && <Button testID="connect-oura-again" label={t('ouraAgain')} disabled={oura.busy} variant="secondary" onPress={oura.refresh} />}
+      {(ringOn || ringExpired) && <Button testID="connect-oura-off" label={t('ouraDisconnect')} disabled={oura.busy} variant="secondary" onPress={confirmOff} />}
+      {!ringOn && !ringUnknown && <ThemedText muted variant="caption">{t('ouraReturn')}</ThemedText>}
+    </Card>}
+    {!live && !ring && <ThemedText muted variant="caption">{t('connectSoon')}</ThemedText>}
+    <ThemedText muted variant="caption">{t(ring ? 'connectPrivacyOura' : 'connectPrivacy')}</ThemedText>
   </View>;
 }

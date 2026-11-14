@@ -50,6 +50,17 @@ test('identical development fixture links receive distinct presentation requests
  expect(redirectSystemPath(input)).not.toBe(redirectSystemPath(input));
 });
 
+test('the Oura preview link opens only in development, with one known state and nothing else', () => {
+  expect(redirectSystemPath({ path: 'insight://dev/oura-preview?state=expired&x=1', initial: true })).toBe('/settings/dev-oura-preview?state=expired');
+  for (const bad of ['insight://dev/oura-preview', 'insight://dev/oura-preview?state=../x', 'insight://dev/oura-preview?state=ON'])
+    expect(redirectSystemPath({ path: bad, initial: true })).toBe('/');
+  const original = __DEV__;
+  try {
+    Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true, writable: true });
+    expect(redirectSystemPath({ path: 'insight://dev/oura-preview?state=on', initial: true })).toBe('/');
+  } finally { Object.defineProperty(globalThis, '__DEV__', { value: original, configurable: true, writable: true }); }
+});
+
 test('the sample data link opens only in development, and carries nothing with it', () => {
   expect(redirectSystemPath({ path: 'insight://dev/sample-data?x=1', initial: true })).toBe('/dev/sample-data');
   const original = __DEV__;

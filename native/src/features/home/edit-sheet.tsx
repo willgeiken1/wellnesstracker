@@ -7,6 +7,7 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import { appleHealth } from '../health/apple';
+import { oura } from '../health/oura-client';
 import { HEALTH_TILES, addTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTiles, type TileId } from './tiles';
 
 export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileScore' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep'> = {
@@ -32,8 +33,8 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
 /** Edit Home: what is on Home (reorder, resize, remove) and what can be added. Every change applies at once; Done only closes. */
 export function EditHome({ visible, tiles, onChange, onClose }: { visible: boolean; tiles: HomeTiles; onChange: (next: HomeTiles) => void; onClose: () => void }) {
   const { colors } = useTheme();
-  // The Apple Health tiles are offered only where Apple Health can exist.
-  const healthHere = useMemo(() => !!appleHealth(), []);
+  // The Steps and Sleep tiles are offered only where Apple Health or an account's Oura connection can exist.
+  const healthHere = useMemo(() => !!appleHealth() || !!oura(), []);
   const rest = offHome(tiles).filter(id => !HEALTH_TILES.includes(id) || healthHere);
   const row = { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], padding: tokens.spacing[2], borderRadius: 18, backgroundColor: colors.surface } as const;
   const name = (id: TileId) => t(TILE_NAME[id]);
