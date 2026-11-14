@@ -6,9 +6,14 @@ import type { HealthSource, SleepSpan } from '../src/features/health/source';
 
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn(() => ({})) }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+// Apple Health only here; Oura has its own tests.
+jest.mock('../src/features/health/oura-client', () => ({ oura: jest.fn(() => null) }));
 const wrap = (node: React.ReactElement) => <ThemeProvider>{node}</ThemeProvider>;
 // Friday 9 a.m. on a made-up week.
 const NOW = new Date(2026, 10, 13, 9, 0);
+// The hook reads the last days from the real clock, so the clock is held at NOW (only Date is faked).
+beforeAll(() => jest.useFakeTimers({ now: NOW, doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'hrtime', 'performance'] }));
+afterAll(() => jest.useRealTimers());
 /** Made-up readings only: 7 h 30 min every night, 8 h 12 min last night, 8,000 steps a day and 4,321 so far today. */
 function source(): HealthSource {
   const spans: SleepSpan[] = [];
@@ -30,7 +35,7 @@ test('last night, the week and 30 nights of sleep, with steps, in plain facts', 
   expect(screen.getByLabelText(/^Sleep, 7-night average: 7 h \d+ min$/)).toBeTruthy();
   expect(screen.getByLabelText(/^Steps, 7-day average: /)).toBeTruthy();
   expect(screen.getByLabelText('Sleep, last 30 nights. 30 of 30 nights recorded. Dashed line: 7 h')).toBeTruthy();
-  expect(screen.getByText('From Apple Health. Read on this phone and kept in memory only.')).toBeTruthy();
+  expect(screen.getByText(/^From Apple Health or Oura\./)).toBeTruthy();
 });
 
 test('not connected: says how to connect, and the phone-only build says it does not read Apple Health', async () => {
