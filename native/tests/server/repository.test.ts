@@ -40,7 +40,8 @@ test('health provenance stays local; local Oura has no outbox; rollback is atomi
   repo.putLocal({...syntheticRow('weigh_ins'),data:{...syntheticRow('weigh_ins').data,source:'healthkit'}});
   expect(repo.pending()).toEqual([]);
   expect(repo.list('weigh_ins')[0].data.source).toBe('healthkit');
-  repo.cacheOura('2026-01-01', {fixture: true});
+  // A row in the old local Oura table (the app no longer writes it) never reaches the outbox.
+  sqlite.prepare('INSERT INTO oura_days(owner_id,day,cache) VALUES(?,?,?)').run(OWNER_A,'2026-01-01','{"fixture":true}');
   expect(repo.pending()).toEqual([]);
   db.run(require('drizzle-orm').sql.raw("CREATE TRIGGER fail_outbox BEFORE INSERT ON sync_outbox BEGIN SELECT RAISE(ABORT, 'fixture rollback'); END;"));
   expect(() => repo.putLocal(syntheticRow())).toThrow();

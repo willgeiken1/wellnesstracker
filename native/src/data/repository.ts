@@ -428,9 +428,6 @@ export class Repository {
       }
     }
   }
-  cacheOura(day: string, cache: Record<string,unknown>) {
-    this.safe(() => this.db.run(sql`INSERT INTO oura_days(owner_id,day,cache) VALUES(${this.owner},${day},${JSON.stringify(cache)}) ON CONFLICT(owner_id,day) DO UPDATE SET cache=excluded.cache`));
-  }
 }
 /** Device metadata is local-only and has no account data. */
 export function deviceId(db: ExpoSQLiteDatabase, uuid: () => string) {

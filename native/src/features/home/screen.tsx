@@ -426,7 +426,8 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
   if (health) {
     const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
     if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
-    if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : '0', unit: minutes ? 'min' : 'h', series: sleep, bars: true, to: '/progress' });
+    if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, // A night with nothing recorded is unknown, not zero hours.
+      value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : t('homeSleepNone'), unit: minutes ? 'min' : t('homeSleepNoneUnit'), series: sleep, bars: true, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }

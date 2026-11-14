@@ -19,6 +19,9 @@ if (process.env.APP_VARIANT === 'freeiphone') {
     if (relative === 'src/features/food/ai/client.ts') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/food-ai-client.ts') };
     }
+    if (relative === 'src/features/health/oura-client.ts') {
+      return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/oura-client.ts') };
+    }
     if (relative === 'src/features/workout/ai/client.ts') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/workout-ai-client.ts') };
     }

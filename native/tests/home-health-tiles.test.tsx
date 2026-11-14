@@ -51,6 +51,18 @@ test('once Apple Health is connected, Home shows steps and last night\'s sleep, 
   expect(JSON.stringify(local.mock.calls)).not.toMatch(/8430|8,430|7\.2|432/);
 });
 
+test('a night with no sleep recorded reads as none recorded, not as 0 hours', async () => {
+  // Earlier nights were recorded; last night was not.
+  const base = fake('asked'), lastNight = new Date(2026, 4, 12);
+  const source = { ...base, sleep: jest.fn(async (from: Date, to: Date) => (await base.sleep(from, to)).filter(span => span.end < new Date(lastNight.getTime() - 3_600_000))) };
+  jest.mocked(appleHealth).mockReturnValue(source);
+  addHealthTiles(open());
+  await render(<Home />, { wrapper });
+  await settle();
+  expect(screen.getByRole('button', { name: 'Sleep, None recorded' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Sleep, 0/ })).toBeNull();
+});
+
 test('before connecting, Home reads nothing from Apple Health and shows no health tiles', async () => {
   const source = fake('ask');
   jest.mocked(appleHealth).mockReturnValue(source);
