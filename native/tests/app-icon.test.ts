@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { SOURCES, ICON_COLORS } from '../scripts/app-icon';
+import { SOURCES, ICON_COLORS, EYE, ANDROID_SCALE } from '../scripts/app-icon';
 import tokens from '../src/design/tokens.json';
 
 const root = path.join(__dirname, '..');
@@ -21,6 +21,15 @@ test('the icon is drawn in the default palette, not Expo template colours', () =
   expect(ICON_COLORS.accent).toBe(sea.accent);
   expect(SOURCES['icon.svg']).toContain(sea.accent);
   expect(JSON.stringify(config)).not.toMatch(/#208AEF|#E6F4FE/i);
+});
+
+test('the eye is E0: small, high and right, and inside the Android safe zone', () => {
+  expect(EYE.half * 2).toBeLessThan(1024 * 0.6);
+  expect(EYE.cx).toBeGreaterThan(512);
+  expect(EYE.cy).toBeLessThan(512);
+  // The far tip of the lens, after the Android shrink about the middle, stays inside the 66% safe circle.
+  const tip = Math.hypot(EYE.cx + EYE.half + 14 - 512, EYE.cy - 512) * ANDROID_SCALE;
+  expect(tip).toBeLessThan(1024 * 0.33);
 });
 
 test('the splash follows the default theme in light and dark', () => {
