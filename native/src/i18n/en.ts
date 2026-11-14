@@ -867,6 +867,8 @@ export const en = {
   lookSoft: 'Soft', lookRound: 'Round', lookSquare: 'Square',
   headingLookTitle: 'Headings', headingLookBody: 'The font for titles. Lexend is Insight\'s own; System font uses your phone\'s.',
   lookLexend: 'Lexend', lookSystem: 'System font',
+  weightChartLookTitle: 'Weight chart', weightChartLookBody: 'The colour of your weight trend on Progress. Accent matches your theme\'s buttons.',
+  lookRecovery: 'Recovery', lookAccent: 'Accent',
   appearancePreview: 'Preview', appearancePreviewTitle: 'Push day', appearancePreviewBody: '6 exercises · about 50 min',
   appearancePreviewStart: 'Start', appearancePreviewCard: 'Insight Score', appearancePreviewCardBody: 'Raised card',
   appearanceReset: 'Reset looks', appearanceResetBody: 'Puts every look back to the default. Your theme stays.',

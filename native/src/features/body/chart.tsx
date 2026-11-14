@@ -9,7 +9,9 @@ import { fromKg } from '../../core/workout/rules';
 import type { Unit } from '../onboarding/model';
 import { dayStamp, friendlyDay, type TrendWeight } from './model';
 export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:string;kg:number}[];unit:Unit}) {
-  const {colors}=useTheme();
+  const {colors,weightChartLook}=useTheme();
+  // The trend wears the colour chosen in Appearance: recovery by default, or the theme's accent.
+  const tint=colors[weightChartLook];
   const [selected,setSelected]=useState<string|null>(null),[width,setWidth]=useState(300);
   if(!points.length)return <ThemedText muted>{t('bodyRangeEmpty')}</ThemedText>;
   const index=Math.max(0,selected===null?points.length-1:points.findIndex(p=>p.day===selected));
@@ -36,9 +38,9 @@ export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:strin
       }} style={{height:190}}>
       <Svg accessible={false} width="100%" height={190} viewBox="0 0 300 190" preserveAspectRatio="none">
         {raw.map((p,i)=><Circle key={i} cx={x(p.day)} cy={y(p.kg)} r={3} fill={colors.text} opacity={0.22}/>)}
-        {points.length>1&&<Path testID="body-chart-area" d={`${points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} L${x(points.at(-1)!.day)},190 L${x(points[0].day)},190 Z`} fill={colors.recovery} opacity={0.14}/>}
-        <Path testID="body-chart-line" d={points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} fill="none" stroke={colors.recovery} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"/>
-        <Circle cx={x(point.day)} cy={y(point.trendKg)} r={5} fill={colors.recovery}/>
+        {points.length>1&&<Path testID="body-chart-area" d={`${points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} L${x(points.at(-1)!.day)},190 L${x(points[0].day)},190 Z`} fill={tint} opacity={0.14}/>}
+        <Path testID="body-chart-line" d={points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} fill="none" stroke={tint} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"/>
+        <Circle cx={x(point.day)} cy={y(point.trendKg)} r={5} fill={tint}/>
       </Svg>
     </Pressable>
     <View style={{flexDirection:'row',justifyContent:'space-between',flexWrap:'wrap'}}><ThemedText muted variant="caption">{friendlyDay(points[0].day)}</ThemedText><ThemedText muted variant="caption">{friendlyDay(points.at(-1)!.day)}</ThemedText></View>

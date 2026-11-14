@@ -2,7 +2,7 @@ import { AccessibilityInfo, Alert, Pressable, View } from 'react-native';
 import { useState } from 'react';
 import Svg from 'react-native-svg';
 import { RingArc } from '@/components/ring-arc';
-import { BAR_LOOKS, CORNER_LOOKS, DEFAULT_APPEARANCE, HEADING_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, SURFACE_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
+import { BAR_LOOKS, CORNER_LOOKS, DEFAULT_APPEARANCE, HEADING_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, SURFACE_LOOKS, WEIGHT_CHART_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';
 import { Screen } from '@/components/screen';
 import { Card, Panel } from '@/components/card';
 import { Button } from '@/components/button';
@@ -79,8 +79,8 @@ function PresetTile({ id, selected, onPress }: { id: Preset; selected: boolean; 
 const MOTION_NAME = { basic: 'motionBasic', calm: 'motionCalm', lively: 'motionLively' } as const;
 const STRENGTH_NAME = { 1: 'strengthSubtle', 2: 'strengthMedium', 3: 'strengthFull' } as const;
 
-const { ring, motion, intensity: strength, bar, keypad, selector, surface, corners, heading } = DEFAULT_APPEARANCE;
-const DEFAULT_LOOKS = [ring, motion, strength, bar, keypad, selector, surface, corners, heading].join();
+const { ring, motion, intensity: strength, bar, keypad, selector, surface, corners, heading, weightChart } = DEFAULT_APPEARANCE;
+const DEFAULT_LOOKS = [ring, motion, strength, bar, keypad, selector, surface, corners, heading, weightChart].join();
 const CORNER_NAME = { soft: 'lookSoft', round: 'lookRound', square: 'lookSquare' } as const;
 /** The current looks on a sample panel with a button, and a raised card, so each change shows before leaving. */
 function Preview() {
@@ -110,9 +110,9 @@ export default function Appearance() {
   const { override, setOverride, palette, setPalette, ringLook, setRingLook, persistenceError,
     preset, applyPreset, motionStyle, setMotionStyle, intensity, setIntensity, reduceMotion, reduceMotionReady,
     barLook, setBarLook, keypadLook, setKeypadLook, selectorLook, setSelectorLook,
-    surfaceLook, setSurfaceLook, cornerLook, setCornerLook, headingLook, setHeadingLook, resetAppearance } = useTheme();
+    surfaceLook, setSurfaceLook, cornerLook, setCornerLook, headingLook, setHeadingLook, weightChartLook, setWeightChartLook, resetAppearance } = useTheme();
   // The note shows only while the looks are still the ones the reset left, and is spoken once on iOS too.
-  const looks = [ringLook, motionStyle, intensity, barLook, keypadLook, selectorLook, surfaceLook, cornerLook, headingLook].join();
+  const looks = [ringLook, motionStyle, intensity, barLook, keypadLook, selectorLook, surfaceLook, cornerLook, headingLook, weightChartLook].join();
   const [resetTo, setResetTo] = useState<string | null>(null);
   const confirmReset = () => Alert.alert(t('appearanceResetConfirm'), t('appearanceResetBody'), [
     { text: t('cancel'), style: 'cancel' },
@@ -167,6 +167,10 @@ export default function Appearance() {
     <ThemedText muted variant="caption">{t('headingLookBody')}</ThemedText>
     <SegmentedControl label={t('headingLookTitle')} value={headingLook} onChange={setHeadingLook}
       options={HEADING_LOOKS.map(value => ({ value, label: t(value === 'system' ? 'lookSystem' : 'lookLexend') }))} />
+    <ThemedText variant="headline" accessibilityRole="header">{t('weightChartLookTitle')}</ThemedText>
+    <ThemedText muted variant="caption">{t('weightChartLookBody')}</ThemedText>
+    <SegmentedControl label={t('weightChartLookTitle')} value={weightChartLook} onChange={setWeightChartLook}
+      options={WEIGHT_CHART_LOOKS.map(value => ({ value, label: t(value === 'accent' ? 'lookAccent' : 'lookRecovery') }))} />
   </Panel><Panel>
     <ThemedText variant="headline" accessibilityRole="header">{t('motionTitle')}</ThemedText>
     <SegmentedControl label={t('motionTitle')} value={motionStyle} onChange={setMotionStyle}

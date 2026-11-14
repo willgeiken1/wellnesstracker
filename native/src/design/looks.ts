@@ -34,10 +34,13 @@ export const PANEL_RADIUS: Record<CornerLook, number> = { soft: 18, round: 28, s
 /** The font for titles and headings: Lexend, the plan's, or the phone's own system font. */
 export const HEADING_LOOKS = ["lexend", "system"] as const;
 export type HeadingLook = (typeof HEADING_LOOKS)[number];
+/** The colour of the weight trend on Progress: the recovery colour (the default) or the theme's accent. */
+export const WEIGHT_CHART_LOOKS = ["recovery", "accent"] as const;
+export type WeightChartLook = (typeof WEIGHT_CHART_LOOKS)[number];
 export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook; selector: SelectorLook;
-  surface: SurfaceLook; corners: CornerLook; heading: HeadingLook };
+  surface: SurfaceLook; corners: CornerLook; heading: HeadingLook; weightChart: WeightChartLook };
 export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain", selector: "standard",
-  surface: "flat", corners: "soft", heading: "lexend" };
+  surface: "flat", corners: "soft", heading: "lexend", weightChart: "recovery" };
 /** Every look back to the default, keeping the theme the person picked. */
 export const resetLooks = (looks: Looks): Looks => ({ ...DEFAULT_APPEARANCE, palette: looks.palette });
 
@@ -80,11 +83,12 @@ export function parseAppearance(saved: unknown): Looks {
     surface: oneOf(SURFACE_LOOKS, pairs.get("surface"), DEFAULT_APPEARANCE.surface),
     corners: oneOf(CORNER_LOOKS, pairs.get("corners"), DEFAULT_APPEARANCE.corners),
     heading: oneOf(HEADING_LOOKS, pairs.get("heading"), DEFAULT_APPEARANCE.heading),
+    weightChart: oneOf(WEIGHT_CHART_LOOKS, pairs.get("weight"), DEFAULT_APPEARANCE.weightChart),
   };
 }
 export function formatAppearance(appearance: Looks): string {
-  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector", surface: "surface", corners: "corners", heading: "heading" } as const;
-  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector", "surface", "corners", "heading"] as const)
+  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector", surface: "surface", corners: "corners", heading: "heading", weightChart: "weight" } as const;
+  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector", "surface", "corners", "heading", "weightChart"] as const)
     .filter((key) => appearance[key] !== DEFAULT_APPEARANCE[key])
     .map((key) => `;${saved[key]}=${appearance[key]}`);
   return appearance.palette + extras.join("");

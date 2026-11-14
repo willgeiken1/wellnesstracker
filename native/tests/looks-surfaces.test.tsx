@@ -153,3 +153,31 @@ test('in dark mode a raised card also takes a hairline edge, since a shadow bare
   expect(flat('card')).toMatchObject({ borderWidth: 1 });
   expect(flat('panel').borderWidth).toBeUndefined();
 });
+
+describe('weight chart colour', () => {
+  const { BodyChart } = require('../src/features/body/chart');
+  const { createTheme } = require('../src/design/tokens');
+  /** Made-up weigh-ins only. */
+  const points = [{ day: '2026-11-01', kg: 80, trendKg: 80 }, { day: '2026-11-02', kg: 79.6, trendKg: 79.8 }];
+  test('is saved as a look, recovery by default and left out of the saved text', () => {
+    expect(DEFAULT_APPEARANCE.weightChart).toBe('recovery');
+    expect(formatAppearance(DEFAULT_APPEARANCE)).toBe('seaGlassTide');
+    expect(parseAppearance('seaGlassTide;weight=accent').weightChart).toBe('accent');
+    expect(parseAppearance('seaGlassTide;weight=plum').weightChart).toBe('recovery');
+    expect(resetLooks({ ...DEFAULT_APPEARANCE, weightChart: 'accent' }).weightChart).toBe('recovery');
+  });
+  test.each([[undefined, 'recovery'], ['seaGlassTide;weight=accent', 'accent']] as const)('the trend line follows the look (%s)', async (accent, role) => {
+    await render(<ThemeProvider repository={settingsRepository(accent)}><BodyChart points={points} raw={[]} unit="kg" /></ThemeProvider>);
+    const colors = createTheme('light');
+    // react-native-svg hands colours to native as ARGB numbers.
+    const argb = (hex: string) => (0xff000000 | parseInt(hex.slice(1), 16)) >>> 0;
+    expect(screen.getByTestId('body-chart-line').props.stroke.payload).toBe(argb(colors[role]));
+    expect(colors.accent).not.toBe(colors.recovery);
+  });
+  test('Appearance offers it and saves the choice', async () => {
+    const repository = settingsRepository();
+    await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accent' }));
+    expect(savedAccent(repository)).toBe('seaGlassTide;weight=accent');
+  });
+});
