@@ -1,3 +1,5 @@
+// These tests cover the AI features, which stay in the code for a later update; the launch build hides them.
+jest.mock('../src/features/ai-launch', () => ({ AI_FEATURES_ENABLED: true }));
 import { AccessibilityInfo } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/design/theme-provider";
