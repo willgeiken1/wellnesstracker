@@ -185,6 +185,18 @@ test('History lists finished workouts as rows that open their summary, and says 
   expect(router.push).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id: session.id } });
 });
 
+test('History draws the latest 30 workouts first and the rest on Show all workouts', async () => {
+  const { store } = open();
+  for (let day = 1; day <= 32; day++) workout(store, day);
+  await render(<Workouts />, { wrapper });
+  await fireEvent.press(screen.getByRole('tab', { name: 'History' }));
+  const rows = () => within(screen.getByTestId('history-list')).getAllByRole('button');
+  expect(rows()).toHaveLength(30);
+  await fireEvent.press(screen.getByRole('button', { name: 'Show all workouts' }));
+  expect(rows()).toHaveLength(32);
+  expect(screen.queryByRole('button', { name: 'Show all workouts' })).toBeNull();
+});
+
 test('routine editor: honest empty state, labelled targets, and reorder controls that know their limits', async () => {
   const { store } = open();
   const view = await render(<TemplateEditor />, { wrapper });

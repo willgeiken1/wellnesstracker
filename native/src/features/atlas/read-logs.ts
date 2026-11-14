@@ -19,11 +19,12 @@ function definitions(store: WorkoutStore): Exercise[] {
 export function atlasSessions(store: WorkoutStore | null): AtlasSession[] {
  if (!store) return [];
  const custom=definitions(store);
- return store.history().filter(session=>typeof session.data.finished_at==='number' && Number.isFinite(session.data.finished_at)).map(session=>({at:Number(session.data.finished_at),
+ // One grouped pass over history instead of a whole-table scan per workout and exercise.
+ return store.reading(()=>store.history().filter(session=>typeof session.data.finished_at==='number' && Number.isFinite(session.data.finished_at)).map(session=>({at:Number(session.data.finished_at),
   exercises:store.entries(session.id).map(entry=>{
    const name=String(entry.data.exercise);
    const exercise=custom.find(e=>e.name.toLowerCase()===name.toLowerCase())??exerciseFor(name);
    return {main:exercise.main,helpers:exercise.helpers,
     sets:store.working(entry).filter(s=>s.done&&!s.warmup&&s.reps>0).length};
-  })}));
+  })})));
 }

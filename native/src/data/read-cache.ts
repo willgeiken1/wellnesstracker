@@ -71,3 +71,18 @@ export function liveReads<T extends Revisioned>(repo: T): T {
     },
   });
 }
+
+const shared = new WeakMap<object, unknown>();
+/**
+ * The one {@link liveReads} view for a repository. Every screen that reads the same repository shares it, so a
+ * year of history is decoded once per change instead of once per mounted screen. Passing a view back in returns
+ * that view, so wrapping twice never stacks two caches.
+ */
+export function sharedReads<T extends Revisioned & object>(repo: T): T {
+  const known = shared.get(repo) as T | undefined;
+  if (known) return known;
+  const view = liveReads(repo);
+  shared.set(repo, view);
+  shared.set(view, view);
+  return view;
+}

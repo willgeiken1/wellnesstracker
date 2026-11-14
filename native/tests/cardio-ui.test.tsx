@@ -13,6 +13,16 @@ test('five accessible machines, default weekly ring and fallback est. label', as
   expect(screen.getByText(/est\./)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Log finished cardio' })).toBeTruthy();
 });
+
+test('the stand-in weight is shown in the unit the person uses', async () => {
+  const lb = memoryRepository();
+  await render(<Cardio repository={lb} />, { wrapper });
+  expect(screen.getByText('est. · Using 176 lb until you type a weigh-in on Progress.')).toBeTruthy();
+  const kg = memoryRepository();
+  kg.save('profile', { weight_unit: 'kg' });
+  await render(<Cardio repository={kg} />, { wrapper });
+  expect(screen.getByText('est. · Using 80 kg until you type a weigh-in on Progress.')).toBeTruthy();
+});
 test('live timer pauses, resumes and saves exactly one session with fallback label', async () => {
   jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
   const repository = memoryRepository();
@@ -103,4 +113,14 @@ test('a new latest weigh-in recomputes estimates while the Cardio screen stays m
   await act(() => { repository.save('weigh_ins', { day: '2026-10-24', weight_kg: 100, entered_value: 100, entered_unit: 'kg', source: 'app' }); });
   expect(screen.getByText(/434 kcal/)).toBeTruthy();
   expect(screen.queryByText(/est\./)).toBeNull();
+});
+
+test('with no session running the screen ticks once a minute, and every second while one runs', async () => {
+  const ticks = jest.spyOn(global, 'setInterval');
+  try {
+    await render(<Cardio repository={memoryRepository()} />, { wrapper });
+    expect(ticks.mock.calls.map(call => call[1])).toEqual([60000]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Start timer' }));
+    expect(ticks.mock.calls.at(-1)?.[1]).toBe(1000);
+  } finally { ticks.mockRestore(); }
 });

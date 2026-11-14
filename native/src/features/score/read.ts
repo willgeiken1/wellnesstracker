@@ -3,7 +3,8 @@ import type { WorkoutStore } from '@/data/workout/store';
 import { attributedDay, foodTargets, totals } from '@/features/food/model';
 import { PlanStore } from '@/features/plans/store';
 import type { HealthDays } from '../health/days';
-import { SCORE_WEIGHTS_KEY, WINDOW_DAYS, cleanWeights, insightScore, type FoodDay, type Score, type Weights } from './model';
+import type { Row } from '@/data/rows';
+import { BASELINE_DAYS, SCORE_WEIGHTS_KEY, WINDOW_DAYS, cleanWeights, insightScore, type FoodDay, type Score, type Weights } from './model';
 
 const KJ = 4.184;
 export function readWeights(store: WorkoutStore): Weights {
@@ -24,21 +25,32 @@ export function readScore(store: WorkoutStore, now: Date, health: HealthDays | n
   // so the day that is still open is the one left out of the average, and nothing shifts at midnight.
   const foodEnd = attributedDay(now), [fy, fm, fd] = foodEnd.split('-').map(Number);
   const foodDays = Array.from({ length: WINDOW_DAYS }, (_, i) => localDay(new Date(fy, fm - 1, fd - (WINDOW_DAYS - 1) + i)));
-  const recent = new Set(days), logged = new Set<string>(), trained = new Set<string>();
-  const entries = store.repo.list('food_entries');
-  for (const row of entries) logged.add(String(row.data.day));
-  for (const session of store.trainingHistory()) {
-    const day = String(session.data.day);
-    logged.add(day);
-    if (recent.has(day)) trained.add(session.id);
-  }
-  const food: FoodDay[] = foodDays.map(day => {
-    const rows = entries.filter(row => String(row.data.day) === day), sum = totals(rows);
-    let targets: ReturnType<typeof foodTargets>['targets'] = null;
-    try { targets = foodTargets(store.repo, day).targets; } catch { /* a day without a target still counts when logged */ }
-    return { logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / KJ, protein: sum.protein_g,
-      goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null };
+  return store.reading(() => {
+    const recent = new Set(days), logged = new Set<string>(), trained = new Set<string>();
+    const entries = store.repo.list('food_entries'), byDay = new Map<string, Row[]>(foodDays.map(day => [day, []]));
+    for (const row of entries) {
+      const day = String(row.data.day);
+      logged.add(day);
+      byDay.get(day)?.push(row);
+    }
+    // Only this week's workouts are opened for the training pillar. Older ones only matter to the count of days
+    // logged, and only until it reaches the baseline: past that the score is the same however many days there are,
+    // so the walk stops instead of opening a whole history of workouts on every change.
+    for (const session of store.history()) {
+      const day = String(session.data.day), inWindow = recent.has(day);
+      if (!inWindow && (logged.size >= BASELINE_DAYS || logged.has(day))) continue;
+      if (!store.trained(session)) continue;
+      logged.add(day);
+      if (inWindow) trained.add(session.id);
+    }
+    const food: FoodDay[] = foodDays.map(day => {
+      const rows = byDay.get(day)!, sum = totals(rows);
+      let targets: ReturnType<typeof foodTargets>['targets'] = null;
+      try { targets = foodTargets(store.repo, day).targets; } catch { /* a day without a target still counts when logged */ }
+      return { logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / KJ, protein: sum.protein_g,
+        goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null };
+    });
+    return insightScore({ daysLogged: logged.size, workouts: trained.size, workoutGoal: workoutGoal(store), food,
+      steps: health?.steps ?? null, sleepHours: health?.sleepHours ?? null, sleepOpen: now.getHours() < 12, weights });
   });
-  return insightScore({ daysLogged: logged.size, workouts: trained.size, workoutGoal: workoutGoal(store), food,
-    steps: health?.steps ?? null, sleepHours: health?.sleepHours ?? null, sleepOpen: now.getHours() < 12, weights });
 }

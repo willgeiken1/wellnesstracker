@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Pressable, ScrollView, View } from "react-native";
+import { Alert, AppState, Platform, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import { router, useIsFocused, useLocalSearchParams } from "expo-router";
@@ -34,6 +34,8 @@ import { UpNext } from "./up-next";
 import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
+import { WorkoutSummary } from "./summary";
+import { friendlyDay } from "@/features/body/model";
 import { tick } from "./haptics";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
@@ -44,6 +46,10 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     }>(),
     [error, setError] = useState(false),
     [pastId, setPastId] = useState<string | null>(null),
+    // The workout just saved from the Finish sheet. It is no longer live, so without this the logger would drop to the
+    // no-workout screen for the frames before the replace to its summary lands, which showed as a flash between them.
+    [savedId, setSavedId] = useState<string | null>(null),
+    [summaryId, setSummaryId] = useState<string | null>(null),
     started = useRef(false);
   useEffect(() => {
     let active = true;
@@ -62,7 +68,10 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       active = false;
     };
   }, [store, routine, id, day]);
-  const session = id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
+  const session = savedId ? store?.repo.get("sessions", savedId) : id ? store?.repo.get("sessions", id) : day ? (pastId ? store?.repo.get("sessions", pastId) : undefined) : store?.active();
+  // The summary takes the logger's place inside this screen. Navigating to the summary route instead swapped the
+  // full-screen workout modal for a new one on iOS, showing the tab underneath for half a second.
+  if (store && summaryId && store.repo.get("sessions", summaryId)) return <WorkoutSummary store={store} id={summaryId} past={false} />;
   return store && session ? (
     <Logger
       key={session.id}
@@ -71,6 +80,9 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
       session={session}
       pending={auth.pending}
       status={auth.syncStatus}
+      saved={savedId === session.id}
+      onSaved={setSavedId}
+      onSummary={setSummaryId}
     />
   ) : (
     <SafeAreaView
@@ -87,28 +99,74 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
 function closeWorkout() {
   router.replace("/");
 }
+/** How long the logger waits for the Finish sheet's native modal to report it is gone before it opens the summary anyway. */
+export const SUMMARY_AFTER_SHEET_MS = 600;
+/** Hands over to the saved workout's summary, once. */
+function openSummary(left: { current: boolean }, show: (id: string) => void, id: string) {
+  if (left.current) return;
+  left.current = true;
+  show(id);
+}
+/** The draft field a keypad cursor writes: the right side has its own weight and reps. */
+function draftKey(field: "weight" | "reps", side?: "right"): "weight" | "reps" | "rightWeight" | "rightReps" {
+  return side ? (field === "weight" ? "rightWeight" : "rightReps") : field;
+}
+/** The workout's running time. It ticks on its own, so the logger around it does not redraw every second. */
+function ElapsedClock({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <>{clock((now - startedAt) / 1000)}</>;
+}
 function Logger({
   store,
   session,
   pending,
   status,
   fixtureState,
+  saved,
+  onSaved,
+  onSummary,
 }: {
   store: WorkoutStore;
   fixtureState?: string;
+  /** This workout was just saved from the Finish sheet; the logger is waiting to hand over to its summary. */
+  saved: boolean;
+  onSaved: (id: string) => void;
+  /** Shows the saved workout's summary in this same screen. */
+  onSummary: (id: string) => void;
   session: Row;
   pending: number;
   status: "idle" | "syncing" | "offline";
 }) {
-  const past = store.pastMode(session.id);
+  // Saving makes the workout history, which would turn the header's running clock into the raw ISO day for the frames
+  // before the summary; until then the logger keeps showing it the way it opened.
+  const [openedPast] = useState(() => store.pastMode(session.id));
+  const past = saved ? openedPast : store.pastMode(session.id);
+  // The summary opens only once the Finish sheet's native modal has finished closing. Replacing the screen under a
+  // modal that is still being dismissed showed the tab under the workout modal on iOS before the summary arrived.
+  const left = useRef(false);
+  useEffect(() => {
+    if (!saved) return;
+    // iOS reports the dismissal (onDismiss); elsewhere, or if that report never comes, go on without it.
+    if (Platform.OS !== "ios") {
+      openSummary(left, onSummary, session.id);
+      return;
+    }
+    const fallback = setTimeout(() => openSummary(left, onSummary, session.id), SUMMARY_AFTER_SHEET_MS);
+    return () => clearTimeout(fallback);
+  }, [saved, onSummary, session.id]);
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ fixtureState?: string }>();
   const selectedFixture = fixtureState ?? params.fixtureState;
   const focused = useIsFocused();
-  const [now, setNow] = useState(() => Date.now()),
-    [cursor, setCursor] = useState<Cursor | null>(() => {
+  const [cursor, setCursor] = useState<Cursor | null>(() => {
       const fixture =
         __DEV__ && store.repo.owner === "demo"
           ? store.repo.localGet<{ benchId: string; sessionId: string }>(
@@ -131,13 +189,6 @@ function Logger({
     [finish, setFinish] = useState(false),
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState<string[]>([]);
-  useEffect(() => {
-    if (past) return;
-    const timer = setInterval(() => {
-      if (AppState.currentState === "active") setNow(Date.now());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [past]);
   const entries = store.entries(session.id),
     drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
@@ -187,7 +238,7 @@ function Logger({
       store.repo.localGet<string | null>(
         `input:${entryId}:${index}:${side ? "right:" : ""}${field}`,
       ) ??
-        (d[side ? field === "weight" ? "rightWeight" : "rightReps" : field] ||
+        (d[draftKey(field, side)] ||
           (field === "weight"
             ? weightHint(
                 entries.find((e) => e.id === entryId)!,
@@ -199,17 +250,16 @@ function Logger({
   function input(text: string) {
     if (!cursor) return;
     setValue(text);
-    run(() => {
+    const key = draftKey(cursor.field, cursor.side);
+    // One change per digit: the typed value and the draft land together, so open screens redraw once.
+    run(() => store.repo.atomic(() => {
       store.repo.localSave(
         `input:${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`,
         text,
       );
       const d = store.drafts(cursor.entryId)[cursor.index];
-      if (!d.setId)
-        store.editDraft(cursor.entryId, cursor.index, {
-          [cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field]: text,
-        });
-    });
+      if (!d.setId) store.editDraft(cursor.entryId, cursor.index, { [key]: text });
+    }));
   }
   function next() {
     if (!cursor) return;
@@ -225,10 +275,11 @@ function Logger({
       setError(t("invalidSet"));
       return;
     }
-    const commit = () => {
-      try {
+    const key = draftKey(cursor.field, cursor.side);
+    // `run` reports a failed save; keeping try/catch out of this body lets the React Compiler memoise the logger.
+    const commit = () => run(() => {
         if (
-          value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] &&
+          value !== d[draftKey(cursor.field, cursor.side)] &&
           !(
             cursor.field === "weight" &&
             !d.weight &&
@@ -239,9 +290,7 @@ function Logger({
               )
           )
         )
-          store.editDraft(cursor.entryId, cursor.index, {
-            [cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field]: value,
-          });
+          store.editDraft(cursor.entryId, cursor.index, { [key]: value });
         store.repo.localSave(
           `input:${cursor.entryId}:${cursor.index}:${cursor.side ? "right:" : ""}${cursor.field}`,
           null,
@@ -266,11 +315,7 @@ function Logger({
           if (nextEntry) edit(nextEntry.id, 0, "weight");
           else setCursor(null);
         }
-        setError(null);
-      } catch {
-        setError(t("workoutSaveError"));
-      }
-    };
+      });
     const baseline = store.sets(cursor.entryId).find((s) => s.id === d.setId);
     const check = validateSet(
       cursor.field === "weight" ? value : cursor.side ? d.rightWeight ?? "" : d.weight,
@@ -278,7 +323,7 @@ function Logger({
       store.unit(cursor.entryId),
       baseline ? Number(baseline.data.weight_kg) : undefined,
     );
-    if (d.setId && value !== d[cursor.side ? cursor.field === "weight" ? "rightWeight" : "rightReps" : cursor.field] && check.warning)
+    if (d.setId && value !== d[draftKey(cursor.field, cursor.side)] && check.warning)
       Alert.alert(t("checkSet"), t(check.warning), [
         {
           text: t("cancel"),
@@ -397,7 +442,7 @@ function Logger({
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
             <ThemedText muted numeric style={{ fontSize: 15 }}>
-              {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
+              {past ? friendlyDay(String(session.data.day)) : <ElapsedClock startedAt={Number(session.data.started_at)} />}
             </ThemedText>
           </View>
           <Pill
@@ -705,6 +750,9 @@ function Logger({
           finish ||
           (!past && !!store.timer() && !store.timer()!.minimized))
         }
+        onDismiss={() => {
+          if (saved) openSummary(left, onSummary, session.id);
+        }}
         onClose={() => {
           if (picker) setPicker(false);
           else if (cursor) setCursor(null);
@@ -759,6 +807,12 @@ function Logger({
             store={store}
             session={session}
             onClose={() => setFinish(false)}
+            onSaved={() => {
+              // Close the sheet and keep this workout on screen in the same render as the save. The summary replaces
+              // the logger once the sheet is gone (see onDismiss above).
+              setFinish(false);
+              onSaved(session.id);
+            }}
           />
         )}
       </SheetHost>

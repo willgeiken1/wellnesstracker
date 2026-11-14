@@ -35,8 +35,41 @@ export interface TemplateExercise extends ExerciseOptions {
   restStyle?: 'unwind' | 'converge';
 }
 const order = (rows: Row[]) => rows.sort((a, b) => Number(a.data.position) - Number(b.data.position) || a.id.localeCompare(b.id));
+/** Rows grouped once for a read-only pass; see {@link WorkoutStore.reading}. */
+interface ReadIndex {
+  history?: Row[];
+  entries?: Map<string, Row[]>;
+  sets?: Map<string, Row[]>;
+  drafts: Map<string, Draft[]>;
+}
 export class WorkoutStore {
   constructor(readonly repo: Repository, readonly viewRevision = 0) {}
+  private index?: ReadIndex;
+  /**
+   * Runs a read-only pass with sessions, entries, sets and drafts grouped once instead of rescanning a whole
+   * table for every exercise. History, records and the weekly totals ask for "the sets of this exercise"
+   * thousands of times; without this, finishing a workout took seconds once there were months of history.
+   * Nothing inside `read` may save sessions, entries or sets: the grouping is thrown away when it returns.
+   */
+  reading<T>(read: () => T): T {
+    if (this.index) return read();
+    this.index = { drafts: new Map() };
+    try { return read(); } finally { this.index = undefined; }
+  }
+  private grouped(table: 'entries' | 'sets', key: 'session_id' | 'entry_id') {
+    const index = this.index!;
+    const cached = index[table];
+    if (cached) return cached;
+    const groups = new Map<string, Row[]>();
+    for (const row of this.repo.list(table)) {
+      const id = String(row.data[key]);
+      const group = groups.get(id);
+      if (group) group.push(row); else groups.set(id, [row]);
+    }
+    for (const group of groups.values()) order(group);
+    index[table] = groups;
+    return groups;
+  }
   unit(entryId?: string): Unit {
     const fallback = this.repo.list('profile').sort(compareRows).at(-1)?.data.weight_unit === 'kg' ? 'kg' : 'lb';
     const entry = entryId ? this.repo.get('entries', entryId) : undefined;
@@ -130,7 +163,10 @@ export class WorkoutStore {
       this.recompute();
     });
   }
-  trainingHistory() { return this.history().filter(s => this.entries(s.id).some(e => this.working(e).some(s => !s.warmup && s.reps > 0))); }
+  trainingHistory() { return this.reading(() => this.history().filter(s => this.trained(s))); }
+  /** Whether a finished workout counts as training: at least one working set with reps. A past-day draft that was
+   * opened and left empty does not. Call it inside {@link reading} when checking more than a few workouts. */
+  trained(session: Row) { return this.entries(session.id).some(e => this.working(e).some(s => !s.warmup && s.reps > 0)); }
   replaceExercise(entryId: string, name: string, mode: 'swap' | 'replace' = 'replace') {
     const entry = this.repo.get('entries', entryId);
     if (!entry || !name.trim() || !['swap','replace'].includes(mode)) throw Error('Invalid exercise.');
@@ -293,6 +329,10 @@ export class WorkoutStore {
     return this.repo.list('sessions').filter(s => s.data.finished_at === null && !this.pastMode(s.id)).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at))[0];
   }
   history() {
+    if (this.index) return [...this.index.history ??= this.loadHistory()];
+    return this.loadHistory();
+  }
+  private loadHistory() {
     return this.repo.list('sessions').filter(s => s.data.finished_at !== null).sort((a, b) => Number(b.data.started_at) - Number(a.data.started_at));
   }
   start(routineId?: string, now = Date.now(), past = false) {
@@ -330,9 +370,11 @@ export class WorkoutStore {
     });
   }
   entries(sessionId: string) {
+    if (this.index) return [...this.grouped('entries', 'session_id').get(sessionId) ?? []];
     return order(this.repo.list('entries').filter(e => e.data.session_id === sessionId));
   }
   sets(entryId: string) {
+    if (this.index) return [...this.grouped('sets', 'entry_id').get(entryId) ?? []];
     return order(this.repo.list('sets').filter(s => s.data.entry_id === entryId));
   }
   addExercise(sessionId: string, name: string, count = 3) {
@@ -373,6 +415,14 @@ export class WorkoutStore {
     });
   }
   drafts(entryId: string): Draft[] {
+    if (this.index) {
+      const known = this.index.drafts.get(entryId) ?? this.loadDrafts(entryId);
+      this.index.drafts.set(entryId, known);
+      return known.map(d => ({ ...d }));
+    }
+    return this.loadDrafts(entryId);
+  }
+  private loadDrafts(entryId: string): Draft[] {
     const saved = this.repo.localGet<Draft[]>(`draft:${entryId}`),
       sets = this.sets(entryId);
     // Match synced done rows by identity/position; local typed blanks never become done rows.
@@ -468,7 +518,9 @@ export class WorkoutStore {
       });
       this.repo.localSave(`draft:${entryId}`, drafts);
     });
-    this.recompute();
+    // Weekly totals and records only count finished workouts; a live workout's sets join them on Finish.
+    const session = this.repo.get('entries', entryId)?.data.session_id;
+    if (session && this.repo.get('sessions', String(session))?.data.finished_at !== null) this.recompute();
   }
   private tag(value: unknown): Draft['tag'] { return value === 'warmup' || value === 'failure' || value === 'drop' ? value : null; }
   private setData(entryId: string, index: number, d: Draft): Row['data'] {
@@ -542,11 +594,14 @@ export class WorkoutStore {
   }
   working(entry: Row): WorkingSet[] {
     if (this.skipped(entry.id)) return [];
+    const synced = !!this.repo.syncFlags?.syncedV1Columns;
+    // Warm-up flags live in the drafts when the v1 columns are off; read them once per exercise, not per set.
+    const drafts = synced ? [] : this.drafts(entry.id);
     return this.sets(entry.id).map(s => ({
       weight: Number(s.data.weight_kg),
       reps: Number(s.data.reps),
       done: true,
-      warmup: this.repo.syncFlags?.syncedV1Columns ? s.data.tag === 'warmup' : this.drafts(entry.id)[Number(s.data.position)]?.warmup
+      warmup: synced ? s.data.tag === 'warmup' : drafts[Number(s.data.position)]?.warmup
     }));
   }
   suggestion(entry: Row) {
@@ -647,7 +702,8 @@ export class WorkoutStore {
       if (!wasFinished) this.repo.localSave(`originalWorkout:${id}`, this.content(id));
     });
   }
-  summary(id: string) {
+  summary(id: string) { return this.reading(() => this.summarise(id)); }
+  private summarise(id: string) {
     const s = this.repo.get('sessions', id)!,
       entries = this.entries(id).filter(e => !this.skipped(e.id)),
       sets = entries.flatMap(e => this.sets(e.id));
@@ -680,33 +736,50 @@ export class WorkoutStore {
     };
   }
   recompute() {
-    const weeks: Record<string, Record<string, number>> = {},
-      milestones: {
-        sessionId: string;
-        exercise: string;
-        weight: number;
-        e1rm: number;
-      }[] = [];
-    for (const s of this.history()) {
-      const week = weekOf(new Date(`${String(s.data.day)}T12:00:00`)),
-        totals = attribute(this.entries(s.id).map(e => {
-          const ex = this.preferences().exercise(String(e.data.exercise));
-          return {
-            ...ex,
-            sets: this.working(e)
-          };
-        }));
-      weeks[week] ??= {};
-      for (const [muscle, count] of Object.entries(totals)) weeks[week][muscle] = (weeks[week][muscle] ?? 0) + count;
-      for (const pr of this.summary(s.id).prs) milestones.push({
-        sessionId: s.id,
-        exercise: pr.exercise,
-        weight: pr.bestWeight,
-        e1rm: pr.bestE1rm
-      });
-    }
+    const { weeks, milestones } = this.reading(() => this.totals());
     this.repo.localSave('weekly', weeks);
     this.repo.localSave('milestones', milestones);
+  }
+  /**
+   * Weekly muscle totals and record milestones for every finished workout, in one pass over history.
+   * Records follow {@link summary}: a workout's best is compared with every workout that started strictly
+   * earlier, so workouts are visited oldest first with the earlier sets of each exercise carried along.
+   */
+  private totals() {
+    const weeks: Record<string, Record<string, number>> = {},
+      milestones: { sessionId: string; exercise: string; weight: number; e1rm: number }[] = [],
+      history = this.history(),
+      found = new Map<string, typeof milestones>(),
+      earlier = new Map<string, WorkingSet[]>();
+    for (const s of history) {
+      const week = weekOf(new Date(`${String(s.data.day)}T12:00:00`)),
+        totals = attribute(this.entries(s.id).map(e => ({ ...this.preferences().exercise(String(e.data.exercise)), sets: this.working(e) })));
+      weeks[week] ??= {};
+      for (const [muscle, count] of Object.entries(totals)) weeks[week][muscle] = (weeks[week][muscle] ?? 0) + count;
+    }
+    const oldestFirst = [...history].reverse();
+    for (let i = 0; i < oldestFirst.length;) {
+      // Workouts that started at the same moment are not "earlier" than each other.
+      const started = Number(oldestFirst[i].data.started_at), group: Row[] = [oldestFirst[i++]];
+      while (i < oldestFirst.length && Number(oldestFirst[i].data.started_at) === started) group.push(oldestFirst[i++]);
+      const added: [string, WorkingSet[]][] = [];
+      for (const s of group) {
+        const entries = this.entries(s.id), shown = entries.filter(e => !this.skipped(e.id)), records: typeof milestones = [];
+        for (const name of new Set(shown.map(e => String(e.data.exercise)))) {
+          const record = detectPR(shown.filter(e => e.data.exercise === name).flatMap(e => this.working(e)), earlier.get(name) ?? []);
+          if (record.weight || record.e1rm) records.push({ sessionId: s.id, exercise: name, weight: record.bestWeight, e1rm: record.bestE1rm });
+        }
+        found.set(s.id, records);
+        for (const e of entries) added.push([String(e.data.exercise), this.working(e)]);
+      }
+      for (const [name, sets] of added) {
+        const list = earlier.get(name);
+        if (list) list.push(...sets); else earlier.set(name, [...sets]);
+      }
+    }
+    // Same order as before: newest workout first.
+    for (const s of history) milestones.push(...found.get(s.id) ?? []);
+    return { weeks, milestones };
   }
   weekly(now = new Date()) {
     return this.repo.localGet<Record<string, Record<string, number>>>('weekly')?.[weekOf(now)] ?? {};

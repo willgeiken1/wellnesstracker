@@ -22,14 +22,23 @@ export function formatLocalDateTime(stamp: number) {
   const d = new Date(stamp);
   return `${localDay(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+/** Where Save goes: this workout's summary. Only straight after finishing does it say "Workout complete"; from History
+ * it is a past workout. */
+export function summaryHref(id: string) {
+  return { pathname: '/workout/summary', params: { id, just: '1' } } as const;
+}
 export function FinishSheet({
   store,
   session,
-  onClose
+  onClose,
+  onSaved
 }: {
   store: WorkoutStore;
   session: Row;
   onClose: () => void;
+  /** Called once the workout is saved. A caller that passes it opens the summary itself (see summaryHref); without it
+   * the sheet replaces straight to the summary. */
+  onSaved?: () => void;
 }) {
   const {
     colors
@@ -80,14 +89,8 @@ export function FinishSheet({
               name,
               saveTemplate
             });
-            router.replace({
-              pathname: '/workout/summary',
-              params: {
-                id: session.id,
-                // Only straight after finishing does the summary say "Workout complete"; from History it is a past workout.
-                just: '1'
-              }
-            });
+            if (onSaved) onSaved();
+            else router.replace(summaryHref(session.id));
           } catch {
             setSaving(false);
             setError(true);

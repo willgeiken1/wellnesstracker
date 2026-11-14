@@ -169,9 +169,12 @@ export function SheetHost({
   children,
   visible,
   onClose,
+  onDismiss,
 }: PropsWithChildren<{
   visible: boolean;
   onClose: () => void;
+  /** iOS: the native modal has finished closing after visible turned false. */
+  onDismiss?: () => void;
 }>) {
   // No native dismissal animation: a quick reopen cannot be swallowed mid-dismissal.
   return (
@@ -180,6 +183,7 @@ export function SheetHost({
       transparent
       visible={visible}
       animationType="none"
+      onDismiss={onDismiss}
       onRequestClose={() => {
         Keyboard.dismiss();
         onClose();
