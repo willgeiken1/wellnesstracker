@@ -1,4 +1,5 @@
 import type { HealthDays } from './days';
+import type { Night } from './recovery';
 
 /**
  * Oura, through the account's existing connection. The server already holds the Oura login and one row per
@@ -7,7 +8,15 @@ import type { HealthDays } from './days';
  */
 /** `expired`: still connected, but Oura no longer accepts the sign-in, so new days cannot come in until the person reconnects. */
 export interface OuraStatus { connected: boolean; expired?: boolean; lastSync: string | null; /** The signed-in account's id. */ account?: string }
-export interface OuraDay { day: string; sleepSeconds: number | null; steps: number | null }
+export interface OuraDay {
+  day: string; sleepSeconds: number | null; steps: number | null;
+  /** Oura's own scores, 0 to 100. */
+  readiness?: number | null; sleepScore?: number | null;
+  /** From the night that ends on this day: average HRV (ms) and lowest heart rate (bpm). */
+  hrv?: number | null; restingHeartRate?: number | null;
+  /** That night's stages, in seconds. */
+  deepSeconds?: number | null; lightSeconds?: number | null; remSeconds?: number | null; awakeSeconds?: number | null;
+}
 export interface OuraSource {
   /** Null when nobody is signed in. Never prompts. */
   status(): Promise<OuraStatus | null>;
@@ -85,6 +94,8 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
   return {
     steps: days.map(day => Math.round(rows.get(day)?.steps ?? 0)),
     sleepHours: days.map(day => (rows.get(day)?.sleepSeconds ?? 0) / 3600),
+    // Active calories and exercise minutes come from Apple Health only.
+    activeKcal: null, exerciseMinutes: null,
   };
 }
 
@@ -94,5 +105,32 @@ export function mergeHealthDays(apple: HealthDays | null, ring: HealthDays | nul
   if (!apple || !ring) return apple ?? ring;
   const pick = (first: number[] | null, second: number[] | null) => !first || !second ? first ?? second
     : first.map((value, i) => value > 0 ? value : second[i] ?? 0);
-  return { steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
+  return { steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours), activeKcal: apple.activeKcal, exerciseMinutes: apple.exerciseMinutes };
+}
+
+/** What Oura adds to Insights › Recovery, oldest day first, null for a day with no reading. Held in memory only. */
+export type OuraRecovery = {
+  readiness: (number | null)[]; sleepScore: (number | null)[]; hrv: (number | null)[]; restingHeartRate: (number | null)[];
+  /** The night that ended on the last day, by stage. Oura's light sleep is Apple Health's core. */
+  night: Night | null;
+};
+const reading = (value: number | null | undefined) => typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+const minutes = (seconds: number | null | undefined) => typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds / 60) : 0;
+
+/** Oura's scores, heart readings and last night for the given days, or null when Oura is not connected. The days
+ * already stored come back at once; a refresh from Oura runs alongside, and `onFresh` is called once it lands. */
+export async function readOuraRecovery(source: OuraSource | null, days: readonly string[], now = new Date(), onFresh?: () => void): Promise<OuraRecovery | null> {
+  if (!source || !days.length) return null;
+  const status = await source.status();
+  if (!status?.connected) return null;
+  void refreshOura(source, status, now).then(fresh => { if (fresh) onFresh?.(); });
+  const rows = new Map((await source.days(days[0], days[days.length - 1])).map(row => [row.day, row]));
+  const each = (pick: (row: OuraDay) => number | null | undefined) => days.map(day => { const row = rows.get(day); return row ? reading(pick(row)) : null; });
+  const last = rows.get(days[days.length - 1]);
+  const stages = last && { deep: minutes(last.deepSeconds), core: minutes(last.lightSeconds), rem: minutes(last.remSeconds), asleep: 0, awake: minutes(last.awakeSeconds) };
+  return {
+    readiness: each(row => row.readiness), sleepScore: each(row => row.sleepScore),
+    hrv: each(row => row.hrv), restingHeartRate: each(row => row.restingHeartRate),
+    night: stages && stages.deep + stages.core + stages.rem > 0 ? stages : null,
+  };
 }

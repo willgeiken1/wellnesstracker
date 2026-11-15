@@ -38,7 +38,11 @@ export function oura(): OuraSource | null {
       if (error) throw new Error('Oura read failed.');
       return (data ?? []).map(row => {
         const day = (row.data ?? {}) as Record<string, unknown>;
-        return { day: String(row.day), sleepSeconds: number(day.total), steps: number(day.steps) };
+        return {
+          day: String(row.day), sleepSeconds: number(day.total), steps: number(day.steps),
+          readiness: number(day.readiness), sleepScore: number(day.sleepScore), hrv: number(day.hrv), restingHeartRate: number(day.rhr),
+          deepSeconds: number(day.deep), lightSeconds: number(day.light), remSeconds: number(day.rem), awakeSeconds: number(day.awake),
+        };
       });
     },
     async disconnect() { await invoke('oura-connect', { action: 'disconnect' }); },
