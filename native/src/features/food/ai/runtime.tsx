@@ -14,7 +14,7 @@ import {
   stopFoodAiRequests,
   type FoodAiClient,
 } from "./service";
-// The configured client can only use the existing loopback endpoint. CI injects stubs.
+// The configured client uses the shared auth config guard. CI injects stubs.
 import { createLocalFoodAiClient } from "./client";
 export const FoodAiClientContext = createContext<FoodAiClient | null>(
   null,

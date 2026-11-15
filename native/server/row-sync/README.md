@@ -9,7 +9,7 @@ Every accepted write assigns a fresh `server_seq`. A transaction-scoped advisory
 
 ## Future application procedure — requires separate approval
 
-1. Obtain Quinn PASS and Will's explicit HIGH-risk go for the exact SQL revision. Keep the app's production-reference and loopback guards until a separately approved launch PR.
+1. Obtain Quinn PASS and Will's explicit HIGH-risk go for the exact SQL revision. The app's endpoint guard (`native/src/auth/config.ts`) now accepts the hosted Insight project, so a store build with Supabase settings will try to sync as soon as it signs in; apply this SQL before shipping such a build to real users.
 2. Have the coordinator select a disposable, approved local Postgres/Supabase environment and supply configuration privately. Confirm `auth.users`, `auth.uid()` and the API roles already exist. Check that none of these table/function names already exist; this is not an upgrade script or a legacy blob importer.
 3. Take a backup/snapshot and run `apply-0001-0002.sql` with stop-on-error as one transaction in that approved environment. Verify explicit grants, all 23 owner policies after both scripts, trigger/RPC behavior, and `(owner_id, server_seq)` indexes using synthetic accounts A/B. Validate the same PostgREST select casts and RPC contract used by the client.
 4. Run the PGlite tests and a later approved local REST smoke test before allowing any real accounts. This task does not authorize those later application steps.
