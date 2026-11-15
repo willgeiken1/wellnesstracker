@@ -1,5 +1,6 @@
 // oura-callback: Oura sends the browser here after you approve access.
-// Swaps the one-time code for tokens, stores them privately, then sends you back to the app.
+// Swaps the one-time code for tokens, stores them privately, then sends you back to the app:
+// the iPhone app (insight://oura) when the login was started there, otherwise the web logger.
 // Deploy with JWT verification OFF (Oura can't sign in to Supabase).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -16,13 +17,20 @@ function serverKey(): string {
 }
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(SUPABASE_URL, serverKey(), { auth: { persistSession: false } });
-const back = (status: string) => new Response(null, { status: 302, headers: { Location: `${APP_URL}?oura=${status}` } });
+// Must match oura-connect. Only picks one of two fixed places to return to, so it is safe to read before
+// the state is checked; the state itself is still checked against the table below.
+const APP_STATE_PREFIX = "app.";
+const PHONE_RETURN = "insight://oura";
+const backTo = (phone: boolean) => (status: string) =>
+  new Response(null, { status: 302, headers: { Location: `${phone ? PHONE_RETURN : APP_URL}?oura=${status}` } });
 
 Deno.serve(async (req) => {
+  let back = backTo(false);
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
+    back = backTo(!!state?.startsWith(APP_STATE_PREFIX));
     if (url.searchParams.get("error") || !code || !state) return back("cancelled");
 
     // The state must match a login this server started in the last 15 minutes.
