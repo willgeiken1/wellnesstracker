@@ -13,8 +13,8 @@ Only Will does the steps that sign in to Apple or Expo. Agents never handle his 
 
 1. **Register the App ID.** At developer.apple.com/account, open Certificates, Identifiers & Profiles, then Identifiers, then +. Pick App IDs, then App. Description `Insight Wellness`, Bundle ID Explicit `com.insightwellness.app`. Tick **HealthKit** and **App Groups**, then Register. If Apple says the ID is taken, stop and tell Claude; don't pick another one.
 2. **Create the app record.** At appstoreconnect.apple.com, open Apps, then + and New App. Platform iOS, name `Insight Wellness`, primary language English (U.S.), bundle ID `com.insightwellness.app`, SKU `insight-wellness` (any unique text works; nobody sees it), Full Access. If the name is taken, stop and tell Claude. On an individual account, the App Store shows your legal name as the seller. The name under the icon also reads `Insight Wellness` (from `app.json`).
-3. **Create the Expo project.** Sign in or sign up (free) at expo.dev, create a project with the slug `insight-daily`, and send Claude its project ID (not a secret). Claude adds it to `app.json` as `extra.eas.projectId`.
-4. **Add the build's public settings.** In that project on expo.dev, open Environment variables and add these two to the **production** environment as plain text: `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Use the publishable key only, never the service-role key.
+3. **Create the Expo project.** Sign in or sign up (free) at expo.dev and create a project with the slug `insight-daily`. Done Nov 15: its ID is in `app.json` as `extra.eas.projectId`.
+4. **Supabase settings: not yet.** `native/src/auth/config.ts` only accepts a local loopback Supabase and refuses the production project, so the first TestFlight build ships with no Supabase settings (accounts and sync stay off). Pointing the app at production is its own HIGH-risk change; once it lands, add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to the Expo project's **production** environment as plain text (publishable key only, never the service-role key).
 
 ## Build and upload (Will's Mac, after the PR merges)
 
