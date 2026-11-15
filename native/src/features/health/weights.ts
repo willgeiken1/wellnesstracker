@@ -49,6 +49,10 @@ export async function refreshWeights(repo: Repository, source: HealthSource | nu
   if (!source || await source.access() !== 'asked' || !live()) return 0;
   const since = importStart(now), samples = await source.weights(since);
   if (!live()) return 0;
-  dropMissing(repo, samples, since);
-  return importWeights(repo, samples, now);
+  // One transaction and one change notice for the whole read: the first import can hold two years of readings,
+  // and a notice per reading made every open screen redraw hundreds of times.
+  return repo.atomic(() => {
+    dropMissing(repo, samples, since);
+    return importWeights(repo, samples, now);
+  });
 }

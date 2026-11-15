@@ -1,3 +1,4 @@
+import { friendlyDay } from '../src/features/body/model';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import { Alert, AccessibilityInfo } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -42,7 +43,8 @@ test('historical logger uses keypad without a clock, timer or interval', async (
  jest.mocked(useLocalSearchParams).mockReturnValue({id:session.id});
  const interval = jest.spyOn(global,'setInterval');
  await render(<ActiveWorkout/>,{wrapper});
- expect(screen.getByText(String(session.data.day))).toBeTruthy();
+ // The header names the day in words, never as a raw ISO date.
+ expect(screen.getByText(friendlyDay(String(session.data.day)))).toBeTruthy();
  expect(screen.queryByText('1:00')).toBeNull();
  expect(screen.queryByTestId('rest-sheet-handle')).toBeNull();
  expect(interval).not.toHaveBeenCalled();
@@ -81,7 +83,7 @@ test('opening a past date creates a preset logger without starting a clock inter
  jest.mocked(useLocalSearchParams).mockReturnValue({day:'2026-10-01'});
  const interval = jest.spyOn(global,'setInterval');
  await render(<ActiveWorkout/>,{wrapper});
- expect(screen.getByText('2026-10-01')).toBeTruthy();
+ expect(screen.getByText(friendlyDay('2026-10-01'))).toBeTruthy();expect(screen.queryByText('2026-10-01')).toBeNull();
  expect(store.active()).toBeUndefined();
  expect(store.timer()).toBeFalsy();
  expect(interval).not.toHaveBeenCalled();

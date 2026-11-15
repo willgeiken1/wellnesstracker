@@ -34,12 +34,14 @@ export function dayPoints(store: WorkoutStore, days: string[], _revision = 0): D
       targetKcal: targets ? targets.energy_kj / 4.184 : null, targetProtein: targets ? targets.protein_g : null, workouts: 0, volumeKg: 0 });
   }
   // Only workouts with a counted set: a past-day draft that was opened and left empty is not a workout.
-  for (const session of store.trainingHistory()) {
-    const point = out.get(String(session.data.day));
-    if (!point) continue;
-    point.workouts += 1;
-    for (const entry of store.entries(session.id)) point.volumeKg += entryVolumeKg(store, entry);
-  }
+  store.reading(() => {
+    for (const session of store.trainingHistory()) {
+      const point = out.get(String(session.data.day));
+      if (!point) continue;
+      point.workouts += 1;
+      for (const entry of store.entries(session.id)) point.volumeKg += entryVolumeKg(store, entry);
+    }
+  });
   return days.map(day => out.get(day)!);
 }
 export const hasAny = (points: DayPoint[]) => points.some(p => p.foods > 0 || p.workouts > 0);

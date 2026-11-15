@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { localDatabase } from './sqlite';
 import { Repository } from '../../src/data/repository';
-import { seedDemo } from '../../fixtures/demo';
+import { seedDemo, seedSampleRows } from '../../fixtures/demo';
 import { ageOn, defaultUnits, estimateTargets, saveProfile, finishOnboarding } from '../../src/features/onboarding/model';
 import { promoteDemo } from '../../src/features/onboarding/demo-transfer';
 const input = {name:'Synthetic',dob:'2000-10-27',unit:'kg' as const,height:'180',weight:'80',sex:'male' as const,activity:'light' as const};
@@ -38,7 +38,7 @@ test('no body stats leaves targets unset; completion is idempotent',async()=>{
 });
 test('demo samples never enqueue; promotion retains user entries, repairs sample parent references and retries safely',async()=>{
  const {repo,db,sqlite}=await localDatabase();
- const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+ const demo=new Repository(db,'demo',repo.device,randomUUID);seedSampleRows(demo);
  const sample=demo.list('sessions')[0];
  const addedExercise=demo.save('routine_exercises',{routine_id:demo.list('routines')[0].id,exercise:'Squat',position:1});
  const entry=demo.save('entries',{session_id:sample.id,exercise:'Squat',position:0});
@@ -59,7 +59,7 @@ test('demo samples never enqueue; promotion retains user entries, repairs sample
 });
 
 test('sample identities survive edits; a user-created row with the same name is retained',async()=>{
- const {repo,db,sqlite}=await localDatabase();const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+ const {repo,db,sqlite}=await localDatabase();const demo=new Repository(db,'demo',repo.device,randomUUID);seedSampleRows(demo);
  const sample=demo.list('routines')[0];demo.save('routines',{name:'Edited sample',position:0},sample.id);
  const user=demo.save('routines',{name:'Demo full body',position:0});
  promoteDemo(demo,repo);
@@ -97,7 +97,7 @@ test('edited estimated targets persist as a manual override for the Food target 
 });
 
 test('a user set added to a sample exercise keeps a valid exercise/session without copying sample sets',async()=>{
- const {repo,db,sqlite}=await localDatabase();const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+ const {repo,db,sqlite}=await localDatabase();const demo=new Repository(db,'demo',repo.device,randomUUID);seedSampleRows(demo);
  const session=demo.list('sessions')[0];const entry=demo.save('entries',{session_id:session.id,exercise:'Squat',position:0});
  const sampleSet=demo.save('sets',{entry_id:entry.id,reps:8,weight_kg:20,entered_value:20,entered_unit:'kg'});
  demo.localSave('demoSamples',[...demo.localGet<string[]>('demoSamples')!,entry.id,sampleSet.id]);
@@ -143,4 +143,18 @@ test.each([null,'2000-01-01'])('first sync loads existing server profile (DOB %s
  expect(repo.list('profile')).toHaveLength(1);expect(repo.list('profile')[0].data).toEqual(server.data);
  expect(repo.list('food_targets')).toEqual([]);expect(repo.list('weigh_ins')).toEqual([]);expect(repo.pending()).toEqual([]);expect(push).not.toHaveBeenCalled();
  await engine.sync();expect(engine.pullRevision).toBe(2);engine.close();sqlite.close();
+});
+
+test('a fresh demo starts with no sample rows, and still promotes what the person logged', async () => {
+ const {repo,db,sqlite}=await localDatabase();const demo=new Repository(db,'demo',repo.device,randomUUID);seedDemo(demo);
+ // No empty "Demo full body" routine offered as Up next, and no empty Jan 1 workout in History.
+ expect(demo.list('routines')).toEqual([]);expect(demo.list('sessions')).toEqual([]);
+ expect(demo.localGet('demoSamples')).toEqual([]);
+ seedDemo(demo);expect(demo.list('routines')).toEqual([]);
+ const routine=demo.save('routines',{name:'Synthetic user routine',position:0});
+ const food=demo.save('food_entries',{name:'Synthetic user food',day:'2026-10-27'});
+ expect(demo.pending()).toEqual([]);
+ promoteDemo(demo,repo);
+ expect(repo.get('routines',routine.id)).toBeDefined();expect(repo.get('food_entries',food.id)).toBeDefined();
+ expect(demo.list('routines')).toEqual([]);sqlite.close();
 });

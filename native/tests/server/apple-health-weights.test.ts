@@ -112,3 +112,17 @@ test('a read that finishes after the page or account has gone writes nothing', a
     expect(repo.list('weigh_ins')).toHaveLength(0);
   } finally { sqlite.close(); }
 });
+
+test('a large first import is one change, not one per reading', async () => {
+  const { db, repo: fixture, sqlite } = await localDatabase();
+  try {
+    const repo = new Repository(db, fixture.owner, fixture.device, randomUUID);
+    const many = Array.from({ length: 700 }, (_, i) => ({ id: `BBBBBBBB-0000-4000-8000-${String(i).padStart(12, '0')}`, at: new Date(now.getTime() - (i + 1) * 3600000), kg: 80 + (i % 10) / 10 }));
+    let notices = 0;
+    const stop = repo.subscribe(() => { notices += 1; });
+    expect(await refreshWeights(repo, source('asked', many), now)).toBe(700);
+    stop();
+    expect(notices).toBe(1);
+    expect(repo.list('weigh_ins')).toHaveLength(700);
+  } finally { sqlite.close(); }
+});

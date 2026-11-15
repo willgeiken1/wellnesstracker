@@ -56,7 +56,9 @@ function Detail({ store }: { store: WorkoutStore }) {
   const health = useHealthDays(useFocused());
   // The weights live in this screen while it is open and on the phone after each change.
   const [held, setHeld] = useState<{ store: WorkoutStore['repo']; weights: Weights } | null>(null);
-  const weights = held && held.store === store.repo ? held.weights : readWeights(store);
+  // Read once per store, not once per draw: a fresh object each draw would redo the score below every time.
+  const stored = useMemo(() => readWeights(store), [store]);
+  const weights = held && held.store === store.repo ? held.weights : stored;
   // Read once per change to the data, the weights or the minute, through a view that fetches each list once.
   const reader = useMemo(() => new WorkoutStore(cachedReads(store.repo), store.viewRevision), [store]);
   const minute = Math.floor(new Date().getTime() / 60_000);

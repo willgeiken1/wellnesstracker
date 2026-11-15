@@ -45,8 +45,15 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
     </Stack>
   </NavigationThemeProvider>;
 }
+/** Longest the splash waits for local data and the session before it gives way anyway. */
+export const SPLASH_LIMIT_MS = 6000;
 function Application() {
   const auth = useAuth();
+  // Keep the splash up until there is something to draw: hiding it when only the fonts were ready showed an empty
+  // window while the database opened and the session was checked. A recovery or setup error is something to draw.
+  const drawable = auth.ready || !!auth.recovery || !!auth.configError || !!auth.demoTransferError;
+  useEffect(() => { if (drawable) void SplashScreen.hideAsync(); }, [drawable]);
+  useEffect(() => { const limit = setTimeout(() => void SplashScreen.hideAsync(), SPLASH_LIMIT_MS); return () => clearTimeout(limit); }, []);
   useEffect(()=>{
     // Resume an interrupted first setup (including email confirmation on restart).
     if(auth.ready&&auth.session&&auth.repository&&auth.initialPullComplete&&auth.repository.list('profile').length===0)router.replace('/onboarding');
@@ -63,7 +70,8 @@ function Application() {
 }
 export default function RootLayout() {
   const [loaded, error] = useFonts({ Lexend_300Light, Lexend_500Medium });
-  useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
+  // A font error is shown as text, which needs the splash gone.
+  useEffect(() => { if (error) void SplashScreen.hideAsync(); }, [error]);
   if (!loaded && !error) return null;
   return <OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider>;
 }

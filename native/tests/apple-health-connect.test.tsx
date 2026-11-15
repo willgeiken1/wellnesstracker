@@ -20,7 +20,7 @@ function fakes(start: HealthAccess, list = samples) {
     steps: async () => 0, sleep: async () => [],
   };
   const local = new Map<string, unknown>();
-  const repo = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); } } as unknown as Repository;
+  const repo = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); }, atomic: <T,>(f: () => T) => f() } as unknown as Repository;
   return { source, repo, saved, local };
 }
 function Page({ repo, source }: { repo: Repository | null; source: HealthSource | null }) {

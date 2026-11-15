@@ -111,3 +111,17 @@ test('at large text the bar wraps its buttons under the clock, and every button 
   const { touchTarget } = require('../src/components/button') as typeof import('../src/components/button');
   for (const name of ['−15 s', '+15 s', 'Skip']) expect(StyleSheet.flatten(screen.getByRole('button', { name }).props.style).minHeight).toBe(touchTarget);
 });
+
+test('the bar under the logger ticks a few times a second, the full timer smoothly, and the end is caught on time', async () => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+  const ticks = jest.spyOn(global, 'setInterval');
+  const { store } = await logger();
+  await act(async () => {});
+  await fireEvent.press(screen.getByTestId('set-0-0-done'));
+  const delays = () => ticks.mock.calls.map(call => call[1]);
+  expect(delays()).toContain(250);
+  expect(delays()).not.toContain(50);
+  await fireEvent.press(screen.getByRole('button', { name: 'Expand rest timer' }));
+  expect(delays()).toContain(50);
+  expect(store.timer()!.minimized).toBe(false);
+});

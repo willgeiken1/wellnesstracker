@@ -1,4 +1,4 @@
-import { cachedReads, liveReads } from '../src/data/read-cache';
+import { cachedReads, liveReads, sharedReads } from '../src/data/read-cache';
 
 test('each list or value is fetched once, and every caller gets its own copy of a list', () => {
   const rows = [{ id: 'b' }, { id: 'a' }];
@@ -84,4 +84,23 @@ describe('liveReads, for a store that also saves', () => {
     view.list('sets');
     expect(repo.list).toHaveBeenCalledTimes(2);
   });
+});
+
+test('every screen shares one remembering view per repository, and wrapping a view again does not stack', () => {
+  let revision = 1;
+  const repo = { list: jest.fn((_table: string) => [{ id: 'a' }]), getRevision: () => revision, save: jest.fn() };
+  const one = sharedReads(repo), two = sharedReads(repo);
+  expect(one).toBe(two);
+  expect(sharedReads(one)).toBe(one);
+  one.list('sets'); two.list('sets');
+  expect(repo.list).toHaveBeenCalledTimes(1);
+  // A write through either one, or a change from anywhere, is seen by both.
+  two.save();
+  one.list('sets');
+  expect(repo.list).toHaveBeenCalledTimes(2);
+  revision += 1;
+  two.list('sets');
+  expect(repo.list).toHaveBeenCalledTimes(3);
+  // Another repository gets its own view.
+  expect(sharedReads({ ...repo })).not.toBe(one);
 });

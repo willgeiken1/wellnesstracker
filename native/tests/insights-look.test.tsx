@@ -156,7 +156,7 @@ describe('Weekly', () => {
   });
 });
 
-test('the tab has four sections; Muscles holds the body map and Recovery says plainly it is not built', async () => {
+test('the tab has four sections; Muscles holds the body map and Recovery leads to connecting Apple Health', async () => {
   const { repo } = sample();
   jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>);
   await render(wrap(<Insights />));
@@ -165,8 +165,10 @@ test('the tab has four sections; Muscles holds the body map and Recovery says pl
   await fireEvent.press(screen.getByRole('tab', { name: 'Muscles' }));
   expect(screen.getByText('Front')).toBeTruthy();
   await fireEvent.press(screen.getByRole('tab', { name: 'Recovery' }));
-  expect(screen.getByRole('header', { name: 'Recovery is not in this version yet' })).toBeTruthy();
-  expect(screen.queryByText('M2/M3 placeholder')).toBeNull();
+  // Without Apple Health connected, Recovery says how to connect it instead of showing a placeholder.
+  expect(screen.getByRole('header', { name: 'Sleep and steps' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Open Health & devices' })).toBeTruthy();
+  expect(screen.queryByText(/not in this version/)).toBeNull();
   await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' }));
   expect(screen.getByTestId('weekly-report')).toBeTruthy();
 });

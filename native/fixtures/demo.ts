@@ -22,6 +22,14 @@ export function seedDemo(repo: Repository) {
   // locally, but promotion will refuse it rather than guess which rows are samples.
   if(repo.list('routines',true).length||repo.list('sessions',true).length)return;
   if(repo.list('routines').length)return;
+  // A fresh demo starts empty. The two old sample rows (an empty "Demo full body" routine offered as Up next and an
+  // empty Jan 1 workout in History) looked like broken data. The marker alone tells promotion this demo is known.
+  repo.localSave('demoSamples',[]);
+}
+/** The two sample rows earlier versions seeded into every demo. Installs that already have them keep them, and
+ * promotion still leaves them out by these reserved ids; tests use this to stand up such an install. */
+export function seedSampleRows(repo: Repository) {
+  if(repo.owner!=='demo')throw new Error('Demo namespace required.');
   repo.atomic(()=>{
     repo.save('routines',{name:t('demoFullBody'),position:0},DEMO_ROUTINE_ID);
     repo.save('sessions',{name:t('demoWorkoutName'),day:'2026-01-01',origin:'routine',finished_at:1767272400000},DEMO_SESSION_ID);

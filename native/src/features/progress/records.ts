@@ -6,7 +6,8 @@ export interface LiftRecord { exercise: string; weight: number; unit: Unit; day:
  * The heaviest working set for each exercise across finished workouts, newest first.
  * Read-only: it reads the same sets the workout summary reads and saves nothing.
  */
-export function liftRecords(store: WorkoutStore): LiftRecord[] {
+export function liftRecords(store: WorkoutStore): LiftRecord[] { return store.reading(() => readLiftRecords(store)); }
+function readLiftRecords(store: WorkoutStore): LiftRecord[] {
   const best = new Map<string, { kg: number; day: string; entryId: string }>();
   for (const session of store.trainingHistory()) {
     const day = String(session.data.day ?? '');
@@ -28,7 +29,8 @@ export function liftRecords(store: WorkoutStore): LiftRecord[] {
 
 export interface Lifetime { workouts: number; sets: number; volume: number; unit: Unit }
 /** Totals across every finished workout that has at least one working set. Volume is in the profile unit. */
-export function lifetime(store: WorkoutStore): Lifetime {
+export function lifetime(store: WorkoutStore): Lifetime { return store.reading(() => readLifetime(store)); }
+function readLifetime(store: WorkoutStore): Lifetime {
   // Reads sets directly. The workout summary also works out records against every earlier workout, which made
   // this total grow with the square of the history; the count and volume here match the summary's own.
   const unit = store.unit(), sessions = store.trainingHistory();

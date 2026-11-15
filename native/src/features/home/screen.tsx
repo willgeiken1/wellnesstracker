@@ -16,7 +16,6 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { dailyWeights } from '@/features/body/model';
 import { attributedDay, foodTargets, totals } from '@/features/food/model';
-import { useFoodRevision } from '@/features/food/use-food-revision';
 import { PlanStore } from '@/features/plans/store';
 import { useWorkout } from '@/features/workout/use-workout';
 import { pluralize, t } from '@/i18n/en';
@@ -29,6 +28,7 @@ import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './ti
 import { HeaderScore, ScoreCard } from '../score/card';
 import { readScore } from '../score/read';
 import type { Score } from '../score/model';
+import type { Row } from '@/data/rows';
 
 export const greeting = (hour: number) => t(hour >= 5 && hour < 12 ? 'goodMorning' : hour >= 12 && hour < 18 ? 'goodAfternoon' : 'goodEvening');
 const whole = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -53,26 +53,35 @@ function nextRoutine(store: WorkoutStore) {
   const plans = new PlanStore(store.repo), days = plans.read().days;
   return days.length ? store.templates().find(r => r.id === days[plans.nextIndex()]?.routineId) : undefined;
 }
-/** What was logged on each local day. Today's food uses the food screen's own day rule. */
+/** What was logged on each local day. Today's food uses the food screen's own day rule.
+ * Only the days Home shows are walked: food is sorted into those days in one pass, and only workouts on those
+ * days are opened, so the work stays the same size with a week or a year of history behind it. */
 function readDays(store: WorkoutStore, days: string[], today: string, foodDay: string, _revision: number) {
-  const wanted = new Set(days), out = new Map<string, DayFacts>();
-  const food = store.repo.list('food_entries');
-  for (const day of days) {
+  return store.reading(() => {
+    const wanted = new Set(days), out = new Map<string, DayFacts>();
     // Before 4 a.m. the food screen still files food under yesterday. Home shows that food under today, to agree
     // with the Food tab, so yesterday's column must not show the same entries a second time.
     // Food filed under the calendar day itself in those hours (the Food tab lets you pick it) still counts for today.
-    const sources = day === today ? [foodDay, today] : day === foodDay ? [] : [day];
-    const rows = food.filter(r => sources.includes(String(r.data.day))), sum = totals(rows);
-    out.set(day, { ...NONE, logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g });
-  }
-  // Only workouts with a counted set: a past-day draft that was opened and left empty is not a workout.
-  for (const session of store.trainingHistory()) {
-    const day = String(session.data.day), facts = out.get(day);
-    if (!wanted.has(day) || !facts) continue;
-    facts.trained = true;
-    for (const entry of store.entries(session.id)) facts.volumeKg += entryVolumeKg(store, entry);
-  }
-  return out;
+    const shownUnder = new Map<string, Set<string>>();
+    for (const day of days) for (const source of day === today ? [foodDay, today] : day === foodDay ? [] : [day]) {
+      const under = shownUnder.get(source) ?? new Set<string>();
+      shownUnder.set(source, under.add(day));
+    }
+    const food = new Map<string, Row[]>(days.map(day => [day, []]));
+    for (const row of store.repo.list('food_entries')) for (const day of shownUnder.get(String(row.data.day)) ?? []) food.get(day)!.push(row);
+    for (const day of days) {
+      const rows = food.get(day)!, sum = totals(rows);
+      out.set(day, { ...NONE, logged: rows.length > 0, kcal: sum.energy_kj === null ? null : sum.energy_kj / 4.184, protein: sum.protein_g });
+    }
+    // Only workouts with a counted set: a past-day draft that was opened and left empty is not a workout.
+    for (const session of store.history()) {
+      const day = String(session.data.day), facts = out.get(day);
+      if (!wanted.has(day) || !facts || !store.trained(session)) continue;
+      facts.trained = true;
+      for (const entry of store.entries(session.id)) facts.volumeKg += entryVolumeKg(store, entry);
+    }
+    return out;
+  });
 }
 function readTargets(store: WorkoutStore, day: string, _revision: number) {
   const targets = foodTargets(store.repo, day).targets;
@@ -84,7 +93,7 @@ function readDayTargets(store: WorkoutStore, days: string[], today: string, food
 }
 function readWeights(store: WorkoutStore) { return dailyWeights(store.repo.list('weigh_ins')).slice(-14).map(w => w.kg); }
 function hasAnything(store: WorkoutStore, _revision: number) {
-  return !!store.active() || store.history().length > 0 || store.repo.list('food_entries').length > 0 || readWeights(store).length > 0;
+  return !!store.active() || store.repo.list('sessions').some(s => s.data.finished_at !== null) || store.repo.list('food_entries').length > 0 || readWeights(store).length > 0;
 }
 
 /** How far along each pillar is, 0 to 1.05. A finished workout fills training; food follows the calorie target. */
@@ -132,7 +141,14 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
  * what's next, tiles, and the + button. Read-only apart from starting or resuming a workout through
  * the existing stores. The Insight Score is worked out here from what is logged and, when connected, Apple Health. */
 export function Home() {
-  const { store, auth } = useWorkout();
+  const { store: live, auth } = useWorkout();
+  // Every write makes a new store, and Home's sums walk the days it shows. While another tab is in front that work
+  // is skipped: Home keeps what it last worked out (and the minute it was worked out in), and catches up as soon as
+  // it is in front again if anything changed meanwhile.
+  const focused = useFocused();
+  const [held, setHeld] = useState(() => ({ store: live, now: new Date() }));
+  // Never across accounts: a different repository (signing out or in) is shown as it is.
+  const store = focused || held.store?.repo !== live?.repo ? live : held.store;
   const { colors, barLook } = useTheme();
   // With the floating bar the + is neutral and sits beside the tabs, so the open tab's circle stays the only accent circle.
   const floating = barLook === 'floating';
@@ -142,7 +158,7 @@ export function Home() {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') setWoken(n => n + 1); });
     return () => sub?.remove();
   }, []);
-  const now = new Date(), today = localDay(now);
+  const now = focused ? new Date() : held.now, today = localDay(now);
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -152,9 +168,11 @@ export function Home() {
   const tiles = layout.repo === repo ? layout.tiles : loadTiles(repo);
   // Coming back to Home re-reads the saved layout, so tiles added elsewhere (connecting Apple Health) show at
   // once and a later edit here cannot overwrite them.
-  const focused = useFocused();
   const [wasFocused, setWasFocused] = useState(focused);
-  if (focused !== wasFocused) { setWasFocused(focused); if (focused) setLayout({ repo, tiles: loadTiles(repo) }); }
+  if (focused !== wasFocused) {
+    setWasFocused(focused);
+    if (focused) setLayout({ repo, tiles: loadTiles(repo) }); else setHeld({ store: live, now: new Date() });
+  }
   const change = (next: HomeTiles) => {
     setLayout({ repo, tiles: next });
     // Home still shows the new layout this session if the local write fails.
@@ -218,8 +236,9 @@ export function Home() {
 }
 
 function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, score }: { store: WorkoutStore; reader: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null }) {
+  // No subscription of its own: Home hands Body a new store on every change while it is in front, and none while
+  // it is hidden, so Body redraws exactly when its sums can have moved.
   const today = localDay(now), foodDay = attributedDay();
-  useFoodRevision(store.repo);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   const week = Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
   // Everything read from the data, worked out once per change to it or to the day.
