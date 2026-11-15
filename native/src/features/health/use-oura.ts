@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { addHealthTiles, type TileStorage } from '../home/tiles';
 import { oura } from './oura-client';
-import { syncNow, type OuraSource, type OuraStatus } from './oura';
+import { OURA_RETURN, syncNow, type OuraSource, type OuraStatus } from './oura';
 
 const stateOf = (status: OuraStatus | null): OuraState['state'] => !status ? 'unavailable' : !status.connected ? 'off' : status.expired ? 'expired' : 'on';
 
@@ -40,9 +40,11 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     return status;
   };
   const connect = () => run(async from => {
-    // Oura's own page opens in the in-app browser. Closing it comes back here, and the account is checked again.
+    // Oura's own page opens in a sign-in sheet. Once the person approves (or cancels), the server sends the sheet
+    // to insight://oura, which closes it and comes back here; closing it by hand does the same. Either way the
+    // account is checked again, so what the sheet returns is never trusted on its own.
     // Reconnecting after Oura signed Insight out is the same path.
-    await WebBrowser.openBrowserAsync(await from.connectUrl());
+    await WebBrowser.openAuthSessionAsync(await from.connectUrl(), OURA_RETURN);
     const status = await check(from);
     if (!status?.connected || status.expired) return;
     // Connecting puts the Steps and Sleep tiles on Home. They can be removed again from Home's Edit.

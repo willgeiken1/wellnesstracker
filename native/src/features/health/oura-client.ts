@@ -25,7 +25,8 @@ export function oura(): OuraSource | null {
       return { connected: !!data, expired: !!data && isExpired(data.last_error), lastSync: typeof data?.last_sync === 'string' ? data.last_sync : null, account: id };
     },
     async connectUrl() {
-      const url = (await invoke('oura-connect', {}))?.url;
+      // `return: 'app'` asks the server to send the finished login back into the app, not to the web logger.
+      const url = (await invoke('oura-connect', { return: 'app' }))?.url;
       if (!isOuraUrl(url)) throw new Error('Oura request failed.');
       return url;
     },

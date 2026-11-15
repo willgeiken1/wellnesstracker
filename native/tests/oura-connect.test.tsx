@@ -11,7 +11,7 @@ import { OURA_PREVIEW_STATES, previewOura } from '../src/features/health/oura-pr
 import { useHealthDays } from '../src/features/health/use-health-days';
 import type { HealthSource } from '../src/features/health/source';
 
-jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn(async () => ({ type: 'cancel' })) }));
+jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn(async () => ({ type: 'cancel' })) }));
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 const URL = 'https://cloud.ouraring.com/oauth/authorize?client_id=made-up';
 /** A made-up account: `approve` is what happens on Oura's page while the browser is open. */
@@ -23,7 +23,7 @@ function fakes(start: 'signed-out' | 'off' | 'on' | 'expired', approve = true) {
     connectUrl: jest.fn(async () => URL), sync: jest.fn(async () => {}), days: jest.fn(async () => []),
     disconnect: jest.fn(async () => { state = 'off'; }),
   } satisfies OuraSource;
-  jest.mocked(WebBrowser.openBrowserAsync).mockImplementation(async () => { if (approve && (state === 'off' || state === 'expired')) state = 'on'; return { type: 'cancel' } as never; });
+  jest.mocked(WebBrowser.openAuthSessionAsync).mockImplementation(async () => { if (approve && (state === 'off' || state === 'expired')) state = 'on'; return { type: 'cancel' } as never; });
   const storage = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); } };
   return { source, storage, local };
 }
@@ -53,7 +53,7 @@ test('before connecting there is one Connect button, and nothing is opened, refr
   expect(screen.queryByRole('button', { name: 'Disconnect Oura' })).toBeNull();
   expect(within(screen.getByTestId('connect-oura')).getByText('Not connected')).toBeTruthy();
   expect(screen.getByText(/Oura days are kept in your Insight account/)).toBeTruthy();
-  expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+  expect(WebBrowser.openAuthSessionAsync).not.toHaveBeenCalled();
   expect(source.sync).not.toHaveBeenCalled();
   expect(source.days).not.toHaveBeenCalled();
   expect(local.size).toBe(0);
@@ -65,7 +65,7 @@ test('Connect opens Oura\'s page; once approved the row reads Connected, the til
   await settle();
   await fireEvent.press(screen.getByTestId('connect-oura-button'));
   await settle();
-  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(URL);
+  expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(URL, 'insight://oura');
   expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
   expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
   expect(JSON.stringify(local.get(HOME_TILES_KEY))).toMatch(/steps.*sleep|sleep.*steps/);
@@ -77,13 +77,13 @@ test('Connect opens Oura\'s page; once approved the row reads Connected, the til
 test('two quick presses open Oura\'s page once', async () => {
   const { source, storage } = fakes('off');
   let close: () => void = () => {};
-  jest.mocked(WebBrowser.openBrowserAsync).mockImplementation(() => new Promise(done => { close = () => done({ type: 'cancel' } as never); }));
+  jest.mocked(WebBrowser.openAuthSessionAsync).mockImplementation(() => new Promise(done => { close = () => done({ type: 'cancel' } as never); }));
   await render(<Page source={source} storage={storage} />, { wrapper });
   await settle();
   const button = screen.getByTestId('connect-oura-button');
   await act(async () => { fireEvent.press(button); fireEvent.press(button); });
   await settle();
-  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledTimes(1);
+  expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(1);
   await act(async () => { close(); });
   await settle();
   expect(screen.getByRole('button', { name: 'Connect Oura' }).props.accessibilityState?.disabled).toBeFalsy();
@@ -98,7 +98,7 @@ test('when Oura has signed Insight out, the row says Reconnect and Reconnect goe
   expect(screen.getByRole('button', { name: 'Disconnect Oura' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Reconnect Oura' }));
   await settle();
-  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(URL);
+  expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(URL, 'insight://oura');
   expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
   expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
   expect(screen.queryByText(/not accepting Insight/)).toBeNull();
@@ -116,7 +116,7 @@ test('when the sign-in is refused, Check again tries a refresh, and one that wor
   await fireEvent.press(screen.getByTestId('connect-oura-again'));
   await settle();
   expect(source.sync).toHaveBeenCalledTimes(1);
-  expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+  expect(WebBrowser.openAuthSessionAsync).not.toHaveBeenCalled();
   expect(within(screen.getByTestId('connect-oura')).getByText('Connected')).toBeTruthy();
 });
 
@@ -157,7 +157,7 @@ test('a page that is not Oura\'s is never opened, and the failure is said plainl
   await settle();
   await fireEvent.press(screen.getByTestId('connect-oura-button'));
   await settle();
-  expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+  expect(WebBrowser.openAuthSessionAsync).not.toHaveBeenCalled();
   expect(screen.getByText('Oura could not be reached just now.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Connect Oura' }).props.accessibilityState?.disabled).toBeFalsy();
 });
