@@ -30,6 +30,25 @@ describe('last night by stage', () => {
     ];
     expect(nightStages(spans, night.from, night.to)).toEqual({ core: 120, deep: 60, rem: 45, asleep: 60, awake: 15 });
   });
+  test('two devices that give the same hour different stages count it once, as core', () => {
+    const spans = [
+      span(at(12, 1), at(12, 2), { stage: 'deep' }), // one device
+      span(at(12, 1), at(12, 2), { stage: 'core' }), // another device, same hour
+      span(at(12, 2), at(12, 3), { stage: 'rem' }),
+      span(at(12, 2, 30), at(12, 3), { stage: 'deep' }), // overlaps REM: the half hour counts once, as REM
+    ];
+    const read = nightStages(spans, night.from, night.to)!;
+    expect(read).toEqual({ core: 60, rem: 60, deep: 0, asleep: 0, awake: 0 });
+    expect(read.core + read.rem + read.deep + read.asleep).toBe(120);
+  });
+  test('awake time from another device still comes out when stages disagree', () => {
+    const spans = [
+      span(at(12, 1), at(12, 2), { stage: 'deep' }),
+      span(at(12, 1, 30), at(12, 2), { stage: 'core' }),
+      span(at(12, 1, 45), at(12, 2), { awake: true }),
+    ];
+    expect(nightStages(spans, night.from, night.to)).toEqual({ core: 15, deep: 30, rem: 0, asleep: 0, awake: 15 });
+  });
   test('awake before falling asleep or after waking is left out, and no sleep gives nothing', () => {
     const spans = [span(at(11, 22), at(11, 23), { awake: true }), span(at(11, 23), at(12, 6), { stage: 'core' }), span(at(12, 6), at(12, 7), { awake: true })];
     expect(nightStages(spans, night.from, night.to)).toMatchObject({ awake: 0, core: 420 });
@@ -73,6 +92,13 @@ describe('reading recovery', () => {
       vo2Max: async () => ({ value: 40, at: at(13, 9) }), // a date past now is not shown
     }), ['2026-11-12'], NOW);
     expect(read).toEqual({ night: null, restingHeartRate: [60], hrv: null, heartToday: { average: 60, min: 50, max: 70 }, vo2Max: null });
+  });
+  test('a day that cannot be read is a gap, and the other days still show', async () => {
+    const read = await readRecovery(source('asked', {
+      heart: async (metric, from) => { if (metric === 'hrv' && from.getDate() === 11) throw new Error('made-up failure'); return { average: 55, min: 50, max: 70 }; },
+    }), ['2026-11-11', '2026-11-12'], NOW);
+    expect(read?.hrv).toEqual([null, 55]);
+    expect(read?.restingHeartRate).toEqual([55, 55]);
   });
 });
 
