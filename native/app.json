@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Insight Daily",
+    "name": "Insight Wellness",
     "slug": "insight-daily",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,9 @@
       "bundleIdentifier": "com.insightwellness.app",
       "supportsTablet": false,
       "deploymentTarget": "17.0",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "privacyManifests": {
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": [],
@@ -199,7 +202,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Insight Daily to take a meal photo you choose for an estimate.",
+          "cameraPermission": "Allow Insight Wellness to take a meal photo you choose for an estimate.",
           "photosPermission": false,
           "microphonePermission": false
         }
@@ -207,7 +210,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Insight Daily to scan food barcodes when you choose Scan.",
+          "cameraPermission": "Allow Insight Wellness to scan food barcodes when you choose Scan.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
@@ -216,12 +219,17 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Insight Daily reads your body weight, steps and sleep from Apple Health to show them beside your training and food. They stay on this phone.",
+          "NSHealthShareUsageDescription": "Insight Wellness reads your body weight, steps and sleep from Apple Health to show them beside your training and food. They stay on this phone.",
           "NSHealthUpdateUsageDescription": false,
           "background": false
         }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "722048b6-6d4c-41ac-8e83-a8824582f57d"
+      }
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

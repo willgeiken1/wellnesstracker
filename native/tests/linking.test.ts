@@ -19,6 +19,8 @@ const cases = [
   ['https://evil.example/food/log', '/'], ['javascript:alert(1)', '/'],
   ['', '/'], ['insight://%zz', '/'], ['insight://[', '/'],
   ['insight://unknown', '/'],
+  ['insight://oura?oura=connected', '/settings/health'], ['INSIGHT://OURA/', '/settings/health'],
+  ['insight://oura/other', '/'], ['https://evil.example/oura', '/'],
 ] as const;
 
 describe.each([true, false])('native intent initial=%s', initial => {
@@ -48,6 +50,17 @@ test('fixture intent rejects malformed states and all release links',()=>{
 test('identical development fixture links receive distinct presentation requests', () => {
  const input={path:'insight://dev/logger-fixture?state=logger',initial:false};
  expect(redirectSystemPath(input)).not.toBe(redirectSystemPath(input));
+});
+
+test('the Oura preview link opens only in development, with one known state and nothing else', () => {
+  expect(redirectSystemPath({ path: 'insight://dev/oura-preview?state=expired&x=1', initial: true })).toBe('/settings/dev-oura-preview?state=expired');
+  for (const bad of ['insight://dev/oura-preview', 'insight://dev/oura-preview?state=../x', 'insight://dev/oura-preview?state=ON'])
+    expect(redirectSystemPath({ path: bad, initial: true })).toBe('/');
+  const original = __DEV__;
+  try {
+    Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true, writable: true });
+    expect(redirectSystemPath({ path: 'insight://dev/oura-preview?state=on', initial: true })).toBe('/');
+  } finally { Object.defineProperty(globalThis, '__DEV__', { value: original, configurable: true, writable: true }); }
 });
 
 test('the sample data link opens only in development, and carries nothing with it', () => {
