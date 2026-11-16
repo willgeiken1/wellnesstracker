@@ -1,3 +1,4 @@
+import { PrivacySwitches } from '../../settings/privacy-switches';
 import { useState } from "react";
 import { Modal, View } from "react-native";
 import { Button } from "../../../components/button";
@@ -104,7 +105,7 @@ export function FoodPrivacyScreen() {
   return (
     <Screen title={t("privacy")}>
       {repository ? (
-        <FoodAiPrivacy repo={repository} />
+        <><PrivacySwitches /><FoodAiPrivacy repo={repository} /></>
       ) : (
         <QuietCard title={t("localError")} />
       )}
