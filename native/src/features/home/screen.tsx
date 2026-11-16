@@ -422,7 +422,11 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     const drunk = (ml: number) => ounces ? ml / 29.5735 : ml / 1000;
     if (water) all.push({ id: 'water', label: t('homeWater'), color: accent, ...shown(today(water), ml => ounces ? whole(drunk(ml)) : drunk(ml).toFixed(1), `${ounces ? 'fl oz' : 'L'} · ${t('homeToday')}`), series: water.map(ml => ml === null ? null : drunk(ml)), bars: true, to: '/progress' });
     if (mindful) all.push({ id: 'mindful', label: t('homeMindful'), color: sleepColor, ...shown(today(mindful), whole, `min · ${t('homeToday')}`), series: mindful, bars: true, to: '/progress' });
-    if (fat?.length) all.push({ id: 'bodyFat', label: t('homeBodyFat'), color: accent, value: fat[fat.length - 1].toFixed(1), unit: '%', series: fat, to: '/progress' });
+    // Body fat is measured now and then, so a reading from before today carries its date.
+    const fatAt = health.bodyFatAt, now = new Date();
+    const fatDated = fatAt && fatAt.toDateString() !== now.toDateString()
+      ? ` · ${fatAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(fatAt.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) })}` : '';
+    if (fat?.length) all.push({ id: 'bodyFat', label: t('homeBodyFat'), color: accent, value: fat[fat.length - 1].toFixed(1), unit: `%${fatDated}`, series: fat, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v !== null && v > 0)).map(tile => [tile.id, tile]));
 }

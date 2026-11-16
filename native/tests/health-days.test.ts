@@ -68,6 +68,8 @@ test('water adds up per day, mindful sessions logged twice count once, and body 
   // 8:00 to 8:15 once, plus 14:50 up to now at 15:00.
   expect(read!.mindfulMinutes).toEqual([null, 25]);
   expect(read!.bodyFat).toEqual([22.5, 21.9]);
+  // The newest valid reading's time travels with the list, so an old one can be shown with its date.
+  expect(read!.bodyFatAt).toEqual(at(12, 7));
   expect(since).toEqual(new Date(2026, 10, 12 - 89));
   const failed = await readHealthDays(source('asked', { bodyFat: async () => { throw new Error('made-up failure'); } }), ['2026-11-12'], at(12, 15));
   expect(failed!.bodyFat).toBeNull();
@@ -78,12 +80,12 @@ test('an earlier day that fails only loses its bar; today failing leaves the num
   const early = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 11) throw new Error('made-up failure'); return 3000; },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(early).toEqual({ steps: [null, 3000], sleepHours: [null, null], activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [] });
+  expect(early).toEqual({ steps: [null, 3000], sleepHours: [null, null], activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [], bodyFatAt: null });
   const today = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 12) throw new Error('made-up failure'); return 3000; },
     sleep: async () => { throw new Error('made-up failure'); },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(today).toEqual({ steps: null, sleepHours: null, activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [] });
+  expect(today).toEqual({ steps: null, sleepHours: null, activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [], bodyFatAt: null });
 });
 
 test('days and nights follow the clock on the wall across a clock change', () => {

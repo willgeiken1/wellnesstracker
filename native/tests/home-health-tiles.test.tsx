@@ -50,7 +50,8 @@ test('once Apple Health is connected, Home shows steps and last night\'s sleep, 
   expect(screen.getByRole('button', { name: 'Exercise, 34 min · today' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Water, 61 fl oz · today' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Mindful minutes, 10 min · today' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Body fat, 21.4 %' })).toBeTruthy();
+  // Measured two days ago, so the tile says when.
+  expect(screen.getByRole('button', { name: 'Body fat, 21.4 % · May 10' })).toBeTruthy();
   expect(source.steps).toHaveBeenCalledTimes(7);
   expect(source.activeEnergy).toHaveBeenCalledTimes(7);
   expect(source.exerciseMinutes).toHaveBeenCalledTimes(7);
@@ -145,4 +146,24 @@ test('reopening the app the next morning moves all of Home to the new day, not j
     expect(screen.getByText('Friday, Nov 13')).toBeTruthy();
     expect(screen.queryByText('Thursday, Nov 12')).toBeNull();
   } finally { jest.useRealTimers(); spy.mockRestore(); }
+});
+
+test('body fat shows the newest reading, with its date unless it was taken today', async () => {
+  const source = fake('asked');
+  (source.bodyFat as jest.Mock).mockResolvedValue([{ at: new Date(2026, 4, 12, 7), percent: 20.04 }, { at: new Date(2025, 11, 30, 7), percent: 23.5 }]);
+  jest.mocked(appleHealth).mockReturnValue(source);
+  addHealthTiles(open());
+  await render(<Home />, { wrapper });
+  await settle();
+  expect(screen.getByRole('button', { name: 'Body fat, 20.0 %' })).toBeTruthy();
+});
+
+test('a body-fat reading from last year carries the year', async () => {
+  const source = fake('asked');
+  (source.bodyFat as jest.Mock).mockResolvedValue([{ at: new Date(2025, 11, 30, 7), percent: 23.5 }]);
+  jest.mocked(appleHealth).mockReturnValue(source);
+  addHealthTiles(open());
+  await render(<Home />, { wrapper });
+  await settle();
+  expect(screen.getByRole('button', { name: 'Body fat, 23.5 % · Dec 30, 2025' })).toBeTruthy();
 });

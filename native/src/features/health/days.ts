@@ -11,6 +11,8 @@ export type HealthDays = {
   waterMl: DaySeries | null; mindfulMinutes: DaySeries | null;
   /** Body-fat readings from the last 90 days, oldest first, as percentages to one decimal. Null when unread. */
   bodyFat: number[] | null;
+  /** When the newest body-fat reading was taken, so an old one is shown with its date. Null with no reading. */
+  bodyFatAt?: Date | null;
 };
 /** How far back body fat is read. Most people measure it now and then, not daily. */
 export const BODY_FAT_DAYS = 90;
@@ -80,11 +82,14 @@ export async function readHealthDays(source: HealthSource | null, days: readonly
     // Two apps logging the same session count it once.
     totals(async (from, to) => { const ranges = union(await source.mindful(from, to), from.getTime(), to.getTime()); return ranges.length ? length(ranges) / 60_000 : null; }),
   ]);
-  let bodyFat: number[] | null;
+  let bodyFat: number[] | null, bodyFatAt: Date | null = null;
   try {
     const [y, m, d] = parts(days[last]);
-    const readings = await source.bodyFat(new Date(y, m - 1, d - BODY_FAT_DAYS + 1));
-    bodyFat = readings.filter(r => r.at <= now && Number.isFinite(r.percent) && r.percent > 0 && r.percent < 100).map(r => Math.round(r.percent * 10) / 10);
+    const readings = (await source.bodyFat(new Date(y, m - 1, d - BODY_FAT_DAYS + 1)))
+      .filter(r => r.at <= now && Number.isFinite(r.at.getTime()) && Number.isFinite(r.percent) && r.percent > 0 && r.percent < 100)
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+    bodyFat = readings.map(r => Math.round(r.percent * 10) / 10);
+    bodyFatAt = readings.length ? readings[readings.length - 1].at : null;
   } catch { bodyFat = null; }
   let sleepHours: DaySeries | null;
   try {
@@ -92,5 +97,5 @@ export async function readHealthDays(source: HealthSource | null, days: readonly
     // A night with nothing asleep recorded is no reading, not a night of zero hours.
     sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to), hours = to > night.from ? hoursAsleep(spans, night.from, to) : 0; return hours > 0 ? hours : null; });
   } catch { sleepHours = null; }
-  return { steps, sleepHours, activeKcal, exerciseMinutes, waterMl, mindfulMinutes, bodyFat };
+  return { steps, sleepHours, activeKcal, exerciseMinutes, waterMl, mindfulMinutes, bodyFat, bodyFatAt };
 }
