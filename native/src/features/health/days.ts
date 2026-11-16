@@ -3,7 +3,14 @@ import type { HealthSource, SleepSpan } from './source';
 /** Steps, active calories, exercise minutes and hours asleep for a run of days, oldest first. Held in memory
  * only: never saved, synced or sent. A list is null when today's reading could not be made, so the tile is left
  * out instead of showing a false 0. */
-export type HealthDays = { steps: number[] | null; sleepHours: number[] | null; activeKcal: number[] | null; exerciseMinutes: number[] | null };
+export type HealthDays = {
+  steps: number[] | null; sleepHours: number[] | null; activeKcal: number[] | null; exerciseMinutes: number[] | null;
+  waterMl: number[] | null; mindfulMinutes: number[] | null;
+  /** Body-fat readings from the last 90 days, oldest first, as percentages to one decimal. Null when unread. */
+  bodyFat: number[] | null;
+};
+/** How far back body fat is read. Most people measure it now and then, not daily. */
+export const BODY_FAT_DAYS = 90;
 const HOUR = 3_600_000;
 const parts = (day: string) => day.split('-').map(Number) as [number, number, number];
 /** Local midnight at the start of a `YYYY-MM-DD` day. */
@@ -23,7 +30,7 @@ export function lastDays(now: Date, count: number): string[] {
 
 export type Range = readonly [number, number];
 /** Clips to the window, drops bad stretches, and merges overlaps into separate ranges in order. */
-export function union(spans: readonly SleepSpan[], from: number, to: number): Range[] {
+export function union(spans: readonly Pick<SleepSpan, 'start' | 'end'>[], from: number, to: number): Range[] {
   const clipped = spans.map(span => [Math.max(span.start.getTime(), from), Math.min(span.end.getTime(), to)] as const)
     .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start).sort((a, b) => a[0] - b[0]);
   const merged: [number, number][] = [];
@@ -62,15 +69,24 @@ export async function readHealthDays(source: HealthSource | null, days: readonly
     }));
     return counts[last] === null ? null : counts.map(count => count ?? 0);
   };
-  const [steps, activeKcal, exerciseMinutes] = await Promise.all([
+  const [steps, activeKcal, exerciseMinutes, waterMl, mindfulMinutes] = await Promise.all([
     totals((from, to) => source.steps(from, to)),
     totals((from, to) => source.activeEnergy(from, to)),
     totals((from, to) => source.exerciseMinutes(from, to)),
+    totals((from, to) => source.water(from, to)),
+    // Two apps logging the same session count it once.
+    totals(async (from, to) => length(union(await source.mindful(from, to), from.getTime(), to.getTime())) / 60_000),
   ]);
+  let bodyFat: number[] | null;
+  try {
+    const [y, m, d] = parts(days[last]);
+    const readings = await source.bodyFat(new Date(y, m - 1, d - BODY_FAT_DAYS + 1));
+    bodyFat = readings.filter(r => r.at <= now && Number.isFinite(r.percent) && r.percent > 0 && r.percent < 100).map(r => Math.round(r.percent * 10) / 10);
+  } catch { bodyFat = null; }
   let sleepHours: number[] | null;
   try {
     const spans = await source.sleep(nightOf(days[0]).from, cap(nightOf(days[last]).to));
     sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to); return to > night.from ? hoursAsleep(spans, night.from, to) : 0; });
   } catch { sleepHours = null; }
-  return { steps, sleepHours, activeKcal, exerciseMinutes };
+  return { steps, sleepHours, activeKcal, exerciseMinutes, waterMl, mindfulMinutes, bodyFat };
 }

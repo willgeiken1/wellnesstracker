@@ -51,7 +51,7 @@ function workout(repo: ReturnType<typeof memoryRepository>) {
 // Made-up Health numbers: 6,000 steps a day and 5 h 30 min asleep each night.
 const health = (): HealthSource => ({
   access: async () => 'asked', request: async () => {}, weights: async () => [],
-  steps: jest.fn(async () => 6000), activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null,
+  steps: jest.fn(async () => 6000), activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [],
   sleep: jest.fn(async (from: Date, to: Date) => {
     const spans = [];
     for (let day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1); day < to; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {

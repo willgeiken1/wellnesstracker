@@ -27,6 +27,12 @@ export interface HealthSource {
   sleep(from: Date, to: Date): Promise<SleepSpan[]>;
   /** Heart rate and resting heart rate in beats a minute, HRV (SDNN) in milliseconds. Null when nothing was recorded. */
   heart(metric: HeartMetric, from: Date, to: Date): Promise<Spread | null>;
+  /** Water drunk (mL) between two instants. */
+  water(from: Date, to: Date): Promise<number>;
+  /** Mindful sessions between two instants, as stretches; overlaps are merged by the reader. */
+  mindful(from: Date, to: Date): Promise<{ start: Date; end: Date }[]>;
+  /** Body-fat readings since a date, oldest first, as a percentage (22.5 means 22.5%). */
+  bodyFat(since: Date): Promise<{ at: Date; percent: number }[]>;
   /** The newest VO2 max estimate, in mL/(kg·min), with when it was recorded. Null when there is none. */
   vo2Max(): Promise<{ value: number; at: Date } | null>;
 }

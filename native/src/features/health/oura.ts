@@ -86,7 +86,7 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
     steps: days.map(day => Math.round(rows.get(day)?.steps ?? 0)),
     sleepHours: days.map(day => (rows.get(day)?.sleepSeconds ?? 0) / 3600),
     // Only steps and sleep are read from Oura; everything else comes from Apple Health alone.
-    activeKcal: null, exerciseMinutes: null,
+    activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null,
   };
 }
 

@@ -12,7 +12,7 @@ const NOW = at(12, 15);
 const span = (a: Date, b: Date, extra: Partial<SleepSpan> = {}): SleepSpan => ({ start: a, end: b, ...extra });
 const source = (access: HealthAccess, over: Partial<HealthSource> = {}): HealthSource => ({
   access: async () => access, request: async () => {}, weights: async () => [], steps: async () => 0, sleep: async () => [],
-  activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, ...over,
+  activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [], ...over,
 });
 const wrap = (node: React.ReactNode) => <ThemeProvider>{node}</ThemeProvider>;
 const settle = () => act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); });
