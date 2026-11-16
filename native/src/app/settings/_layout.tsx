@@ -24,5 +24,6 @@ export default function SettingsLayout() {
     <Stack.Screen name="account" options={{ title: t('account') }} />
     <Stack.Screen name="appearance" options={{ title: t('appearance'), headerTitle: t('appearance') }} />
     <Stack.Screen name="[section]" options={{ title: t('settings') }} />
+    <Stack.Screen name="dev-oura-preview" options={{ title: t('health') }} />
   </Stack>;
 }
