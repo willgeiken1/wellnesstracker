@@ -915,7 +915,24 @@ export const en = {
   fontError: 'The heading font could not load. System text is available.',
 } as const;
 export type MessageKey = keyof typeof en;
-export function t(key: MessageKey): string { return en[key]; }
+/** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
+export const android: Partial<Record<MessageKey, string>> = {
+  welcomeHealthBody: 'Connect your Oura ring and your sleep and steps sit beside your training and food.',
+  homeTileStepsAbout: 'Today\'s steps from Oura. Shows once Oura is connected.',
+  homeTileSleepAbout: 'Last night\'s sleep from Oura. Shows once Oura is connected.',
+  scoreTrainingNoSteps: 'Steps join this pillar when Oura is connected.',
+  scoreRecoveryNone: 'Sleep comes from Oura. Until there is some, this pillar is left out of your score.',
+  recoveryLaterBody: 'It needs sleep and heart data from an Oura ring. Nothing here is estimated or made up.',
+  recoveryFootnoteOura: 'Readiness, sleep score, last night and heart readings come from Oura and are kept with your account. For fitness use, not medical advice.',
+  ouraOn: 'Connected. Sleep and steps from your ring show on Home. Your Oura days are kept in your Insight account, not on this phone.',
+  connectPrivacyOura: 'Oura days are kept in your Insight account. They are never sent to AI or analytics.',
+};
+
+let androidCopy = false;
+/** The app turns on the Android wording at start (src/app/_layout.tsx). Kept out of react-native so server code can use t(). */
+export function setAndroidCopy(on: boolean): void { androidCopy = on; }
+
+export function t(key: MessageKey): string { return (androidCopy && android[key]) || en[key]; }
 
 export function signOutUnsynced(count: number): string {
   return t(count===1?'signOutUnsynced_one':'signOutUnsynced_other').replace('{count}',String(count));

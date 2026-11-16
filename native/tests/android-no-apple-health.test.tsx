@@ -1,0 +1,68 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { Platform } from 'react-native';
+import { render, screen } from '@testing-library/react-native';
+import type { PropsWithChildren } from 'react';
+import { ThemeProvider } from '../src/design/theme-provider';
+import { EditHome } from '../src/features/home/edit-sheet';
+import { RING_TILES, addHealthTiles, defaultTiles, loadTiles } from '../src/features/home/tiles';
+import { appleHealth } from '../src/features/health/apple';
+import { oura } from '../src/features/health/oura-client';
+import { android, en, setAndroidCopy, t } from '../src/i18n/en';
+
+// Android has no Apple Health in v1 (Health Connect comes later): nothing there may name it or offer what only it fills.
+jest.mock('../src/features/health/apple', () => ({ appleHealth: jest.fn(() => null) }));
+jest.mock('../src/features/health/oura-client', () => ({ oura: jest.fn(() => null) }));
+const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
+
+beforeEach(() => jest.replaceProperty(Platform, 'OS', 'android'));
+afterEach(() => setAndroidCopy(false));
+
+test('Android copy never names Apple Health, and iPhone copy is unchanged (the app sets it from Platform.OS at start)', () => {
+  setAndroidCopy(true);
+  for (const [key, text] of Object.entries(android)) {
+    expect(text).not.toMatch(/Apple Health|iPhone/);
+    expect(t(key as keyof typeof en)).toBe(text);
+  }
+  setAndroidCopy(false);
+  for (const key of Object.keys(android)) expect(t(key as keyof typeof en)).toBe(en[key as keyof typeof en]);
+});
+
+test('Connections lists only Oura on Android', () => {
+  jest.isolateModules(() => {
+    jest.replaceProperty((require('react-native') as typeof import('react-native')).Platform, 'OS', 'android');
+    const { SHOWN } = require('../src/features/connections/screen') as typeof import('../src/features/connections/screen');
+    expect(SHOWN).toEqual(['oura']);
+  });
+});
+
+test('with only Oura, Edit Home offers Steps and Sleep but none of the Apple Health tiles', async () => {
+  jest.mocked(appleHealth).mockReturnValue(null);
+  jest.mocked(oura).mockReturnValue({} as never);
+  await render(<EditHome visible tiles={defaultTiles()} onChange={() => {}} onClose={() => {}} />, { wrapper });
+  for (const id of RING_TILES) expect(screen.getByTestId(`edit-off-${id}`)).toBeTruthy();
+  for (const id of ['active', 'exercise', 'bodyFat', 'water', 'mindful']) expect(screen.queryByTestId(`edit-off-${id}`)).toBeNull();
+});
+
+test('addHealthTiles adds only the tiles it is given', () => {
+  let saved: unknown = null;
+  const storage = { localGet: () => saved, localSave: (_key: string, value: unknown) => { saved = value; } };
+  addHealthTiles(storage as never, RING_TILES);
+  const order = loadTiles(storage as never).order;
+  expect(order).toEqual(expect.arrayContaining(['steps', 'sleep']));
+  expect(order).not.toContain('active');
+});
+
+test('the Android welcome offers Oura now, not in a later update', () => {
+  setAndroidCopy(true);
+  expect(t('welcomeHealthBody')).toMatch(/Oura/);
+  expect(t('welcomeHealthBody')).not.toMatch(/later update|Fitbit|WHOOP/);
+});
+
+test('the deletion page says what is not deleted, matching the privacy policy', () => {
+  const page = readFileSync(join(__dirname, '../../insight-wellness-delete-account.md'), 'utf8');
+  expect(page).not.toMatch(/nothing is kept/i);
+  expect(page).toMatch(/## What isn't deleted[\s\S]*Sentry[\s\S]*PostHog/);
+  const policy = readFileSync(join(__dirname, '../../insight-daily-privacy.md'), 'utf8');
+  for (const service of ['Sentry', 'PostHog']) expect(policy).toMatch(service);
+});

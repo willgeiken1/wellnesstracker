@@ -2,6 +2,7 @@ import { FoodAiRuntime } from '../features/food/ai/runtime';
 import { AI_FEATURES_ENABLED } from '../features/ai-launch';
 import { TelemetryRuntime } from '../telemetry/runtime';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -13,11 +14,13 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { AuthProvider, useAuth } from '../auth/provider';
 import { LocalDataRecovery } from '../auth/screens';
-import { t } from '@/i18n/en';
+import { setAndroidCopy, t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
 
 import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
 void SplashScreen.preventAutoHideAsync();
+// Android has no Apple Health in v1, so its copy names only Oura.
+setAndroidCopy(Platform.OS === 'android');
 export function NavigationShell({ access = false, signedIn = false }: {access?: boolean;signedIn?:boolean}) {
   const { colors, mode, reduceMotion, motion } = useTheme();
   const base = mode === 'dark' ? DarkTheme : DefaultTheme;
