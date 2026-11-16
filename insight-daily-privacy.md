@@ -1,8 +1,8 @@
-# Insight Daily Privacy Policy
+# Insight Wellness Privacy Policy
 
 _Effective November 13, 2026_
 
-Insight Daily is an iPhone app for logging workouts, food and body measurements and seeing how they fit together. This policy explains what the app handles, where it goes and the choices you have.
+Insight Wellness is an iPhone app for logging workouts, food and body measurements and seeing how they fit together. This policy explains what the app handles, where it goes and the choices you have.
 
 ## What stays on your iPhone
 
@@ -18,11 +18,11 @@ Signing out erases that account's data from the iPhone. Anything that had not fi
 
 ## Apple Health
 
-Only if you allow it. Insight Daily reads three things: body weight, steps and sleep. Weigh-ins from Apple Health are saved on your iPhone so they show on Progress; steps and sleep are read when the app needs them and are not saved. None of it is synced, exported, or sent to AI or analytics. Insight Daily never writes to Apple Health. You can turn access off at any time in the Health app: tap your picture, then Apps, then Insight Daily.
+Only if you allow it. Insight Wellness reads three things: body weight, steps and sleep. The app reads them when it needs them, to show on Home and Progress, and never saves them. None of it is synced, exported, or sent to AI or analytics. Insight Wellness never writes to Apple Health. You can turn access off at any time in the Health app: tap your picture, then Apps, then Insight Wellness.
 
 ## Oura
 
-Only if you connect a ring to your Insight account. With your permission, our server fetches your daily sleep, readiness, activity, heart rate, heart rate variability, temperature and steps from Oura. The Oura sign-in tokens are kept on our server, where the app itself can't read them, and your daily Oura data is stored with your account. You can remove Insight's access in your Oura account at any time.
+Only if you connect a ring to your Insight account. With your permission, our server fetches your daily sleep, readiness, activity, heart rate, heart rate variability, temperature and steps from Oura. The Oura sign-in tokens are kept on our server, where the app itself can't read them, and your daily Oura data is stored with your account. You can disconnect Oura at any time in Settings, Health & devices, which removes the sign-in tokens and your stored Oura days, or remove Insight's access in your Oura account.
 
 ## AI estimates
 
@@ -55,7 +55,7 @@ Until you delete it or your account is deleted.
 
 ## Children
 
-Insight Daily is not for anyone under 13.
+Insight Wellness is not for anyone under 13.
 
 ## Not medical advice
 

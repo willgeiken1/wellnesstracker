@@ -14,13 +14,15 @@ import { ImportScreen } from '@/features/importer/screen';
 import { AuthContext } from '@/auth/provider';
 import { ConnectedServices } from '@/features/connections/screen';
 import { useAppleHealth } from '@/features/health/use-apple-health';
+import { useOura } from '@/features/health/use-oura';
 import Constants from 'expo-constants';
 import { LicenseNotice, Licenses, noticeTitle } from '@/features/settings/licenses/screen';
 import { LEGAL_LINKS, openPage } from '@/features/settings/links';
 function HealthAndDevices() {
   // Settings also opens with no account provider around it; Apple Health is simply not offered there.
   const repository = useContext(AuthContext)?.repository;
-  return <ConnectedServices apple={useAppleHealth(repository)} />;
+  const apple = useAppleHealth(repository), ring = useOura(repository);
+  return <ConnectedServices apple={apple} oura={ring} />;
 }
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
