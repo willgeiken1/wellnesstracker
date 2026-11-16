@@ -59,6 +59,19 @@ describe('Recovery with Oura', () => {
     expect(within(screen.getByTestId('recovery-hrv')).getByText('Latest 45 ms · 7-day average 42 ms')).toBeTruthy();
     expect(screen.getByTestId('recovery-readiness')).toBeTruthy();
   });
+  test('heart readings come from whichever source has the more recent day, never a mix of both', async () => {
+    // Review of #195: one old Apple Health reading used to hide a whole week of Oura.
+    const stale: AppleRecovery = { night: null, restingHeartRate: [60, null, null], hrv: [38, null, null], heartToday: null, vo2Max: null };
+    let view = await render(wrap(<Recovery access="asked" recovery={stale} oura={oura()} now={NOW} />));
+    expect(within(screen.getByTestId('recovery-hrv')).getByText('Latest 45 ms · 7-day average 42 ms')).toBeTruthy();
+    expect(within(screen.getByTestId('recovery-resting')).getByText('Latest 53 bpm · 7-day average 54 bpm')).toBeTruthy();
+    await view.unmount();
+    // Same day on both: Apple Health, alone, not averaged with Oura.
+    const current: AppleRecovery = { ...stale, hrv: [null, null, 30] };
+    view = await render(wrap(<Recovery access="asked" recovery={current} oura={oura()} now={NOW} />));
+    expect(within(screen.getByTestId('recovery-hrv')).getByText('Latest 30 ms · 7-day average 30 ms')).toBeTruthy();
+    await view.unmount();
+  });
   test('Oura with no readings leaves the Apple Health page as it was', async () => {
     const empty = oura({ readiness: [null, null, null], sleepScore: [null, null, null], hrv: [null, null, null], restingHeartRate: [null, null, null], night: null });
     await render(wrap(<Recovery access="ask" recovery={null} oura={empty} now={NOW} />));

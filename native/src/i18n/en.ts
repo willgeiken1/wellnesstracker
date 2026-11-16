@@ -855,7 +855,7 @@ export const en = {
   recoveryVo2: 'VO2 max', recoveryVo2Value: '{value} mL/kg/min · recorded {date}',
   recoveryFootnote: 'Read from Apple Health each time you open this page. It stays on this phone and is never synced or sent. For fitness use, not medical advice.',
   recoveryReadiness: 'Readiness', recoverySleepScore: 'Sleep score', recoveryLight: 'Light',
-  recoveryFootnoteOura: 'Readiness and sleep score come from Oura, which also fills in last night and heart readings when Apple Health has none. Oura readings are kept with your account; Apple Health readings stay on this phone. For fitness use, not medical advice.',
+  recoveryFootnoteOura: 'Readiness and sleep score come from Oura, which also fills in last night when Apple Health has none, and heart readings when its readings are more recent. Oura readings are kept with your account; Apple Health readings stay on this phone. For fitness use, not medical advice.',
   account: 'Account', profile: 'Profile & units', appearance: 'Appearance', workoutSettings: 'Workout',
   connectTitle: 'Everything in one place', connectBody: 'Insight lines up the services you already use, so sleep, recovery, activity, training and food read as one day.',
   connectSoon: 'Connecting opens in a later update. Nothing is connected or read yet.',
