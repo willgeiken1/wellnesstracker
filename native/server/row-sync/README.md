@@ -7,6 +7,28 @@ The 0001 baseline transaction creates 19 explicit row tables (23 after 0002), a 
 
 Every accepted write assigns a fresh `server_seq`. A transaction-scoped advisory lock per owner serializes writes across tables before sequence allocation. This prevents a delayed commit from appearing behind a cursor already consumed by that owner. Retried/stale writes may consume unused sequence values; gaps are harmless. The sequence is not a device timestamp. Pulls order/filter the physical bigint and serialize it as text. LWW compares `(updated_at, device_id COLLATE "C")`; equal normalized versions are immutable retries. Before comparison, updated_at beyond transaction now()+5min is clamped to now() to avoid granting a bad clock priority over later legitimate edits. Tombstones wipe all payload values except immutable weigh-in source; existing value columns already permit NULL. See D1–D4 in `docs/p2-sync.md`. Child rows have no cascading parent foreign keys. `weigh_ins.source` must be `app`; Oura has no server table.
 
+## Live apply on the hosted project (workflow)
+
+`.github/workflows/row-sync-apply.yml` is the one-time path to the hosted project.
+It never runs on merge. After Will's review and go for the exact commit, run it by
+hand on `main` (Actions, "Apply row-sync to Supabase (one time)", type
+`apply row-sync`) and approve the production environment. In one job it:
+
+1. checks all four SQL files against `SHA256SUMS` and the wrapper generator;
+2. runs `live/precheck.sql` (read-only) and stops if any reserved name exists;
+3. dumps the public schema, data and cluster roles, encrypts them with the
+   `DB_BACKUP_PASSPHRASE` production secret and uploads artifact
+   `row-sync-backup` (kept 30 days);
+4. applies `apply-0001-0002.sql` as one transaction;
+5. runs `live/verify.sql` (read-only) and writes the commit, hashes and the
+   `sync_purge_range` owner/`rolbypassrls` to the run summary for the ledger.
+
+To read the backup: download the artifact, then
+`openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in row-sync-backup.tar.gz.enc | tar -xz`
+(it asks for the passphrase). `tests/server/row-sync-live-checks.test.ts` runs
+both checks and the wrapper on a PGlite copy of the full `supabase/migrations`
+chain, which matches the hosted project.
+
 ## Future application procedure — requires separate approval
 
 1. Obtain Quinn PASS and Will's explicit HIGH-risk go for the exact SQL revision. The app's endpoint guard (`native/src/auth/config.ts`) now accepts the hosted Insight project, so a store build with Supabase settings will try to sync as soon as it signs in; apply this SQL before shipping such a build to real users.

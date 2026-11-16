@@ -52,3 +52,7 @@ npm run pw:live
 ```
 
 `npm run pw:live` exits 0 without printing the values when the email or password is unset.
+
+## Row-sync tables for the iPhone app (one time)
+
+The iPhone app's sync tables live in `native/server/row-sync/`, outside `supabase/migrations`, so the deploy above never applies them. They go in once, by hand, with **Apply row-sync to Supabase (one time)** (`.github/workflows/row-sync-apply.yml`): run it on `main`, type `apply row-sync`, and approve the production environment. It needs the production environment secret `DB_BACKUP_PASSPHRASE` (20+ characters) and backs up before it changes anything. Details and rollback: `native/server/row-sync/README.md`.
