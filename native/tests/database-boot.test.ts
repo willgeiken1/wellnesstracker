@@ -5,6 +5,8 @@ const mockSQLite={execSync:jest.fn(),closeSync:jest.fn()};
 jest.mock('expo-sqlite',()=>({openDatabaseSync:jest.fn()}));
 jest.mock('drizzle-orm/expo-sqlite',()=>({drizzle:()=>({})}));
 jest.mock('drizzle-orm/expo-sqlite/migrator',()=>({migrate:jest.fn()}));
+jest.mock('expo-file-system',()=>({Paths:{cache:{uri:'file:///fixture/Library/Caches/'}}}));
+jest.mock('../src/data/health-store',()=>({HEALTH_DB:'insight-health.db',HEALTH_SCHEMA:'CREATE TABLE fixture (x)',moveHealthRows:jest.fn()}));
 jest.mock('../src/data/repository',()=>({deviceId:()=> 'fixture-device',Repository:class {},wipeAllOwners:jest.fn()}));
 test('open, locked connection and migration failures release the cached boot promise and close failed connections',async()=>{
  jest.mocked(openDatabaseSync).mockImplementationOnce(()=>{throw new Error('synthetic open failure');}).mockReturnValue(mockSQLite as never);
@@ -17,5 +19,23 @@ test('open, locked connection and migration failures release the cached boot pro
  expect(mockSQLite.closeSync).toHaveBeenCalledTimes(2);
  jest.mocked(migrate).mockResolvedValue();
  await expect(openLocalDatabase()).resolves.toHaveProperty('forOwner');
- expect(openDatabaseSync).toHaveBeenCalledTimes(4);
+ // Four for the main database, one more for the Health store once it opened.
+ expect(openDatabaseSync).toHaveBeenCalledTimes(5);
+});
+
+test('the Health store opens in the Caches folder, never the backed-up default, and falls back to memory', async () => {
+ jest.resetModules();
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const sqlite = require('expo-sqlite') as typeof import('expo-sqlite');
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const { moveHealthRows } = require('../src/data/health-store') as typeof import('../src/data/health-store');
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const { openLocalDatabase: open } = require('../src/data/database') as typeof import('../src/data/database');
+ const handle = { execSync: jest.fn(), closeSync: jest.fn() };
+ jest.mocked(sqlite.openDatabaseSync).mockReset().mockReturnValueOnce(handle as never).mockImplementationOnce(() => { throw new Error('synthetic cache failure'); }).mockReturnValue(handle as never);
+ await expect(open()).resolves.toHaveProperty('forOwner');
+ expect(sqlite.openDatabaseSync).toHaveBeenNthCalledWith(1, 'insight.db');
+ expect(sqlite.openDatabaseSync).toHaveBeenNthCalledWith(2, 'insight-health.db', undefined, 'file:///fixture/Library/Caches/');
+ expect(sqlite.openDatabaseSync).toHaveBeenNthCalledWith(3, ':memory:');
+ expect(moveHealthRows).toHaveBeenCalledTimes(1);
 });

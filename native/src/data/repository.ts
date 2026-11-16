@@ -4,6 +4,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { columns, syncedTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
+import { isHealthSource } from './health-store';
 import { DEFAULT_SYNC_FLAGS, gatedColumns, hasGatedColumns, hydrateSyncRow, mergeSyncRow, projectSyncRow, syncTables, type SyncFlags } from './sync/flags';
 
 type Physical = Record<string, Scalar>;
@@ -11,14 +12,15 @@ type Physical = Record<string, Scalar>;
 const batches = new WeakMap<ExpoSQLiteDatabase, { depth: number; rollbackOnly: boolean }>();
 export interface SyncConflict { table: Table; id: string; reason: 'provenance' }
 export interface Pending { row: Row; revision: string }
-/** Corrupt-marker escape only: erase every namespace in one atomic transaction. */
-export function wipeAllOwners(db: ExpoSQLiteDatabase) {
+/** Corrupt-marker escape only: erase every namespace in one atomic transaction, and the Health store. */
+export function wipeAllOwners(db: ExpoSQLiteDatabase, health?: ExpoSQLiteDatabase) {
   try {
     db.transaction(() => {
       for(const table of [...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days','workout_local','workout_milestones','workout_weekly']) {
         db.run(sql`DELETE FROM ${sql.identifier(table)}`);
       }
     });
+    health?.run(sql`DELETE FROM weigh_ins`);
   } catch {throw new Error('Local data is unavailable.');}
 }
 export class Repository {
@@ -82,7 +84,8 @@ export class Repository {
     this.notify();return result;
   }
 
-  constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string, flags: SyncFlags = DEFAULT_SYNC_FLAGS) {
+  /** `health` is the separate store, kept out of backups, that holds weigh-ins copied from a health service. */
+  constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string, flags: SyncFlags = DEFAULT_SYNC_FLAGS, private health?: ExpoSQLiteDatabase) {
     this.syncFlags = Object.freeze({...flags});
     let batch = batches.get(db);
     if (!batch) { batch = { depth: 0, rollbackOnly: false }; batches.set(db, batch); }
@@ -107,14 +110,29 @@ export class Repository {
     const fields = sql.join(keys.map(k => sql.identifier(k)), sql`, `);
     const values = sql.join(Object.values(data).map(v => sql`${v}`), sql`, `);
     const updates = sql.join(keys.filter(k => !['owner_id','id'].includes(k)).map(k => sql`${sql.identifier(k)}=excluded.${sql.identifier(k)}`), sql`, `);
-    this.db.run(sql`INSERT INTO ${this.table(row.table)} (${fields}) VALUES (${values}) ON CONFLICT(owner_id,id) DO UPDATE SET ${updates}`);
+    this.store(row).run(sql`INSERT INTO ${this.table(row.table)} (${fields}) VALUES (${values}) ON CONFLICT(owner_id,id) DO UPDATE SET ${updates}`);
     return row;
   }
+  /** Health weigh-ins go to the Health store when there is one; everything else to the main database. */
+  private store(row: Row) { return this.health && row.table === 'weigh_ins' && isHealthSource(row.data.source) ? this.health : this.db; }
+  /** With a Health store, a Health weigh-in still in the main database is a copy waiting to move and is not read. */
+  private shadowed(table: Table, value: Physical) { return !!this.health && table === 'weigh_ins' && isHealthSource(value.source); }
   get(table: Table, id: string): Row | undefined {
-    return this.safe(() => { const value = this.db.get<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} AND id=${id}`); return value ? this.decode(table, value) : undefined; });
+    return this.safe(() => {
+      const value = this.db.get<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} AND id=${id}`);
+      if (value && !this.shadowed(table, value)) return this.decode(table, value);
+      const kept = this.health && table === 'weigh_ins' ? this.health.get<Physical>(sql`SELECT * FROM weigh_ins WHERE owner_id=${this.owner} AND id=${id}`) : undefined;
+      return kept ? this.decode(table, kept) : undefined;
+    });
   }
   list(table: Table, includeDeleted = false): Row[] {
-    return this.safe(() => this.db.all<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} ${includeDeleted ? sql`` : sql`AND deleted_at IS NULL`} ORDER BY id`).map(r => this.decode(table,r)));
+    return this.safe(() => {
+      const live = includeDeleted ? sql`` : sql`AND deleted_at IS NULL`;
+      const rows = this.db.all<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} ${live} ORDER BY id`);
+      if (!this.health || table !== 'weigh_ins') return rows.map(r => this.decode(table, r));
+      const kept = this.health.all<Physical>(sql`SELECT * FROM weigh_ins WHERE owner_id=${this.owner} ${live}`);
+      return [...rows.filter(r => !this.shadowed(table, r)), ...kept].sort((a, b) => String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0).map(r => this.decode(table, r));
+    });
   }
   /** One synchronous transaction commits both row and outbox before notifying subscribers. */
   putLocal(input: Row): void {
@@ -178,6 +196,7 @@ export class Repository {
     for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
       this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
     }
+    this.health?.run(sql`DELETE FROM weigh_ins WHERE owner_id=${this.owner}`);
   }
   /** Atomic account departure, including local-only caches and flagged outbox rows. */
   wipe() {
@@ -186,6 +205,7 @@ export class Repository {
       for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
         this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
       }
+      this.health?.run(sql`DELETE FROM weigh_ins WHERE owner_id=${this.owner}`);
     }));
     this.notify();
   }
