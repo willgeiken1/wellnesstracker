@@ -9,6 +9,7 @@ import { atlasSessions } from '@/features/atlas/read-logs';
 import { Trends, Weekly } from '@/features/insights/trends';
 import { Recovery } from '@/features/insights/recovery';
 import { useRecovery } from '@/features/health/use-recovery';
+import { useOuraRecovery } from '@/features/health/use-oura-recovery';
 import { useFocused } from '@/features/home/use-focused';
 const SECTIONS = ['trends', 'recovery', 'muscles', 'weekly'] as const;
 export default function Page() {
@@ -20,6 +21,7 @@ export default function Page() {
  // Read only while Recovery is the section in front, so the other sections never touch Apple Health.
  const focused=useFocused();
  const recovery=useRecovery(focused&&section==='recovery');
+ const ring=useOuraRecovery(focused&&section==='recovery');
  useEffect(()=>{
   const timer=setInterval(()=>setNow(Date.now()),60000);
   const sub=AppState.addEventListener('change',state=>{if(state==='active') setNow(Date.now());});
@@ -31,6 +33,6 @@ export default function Page() {
   {section==='trends'&&store&&<Trends store={store} now={today}/>}
   {section==='weekly'&&store&&<Weekly store={store} now={today}/>}
   {section==='muscles'&&<BodyAtlas sessions={sessions} now={now} haptics={store?.repo.localGet<boolean>('haptics')!==false}/>}
-  {section==='recovery'&&<Recovery access={recovery.access} recovery={recovery.recovery} now={today}/>}
+  {section==='recovery'&&<Recovery access={recovery.access} recovery={recovery.recovery} oura={ring} now={today}/>}
  </Screen>;
 }

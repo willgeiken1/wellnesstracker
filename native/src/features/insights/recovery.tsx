@@ -3,6 +3,7 @@ import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
+import type { OuraRecovery } from '@/features/health/oura';
 import type { Night, Recovery as RecoveryData } from '@/features/health/recovery';
 import type { HealthAccess } from '@/features/health/source';
 import { t } from '@/i18n/en';
@@ -24,9 +25,10 @@ function Message({ title, body, testID }: { title: string; body: string; testID:
 
 /** Last night as one bar split by stage, with the minutes of each underneath. Plain asleep shows only when a device
  * recorded no stages. */
-function NightCard({ night }: { night: Night }) {
+function NightCard({ night, fromOura }: { night: Night; fromOura?: boolean }) {
   const { colors } = useTheme();
-  const parts = ([['deep', t('recoveryDeep'), colors.sleep, 1], ['core', t('recoveryCore'), colors.sleep, 0.6], ['rem', t('recoveryRem'), colors.sleep, 0.35],
+  // Oura calls the middle stage light sleep; Apple Health calls it core.
+  const parts = ([['deep', t('recoveryDeep'), colors.sleep, 1], ['core', fromOura ? t('recoveryLight') : t('recoveryCore'), colors.sleep, 0.6], ['rem', t('recoveryRem'), colors.sleep, 0.35],
     ['asleep', t('recoveryAsleep'), colors.sleep, 0.6], ['awake', t('recoveryAwake'), colors['text-muted'], 0.35]] as const).filter(([key]) => night[key] > 0);
   const asleep = night.deep + night.core + night.rem + night.asleep, total = asleep + night.awake;
   const label = `${t('recoveryLastNight')}. ${hours(asleep)} ${t('recoveryAsleepSuffix')}. ${parts.map(([key, name]) => `${name} ${hours(night[key])}`).join(', ')}`;
@@ -42,9 +44,10 @@ function NightCard({ night }: { night: Night }) {
   </Card>;
 }
 
-function DailyCard({ testID, title, unit, values, color, now }: { testID: string; title: string; unit: string; values: (number | null)[]; color: string; now: Date }) {
+function DailyCard({ testID, title, unit, values, color, now }: { testID: string; title: string; unit?: string; values: (number | null)[]; color: string; now: Date }) {
   const last = latest(values), average = mean(values);
-  const summary = last === null ? t('recoveryNone') : `${t('recoveryLatest')} ${last} ${unit} · ${t('recoveryWeekAverage')} ${average} ${unit}`;
+  const withUnit = (n: number | null) => unit ? `${n} ${unit}` : String(n);
+  const summary = last === null ? t('recoveryNone') : `${t('recoveryLatest')} ${withUnit(last)} · ${t('recoveryWeekAverage')} ${withUnit(average)}`;
   return <Card testID={testID} accessible accessibilityRole="image" accessibilityLabel={`${title}. ${summary}`} style={{ gap: tokens.spacing[1] }}>
     <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
     <ThemedText muted numeric variant="caption">{summary}</ThemedText>
@@ -59,22 +62,34 @@ function Line({ testID, title, value }: { testID: string; title: string; value: 
   </Card>;
 }
 
-/** Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health. Nothing here is
- * saved, synced or sent, and nothing is estimated: a reading that is not there is left out. */
-export function Recovery({ access, recovery, now }: { access: HealthAccess; recovery: RecoveryData | null; now: Date }) {
+const has = (values: (number | null)[] | null | undefined): values is (number | null)[] => !!values && latest(values) !== null;
+
+/** Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health, with Oura's readiness
+ * and sleep scores when Oura is connected. Where both have a reading, last night and the heart readings come from
+ * Apple Health, and Oura fills in what it does not have. Nothing is estimated: a reading that is not there is left out. */
+export function Recovery({ access, recovery, oura, now }: { access: HealthAccess; recovery: RecoveryData | null; oura?: OuraRecovery | null; now: Date }) {
   const { colors } = useTheme();
-  if (access === 'unavailable') return <Message testID="recovery-later" title={t('recoveryLaterTitle')} body={t('recoveryLaterBody')} />;
-  if (access === 'ask') return <Message testID="recovery-connect" title={t('recoveryConnectTitle')} body={t('recoveryConnectBody')} />;
-  if (!recovery) return <Message testID="recovery-failed" title={t('recoveryFailedTitle')} body={t('recoveryFailedBody')} />;
-  const { night, restingHeartRate, hrv, heartToday, vo2Max } = recovery;
-  const nothing = !night && !latest(restingHeartRate) && !latest(hrv) && !heartToday && !vo2Max;
+  const ring = oura && (has(oura.readiness) || has(oura.sleepScore) || has(oura.hrv) || has(oura.restingHeartRate) || oura.night) ? oura : null;
+  if (!ring) {
+    if (access === 'unavailable') return <Message testID="recovery-later" title={t('recoveryLaterTitle')} body={t('recoveryLaterBody')} />;
+    if (access === 'ask') return <Message testID="recovery-connect" title={t('recoveryConnectTitle')} body={t('recoveryConnectBody')} />;
+    if (!recovery) return <Message testID="recovery-failed" title={t('recoveryFailedTitle')} body={t('recoveryFailedBody')} />;
+  }
+  const apple = recovery;
+  const night = apple?.night ?? ring?.night ?? null, nightFromOura = !apple?.night && !!ring?.night;
+  const restingHeartRate = has(apple?.restingHeartRate) ? apple.restingHeartRate : has(ring?.restingHeartRate) ? ring.restingHeartRate : apple?.restingHeartRate ?? null;
+  const hrv = has(apple?.hrv) ? apple.hrv : has(ring?.hrv) ? ring.hrv : apple?.hrv ?? null;
+  const heartToday = apple?.heartToday ?? null, vo2Max = apple?.vo2Max ?? null;
+  const nothing = !ring && !night && !latest(restingHeartRate) && !latest(hrv) && !heartToday && !vo2Max;
   if (nothing) return <Message testID="recovery-empty" title={t('recoveryEmptyTitle')} body={t('recoveryEmptyBody')} />;
   return <View style={{ gap: tokens.spacing[3] }}>
-    {night && <NightCard night={night} />}
+    {ring && has(ring.readiness) && <DailyCard testID="recovery-readiness" title={t('recoveryReadiness')} values={ring.readiness} color={colors.sleep} now={now} />}
+    {ring && has(ring.sleepScore) && <DailyCard testID="recovery-sleep-score" title={t('recoverySleepScore')} values={ring.sleepScore} color={colors.sleep} now={now} />}
+    {night && <NightCard night={night} fromOura={nightFromOura} />}
     {restingHeartRate && <DailyCard testID="recovery-resting" title={t('recoveryResting')} unit="bpm" values={restingHeartRate} color={colors.sleep} now={now} />}
     {hrv && <DailyCard testID="recovery-hrv" title={t('recoveryHrv')} unit="ms" values={hrv} color={colors.sleep} now={now} />}
     {heartToday && <Line testID="recovery-heart" title={t('recoveryHeart')} value={t('recoveryHeartValue').replace('{average}', String(heartToday.average)).replace('{min}', String(heartToday.min)).replace('{max}', String(heartToday.max))} />}
     {vo2Max && <Line testID="recovery-vo2" title={t('recoveryVo2')} value={t('recoveryVo2Value').replace('{value}', vo2Max.value.toFixed(1)).replace('{date}', short(vo2Max.at))} />}
-    <ThemedText muted variant="caption">{t('recoveryFootnote')}</ThemedText>
+    <ThemedText muted variant="caption">{ring ? t('recoveryFootnoteOura') : t('recoveryFootnote')}</ThemedText>
   </View>;
 }
