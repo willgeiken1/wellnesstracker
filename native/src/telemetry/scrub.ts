@@ -5,16 +5,19 @@
 const USER_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function telemetryUserId(id:unknown):string|undefined{return typeof id==='string'&&USER_ID_RE.test(id)?id:undefined;}
 
-/** Short, numberless, secret-free text for an error message. */
+/** Short, numberless, secret-free text for an error message, with quoted text and web address paths taken out. */
 export function scrubText(value:unknown):string|undefined{
   if(typeof value!=='string'||!value)return undefined;
   return value
-    .replace(/https?:\/\/[^\s?#'"]+[?#][^\s'"]*/gi,m=>m.split(/[?#]/)[0])
+    // A web address keeps only its host: a path or query can name a food, a day or an account.
+    .replace(/(https?:\/\/[^\s/?#'"]+)[^\s'"]*/gi,'$1')
     .replace(/\bBearer\s+[\w.~+/-]+=*/gi,'Bearer [token]')
     .replace(/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g,'[token]')
     .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g,'[email]')
     .replace(/\b(access_token|refresh_token|token|code|apikey|key|password)=[^\s&]+/gi,'$1=[redacted]')
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,'[id]')
+    // Quoted text is usually something a person typed (a food, a note, a search), so it goes whole.
+    .replace(/(^|[^\w])(["'`\u2018\u201c])(?:(?!\2|[\u2019\u201d]).){1,200}(?:\2|[\u2019\u201d])/g,'$1[text]')
     .replace(/\d+(?:[.,]\d+)*/g,'#')
     .slice(0,200);
 }
