@@ -6,7 +6,7 @@ test('support body contains exactly three allowlisted non-health fields',()=>{
  expect(url).toContain('%0A');
  const query=new URLSearchParams(url.split('?')[1]);
  expect(url.split('?')[0]).toBe('mailto:insight.wellnessos@gmail.com');
- expect(query.get('subject')).toBe('Insight Daily app opening help');
+ expect(query.get('subject')).toBe('Insight Wellness app opening help');
  expect(query.get('body')).toBe('App version: 1.0.0\nPlatform: ios\nError class: Error');
  expect(query.get('body')).not.toMatch(/weight|note|email|token|fixture|@/i);
 });

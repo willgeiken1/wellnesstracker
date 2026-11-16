@@ -1,5 +1,7 @@
 import { useContext, useState } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
+import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
+import { PrivacySwitches } from '@/features/settings/privacy-switches';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { Card } from '@/components/card';
@@ -15,11 +17,13 @@ import { ImportScreen } from '@/features/importer/screen';
 import { AuthContext } from '@/auth/provider';
 import { ConnectedServices } from '@/features/connections/screen';
 import { useAppleHealth } from '@/features/health/use-apple-health';
+import { useOura } from '@/features/health/use-oura';
 import Constants from 'expo-constants';
 function HealthAndDevices() {
   // Settings also opens with no account provider around it; Apple Health is simply not offered there.
   const repository = useContext(AuthContext)?.repository;
-  return <ConnectedServices apple={useAppleHealth(repository)} />;
+  const apple = useAppleHealth(repository), ring = useOura(repository);
+  return <ConnectedServices apple={apple} oura={ring} />;
 }
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
@@ -49,7 +53,8 @@ export default function SettingsSection() {
   if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><HealthAndDevices /></Screen></>;
   if (section === 'score') return <>{named}<Screen title={title}><ScoreSettings /></Screen></>;
   if (section === 'data') return <>{named}<ImportScreen /></>;
-  if (section === 'privacy') return <>{named}<FoodPrivacyScreen /></>;
+  // While AI is off for launch, Privacy holds only the crash-report and analytics switches.
+  if (section === 'privacy') return <>{named}{AI_FEATURES_ENABLED ? <FoodPrivacyScreen /> : <Screen title={title}><PrivacySwitches /></Screen>}</>;
   if (section === 'profile') return <>{named}<Profile /></>;
   if (section === 'workout') return <>{named}<WorkoutSettings /></>;
   if (section === 'about') {
