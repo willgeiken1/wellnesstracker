@@ -57,7 +57,7 @@ Source: support.google.com/googleplay/android-developer/answer/10787469
 
 - In the app: Settings › Account › Delete account (shipped in #180).
 - On the web: `insight-wellness-delete-account.md` in this PR, published by GitHub Pages at the address above, with the email route for people without the app.
-- Deleting the account deletes its data.
+- Deleting the account deletes its data. Crash reports and usage events already sent to Sentry and PostHog are not deleted, and the page says so; Will to confirm how long each keeps them before the Data safety form.
 
 Source: support.google.com/googleplay/android-developer/answer/13327111
 

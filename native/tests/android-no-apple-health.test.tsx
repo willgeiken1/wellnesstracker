@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Platform } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
@@ -49,4 +51,18 @@ test('addHealthTiles adds only the tiles it is given', () => {
   const order = loadTiles(storage as never).order;
   expect(order).toEqual(expect.arrayContaining(['steps', 'sleep']));
   expect(order).not.toContain('active');
+});
+
+test('the Android welcome offers Oura now, not in a later update', () => {
+  setAndroidCopy(true);
+  expect(t('welcomeHealthBody')).toMatch(/Oura/);
+  expect(t('welcomeHealthBody')).not.toMatch(/later update|Fitbit|WHOOP/);
+});
+
+test('the deletion page says what is not deleted, matching the privacy policy', () => {
+  const page = readFileSync(join(__dirname, '../../insight-wellness-delete-account.md'), 'utf8');
+  expect(page).not.toMatch(/nothing is kept/i);
+  expect(page).toMatch(/## What isn't deleted[\s\S]*Sentry[\s\S]*PostHog/);
+  const policy = readFileSync(join(__dirname, '../../insight-daily-privacy.md'), 'utf8');
+  for (const service of ['Sentry', 'PostHog']) expect(policy).toMatch(service);
 });

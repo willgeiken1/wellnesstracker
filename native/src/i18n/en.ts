@@ -917,7 +917,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
 export const android: Partial<Record<MessageKey, string>> = {
-  welcomeHealthBody: 'Oura, Fitbit and WHOOP sit beside your training and food. Connecting opens in a later update.',
+  welcomeHealthBody: 'Connect your Oura ring and your sleep and steps sit beside your training and food.',
   homeTileStepsAbout: 'Today\'s steps from Oura. Shows once Oura is connected.',
   homeTileSleepAbout: 'Last night\'s sleep from Oura. Shows once Oura is connected.',
   scoreTrainingNoSteps: 'Steps join this pillar when Oura is connected.',

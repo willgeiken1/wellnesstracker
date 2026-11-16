@@ -16,8 +16,13 @@ If you no longer have the app, email insight.wellnessos@gmail.com from the addre
 
 ## What is deleted
 
-Your sign-in and everything stored with your account: your profile, workouts, sets, routines, cardio, plans, goals, notes, food logs, saved foods, targets, weigh-ins, body measurements, progress photo details, and your Oura sign-in tokens and Oura data. Nothing is kept after deletion, and it can't be undone.
+Your sign-in and everything stored with your account: your profile, workouts, sets, routines, cardio, plans, goals, notes, food logs, saved foods, targets, weigh-ins, body measurements, progress photo details, and your Oura sign-in tokens and Oura data. This can't be undone.
 
-Deleting your account in the app also erases the copy on that phone. A copy on another phone stays there until you erase it in that phone's Settings.
+Deleting your account in the app also erases the copy on that phone.
+
+## What isn't deleted
+
+- Crash reports already sent to Sentry and usage events already sent to PostHog. They carry your account ID, but not your logs, health data, photos or email.
+- A copy of your data on another phone, until you erase it in that phone's Settings.
 
 See the [privacy policy](insight-daily-privacy) for more.
