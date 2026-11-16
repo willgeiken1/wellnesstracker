@@ -356,7 +356,7 @@ export const en = {
   welcomeFood: "Food",
   welcomeFoodBody: "Log meals against daily calorie and protein targets.",
   welcomeHealth: "Health services",
-  welcomeHealthBody: "Apple Health, Oura, Fitbit and WHOOP sit beside your training and food. Connecting opens in a later update.",
+  welcomeHealthBody: "Connect Apple Health or your Oura ring and your sleep and steps sit beside your training and food. Fitbit and WHOOP come in a later update.",
   haveAccountBody: "Sign in with your email and password.",
   lookAroundBody: "Open the app with example data. No account needed.",
   welcomeImportBody: "Bring in a backup from the Insight web app.",
