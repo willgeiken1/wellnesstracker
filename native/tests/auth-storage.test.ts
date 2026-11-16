@@ -1,15 +1,44 @@
 import { authConfig } from '../src/auth/config';
 import { chunkedStorage } from '../src/auth/storage';
 
-test('production ref is refused before a client can be created, including missing key', () => {
-  expect(() => authConfig('https://pvodxxmfgflvgvbdotlv.supabase.co', '')).toThrow('Production');
+test('the Insight hosted project is accepted over HTTPS with a publishable key', () => {
+  for (const url of ['https://pvodxxmfgflvgvbdotlv.supabase.co', 'https://pvodxxmfgflvgvbdotlv.supabase.co/', 'https://PVODXXMFGFLVGVBDOTLV.supabase.co']) {
+    expect(authConfig(url, 'sb_publishable_fixture')).toEqual({ url, key: 'sb_publishable_fixture' });
+  }
 });
-test.each(['https://example.supabase.co', 'https://localhost.evil.com', 'http://127.0.0.1.evil.com'])('hosted/non-loopback URL %s is refused', url => {
-  expect(() => authConfig(url, 'sb_publishable_fixture')).toThrow('loopback');
+test.each(['sb_secret_fixture', 'eyJhbGciOiJIUzI1NiJ9.service_role.fixture', 'not-a-key'])('the hosted project refuses non-publishable key %s', key => {
+  expect(() => authConfig('https://pvodxxmfgflvgvbdotlv.supabase.co', key)).toThrow('publishable');
 });
-test('missing configuration is disabled; local publishable only', () => {
+test.each([
+  'https://example.supabase.co',
+  'https://localhost.evil.com',
+  'http://127.0.0.1.evil.com',
+  'http://pvodxxmfgflvgvbdotlv.supabase.co',
+  'https://pvodxxmfgflvgvbdotlv.supabase.co.evil.com',
+  'https://pvodxxmfgflvgvbdotlv.supabase.co:8443',
+  'https://xpvodxxmfgflvgvbdotlv.supabase.co',
+  'https://api.pvodxxmfgflvgvbdotlv.supabase.co',
+])('other hosts, plain HTTP and other ports are refused: %s', url => {
+  expect(() => authConfig(url, 'sb_publishable_fixture')).toThrow('loopback address or the Insight project');
+});
+test.each([
+  'https://user:pass@pvodxxmfgflvgvbdotlv.supabase.co',
+  'https://pvodxxmfgflvgvbdotlv.supabase.co/rest/v1',
+  'https://pvodxxmfgflvgvbdotlv.supabase.co/?x=1',
+  'https://pvodxxmfgflvgvbdotlv.supabase.co/#x',
+  'http://127.0.0.1:54321/auth',
+  'https://evil.com/pvodxxmfgflvgvbdotlv.supabase.co',
+])('URLs with credentials, paths, queries or fragments are refused: %s', url => {
+  expect(() => authConfig(url, 'sb_publishable_fixture')).toThrow('bare origin');
+});
+test('missing configuration is disabled; loopback stays available for development', () => {
   expect(authConfig('', '')).toBeNull();
+  expect(authConfig('https://pvodxxmfgflvgvbdotlv.supabase.co', '')).toBeNull();
+  expect(authConfig('', 'sb_publishable_fixture')).toBeNull();
+  expect(() => authConfig('not a url', 'sb_publishable_fixture')).toThrow('not valid');
   expect(authConfig('http://127.0.0.1:54321', 'sb_publishable_fixture')).toBeTruthy();
+  expect(authConfig('http://localhost:54321', 'sb_publishable_fixture')).toBeTruthy();
+  expect(authConfig('http://[::1]:54321', 'sb_publishable_fixture')).toBeTruthy();
   expect(() => authConfig('http://localhost:54321', 'sb_secret_fixture')).toThrow('publishable');
 });
 test('chunks Unicode below SecureStore byte limit, rejoins, replaces and removes all keys', async () => {

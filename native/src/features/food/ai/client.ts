@@ -109,7 +109,7 @@ export function createFoodEndpointClient(
     });
   };
 }
-/** Existing authConfig only accepts local loopback URLs and blocks production.
+/** Uses the shared authConfig endpoint guard (loopback or the hosted Insight project only).
  * No client/config is read until a consented request actually reaches this function. */
 export const createLocalFoodAiClient = (repo: Repository): FoodAiClient => createFoodEndpointClient(
   async (name, body, signal) => {

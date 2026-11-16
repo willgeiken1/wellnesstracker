@@ -53,7 +53,7 @@ export function createWorkoutEndpointClient(request: WorkoutEndpointRequest, con
         return { summary: result.summary.trim(), remaining: result.remaining!, limit: 5 };
     };
 }
-/** Same loopback-only auth config as M2-16. No auth read until a consented call. */
+/** Same auth config guard as M2-16 (loopback or the hosted Insight project only). No auth read until a consented call. */
 export function createLocalWorkoutAiClient(repo: Repository): WorkoutAiClient {
     return createWorkoutEndpointClient(async (name, body, signal) => {
         const client = getAuthClient();

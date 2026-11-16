@@ -1,0 +1,147 @@
+name: Apply row-sync to Supabase (one time)
+
+# One-time apply of native/server/row-sync/apply-0001-0002.sql to project
+# pvodxxmfgflvgvbdotlv, so the iPhone app's sync has its tables and RPCs.
+# Nothing runs on merge. Start it by hand from the Actions tab on main and type
+# the confirmation. The job then waits for Will's required-reviewer approval in
+# the production environment, and runs in this order, stopping at the first
+# failure:
+#   1. Check the SQL files against the reviewed SHA256SUMS ledger.
+#   2. Read-only pre-check: stop if any row-sync name already exists.
+#   3. Back up the public schema, its data and the cluster roles, encrypted with
+#      DB_BACKUP_PASSPHRASE, and upload them as an artifact.
+#   4. Apply the wrapper. It is one transaction, so an error leaves nothing applied.
+#   5. Read-only verify of all 23 tables, policies, triggers, indexes and RPCs.
+# Rollback is native/server/row-sync/rollback-0001-0002.sql; read the README's
+# rollback section first, because the importer must be handled before it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply row-sync" to confirm'
+        required: true
+        type: string
+
+# Shares the deploy group so a migration push and this apply never overlap.
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Back up, apply and verify row-sync
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'apply row-sync'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: pvodxxmfgflvgvbdotlv
+      ROW_SYNC_DIR: native/server/row-sync
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.119.0
+
+      - name: Require secrets
+        env:
+          DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "Environment secret SUPABASE_ACCESS_TOKEN is not set in the production environment."
+            exit 1
+          fi
+          if [ "${#DB_BACKUP_PASSPHRASE}" -lt 20 ]; then
+            echo "Environment secret DB_BACKUP_PASSPHRASE must be set in the production environment (20+ characters). The backup is encrypted with it."
+            exit 1
+          fi
+
+      - name: Check SQL files against the reviewed hashes
+        working-directory: ${{ env.ROW_SYNC_DIR }}
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS
+          node artifacts.cjs
+
+      - name: Link project
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then unset SUPABASE_DB_PASSWORD; fi
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Read-only pre-check
+        run: supabase db query --linked -f "$ROW_SYNC_DIR/live/precheck.sql"
+
+      - name: Back up schema, data and roles (encrypted)
+        env:
+          DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then unset SUPABASE_DB_PASSWORD; fi
+          umask 077
+          work="$RUNNER_TEMP/row-sync-backup"
+          mkdir -p "$work"
+          supabase db dump --linked -f "$work/schema.sql"
+          supabase db dump --linked --data-only --use-copy -f "$work/data.sql"
+          supabase db dump --linked --role-only -f "$work/roles.sql"
+          cd "$work"
+          for f in schema.sql data.sql roles.sql; do test -s "$f" || { echo "Backup file $f is empty."; exit 1; }; done
+          sha256sum schema.sql data.sql roles.sql > SHA256SUMS
+          tar -czf - schema.sql data.sql roles.sql SHA256SUMS \
+            | openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:DB_BACKUP_PASSPHRASE \
+              -out "$GITHUB_WORKSPACE/row-sync-backup.tar.gz.enc"
+          rm -f schema.sql data.sql roles.sql
+          {
+            echo "### Backup"
+            echo "Encrypted backup of schema, data and roles saved as artifact row-sync-backup."
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: row-sync-backup
+          path: row-sync-backup.tar.gz.enc
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Apply row-sync (one transaction)
+        run: supabase db query --linked -f "$ROW_SYNC_DIR/apply-0001-0002.sql"
+
+      - name: Read-only verify
+        run: |
+          set -euo pipefail
+          supabase db query --linked -f "$ROW_SYNC_DIR/live/verify.sql" | tee "$RUNNER_TEMP/verify.txt"
+
+      - name: Record the apply for the ledger
+        if: always()
+        run: |
+          {
+            echo "### Row-sync apply record"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Job status: ${{ job.status }}"
+            echo '```'
+            cat "$ROW_SYNC_DIR/SHA256SUMS"
+            echo '```'
+            if [ -f "$RUNNER_TEMP/verify.txt" ]; then echo '```'; cat "$RUNNER_TEMP/verify.txt"; echo '```'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
