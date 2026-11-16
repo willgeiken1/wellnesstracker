@@ -62,7 +62,9 @@ function Detail({ store }: { store: WorkoutStore }) {
   const minute = Math.floor(new Date().getTime() / 60_000);
   const score = useMemo(() => readScore(reader, new Date(minute * 60_000), health, weights), [reader, health, weights, minute]);
   const share = shares(weights, score.pillars), line = headline(score);
-  const change = (next: Weights) => { if (next === weights) return; setHeld({ store: store.repo, weights: next }); saveWeights(store, next); };
+  // A failed save keeps the change on screen for this visit and says so, instead of looking saved.
+  const [unsaved, setUnsaved] = useState(false);
+  const change = (next: Weights) => { if (next === weights) return; setHeld({ store: store.repo, weights: next }); setUnsaved(!saveWeights(store, next)); };
   return <>
     <Card testID="score-summary" style={[card, { alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[4] }]}>
       <View accessible accessibilityLabel={spokenScore(score)} style={{ alignItems: 'center', gap: tokens.spacing[1] }}>
@@ -101,6 +103,7 @@ function Detail({ store }: { store: WorkoutStore }) {
       style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 })}>
       <ThemedText style={semibold}>{t('scoreReset')}</ThemedText>
     </Pressable>}
+    {unsaved && <ThemedText testID="score-unsaved" accessibilityRole="alert" variant="caption" style={{ color: colors.danger, lineHeight: 19 }}>{t('unsavedHere')}</ThemedText>}
     <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{t('scorePrivate')}</ThemedText>
     <ThemedText muted variant="caption" style={{ lineHeight: 19 }}>{t('scoreDisclaimer')}</ThemedText>
   </>;

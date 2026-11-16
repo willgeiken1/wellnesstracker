@@ -155,10 +155,11 @@ export function Home() {
   const focused = useFocused();
   const [wasFocused, setWasFocused] = useState(focused);
   if (focused !== wasFocused) { setWasFocused(focused); if (focused) setLayout({ repo, tiles: loadTiles(repo) }); }
+  // Home still shows the new layout this session if the local write fails, and the edit sheet says it was not kept.
+  const [unsaved, setUnsaved] = useState(false);
   const change = (next: HomeTiles) => {
     setLayout({ repo, tiles: next });
-    // Home still shows the new layout this session if the local write fails.
-    try { saveTiles(repo, next); } catch { /* saved again on the next change */ }
+    try { saveTiles(repo, next); setUnsaved(false); } catch { setUnsaved(true); }
   };
   // Inside the tabs the bottom inset includes the floating tab bar, so the + button sits above it, not over a tab.
   const insets = useSafeAreaInsets();
@@ -200,7 +201,7 @@ export function Home() {
       </View>
       {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
     </Screen>
-    <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
+    <EditHome visible={editing} tiles={tiles} unsaved={unsaved} onChange={change} onClose={() => setEditing(false)} />
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
     <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>

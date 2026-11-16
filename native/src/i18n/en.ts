@@ -804,6 +804,7 @@ export const en = {
   homeTileNextAbout: 'Resume, start today\'s workout or check in on food.', homeTileCaloriesAbout: 'Calories today with the last 7 days.',
   homeTileProteinAbout: 'Protein today with the last 7 days.', homeTileVolumeAbout: 'Weight lifted over the last 7 days.',
   homeTileWeightAbout: 'Your latest weight with its trend.',
+  unsavedHere: "This change couldn't be saved on this phone. It shows until you close Insight.",
   homeSteps: 'Steps', homeSleep: 'Sleep', homeToday: 'today', homeSleepNone: 'None', homeSleepNoneUnit: 'recorded', homeActive: 'Active calories', homeExercise: 'Exercise', homeBodyFat: 'Body fat', homeWater: 'Water', homeMindful: 'Mindful minutes',
   homeTileStepsAbout: 'Today\'s steps from Apple Health or Oura. Shows once one of them is connected.', homeTileSleepAbout: 'Last night\'s sleep from Apple Health or Oura. Shows once one of them is connected.',
   homeTileActiveAbout: 'Today\'s active calories from Apple Health. Shows once Apple Health is connected.', homeTileExerciseAbout: 'Today\'s exercise minutes from Apple Health. Shows once Apple Health is connected.',
