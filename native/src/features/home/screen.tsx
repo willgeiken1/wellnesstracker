@@ -409,6 +409,15 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
     if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, // A night with nothing recorded is unknown, not zero hours.
       value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : t('homeSleepNone'), unit: minutes ? 'min' : t('homeSleepNoneUnit'), series: sleep, bars: true, to: '/progress' });
+    const active = health.activeKcal, exercise = health.exerciseMinutes;
+    if (active) all.push({ id: 'active', label: t('homeActive'), color: pillar.training, value: whole(active[active.length - 1] ?? 0), unit: `kcal · ${t('homeToday')}`, series: active, bars: true, to: '/progress' });
+    if (exercise) all.push({ id: 'exercise', label: t('homeExercise'), color: pillar.training, value: whole(exercise[exercise.length - 1] ?? 0), unit: `min · ${t('homeToday')}`, series: exercise, bars: true, to: '/progress' });
+    // Water in US fluid ounces for pounds, litres for kilograms.
+    const water = health.waterMl, mindful = health.mindfulMinutes, fat = health.bodyFat, ounces = unit === 'lb';
+    const drunk = (ml: number) => ounces ? ml / 29.5735 : ml / 1000;
+    if (water) all.push({ id: 'water', label: t('homeWater'), color: accent, value: ounces ? whole(drunk(water[water.length - 1] ?? 0)) : drunk(water[water.length - 1] ?? 0).toFixed(1), unit: `${ounces ? 'fl oz' : 'L'} · ${t('homeToday')}`, series: water.map(drunk), bars: true, to: '/progress' });
+    if (mindful) all.push({ id: 'mindful', label: t('homeMindful'), color: sleepColor, value: whole(mindful[mindful.length - 1] ?? 0), unit: `min · ${t('homeToday')}`, series: mindful, bars: true, to: '/progress' });
+    if (fat?.length) all.push({ id: 'bodyFat', label: t('homeBodyFat'), color: accent, value: fat[fat.length - 1].toFixed(1), unit: '%', series: fat, to: '/progress' });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
 }

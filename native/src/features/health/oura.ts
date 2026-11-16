@@ -25,6 +25,9 @@ export const isExpired = (error: unknown) => typeof error === 'string' && /login
 /** Only Oura's own approval page is ever opened, whatever the server answers. */
 export const isOuraUrl = (url: unknown): url is string => typeof url === 'string' && url.startsWith('https://cloud.ouraring.com/oauth/authorize?');
 
+/** Where oura-callback sends a login that was started from this app; reaching it closes the sign-in sheet. */
+export const OURA_RETURN = 'insight://oura';
+
 const HOUR = 3_600_000;
 /** How long a refresh from Oura is trusted before the server is asked again, and how soon a failed ask is retried. */
 export const SYNC_EVERY = HOUR, RETRY_AFTER = 10 * 60_000;
@@ -82,6 +85,8 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
   return {
     steps: days.map(day => Math.round(rows.get(day)?.steps ?? 0)),
     sleepHours: days.map(day => (rows.get(day)?.sleepSeconds ?? 0) / 3600),
+    // Only steps and sleep are read from Oura; everything else comes from Apple Health alone.
+    activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null,
   };
 }
 
@@ -91,5 +96,5 @@ export function mergeHealthDays(apple: HealthDays | null, ring: HealthDays | nul
   if (!apple || !ring) return apple ?? ring;
   const pick = (first: number[] | null, second: number[] | null) => !first || !second ? first ?? second
     : first.map((value, i) => value > 0 ? value : second[i] ?? 0);
-  return { steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
+  return { ...apple, steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
 }

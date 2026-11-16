@@ -19,6 +19,8 @@ const cases = [
   ['https://evil.example/food/log', '/'], ['javascript:alert(1)', '/'],
   ['', '/'], ['insight://%zz', '/'], ['insight://[', '/'],
   ['insight://unknown', '/'],
+  ['insight://oura?oura=connected', '/settings/health'], ['INSIGHT://OURA/', '/settings/health'],
+  ['insight://oura/other', '/'], ['https://evil.example/oura', '/'],
 ] as const;
 
 describe.each([true, false])('native intent initial=%s', initial => {

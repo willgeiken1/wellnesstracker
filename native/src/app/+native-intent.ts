@@ -20,6 +20,9 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
       // Opened inside Settings, so it has Settings' own back button and Settings underneath.
       return state && (OURA_PREVIEW_STATES as readonly string[]).includes(state) ? `/settings/dev-oura-preview?state=${state}` : '/';
     }
+    // Oura's sign-in sheet normally catches insight://oura itself. If the link reaches the app anyway, the person
+    // lands on Health & devices, which reads the connection again; nothing in the link is passed on.
+    if (route === '/oura') return '/settings/health';
     if (!allowedRoutes.has(route)) return '/';
     const routine=url.searchParams.get('routine');
     return route==='/workout/start' && routine && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(routine) ? `${route}?routine=${routine}` : route;

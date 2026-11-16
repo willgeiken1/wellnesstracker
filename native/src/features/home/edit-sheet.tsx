@@ -10,13 +10,13 @@ import { appleHealth } from '../health/apple';
 import { oura } from '../health/oura-client';
 import { HEALTH_TILES, addTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTiles, type TileId } from './tiles';
 
-export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileScore' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep'> = {
+export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileScore' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep' | 'homeActive' | 'homeExercise' | 'homeBodyFat' | 'homeWater' | 'homeMindful'> = {
   map: 'homeTileMap', score: 'homeTileScore', week: 'homeTileWeek', next: 'homeTileNext', calories: 'homeCalories', protein: 'homeProtein', volume: 'volume', weight: 'weight',
-  steps: 'homeSteps', sleep: 'homeSleep',
+  steps: 'homeSteps', sleep: 'homeSleep', active: 'homeActive', exercise: 'homeExercise', bodyFat: 'homeBodyFat', water: 'homeWater', mindful: 'homeMindful',
 };
-const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileScoreAbout' | 'homeTileWeekAbout' | 'homeTileNextAbout' | 'homeTileCaloriesAbout' | 'homeTileProteinAbout' | 'homeTileVolumeAbout' | 'homeTileWeightAbout' | 'homeTileStepsAbout' | 'homeTileSleepAbout'> = {
+const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileScoreAbout' | 'homeTileWeekAbout' | 'homeTileNextAbout' | 'homeTileCaloriesAbout' | 'homeTileProteinAbout' | 'homeTileVolumeAbout' | 'homeTileWeightAbout' | 'homeTileStepsAbout' | 'homeTileSleepAbout' | 'homeTileActiveAbout' | 'homeTileExerciseAbout' | 'homeTileBodyFatAbout' | 'homeTileWaterAbout' | 'homeTileMindfulAbout'> = {
   map: 'homeTileMapAbout', score: 'homeTileScoreAbout', week: 'homeTileWeekAbout', next: 'homeTileNextAbout', calories: 'homeTileCaloriesAbout', protein: 'homeTileProteinAbout',
-  volume: 'homeTileVolumeAbout', weight: 'homeTileWeightAbout', steps: 'homeTileStepsAbout', sleep: 'homeTileSleepAbout',
+  volume: 'homeTileVolumeAbout', weight: 'homeTileWeightAbout', steps: 'homeTileStepsAbout', sleep: 'homeTileSleepAbout', active: 'homeTileActiveAbout', exercise: 'homeTileExerciseAbout', bodyFat: 'homeTileBodyFatAbout', water: 'homeTileWaterAbout', mindful: 'homeTileMindfulAbout',
 };
 const GLYPH = { up: 'M6 14l6-6 6 6', down: 'M6 10l6 6 6-6', remove: 'M6 12h12', add: 'M12 6v12M6 12h12' } as const;
 
