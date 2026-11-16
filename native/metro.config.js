@@ -16,6 +16,9 @@ if (process.env.APP_VARIANT === 'freeiphone') {
     if (relative === 'src/auth/provider.tsx' || relative === 'src/auth/screens.tsx') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only', path.basename(relative)) };
     }
+    if (relative === 'src/telemetry/sdk.ts') {
+      return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/telemetry-sdk.ts') };
+    }
     if (relative === 'src/features/food/ai/client.ts') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/food-ai-client.ts') };
     }

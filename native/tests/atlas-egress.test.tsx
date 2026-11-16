@@ -56,22 +56,30 @@ test('synthetic local log read and every atlas interaction make zero requests or
  }finally{fetchSpy.mockRestore();if(priorXHR) Object.defineProperty(globalThis,'XMLHttpRequest',priorXHR);else Reflect.deleteProperty(globalThis,'XMLHttpRequest');logs.forEach(log=>log.mockRestore());}
 });
 
-/** There is currently no native telemetry integration. Unlike the PWA, native
- * cannot record /muscle/<key>, params, screen names or navigation breadcrumbs.
- * Adding an SDK must replace this gate with tested global scrubbing first. */
-test('native has no Sentry/PostHog SDK or navigation recording hook that can capture muscle routes',()=>{
- const pkg=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../package.json'),'utf8'));
- expect(Object.keys({...pkg.dependencies,...pkg.devDependencies}).filter(name=>/sentry|posthog/i.test(name))).toEqual([]);
+/** Native telemetry is one file, src/telemetry/sdk.ts, behind the scrubbers in src/telemetry/scrub.ts
+ * (tests/telemetry.test.ts). Nothing may record /muscle/<key>, params, screen names or navigation
+ * breadcrumbs: breadcrumbs are off and the only route signal is a fixed tab name. */
+test('only the telemetry module loads Sentry/PostHog, and nothing records navigation or muscle routes',()=>{
+ const sdkFile=path.resolve(__dirname,'../src/telemetry/sdk.ts');
  function inspect(dir:string){
   for(const item of fs.readdirSync(dir,{withFileTypes:true})){
    const file=path.join(dir,item.name);
    if(item.isDirectory())inspect(file);
    else if(/\.tsx?$/.test(file)){
     const source=fs.readFileSync(file,'utf8');
+    expect(source).not.toMatch(/\b(?:onStateChange|onNavigationStateChange|registerNavigationContainer|reactNavigationIntegration|captureScreen|usePostHog|addBreadcrumb)\b/);
+    if(file===sdkFile)continue;
     expect(source).not.toMatch(/(?:from\s*|import\s*\(|require\s*\()\s*['"][^'"]*(?:sentry|posthog)/i);
-    expect(source).not.toMatch(/\b(?:Sentry|PostHog|posthog)\s*\.|\b(?:onStateChange|onNavigationStateChange|registerNavigationContainer|captureScreen|usePostHog)\b/);
+    expect(source).not.toMatch(/\b(?:Sentry|PostHog|posthog)\s*\./);
    }
   }
  }
  inspect(path.resolve(__dirname,'../src'));
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const { tabForPath } = require('../src/telemetry/runtime') as typeof import('../src/telemetry/runtime');
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const { usageEvent } = require('../src/telemetry/scrub') as typeof import('../src/telemetry/scrub');
+ expect(tabForPath('/muscle/chest')).toBeUndefined();
+ expect(usageEvent({event:'tab_viewed',properties:{tab:'/muscle/chest',$screen_name:'muscle/chest',$pathname:'/muscle/chest'}})).toBeNull();
+ expect(JSON.stringify(usageEvent({event:'tab_viewed',properties:{tab:'progress',$screen_name:'muscle/chest',$pathname:'/muscle/chest'}}))).not.toContain('chest');
 });
