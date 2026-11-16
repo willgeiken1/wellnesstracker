@@ -204,7 +204,7 @@ describe('Home reads both sources', () => {
   test('Apple Health shows at once while Oura is still answering, and Oura joins when it lands', async () => {
     const spy = sub();
     let answer: (rows: { day: string; sleepSeconds: number | null; steps: number | null }[]) => void = () => {};
-    const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [] };
+    const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [], workouts: async () => [] };
     await render(<Probe apple={apple} ring={ringWith(() => new Promise(done => { answer = done; }))} />);
     await settle();
     expect(screen.getByTestId('read').props.children).toBe('4200 steps, 0 h');
@@ -231,7 +231,7 @@ describe('Home reads both sources', () => {
   });
   test('Oura failing never hides Apple Health', async () => {
     const spy = sub();
-    const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [] };
+    const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [], workouts: async () => [] };
     await render(<Probe apple={apple} ring={ringWith(async () => { throw new Error('made-up failure'); })} />);
     await settle();
     expect(String(screen.getByTestId('read').props.children)).toMatch(/^4200 steps/);
