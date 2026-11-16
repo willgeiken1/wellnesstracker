@@ -20,6 +20,8 @@ function serverKey(): string {
   return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 }
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+// Must match oura-callback.
+const APP_STATE_PREFIX = "app.";
 const admin = createClient(SUPABASE_URL, serverKey(), { auth: { persistSession: false } });
 
 Deno.serve(async (req) => {
@@ -42,7 +44,9 @@ Deno.serve(async (req) => {
 
     // Clear out abandoned logins older than an hour, then start a new one.
     await admin.from("oura_oauth_states").delete().lt("created_at", new Date(Date.now() - 3600_000).toISOString());
-    const state = crypto.randomUUID();
+    // A login started from the iPhone app is marked, so oura-callback sends it back into the app
+    // (insight://oura) instead of the web logger. The rest of the state is still a fresh random id.
+    const state = (body.return === "app" ? APP_STATE_PREFIX : "") + crypto.randomUUID();
     const { error } = await admin.from("oura_oauth_states").insert({ state, user_id: user.id });
     if (error) return json({ error: error.message }, 500);
 
