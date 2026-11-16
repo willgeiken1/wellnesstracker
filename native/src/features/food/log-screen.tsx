@@ -9,6 +9,7 @@ import type { Repository } from '../../data/repository';
 import { foodDayLabel, t } from '../../i18n/en';
 import { today } from '../onboarding/model';
 import { FoodAiEntry } from './ai/entry';
+import { AI_FEATURES_ENABLED } from '../ai-launch';
 import { FoodAiResults } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { FoodCalendar } from './calendar';
@@ -101,10 +102,10 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
         : mode === 'scan' ? <FoodScanner repo={repo} onChoose={food => setEntry({ meal: selectedMeal, initial: food })} onManual={() => setEntry({ meal: selectedMeal })}
             onSearch={() => chooseMode('search')} onClose={() => chooseMode('search')} />
         : mode === 'saved' ? <FoodSaved repo={repo} meal={selectedMeal} mealName={mealName(selectedMeal)} onLog={log} onLogCombo={logSet} />
-        : <FoodAiEntry key={mode + day + selectedMeal} repo={repo} fallbackId={fallbackId} mode={mode} day={day} meal={selectedMeal}
-            onClose={() => chooseMode('search')} onManual={() => setEntry({ meal: selectedMeal })} />}
+        : AI_FEATURES_ENABLED ? <FoodAiEntry key={mode + day + selectedMeal} repo={repo} fallbackId={fallbackId} mode={mode} day={day} meal={selectedMeal}
+            onClose={() => chooseMode('search')} onManual={() => setEntry({ meal: selectedMeal })} /> : null}
     </Card>
-    {(!!ai.ready.length || !!ai.fallback.length) && <Card style={foodCard}>
+    {AI_FEATURES_ENABLED && (!!ai.ready.length || !!ai.fallback.length) && <Card style={foodCard}>
       <FoodAiResults repo={repo}
         onDescribe={id => { const job = aiState(repo).fallback.find(j => j.id === id)!; setEntry(null); setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setMode('describe'); }}
         onManual={id => { const job = aiState(repo).fallback.find(j => j.id === id)!; setDay(job.day); setSelectedMeal(job.meal); setFallbackId(id); setEntry({ meal: job.meal }); }} />

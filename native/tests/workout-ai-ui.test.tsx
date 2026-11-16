@@ -1,3 +1,5 @@
+// These tests cover the AI features, which stay in the code for a later update; the launch build hides them.
+jest.mock('../src/features/ai-launch', () => ({ AI_FEATURES_ENABLED: true }));
 import type { WorkoutAiClient } from '../src/features/workout/ai/client';
 import { createWorkoutEndpointClient } from '../src/features/workout/ai/client';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';

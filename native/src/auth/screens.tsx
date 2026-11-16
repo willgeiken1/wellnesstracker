@@ -1,6 +1,7 @@
 import { SyncRecovery } from './sync-recovery';
 import { BootRecovery } from './boot-recovery';
-import { DepartureFailure } from './sign-out';
+import { AccountDeletionFailed, DepartureFailure } from './sign-out';
+import { exportAccountBackup } from '../phone-only/export';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ageOn, onboardingProgress } from '../features/onboarding/model';
 import { PreferenceFields } from '../features/onboarding/fields';
@@ -76,6 +77,7 @@ export function Account() {
   const [lossCount,setLossCount]=useState<number|null>(null);
   const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|null>(null),[busy,setBusy]=useState(false);
   const submitting=useRef(false);
+  const [deleting,setDeleting]=useState(false);
   const leave=async(discardUnsynced=false)=>{
     if(submitting.current)return;
     submitting.current=true;setBusy(true);
@@ -109,6 +111,7 @@ export function Account() {
       <Button label={t('syncNow')} disabled={auth.syncStatus==='syncing'} onPress={()=>{void auth.syncNow();}}/>
       </Card>
       <Button label={t('signOut')} variant="destructive" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/>
+      {auth.deleteAccount&&<Button testID="account-delete" label={t('deleteAccount')} variant="secondary" disabled={busy} onPress={()=>{setError(null);setDeleting(true);}}/>}
     </>}
     {error&&<ThemedText muted accessibilityRole="alert">{t(error)}</ThemedText>}
     <Modal transparent visible={lossCount!==null} animationType="none" onRequestClose={()=>{if(!submitting.current)setLossCount(null);}}>
@@ -122,7 +125,45 @@ export function Account() {
         </View>
       </View>}
     </Modal>
+    {deleting&&<DeleteAccountSheet onClose={()=>setDeleting(false)}/>}
   </Screen>;
+}
+/** Apple 5.1.1(v): delete the account in the app. Offers a JSON backup first; typing DELETE confirms. */
+function DeleteAccountSheet({onClose}:{onClose:()=>void}) {
+  const auth=useAuth(),{colors}=useTheme();
+  const [typed,setTyped]=useState(''),[busy,setBusy]=useState(false),[saving,setSaving]=useState(false);
+  const [status,setStatus]=useState<'deleteAccountBackupDone'|'deleteAccountBackupFailed'|'deleteAccountFailed'|'signOutFailed'|null>(null);
+  const submitting=useRef(false);
+  const close=()=>{if(!submitting.current)onClose();};
+  const backup=()=>{
+    if(saving||busy||!auth.repository)return;
+    setSaving(true);setStatus(null);
+    void exportAccountBackup(auth.repository).then(()=>setStatus('deleteAccountBackupDone'))
+      .catch(()=>setStatus('deleteAccountBackupFailed')).finally(()=>setSaving(false));
+  };
+  const remove=async()=>{
+    if(submitting.current||typed.trim()!=='DELETE'||!auth.deleteAccount)return;
+    submitting.current=true;setBusy(true);setStatus(null);
+    try {await auth.deleteAccount();submitting.current=false;onClose();}
+    catch(cause) {setStatus(cause instanceof AccountDeletionFailed?'deleteAccountFailed':cause instanceof DepartureFailure?'signOutFailed':'deleteAccountFailed');}
+    finally {submitting.current=false;setBusy(false);}
+  };
+  const input={color:colors.text,backgroundColor:colors['surface-2'],borderRadius:8,minHeight:touchTarget,padding:12,fontSize:16};
+  return <Modal transparent visible animationType="none" onRequestClose={close}>
+    <View style={{flex:1,justifyContent:'flex-end',backgroundColor:colors.scrim}}>
+      <View accessibilityViewIsModal onAccessibilityEscape={close}
+        style={{backgroundColor:colors.surface,padding:24,paddingBottom:40,gap:16,borderTopLeftRadius:24,borderTopRightRadius:24}}>
+        <ThemedText accessibilityRole="header">{t('deleteAccountTitle')}</ThemedText>
+        <ThemedText>{t('deleteAccountBody')}</ThemedText>
+        <Button label={t('deleteAccountBackup')} variant="secondary" busy={saving} disabled={saving||busy||!auth.repository} onPress={backup}/>
+        <TextInput accessibilityLabel={t('deleteAccountTypeLabel')} placeholder={t('deleteAccountTypeLabel')} placeholderTextColor={colors['text-muted']} style={input}
+          value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} editable={!busy}/>
+        {status&&<ThemedText muted={status==='deleteAccountBackupDone'} accessibilityRole={status==='deleteAccountBackupDone'?undefined:'alert'} accessibilityLiveRegion="polite">{t(status)}</ThemedText>}
+        <Button label={t('deleteAccountKeep')} variant="secondary" disabled={busy} onPress={close}/>
+        <Button testID="account-delete-confirm" label={t('deleteAccountConfirm')} variant="destructive" busy={busy} disabled={busy||typed.trim()!=='DELETE'} onPress={()=>{void remove();}}/>
+      </View>
+    </View>
+  </Modal>;
 }
 
 /** Recovery actions remain outside the locked navigation routes. */

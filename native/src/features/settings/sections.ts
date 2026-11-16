@@ -1,7 +1,7 @@
 /** Settings home: the groups, their rows, and the extra words Search matches besides the label. */
 export const settingsGroups = [
   { title: 'settingsGroupYou', rows: [
-    { route: 'account', label: 'account', icon: 'account', keywords: 'sign in out email sync backup export' },
+    { route: 'account', label: 'account', icon: 'account', keywords: 'sign in out email sync backup export delete account' },
     { route: 'profile', label: 'profile', icon: 'profile', keywords: 'name lb kg weight height birthday' },
   ] },
   { title: 'settingsGroupApp', rows: [
@@ -12,7 +12,7 @@ export const settingsGroups = [
     { route: 'notifications', label: 'notifications', icon: 'notifications', keywords: 'reminders alerts' },
   ] },
   { title: 'settingsGroupData', rows: [
-    { route: 'privacy', label: 'privacy', icon: 'privacy', keywords: 'ai photos thumbnails permission' },
+    { route: 'privacy', label: 'privacy', icon: 'privacy', keywords: 'ai photos thumbnails permission crash reports analytics sentry posthog' },
     { route: 'data', label: 'data', icon: 'data', keywords: 'import backup file restore' },
   ] },
   { title: 'settingsGroupAbout', rows: [
