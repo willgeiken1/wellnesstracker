@@ -1,4 +1,6 @@
 import { FoodAiRuntime } from '../features/food/ai/runtime';
+import { AI_FEATURES_ENABLED } from '../features/ai-launch';
+import { TelemetryRuntime } from '../telemetry/runtime';
 import { useEffect } from 'react';
 import { router, Stack, ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -56,7 +58,8 @@ function Application() {
     <LocalDataRecovery />
     <LegacyImportPrompt />
     <SharedImportEntry />
-    <FoodAiRuntime repo={auth.ready ? auth.repository : null} />
+    {AI_FEATURES_ENABLED && <FoodAiRuntime repo={auth.ready ? auth.repository : null} />}
+    <TelemetryRuntime userId={auth.session?.user.id} />
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
   </ThemeProvider>;
