@@ -147,7 +147,8 @@ test.each([OWNER_A,'demo'])('wipe erases every local table and sync metadata for
    if(repo.syncTables().includes(table))repo.applyPage(table,[],'17');
   }
   if(owner===OWNER_A)repo.flagConflict(repo.pending()[0]);
-  repo.cacheOura('2026-01-01',{fixture:true});
+  // An old build's Oura copy, so the wipe is shown to clear it.
+  local.sqlite.prepare('INSERT INTO oura_days(owner_id,day,cache) VALUES(?,?,?)').run(owner,'2026-01-01','{"fixture":true}');
   repo.wipe();
   for(const table of [...syncedTables,'sync_state','sync_outbox','sync_conflicts','oura_days']) {
    expect(local.sqlite.prepare(`SELECT * FROM ${table} WHERE owner_id=?`).all(owner)).toEqual([]);
