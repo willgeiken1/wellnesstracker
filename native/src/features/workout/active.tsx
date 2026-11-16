@@ -35,6 +35,7 @@ import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
+import type { SyncStatus } from "@/data/sync/engine";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
     { routine, id, day } = useLocalSearchParams<{
@@ -98,7 +99,7 @@ function Logger({
   fixtureState?: string;
   session: Row;
   pending: number;
-  status: "idle" | "syncing" | "offline";
+  status: SyncStatus;
 }) {
   const past = store.pastMode(session.id);
   useKeepAwake("workout");

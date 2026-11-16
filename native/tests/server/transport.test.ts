@@ -104,3 +104,21 @@ test('M2-04 enabled transport uses shared validators for outgoing/pulled/acknowl
  fixture.query.limit.mockResolvedValueOnce({data:[{...invalid,mode:'invalid',server_seq:'1'}],error:null} as never);
  await expect(transport.pull('plans','0',100)).rejects.toThrow();
 });
+
+test('a refusal a retry can fix reads as offline; a refusal it cannot fix needs attention (review of #70)',async()=>{
+ const {SyncAttention}=require('../../src/data/sync/conflict') as typeof import('../../src/data/sync/conflict');
+ const fixture=clientFixture(),transport=new SupabaseTransport(fixture.client,OWNER_A);
+ for(const status of [500,503,401,408,429])fixture.rpc.mockResolvedValueOnce({error:{code:'XX000',message:'fixture private detail'},status} as never);
+ for(let i=0;i<5;i++)await expect(transport.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
+ // A missing table or function, a permission refusal or a rejected row will fail the same way every time.
+ for(const [code,status] of [['PGRST205',404],['PGRST202',404],['42501',403],['23514',400]] as const){
+  fixture.rpc.mockResolvedValueOnce({error:{code,message:'fixture private detail'},status} as never);
+  await expect(transport.push([syntheticRow()])).rejects.toBeInstanceOf(SyncAttention);
+ }
+ fixture.query.limit.mockResolvedValueOnce({error:{code:'42P01',message:'fixture private detail'},status:404} as never);
+ await expect(transport.pull('sets','0',100)).rejects.toBeInstanceOf(SyncAttention);
+ fixture.query.limit.mockResolvedValueOnce({error:{code:'PGRST301',message:'fixture private detail'},status:401} as never);
+ await expect(transport.pull('sets','0',100)).rejects.toThrow('Sync unavailable.');
+ fixture.rpc.mockResolvedValueOnce({data:null,error:null,status:200} as never);
+ await expect(transport.push([syntheticRow()])).rejects.toBeInstanceOf(SyncAttention);
+});

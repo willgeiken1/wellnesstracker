@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { columns, fromAcknowledgment, fromWire, pushRow, validateRow, type Row, type Table } from '../rows';
 import { DEFAULT_SYNC_FLAGS, projectSyncRow, syncFields, type SyncFlags } from './flags';
-import { ProvenanceConflict } from './conflict';
+import { ProvenanceConflict, SyncAttention } from './conflict';
 import type { Transport } from './engine';
 
 export class SupabaseTransport implements Transport {
@@ -11,6 +11,13 @@ export class SupabaseTransport implements Transport {
   private async request<T>(operation: () => PromiseLike<T>): Promise<T> {
     try { return await operation(); }
     catch { throw new Error('Sync unavailable.'); }
+  }
+
+  /** A refusal a retry can fix (no connection, server trouble, an expired sign-in, rate limits) is offline;
+   * any other refusal (a missing table or function, a permission or a bad request) needs attention. */
+  private refused(status: number | undefined, code: string | undefined): Error {
+    const transient = !status || status >= 500 || [401, 408, 429].includes(status) || code === 'PGRST301';
+    return transient ? new Error('Sync unavailable.') : new SyncAttention();
   }
 
   private async checkOwner() {
@@ -25,13 +32,13 @@ export class SupabaseTransport implements Transport {
       if (row.owner_id !== this.owner) throw new Error('Sync account changed.');
     }
     const payload = rows.map(row=>pushRow(projectSyncRow(row,this.syncFlags)));
-    const { data, error } = await this.request(() => this.client.rpc('sync_push', { rows: payload }));
+    const { data, error, status } = await this.request(() => this.client.rpc('sync_push', { rows: payload }));
     if (error?.code === 'P2001') throw new ProvenanceConflict();
-    if (error) throw new Error('Sync unavailable.');
-    if (!Array.isArray(data) || data.length !== rows.length) throw new Error('Invalid sync acknowledgment.');
+    if (error) throw this.refused(status, error.code);
+    if (!Array.isArray(data) || data.length !== rows.length) throw new SyncAttention();
     return data.map((value,index) => {
       const accepted = projectSyncRow(fromAcknowledgment(projectSyncRow(value as Row,this.syncFlags)),this.syncFlags);
-      if (accepted.owner_id !== this.owner || accepted.table !== rows[index].table || accepted.id !== rows[index].id) throw new Error('Invalid sync acknowledgment.');
+      if (accepted.owner_id !== this.owner || accepted.table !== rows[index].table || accepted.id !== rows[index].id) throw new SyncAttention();
       return accepted;
     });
   }
@@ -39,13 +46,14 @@ export class SupabaseTransport implements Transport {
   async pull(table: Table, after: string, limit: number) {
     await this.checkOwner();
     if (!Object.hasOwn(columns, table) || !/^\d+$/.test(after) || !Number.isInteger(limit) || limit < 1 || limit > 1000) {
-      throw new Error('Invalid sync request.');
+      throw new SyncAttention();
     }
     // Cast bigint before JSON serialization, but filter/order the physical bigint column.
     const fields = ['owner_id', 'id', 'updated_at', 'deleted_at', 'device_id', ...Object.keys(syncFields(table,this.syncFlags)), 'server_seq::text'].join(',');
-    const { data, error } = await this.request(() => this.client.from(table).select(fields)
+    const { data, error, status } = await this.request(() => this.client.from(table).select(fields)
       .eq('owner_id', this.owner).gt('server_seq', after).order('server_seq', { ascending: true }).limit(limit));
-    if (error || !Array.isArray(data)) throw new Error('Sync unavailable.');
+    if (error) throw this.refused(status, error.code);
+    if (!Array.isArray(data)) throw new SyncAttention();
     return (data as unknown as Record<string, unknown>[]).map(row => fromWire(table, row, syncFields(table,this.syncFlags)));
   }
 }
