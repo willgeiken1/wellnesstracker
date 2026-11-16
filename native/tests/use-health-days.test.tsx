@@ -9,7 +9,7 @@ function Probe({ source, focused = true }: { source: HealthSource; focused?: boo
   return <Text testID="steps">{read?.steps ? String(read.steps[0]) : 'none'}</Text>;
 }
 const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
-const base = { access: async () => 'asked' as const, request: async () => {}, weights: async () => [], sleep: async () => [] };
+const base = { access: async () => 'asked' as const, request: async () => {}, weights: async () => [], sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0 };
 
 test('a slow earlier read never overwrites a newer one', async () => {
   const waiting: ((n: number) => void)[] = [];

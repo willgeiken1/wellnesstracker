@@ -4,10 +4,10 @@
  */
 export const HOME_TILES_KEY = 'homeTiles';
 /** Full-width sections first, then the small number tiles. This is also the starting order. */
-export const TILE_IDS = ['map', 'score', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep'] as const;
+export const TILE_IDS = ['map', 'score', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep', 'active', 'exercise'] as const;
 export type TileId = typeof TILE_IDS[number];
 /** Small tiles are half width unless made wide. The others are always full width. */
-export const SMALL_TILES: readonly TileId[] = ['calories', 'protein', 'volume', 'weight', 'steps', 'sleep'];
+export const SMALL_TILES: readonly TileId[] = ['calories', 'protein', 'volume', 'weight', 'steps', 'sleep', 'active', 'exercise'];
 export interface HomeTiles { order: TileId[]; wide: TileId[] }
 /** Saved layouts carry this, so a tile added to the app later can be put on Home once for layouts saved before it. */
 const LAYOUT_VERSION = 2;
@@ -17,7 +17,7 @@ const isTile = (value: unknown): value is TileId => (TILE_IDS as readonly unknow
 const clean = (value: unknown) => Array.isArray(value) ? [...new Set(value.filter(isTile))] : null;
 export const isSmall = (id: TileId) => SMALL_TILES.includes(id);
 /** Tiles fed by Apple Health. They start off Home and are added when the person connects it. */
-export const HEALTH_TILES: readonly TileId[] = ['steps', 'sleep'];
+export const HEALTH_TILES: readonly TileId[] = ['steps', 'sleep', 'active', 'exercise'];
 export const defaultTiles = (): HomeTiles => ({ order: TILE_IDS.filter(id => !HEALTH_TILES.includes(id)), wide: [] });
 /** Puts the Apple Health tiles on Home, after whatever is there. Tile ids only: no health value is stored. */
 export function addHealthTiles(storage: TileStorage | null | undefined): void {

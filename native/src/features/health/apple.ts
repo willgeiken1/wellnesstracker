@@ -2,7 +2,9 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { HealthSource } from './source';
 
-const READ = ['HKQuantityTypeIdentifierBodyMass', 'HKQuantityTypeIdentifierStepCount', 'HKCategoryTypeIdentifierSleepAnalysis'] as const;
+// Only the types Insight has a screen for. A type joins this list in the same change that shows it.
+const READ = ['HKQuantityTypeIdentifierBodyMass', 'HKQuantityTypeIdentifierStepCount', 'HKCategoryTypeIdentifierSleepAnalysis',
+  'HKQuantityTypeIdentifierActiveEnergyBurned', 'HKQuantityTypeIdentifierAppleExerciseTime'] as const;
 // Apple's sleep values: 0 in bed, 2 awake; 1, 3, 4 and 5 are the kinds of asleep.
 const ASLEEP = new Set([1, 3, 4, 5]), AWAKE = 2;
 type Kit = typeof import('@kingstinct/react-native-healthkit');
@@ -32,6 +34,14 @@ export function appleHealth(): HealthSource | null {
     },
     async steps(from, to) {
       const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierStepCount', ['cumulativeSum'], { unit: 'count', filter: { date: { startDate: from, endDate: to } } });
+      return total.sumQuantity?.quantity ?? 0;
+    },
+    async activeEnergy(from, to) {
+      const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierActiveEnergyBurned', ['cumulativeSum'], { unit: 'kcal', filter: { date: { startDate: from, endDate: to } } });
+      return total.sumQuantity?.quantity ?? 0;
+    },
+    async exerciseMinutes(from, to) {
+      const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierAppleExerciseTime', ['cumulativeSum'], { unit: 'min', filter: { date: { startDate: from, endDate: to } } });
       return total.sumQuantity?.quantity ?? 0;
     },
     async sleep(from, to) {
