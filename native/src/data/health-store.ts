@@ -17,13 +17,16 @@ export const isHealthSource = (source: unknown) => source !== null && source !==
 
 /** Moves Health weigh-ins an earlier version kept in the main database into the Health store, then rewrites
  * the main file so their values are not left behind in freed pages or the write-ahead log. Safe to run on every
- * launch: a copy that landed before an interrupted delete is simply copied again. Returns how many moved. */
+ * launch: a copy left by an interrupted delete never replaces a newer row already in the Health store, so a
+ * reading removed since stays removed. Returns how many it found. */
 export function moveHealthRows(main: ExpoSQLiteDatabase, health: ExpoSQLiteDatabase): number {
   const rows = main.all<Record<string, string | number | null>>(sql`SELECT * FROM weigh_ins WHERE source IS NOT NULL AND source <> 'app'`);
   if (!rows.length) return 0;
   const fields = sql.join(COLUMNS.map(c => sql.identifier(c)), sql`, `);
   health.transaction(() => {
-    for (const row of rows) health.run(sql`INSERT OR REPLACE INTO weigh_ins (${fields}) VALUES (${sql.join(COLUMNS.map(c => sql`${row[c] ?? null}`), sql`, `)})`);
+    for (const row of rows) health.run(sql`INSERT INTO weigh_ins (${fields}) VALUES (${sql.join(COLUMNS.map(c => sql`${row[c] ?? null}`), sql`, `)})
+      ON CONFLICT(owner_id, id) DO UPDATE SET ${sql.join(COLUMNS.filter(c => c !== 'owner_id' && c !== 'id').map(c => sql`${sql.identifier(c)} = excluded.${sql.identifier(c)}`), sql`, `)}
+      WHERE excluded.updated_at > weigh_ins.updated_at`);
   });
   // Zero the deleted cells, then fold the log into the file and rebuild it without free pages.
   main.run(sql`PRAGMA secure_delete = ON`);

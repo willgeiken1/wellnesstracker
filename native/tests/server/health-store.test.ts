@@ -102,3 +102,28 @@ test('signing out or deleting the account erases that account\'s Health weigh-in
     expect(healthWeighIns(health.sqlite)).toEqual([]);
   } finally { main.sqlite.close(); health.sqlite.close(); }
 });
+
+test('a copy left by an interrupted move never brings back a reading removed since', async () => {
+  const main = await localDatabase(), health = healthStore();
+  try {
+    const old = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags);
+    importWeights(old, [{ id: SAMPLE, at: new Date(2026, 10, 15, 7), kg: 81.25 }], NOW);
+    // The move did not run; Apple Health later drops the reading and the refresh removes it from the Health store.
+    const repo = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags, health.db);
+    importWeights(repo, [{ id: SAMPLE, at: new Date(2026, 10, 15, 7), kg: 81.25 }], NOW);
+    repo.remove('weigh_ins', SAMPLE);
+    expect(moveHealthRows(main.db, health.db)).toBe(1);
+    expect(repo.get('weigh_ins', SAMPLE)?.deleted_at).not.toBeNull();
+    expect(repo.list('weigh_ins')).toEqual([]);
+    expect(mainWeighIns(main.sqlite)).toEqual([]);
+  } finally { main.sqlite.close(); health.sqlite.close(); }
+});
+
+test('the Health store has exactly the main database\'s weigh-in columns, so a later migration cannot leave it behind', async () => {
+  const main = await localDatabase(), health = healthStore();
+  try {
+    const columns = (sqlite: DatabaseSync) => (sqlite.prepare('PRAGMA table_info(weigh_ins)').all() as { name: string; type: string; notnull: number; pk: number }[])
+      .map(({ name, type, notnull, pk }) => ({ name, type, notnull, pk }));
+    expect(columns(health.sqlite)).toEqual(columns(main.sqlite));
+  } finally { main.sqlite.close(); health.sqlite.close(); }
+});

@@ -21,9 +21,12 @@ test('open, locked connection and migration failures release the cached boot pro
  await expect(openLocalDatabase()).resolves.toHaveProperty('forOwner');
  // Four for the main database, one more for the Health store once it opened.
  expect(openDatabaseSync).toHaveBeenCalledTimes(5);
+ // The Health store opened on disk, so earlier Health weigh-ins move into it.
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ expect((require('../src/data/health-store') as typeof import('../src/data/health-store')).moveHealthRows).toHaveBeenCalledTimes(1);
 });
 
-test('the Health store opens in the Caches folder, never the backed-up default, and falls back to memory', async () => {
+test('the Health store opens in the Caches folder, never the backed-up default, and falls back to memory without moving anything into it', async () => {
  jest.resetModules();
  // eslint-disable-next-line @typescript-eslint/no-require-imports
  const sqlite = require('expo-sqlite') as typeof import('expo-sqlite');
@@ -37,5 +40,6 @@ test('the Health store opens in the Caches folder, never the backed-up default, 
  expect(sqlite.openDatabaseSync).toHaveBeenNthCalledWith(1, 'insight.db');
  expect(sqlite.openDatabaseSync).toHaveBeenNthCalledWith(2, 'insight-health.db', undefined, 'file:///fixture/Library/Caches/');
  expect(sqlite.openDatabaseSync).toHaveBeenNthCalledWith(3, ':memory:');
- expect(moveHealthRows).toHaveBeenCalledTimes(1);
+ // Rows moved into memory would be gone at the next launch, so they stay where they are.
+ expect(moveHealthRows).not.toHaveBeenCalled();
 });
