@@ -21,9 +21,9 @@ export function lastDays(now: Date, count: number): string[] {
   });
 }
 
-type Range = readonly [number, number];
+export type Range = readonly [number, number];
 /** Clips to the window, drops bad stretches, and merges overlaps into separate ranges in order. */
-function union(spans: readonly SleepSpan[], from: number, to: number): Range[] {
+export function union(spans: readonly SleepSpan[], from: number, to: number): Range[] {
   const clipped = spans.map(span => [Math.max(span.start.getTime(), from), Math.min(span.end.getTime(), to)] as const)
     .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start).sort((a, b) => a[0] - b[0]);
   const merged: [number, number][] = [];
@@ -33,8 +33,8 @@ function union(spans: readonly SleepSpan[], from: number, to: number): Range[] {
   }
   return merged;
 }
-const length = (ranges: readonly Range[]) => ranges.reduce((sum, [start, end]) => sum + end - start, 0);
-function overlap(a: readonly Range[], b: readonly Range[]): number {
+export const length = (ranges: readonly Range[]) => ranges.reduce((sum, [start, end]) => sum + end - start, 0);
+export function overlap(a: readonly Range[], b: readonly Range[]): number {
   let total = 0;
   for (const [s1, e1] of a) for (const [s2, e2] of b) total += Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
   return total;

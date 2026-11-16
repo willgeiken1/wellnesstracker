@@ -5,7 +5,7 @@ import type { HealthAccess, HealthSource, SleepSpan } from '../src/features/heal
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 10, day, hour, minute);
 const span = (a: Date, b: Date): SleepSpan => ({ start: a, end: b });
 const source = (access: HealthAccess, over: Partial<HealthSource> = {}): HealthSource => ({
-  access: async () => access, request: async () => {}, weights: async () => [], steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, ...over,
+  access: async () => access, request: async () => {}, weights: async () => [], steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, ...over,
 });
 
 test('a night runs from 6 pm the evening before to noon and belongs to the day you wake on', () => {
