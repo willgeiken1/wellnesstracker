@@ -821,7 +821,7 @@ export const en = {
   appleHealthTitle: 'Apple Health', appleHealthConnect: 'Connect Apple Health', appleHealthAgain: 'Check again', appleHealthBusy: 'Checking…',
   appleHealthOff: 'Insight can read your body weight, steps and sleep from Apple Health. Weigh-ins from a smart scale show up on Progress, and steps and sleep get tiles on Home. Insight only reads. It never writes to Apple Health.',
   appleHealthOn: 'Connected. Body weight shows on Progress, and steps and sleep show on Home. All of it stays on this phone.',
-  appleHealthNone: 'No new weights found.', appleHealthOne: '1 weight added.', appleHealthMany: '{n} weights added.',
+  appleHealthNone: 'No weights found in Apple Health.', appleHealthOne: 'Found 1 weight in Apple Health.', appleHealthMany: 'Found {n} weights in Apple Health.',
   appleHealthFailed: 'Apple Health could not be read just now. Try again.',
   appleHealthStop: 'To stop, open the Health app, tap your picture, then Apps, then Insight, and turn the types off.',
   ouraTitle: 'Oura', ouraConnect: 'Connect Oura', ouraReconnect: 'Reconnect Oura', ouraDisconnect: 'Disconnect Oura',

@@ -6,6 +6,8 @@ import type { Repository } from '../src/data/repository';
 import { appleHealth } from '../src/features/health/apple';
 import type { HealthAccess, HealthSource, WeightSample } from '../src/features/health/source';
 import { useAppleHealth } from '../src/features/health/use-apple-health';
+import { clearHealthWeighIns, healthWeighIns } from '../src/features/health/live-weights';
+afterEach(() => clearHealthWeighIns());
 
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 // Made-up readings only.
@@ -20,7 +22,7 @@ function fakes(start: HealthAccess, list = samples) {
     steps: async () => 0, sleep: async () => [],
   };
   const local = new Map<string, unknown>();
-  const repo = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); } } as unknown as Repository;
+  const repo = { owner: 'guest', localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); } } as unknown as Repository;
   return { source, repo, saved, local };
 }
 function Page({ repo, source }: { repo: Repository | null; source: HealthSource | null }) {
@@ -46,8 +48,10 @@ test('Connect asks once, brings the weights in and says how many', async () => {
   await fireEvent.press(screen.getByTestId('connect-apple-button'));
   await settle();
   expect(source.request).toHaveBeenCalledTimes(1);
-  expect(saved.size).toBe(3);
-  expect(screen.getByText('3 weights added.')).toBeTruthy();
+  // Held in memory, never saved to the phone's database.
+  expect(saved.size).toBe(0);
+  expect(healthWeighIns('guest')).toHaveLength(3);
+  expect(screen.getByText('Found 3 weights in Apple Health.')).toBeTruthy();
   expect(within(screen.getByTestId('connect-appleHealth')).getByText('Connected')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy();
 });
@@ -71,8 +75,10 @@ test('once connected, opening the page picks up new weights without asking again
   await render(<Page repo={repo} source={source} />, { wrapper });
   await settle();
   expect(source.request).not.toHaveBeenCalled();
-  expect(saved.size).toBe(3);
-  expect(screen.getByText('3 weights added.')).toBeTruthy();
+  // Held in memory, never saved to the phone's database.
+  expect(saved.size).toBe(0);
+  expect(healthWeighIns('guest')).toHaveLength(3);
+  expect(screen.getByText('Found 3 weights in Apple Health.')).toBeTruthy();
 });
 
 test('a failed read says so plainly and can be retried', async () => {

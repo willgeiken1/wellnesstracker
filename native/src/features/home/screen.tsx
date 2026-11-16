@@ -24,6 +24,10 @@ import { MINI, terrain } from './contour';
 import { EditHome } from './edit-sheet';
 import { type HealthDays } from '../health/days';
 import { useHealthDays } from '../health/use-health-days';
+import { appleHealth } from '../health/apple';
+import { useHealthWeighIns } from '../health/live-weights';
+import { refreshWeights } from '../health/weights';
+import type { Row } from '@/data/rows';
 import { useFocused } from './use-focused';
 import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './tiles';
 import { HeaderScore, ScoreCard } from '../score/card';
@@ -82,9 +86,12 @@ function readTargets(store: WorkoutStore, day: string, _revision: number) {
 function readDayTargets(store: WorkoutStore, days: string[], today: string, foodDay: string, revision: number) {
   return new Map(days.map(day => [day, readTargets(store, day === today ? foodDay : day, revision)]));
 }
-function readWeights(store: WorkoutStore) { return dailyWeights(store.repo.list('weigh_ins')).slice(-14).map(w => w.kg); }
-function hasAnything(store: WorkoutStore, _revision: number) {
-  return !!store.active() || store.history().length > 0 || store.repo.list('food_entries').length > 0 || readWeights(store).length > 0;
+/** Typed weigh-ins plus the Apple Health ones, which are held in memory and passed in. */
+function readWeights(store: WorkoutStore, health: readonly Row[]) {
+  return dailyWeights([...store.repo.list('weigh_ins').filter(row => row.data.source === 'app'), ...health]).slice(-14).map(w => w.kg);
+}
+function hasAnything(store: WorkoutStore, health: readonly Row[], _revision: number) {
+  return !!store.active() || store.history().length > 0 || store.repo.list('food_entries').length > 0 || readWeights(store, health).length > 0;
 }
 
 /** How far along each pillar is, 0 to 1.05. A finished workout fills training; food follows the calorie target. */
@@ -173,6 +180,14 @@ export function Home() {
   // Steps and sleep come straight from Apple Health once connected. They live in memory here and nowhere else,
   // and so does the Insight Score worked out from them.
   const health = useHealthDays(focused);
+  // Apple Health weigh-ins are read again each time Home opens and kept in memory only, like steps and sleep.
+  const healthWeights = useHealthWeighIns(repo);
+  useEffect(() => {
+    if (!focused || !repo) return;
+    let live = true;
+    void refreshWeights(repo, appleHealth(), new Date(), () => live).catch(() => {});
+    return () => { live = false; };
+  }, [focused, repo]);
   // Home only reads here, so each list is fetched once per change to the data, and the sums are kept until the
   // data, the day or the minute changes. Without this Home re-ran thousands of queries on every draw.
   const reader = useMemo(() => store ? new WorkoutStore(cachedReads(store.repo), store.viewRevision) : null, [store]);
@@ -198,7 +213,7 @@ export function Home() {
         </Pressable>}
         {score && <HeaderScore score={score} />}
       </View>
-      {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
+      {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} weighIns={healthWeights} /> : <Next />}
     </Screen>
     <EditHome visible={editing} tiles={tiles} onChange={change} onClose={() => setEditing(false)} />
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
@@ -217,7 +232,7 @@ export function Home() {
   </View>;
 }
 
-function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, score }: { store: WorkoutStore; reader: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null }) {
+function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, score, weighIns }: { store: WorkoutStore; reader: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null; weighIns: readonly Row[] }) {
   const today = localDay(now), foodDay = attributedDay();
   useFoodRevision(store.repo);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
@@ -229,8 +244,8 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
     const recent = Array.from({ length: 7 }, (_, i) => localDay(new Date(y, m - 1, d - 6 + i)));
     const days = [...new Set([...thisWeek.filter(day => day <= today), ...recent])];
     return { recent, facts: readDays(reader, days, today, foodDay, reader.viewRevision), targets: readTargets(reader, foodDay, reader.viewRevision),
-      dayTargets: readDayTargets(reader, days, today, foodDay, reader.viewRevision), active: !!reader.active(), any: hasAnything(reader, reader.viewRevision) };
-  }, [reader, today, foodDay]);
+      dayTargets: readDayTargets(reader, days, today, foodDay, reader.viewRevision), active: !!reader.active(), any: hasAnything(reader, weighIns, reader.viewRevision) };
+  }, [reader, today, foodDay, weighIns]);
   const { recent, facts, targets, dayTargets, active } = data;
   const pillar = usePillarColors(), palette = useTheme().colors, accent = palette.accent;
   const of = (day: string) => progress(facts.get(day) ?? NONE, dayTargets.get(day)?.kcal ?? null, active && day === today);
@@ -250,7 +265,7 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
       <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
     </>}
   </>;
-  const numbers = numberTiles(reader, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
+  const numbers = numberTiles(reader, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep, weighIns);
   const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
   // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
   return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
@@ -395,8 +410,8 @@ function Spark({ values, color, bars }: { values: number[]; color: string; bars?
 interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
 
 /** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
-function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent): Partial<Record<TileId, TileData>> {
-  const unit = store.unit(), last = facts[facts.length - 1], weights = readWeights(store).map(kg => fromKg(kg, unit));
+function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent, weighIns: readonly Row[] = []): Partial<Record<TileId, TileData>> {
+  const unit = store.unit(), last = facts[facts.length - 1], weights = readWeights(store, weighIns).map(kg => fromKg(kg, unit));
   const volumes = facts.map(f => fromKg(f.volumeKg, unit));
   const all: TileData[] = [
     { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), to: '/food' },

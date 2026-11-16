@@ -10,6 +10,7 @@ import { t } from '../../i18n/en';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import { appleHealth } from '../health/apple';
+import { useHealthWeighIns } from '../health/live-weights';
 import { refreshWeights } from '../health/weights';
 import { readProfile, today } from '../onboarding/model';
 import { Panel } from '../workout/primitives';
@@ -20,11 +21,13 @@ import { deleteWeighIn, dailyWeights, friendlyDay, inRange, lastWeight, saveWeig
 export function Body({repository}:{repository:Repository}) {
   const facade=useWorkoutStore(repository),{colors,selectorLook}=useTheme();
   const repo=facade.repo,unit=readProfile(repo).unit;
-  // Once Apple Health is connected, opening Body quietly picks up new readings. It never prompts from here.
+  // Once Apple Health is connected, opening Body reads its weigh-ins again. They are held in memory, never saved,
+  // and it never prompts from here.
   useEffect(()=>{let live=true;void refreshWeights(repo,appleHealth(),new Date(),()=>live).catch(()=>{});return()=>{live=false;};},[repo]);
   const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false),[deleteFailed,setDeleteFailed]=useState(false);
   const [showAll,setShowAll]=useState(false);
-  const rows=repo.list('weigh_ins').filter(r=>String(r.data.day)<=today());
+  const healthWeights=useHealthWeighIns(repo);
+  const rows=[...repo.list('weigh_ins').filter(r=>r.data.source==='app'),...healthWeights].filter(r=>String(r.data.day)<=today());
   const deletable=rows.filter(row=>row.data.source==='app').sort((a,b)=>String(b.data.day).localeCompare(String(a.data.day)) || compareRows(b,a) || b.id.localeCompare(a.id));
   const deleteRows=showAll?deletable:deletable.slice(0,30);
   const trend=trendWeights(dailyWeights(rows)),visible=inRange(trend,range),last=trend.at(-1),change=weeklyChange(trend);

@@ -4,8 +4,10 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { Body } from '../src/features/body/screen';
 import { memoryRepository } from './workout-repository';
 import { friendlyDay, saveWeighIn } from '../src/features/body/model';
+import { clearHealthWeighIns, setHealthWeighIns } from '../src/features/health/live-weights';
+import { toWeighIns } from '../src/features/health/weights';
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
-afterEach(()=>jest.useRealTimers());
+afterEach(()=>{jest.useRealTimers();clearHealthWeighIns();});
 test('days read as people say them, with the year only when it is not this year',()=>{
  const now=new Date(2026,10,13);
  expect(friendlyDay('2026-11-13',now)).toBe('Nov 13');
@@ -153,8 +155,8 @@ test('a stale delete confirmation shows failure when its row is already deleted'
 });
 test('Log weigh-in never starts from an Apple Health reading, so a Health value cannot be saved as a typed one',async()=>{
  const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
- // Made-up reading, stored the way the Apple Health import stores it.
- repo.save('weigh_ins',{day:'2026-01-05',weight_kg:91.3,entered_value:91.3,entered_unit:'kg',source:'healthkit'});
+ // Made-up reading, held in memory the way an Apple Health read holds it.
+ setHealthWeighIns(repo.owner,toWeighIns(repo.owner,[{id:'AAAAAAAA-0000-4000-8000-000000000009',at:new Date(2026,0,5,7),kg:91.3}],new Date(2026,0,6)));
  await render(<Body repository={repo}/>,{wrapper});await fireEvent.press(screen.getByRole('button',{name:'Log weigh-in'}));
  expect(screen.getByLabelText('Weight (kg)').props.value).toBe('');
  await fireEvent.press(screen.getByRole('button',{name:'Cancel'}));
