@@ -94,8 +94,8 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
   return {
     steps: days.map(day => Math.round(rows.get(day)?.steps ?? 0)),
     sleepHours: days.map(day => (rows.get(day)?.sleepSeconds ?? 0) / 3600),
-    // Active calories and exercise minutes come from Apple Health only.
-    activeKcal: null, exerciseMinutes: null,
+    // Only steps and sleep are read from Oura; everything else comes from Apple Health alone.
+    activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null,
   };
 }
 
@@ -105,7 +105,7 @@ export function mergeHealthDays(apple: HealthDays | null, ring: HealthDays | nul
   if (!apple || !ring) return apple ?? ring;
   const pick = (first: number[] | null, second: number[] | null) => !first || !second ? first ?? second
     : first.map((value, i) => value > 0 ? value : second[i] ?? 0);
-  return { steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours), activeKcal: apple.activeKcal, exerciseMinutes: apple.exerciseMinutes };
+  return { ...apple, steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
 }
 
 /** What Oura adds to Insights › Recovery, oldest day first, null for a day with no reading. Held in memory only. */

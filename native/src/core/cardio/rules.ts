@@ -28,15 +28,22 @@ export function kcalPerMin(machine: Machine, seg: Settings, kg: number): number 
     : machine === 'bike' ? 3.5 + .3 * level : 4.5 + .3 * level;
   return met * 3.5 * kg / 200;
 }
-export function weeklyMinutes(rows: Row[], pauses: Row[], today: string): number {
+/** The Monday that starts `today`'s week, and the Monday after, as calendar dates. */
+export function weekOf(today: string): { start: string; end: string } {
   // Calendar dates, UTC only for arithmetic: DST never changes the week edges.
   const monday = new Date(`${today}T00:00:00Z`);
   monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
   const start = monday.toISOString().slice(0, 10);
   monday.setUTCDate(monday.getUTCDate() + 7);
-  const end = monday.toISOString().slice(0, 10);
-  return rows.filter(r => r.deleted_at === null && String(r.data.day) >= start && String(r.data.day) < end && !pauses.some(p =>
-    p.deleted_at === null && p.data.start_day != null && String(r.data.day) >= String(p.data.start_day) && (p.data.end_day == null || String(r.data.day) <= String(p.data.end_day))))
+  return { start, end: monday.toISOString().slice(0, 10) };
+}
+/** Whether a training pause covers a day. */
+export function paused(day: string, pauses: Row[]): boolean {
+  return pauses.some(p => p.deleted_at === null && p.data.start_day != null && day >= String(p.data.start_day) && (p.data.end_day == null || day <= String(p.data.end_day)));
+}
+export function weeklyMinutes(rows: Row[], pauses: Row[], today: string): number {
+  const { start, end } = weekOf(today);
+  return rows.filter(r => r.deleted_at === null && String(r.data.day) >= start && String(r.data.day) < end && !paused(String(r.data.day), pauses))
     .reduce((sum, r) => sum + Math.max(0, Number(r.data.duration_ms) || 0) / 60000, 0);
 }
 export function elapsedMs(timer: Timer, now: number): number {

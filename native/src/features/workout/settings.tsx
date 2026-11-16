@@ -7,6 +7,7 @@ import { useWorkout } from './use-workout';
 import { REST_OPENS, restOpens, setRestOpens } from './rest-pref';
 import { REST_STYLES, restChoices } from './rest-options';
 import { summaryLength, setSummaryLength } from './ai/service';
+import { AI_FEATURES_ENABLED } from '../ai-launch';
 const LENGTHS = [{ value: 'short', label: t('workoutAiShort') }, { value: 'coach', label: t('workoutAiCoach') }, { value: 'detailed', label: t('workoutAiDetailed') }] as const;
 export function WorkoutSettings() {
   // Reads saved choices straight from the repository on every render, so a tap shows as chosen at once.
@@ -36,12 +37,14 @@ export function WorkoutSettings() {
     </Group>
     <SectionLabel>{t('gymPlates')}</SectionLabel>
     <PlateSettings store={store} />
+    {AI_FEATURES_ENABLED && <>
     <SectionLabel>{t('settingsSummary')}</SectionLabel>
     <Group testID="workout-settings-summary">
       <InfoRow label={t('workoutAiLength')}>
         <ChoiceChips stacked options={LENGTHS} value={summaryLength(store.repo)} onChange={length => setSummaryLength(store.repo, length)} />
       </InfoRow>
     </Group>
+    </>}
     <SectionLabel>{t('settingsFeedback')}</SectionLabel>
     <Group testID="workout-settings-feedback">
       <ToggleRow testID="workout-haptics" label={t('settingsHaptics')} hint={t('settingsHapticsHint')} value={store.hapticsEnabled()} onValueChange={() => store.toggleHaptics()} />
