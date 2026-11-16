@@ -1,11 +1,14 @@
 import type { HealthSource, SleepSpan } from './source';
 
+/** One value a day, oldest first. A day is null when nothing was recorded or it could not be read, so it shows
+ * as no reading rather than as a false 0. */
+export type DaySeries = (number | null)[];
 /** Steps, active calories, exercise minutes and hours asleep for a run of days, oldest first. Held in memory
  * only: never saved, synced or sent. A list is null when today's reading could not be made, so the tile is left
  * out instead of showing a false 0. */
 export type HealthDays = {
-  steps: number[] | null; sleepHours: number[] | null; activeKcal: number[] | null; exerciseMinutes: number[] | null;
-  waterMl: number[] | null; mindfulMinutes: number[] | null;
+  steps: DaySeries | null; sleepHours: DaySeries | null; activeKcal: DaySeries | null; exerciseMinutes: DaySeries | null;
+  waterMl: DaySeries | null; mindfulMinutes: DaySeries | null;
   /** Body-fat readings from the last 90 days, oldest first, as percentages to one decimal. Null when unread. */
   bodyFat: number[] | null;
 };
@@ -59,15 +62,15 @@ export function hoursAsleep(spans: readonly SleepSpan[], from: Date, to: Date): 
 export async function readHealthDays(source: HealthSource | null, days: readonly string[], now = new Date()): Promise<HealthDays | null> {
   if (!source || !days.length || await source.access() !== 'asked') return null;
   const last = days.length - 1, cap = (date: Date) => new Date(Math.min(date.getTime(), now.getTime()));
-  // One whole number per day from a day total. An earlier day that failed only loses its bar. Today failing
-  // means there is no honest number to show.
-  const totals = async (read: (from: Date, to: Date) => Promise<number>) => {
-    const counts = await Promise.all(days.map(async day => {
+  // One whole number per day from a day total, or null for a day with nothing recorded. An earlier day that
+  // failed only loses its bar. Today failing means there is no honest number to show.
+  const totals = async (read: (from: Date, to: Date) => Promise<number | null>) => {
+    const counts = await Promise.all(days.map(async (day): Promise<number | null | 'failed'> => {
       const from = dayStart(day), to = cap(dayEnd(day));
-      if (to <= from) return 0;
-      try { const count = await read(from, to); return Number.isFinite(count) && count > 0 ? Math.round(count) : 0; } catch { return null; }
+      if (to <= from) return null;
+      try { const count = await read(from, to); return typeof count === 'number' && Number.isFinite(count) && count >= 0 ? Math.round(count) : null; } catch { return 'failed'; }
     }));
-    return counts[last] === null ? null : counts.map(count => count ?? 0);
+    return counts[last] === 'failed' ? null : counts.map(count => count === 'failed' ? null : count);
   };
   const [steps, activeKcal, exerciseMinutes, waterMl, mindfulMinutes] = await Promise.all([
     totals((from, to) => source.steps(from, to)),
@@ -75,7 +78,7 @@ export async function readHealthDays(source: HealthSource | null, days: readonly
     totals((from, to) => source.exerciseMinutes(from, to)),
     totals((from, to) => source.water(from, to)),
     // Two apps logging the same session count it once.
-    totals(async (from, to) => length(union(await source.mindful(from, to), from.getTime(), to.getTime())) / 60_000),
+    totals(async (from, to) => { const ranges = union(await source.mindful(from, to), from.getTime(), to.getTime()); return ranges.length ? length(ranges) / 60_000 : null; }),
   ]);
   let bodyFat: number[] | null;
   try {
@@ -83,10 +86,11 @@ export async function readHealthDays(source: HealthSource | null, days: readonly
     const readings = await source.bodyFat(new Date(y, m - 1, d - BODY_FAT_DAYS + 1));
     bodyFat = readings.filter(r => r.at <= now && Number.isFinite(r.percent) && r.percent > 0 && r.percent < 100).map(r => Math.round(r.percent * 10) / 10);
   } catch { bodyFat = null; }
-  let sleepHours: number[] | null;
+  let sleepHours: DaySeries | null;
   try {
     const spans = await source.sleep(nightOf(days[0]).from, cap(nightOf(days[last]).to));
-    sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to); return to > night.from ? hoursAsleep(spans, night.from, to) : 0; });
+    // A night with nothing asleep recorded is no reading, not a night of zero hours.
+    sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to), hours = to > night.from ? hoursAsleep(spans, night.from, to) : 0; return hours > 0 ? hours : null; });
   } catch { sleepHours = null; }
   return { steps, sleepHours, activeKcal, exerciseMinutes, waterMl, mindfulMinutes, bodyFat };
 }

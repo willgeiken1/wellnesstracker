@@ -18,10 +18,10 @@ describe('reading Oura days', () => {
     expect(await readOuraDays(off, DAYS, NOW)).toBeNull();
     for (const source of [signedOut, off]) { expect(source.sync).not.toHaveBeenCalled(); expect(source.days).not.toHaveBeenCalled(); }
   });
-  test('sleep comes back in hours and steps whole, in the order asked, with 0 for a day Oura has nothing for', async () => {
+  test('sleep comes back in hours and steps whole, in the order asked, with no reading for a day Oura has nothing for', async () => {
     const source = ring({ connected: true, lastSync: NOW.toISOString() }, [
       { day: '2026-11-13', sleepSeconds: 27000, steps: 4321.4 }, { day: '2026-11-11', sleepSeconds: null, steps: 9000 }]);
-    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [9000, 0, 4321], sleepHours: [0, 0, 7.5], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
+    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [9000, null, 4321], sleepHours: [null, null, 7.5], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
     expect(source.days).toHaveBeenCalledWith('2026-11-11', '2026-11-13');
   });
 });
@@ -42,7 +42,7 @@ describe('asking the server to refresh', () => {
   test('the first refresh reaches further back, and a failed refresh still shows the stored days', async () => {
     const source = ring({ connected: true, lastSync: null }, [{ day: '2026-11-12', sleepSeconds: 25200, steps: 100 }]);
     source.sync.mockRejectedValue(new Error('made-up failure'));
-    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [0, 100, 0], sleepHours: [0, 7, 0], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
+    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [null, 100, null], sleepHours: [null, 7, null], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
     expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
   });
 });
@@ -53,7 +53,7 @@ describe('a slow or hung Oura never holds anything back', () => {
     const source = ring({ connected: true, lastSync: null }, [{ day: '2026-11-12', sleepSeconds: 25200, steps: 100 }]);
     source.sync.mockImplementation(() => new Promise<void>(done => { land = done; }));
     const fresh = jest.fn();
-    expect(await readOuraDays(source, DAYS, NOW, fresh)).toEqual({ steps: [0, 100, 0], sleepHours: [0, 7, 0], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
+    expect(await readOuraDays(source, DAYS, NOW, fresh)).toEqual({ steps: [null, 100, null], sleepHours: [null, 7, null], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
     expect(source.sync).toHaveBeenCalledWith(FIRST_SYNC_DAYS);
     expect(fresh).not.toHaveBeenCalled();
     land();
@@ -131,7 +131,7 @@ describe('when Oura has signed Insight out', () => {
   test('the days already stored still show, and a refresh is still tried now and then in case it was a brief outage', async () => {
     const source = ring({ connected: true, expired: true, lastSync: NOW.toISOString() }, [{ day: '2026-11-11', sleepSeconds: 25200, steps: 8000 }]);
     source.sync.mockRejectedValue(new Error('made-up refusal'));
-    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [8000, 0, 0], sleepHours: [7, 0, 0], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
+    expect(await readOuraDays(source, DAYS, NOW)).toEqual({ steps: [8000, null, null], sleepHours: [7, null, null], activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null });
     expect(source.sync).toHaveBeenCalledTimes(1);
     await new Promise(done => setTimeout(done, 0));
     await readOuraDays(source, DAYS, new Date(NOW.getTime() + EXPIRED_RETRY_AFTER - 60_000));
@@ -152,6 +152,10 @@ describe('two sources, one day', () => {
   });
   test('sleep prefers the ring, steps prefer Apple Health, each falls back per day, and nothing is ever added together', () => {
     expect(mergeHealthDays(apple, worn)).toEqual({ steps: [8000, 3000, 5000], sleepHours: [7.25, 7, 8], ...active });
+  });
+  test('a day neither source has stays no reading; a day one source has comes from it', () => {
+    const a = { steps: [null, 0, 4000], sleepHours: [null, null, 6], ...only }, b = { steps: [null, 2500, null], sleepHours: [null, 7, null], ...only };
+    expect(mergeHealthDays(a, b)).toEqual({ steps: [null, 2500, 4000], sleepHours: [null, 7, 6], ...only });
   });
   test('a list one source could not read comes from the other', () => {
     expect(mergeHealthDays({ steps: null, sleepHours: [6, 6, 6], ...only }, worn)).toEqual({ steps: worn.steps, sleepHours: [7.25, 6, 8], ...only });

@@ -70,6 +70,17 @@ test('a night with no sleep recorded reads as none recorded, not as 0 hours', as
   expect(screen.queryByRole('button', { name: /^Sleep, 0/ })).toBeNull();
 });
 
+test('a day with no steps recorded today reads as none recorded, not as 0 steps (review of #176, #181)', async () => {
+  const base = fake('asked'), today = new Date(2026, 4, 12);
+  const source = { ...base, steps: jest.fn(async (from: Date, to: Date) => from >= today ? null : base.steps(from, to)) };
+  jest.mocked(appleHealth).mockReturnValue(source);
+  addHealthTiles(open());
+  await render(<Home />, { wrapper });
+  await settle();
+  expect(screen.getByRole('button', { name: 'Steps, None recorded' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Steps, 0/ })).toBeNull();
+});
+
 test('before connecting, Home reads nothing from Apple Health and shows no health tiles', async () => {
   const source = fake('ask');
   jest.mocked(appleHealth).mockReturnValue(source);

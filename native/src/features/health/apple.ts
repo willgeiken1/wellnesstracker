@@ -49,15 +49,15 @@ export function appleHealth(): HealthSource | null {
     },
     async steps(from, to) {
       const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierStepCount', ['cumulativeSum'], { unit: 'count', filter: { date: { startDate: from, endDate: to } } });
-      return total.sumQuantity?.quantity ?? 0;
+      return total.sumQuantity?.quantity ?? null;
     },
     async activeEnergy(from, to) {
       const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierActiveEnergyBurned', ['cumulativeSum'], { unit: 'kcal', filter: { date: { startDate: from, endDate: to } } });
-      return total.sumQuantity?.quantity ?? 0;
+      return total.sumQuantity?.quantity ?? null;
     },
     async exerciseMinutes(from, to) {
       const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierAppleExerciseTime', ['cumulativeSum'], { unit: 'min', filter: { date: { startDate: from, endDate: to } } });
-      return total.sumQuantity?.quantity ?? 0;
+      return total.sumQuantity?.quantity ?? null;
     },
     async sleep(from, to) {
       const samples = await kit.queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', { limit: 0, ascending: true, filter: { date: { startDate: from, endDate: to } } });
@@ -76,7 +76,7 @@ export function appleHealth(): HealthSource | null {
     },
     async water(from, to) {
       const total = await kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierDietaryWater', ['cumulativeSum'], { unit: 'mL', filter: { date: { startDate: from, endDate: to } } });
-      return total.sumQuantity?.quantity ?? 0;
+      return total.sumQuantity?.quantity ?? null;
     },
     async mindful(from, to) {
       const samples = await kit.queryCategorySamples('HKCategoryTypeIdentifierMindfulSession', { limit: 0, ascending: true, filter: { date: { startDate: from, endDate: to } } });

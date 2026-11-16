@@ -22,7 +22,7 @@ import { useWorkout } from '@/features/workout/use-workout';
 import { pluralize, t } from '@/i18n/en';
 import { MINI, terrain } from './contour';
 import { EditHome } from './edit-sheet';
-import { type HealthDays } from '../health/days';
+import { type DaySeries, type HealthDays } from '../health/days';
 import { useHealthDays } from '../health/use-health-days';
 import { useFocused } from './use-focused';
 import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './tiles';
@@ -376,23 +376,25 @@ function Next({ store, facts = NONE, targets = null, hour = 12 }: { store?: Work
     }} />} />;
 }
 
-function Spark({ values, color, bars }: { values: number[]; color: string; bars?: boolean }) {
-  const w = 140, h = 30, list = values.length > 1 ? values : [...values, ...values];
-  const max = Math.max(...list, 1), min = bars ? 0 : Math.min(...list), span = max - min || 1;
+function Spark({ values, color, bars }: { values: (number | null)[]; color: string; bars?: boolean }) {
+  // A day with no reading gets no bar; a line joins only the days that have one.
+  const known = values.filter((v): v is number => v !== null);
+  const w = 140, h = 30, list = bars ? (values.length > 1 ? values : [...values, ...values]) : (known.length > 1 ? known : [...known, ...known]);
+  const max = Math.max(...known, 1), min = bars ? 0 : Math.min(...known), span = max - min || 1;
   if (bars) {
     const bw = w / list.length;
     return <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" accessible={false}>
-      {list.map((v, i) => <Rect key={i} x={i * bw + 1} y={h - (v / max) * (h - 2)} width={bw - 2} height={(v / max) * (h - 2)} rx={1.5} fill={color} opacity={i === list.length - 1 ? 1 : 0.45} />)}
+      {list.map((v, i) => v === null ? null : <Rect key={i} x={i * bw + 1} y={h - (v / max) * (h - 2)} width={bw - 2} height={(v / max) * (h - 2)} rx={1.5} fill={color} opacity={i === list.length - 1 ? 1 : 0.45} />)}
     </Svg>;
   }
-  const d = list.map((v, i) => `${i ? 'L' : 'M'}${(i / (list.length - 1) * w).toFixed(1)} ${(h - 3 - (v - min) / span * (h - 6)).toFixed(1)}`).join('');
+  const d = (list as number[]).map((v, i) => `${i ? 'L' : 'M'}${(i / (list.length - 1) * w).toFixed(1)} ${(h - 3 - (v - min) / span * (h - 6)).toFixed(1)}`).join('');
   return <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" accessible={false}>
     <Path d={`${d} L${w} ${h} L0 ${h}Z`} fill={color} opacity={0.12} />
     <Path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
   </Svg>;
 }
 
-interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: number[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
+interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: (number | null)[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
 
 /** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
 function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent): Partial<Record<TileId, TileData>> {
@@ -405,21 +407,24 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
   ];
   if (health) {
-    const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep?.[sleep.length - 1] ?? 0) * 60);
-    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, value: whole(steps[steps.length - 1] ?? 0), unit: t('homeToday'), series: steps, bars: true, to: '/progress' });
+    // Today with nothing recorded reads as none recorded, not as a 0.
+    const today = (series: DaySeries) => series[series.length - 1] ?? null;
+    const shown = (value: number | null, text: (n: number) => string, unitText: string) => value === null ? { value: t('homeSleepNone'), unit: t('homeSleepNoneUnit') } : { value: text(value), unit: unitText };
+    const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep ? today(sleep) ?? 0 : 0) * 60);
+    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, ...shown(today(steps), whole, t('homeToday')), series: steps, bars: true, to: '/progress' });
     if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, // A night with nothing recorded is unknown, not zero hours.
       value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : t('homeSleepNone'), unit: minutes ? 'min' : t('homeSleepNoneUnit'), series: sleep, bars: true, to: '/progress' });
     const active = health.activeKcal, exercise = health.exerciseMinutes;
-    if (active) all.push({ id: 'active', label: t('homeActive'), color: pillar.training, value: whole(active[active.length - 1] ?? 0), unit: `kcal · ${t('homeToday')}`, series: active, bars: true, to: '/progress' });
-    if (exercise) all.push({ id: 'exercise', label: t('homeExercise'), color: pillar.training, value: whole(exercise[exercise.length - 1] ?? 0), unit: `min · ${t('homeToday')}`, series: exercise, bars: true, to: '/progress' });
+    if (active) all.push({ id: 'active', label: t('homeActive'), color: pillar.training, ...shown(today(active), whole, `kcal · ${t('homeToday')}`), series: active, bars: true, to: '/progress' });
+    if (exercise) all.push({ id: 'exercise', label: t('homeExercise'), color: pillar.training, ...shown(today(exercise), whole, `min · ${t('homeToday')}`), series: exercise, bars: true, to: '/progress' });
     // Water in US fluid ounces for pounds, litres for kilograms.
     const water = health.waterMl, mindful = health.mindfulMinutes, fat = health.bodyFat, ounces = unit === 'lb';
     const drunk = (ml: number) => ounces ? ml / 29.5735 : ml / 1000;
-    if (water) all.push({ id: 'water', label: t('homeWater'), color: accent, value: ounces ? whole(drunk(water[water.length - 1] ?? 0)) : drunk(water[water.length - 1] ?? 0).toFixed(1), unit: `${ounces ? 'fl oz' : 'L'} · ${t('homeToday')}`, series: water.map(drunk), bars: true, to: '/progress' });
-    if (mindful) all.push({ id: 'mindful', label: t('homeMindful'), color: sleepColor, value: whole(mindful[mindful.length - 1] ?? 0), unit: `min · ${t('homeToday')}`, series: mindful, bars: true, to: '/progress' });
+    if (water) all.push({ id: 'water', label: t('homeWater'), color: accent, ...shown(today(water), ml => ounces ? whole(drunk(ml)) : drunk(ml).toFixed(1), `${ounces ? 'fl oz' : 'L'} · ${t('homeToday')}`), series: water.map(ml => ml === null ? null : drunk(ml)), bars: true, to: '/progress' });
+    if (mindful) all.push({ id: 'mindful', label: t('homeMindful'), color: sleepColor, ...shown(today(mindful), whole, `min · ${t('homeToday')}`), series: mindful, bars: true, to: '/progress' });
     if (fat?.length) all.push({ id: 'bodyFat', label: t('homeBodyFat'), color: accent, value: fat[fat.length - 1].toFixed(1), unit: '%', series: fat, to: '/progress' });
   }
-  return Object.fromEntries(all.filter(tile => tile.series.some(v => v > 0)).map(tile => [tile.id, tile]));
+  return Object.fromEntries(all.filter(tile => tile.series.some(v => v !== null && v > 0)).map(tile => [tile.id, tile]));
 }
 function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
   return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"

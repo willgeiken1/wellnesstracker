@@ -1,4 +1,4 @@
-import type { HealthDays } from './days';
+import type { DaySeries, HealthDays } from './days';
 import type { Night } from './recovery';
 
 /**
@@ -82,7 +82,7 @@ export async function refreshOura(source: OuraSource, status: OuraStatus, now = 
   return syncNow(source, status, now).catch(() => false);
 }
 
-/** Steps and sleep for the given days from Oura, or null when Oura is not connected. A day Oura has nothing for is 0.
+/** Steps and sleep for the given days from Oura, or null when Oura is not connected. A day Oura has nothing for is null.
  * The days already stored come back at once; a refresh from Oura runs alongside and never holds them back.
  * `onFresh` is called once that refresh has landed, so the caller can read again. */
 export async function readOuraDays(source: OuraSource | null, days: readonly string[], now = new Date(), onFresh?: () => void): Promise<HealthDays | null> {
@@ -92,8 +92,8 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
   void refreshOura(source, status, now).then(fresh => { if (fresh) onFresh?.(); });
   const rows = new Map((await source.days(days[0], days[days.length - 1])).map(row => [row.day, row]));
   return {
-    steps: days.map(day => Math.round(rows.get(day)?.steps ?? 0)),
-    sleepHours: days.map(day => (rows.get(day)?.sleepSeconds ?? 0) / 3600),
+    steps: days.map(day => { const steps = rows.get(day)?.steps; return typeof steps === 'number' && Number.isFinite(steps) ? Math.round(steps) : null; }),
+    sleepHours: days.map(day => { const seconds = rows.get(day)?.sleepSeconds; return typeof seconds === 'number' && seconds > 0 ? seconds / 3600 : null; }),
     // Only steps and sleep are read from Oura; everything else comes from Apple Health alone.
     activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null,
   };
@@ -103,8 +103,8 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
  * which may already include the ring's steps, so the two are never added together. */
 export function mergeHealthDays(apple: HealthDays | null, ring: HealthDays | null): HealthDays | null {
   if (!apple || !ring) return apple ?? ring;
-  const pick = (first: number[] | null, second: number[] | null) => !first || !second ? first ?? second
-    : first.map((value, i) => value > 0 ? value : second[i] ?? 0);
+  const pick = (first: DaySeries | null, second: DaySeries | null) => !first || !second ? first ?? second
+    : first.map((value, i) => value !== null && value > 0 ? value : second[i] ?? value);
   return { ...apple, steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
 }
 

@@ -53,7 +53,8 @@ test('active calories and exercise minutes are read per day like steps, up to no
   expect(read!.exerciseMinutes).toBeNull();
   expect(read!.steps).toEqual([0, 0]);
   const odd = await readHealthDays(source('asked', { activeEnergy: async () => Number.NaN, exerciseMinutes: async () => -3 }), ['2026-11-12'], at(12, 15));
-  expect(odd).toMatchObject({ activeKcal: [0], exerciseMinutes: [0] });
+  // A reading that is not a number is no reading, not a 0.
+  expect(odd).toMatchObject({ activeKcal: [null], exerciseMinutes: [null] });
 });
 
 test('water adds up per day, mindful sessions logged twice count once, and body fat comes from the last 90 days', async () => {
@@ -65,7 +66,7 @@ test('water adds up per day, mindful sessions logged twice count once, and body 
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
   expect(read!.waterMl).toEqual([0, 1250]);
   // 8:00 to 8:15 once, plus 14:50 up to now at 15:00.
-  expect(read!.mindfulMinutes).toEqual([0, 25]);
+  expect(read!.mindfulMinutes).toEqual([null, 25]);
   expect(read!.bodyFat).toEqual([22.5, 21.9]);
   expect(since).toEqual(new Date(2026, 10, 12 - 89));
   const failed = await readHealthDays(source('asked', { bodyFat: async () => { throw new Error('made-up failure'); } }), ['2026-11-12'], at(12, 15));
@@ -77,12 +78,12 @@ test('an earlier day that fails only loses its bar; today failing leaves the num
   const early = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 11) throw new Error('made-up failure'); return 3000; },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(early).toEqual({ steps: [0, 3000], sleepHours: [0, 0], activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [0, 0], bodyFat: [] });
+  expect(early).toEqual({ steps: [null, 3000], sleepHours: [null, null], activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [] });
   const today = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 12) throw new Error('made-up failure'); return 3000; },
     sleep: async () => { throw new Error('made-up failure'); },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(today).toEqual({ steps: null, sleepHours: null, activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [0, 0], bodyFat: [] });
+  expect(today).toEqual({ steps: null, sleepHours: null, activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [] });
 });
 
 test('days and nights follow the clock on the wall across a clock change', () => {
@@ -111,4 +112,17 @@ test('sleep that has not happened yet is not counted', async () => {
 test('the last days end on today, oldest first, across a month boundary', () => {
   expect(lastDays(new Date(2026, 2, 2, 9), 4)).toEqual(['2026-02-27', '2026-02-28', '2026-03-01', '2026-03-02']);
   expect(lastDays(new Date(2026, 10, 13, 0, 1), 1)).toEqual(['2026-11-13']);
+});
+
+test('a day with nothing recorded is no reading, not 0, and a recorded 0 stays 0 (review of #176, #181, #191)', async () => {
+  const read = await readHealthDays(source('asked', {
+    steps: async from => from.getDate() === 11 ? null : 5200,
+    water: async from => from.getDate() === 11 ? 0 : null,
+    sleep: async () => [{ start: at(12, 0), end: at(12, 6) }],
+  }), ['2026-11-11', '2026-11-12'], at(12, 15));
+  expect(read!.steps).toEqual([null, 5200]);
+  expect(read!.waterMl).toEqual([0, null]);
+  // No night recorded before the 11th: no reading. The 12th has six hours.
+  expect(read!.sleepHours![0]).toBeNull();
+  expect(read!.sleepHours![1]).toBeCloseTo(6);
 });
