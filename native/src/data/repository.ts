@@ -209,6 +209,13 @@ export class Repository {
     }));
     this.notify();
   }
+  /** The earliest day Apple Health weigh-ins have been read back to for this account: a date only, never a
+   * reading. It is kept in the main database so that if iOS clears the Health store, the next refresh reads that
+   * far back again instead of only the usual window. */
+  healthWeightsFrom(): string | undefined { return this.safe(() => this.state('health_weights_from')); }
+  noteHealthWeightsFrom(day: string) {
+    this.safe(() => { const kept = this.state('health_weights_from'); if (!kept || day < kept) this.setState('health_weights_from', day); });
+  }
   /** Includes conflict-flagged rows, which pending() intentionally excludes from upload. */
   unsyncedCount() {
     return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges'`)?.count ?? 0);

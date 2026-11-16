@@ -4,7 +4,9 @@ import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 /* Readings copied from Apple Health (or Health Connect) live in their own SQLite file in the Caches folder,
    which iOS never puts in an iCloud or computer backup: Apple does not allow personal health information in
    iCloud. Everything else stays in the main database and is backed up as before. Apple Health stays the record
-   for these readings, so if iOS clears the folder to free space, the next refresh reads them again. */
+   for these readings, so if iOS clears the folder to free space, the next refresh reads them again, as far back
+   as earlier reads reached (Repository.healthWeightsFrom). Expo has no way to mark a file in a kept folder as
+   excluded from backup, so Caches is the one place that needs no native code. */
 
 /** The Health store's file name, in the Caches folder. */
 export const HEALTH_DB = 'insight-health.db';

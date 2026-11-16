@@ -7,7 +7,7 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { localDatabase, sqliteClient } from './sqlite';
 import { Repository, wipeAllOwners } from '../../src/data/repository';
 import { HEALTH_SCHEMA, moveHealthRows } from '../../src/data/health-store';
-import { importWeights } from '../../src/features/health/weights';
+import { importStart, importWeights, refreshWeights } from '../../src/features/health/weights';
 import { saveWeighIn } from '../../src/features/body/model';
 import { OWNER_A, OWNER_B } from '../../fixtures/sync';
 
@@ -126,4 +126,28 @@ test('the Health store has exactly the main database\'s weigh-in columns, so a l
       .map(({ name, type, notnull, pk }) => ({ name, type, notnull, pk }));
     expect(columns(health.sqlite)).toEqual(columns(main.sqlite));
   } finally { main.sqlite.close(); health.sqlite.close(); }
+});
+
+test('if iOS clears the Health store, the next refresh reads back as far as earlier reads did, not just two years', async () => {
+  const main = await localDatabase(), lost = healthStore();
+  try {
+    const old = { id: SAMPLE, at: new Date(2024, 0, 10, 7), kg: 79.5 };
+    const reads: Date[] = [];
+    const apple = { access: async () => 'asked' as const, weights: async (since: Date) => { reads.push(since); return [old].filter(s => s.at >= since); } } as unknown as Parameters<typeof refreshWeights>[1];
+    const first = new Date(2025, 11, 20, 9);
+    let repo = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags, lost.db);
+    expect(await refreshWeights(repo, apple, first)).toBe(1);
+    // A year later the reading is past the usual two-year window, and iOS has cleared the Health store.
+    const later = new Date(2026, 11, 20, 9), fresh = healthStore();
+    expect(old.at < importStart(later)).toBe(true);
+    repo = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags, fresh.db);
+    expect(await refreshWeights(repo, apple, later)).toBe(1);
+    expect(reads[1]).toEqual(importStart(first));
+    expect(repo.get('weigh_ins', SAMPLE)?.data.weight_kg).toBe(79.5);
+    // Only the day is kept in the main database, never the reading; signing out clears it.
+    expect(JSON.stringify(main.sqlite.prepare("SELECT * FROM sync_state WHERE key = 'health_weights_from'").all())).not.toContain('79.5');
+    repo.wipe();
+    expect(repo.healthWeightsFrom()).toBeUndefined();
+    fresh.sqlite.close();
+  } finally { main.sqlite.close(); lost.sqlite.close(); }
 });
