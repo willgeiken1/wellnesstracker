@@ -7,5 +7,5 @@ export function supportURL(version: string, platform: string, errorClass: string
   const safeVersion = /^\d+\.\d+\.\d+$/.test(version) ? version : 'unknown';
   const safePlatform = ['ios', 'android', 'web'].includes(platform) ? platform : 'unknown';
   const safeClass = classes.some(name => name === errorClass) ? errorClass : 'Error';
-  return `mailto:insight.wellnessos@gmail.com?subject=${encodeURIComponent('Insight Daily app opening help')}&body=${encodeURIComponent(`App version: ${safeVersion}\nPlatform: ${safePlatform}\nError class: ${safeClass}`)}`;
+  return `mailto:insight.wellnessos@gmail.com?subject=${encodeURIComponent('Insight Wellness app opening help')}&body=${encodeURIComponent(`App version: ${safeVersion}\nPlatform: ${safePlatform}\nError class: ${safeClass}`)}`;
 }

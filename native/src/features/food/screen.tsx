@@ -1,4 +1,5 @@
 import { FoodAiEntry } from './ai/entry';
+import { AI_FEATURES_ENABLED } from '../ai-launch';
 import { FoodAiResults, FoodAiMorningReview, LocalMealThumbnail } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { useEffect, useState } from 'react';
@@ -20,8 +21,10 @@ import { FoodTargets } from './targets';
 import { FoodCalendar } from './calendar';
 import { CalorieRing } from './ring';
 import { allFavorites, attributedDay, combos, copyYesterday, deleteFood, favorites, foodTargets, logCombo, meals, recentFoods, saveCombo, saveFood, saveMeal, saveReusable, shiftDay, toggleFavorite, totals, undoFood, type Food, type Undo } from './model';
-const METHODS=['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const;
-type Method=typeof METHODS[number];
+const ALL_METHODS=['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'] as const;
+type Method=typeof ALL_METHODS[number];
+// Snap and Describe are AI; they are left out while AI is off for launch.
+const METHODS:readonly Method[]=AI_FEATURES_ENABLED?ALL_METHODS:ALL_METHODS.filter(method=>method!=='foodSnap'&&method!=='foodDescribe');
 const METHOD_ICON:Record<Method,string>={
  foodSnap:'M4 8h3l1.5-2h7L17 8h3v11H4zM12 10.5a3 3 0 1 0 0 6a3 3 0 0 0 0-6',
  foodDescribe:'M4 5h16v11H10l-5 4v-4H4z',
@@ -113,8 +116,8 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
     <ThemedText variant="caption" numberOfLines={1}>{t(method)}</ThemedText>
    </Pressable>)}
   </View>
-  <FoodAiMorningReview key={reviewClock} repo={repo}/>
-  <FoodAiResults repo={repo} onDescribe={id=>{setScanning(false);setEntry(null);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{setScanning(false);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>
+  {AI_FEATURES_ENABLED&&<FoodAiMorningReview key={reviewClock} repo={repo}/>}
+  {AI_FEATURES_ENABLED&&<FoodAiResults repo={repo} onDescribe={id=>{setScanning(false);setEntry(null);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode('describe');}} onManual={id=>{setScanning(false);setLibrary(false);const job=aiState(repo).fallback.find(j=>j.id===id)!;setDay(job.day);setSelectedMeal(job.meal);setFallbackId(id);setAiMode(null);setEntry({meal:job.meal});}}/>}
   <View style={{gap:tokens.spacing[0]}}>
    <View style={{flexDirection:'row',alignItems:'center'}}>
     <ThemedText muted variant="caption" style={{flex:1}}>{t('foodChooseMeal')}</ThemedText>
@@ -126,7 +129,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
   {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
   {scanning&&<Card style={card}><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Card>}
-  {aiMode&&<Card style={card}><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Card>}
+  {AI_FEATURES_ENABLED&&aiMode&&<Card style={card}><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Card>}
   {entry&&<Card style={card}><FoodEntry key={entry.id??'new'} initial={entry.initial} editing={entry.id!==undefined} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{const row=saveFood(repo,day,entry.meal,food,multiple,entry.id);if(fallbackId!==undefined){attachFallback(repo,row.id,fallbackId);setFallbackId(undefined);}if(entry.id&&aiState(repo).entries[entry.id])confirmEstimate(repo,entry.id);setEntry(null);}}/></Card>}
   {library&&<Card style={card}>
    {([{title:'foodSaved',foods:repo.list('saved_foods').map((r):Food=>({...r.data,saved_food_id:r.id,amount_g:r.data.serving_g??null}))},{title:'foodRecent',foods:recentFoods(repo)},{title:'foodFavorites',foods:allFavorites(repo,selectedMeal)}] as const).map(section=><View key={section.title} style={{gap:6}}><ThemedText variant="headline">{t(section.title)}</ThemedText>{!section.foods.length&&<ThemedText muted>{t('foodNoSaved')}</ThemedText>}{section.foods.map((food,i)=><Button key={i} variant="secondary" label={t('foodLogSaved').replace('{name}',String(food['name']))} onPress={()=>log(food)}/>)}</View>)}

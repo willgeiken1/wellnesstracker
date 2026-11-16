@@ -3,10 +3,13 @@ import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
 import { t } from '../../i18n/en';
 import { Glyph, semibold } from './parts';
+import { AI_FEATURES_ENABLED } from '../ai-launch';
 
 /** The ways to log food, in the order they are offered. Manual entry is reached from Search. */
-export const LOG_MODES = ['search', 'scan', 'snap', 'describe', 'saved'] as const;
-export type LogMode = typeof LOG_MODES[number];
+const ALL_LOG_MODES = ['search', 'scan', 'snap', 'describe', 'saved'] as const;
+export type LogMode = typeof ALL_LOG_MODES[number];
+/** Snap and Describe are AI; they are left out while AI is off for launch. */
+export const LOG_MODES: readonly LogMode[] = AI_FEATURES_ENABLED ? ALL_LOG_MODES : ALL_LOG_MODES.filter(mode => mode !== 'snap' && mode !== 'describe');
 const LABEL = { search: 'foodSearch', scan: 'foodScan', snap: 'foodSnap', describe: 'foodDescribe', saved: 'foodSaved' } as const;
 
 /** One row of five: an icon and a word each, with the chosen one marked. */
