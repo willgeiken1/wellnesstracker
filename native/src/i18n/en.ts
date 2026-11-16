@@ -338,6 +338,7 @@ export const en = {
   crashReportsPref: "Send crash reports",
   analyticsPref: "Share usage analytics",
   devicePrefsHelp: "These apply to this phone only. Crash reports start on. Usage analytics start off.",
+  privacySaveFailed: "This change is on for now but could not be saved on this phone, so it may go back after the app restarts. Switch it again to try saving.",
   finishOnboarding: "Start using Insight Wellness",
   saveProfileLabel: "Save profile",
   activityLevel: "Activity level",
