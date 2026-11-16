@@ -83,7 +83,9 @@ export function FinishSheet({
             router.replace({
               pathname: '/workout/summary',
               params: {
-                id: session.id
+                id: session.id,
+                // Only straight after finishing does the summary say "Workout complete"; from History it is a past workout.
+                just: '1'
               }
             });
           } catch {

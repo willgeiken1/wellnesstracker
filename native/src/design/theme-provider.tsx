@@ -3,7 +3,7 @@ import { AccessibilityInfo, Appearance, useColorScheme } from 'react-native';
 import type { Repository } from '../data/repository';
 import { compareRows } from '../data/rows';
 import { createTheme, paletteLocked, tokens, type Palette, type ThemeOverride } from './tokens';
-import { DEFAULT_APPEARANCE, formatAppearance, parseAppearance, PRESETS, presetOf, type BarLook, type Intensity, type KeypadLook, type Looks, type Motion, type Preset, type RingLook } from './looks';
+import { DEFAULT_APPEARANCE, formatAppearance, parseAppearance, PRESETS, presetOf, type BarLook, type Intensity, type KeypadLook, type Looks, type Motion, type Preset, type RingLook, type SelectorLook } from './looks';
 
 function useThemeState(repository?: Repository | null) {
   const [override, updateOverride] = useState<ThemeOverride>('system');
@@ -38,6 +38,7 @@ function useThemeState(repository?: Repository | null) {
   const setIntensity = (intensity: Intensity) => persist(override, { ...appearance, intensity });
   const setBarLook = (bar: BarLook) => persist(override, { ...appearance, bar });
   const setKeypadLook = (keypad: KeypadLook) => persist(override, { ...appearance, keypad });
+  const setSelectorLook = (selector: SelectorLook) => persist(override, { ...appearance, selector });
   const applyPreset = (preset: Preset) => persist(override, { ...appearance, ...PRESETS[preset] });
   useEffect(() => {
     Appearance.setColorScheme(override === 'system' ? 'auto' : override);
@@ -63,7 +64,7 @@ function useThemeState(repository?: Repository | null) {
   return { persistenceError, override, setOverride, palette, setPalette, ringLook: appearance.ring, setRingLook,
     // The saved choice, and what actually plays: iOS Reduce Motion always wins.
     motionStyle: appearance.motion, setMotionStyle, ringMotion: (reduceMotion ? 'basic' : appearance.motion) as Motion,
-    intensity: appearance.intensity, setIntensity, barLook: appearance.bar, setBarLook, keypadLook: appearance.keypad, setKeypadLook, preset: presetOf(appearance), applyPreset, mode, colors: createTheme(mode, palette),
+    intensity: appearance.intensity, setIntensity, barLook: appearance.bar, setBarLook, keypadLook: appearance.keypad, setKeypadLook, selectorLook: appearance.selector, setSelectorLook, preset: presetOf(appearance), applyPreset, mode, colors: createTheme(mode, palette),
     reduceMotion, reduceMotionReady, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
 }
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);

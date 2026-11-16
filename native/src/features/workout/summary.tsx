@@ -185,11 +185,12 @@ export function summaryDate(start: number, end: number) {
 }
 export function Summary() {
   const { store } = useWorkout(),
-    { id } = useLocalSearchParams<{
+    { id, just } = useLocalSearchParams<{
       id: string;
+      just?: string;
     }>();
   return store && id && store.repo.get("sessions", id) ? (
-    <WorkoutSummary store={store} id={id} />
+    <WorkoutSummary store={store} id={id} past={just !== "1"} />
   ) : (
     <Screen topInset>
       <PageBar
@@ -240,9 +241,12 @@ export function sessionMuscles(store: WorkoutStore, id: string) {
 export function WorkoutSummary({
   store: source,
   id,
+  past = false,
 }: {
   store: WorkoutStore;
   id: string;
+  /** Opened later from History or a routine, so it is not announced as just saved or just completed. */
+  past?: boolean;
 }) {
   const store = useWorkoutStore(source.repo);
   const { colors } = useTheme();
@@ -283,12 +287,12 @@ export function WorkoutSummary({
       <View style={[layout.row, { minHeight: 44 }]}>
         <Round glyph="close" label={t("close")} onPress={close} />
         <ThemedText muted style={{ flex: 1, textAlign: "center", fontSize: 15 }}>
-          {t("savedHistory")}
+          {t(past ? "pastWorkoutBar" : "savedHistory")}
         </ThemedText>
         <View style={{ width: 44 }} />
       </View>
       <View style={{ alignItems: "center", gap: 4 }}>
-        <Eyebrow center>{t("workoutComplete")}</Eyebrow>
+        <Eyebrow center>{t(past ? "pastWorkout" : "workoutComplete")}</Eyebrow>
         <ThemedText
           variant="title"
           accessibilityRole="header"

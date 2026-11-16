@@ -9,14 +9,19 @@ export type Motion = (typeof MOTIONS)[number];
 /** How strong the effects are: 1 subtle, 2 medium, 3 full. */
 export const INTENSITIES = [1, 2, 3] as const;
 export type Intensity = (typeof INTENSITIES)[number];
-/** The tab bar: tinted with the theme's background, or left as clear system glass. */
-export const BAR_LOOKS = ["standard", "glass"] as const;
+/** The tab bar: tinted with the theme's background, left as clear system glass, or a floating bar where the
+ * open tab stands apart in the accent colour. */
+export const BAR_LOOKS = ["standard", "glass", "floating"] as const;
 export type BarLook = (typeof BAR_LOOKS)[number];
 /** The number keys in the logger: solid, or glass keys with a light rim. */
 export const KEYPAD_LOOKS = ["plain", "glass"] as const;
 export type KeypadLook = (typeof KEYPAD_LOOKS)[number];
-export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook };
-export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain" };
+/** The choice controls (Workouts, Progress, Insights, Appearance): one track, the plan's default, or a row of
+ * separate pill chips that scrolls sideways when there are more than fit. */
+export const SELECTOR_LOOKS = ["standard", "pills"] as const;
+export type SelectorLook = (typeof SELECTOR_LOOKS)[number];
+export type Looks = { palette: Palette; ring: RingLook; motion: Motion; intensity: Intensity; bar: BarLook; keypad: KeypadLook; selector: SelectorLook };
+export const DEFAULT_APPEARANCE: Looks = { palette: DEFAULT_PALETTE, ring: "contour", motion: "calm", intensity: 2, bar: "standard", keypad: "plain", selector: "standard" };
 
 type PresetLooks = Pick<Looks, "ring" | "motion" | "bar" | "keypad">;
 /** A preset is a starting point that sets several looks at once. It never changes the theme or the strength. */
@@ -51,12 +56,13 @@ export function parseAppearance(saved: unknown): Looks {
     motion: oneOf(MOTIONS, pairs.get("motion"), DEFAULT_APPEARANCE.motion),
     bar: oneOf(BAR_LOOKS, pairs.get("bar"), DEFAULT_APPEARANCE.bar),
     keypad: oneOf(KEYPAD_LOOKS, pairs.get("keypad"), DEFAULT_APPEARANCE.keypad),
+    selector: oneOf(SELECTOR_LOOKS, pairs.get("selector"), DEFAULT_APPEARANCE.selector),
     intensity: INTENSITIES.find((level) => String(level) === pairs.get("strength")) ?? DEFAULT_APPEARANCE.intensity,
   };
 }
 export function formatAppearance(appearance: Looks): string {
-  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad" } as const;
-  const extras = (["ring", "motion", "intensity", "bar", "keypad"] as const)
+  const saved = { ring: "ring", motion: "motion", intensity: "strength", bar: "bar", keypad: "keypad", selector: "selector" } as const;
+  const extras = (["ring", "motion", "intensity", "bar", "keypad", "selector"] as const)
     .filter((key) => appearance[key] !== DEFAULT_APPEARANCE[key])
     .map((key) => `;${saved[key]}=${appearance[key]}`);
   return appearance.palette + extras.join("");

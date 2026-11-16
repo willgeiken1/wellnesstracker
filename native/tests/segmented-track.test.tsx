@@ -28,3 +28,35 @@ test.each(['dark', 'light'] as const)('in %s mode a choice that is not chosen ke
   expect(contrast(c.text, c['surface-2'])).toBeGreaterThanOrEqual(4.5);
   expect(contrast(c['on-accent'], c.accent)).toBeGreaterThanOrEqual(4.5);
 });
+
+describe('the Pills look from Settings', () => {
+  const { syntheticRow } = jest.requireActual('../fixtures/sync');
+  const pills = (theme: 'dark' | 'light', palette = 'seaGlassTide') => ({
+    list: () => [{ ...syntheticRow('settings'), data: { theme_override: theme, accent: `${palette};selector=pills` } }],
+    subscribe: () => () => {}, save: jest.fn(),
+  }) as never;
+  const four = [{ value: 'w', label: 'Week' }, { value: 'm', label: 'Month' }, { value: 'q', label: 'Quarter' }, { value: 'y', label: 'Year' }] as const;
+  test('each choice is its own rounded chip in one row that scrolls sideways, never a grid', async () => {
+    const onChange = jest.fn();
+    await render(<ThemeProvider repository={pills('light')}><SegmentedControl label="Made-up range" options={four} value="m" onChange={onChange} /></ThemeProvider>);
+    const row = screen.getByTestId('selector-pills');
+    expect(row.props.horizontal).toBe(true);
+    expect(row.props.accessibilityRole).toBe('tablist');
+    const chosen = StyleSheet.flatten(screen.getByRole('tab', { name: 'Month' }).props.style);
+    const other = StyleSheet.flatten(screen.getByRole('tab', { name: 'Year' }).props.style);
+    expect(chosen.borderRadius).toBe(chosen.minHeight / 2);
+    expect(chosen.backgroundColor).not.toBe(other.backgroundColor);
+    expect(other.minHeight).toBeGreaterThanOrEqual(44);
+    expect(other.flexBasis).toBeUndefined();
+    expect(screen.getByRole('tab', { name: 'Month' }).props.accessibilityState).toEqual({ selected: true });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Year' }));
+    expect(onChange).toHaveBeenCalledWith('y');
+  });
+  test.each(['seaGlassTide', 'forestEmber', 'goldenHour', 'moonlightDusk'] as const)('on %s the chip text keeps 4.5:1 in light and dark', palette => {
+    for (const mode of ['light', 'dark'] as const) {
+      const c = (design.createTheme as (mode: string, palette?: unknown) => Record<string, string>)(mode, palette);
+      expect(contrast(c.text, c.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c['on-accent'], c.accent)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
