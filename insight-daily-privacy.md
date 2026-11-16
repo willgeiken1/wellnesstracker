@@ -2,11 +2,11 @@
 
 _Effective November 12, 2026_
 
-Insight Wellness is an iPhone app for logging workouts, food, body measurements and recovery. This policy explains what the app handles, where it goes and the choices you have.
+Insight Wellness is an iPhone and Android app for logging workouts, food, body measurements and recovery. This policy explains what the app handles, where it goes and the choices you have.
 
-## What stays on your iPhone
+## What stays on your phone
 
-Everything you log is saved on your iPhone first. Data Insight Wellness reads from Apple Health always stays on your iPhone. It is never synced to our servers, never sent to AI services or analytics, and never used for advertising.
+Everything you log is saved on your phone first. Data Insight Wellness reads from Apple Health always stays on your iPhone. It is never synced to our servers, never sent to AI services or analytics, and never used for advertising.
 
 ## If you create an account
 
@@ -14,7 +14,7 @@ We collect your email address and password to sign you in. Your password is hand
 
 ## Apple Health
 
-Only if you allow it. Insight Wellness reads your steps, active calories, exercise minutes, workouts, heart rate, resting heart rate, heart rate variability, sleep stages and time asleep, weight, body fat, VO2 max, water and mindful minutes to show your trends and daily Score. It does not write to Apple Health. You can change this at any time in the Health app or in iPhone Settings.
+On iPhone, and only if you allow it. Insight Wellness reads your steps, active calories, exercise minutes, workouts, heart rate, resting heart rate, heart rate variability, sleep stages and time asleep, weight, body fat, VO2 max, water and mindful minutes to show your trends and daily Score. It does not write to Apple Health. You can change this at any time in the Health app or in iPhone Settings. The Android app doesn't read Health Connect or any other health data on your phone.
 
 ## Oura
 
@@ -42,11 +42,11 @@ We don't sell your data, show ads, use it for advertising or track you across ot
 
 ## Your choices
 
-You can edit or delete anything you log, delete a date range, export your data, and remove Apple Health access. You can disconnect Oura in Settings, which deletes their sign-in tokens and the data Insight Wellness stored from them; you can also remove Insight Wellness's access in your Oura account. You can delete your account in Settings, which permanently removes your account and everything stored with it, including Oura data and tokens. Signing out leaves the copy on your iPhone until you erase it.
+You can edit or delete anything you log, delete a date range, export your data, and remove Apple Health access on iPhone. You can disconnect Oura in Settings, which deletes their sign-in tokens and the data Insight Wellness stored from them; you can also remove Insight Wellness's access in your Oura account. You can delete your account in Settings, or by email as set out on [Delete your Insight Wellness account](insight-wellness-delete-account). Deleting it permanently removes your account and everything stored with it, including Oura data and tokens. Signing out leaves the copy on your phone until you erase it.
 
 ## How long we keep data
 
-Until you delete it or delete your account.
+Until you delete it or delete your account. Crash reports already sent to Sentry and usage events already sent to PostHog aren't removed when you delete your account. Sentry keeps crash reports for **[Will to confirm]** and PostHog keeps usage events for **[Will to confirm]**.
 
 ## Children
 

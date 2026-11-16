@@ -66,3 +66,11 @@ test('the deletion page says what is not deleted, matching the privacy policy', 
   const policy = readFileSync(join(__dirname, '../../insight-daily-privacy.md'), 'utf8');
   for (const service of ['Sentry', 'PostHog']) expect(policy).toMatch(service);
 });
+
+test('the privacy policy covers Android and agrees with the deletion page', () => {
+  const policy = readFileSync(join(__dirname, '../../insight-daily-privacy.md'), 'utf8');
+  expect(policy).toMatch(/iPhone and Android app/);
+  expect(policy).toMatch(/Android app doesn't read Health Connect/);
+  expect(policy).toContain('(insight-wellness-delete-account)');
+  expect(policy).toMatch(/sent to Sentry and usage events already sent to PostHog aren't removed when you delete your account/);
+});

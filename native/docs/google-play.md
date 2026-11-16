@@ -71,7 +71,7 @@ Source: support.google.com/googleplay/android-developer/answer/14738291
 
 ## Other App content items
 
-- Privacy policy URL: https://willgeiken1.github.io/wellnesstracker/insight-daily-privacy. **Before Play submission it needs Android wording**: it says "iPhone app" and "your iPhone" throughout, and Apple Health should read as iPhone only. Needs Will's yes, since it changes the published policy.
+- Privacy policy URL: https://willgeiken1.github.io/wellnesstracker/insight-daily-privacy. Android wording is drafted (iPhone and Android app; Apple Health iPhone only; no Health Connect; deletion page linked; Sentry and PostHog retention left for Will to fill in). It goes live only when Will merges it.
 - Ads: **No ads**.
 - App access: sign-in required; give Google the demo account (same as Apple's, LT-3).
 - Content rating: IARC questionnaire, expected Teen per the plan (13+).
