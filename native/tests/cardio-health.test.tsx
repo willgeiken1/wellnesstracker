@@ -42,6 +42,32 @@ describe('this week from Apple Health', () => {
     expect(read.workouts.map(w => w.status)).toEqual(['counted', 'counted']);
     expect(read.minutes).toBe(50);
   });
+  test('a separate walk the same day as a shorter treadmill session counts on its own', () => {
+    const read = healthWeek([workout('walk', 'walk', 13, 30)], [row('cardio_sessions', { day: '2026-11-13', kind: 'treadmill', duration_ms: 1_200_000 })], [], '2026-11-14');
+    expect(read.workouts.map(w => w.status)).toEqual(['counted']);
+    expect(read.minutes).toBe(30);
+  });
+  test('one Insight session hides only one Health workout, the closest in length', () => {
+    const read = healthWeek([
+      workout('morning', 'run', 13, 21, { start: at(13, 7) }),
+      workout('evening', 'run', 13, 19, { start: at(13, 18) }),
+    ], [row('cardio_sessions', { day: '2026-11-13', kind: 'treadmill', duration_ms: 1_200_000 })], [], '2026-11-14');
+    expect(read.workouts.filter(w => w.status === 'logged')).toHaveLength(1);
+    expect(read.minutes).toBe(read.workouts.find(w => w.status === 'counted')!.minutes);
+  });
+  test('two Insight sessions and two watch recordings of them pair up one to one', () => {
+    const sessions = [
+      { ...row('cardio_sessions', { day: '2026-11-13', kind: 'treadmill', duration_ms: 1_200_000 }), id: 'short' },
+      { ...row('cardio_sessions', { day: '2026-11-13', kind: 'treadmill', duration_ms: 3_600_000 }), id: 'long' },
+    ];
+    const read = healthWeek([workout('a', 'walk', 13, 22), workout('b', 'run', 13, 58), workout('c', 'walk', 13, 40)], sessions, [], '2026-11-14');
+    expect(Object.fromEntries(read.workouts.map(w => [w.id, w.status]))).toEqual({ a: 'logged', b: 'logged', c: 'counted' });
+    expect(read.minutes).toBe(40);
+  });
+  test('a session with no usable length hides nothing', () => {
+    const read = healthWeek([workout('walk', 'walk', 13, 30)], [row('cardio_sessions', { day: '2026-11-13', kind: 'treadmill', duration_ms: null })], [], '2026-11-14');
+    expect(read.workouts.map(w => w.status)).toEqual(['counted']);
+  });
   test('the week starts at local midnight on Monday', () => {
     expect(mondayOf(at(14, 15))).toEqual(new Date(2026, 10, 9));
     expect(mondayOf(new Date(2026, 10, 9, 0, 5))).toEqual(new Date(2026, 10, 9));
