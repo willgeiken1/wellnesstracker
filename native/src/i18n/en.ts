@@ -778,6 +778,7 @@ export const en = {
   deleteAccountBackup: 'Save a backup first', deleteAccountBackupDone: 'Share sheet closed. Check that the backup is saved in Files.', deleteAccountBackupFailed: 'The backup could not be saved. Try again.',
   deleteAccountTypeLabel: 'Type DELETE to confirm', deleteAccountConfirm: 'Delete permanently', deleteAccountKeep: 'Keep my account',
   deleteAccountFailed: 'Your account was not deleted. Check your connection and try again.',
+  deleteAccountUncertain: 'We couldn\'t confirm whether your account was deleted, so nothing on this phone was erased. Check your connection and tap Delete permanently again; if the account is already gone, that finishes erasing this phone.',
   retrySignOut: 'Finish signing out', recoveryFailed: 'Recovery did not finish. The app is still locked. Try again.',
   localError: 'Local data is unavailable. Please restart the app.', preferenceError: 'Preferences could not be saved. Please try again.',
   signOutFailed: 'Sign-out did not finish. Some local data may already have been erased. Try again now to finish signing out.', backWelcome: 'Back to Welcome',
