@@ -43,6 +43,8 @@ export function SyncBadge({
   const label =
     status === "offline"
       ? t("offlineSaved")
+      : status === "attention"
+        ? t("attentionSaved")
       : local
         ? t("savedPhone")
         : busy
@@ -65,7 +67,7 @@ export function SyncBadge({
     >
       <Line
         size={16}
-        name={status === "offline" ? "cloud-off" : "check"}
+        name={status === "offline" || status === "attention" ? "cloud-off" : "check"}
         color={colors["text-muted"]}
       />
       <ThemedText accessibilityLiveRegion="polite" muted variant="caption">

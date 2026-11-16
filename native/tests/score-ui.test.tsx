@@ -239,7 +239,7 @@ test('a weight change that could not be saved stays on screen and says it was no
   expect(screen.queryByTestId('score-unsaved')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Raise the weight of Recovery' }));
   expect(within(screen.getByTestId('score-detail-recovery')).getByText('Weight: 30')).toBeTruthy();
-  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you close Insight.");
+  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you leave this screen.");
   await fireEvent.press(screen.getByRole('button', { name: 'Raise the weight of Recovery' }));
   expect(local).toHaveBeenCalledTimes(2);
   expect(screen.queryByTestId('score-unsaved')).toBeNull();

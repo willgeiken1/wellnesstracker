@@ -119,6 +119,25 @@ test('a refusal a retry can fix reads as offline; a refusal it cannot fix needs 
  await expect(transport.pull('sets','0',100)).rejects.toBeInstanceOf(SyncAttention);
  fixture.query.limit.mockResolvedValueOnce({error:{code:'PGRST301',message:'fixture private detail'},status:401} as never);
  await expect(transport.pull('sets','0',100)).rejects.toThrow('Sync unavailable.');
+ // No list at all is what a Wi-Fi sign-in page or an empty reply looks like: offline, not the server's fault.
  fixture.rpc.mockResolvedValueOnce({data:null,error:null,status:200} as never);
+ await expect(transport.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
+ fixture.query.limit.mockResolvedValueOnce({data:null,error:null,status:204} as never);
+ await expect(transport.pull('sets','0',100)).rejects.toThrow('Sync unavailable.');
+ // Something in the way (a proxy, a sign-in page) refuses without a database error code: also offline.
+ for(const [error,status] of [[{message:'<html>sign in</html>'},200],[{message:'Forbidden'},403],[{message:'Proxy'},407],[{code:'',message:''},404]] as const){
+  fixture.rpc.mockResolvedValueOnce({error,status} as never);
+  await expect(transport.push([syntheticRow()])).rejects.toThrow('Sync unavailable.');
+ }
+ // A list of the wrong length, an acknowledgment or pulled row that fails its checks, or a row on this phone
+ // that fails them, repeats on every retry: attention.
+ fixture.rpc.mockResolvedValueOnce({data:[],error:null,status:200} as never);
  await expect(transport.push([syntheticRow()])).rejects.toBeInstanceOf(SyncAttention);
+ const plans=new SupabaseTransport(fixture.client,OWNER_A,{syncedV1Columns:true});
+ const invalid={...syntheticRow('plans'),data:{mode:'invalid'}};
+ fixture.rpc.mockResolvedValueOnce({data:[invalid],error:null,status:200} as never);
+ await expect(plans.push([{...invalid,data:{mode:'rotation'}}])).rejects.toBeInstanceOf(SyncAttention);
+ fixture.query.limit.mockResolvedValueOnce({data:[{...invalid,mode:'invalid',server_seq:'1'}],error:null,status:200} as never);
+ await expect(plans.pull('plans','0',100)).rejects.toBeInstanceOf(SyncAttention);
+ await expect(plans.push([invalid])).rejects.toBeInstanceOf(SyncAttention);
 });

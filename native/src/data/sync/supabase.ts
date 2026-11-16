@@ -13,11 +13,18 @@ export class SupabaseTransport implements Transport {
     catch { throw new Error('Sync unavailable.'); }
   }
 
-  /** A refusal a retry can fix (no connection, server trouble, an expired sign-in, rate limits) is offline;
-   * any other refusal (a missing table or function, a permission or a bad request) needs attention. */
+  /** Only a refusal that the database itself gave (a 4xx with a PostgREST or Postgres error code: a missing
+   * table or function, a permission or a rejected row) needs attention. Anything else is treated as offline,
+   * because a retry can fix it: no connection, server trouble, an expired sign-in, rate limits, or a reply from
+   * something in the way, like a Wi-Fi sign-in page or a proxy. */
   private refused(status: number | undefined, code: string | undefined): Error {
-    const transient = !status || status >= 500 || [401, 408, 429].includes(status) || code === 'PGRST301';
-    return transient ? new Error('Sync unavailable.') : new SyncAttention();
+    const fromDatabase = !!status && status >= 400 && status < 500 && ![401, 407, 408, 429].includes(status)
+      && !!code && /^(PGRST\d{3}|[0-9A-Z]{5})$/.test(code) && code !== 'PGRST301';
+    return fromDatabase ? new SyncAttention() : new Error('Sync unavailable.');
+  }
+  /** A row this phone holds, or a reply that parsed but fails its checks, fails the same way on every retry. */
+  private checked<T>(read: () => T): T {
+    try { return read(); } catch { throw new SyncAttention(); }
   }
 
   private async checkOwner() {
@@ -28,16 +35,18 @@ export class SupabaseTransport implements Transport {
   async push(rows: Row[]) {
     await this.checkOwner();
     for (const row of rows) {
-      validateRow(row);
+      this.checked(() => validateRow(row));
       if (row.owner_id !== this.owner) throw new Error('Sync account changed.');
     }
     const payload = rows.map(row=>pushRow(projectSyncRow(row,this.syncFlags)));
     const { data, error, status } = await this.request(() => this.client.rpc('sync_push', { rows: payload }));
     if (error?.code === 'P2001') throw new ProvenanceConflict();
     if (error) throw this.refused(status, error.code);
-    if (!Array.isArray(data) || data.length !== rows.length) throw new SyncAttention();
+    // No list at all is what a sign-in page or an empty reply looks like; a list of the wrong length is the server's.
+    if (!Array.isArray(data)) throw new Error('Sync unavailable.');
+    if (data.length !== rows.length) throw new SyncAttention();
     return data.map((value,index) => {
-      const accepted = projectSyncRow(fromAcknowledgment(projectSyncRow(value as Row,this.syncFlags)),this.syncFlags);
+      const accepted = this.checked(() => projectSyncRow(fromAcknowledgment(projectSyncRow(value as Row,this.syncFlags)),this.syncFlags));
       if (accepted.owner_id !== this.owner || accepted.table !== rows[index].table || accepted.id !== rows[index].id) throw new SyncAttention();
       return accepted;
     });
@@ -53,7 +62,7 @@ export class SupabaseTransport implements Transport {
     const { data, error, status } = await this.request(() => this.client.from(table).select(fields)
       .eq('owner_id', this.owner).gt('server_seq', after).order('server_seq', { ascending: true }).limit(limit));
     if (error) throw this.refused(status, error.code);
-    if (!Array.isArray(data)) throw new SyncAttention();
-    return (data as unknown as Record<string, unknown>[]).map(row => fromWire(table, row, syncFields(table,this.syncFlags)));
+    if (!Array.isArray(data)) throw new Error('Sync unavailable.');
+    return this.checked(() => (data as unknown as Record<string, unknown>[]).map(row => fromWire(table, row, syncFields(table,this.syncFlags))));
   }
 }

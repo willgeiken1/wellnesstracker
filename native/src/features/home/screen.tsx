@@ -154,9 +154,9 @@ export function Home() {
   // once and a later edit here cannot overwrite them.
   const focused = useFocused();
   const [wasFocused, setWasFocused] = useState(focused);
-  if (focused !== wasFocused) { setWasFocused(focused); if (focused) setLayout({ repo, tiles: loadTiles(repo) }); }
-  // Home still shows the new layout this session if the local write fails, and the edit sheet says it was not kept.
+  // Home still shows the new layout until it is left if the local write fails, and the edit sheet says it was not kept.
   const [unsaved, setUnsaved] = useState(false);
+  if (focused !== wasFocused) { setWasFocused(focused); if (focused) { setLayout({ repo, tiles: loadTiles(repo) }); setUnsaved(false); } }
   const change = (next: HomeTiles) => {
     setLayout({ repo, tiles: next });
     try { saveTiles(repo, next); setUnsaved(false); } catch { setUnsaved(true); }

@@ -111,7 +111,7 @@ test('a layout change that could not be saved still shows, and the sheet says it
   expect(screen.queryByTestId('home-edit-unsaved')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
   expect(screen.queryByTestId('home-map')).toBeNull();
-  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you close Insight.");
+  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you leave this screen.");
   // The next change saves the whole layout, the earlier one included, and the warning goes.
   await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
   expect(local).toHaveBeenCalledTimes(2);
