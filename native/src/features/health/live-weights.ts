@@ -17,7 +17,7 @@ export function setHealthWeighIns(owner: string, rows: readonly Row[]) {
   if (rows.length) byOwner.set(owner, rows); else byOwner.delete(owner);
   notify();
 }
-/** Forget every account's readings, as on sign-out. */
+/** Forget every account's readings. Readings are kept per account, so another account never sees them. */
 export function clearHealthWeighIns() { byOwner.clear(); notify(); }
 
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };

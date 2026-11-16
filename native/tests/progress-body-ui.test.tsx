@@ -4,6 +4,7 @@ import Progress from '../src/app/(tabs)/progress';
 import { memoryRepository } from './workout-repository';
 const mockRepository=memoryRepository();
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:mockRepository})}));
+jest.mock('../src/features/home/use-focused',()=>({useFocused:()=>true}));
 test('Progress opens Body and keeps Photos and Goals in their own segments',async()=>{
  await render(<ThemeProvider><Progress/></ThemeProvider>);
  expect(screen.getByRole('button',{name:'Log weigh-in'})).toBeTruthy();

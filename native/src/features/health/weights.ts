@@ -34,6 +34,8 @@ export function forgetStoredWeights(repo: Repository): number {
   return removed;
 }
 
+let reads = 0;
+
 /** Local midnight `IMPORT_DAYS` ago, so a read covers whole days. */
 export function importStart(now = new Date()): Date {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -45,10 +47,13 @@ export function importStart(now = new Date()): Date {
  * never saves them. `live` is asked after every wait: once it says no (the page closed, or the account changed
  * or signed out) nothing is kept. Returns how many readings Apple Health gave. */
 export async function refreshWeights(repo: Repository, source: HealthSource | null, now = new Date(), live: () => boolean = () => true): Promise<number> {
-  forgetStoredWeights(repo);
+  // Clearing old rows must never stop the read: if it fails, it is tried again on the next visit.
+  try { forgetStoredWeights(repo); } catch { /* next visit */ }
+  // Body, Home and Settings can each start a read; only the newest one is kept.
+  const read = ++reads;
   if (!source || await source.access() !== 'asked' || !live()) return 0;
   const samples = await source.weights(importStart(now));
-  if (!live()) return 0;
+  if (!live() || read !== reads) return 0;
   const rows = toWeighIns(repo.owner, samples, now);
   setHealthWeighIns(repo.owner, rows);
   return rows.length;

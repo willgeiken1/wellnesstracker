@@ -12,6 +12,7 @@ import { tokens } from '../../design/tokens';
 import { appleHealth } from '../health/apple';
 import { useHealthWeighIns } from '../health/live-weights';
 import { refreshWeights } from '../health/weights';
+import { useFocused } from '../home/use-focused';
 import { readProfile, today } from '../onboarding/model';
 import { Panel } from '../workout/primitives';
 import { useWorkoutStore } from '../workout/use-workout';
@@ -23,7 +24,8 @@ export function Body({repository}:{repository:Repository}) {
   const repo=facade.repo,unit=readProfile(repo).unit;
   // Once Apple Health is connected, opening Body reads its weigh-ins again. They are held in memory, never saved,
   // and it never prompts from here.
-  useEffect(()=>{let live=true;void refreshWeights(repo,appleHealth(),new Date(),()=>live).catch(()=>{});return()=>{live=false;};},[repo]);
+  const focused=useFocused();
+  useEffect(()=>{if(!focused)return;let live=true;void refreshWeights(repo,appleHealth(),new Date(),()=>live).catch(()=>{});return()=>{live=false;};},[repo,focused]);
   const [range,setRange]=useState<BodyRange>(30),[entry,setEntry]=useState(false),[saved,setSaved]=useState(false),[deleteFailed,setDeleteFailed]=useState(false);
   const [showAll,setShowAll]=useState(false);
   const healthWeights=useHealthWeighIns(repo);

@@ -7,6 +7,7 @@ import { friendlyDay, saveWeighIn } from '../src/features/body/model';
 import { clearHealthWeighIns, setHealthWeighIns } from '../src/features/health/live-weights';
 import { toWeighIns } from '../src/features/health/weights';
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
+jest.mock('../src/features/home/use-focused',()=>({useFocused:()=>true}));
 afterEach(()=>{jest.useRealTimers();clearHealthWeighIns();});
 test('days read as people say them, with the year only when it is not this year',()=>{
  const now=new Date(2026,10,13);
@@ -152,6 +153,18 @@ test('a stale delete confirmation shows failure when its row is already deleted'
  await act(()=>{repo.remove('weigh_ins',row.id);});
  await act(()=>{confirm();});
  expect(screen.getByRole('alert')).toHaveTextContent('Could not delete this weigh-in. Try again.');alert.mockRestore();
+});
+test('Apple Health weigh-ins held in memory show on Body beside typed ones',async()=>{
+ jest.useFakeTimers({now:new Date(2026,0,10,12),doNotFake:['setImmediate','queueMicrotask','nextTick']});
+ const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});
+ saveWeighIn(repo,80,'kg','2026-01-08');
+ await render(<Body repository={repo}/>,{wrapper});
+ expect(screen.getByText('Weigh-ins').parent).toHaveTextContent('1',{exact:false});
+ // Made-up reading, as a read from Apple Health would hold it.
+ await act(()=>{setHealthWeighIns(repo.owner,toWeighIns(repo.owner,[{id:'AAAAAAAA-0000-4000-8000-000000000008',at:new Date(2026,0,9,7),kg:79.6}],new Date(2026,0,10)));});
+ expect(screen.getByText('Weigh-ins').parent).toHaveTextContent('2',{exact:false});
+ // It is never offered for deleting here: it belongs to Apple Health.
+ expect(screen.queryByTestId('body-delete-aaaaaaaa-0000-4000-8000-000000000008')).toBeNull();
 });
 test('Log weigh-in never starts from an Apple Health reading, so a Health value cannot be saved as a typed one',async()=>{
  const repo=memoryRepository();repo.save('profile',{weight_unit:'kg'});

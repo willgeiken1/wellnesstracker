@@ -107,3 +107,30 @@ test('a read that finishes after the page or account has gone keeps nothing', as
     expect(healthWeighIns(repo.owner)).toHaveLength(0);
   } finally { sqlite.close(); }
 });
+
+test('when two reads overlap, only the newer one is kept', async () => {
+  const { db, repo: fixture, sqlite } = await localDatabase();
+  try {
+    const repo = new Repository(db, 'guest', fixture.device, randomUUID);
+    let finishOld: (samples: WeightSample[]) => void = () => {};
+    const slow: HealthSource = { access: async () => 'asked', request: async () => {}, steps: async () => 0, sleep: async () => [],
+      weights: () => new Promise(resolve => { finishOld = resolve; }) };
+    const older = refreshWeights(repo, slow, now);
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await refreshWeights(repo, source('asked', [sample(B, 11, 80.1)]), now)).toBe(1);
+    finishOld([sample(A, 10, 80.4)]);
+    expect(await older).toBe(0);
+    expect(healthWeighIns(repo.owner).map(row => row.id)).toEqual([B.toLowerCase()]);
+  } finally { sqlite.close(); }
+});
+
+test('if clearing old rows fails, the read still happens', async () => {
+  const { db, repo: fixture, sqlite } = await localDatabase();
+  try {
+    const repo = new Repository(db, 'guest', fixture.device, randomUUID);
+    storedHealthRow(repo, A, 80.4);
+    jest.spyOn(repo, 'remove').mockImplementation(() => { throw new Error('synthetic'); });
+    expect(await refreshWeights(repo, source('asked', [sample(B, 11, 80.1)]), now)).toBe(1);
+    expect(healthWeighIns(repo.owner)).toHaveLength(1);
+  } finally { sqlite.close(); }
+});
