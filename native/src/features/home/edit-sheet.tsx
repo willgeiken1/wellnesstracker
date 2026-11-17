@@ -31,15 +31,15 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
 }
 
 /** Edit Home: what is on Home (reorder, resize, remove) and what can be added. Every change applies at once; Done only closes. */
-export function EditHome({ visible, tiles, onChange, onClose }: { visible: boolean; tiles: HomeTiles; onChange: (next: HomeTiles) => void; onClose: () => void }) {
-  const { colors } = useTheme();
+export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }: { visible: boolean; tiles: HomeTiles; unsaved?: boolean; onChange: (next: HomeTiles) => void; onClose: () => void }) {
+  const { colors, reduceMotion } = useTheme();
   // Health tiles are offered only where Apple Health or an account's Oura connection can exist. Without Apple Health
   // (Android, until Health Connect comes) only the Steps and Sleep tiles Oura can fill are offered.
   const healthHere = useMemo(() => appleHealth() ? HEALTH_TILES : oura() ? RING_TILES : [], []);
   const rest = offHome(tiles).filter(id => !HEALTH_TILES.includes(id) || healthHere.includes(id));
   const row = { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], padding: tokens.spacing[2], borderRadius: 18, backgroundColor: colors.surface } as const;
   const name = (id: TileId) => t(TILE_NAME[id]);
-  return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+  return <Modal testID="home-edit-sheet" visible={visible} animationType={reduceMotion ? 'none' : 'slide'} presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'left', 'right', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: tokens.spacing[3] }}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1, fontWeight: '600' }}>{t('homeEditTitle')}</ThemedText>
@@ -49,6 +49,7 @@ export function EditHome({ visible, tiles, onChange, onClose }: { visible: boole
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: tokens.spacing[3], paddingTop: 0, gap: tokens.spacing[1] }}>
+        {unsaved && <ThemedText testID="home-edit-unsaved" accessibilityRole="alert" variant="caption" style={{ color: colors.danger }}>{t('unsavedHere')}</ThemedText>}
         <ThemedText variant="headline" accessibilityRole="header" style={{ fontWeight: '600' }}>{t('homeEditOn')}</ThemedText>
         {!tiles.order.length && <ThemedText muted variant="caption">{t('homeEditEmpty')}</ThemedText>}
         {tiles.order.map((id, index) => {

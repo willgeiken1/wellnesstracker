@@ -9,9 +9,10 @@ const KJ = 4.184;
 export function readWeights(store: WorkoutStore): Weights {
   try { return cleanWeights(store.repo.localGet<unknown>(SCORE_WEIGHTS_KEY)); } catch { return cleanWeights(null); }
 }
-/** Saves the person's weights on this phone. Only the three weights: never a score or a health value. */
-export function saveWeights(store: WorkoutStore, weights: Weights): void {
-  try { store.repo.localSave(SCORE_WEIGHTS_KEY, weights); } catch { /* the screen keeps the change for this visit */ }
+/** Saves the person's weights on this phone. Only the three weights: never a score or a health value. False when
+ * the save failed, so the screen can say the change shows for now but was not kept. */
+export function saveWeights(store: WorkoutStore, weights: Weights): boolean {
+  try { store.repo.localSave(SCORE_WEIGHTS_KEY, weights); return true; } catch { return false; }
 }
 function workoutGoal(store: WorkoutStore): number {
   try { return new PlanStore(store.repo).read().daysPerWeek; } catch { return 3; }

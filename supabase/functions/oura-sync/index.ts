@@ -2,6 +2,7 @@
 // Body: { "days": 14 } -> how far back to fetch (the first sync uses 120).
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { connectionMark, saveDays } from "../_shared/oura-store.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -42,12 +43,16 @@ async function accessToken(userId: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`Oura login expired. Reconnect Oura in the app. (${res.status})`);
   const n = await res.json();
-  await admin.from("oura_tokens").update({
+  // Oura has already used up the old refresh token, so the new one must be kept: try the save twice.
+  const fresh = {
     access_token: n.access_token,
     refresh_token: n.refresh_token ?? t.refresh_token,
     expires_at: new Date(Date.now() + (n.expires_in ?? 86400) * 1000).toISOString(),
     updated_at: new Date().toISOString(),
-  }).eq("user_id", userId);
+  };
+  let saved = await admin.from("oura_tokens").update(fresh).eq("user_id", userId);
+  if (saved.error) saved = await admin.from("oura_tokens").update(fresh).eq("user_id", userId);
+  if (saved.error) throw new Error("Couldn't save the new Oura login. Reconnect Oura in the app if this keeps happening.");
   return n.access_token;
 }
 
@@ -67,6 +72,9 @@ async function fetchAll(path: string, token: string, start: string, end: string)
 }
 
 async function syncUser(userId: string, daysBack: number) {
+  // The connection this sync belongs to. If it is disconnected while Oura is being read, nothing is kept.
+  const mark = await connectionMark(admin, userId);
+  if (!mark) throw new Error("Oura isn't connected");
   const token = await accessToken(userId);
   const start = isoDay(new Date(Date.now() - daysBack * 86400_000));
   const end = isoDay(new Date(Date.now() + 86400_000));
@@ -104,12 +112,9 @@ async function syncUser(userId: string, daysBack: number) {
 
   const now = new Date().toISOString();
   const rows = Object.values(days).filter((d: any) => !purged(d.date)).map((d: any) => ({ user_id: userId, day: d.date, data: d, updated_at: now }));
-  if (rows.length) {
-    const { error } = await admin.from("oura_days").upsert(rows, { onConflict: "user_id,day" });
-    if (error) throw new Error(error.message);
-  }
-  await admin.from("oura_connections").update({ last_sync: now, last_error: null }).eq("user_id", userId);
-  return rows.length;
+  const kept = await saveDays(admin, userId, mark, rows);
+  await admin.from("oura_connections").update({ last_sync: now, last_error: null }).eq("user_id", userId).eq("connected_at", mark);
+  return kept;
 }
 
 Deno.serve(async (req) => {

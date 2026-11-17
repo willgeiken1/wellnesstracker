@@ -26,7 +26,7 @@ function ProfileCard() {
   const email = auth.session?.user.email ?? '';
   const place = auth.demo ? t('settingsExample') : auth.phoneOnly ? t('settingsOnPhone') : auth.session ? (email || t('settingsSignedIn')) : t('settingsNotSignedIn');
   const detail = auth.demo ? t('settingsExampleBody') : auth.phoneOnly ? t('settingsOnPhoneBody') : auth.session
-    ? t(auth.syncStatus === 'syncing' ? 'syncBusy' : auth.syncStatus === 'offline' ? 'syncOffline' : auth.pending > 0 ? 'syncPending' : auth.conflicts > 0 ? 'syncConflictStatus' : 'syncIdle') : '';
+    ? t(auth.syncStatus === 'syncing' ? 'syncBusy' : auth.syncStatus === 'offline' ? 'syncOffline' : auth.syncStatus === 'attention' ? 'syncAttention' : auth.pending > 0 ? 'syncPending' : auth.conflicts > 0 ? 'syncConflictStatus' : 'syncIdle') : '';
   const title = name || place, lines = name ? [place, detail] : [detail];
   const sub = lines.filter(Boolean).join(' · ');
   const initial = (name || email).charAt(0).toUpperCase();

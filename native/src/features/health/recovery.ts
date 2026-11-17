@@ -13,10 +13,12 @@ export type Recovery = {
   vo2Max: { value: number; at: Date } | null;
 };
 const MINUTE = 60_000;
-const STAGES: readonly SleepStage[] = ['deep', 'core', 'rem'];
+/** When devices give one moment different stages, it counts once, under the first stage here. Core comes first
+ * because it is the most common stage, so a disagreement never adds deep or REM sleep that may not have happened. */
+const STAGES: readonly SleepStage[] = ['core', 'rem', 'deep'];
 
-/** Last night by stage, inside a window. Each stage counts once across devices, and time any device marked awake
- * is taken out of every stage. Plain asleep counts only where no device recorded a stage. Awake is counted from
+/** Last night by stage, inside a window. Every moment counts once across devices and stages, and time any device
+ * marked awake is taken out of every stage. Plain asleep counts only where no device recorded a stage. Awake is counted from
  * the first moment asleep to the last, so lying awake before or after sleep is left out. Null with no sleep. */
 export function nightStages(spans: readonly SleepSpan[], from: Date, to: Date): Night | null {
   const a = from.getTime(), b = to.getTime();
@@ -26,7 +28,12 @@ export function nightStages(spans: readonly SleepSpan[], from: Date, to: Date): 
   const [first, last] = [all[0][0], all[all.length - 1][1]];
   const minutes = (ranges: readonly (readonly [number, number])[], minus: readonly (readonly [number, number])[]) => Math.round((length(ranges) - overlap(ranges, minus)) / MINUTE);
   const night = { awake: Math.round(length(union(spans.filter(span => span.awake), first, last)) / MINUTE) } as Night;
-  for (const stage of STAGES) night[stage] = minutes(union(asleep.filter(span => span.stage === stage), a, b), awake);
+  let claimed = awake;
+  for (const stage of STAGES) {
+    const ranges = union(asleep.filter(span => span.stage === stage), a, b);
+    night[stage] = minutes(ranges, claimed);
+    claimed = union([...claimed, ...ranges].map(([start, end]) => ({ start: new Date(start), end: new Date(end) })), a, b);
+  }
   const staged = union(spans.filter(span => span.awake || span.stage), a, b);
   night.asleep = minutes(union(asleep.filter(span => !span.stage), a, b), staged);
   return night;
@@ -41,12 +48,17 @@ export async function readRecovery(source: HealthSource | null, days: readonly s
   if (!source || !days.length || await source.access() !== 'asked') return null;
   const cap = (date: Date) => new Date(Math.min(date.getTime(), now.getTime()));
   const today = days[days.length - 1], night = nightOf(today);
-  const daily = (metric: 'restingHeartRate' | 'hrv') => settle(() => Promise.all(days.map(async day => {
-    const from = dayStart(day), to = cap(dayEnd(day));
-    if (to <= from) return null;
-    const read = await source.heart(metric, from, to);
-    return read && finite(read.average) ? Math.round(read.average) : null;
-  })));
+  // Each day stands alone: a day that cannot be read is a gap, and the days that could be read still show.
+  // The part is null only when no day at all could be read.
+  const daily = async (metric: 'restingHeartRate' | 'hrv'): Promise<(number | null)[] | null> => {
+    const reads = await Promise.all(days.map(async day => {
+      const from = dayStart(day), to = cap(dayEnd(day));
+      if (to <= from) return { value: null };
+      try { const read = await source.heart(metric, from, to); return { value: read && finite(read.average) ? Math.round(read.average) : null }; }
+      catch { return null; }
+    }));
+    return reads.some(read => read !== null) ? reads.map(read => read?.value ?? null) : null;
+  };
   const [spans, restingHeartRate, hrv, heartToday, vo2Max] = await Promise.all([
     settle(() => source.sleep(night.from, cap(night.to))),
     daily('restingHeartRate'),

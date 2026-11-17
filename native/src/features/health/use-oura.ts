@@ -53,10 +53,13 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     await syncNow(from, status);
   });
   // Check again also tries a refused sign-in: a brief outage at Oura looks the same, and a refresh that works clears it.
+  // A sync that fails may have just found Oura's login expired, so the card is read again either way; the
+  // failure still shows. `check` draws nothing once the page has closed.
   const refresh = () => run(async from => {
     const status = await check(from);
     if (!status?.connected) return;
-    await syncNow(from, status);
+    try { await syncNow(from, status); }
+    catch (cause) { await check(from).catch(() => undefined); throw cause; }
     if (status.expired) await check(from);
   });
   const disconnect = () => run(async from => { await from.disconnect(); await check(from); });

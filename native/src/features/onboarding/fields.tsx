@@ -72,19 +72,19 @@ export function ProfileFields({ value, onChange, settings = false, errors }: { v
   </>;
 }
 
-function Toggle({ label, value, onChange, first = false }: { label: string; value: boolean; onChange: (value: boolean) => void; first?: boolean }) {
+function Toggle({ label, value, onChange, first = false, disabled = false }: { label: string; value: boolean; onChange: (value: boolean) => void; first?: boolean; disabled?: boolean }) {
   const { colors } = useTheme();
   return <View style={{ minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing[2],
     paddingVertical: tokens.spacing[1], borderTopWidth: first ? 0 : 1, borderTopColor: colors['surface-2'] }}>
     <ThemedText style={{ flex: 1 }}>{label}</ThemedText>
-    <Switch hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ true: colors.accent, false: colors['hair-2'] }} />
+    <Switch hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={label} disabled={disabled} accessibilityState={{ disabled, checked: value }} value={value} onValueChange={onChange} trackColor={{ true: colors.accent, false: colors['hair-2'] }} />
   </View>;
 }
-export function PreferenceFields({ value, onChange }: { value: DevicePreferences; onChange: (value: DevicePreferences) => void }) {
+export function PreferenceFields({ value, onChange, disabled = false }: { value: DevicePreferences; onChange: (value: DevicePreferences) => void; disabled?: boolean }) {
   return <Group testID="device-preferences" title={t('devicePrefs')} body={t('devicePrefsHelp')}>
     <View>
-      <Toggle first label={t('crashReportsPref')} value={value.crashReports} onChange={crashReports => onChange({ ...value, crashReports })} />
-      <Toggle label={t('analyticsPref')} value={value.analytics} onChange={analytics => onChange({ ...value, analytics })} />
+      <Toggle first disabled={disabled} label={t('crashReportsPref')} value={value.crashReports} onChange={crashReports => onChange({ ...value, crashReports })} />
+      <Toggle disabled={disabled} label={t('analyticsPref')} value={value.analytics} onChange={analytics => onChange({ ...value, analytics })} />
     </View>
   </Group>;
 }

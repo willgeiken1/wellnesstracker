@@ -229,3 +229,18 @@ describe('review fixes: the ring and the training sum', () => {
     expect(screen.getByText(/which covers your plan of 3 a week\.$/)).toBeTruthy();
   });
 });
+
+test('a weight change that could not be saved stays on screen and says it was not kept, then clears once a save works', async () => {
+  const repo = open();
+  jest.mocked(appleHealth).mockReturnValue(health());
+  const local = jest.spyOn(repo, 'localSave').mockImplementationOnce(() => { throw new Error('synthetic write failure'); });
+  await render(<ScoreDetail />, { wrapper });
+  await settle();
+  expect(screen.queryByTestId('score-unsaved')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Raise the weight of Recovery' }));
+  expect(within(screen.getByTestId('score-detail-recovery')).getByText('Weight: 30')).toBeTruthy();
+  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you leave this screen.");
+  await fireEvent.press(screen.getByRole('button', { name: 'Raise the weight of Recovery' }));
+  expect(local).toHaveBeenCalledTimes(2);
+  expect(screen.queryByTestId('score-unsaved')).toBeNull();
+});

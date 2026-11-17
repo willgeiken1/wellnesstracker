@@ -28,8 +28,10 @@ describe('Welcome',()=>{
   expect(screen.getAllByTestId('onboarding-progress-todo')).toHaveLength(2);
   expect(screen.getByRole('image',{name:t('welcomeMapLabel')})).toBeTruthy();
   for(const key of ['welcomeWorkouts','welcomeFood','welcomeHealth'] as const)expect(screen.getByText(t(key))).toBeTruthy();
-  // Services cannot be connected yet, and the screen says so.
-  expect(screen.getByText(/Connecting opens in a later update/)).toBeTruthy();
+  // Apple Health and Oura connect in v1, so the screen offers them and only says Fitbit and WHOOP come later.
+  expect(screen.getByText(t('welcomeHealthBody'))).toBeTruthy();
+  expect(t('welcomeHealthBody')).toMatch(/Apple Health/);expect(t('welcomeHealthBody')).toMatch(/Oura/);
+  expect(screen.queryByText(/Connecting opens in a later update/)).toBeNull();
  });
  test('one main button and three quieter ways in, each firing its own handler',async()=>{
   const auth=await wrap(<Welcome/>);

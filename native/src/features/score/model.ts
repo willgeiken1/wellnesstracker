@@ -28,9 +28,10 @@ export interface ScoreInput {
   workoutGoal: number;
   /** The last 7 days, oldest first; the last one is today. */
   food: FoodDay[];
-  /** Steps per day and hours asleep per night for the same 7 days, or null when there is no source. Held in memory only. */
-  steps: number[] | null;
-  sleepHours: number[] | null;
+  /** Steps per day and hours asleep per night for the same 7 days, or null when there is no source. A day with
+   * no reading is null. Held in memory only. */
+  steps: (number | null)[] | null;
+  sleepHours: (number | null)[] | null;
   /** True while last night may still be going (before noon). Until then it counts only once it reaches full marks. */
   sleepOpen?: boolean;
   weights: Weights;
@@ -112,7 +113,7 @@ export function insightScore(input: ScoreInput): Score {
 
   // Today's steps are still climbing, so only the days before today are averaged. A day with no steps at all is
   // treated as a day with no reading (the phone was not carried), not as a day of zero.
-  const walked = (input.steps ?? []).slice(0, -1).filter(n => finite(n) && n > 0);
+  const walked = (input.steps ?? []).slice(0, -1).filter((n): n is number => finite(n) && n > 0);
   const stepsAverage = walked.length ? mean(walked) : null;
   const lifted = clamp01(workouts / goal);
   const training = 100 * (stepsAverage === null ? lifted : (1 - STEPS_SHARE) * lifted + STEPS_SHARE * mean(walked.map(stepsScore)));
@@ -124,7 +125,7 @@ export function insightScore(input: ScoreInput): Score {
   // Before noon last night may not be over, so a short reading is left out rather than scored as a short night.
   const slept = input.sleepHours ?? [], lastNight = slept[slept.length - 1];
   const lastNightCounted = !input.sleepOpen || (finite(lastNight) && lastNight >= SLEEP_FULL);
-  const nights = (lastNightCounted ? slept : slept.slice(0, -1)).filter(n => finite(n) && n > 0);
+  const nights = (lastNightCounted ? slept : slept.slice(0, -1)).filter((n): n is number => finite(n) && n > 0);
   const recovery = nights.length ? 100 * mean(nights.map(sleepScore)) : null;
 
   const pillars = { training: Math.round(training), food: Math.round(food), recovery: recovery === null ? null : Math.round(recovery) };
