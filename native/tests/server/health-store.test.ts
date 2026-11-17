@@ -151,3 +151,27 @@ test('if iOS clears the Health store, the next refresh reads back as far as earl
     fresh.sqlite.close();
   } finally { main.sqlite.close(); lost.sqlite.close(); }
 });
+
+test('readings moved from an earlier version are read back after iOS clears the Health store, however old', async () => {
+  // Codex review, Nov 17: the move must record how far back the moved readings go.
+  const main = await localDatabase(), health = healthStore();
+  try {
+    const aged = { id: SAMPLE, at: new Date(2023, 0, 10, 7), kg: 80.5 };
+    const old = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags);
+    importWeights(old, [aged], new Date(2023, 0, 11, 12));
+    const other = new Repository(main.db, OWNER_B, main.repo.device, randomUUID, main.repo.syncFlags);
+    importWeights(other, [{ id: 'b1b2c3d4-0000-4000-8000-0000000000fe', at: new Date(2026, 10, 14, 7), kg: 70 }], NOW);
+    expect(moveHealthRows(main.db, health.db)).toBe(2);
+    expect(new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags, health.db).healthWeightsFrom()).toBe('2023-01-10');
+    expect(new Repository(main.db, OWNER_B, main.repo.device, randomUUID, main.repo.syncFlags, health.db).healthWeightsFrom()).toBe('2026-11-14');
+    // iOS clears the Health store; the next refresh still reaches back to January 2023.
+    expect(aged.at < importStart(NOW)).toBe(true);
+    const fresh = healthStore(), reads: Date[] = [];
+    const apple = { access: async () => 'asked' as const, weights: async (since: Date) => { reads.push(since); return [aged].filter(s => s.at >= since); } } as unknown as Parameters<typeof refreshWeights>[1];
+    const repo = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags, fresh.db);
+    expect(await refreshWeights(repo, apple, NOW)).toBe(1);
+    expect(reads[0]).toEqual(new Date(2023, 0, 10));
+    expect(repo.get('weigh_ins', SAMPLE)?.data.weight_kg).toBe(80.5);
+    fresh.sqlite.close();
+  } finally { main.sqlite.close(); health.sqlite.close(); }
+});
