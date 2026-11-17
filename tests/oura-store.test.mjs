@@ -22,6 +22,7 @@ function fakeDb(state, hooks = {}) {
           const at = (state[table] ??= []).findIndex((r) => r.user_id === row.user_id && r.day === row.day);
           if (at >= 0) state[table][at] = row; else state[table].push(row);
         }
+        await hooks.afterUpsert?.();
         return { error: null };
       },
     };
@@ -72,4 +73,26 @@ test("an already disconnected account writes nothing", async () => {
   assert.equal(await connectionMark(admin, U), null);
   assert.equal(await saveDays(admin, U, null, days), 0);
   assert.deepEqual(state.oura_days, []);
+});
+
+test("an old sync's cleanup leaves the days a newer connection's sync already saved", async () => {
+  const state = connected();
+  const newer = { user_id: U, day: "2026-11-15", data: { from: "new connection" }, updated_at: "2026-11-16T11:00:00.000001Z" };
+  // Right after the old sync writes, the person disconnects and reconnects, and the new connection's sync saves Nov 15.
+  const admin = fakeDb(state, { afterUpsert: () => {
+    disconnect(state);
+    state.oura_tokens = [{ user_id: U }];
+    state.oura_connections = [{ user_id: U, connected_at: "2026-11-16T11:00:00+00:00" }];
+    state.oura_days.push({ ...newer });
+  } });
+  assert.equal(await saveDays(admin, U, "2026-11-16T10:00:00+00:00", days), 0);
+  assert.deepEqual(state.oura_days, [newer]);
+});
+
+test("each sync's rows carry their own write stamp", async () => {
+  const state = connected(), admin = fakeDb(state);
+  await saveDays(admin, U, await connectionMark(admin, U), days);
+  const stamps = new Set(state.oura_days.map((r) => r.updated_at));
+  assert.equal(stamps.size, 1);
+  assert.match([...stamps][0], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
 });
