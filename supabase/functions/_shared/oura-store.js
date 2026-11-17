@@ -70,3 +70,85 @@ export async function saveDays(admin, userId, mark, rows) {
   if (undoError) throw new Error("Oura was disconnected during a sync, and its days couldn't be removed. Try disconnecting again.");
   return 0;
 }
+
+// When Oura takes back Insight's access (the person removed Insight in their Oura account, or Oura revoked it),
+// the Oura API agreement wants the stored Oura data gone. Insight deletes it as soon as a sync finds out, the same
+// as Disconnect, but keeps the connection row so the app says the login expired and offers Reconnect Oura. The
+// message starts with "Oura login expired" because that is what the app and the web logger read as "reconnect".
+export const REVOKED = "Oura login expired: Oura no longer allows Insight access, so the Oura days Insight stored were deleted. Reconnect Oura in the app to sync again.";
+
+/** Oura turned an access token down (HTTP 401). */
+export class OuraUnauthorized extends Error {}
+
+/** True only when Oura's token endpoint says the login itself is no good (OAuth `invalid_grant`). A wrong app key
+ * (`invalid_client`), a rate limit or an outage is not a revoke, so it never deletes anyone's days. */
+export function isRevokedGrant(status, body) {
+  return (status === 400 || status === 401) && !!body && typeof body === "object" && body.error === "invalid_grant";
+}
+
+/** Deletes what Oura no longer allows Insight to keep: the revoked login and the days this connection (or an
+ * older one) stored. A reconnect that already saved a new login and new days keeps them: only the exact revoked
+ * refresh token is deleted, and only days whose `data.conn` is this connection's mark or older (or unmarked). */
+export async function forgetRevoked(admin, userId, mark, refreshToken) {
+  const token = await admin.from("oura_tokens").delete().eq("user_id", userId).eq("refresh_token", refreshToken);
+  if (token.error) throw new Error("Oura access was removed, and its login couldn't be deleted. Disconnect Oura in the app.");
+  const days = await admin.from("oura_days").delete().eq("user_id", userId).or(`data->>conn.is.null,data->>conn.lte.${JSON.stringify(mark)}`);
+  if (days.error) throw new Error("Oura access was removed, and its days couldn't be deleted. Disconnect Oura in the app.");
+  await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
+}
+
+const usable = (t, now) => new Date(t.expires_at).getTime() > now + 120_000;
+
+/** A valid access token, refreshed first if it is about to expire, or when `force` is set because Oura turned the
+ * current one down. Oura refresh tokens are single-use, so the new one is always saved. `exchange(refreshToken)`
+ * asks Oura's token endpoint and returns its Response. If Oura says the login was revoked, the stored Oura data is
+ * deleted (forgetRevoked) and this throws REVOKED. */
+export async function accessToken(admin, userId, mark, exchange, { force = false, now = Date.now() } = {}) {
+  const { data: t } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
+  if (!t) throw new Error("Oura isn't connected");
+  if (!force && usable(t, now)) return t.access_token;
+
+  const res = await exchange(t.refresh_token);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    if (isRevokedGrant(res.status, body)) {
+      // Another sync may have just used this single-use refresh token and saved a new login: use that one.
+      const { data: latest } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
+      if (latest && latest.refresh_token !== t.refresh_token && usable(latest, now)) return latest.access_token;
+      if ((await connectionMark(admin, userId)) === mark) await forgetRevoked(admin, userId, mark, t.refresh_token);
+      throw new Error(REVOKED);
+    }
+    throw new Error(`Oura login expired. Reconnect Oura in the app. (${res.status})`);
+  }
+  const n = await res.json();
+  // Oura has already used up the old refresh token, so the new one must be kept: try the save twice.
+  const fresh = {
+    access_token: n.access_token,
+    refresh_token: n.refresh_token ?? t.refresh_token,
+    expires_at: new Date(now + (n.expires_in ?? 86400) * 1000).toISOString(),
+    updated_at: new Date(now).toISOString(),
+  };
+  let saved = await admin.from("oura_tokens").update(fresh).eq("user_id", userId);
+  if (saved.error) saved = await admin.from("oura_tokens").update(fresh).eq("user_id", userId);
+  if (saved.error) throw new Error("Couldn't save the new Oura login. Reconnect Oura in the app if this keeps happening.");
+  return n.access_token;
+}
+
+/** Runs `read(token)` with a valid token. If Oura turns the token down (OuraUnauthorized), gets a new one once and
+ * tries again. Turned down again with a login Oura has just issued means Oura no longer allows access: the stored
+ * Oura data is deleted and this throws REVOKED. */
+export async function readWithAccess(admin, userId, mark, exchange, read, opts = {}) {
+  try {
+    return await read(await accessToken(admin, userId, mark, exchange, opts));
+  } catch (e) {
+    if (!(e instanceof OuraUnauthorized)) throw e;
+  }
+  try {
+    return await read(await accessToken(admin, userId, mark, exchange, { ...opts, force: true }));
+  } catch (e) {
+    if (!(e instanceof OuraUnauthorized)) throw e;
+    const { data: t } = await admin.from("oura_tokens").select("refresh_token").eq("user_id", userId).maybeSingle();
+    if (t && (await connectionMark(admin, userId)) === mark) await forgetRevoked(admin, userId, mark, t.refresh_token);
+    throw new Error(REVOKED);
+  }
+}

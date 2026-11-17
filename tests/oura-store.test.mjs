@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { connectionMark, saveDays } from "../supabase/functions/_shared/oura-store.js";
+import { accessToken, connectionMark, forgetRevoked, isRevokedGrant, OuraUnauthorized, readWithAccess, REVOKED, saveDays } from "../supabase/functions/_shared/oura-store.js";
 
 // A made-up in-memory database with just the query shapes oura-store uses. No real Oura data.
 // `or` understands only the one filter oura-store sends: rows with no `data.conn`, or one at or before a mark.
@@ -20,7 +20,7 @@ function fakeDb(state, hooks = {}) {
       in(k, v) { within(k, v); return chain; },
       async maybeSingle() { return { data: rows()[0] ?? null, error: null }; },
       delete() {
-        const del = { eq(k, v) { eq(k, v); return del; }, in(k, v) { within(k, v); return del; },
+        const del = { eq(k, v) { eq(k, v); return del; }, in(k, v) { within(k, v); return del; }, or(expr) { ours(expr); return del; },
           then(ok) { const gone = new Set(rows()); state[table] = (state[table] ?? []).filter((r) => !gone.has(r)); return Promise.resolve({ error: null }).then(ok); } };
         return del;
       },
@@ -174,4 +174,108 @@ test("a sync whose days keep vanishing reports an error instead of success", asy
   const admin = fakeDb(state, { duringUpsert: () => { state.oura_days.push({ user_id: U, day: "2026-11-15", data: { conn: mark }, updated_at: "x" }); },
     beforeUpdate: () => { state.oura_days = state.oura_days.filter((r) => r.updated_at !== "x"); } });
   await assert.rejects(saveDays(admin, U, mark, [{ user_id: U, day: "2026-11-15", data: { steps: 1 } }]), /couldn't be saved/);
+});
+
+// Oura taking back Insight's access (LT-10, from old PR #19). Made-up tokens and days only.
+const MARK = "2026-11-16T10:00:00+00:00";
+const SOON = Date.parse("2026-11-17T12:00:00Z");
+const login = (over = {}) => ({ user_id: U, access_token: "made-up-access", refresh_token: "made-up-refresh", expires_at: "2026-11-17T11:00:00Z", ...over });
+const linked = (days = []) => ({ oura_tokens: [login()], oura_connections: [{ user_id: U, connected_at: MARK, last_error: null }], oura_days: days });
+const answer = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const revoked = () => answer(400, { error: "invalid_grant" });
+const stored = () => [{ user_id: U, day: "2026-11-15", data: { steps: 1, conn: MARK }, updated_at: "x" }, { user_id: U, day: "2026-11-14", data: { steps: 2 }, updated_at: "x" }];
+
+test("only an OAuth invalid_grant counts as Oura revoking access", () => {
+  assert.equal(isRevokedGrant(400, { error: "invalid_grant" }), true);
+  assert.equal(isRevokedGrant(401, { error: "invalid_grant" }), true);
+  // A wrong app key, a rate limit, an outage or an unreadable answer never deletes anyone's days.
+  assert.equal(isRevokedGrant(401, { error: "invalid_client" }), false);
+  assert.equal(isRevokedGrant(429, { error: "invalid_grant" }), false);
+  assert.equal(isRevokedGrant(500, null), false);
+  assert.equal(isRevokedGrant(400, "invalid_grant"), false);
+});
+
+test("a revoked login deletes the login and the stored days, and the app is told to reconnect", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), { now: SOON }), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_tokens, []);
+  assert.deepEqual(state.oura_days, []);
+  assert.equal(state.oura_connections.length, 1);
+  assert.equal(state.oura_connections[0].last_error, REVOKED);
+  // The app and the web logger read this message as "reconnect needed".
+  assert.match(REVOKED, /login expired/i);
+});
+
+test("any other refresh failure keeps the login and the stored days", async () => {
+  for (const res of [answer(401, { error: "invalid_client" }), answer(500, null), answer(429, { error: "slow down" })]) {
+    const state = linked(stored()), admin = fakeDb(state);
+    await assert.rejects(accessToken(admin, U, MARK, async () => res, { now: SOON }), /login expired/);
+    assert.equal(state.oura_tokens.length, 1);
+    assert.equal(state.oura_days.length, 2);
+    assert.equal(state.oura_connections[0].last_error, null);
+  }
+});
+
+test("a refresh token another sync just used is not a revoke: its new login is used and nothing is deleted", async () => {
+  const state = linked(stored());
+  // The other sync saves its new login while this one is still asking Oura with the old, now spent token.
+  const admin = fakeDb(state);
+  const exchange = async () => { state.oura_tokens = [login({ access_token: "made-up-new", refresh_token: "made-up-new-refresh", expires_at: "2026-11-18T12:00:00Z" })]; return revoked(); };
+  assert.equal(await accessToken(admin, U, MARK, exchange, { now: SOON }), "made-up-new");
+  assert.equal(state.oura_days.length, 2);
+  assert.equal(state.oura_tokens[0].refresh_token, "made-up-new-refresh");
+});
+
+test("a reconnect that lands during the refresh keeps its new login and days", async () => {
+  const newer = "2026-11-17T11:59:00+00:00";
+  const state = linked(stored()), admin = fakeDb(state);
+  const exchange = async () => {
+    state.oura_tokens = [login({ refresh_token: "made-up-reconnect", expires_at: "2026-11-17T12:01:00Z" })];
+    state.oura_connections = [{ user_id: U, connected_at: newer, last_error: null }];
+    state.oura_days.push({ user_id: U, day: "2026-11-16", data: { steps: 3, conn: newer }, updated_at: "y" });
+    return revoked();
+  };
+  await assert.rejects(accessToken(admin, U, MARK, exchange, { now: SOON }), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_tokens.map((t) => t.refresh_token), ["made-up-reconnect"]);
+  assert.equal(state.oura_days.length, 3);
+  assert.equal(state.oura_connections[0].last_error, null);
+});
+
+test("forgetting a revoked login leaves a newer connection's days alone", async () => {
+  const newer = { user_id: U, day: "2026-11-16", data: { conn: "2026-11-17T09:00:00+00:00" }, updated_at: "y" };
+  const state = linked([...stored(), { ...newer }]), admin = fakeDb(state);
+  await forgetRevoked(admin, U, MARK, "made-up-refresh");
+  assert.deepEqual(state.oura_days, [newer]);
+});
+
+test("a token Oura turns down gets one new login; turned down again, the stored data is deleted", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  let exchanges = 0, reads = 0;
+  const exchange = async () => { exchanges++; return answer(200, { access_token: "made-up-second", refresh_token: "made-up-second-refresh", expires_in: 86400 }); };
+  const read = async () => { reads++; throw new OuraUnauthorized("401"); };
+  await assert.rejects(readWithAccess(admin, U, MARK, exchange, read, { now: Date.parse("2026-11-17T10:00:00Z") }), (e) => e.message === REVOKED);
+  assert.equal(exchanges, 1);
+  assert.equal(reads, 2);
+  assert.deepEqual(state.oura_tokens, []);
+  assert.deepEqual(state.oura_days, []);
+  assert.equal(state.oura_connections[0].last_error, REVOKED);
+});
+
+test("a token Oura turns down once is replaced and the read goes on, keeping everything", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  const seen = [];
+  const exchange = async () => answer(200, { access_token: "made-up-second", refresh_token: "made-up-second-refresh", expires_in: 86400 });
+  const read = async (token) => { seen.push(token); if (seen.length === 1) throw new OuraUnauthorized("401"); return ["ok"]; };
+  assert.deepEqual(await readWithAccess(admin, U, MARK, exchange, read, { now: Date.parse("2026-11-17T10:00:00Z") }), ["ok"]);
+  assert.deepEqual(seen, ["made-up-access", "made-up-second"]);
+  assert.equal(state.oura_tokens[0].refresh_token, "made-up-second-refresh");
+  assert.equal(state.oura_days.length, 2);
+});
+
+test("other read failures never delete anything", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  const read = async () => { throw new Error("Oura sleep request failed (500)"); };
+  await assert.rejects(readWithAccess(admin, U, MARK, async () => revoked(), read, { now: Date.parse("2026-11-17T10:00:00Z") }), /500/);
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
 });

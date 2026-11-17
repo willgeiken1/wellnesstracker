@@ -2,7 +2,7 @@
 // Body: { "days": 14 } -> how far back to fetch (the first sync uses 120).
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { connectionMark, saveDays } from "../_shared/oura-store.js";
+import { connectionMark, OuraUnauthorized, readWithAccess, saveDays } from "../_shared/oura-store.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -25,36 +25,17 @@ const admin = createClient(Deno.env.get("SUPABASE_URL")!, serverKey(), { auth: {
 const API = "https://api.ouraring.com/v2/usercollection";
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
-/** A valid access token, refreshed first if expired. Oura refresh tokens are single-use, so the new one is always saved. */
-async function accessToken(userId: string): Promise<string> {
-  const { data: t } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
-  if (!t) throw new Error("Oura isn't connected");
-  if (new Date(t.expires_at).getTime() > Date.now() + 120_000) return t.access_token;
-
-  const res = await fetch("https://api.ouraring.com/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: t.refresh_token,
-      client_id: Deno.env.get("OURA_CLIENT_ID") ?? "",
-      client_secret: Deno.env.get("OURA_CLIENT_SECRET") ?? "",
-    }),
-  });
-  if (!res.ok) throw new Error(`Oura login expired. Reconnect Oura in the app. (${res.status})`);
-  const n = await res.json();
-  // Oura has already used up the old refresh token, so the new one must be kept: try the save twice.
-  const fresh = {
-    access_token: n.access_token,
-    refresh_token: n.refresh_token ?? t.refresh_token,
-    expires_at: new Date(Date.now() + (n.expires_in ?? 86400) * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-  let saved = await admin.from("oura_tokens").update(fresh).eq("user_id", userId);
-  if (saved.error) saved = await admin.from("oura_tokens").update(fresh).eq("user_id", userId);
-  if (saved.error) throw new Error("Couldn't save the new Oura login. Reconnect Oura in the app if this keeps happening.");
-  return n.access_token;
-}
+/** Asks Oura's token endpoint for a new login. oura-store decides what the answer means. */
+const exchange = (refreshToken: string) => fetch("https://api.ouraring.com/oauth/token", {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: Deno.env.get("OURA_CLIENT_ID") ?? "",
+    client_secret: Deno.env.get("OURA_CLIENT_SECRET") ?? "",
+  }),
+});
 
 async function fetchAll(path: string, token: string, start: string, end: string) {
   const out: any[] = [];
@@ -63,6 +44,8 @@ async function fetchAll(path: string, token: string, start: string, end: string)
     const q = new URLSearchParams({ start_date: start, end_date: end });
     if (next) q.set("next_token", next);
     const res = await fetch(`${API}/${path}?${q}`, { headers: { Authorization: `Bearer ${token}` } });
+    // A 401 means Oura turned the token down; oura-store gets a new one, or forgets the data if access was revoked.
+    if (res.status === 401) throw new OuraUnauthorized(`Oura ${path} request failed (401)`);
     if (!res.ok) throw new Error(`Oura ${path} request failed (${res.status})`);
     const body = await res.json();
     out.push(...(body.data ?? []));
@@ -75,15 +58,14 @@ async function syncUser(userId: string, daysBack: number) {
   // The connection this sync belongs to. If it is disconnected while Oura is being read, nothing is kept.
   const mark = await connectionMark(admin, userId);
   if (!mark) throw new Error("Oura isn't connected");
-  const token = await accessToken(userId);
   const start = isoDay(new Date(Date.now() - daysBack * 86400_000));
   const end = isoDay(new Date(Date.now() + 86400_000));
-  const [readiness, dailySleep, sleep, activity] = await Promise.all([
+  const [readiness, dailySleep, sleep, activity] = await readWithAccess(admin, userId, mark, exchange, (token: string) => Promise.all([
     fetchAll("daily_readiness", token, start, end),
     fetchAll("daily_sleep", token, start, end),
     fetchAll("sleep", token, start, end),
     fetchAll("daily_activity", token, start, end),
-  ]);
+  ]));
 
   const days: Record<string, any> = {};
   const day = (d: string) => (days[d] ??= { date: d });
