@@ -14,8 +14,9 @@ export type WorkoutKind = 'run' | 'walk' | 'hike' | 'cycle' | 'row' | 'elliptica
 /** One workout as Apple Health recorded it. `minutes` leaves out time the workout was paused. `kcal` is the
  * active energy the recording app measured, null when it measured none. `app` is the recording app's name. */
 export type HealthWorkout = { id: string; kind: WorkoutKind; start: Date; end: Date; minutes: number; kcal: number | null; app: string };
-/** `ask`: Insight has not asked yet. `asked`: the person has seen Apple's sheet. iOS never says which
- * types they allowed to be read, so "asked" is as much as an app can know. */
+/** `ask`: Insight has not asked yet. `asked`: the person has seen Apple's sheet, for at least some of the
+ * types Insight reads (an update can add types). iOS never says which types they allowed to be read, so
+ * "asked" is as much as an app can know. */
 export type HealthAccess = 'unavailable' | 'ask' | 'asked';
 /** Read-only view of a health service. Nothing here can write to it. */
 export interface HealthSource {

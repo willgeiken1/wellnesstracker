@@ -39,7 +39,11 @@ export function appleHealth(): HealthSource | null {
       try {
         // 1 = should request, 2 = unnecessary (already asked). Anything else is treated as not asked.
         const status = Number(await kit.getRequestStatusForAuthorization({ toRead: READ }));
-        return status === 2 ? 'asked' : 'ask';
+        if (status === 2) return 'asked';
+        // An update that adds a type makes the whole list read as not asked. Someone who has already seen
+        // Apple's sheet for any of Insight's types keeps reading what they allowed; Connect again asks for the rest.
+        const each = await Promise.all(READ.map(type => kit.getRequestStatusForAuthorization({ toRead: [type] })));
+        return each.some(one => Number(one) === 2) ? 'asked' : 'ask';
       } catch { return 'unavailable'; }
     },
     async request() { await kit.requestAuthorization({ toRead: READ }); },
