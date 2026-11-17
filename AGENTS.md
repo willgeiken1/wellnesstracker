@@ -61,3 +61,20 @@ Will's decision biases (tie-breaks only; never override a hard rule, gate or app
 - Simple vs flexible (Oct 29 2026, design/architecture): flexible only with 2+ real named reuses or <=20% extra cost; otherwise simple but easy to upgrade.
 - Quality vs usage (Oct 29 2026, model/effort/spend): quality for anything Will sees or ships; cheap for behind-the-scenes work.
 - Settled earlier (standing): free over paid without his OK; safety rules over speed; test and diagnose before dropping an idea.
+
+## 7. Review guidelines (Codex and every reviewer)
+Every PR gets a Codex review, drafts included (Will, Nov 17 2026), plus the cross-family review in §5. Review the diff at its current head against `main`; don't re-describe the PR.
+- **Severity:** P0/P1 = **BLOCKER** (fix before merge), P2 = **follow-up**, P3 = **nit**. Give file and line, what goes wrong for a user, and the fix.
+- **Always P1 or higher:**
+  - a Health, HealthKit, Health Connect, Oura, body-weight or check-in value, or anything derived, reaching an AI model, Sentry, PostHog, logs or crash text (§4 rule 1);
+  - Health readings written anywhere iCloud backs up; they live in their own store in Caches (`native/src/data/health-store.ts`, Will Nov 16);
+  - a key, token or service-role credential in the app, a log or the diff (§4 rule 3);
+  - account deletion that reports success without deleting, keeps the phone's copy, or touches another user;
+  - sync or merge that can lose, duplicate or bring back a user's rows, or reach another user's rows;
+  - an Oura token readable by the app, or Oura data kept after Disconnect;
+  - a privacy switch that shows Off while collection continues;
+  - AI meal estimates or AI workout summaries reachable in a release build (off for v1, Will Nov 12);
+  - a missing reading shown as 0, or two sources mixed for one value (Apple HRV is SDNN, Oura HRV is RMSSD);
+  - a skipped, disabled or weakened test.
+- **v1 scope (Will, Nov 12 and 16):** accounts and row sync ship; launch free, no purchase in release builds; Apple Health and Oura ship; Fitbit and WHOOP later; Android ships without Health Connect. Work outside this is P2.
+- A bug fix needs a regression test. Security review follows `SECURITY.md` and `docs/threat-model.md`.
