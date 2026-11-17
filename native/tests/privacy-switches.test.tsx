@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { PrivacySwitches } from '../src/features/settings/privacy-switches';
-import { onDevicePreferencesSaved } from '../src/features/onboarding/device-preferences';
+import { onDevicePreferencesSaved, resetDevicePreferencesSession } from '../src/features/onboarding/device-preferences';
 
 // A made-up phone store whose first read and saves the test controls.
 let mockStored: unknown = { crashReports: false, analytics: true };
@@ -13,7 +13,7 @@ jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn(async () =
 const settle = () => act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); });
 const draw = () => render(<ThemeProvider><PrivacySwitches /></ThemeProvider>);
 
-beforeEach(() => { mockStored = { crashReports: false, analytics: true }; mockSaveFails = false; mockReadGate = Promise.resolve(); mockLocalSave.mockClear(); });
+beforeEach(() => { resetDevicePreferencesSession(); mockStored = { crashReports: false, analytics: true }; mockSaveFails = false; mockReadGate = Promise.resolve(); mockLocalSave.mockClear(); });
 
 test('switching analytics off stops it at once, even when saving fails, and says it was not saved', async () => {
   const heard: unknown[] = [];
