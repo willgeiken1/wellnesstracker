@@ -6,6 +6,9 @@ import { mondayOf } from '../src/features/cardio/use-health-workouts';
 import type { Row } from '../src/data/rows';
 import type { HealthAccess, HealthSource, HealthWorkout } from '../src/features/health/source';
 import { memoryRepository } from './workout-repository';
+import { useFocused } from '../src/features/home/use-focused';
+
+jest.mock('../src/features/home/use-focused', () => ({ useFocused: jest.fn(() => true) }));
 
 // Made-up workouts only. Saturday 14 November 2026; the week runs Monday 9 to Sunday 15.
 const at = (day: number, hour: number) => new Date(2026, 10, day, hour);
@@ -102,6 +105,22 @@ describe('Cardio screen', () => {
     expect(health.workouts).not.toHaveBeenCalled();
     expect(screen.queryByText('From Apple Health')).toBeNull();
     expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ now: 0 });
+  });
+  test('coming back to Cardio after connecting Apple Health in Settings reads the workouts', async () => {
+    // Codex review of #196, Nov 17: Cardio passed a constant "in front", so it never read again on return.
+    let access: HealthAccess = 'ask';
+    const health = { ...source('ask', [workout('run', 'run', 10, 30)]), access: async () => access };
+    const repository = memoryRepository();
+    const view = await render(<Cardio repository={repository} health={health} />, { wrapper });
+    await jest.runOnlyPendingTimersAsync();
+    expect(health.workouts).not.toHaveBeenCalled();
+    jest.mocked(useFocused).mockReturnValue(false);
+    await view.rerender(<Cardio repository={repository} health={health} />);
+    access = 'asked';
+    jest.mocked(useFocused).mockReturnValue(true);
+    await view.rerender(<Cardio repository={repository} health={health} />);
+    expect(await screen.findByText('From Apple Health')).toBeTruthy();
+    jest.mocked(useFocused).mockReturnValue(true);
   });
   test('without Apple Health the screen is as before', async () => {
     await render(<Cardio repository={memoryRepository()} health={null} />, { wrapper });

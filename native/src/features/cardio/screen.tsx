@@ -15,6 +15,7 @@ import { CardioStore, machineDefaults } from './store';
 import type { HealthSource } from '../health/source';
 import { healthWeek } from './health';
 import { useHealthWorkouts } from './use-health-workouts';
+import { useFocused } from '../home/use-focused';
 
 const machineName = (machine: Machine) => t(`cardio_${machine}`);
 const iconPaths: Record<Machine, string> = {
@@ -86,7 +87,8 @@ export function Cardio({ repository, health }: { repository: Repository; health?
   const kcalText = (kcal: number) => t('cardioKcal').replace('{kcal}', String(Math.round(kcal)));
   const sessions = store.sessions();
   const pauses = repository.list('pauses');
-  const healthWorkouts = useHealthWorkouts(true, health);
+  // Read again each time Cardio comes back to the front, so connecting Health in Settings shows up here.
+  const healthWorkouts = useHealthWorkouts(useFocused(), health);
   // Apple Health workouts stay in memory: they add to the ring here and are never written to a cardio row.
   const fromHealth = healthWorkouts ? healthWeek(healthWorkouts, sessions, pauses, localDay(now)) : null;
   return <View style={layout.stack}>
