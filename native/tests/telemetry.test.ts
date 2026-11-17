@@ -28,6 +28,12 @@ describe('scrubbing',()=>{
     expect(out).toContain("Couldn't save [text]");
     expect(out).toContain('https://x.supabase.co');
   });
+  test('error text keeps error words and code names, and drops every other word',()=>{
+    // Codex review of #192, Nov 17: words that carry a check-in or a reading reached Sentry.
+    const out=scrubText("TypeError: Cannot read property 'x' of undefined in saveCheckIn; mood sad; stress high, energy low, deep sleep short")!;
+    expect(out).not.toMatch(/mood|sad|stress|high|energy|low|deep|sleep|short/i);
+    expect(out).toContain('TypeError: Cannot read property [text] of undefined in saveCheckIn');
+  });
   test('a crash event keeps only the error, frames and app basics',()=>{
     const event={event_id:'e1',level:'error',release:'insight@1',message:'HRV 55 too low',
       exception:{values:[{type:'TypeError',value:'Cannot read 82.5',stacktrace:{frames:[{filename:'app:///index.bundle?x=1',function:'save',lineno:3,colno:4,in_app:true,vars:{weight:82.5}}]}}]},
@@ -78,6 +84,12 @@ describe('switches',()=>{
     expect(mockSentry.close).toHaveBeenCalled();
     expect(options.beforeSend({message:'late'})).toBeNull();
     expect(mockPostHogCtor).not.toHaveBeenCalled();
+  });
+  test('analytics switched on after a restart opt PostHog back in, since it remembers an earlier opt-out',()=>{
+    // Codex review of #192, Nov 17: a new client never called optIn, so the switch showed On and nothing was sent.
+    sdk.applyTelemetry({crashReports:false,analytics:true},keys);
+    expect(mockPostHogCtor).toHaveBeenCalledTimes(1);
+    expect(mockPh.optIn).toHaveBeenCalledTimes(1);
   });
   test('analytics start only on opt-in, on the US host, and pause when switched off',()=>{
     sdk.applyTelemetry({crashReports:false,analytics:true},keys);

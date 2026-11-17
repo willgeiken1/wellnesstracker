@@ -61,7 +61,8 @@ export function applyTelemetry(prefs:DevicePreferences,keys:TelemetryKeys=teleme
       disableSurveys:true,
       before_send:event=>analyticsOn?(usageEvent(event as UsageEvent) as typeof event|null):null,
     });
-    posthogUser=undefined;followUser();
+    // PostHog keeps an earlier opt-out across restarts, so a client made with the switch on is opted in here.
+    void posthog.optIn();posthogUser=undefined;followUser();
   }else if(analyticsOn&&posthog){
     void posthog.optIn();followUser();
   }else if(!analyticsOn&&posthog){
