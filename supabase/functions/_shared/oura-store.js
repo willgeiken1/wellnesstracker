@@ -36,18 +36,28 @@ export async function saveDays(admin, userId, mark, rows) {
   // Every row this sync writes carries its own stamp, so taking them back can't touch a newer sync's rows.
   const stamp = writeStamp();
   const own = rows.map((r) => ({ ...r, data: { ...(r.data ?? {}), conn: mark }, updated_at: stamp }));
-  const { data: added, error } = await admin.from("oura_days")
-    .upsert(own, { onConflict: "user_id,day", ignoreDuplicates: true }).select("day");
-  if (error) throw new Error(error.message);
-  const isNew = new Set((added ?? []).map((r) => String(r.day)));
   // Rows saved before connections were recorded have no `conn`; they belong to whoever is syncing now.
   const ours = `data->>conn.is.null,data->>conn.lte.${JSON.stringify(mark)}`;
-  const stored = own.filter((r) => !isNew.has(String(r.day)));
-  for (let i = 0; i < stored.length; i += 10) {
-    const results = await Promise.all(stored.slice(i, i + 10).map((r) => admin.from("oura_days")
-      .update({ data: r.data, updated_at: stamp }).eq("user_id", userId).eq("day", r.day).or(ours)));
-    const failed = results.find((r) => r.error);
-    if (failed) throw new Error(failed.error.message);
+  // A day can vanish between the add and the rewrite (an older sync taking back its own rows), so a rewrite that
+  // matches nothing tries the add again. A day a newer connection owns matches neither and is left alone.
+  let pending = own;
+  for (let round = 0; round < 3 && pending.length; round++) {
+    const { data: added, error } = await admin.from("oura_days")
+      .upsert(pending, { onConflict: "user_id,day", ignoreDuplicates: true }).select("day");
+    if (error) throw new Error(error.message);
+    const isNew = new Set((added ?? []).map((r) => String(r.day)));
+    const stored = pending.filter((r) => !isNew.has(String(r.day)));
+    const missed = [];
+    for (let i = 0; i < stored.length; i += 10) {
+      const batch = stored.slice(i, i + 10);
+      const results = await Promise.all(batch.map((r) => admin.from("oura_days")
+        .update({ data: r.data, updated_at: stamp }).eq("user_id", userId).eq("day", r.day).or(ours).select("day")));
+      results.forEach((result, j) => {
+        if (result.error) throw new Error(result.error.message);
+        if (!result.data?.length) missed.push(batch[j]);
+      });
+    }
+    pending = missed;
   }
   if (await stillConnected(admin, userId, mark)) return rows.length;
   // Disconnected (or reconnected) while writing: take back exactly the rows this sync wrote and nobody has

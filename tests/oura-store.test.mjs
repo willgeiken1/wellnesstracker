@@ -25,8 +25,8 @@ function fakeDb(state, hooks = {}) {
         return del;
       },
       update(values) {
-        const up = { eq(k, v) { eq(k, v); return up; }, or(expr) { ours(expr); return up; },
-          then(ok, bad) { return (async () => { await hooks.beforeUpdate?.(); for (const r of rows()) Object.assign(r, structuredClone(values)); return { error: null }; })().then(ok, bad); } };
+        const up = { eq(k, v) { eq(k, v); return up; }, or(expr) { ours(expr); return up; }, select() { return up; },
+          then(ok, bad) { return (async () => { await hooks.beforeUpdate?.(); const hit = rows(); for (const r of hit) Object.assign(r, structuredClone(values)); return { data: hit.map((r) => ({ day: r.day })), error: null }; })().then(ok, bad); } };
         return up;
       },
       upsert(list, opts = {}) {
@@ -152,4 +152,17 @@ test("a sync rewrites its own connection's days and days saved before connection
   const fresh = [{ user_id: U, day: "2026-11-14", data: { steps: 10 } }, { user_id: U, day: "2026-11-15", data: { steps: 20 } }];
   assert.equal(await saveDays(admin, U, mark, fresh), 2);
   assert.deepEqual(state.oura_days.map((r) => r.data), [{ steps: 10, conn: mark }, { steps: 20, conn: mark }]);
+});
+
+test("a newer sync whose day an older sync takes back before the rewrite adds that day again", async () => {
+  // Codex review, Nov 17: the old sync added Nov 15 after the reconnect; the new sync's add skips it, then the old
+  // sync's cleanup removes it before the new sync's rewrite runs.
+  const oldMark = "2026-11-16T10:00:00+00:00", newMark = "2026-11-16T11:00:00+00:00";
+  const state = { oura_tokens: [{ user_id: U }], oura_connections: [{ user_id: U, connected_at: newMark }],
+    oura_days: [{ user_id: U, day: "2026-11-15", data: { from: "old", conn: oldMark }, updated_at: "old-stamp" }] };
+  let once = false;
+  const admin = fakeDb(state, { beforeUpdate: () => { if (once) return; once = true; state.oura_days = state.oura_days.filter((r) => r.updated_at !== "old-stamp"); } });
+  assert.equal(await saveDays(admin, U, newMark, [{ user_id: U, day: "2026-11-15", data: { from: "new" } }]), 1);
+  assert.equal(state.oura_days.length, 1);
+  assert.deepEqual(state.oura_days[0].data, { from: "new", conn: newMark });
 });
