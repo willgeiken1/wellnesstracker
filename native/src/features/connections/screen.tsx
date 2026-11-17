@@ -1,4 +1,4 @@
-import { Alert, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
@@ -14,8 +14,9 @@ const semibold = { fontWeight: '600' } as const;
 
 const NAMES: Record<ServiceId, string> = { oura: 'Oura', appleHealth: 'Apple Health', fitbit: 'Fitbit', whoop: 'WHOOP' };
 const PILLAR: Record<ServiceId, 'training' | 'food' | 'sleep'> = { oura: 'sleep', appleHealth: 'food', fitbit: 'training', whoop: 'sleep' };
-/** The services Insight can connect today. Others join this list only once they can really connect. */
-export const SHOWN: readonly ServiceId[] = ['appleHealth', 'oura'];
+/** The services Insight can connect today. Others join this list only once they can really connect.
+ * Apple Health exists only on iPhone; Android gets Health Connect in a later update. */
+export const SHOWN: readonly ServiceId[] = Platform.OS === 'ios' ? ['appleHealth', 'oura'] : ['oura'];
 /** What each service adds, read from the Home widget catalogue so the two never drift apart. */
 export const unlocks = (service: ServiceId) => WIDGETS.filter(widget => (widget.services as readonly ServiceId[]).includes(service)).map(widget => widget.title);
 /** A service is ready to connect once at least one of its widgets is built. */

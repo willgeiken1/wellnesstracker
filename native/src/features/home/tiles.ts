@@ -18,10 +18,12 @@ const clean = (value: unknown) => Array.isArray(value) ? [...new Set(value.filte
 export const isSmall = (id: TileId) => SMALL_TILES.includes(id);
 /** Tiles fed by Apple Health. They start off Home and are added when the person connects it. */
 export const HEALTH_TILES: readonly TileId[] = ['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful'];
+/** The health tiles an Oura ring can fill. On Android, where Apple Health does not exist, these are the only ones. */
+export const RING_TILES: readonly TileId[] = ['steps', 'sleep'];
 export const defaultTiles = (): HomeTiles => ({ order: TILE_IDS.filter(id => !HEALTH_TILES.includes(id)), wide: [] });
-/** Puts the Apple Health tiles on Home, after whatever is there. Tile ids only: no health value is stored. */
-export function addHealthTiles(storage: TileStorage | null | undefined): void {
-  const next = HEALTH_TILES.reduce(addTile, loadTiles(storage));
+/** Puts the health tiles on Home, after whatever is there (all of them unless told which). Tile ids only: no health value is stored. */
+export function addHealthTiles(storage: TileStorage | null | undefined, ids: readonly TileId[] = HEALTH_TILES): void {
+  const next = ids.reduce(addTile, loadTiles(storage));
   try { saveTiles(storage, next); } catch { /* the tiles can still be added from Edit */ }
 }
 /** Saves a layout. Throws if the local write fails, so the caller decides what that means. */

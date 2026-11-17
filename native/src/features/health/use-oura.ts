@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
-import { addHealthTiles, type TileStorage } from '../home/tiles';
+import { Platform } from 'react-native';
+import { HEALTH_TILES, RING_TILES, addHealthTiles, type TileStorage } from '../home/tiles';
 import { oura } from './oura-client';
 import { OURA_RETURN, syncNow, type OuraSource, type OuraStatus } from './oura';
 
@@ -48,7 +49,7 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     const status = await check(from);
     if (!status?.connected || status.expired) return;
     // Connecting puts the Steps and Sleep tiles on Home. They can be removed again from Home's Edit.
-    if (live.current) addHealthTiles(storage);
+    if (live.current) addHealthTiles(storage, Platform.OS === 'ios' ? HEALTH_TILES : RING_TILES);
     await syncNow(from, status);
   });
   // Check again also tries a refused sign-in: a brief outage at Oura looks the same, and a refresh that works clears it.
