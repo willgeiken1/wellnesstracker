@@ -11,7 +11,7 @@ import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
-import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed } from './sign-out';
+import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
@@ -237,7 +237,18 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         const {data,error}=await client.functions.invoke('delete-account',{body:{confirm:'DELETE'}});
         confirmed=!error&&data?.ok===true;
       } catch {confirmed=false;}
-      if(!confirmed)throw new AccountDeletionFailed();
+      if(!confirmed){
+        // The reply can be lost after the server has already deleted the account, and a retry is then refused
+        // because the account is gone. So ask the sign-in service who this is: "no such user" confirms the deletion.
+        // Anything else that can't be read is reported as unconfirmed, never as "not deleted", and nothing is erased.
+        let gone=false,stillThere=false;
+        try {
+          const {data,error}=await client.auth.getUser();
+          if(error)gone=(error as {code?:string}).code==='user_not_found';
+          else stillThere=data?.user?.id===session.user.id;
+        } catch {/* unknown: reported as unconfirmed below */}
+        if(!gone||activeSession.current?.user.id!==session.user.id)throw stillThere?new AccountDeletionFailed():new AccountDeletionUncertain();
+      }
       // The account is gone: there is nothing to sync, so erase this phone's copy without the unsynced check.
       await depart();
     },

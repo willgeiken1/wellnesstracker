@@ -4,6 +4,7 @@ import { useTheme } from "@/design/theme-provider";
 import { Line } from "./primitives";
 import { ThemedText } from "@/components/themed-text";
 import { t } from "@/i18n/en";
+import type { SyncStatus } from "@/data/sync/engine";
 export function SyncBadge({
   local,
   pending,
@@ -11,7 +12,7 @@ export function SyncBadge({
 }: {
   local: boolean;
   pending: number;
-  status: "idle" | "syncing" | "offline";
+  status: SyncStatus;
 }) {
   const { colors } = useTheme();
   const busy = pending > 0 || status !== "idle";
@@ -42,6 +43,8 @@ export function SyncBadge({
   const label =
     status === "offline"
       ? t("offlineSaved")
+      : status === "attention"
+        ? t("attentionSaved")
       : local
         ? t("savedPhone")
         : busy
@@ -64,7 +67,7 @@ export function SyncBadge({
     >
       <Line
         size={16}
-        name={status === "offline" ? "cloud-off" : "check"}
+        name={status === "offline" || status === "attention" ? "cloud-off" : "check"}
         color={colors["text-muted"]}
       />
       <ThemedText accessibilityLiveRegion="polite" muted variant="caption">

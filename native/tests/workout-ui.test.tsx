@@ -624,6 +624,11 @@ test('offline badge is a themed chip even in a forced-offline demo', async () =>
   expect(screen.getByText('Offline · saved on phone')).toBeTruthy();
   expect(screen.getByTestId('sync-chip')).toHaveStyle({ borderRadius: 99 });
 });
+test('a sync failure a reconnect will not fix says so on the workout chip, not that it is waiting', async () => {
+  await render(<SyncBadge local={false} pending={1} status="attention" />, { wrapper });
+  expect(screen.getByText("Sync isn't working · saved on phone")).toBeTruthy();
+  expect(screen.queryByText('Saved on phone · waiting to sync')).toBeNull();
+});
 test('completed rows fill the card width and pending inputs remain borderless', async () => {
   const props = { exercise: 'Bench Press', index: 0, previous: '185 × 8', hint: '190', onEdit: jest.fn(), onDone: jest.fn(), onRemove: jest.fn() };
   const view = await render(<SetRow {...props} draft={{weight:'185',reps:'8',setId:'synthetic'}} />, {wrapper});

@@ -63,10 +63,19 @@ function Line({ testID, title, value }: { testID: string; title: string; value: 
 }
 
 const has = (values: (number | null)[] | null | undefined): values is (number | null)[] => !!values && latest(values) !== null;
+/** The day of the newest reading, counted from the start of the week, or -1 with none. */
+const newest = (values: (number | null)[] | null | undefined) => values ? values.reduce<number>((at, v, i) => v !== null ? i : at, -1) : -1;
+/** One source's whole week, never a mix: Apple Health and Oura measure heart readings differently (heart rate
+ * variability is SDNN on Apple Health and RMSSD on Oura), so days from both would not compare. Apple Health is
+ * used unless Oura has a more recent reading; one old Apple Health reading no longer hides a week of Oura. */
+function pick(apple: (number | null)[] | null | undefined, oura: (number | null)[] | null | undefined) {
+  if (has(apple) && !(has(oura) && newest(oura) > newest(apple))) return apple;
+  return has(oura) ? oura : apple ?? null;
+}
 
 /** Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health, with Oura's readiness
- * and sleep scores when Oura is connected. Where both have a reading, last night and the heart readings come from
- * Apple Health, and Oura fills in what it does not have. Nothing is estimated: a reading that is not there is left out. */
+ * and sleep scores when Oura is connected. Last night comes from Apple Health when it has one; each heart reading
+ * comes from whichever of the two has the more recent day, Apple Health on a tie. Nothing is estimated: a reading that is not there is left out. */
 export function Recovery({ access, recovery, oura, now }: { access: HealthAccess; recovery: RecoveryData | null; oura?: OuraRecovery | null; now: Date }) {
   const { colors } = useTheme();
   const ring = oura && (has(oura.readiness) || has(oura.sleepScore) || has(oura.hrv) || has(oura.restingHeartRate) || oura.night) ? oura : null;
@@ -77,8 +86,7 @@ export function Recovery({ access, recovery, oura, now }: { access: HealthAccess
   }
   const apple = recovery;
   const night = apple?.night ?? ring?.night ?? null, nightFromOura = !apple?.night && !!ring?.night;
-  const restingHeartRate = has(apple?.restingHeartRate) ? apple.restingHeartRate : has(ring?.restingHeartRate) ? ring.restingHeartRate : apple?.restingHeartRate ?? null;
-  const hrv = has(apple?.hrv) ? apple.hrv : has(ring?.hrv) ? ring.hrv : apple?.hrv ?? null;
+  const restingHeartRate = pick(apple?.restingHeartRate, ring?.restingHeartRate), hrv = pick(apple?.hrv, ring?.hrv);
   const heartToday = apple?.heartToday ?? null, vo2Max = apple?.vo2Max ?? null;
   const nothing = !ring && !night && !latest(restingHeartRate) && !latest(hrv) && !heartToday && !vo2Max;
   if (nothing) return <Message testID="recovery-empty" title={t('recoveryEmptyTitle')} body={t('recoveryEmptyBody')} />;

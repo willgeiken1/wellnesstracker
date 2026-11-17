@@ -1,6 +1,6 @@
 import { SyncRecovery } from './sync-recovery';
 import { BootRecovery } from './boot-recovery';
-import { AccountDeletionFailed, DepartureFailure } from './sign-out';
+import { AccountDeletionFailed, AccountDeletionUncertain, DepartureFailure } from './sign-out';
 import { exportAccountBackup } from '../phone-only/export';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ageOn, onboardingProgress } from '../features/onboarding/model';
@@ -104,7 +104,7 @@ export function Account() {
     {auth.demo?<><Button label={t('createAccount')} disabled={!auth.configured||busy} onPress={()=>router.push('/onboarding')}/><Button label={t('haveAccount')} disabled={!auth.configured||busy} onPress={()=>router.push('/sign-in')}/><Button label={t('leaveDemo')} variant="secondary" disabled={busy} busy={busy} onPress={()=>{void signOut();}}/></>:<>
       <SectionLabel>{t('settingsSync')}</SectionLabel>
       <Card style={accountCard}>
-      <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.pending>0?'syncPending':auth.conflicts>0?'syncConflictStatus':'syncIdle')}</ThemedText>
+      <ThemedText accessibilityLiveRegion="polite">{t(auth.syncStatus==='syncing'?'syncBusy':auth.syncStatus==='offline'?'syncOffline':auth.syncStatus==='attention'?'syncAttention':auth.pending>0?'syncPending':auth.conflicts>0?'syncConflictStatus':'syncIdle')}</ThemedText>
       {auth.conflicts>0&&<Badge label={`${auth.conflicts} ${t('syncConflicts')}`}/>}
       {auth.pending>0&&<Badge label={`${auth.pending} ${t('pending')}`}/>}
       <SyncRecovery repository={auth.repository}/>
@@ -132,7 +132,7 @@ export function Account() {
 function DeleteAccountSheet({onClose}:{onClose:()=>void}) {
   const auth=useAuth(),{colors}=useTheme();
   const [typed,setTyped]=useState(''),[busy,setBusy]=useState(false),[saving,setSaving]=useState(false);
-  const [status,setStatus]=useState<'deleteAccountBackupDone'|'deleteAccountBackupFailed'|'deleteAccountFailed'|'signOutFailed'|null>(null);
+  const [status,setStatus]=useState<'deleteAccountBackupDone'|'deleteAccountBackupFailed'|'deleteAccountFailed'|'deleteAccountUncertain'|'signOutFailed'|null>(null);
   const submitting=useRef(false);
   const close=()=>{if(!submitting.current)onClose();};
   const backup=()=>{
@@ -145,7 +145,7 @@ function DeleteAccountSheet({onClose}:{onClose:()=>void}) {
     if(submitting.current||typed.trim()!=='DELETE'||!auth.deleteAccount)return;
     submitting.current=true;setBusy(true);setStatus(null);
     try {await auth.deleteAccount();submitting.current=false;onClose();}
-    catch(cause) {setStatus(cause instanceof AccountDeletionFailed?'deleteAccountFailed':cause instanceof DepartureFailure?'signOutFailed':'deleteAccountFailed');}
+    catch(cause) {setStatus(cause instanceof AccountDeletionUncertain?'deleteAccountUncertain':cause instanceof AccountDeletionFailed?'deleteAccountFailed':cause instanceof DepartureFailure?'signOutFailed':'deleteAccountUncertain');}
     finally {submitting.current=false;setBusy(false);}
   };
   const input={color:colors.text,backgroundColor:colors['surface-2'],borderRadius:8,minHeight:touchTarget,padding:12,fontSize:16};

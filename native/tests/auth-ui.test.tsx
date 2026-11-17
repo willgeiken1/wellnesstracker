@@ -162,3 +162,8 @@ test('Wait dismisses the offline loss sheet and preserves edits',async()=>{
  expect(screen.queryByRole('button',{name:'Sign out anyway'})).toBeNull();
  expect(auth.signOut).not.toHaveBeenCalled();
 });
+test.each([['attention','syncAttention','syncOffline'],['offline','syncOffline','syncAttention']] as const)('sync status %s reads as its own line: one a reconnect will not fix is not called offline (review of #70)',async(status,shown,hidden)=>{
+ const signedIn={...state(),session:{user:{id:'fixture',email:'fixture@example.test'}} as never,repository:{owner:'fixture'} as never};
+ await wrap(<Account/>,{...signedIn,syncStatus:status});
+ expect(screen.getByText(t(shown))).toBeTruthy();expect(screen.queryByText(t(hidden))).toBeNull();
+});

@@ -42,13 +42,19 @@ export function importStart(now = new Date()): Date {
   return start;
 }
 
-/** Reads recent weights if the person has already been asked, and adds any new ones. Never prompts.
- * `live` is asked after every wait: once it says no (the page closed, or the account changed or signed out)
- * nothing more is written. */
+/** Reads weights if the person has already been asked, and adds any new ones. Never prompts. The read goes
+ * back `IMPORT_DAYS`, or to the earliest day an earlier read reached, so readings kept from back then are read
+ * again if iOS cleared the Health store. `live` is asked after every wait: once it says no (the page closed, or
+ * the account changed or signed out) nothing more is written. */
 export async function refreshWeights(repo: Repository, source: HealthSource | null, now = new Date(), live: () => boolean = () => true): Promise<number> {
   if (!source || await source.access() !== 'asked' || !live()) return 0;
-  const since = importStart(now), samples = await source.weights(since);
+  const usual = importStart(now), kept = repo.healthWeightsFrom(), [y, m, d] = (kept ?? '').split('-').map(Number);
+  const earlier = kept ? new Date(y, m - 1, d) : null;
+  const since = earlier && Number.isFinite(earlier.getTime()) && earlier < usual ? earlier : usual;
+  const samples = await source.weights(since);
   if (!live()) return 0;
   dropMissing(repo, samples, since);
-  return importWeights(repo, samples, now);
+  const added = importWeights(repo, samples, now);
+  repo.noteHealthWeightsFrom(localDay(since));
+  return added;
 }

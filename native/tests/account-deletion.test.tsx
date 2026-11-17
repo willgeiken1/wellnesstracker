@@ -5,7 +5,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { AuthContext, AuthProvider, useAuth, type AuthState } from '../src/auth/provider';
 import { Account } from '../src/auth/screens';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { AccountDeletionFailed } from '../src/auth/sign-out';
+import { AccountDeletionFailed, AccountDeletionUncertain } from '../src/auth/sign-out';
 import { OWNER_A, syntheticRow } from '../fixtures/sync';
 import { openLocalDatabase } from '../src/data/database';
 import { signOutStorage } from '../src/auth/sign-out-storage';
@@ -36,8 +36,8 @@ function fixtureRepo(owner:string){
     subscribe:()=>()=>{},ack:jest.fn(),wipe:jest.fn(()=>{pending=[];}),hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,
     cursor:()=>'0',applyPage:jest.fn()} as unknown as Repository;
 }
-function clientFixture(invoke:jest.Mock){
-  const auth={getSession:jest.fn(async()=>({data:{session:session(OWNER_A)},error:null})),
+function clientFixture(invoke:jest.Mock,getUser:jest.Mock=jest.fn(async()=>{throw new Error('offline fixture');})){
+  const auth={getUser,getSession:jest.fn(async()=>({data:{session:session(OWNER_A)},error:null})),
     onAuthStateChange:jest.fn(()=>({data:{subscription:{unsubscribe:jest.fn()}}})),
     startAutoRefresh:jest.fn(),stopAutoRefresh:jest.fn(),signOut:jest.fn(async()=>({error:null}))};
   return {client:{auth,functions:{invoke}} as unknown as SupabaseClient,auth};
@@ -45,10 +45,10 @@ function clientFixture(invoke:jest.Mock){
 let observed:AuthState;
 function Probe(){observed=useAuth();return null;}
 beforeEach(()=>{jest.clearAllMocks();jest.spyOn(AppState,'addEventListener').mockImplementation(()=>({remove:jest.fn()}));jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);});
-async function mountProvider(invoke:jest.Mock){
+async function mountProvider(invoke:jest.Mock,getUser?:jest.Mock){
   const a=fixtureRepo(OWNER_A),guest=fixtureRepo('guest');
   jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:(owner:string)=>owner===OWNER_A?a:owner==='guest'?guest:fixtureRepo(owner)} as never);
-  const fixture=clientFixture(invoke);
+  const fixture=clientFixture(invoke,getUser);
   const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
   await waitFor(()=>expect(observed.repository).toBe(a));
   return {a,guest,fixture,view};
@@ -107,10 +107,42 @@ test('a failed deletion says nothing was deleted and keeps the sheet open',async
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent(t('deleteAccountFailed')));
   expect(screen.getByText(t('deleteAccountTitle'))).toBeTruthy();
 });
+test('an unconfirmed deletion says it could not be confirmed, not that nothing was deleted',async()=>{
+  const auth={...state(),deleteAccount:jest.fn(async()=>{throw new AccountDeletionUncertain();})};await wrap(auth);
+  await fireEvent.press(screen.getByRole('button',{name:t('deleteAccount')}));
+  await fireEvent.changeText(screen.getByLabelText(t('deleteAccountTypeLabel')),'DELETE');
+  await fireEvent.press(screen.getByTestId('account-delete-confirm'));
+  await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent(t('deleteAccountUncertain')));
+  expect(screen.getByText(t('deleteAccountTitle'))).toBeTruthy();
+});
 test('the example data has no delete-account button',async()=>{
   await wrap({...state(),demo:true,session:null});
   expect(screen.queryByRole('button',{name:t('deleteAccount')})).toBeNull();
 });
 test('the account backup refuses example and phone-only data',()=>{
   for(const owner of ['demo','guest','device'])expect(()=>createAccountBackup({owner} as unknown as Repository)).toThrow();
+});
+
+test('a lost reply after the server deleted the account: a retry that is refused finds the account gone and erases this phone',async()=>{
+  // The server deleted everything but the reply never arrived; the retry is refused because the sign-in no longer exists.
+  const invoke=jest.fn(async()=>({data:null,error:new Error('private fixture')})) as jest.Mock;
+  const getUser=jest.fn(async()=>({data:{user:null},error:Object.assign(new Error('private fixture'),{code:'user_not_found',status:403})})) as jest.Mock;
+  const {a,guest,fixture,view}=await mountProvider(invoke,getUser);
+  await act(async()=>{await observed.deleteAccount!();});
+  await waitFor(()=>expect(observed.repository).toBe(guest));
+  expect(a.wipe).toHaveBeenCalledTimes(1);expect(fixture.auth.signOut).toHaveBeenCalledWith({scope:'local'});
+  await view.unmount();
+});
+test('when the account is still there, the failure says it was not deleted; when nothing can be checked, it says unconfirmed',async()=>{
+  const invoke=jest.fn(async()=>{throw new Error('private fixture');}) as jest.Mock;
+  const still=jest.fn(async()=>({data:{user:{id:OWNER_A}},error:null})) as jest.Mock;
+  let mounted=await mountProvider(invoke,still);
+  await act(async()=>{await observed.deleteAccount!().then(()=>{throw new Error('should fail');},cause=>{expect(cause).toBeInstanceOf(AccountDeletionFailed);expect(cause).not.toBeInstanceOf(AccountDeletionUncertain);});});
+  expect(mounted.a.wipe).not.toHaveBeenCalled();
+  await mounted.view.unmount();
+  const other=jest.fn(async()=>({data:{user:null},error:Object.assign(new Error('private fixture'),{code:'refresh_token_not_found',status:400})})) as jest.Mock;
+  mounted=await mountProvider(invoke,other);
+  await act(async()=>{await expect(observed.deleteAccount!()).rejects.toBeInstanceOf(AccountDeletionUncertain);});
+  expect(mounted.a.wipe).not.toHaveBeenCalled();expect(observed.repository).toBe(mounted.a);
+  await mounted.view.unmount();
 });

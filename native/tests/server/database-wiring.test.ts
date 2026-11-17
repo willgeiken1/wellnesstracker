@@ -5,15 +5,24 @@ import { syncTables } from '../../src/data/sync/flags';
 import { syncedTables } from '../../src/data/rows';
 
 jest.mock('expo-sqlite',()=>({openDatabaseSync:jest.fn(),addDatabaseChangeListener:jest.fn()}));
+jest.mock('expo-file-system',()=>({Paths:{cache:{uri:'file:///fixture/Library/Caches/'}}}));
 jest.mock('expo-crypto',()=>({randomUUID:()=> '20000000-0000-4000-8000-000000000001'}));
 
+/** The main file gets `client`; the Health store, opened in the Caches folder, gets its own in-memory database. */
+let healthSqlite:DatabaseSync;
+const route=(client:unknown)=>(name:string,_options?:unknown,directory?:string)=>{
+ if(name==='insight.db')return client;
+ expect([name,directory]).toEqual(['insight-health.db','file:///fixture/Library/Caches/']);
+ healthSqlite=new DatabaseSync(':memory:');
+ return Object.assign(sqliteClient(healthSqlite),{execSync:(query:string)=>healthSqlite.exec(query),closeSync:()=>healthSqlite.close()});
+};
 test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (failure=%s)',async fail=>{
  const sqlite=new DatabaseSync(':memory:');
  const client=Object.assign(sqliteClient(sqlite),{execSync:(query:string)=>sqlite.exec(query)});
  try {
   let database!:Awaited<ReturnType<typeof import('../../src/data/database').openLocalDatabase>>;
   await jest.isolateModulesAsync(async()=>{
-   const expo=require('expo-sqlite');expo.openDatabaseSync.mockReturnValue(client);
+   const expo=require('expo-sqlite');expo.openDatabaseSync.mockImplementation(route(client));
    database=await require('../../src/data/database').openLocalDatabase();
    expect(expo.openDatabaseSync).toHaveBeenCalledWith('insight.db');
   });
@@ -21,7 +30,9 @@ test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (
    const repo=database.forOwner(owner);
    for(const table of syncedTables){if(table==='purges')repo.applyPage(table,[{row:{...syntheticRow(table),owner_id:owner},server_seq:'1'}],'1');else repo.putLocal({...syntheticRow(table),owner_id:owner});if(repo.syncTables().includes(table))repo.applyPage(table,[],'17');}
    // An old build's Oura copy, so the wipe is shown to clear it.
-   sqlite.prepare('INSERT INTO oura_days(owner_id,day,cache) VALUES(?,?,?)').run(owner,'2026-01-01','{"fixture":true}');if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
+   sqlite.prepare('INSERT INTO oura_days(owner_id,day,cache) VALUES(?,?,?)').run(owner,'2026-01-01','{"fixture":true}');
+   // A weight copied from Apple Health lands in the Health store, not the main file.
+   repo.save('weigh_ins',{day:'2026-01-01',weight_kg:80,entered_value:80,entered_unit:'kg',source:'healthkit'});if(repo.pending().length)repo.flagConflict(repo.pending()[0]);
   }
   // Legacy pull-only markers must not inflate the all-owner recovery warning.
   for(const owner of [OWNER_A,OWNER_B])sqlite.prepare('INSERT INTO sync_outbox(owner_id,table_name,row_id,revision) VALUES(?,?,?,?)').run(owner,'purges',syntheticRow('purges').id,'100:fixture');
@@ -30,7 +41,11 @@ test.each([false,true])('production openLocalDatabase all-owner wipe is atomic (
   const tables=[...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days'];
   const before=tables.map(table=>sqlite.prepare(`SELECT * FROM ${table}`).all());
   if(fail)sqlite.exec("CREATE TRIGGER deny_wipe BEFORE DELETE ON photos BEGIN SELECT RAISE(ABORT,'synthetic'); END");
+  const health=()=>healthSqlite.prepare('SELECT owner_id FROM weigh_ins').all().length;
+  expect(health()).toBe(4);
+  expect(sqlite.prepare("SELECT count(*) AS count FROM weigh_ins WHERE source='healthkit'").get()?.count).toBe(0);
   if(fail)expect(()=>database.wipeAll()).toThrow('Local data is unavailable.');else {database.wipeAll();database.wipeAll();}
+  expect(health()).toBe(fail?4:0);
   tables.forEach((table,index)=>expect(sqlite.prepare(`SELECT * FROM ${table}`).all()).toEqual(fail?before[index]:[]));
   if(fail){sqlite.exec('DROP TRIGGER deny_wipe');database.wipeAll();}
   expect(database.countAllUnsynced!()).toBe(0);
@@ -43,7 +58,7 @@ test('all-owner pending count reaches zero with only OFF-held rows remaining',as
  const client=Object.assign(sqliteClient(sqlite),{execSync:(query:string)=>sqlite.exec(query)});
  try {
   await jest.isolateModulesAsync(async()=>{
-   require('expo-sqlite').openDatabaseSync.mockReturnValue(client);
+   require('expo-sqlite').openDatabaseSync.mockImplementation(route(client));
    const database=await require('../../src/data/database').openLocalDatabase();
    for(const owner of [OWNER_A,OWNER_B]) {
     const repo=database.forOwner(owner);
@@ -64,7 +79,7 @@ test.each([false,true])('all-owner count uses the same live v1 flag as repositor
  const client=Object.assign(sqliteClient(sqlite),{execSync:(query:string)=>sqlite.exec(query)});
  try {
   await jest.isolateModulesAsync(async()=>{
-   require('expo-sqlite').openDatabaseSync.mockReturnValue(client);
+   require('expo-sqlite').openDatabaseSync.mockImplementation(route(client));
    const database=await require('../../src/data/database').openLocalDatabase({syncedV1Columns});
    for(const owner of [OWNER_A,OWNER_B]) {
     const repo=database.forOwner(owner);

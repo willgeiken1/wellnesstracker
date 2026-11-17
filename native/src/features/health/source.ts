@@ -14,8 +14,9 @@ export type WorkoutKind = 'run' | 'walk' | 'hike' | 'cycle' | 'row' | 'elliptica
 /** One workout as Apple Health recorded it. `minutes` leaves out time the workout was paused. `kcal` is the
  * active energy the recording app measured, null when it measured none. `app` is the recording app's name. */
 export type HealthWorkout = { id: string; kind: WorkoutKind; start: Date; end: Date; minutes: number; kcal: number | null; app: string };
-/** `ask`: Insight has not asked yet. `asked`: the person has seen Apple's sheet. iOS never says which
- * types they allowed to be read, so "asked" is as much as an app can know. */
+/** `ask`: Insight has not asked yet. `asked`: the person has seen Apple's sheet, for at least some of the
+ * types Insight reads (an update can add types). iOS never says which types they allowed to be read, so
+ * "asked" is as much as an app can know. */
 export type HealthAccess = 'unavailable' | 'ask' | 'asked';
 /** Read-only view of a health service. Nothing here can write to it. */
 export interface HealthSource {
@@ -23,17 +24,17 @@ export interface HealthSource {
   /** Shows the system permission sheet. Resolves once it closes. */
   request(): Promise<void>;
   weights(since: Date): Promise<WeightSample[]>;
-  /** Steps between two instants, counted once even when a phone and a watch both recorded them. */
-  steps(from: Date, to: Date): Promise<number>;
-  /** Active calories (kcal) between two instants, counted once across a phone and a watch. */
-  activeEnergy(from: Date, to: Date): Promise<number>;
-  /** Exercise minutes between two instants, as Apple counts them for the green ring. */
-  exerciseMinutes(from: Date, to: Date): Promise<number>;
+  /** Steps between two instants, counted once even when a phone and a watch both recorded them. Null when nothing was recorded. */
+  steps(from: Date, to: Date): Promise<number | null>;
+  /** Active calories (kcal) between two instants, counted once across a phone and a watch. Null when nothing was recorded. */
+  activeEnergy(from: Date, to: Date): Promise<number | null>;
+  /** Exercise minutes between two instants, as Apple counts them for the green ring. Null when nothing was recorded. */
+  exerciseMinutes(from: Date, to: Date): Promise<number | null>;
   sleep(from: Date, to: Date): Promise<SleepSpan[]>;
   /** Heart rate and resting heart rate in beats a minute, HRV (SDNN) in milliseconds. Null when nothing was recorded. */
   heart(metric: HeartMetric, from: Date, to: Date): Promise<Spread | null>;
-  /** Water drunk (mL) between two instants. */
-  water(from: Date, to: Date): Promise<number>;
+  /** Water drunk (mL) between two instants. Null when nothing was recorded. */
+  water(from: Date, to: Date): Promise<number | null>;
   /** Mindful sessions between two instants, as stretches; overlaps are merged by the reader. */
   mindful(from: Date, to: Date): Promise<{ start: Date; end: Date }[]>;
   /** Body-fat readings since a date, oldest first, as a percentage (22.5 means 22.5%). */

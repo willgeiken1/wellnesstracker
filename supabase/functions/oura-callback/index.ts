@@ -55,15 +55,22 @@ Deno.serve(async (req) => {
     }
     const t = await res.json();
     const now = new Date().toISOString();
-    await admin.from("oura_tokens").upsert({
+    const { error: tokenError } = await admin.from("oura_tokens").upsert({
       user_id: st.user_id,
       access_token: t.access_token,
       refresh_token: t.refresh_token,
       expires_at: new Date(Date.now() + (t.expires_in ?? 86400) * 1000).toISOString(),
       updated_at: now,
     });
+    // Only say "connected" when both saves worked; otherwise the app would show Oura on with nothing to sync.
+    if (tokenError) { console.error("Oura token save failed"); return back("error"); }
     // last_sync stays empty so the app runs a full first sync the next time it opens.
-    await admin.from("oura_connections").upsert({ user_id: st.user_id, connected_at: now, last_sync: null, last_error: null });
+    const { error: connectionError } = await admin.from("oura_connections").upsert({ user_id: st.user_id, connected_at: now, last_sync: null, last_error: null });
+    if (connectionError) {
+      console.error("Oura connection save failed");
+      await admin.from("oura_tokens").delete().eq("user_id", st.user_id);
+      return back("error");
+    }
     return back("connected");
   } catch (e) {
     console.error(e);

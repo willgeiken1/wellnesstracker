@@ -4,6 +4,9 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { Cardio } from '../src/features/cardio/screen';
 import { memoryRepository } from './workout-repository';
 import { CardioStore } from '../src/features/cardio/store';
+
+// Cardio sits inside the Workouts tab in the app; outside a router it simply counts as in front.
+jest.mock('../src/features/home/use-focused', () => ({ useFocused: () => true }));
 const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 afterEach(() => jest.useRealTimers());
 test('five accessible machines, default weekly ring and fallback est. label', async () => {

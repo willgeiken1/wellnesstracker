@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
@@ -101,6 +101,33 @@ test('removing, adding and reordering change Home at once and are saved on the p
   expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order).toEqual(['score', 'week', 'next', 'volume', 'calories', 'protein', 'weight', 'map']);
   const shown = order().filter(id => id.startsWith('home-tile-'));
   expect(shown).toEqual(['home-tile-volume', 'home-tile-calories', 'home-tile-protein']);
+});
+
+test('a layout change that could not be saved still shows, and the sheet says it was not kept', async () => {
+  const repo = seeded();
+  const local = jest.spyOn(repo, 'localSave').mockImplementationOnce(() => { throw new Error('synthetic write failure'); });
+  await render(<Home />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
+  expect(screen.queryByTestId('home-edit-unsaved')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
+  expect(screen.queryByTestId('home-map')).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you leave this screen.");
+  // The next change saves the whole layout, the earlier one included, and the warning goes.
+  await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
+  expect(local).toHaveBeenCalledTimes(2);
+  expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order).not.toContain('map');
+  expect(screen.queryByTestId('home-edit-unsaved')).toBeNull();
+});
+
+test.each([[false, 'slide'], [true, 'none']])('with Reduce Motion %s the edit sheet opens with %s', async (reduce, animation) => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { AccessibilityInfo } = require('react-native') as typeof import('react-native');
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(reduce);
+  seeded();
+  await render(<Home />, { wrapper });
+  await act(async () => { await Promise.resolve(); });
+  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
+  expect(screen.getByTestId('home-edit-sheet')).toHaveProp('animationType', animation);
 });
 
 test('a small tile can be made full width and back', async () => {

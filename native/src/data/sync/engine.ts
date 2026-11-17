@@ -1,4 +1,4 @@
-import { ProvenanceConflict } from './conflict';
+import { ProvenanceConflict, SyncAttention } from './conflict';
 import type { Pending, Repository } from '../repository';
 import type { Row, ServerRow, Table } from '../rows';
 import { DEFAULT_SYNC_FLAGS, hasGatedColumns, type SyncFlags } from './flags';
@@ -8,7 +8,8 @@ export interface Transport {
   push(rows: Row[]): Promise<Row[] | void>;
   pull(table: Table, after: string, limit: number): Promise<ServerRow[]>;
 }
-export type SyncStatus = 'idle' | 'syncing' | 'offline';
+/** `offline`: a later try may well work. `attention`: the last try failed in a way a connection won't fix. */
+export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'attention';
 export class SyncEngine {
   status: SyncStatus = 'idle';
   initialPullComplete = false;
@@ -38,7 +39,9 @@ export class SyncEngine {
     if (!this.active) return;
     try {
       const accepted = await this.transport.push(batch.map(p=>p.row));
-      if (this.active) this.repository.ack(batch,Array.isArray(accepted)?accepted:undefined);
+      if (this.active) {
+        try { this.repository.ack(batch,Array.isArray(accepted)?accepted:undefined); } catch { throw new SyncAttention(); }
+      }
     } catch (error) {
       if (!this.active) return;
       if (!(error instanceof ProvenanceConflict)) throw error;
@@ -56,12 +59,12 @@ export class SyncEngine {
       if (!this.active) return;
       let cursor=after;
       for (const item of page) {
-        if (!/^\d+$/.test(item.server_seq) || BigInt(item.server_seq)<=BigInt(cursor)) throw new Error('Invalid sync cursor.');
+        if (!/^\d+$/.test(item.server_seq) || BigInt(item.server_seq)<=BigInt(cursor)) throw new SyncAttention();
         cursor=item.server_seq;
       }
       more=page.length===this.pageSize;
       // Completion is known only after the final (possibly empty) page.
-      this.repository.applyPage(table,page,cursor,!more,after);
+      try { this.repository.applyPage(table,page,cursor,!more,after); } catch { throw new SyncAttention(); }
       // A reset during the final page still requires another pull before push.
       more ||= this.repository.cursor(table) !== cursor;
     }
@@ -83,7 +86,7 @@ export class SyncEngine {
       }
       for (const table of this.repository.syncTables().filter(t=>t!=='purges')) await this.pullTable(table);
       if (this.active) { this.initialPullComplete=true; this.pullRevision++; this.setStatus('idle'); }
-    } catch { if (this.active) this.setStatus('offline'); }
+    } catch (error) { if (this.active) this.setStatus(error instanceof SyncAttention ? 'attention' : 'offline'); }
   }
   close() { this.active=false; this.listeners.clear(); }
 }

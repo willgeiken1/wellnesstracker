@@ -162,6 +162,18 @@ test('a page that is not Oura\'s is never opened, and the failure is said plainl
   expect(screen.getByRole('button', { name: 'Connect Oura' }).props.accessibilityState?.disabled).toBeFalsy();
 });
 
+test('a refresh that finds Oura\'s sign-in expired reads the card again, so it offers Reconnect instead of claiming Connected', async () => {
+  const { source, storage } = fakes('on');
+  let expired = false;
+  source.status.mockImplementation(async () => ({ connected: true, expired, lastSync: null }));
+  source.sync.mockImplementation(async () => { expired = true; throw new Error('made-up refused sign-in'); });
+  await render(<Page source={source} storage={storage} />, { wrapper });
+  await settle();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check Oura again' }));
+  await settle();
+  expect(source.status).toHaveBeenCalledTimes(3);
+  expect(screen.getByTestId('connect-oura-again')).toBeTruthy();
+});
 test('Check again refreshes; Disconnect asks first, and only the destructive answer disconnects', async () => {
   const { source, storage } = fakes('on');
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -207,7 +219,7 @@ describe('Home reads both sources', () => {
     const apple: HealthSource = { access: async () => 'asked', request: async () => {}, weights: async () => [], steps: async () => 4200, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [], workouts: async () => [] };
     await render(<Probe apple={apple} ring={ringWith(() => new Promise(done => { answer = done; }))} />);
     await settle();
-    expect(screen.getByTestId('read').props.children).toBe('4200 steps, 0 h');
+    expect(screen.getByTestId('read').props.children).toBe('4200 steps, null h');
     await act(async () => { answer([{ day: today(), sleepSeconds: 27000, steps: 6100 }]); });
     await settle();
     expect(screen.getByTestId('read').props.children).toBe('4200 steps, 7.5 h');
