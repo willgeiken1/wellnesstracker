@@ -166,3 +166,12 @@ test("a newer sync whose day an older sync takes back before the rewrite adds th
   assert.equal(state.oura_days.length, 1);
   assert.deepEqual(state.oura_days[0].data, { from: "new", conn: newMark });
 });
+
+test("a sync whose days keep vanishing reports an error instead of success", async () => {
+  const mark = "2026-11-16T10:00:00+00:00";
+  const state = connected();
+  // Each round an older row is there when the add runs and gone before the rewrite.
+  const admin = fakeDb(state, { duringUpsert: () => { state.oura_days.push({ user_id: U, day: "2026-11-15", data: { conn: mark }, updated_at: "x" }); },
+    beforeUpdate: () => { state.oura_days = state.oura_days.filter((r) => r.updated_at !== "x"); } });
+  await assert.rejects(saveDays(admin, U, mark, [{ user_id: U, day: "2026-11-15", data: { steps: 1 } }]), /couldn't be saved/);
+});

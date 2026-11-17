@@ -59,7 +59,11 @@ export async function saveDays(admin, userId, mark, rows) {
     }
     pending = missed;
   }
-  if (await stillConnected(admin, userId, mark)) return rows.length;
+  if (await stillConnected(admin, userId, mark)) {
+    // Still this connection, yet some days never stuck: report it, so the sync isn't marked as done.
+    if (pending.length) throw new Error("Some Oura days couldn't be saved. They'll be tried again on the next sync.");
+    return rows.length;
+  }
   // Disconnected (or reconnected) while writing: take back exactly the rows this sync wrote and nobody has
   // rewritten since. A sync for a new connection may already have saved the same days; those stay.
   const { error: undoError } = await admin.from("oura_days").delete().eq("user_id", userId).in("day", rows.map((r) => r.day)).eq("updated_at", stamp);
