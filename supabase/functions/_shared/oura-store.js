@@ -86,17 +86,37 @@ export function isRevokedGrant(status, body) {
   return (status === 400 || status === 401) && !!body && typeof body === "object" && body.error === "invalid_grant";
 }
 
+/** Shown while a revoked connection's days are still being deleted. Thrown by every failed step after the login is
+ * gone, so the sync's own error handler writes it back and the next sync, which finds no login, finishes the job. */
+export const DELETING = "Oura login expired: Oura no longer allows Insight access, and the Oura days Insight stored are still being deleted. Reconnect Oura in the app to sync again.";
+
 /** Deletes what Oura no longer allows Insight to keep: the revoked login and the days this connection (or an
  * older one) stored. A reconnect that already saved a new login and new days keeps them: only the exact revoked
- * refresh token is deleted, and only days whose `data.conn` is this connection's mark or older (or unmarked). */
+ * refresh token is deleted, and only days whose `data.conn` is this connection's mark or older (or unmarked).
+ * The order is Disconnect's: the login goes first, so a sync still writing days sees it gone and takes its rows
+ * back (`saveDays`), and only then are the days deleted. The connection is marked DELETING before the login goes,
+ * so if the days delete fails, a later sync finishes it without a login (see `finishRevoked`). */
 export async function forgetRevoked(admin, userId, mark, refreshToken) {
-  // Days first: if their delete fails, the refused login is still stored, so the next sync is refused the same way
-  // and tries the whole cleanup again. Deleting the login first would leave the days with no sync left to retry.
-  const days = await admin.from("oura_days").delete().eq("user_id", userId).or(`data->>conn.is.null,data->>conn.lte.${JSON.stringify(mark)}`);
-  if (days.error) throw new Error("Oura access was removed, and its days couldn't be deleted. Disconnect Oura in the app.");
+  const pending = await admin.from("oura_connections").update({ last_error: DELETING }).eq("user_id", userId).eq("connected_at", mark);
+  if (pending.error) throw new Error("Oura access was removed, and its login couldn't be deleted yet. It will be tried again on the next sync.");
   const token = await admin.from("oura_tokens").delete().eq("user_id", userId).eq("refresh_token", refreshToken);
-  if (token.error) throw new Error("Oura access was removed, and its login couldn't be deleted. Disconnect Oura in the app.");
+  if (token.error) throw new Error(DELETING);
+  return deleteRevokedDays(admin, userId, mark);
+}
+
+async function deleteRevokedDays(admin, userId, mark) {
+  const days = await admin.from("oura_days").delete().eq("user_id", userId).or(`data->>conn.is.null,data->>conn.lte.${JSON.stringify(mark)}`);
+  if (days.error) throw new Error(DELETING);
   await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
+}
+
+/** A sync that finds no Oura login. If this connection's revoke cleanup was cut short, it deletes the days now.
+ * Always throws. */
+export async function finishRevoked(admin, userId, mark) {
+  const { data: conn } = await admin.from("oura_connections").select("connected_at, last_error").eq("user_id", userId).maybeSingle();
+  if (!conn || String(conn.connected_at) !== mark || conn.last_error !== DELETING) throw new Error("Oura isn't connected");
+  await deleteRevokedDays(admin, userId, mark);
+  throw new Error(REVOKED);
 }
 
 /** A short, one-way tag for a refresh token, so two refusals can be matched without storing the token. */
@@ -116,7 +136,8 @@ export async function refused(admin, userId, mark, refreshToken, key = refreshTo
   const tag = await loginTag(key);
   const { data: conn } = await admin.from("oura_connections").select("connected_at, last_error").eq("user_id", userId).maybeSingle();
   if (!conn || String(conn.connected_at) !== mark) throw new Error("Oura isn't connected");
-  if (conn.last_error === suspectMessage(tag)) {
+  // A cleanup already under way (its login delete failed) goes on straight away.
+  if (conn.last_error === suspectMessage(tag) || conn.last_error === DELETING) {
     await forgetRevoked(admin, userId, mark, refreshToken);
     throw new Error(REVOKED);
   }
@@ -133,7 +154,7 @@ const pause = (ms) => new Promise((done) => setTimeout(done, ms));
  * just spent the token: its new login is waited for briefly and used. Otherwise see `refused`. */
 export async function accessToken(admin, userId, mark, exchange, { force = false, now = Date.now(), wait = pause, waits = 6 } = {}) {
   const { data: t } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
-  if (!t) throw new Error("Oura isn't connected");
+  if (!t) return finishRevoked(admin, userId, mark);
   if (!force && usable(t, now)) return t.access_token;
 
   const res = await exchange(t.refresh_token);
