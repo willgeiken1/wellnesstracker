@@ -14,7 +14,17 @@ Only Will does the steps that sign in to Apple or Expo. Agents never handle his 
 1. **Register the App ID.** At developer.apple.com/account, open Certificates, Identifiers & Profiles, then Identifiers, then +. Pick App IDs, then App. Description `Insight Wellness`, Bundle ID Explicit `com.insightwellness.app`. Tick **HealthKit** and **App Groups**, then Register. If Apple says the ID is taken, stop and tell Claude; don't pick another one.
 2. **Create the app record.** At appstoreconnect.apple.com, open Apps, then + and New App. Platform iOS, name `Insight Wellness`, primary language English (U.S.), bundle ID `com.insightwellness.app`, SKU `insight-wellness` (any unique text works; nobody sees it), Full Access. If the name is taken, stop and tell Claude. On an individual account, the App Store shows your legal name as the seller. The name under the icon also reads `Insight Wellness` (from `app.json`).
 3. **Create the Expo project.** Sign in or sign up (free) at expo.dev and create a project with the slug `insight-daily`. Done Nov 15: its ID is in `app.json` as `extra.eas.projectId`.
-4. **Supabase settings: not yet.** `native/src/auth/config.ts` only accepts a local loopback Supabase and refuses the production project, so the first TestFlight build ships with no Supabase settings (accounts and sync stay off). Pointing the app at production is its own HIGH-risk change; once it lands, add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to the Expo project's **production** environment as plain text (publishable key only, never the service-role key).
+4. **Account/sync settings only, if approved for this build.** `EXPO_PUBLIC_` values are baked into the app when it is built, and the cloud build never reads a `.env` file or your Mac's shell (`EXPO_NO_DOTENV=1`). A setting missing from the Expo project's **production** environment is missing from that build, and adding it later needs a new build. Only the two public account/sync values below belong in this step. Database changes and enabling accounts/sync require their own release approval; these are not telemetry settings:
+
+   ```sh
+   npx eas-cli@latest env:create --environment production --visibility plaintext --name EXPO_PUBLIC_SUPABASE_URL --value https://pvodxxmfgflvgvbdotlv.supabase.co
+   npx eas-cli@latest env:create --environment production --visibility plaintext --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value <publishable key>
+   ```
+
+   - The publishable key starts with `sb_publishable_` and is under Project Settings, API Keys in the Supabase dashboard. Never use the secret or service-role key; `native/src/auth/config.ts` refuses anything else.
+   - For an account-enabled build, reconcile the row-sync flag and the separate schema-deployment receipt against the intended target. A flag is not a migration receipt. If either is unknown, stop; do not run a migration to resolve conflicting records. See `docs/DEPLOY.md`, "Row-sync tables for the iPhone app", for the separately approved process.
+   - **Reporting hold:** do not request, create, copy, or set a Sentry DSN or PostHog key for this build. If previous build settings might supply either, stop and have the authorized release owner verify the effective configuration privately. Do not paste configuration values into logs, tickets, or chat.
+   - **Before building or uploading:** require the reviewed reporting-hold source and a verified build configuration. Do not treat missing keys, this documentation change, or a source test as proof that an installed build sends nothing. Inspect the exact built artifact before a separately approved upload. A TestFlight-only device check can follow a restricted internal install for that purpose: validate that same build with synthetic inputs, including upgrade and queued-report behavior, before broader distribution. Historical reports and older installed clients remain separate reviews.
 
 ## Build and upload (Will's Mac, after the PR merges)
 
@@ -23,11 +33,11 @@ From `native/` on an up-to-date `main`:
 ```sh
 npm ci
 npx eas-cli@latest login
-npx eas-cli@latest build --platform ios --profile production --auto-submit
+npx eas-cli@latest build --platform ios --profile production
 ```
 
 - When asked, sign in to your Apple account in the terminal and pick the team **WILLIAM GERHARD GEIKEN**. Let EAS create the distribution certificate and the provisioning profiles for the app and the share extension.
-- For the upload, let EAS create an App Store Connect API key when it offers to. It stores the key on Expo for later uploads.
+- Do not auto-submit. Record the exact build ID. Once the release owner has verified pre-upload source, configuration, and artifact evidence and approved upload, submit that specific artifact, not the latest build. Internal distribution or any public release is a separate decision. For an authorized upload, EAS can store an App Store Connect API key on Expo for later uploads.
 - This uses one of EAS's free monthly builds. Free builds can wait in a queue before they start.
 
 ## Install on the iPhone
