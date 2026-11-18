@@ -90,10 +90,12 @@ export function isRevokedGrant(status, body) {
  * older one) stored. A reconnect that already saved a new login and new days keeps them: only the exact revoked
  * refresh token is deleted, and only days whose `data.conn` is this connection's mark or older (or unmarked). */
 export async function forgetRevoked(admin, userId, mark, refreshToken) {
-  const token = await admin.from("oura_tokens").delete().eq("user_id", userId).eq("refresh_token", refreshToken);
-  if (token.error) throw new Error("Oura access was removed, and its login couldn't be deleted. Disconnect Oura in the app.");
+  // Days first: if their delete fails, the refused login is still stored, so the next sync is refused the same way
+  // and tries the whole cleanup again. Deleting the login first would leave the days with no sync left to retry.
   const days = await admin.from("oura_days").delete().eq("user_id", userId).or(`data->>conn.is.null,data->>conn.lte.${JSON.stringify(mark)}`);
   if (days.error) throw new Error("Oura access was removed, and its days couldn't be deleted. Disconnect Oura in the app.");
+  const token = await admin.from("oura_tokens").delete().eq("user_id", userId).eq("refresh_token", refreshToken);
+  if (token.error) throw new Error("Oura access was removed, and its login couldn't be deleted. Disconnect Oura in the app.");
   await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
 }
 

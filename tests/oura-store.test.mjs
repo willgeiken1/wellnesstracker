@@ -21,7 +21,7 @@ function fakeDb(state, hooks = {}) {
       async maybeSingle() { return { data: rows()[0] ?? null, error: null }; },
       delete() {
         const del = { eq(k, v) { eq(k, v); return del; }, in(k, v) { within(k, v); return del; }, or(expr) { ours(expr); return del; },
-          then(ok) { const gone = new Set(rows()); state[table] = (state[table] ?? []).filter((r) => !gone.has(r)); return Promise.resolve({ error: null }).then(ok); } };
+          then(ok) { if (hooks.failDelete?.(table)) return Promise.resolve({ error: { message: "made-up failure" } }).then(ok); const gone = new Set(rows()); state[table] = (state[table] ?? []).filter((r) => !gone.has(r)); return Promise.resolve({ error: null }).then(ok); } };
         return del;
       },
       update(values) {
@@ -214,6 +214,21 @@ test("a first refusal deletes nothing and marks the connection; the same refusal
   assert.equal(state.oura_connections[0].last_error, REVOKED);
   // The app and the web logger read both messages as "reconnect needed".
   assert.match(REVOKED, /login expired/i);
+});
+
+test("Codex review, Nov 18: a failed delete of the days keeps the login, so the next sync retries the cleanup", async () => {
+  const state = linked(stored());
+  let failing = true;
+  const admin = fakeDb(state, { failDelete: (table) => failing && table === "oura_days" });
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /check [0-9a-f]{8}/);
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /days couldn't be deleted/);
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
+  failing = false;
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_tokens, []);
+  assert.deepEqual(state.oura_days, []);
+  assert.equal(state.oura_connections[0].last_error, REVOKED);
 });
 
 test("any other refresh failure keeps the login and the stored days, however often it happens", async () => {
