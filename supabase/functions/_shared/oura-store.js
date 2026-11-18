@@ -86,16 +86,15 @@ export function isRevokedGrant(status, body) {
   return (status === 400 || status === 401) && !!body && typeof body === "object" && body.error === "invalid_grant";
 }
 
-/** Shown while a revoked connection's days are still being deleted. Thrown by every failed step after the login is
- * gone, so the sync's own error handler writes it back and the next sync, which finds no login, finishes the job. */
+/** Shown while a revoked connection's days are still being deleted. */
 export const DELETING = "Oura login expired: Oura no longer allows Insight access, and the Oura days Insight stored are still being deleted. Reconnect Oura in the app to sync again.";
 
 /** Deletes what Oura no longer allows Insight to keep: the revoked login and the days this connection (or an
  * older one) stored. A reconnect that already saved a new login and new days keeps them: only the exact revoked
  * refresh token is deleted, and only days whose `data.conn` is this connection's mark or older (or unmarked).
  * The order is Disconnect's: the login goes first, so a sync still writing days sees it gone and takes its rows
- * back (`saveDays`), and only then are the days deleted. The connection is marked DELETING before the login goes,
- * so if the days delete fails, a later sync finishes it without a login (see `finishRevoked`). */
+ * back (`saveDays`), and only then are the days deleted. If the days delete fails, a later sync finishes it: it finds
+ * the connection with no login (see `finishRevoked`), whatever message has since been written over DELETING. */
 export async function forgetRevoked(admin, userId, mark, refreshToken) {
   const pending = await admin.from("oura_connections").update({ last_error: DELETING }).eq("user_id", userId).eq("connected_at", mark);
   if (pending.error) throw new Error("Oura access was removed, and its login couldn't be deleted yet. It will be tried again on the next sync.");
@@ -110,11 +109,14 @@ async function deleteRevokedDays(admin, userId, mark) {
   await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
 }
 
-/** A sync that finds no Oura login. If this connection's revoke cleanup was cut short, it deletes the days now.
- * Always throws. */
+/** A sync that found the connection it started from, but no Oura login. A connection is only ever saved after its
+ * login, so this connection has lost its login: a revoke cleanup cut short, a Disconnect under way, or a reconnect
+ * whose save failed. Its days may not stay without a login, so they are deleted now (only this connection's or older
+ * ones). It does not rely on `last_error`, which any sync's error handler can overwrite. Always throws. */
 export async function finishRevoked(admin, userId, mark) {
-  const { data: conn } = await admin.from("oura_connections").select("connected_at, last_error").eq("user_id", userId).maybeSingle();
-  if (!conn || String(conn.connected_at) !== mark || conn.last_error !== DELETING) throw new Error("Oura isn't connected");
+  const { data: conn, error } = await admin.from("oura_connections").select("connected_at").eq("user_id", userId).maybeSingle();
+  if (error) throw new Error("Couldn't read the Oura connection.");
+  if (!conn || String(conn.connected_at) !== mark) throw new Error("Oura isn't connected");
   await deleteRevokedDays(admin, userId, mark);
   throw new Error(REVOKED);
 }
@@ -153,7 +155,9 @@ const pause = (ms) => new Promise((done) => setTimeout(done, ms));
  * asks Oura's token endpoint and returns its Response. When Oura answers `invalid_grant`, another sync may have
  * just spent the token: its new login is waited for briefly and used. Otherwise see `refused`. */
 export async function accessToken(admin, userId, mark, exchange, { force = false, now = Date.now(), wait = pause, waits = 6 } = {}) {
-  const { data: t } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
+  const { data: t, error: readError } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
+  // A failed read is not a missing login: never delete anything on it.
+  if (readError) throw new Error("Couldn't read the Oura login.");
   if (!t) return finishRevoked(admin, userId, mark);
   if (!force && usable(t, now)) return t.access_token;
 

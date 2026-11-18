@@ -18,7 +18,7 @@ function fakeDb(state, hooks = {}) {
       select() { return chain; },
       eq(k, v) { eq(k, v); return chain; },
       in(k, v) { within(k, v); return chain; },
-      async maybeSingle() { return { data: rows()[0] ?? null, error: null }; },
+      async maybeSingle() { if (hooks.failRead?.(table)) return { data: null, error: { message: "made-up failure" } }; return { data: rows()[0] ?? null, error: null }; },
       delete() {
         const del = { eq(k, v) { eq(k, v); return del; }, in(k, v) { within(k, v); return del; }, or(expr) { ours(expr); return del; },
           then(ok) { if (hooks.failDelete?.(table)) return Promise.resolve({ error: { message: "made-up failure" } }).then(ok); const gone = new Set(rows()); state[table] = (state[table] ?? []).filter((r) => !gone.has(r)); return Promise.resolve({ error: null }).then(ok); } };
@@ -228,12 +228,15 @@ test("Codex review, Nov 18: a failed delete of the days is finished by the next 
   assert.match(DELETING, /login expired/i);
   // Still failing: nothing changes and the next sync tries again.
   await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === DELETING);
+  // Codex review, Nov 18: another sync's error handler writes over DELETING; the cleanup still finishes.
+  state.oura_connections[0].last_error = "Oura login expired. Reconnect Oura in the app. (400)";
   failing = false;
   await assert.rejects(accessToken(admin, U, MARK, async () => { throw new Error("no login, so Oura is never asked"); }, fast), (e) => e.message === REVOKED);
   assert.deepEqual(state.oura_days, []);
   assert.equal(state.oura_connections[0].last_error, REVOKED);
-  // Once finished, a sync with no login is simply not connected.
-  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /^Error: Oura isn't connected$/);
+  // Later syncs keep saying so, until a reconnect or Disconnect.
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_days, []);
 });
 
 test("Codex review, Nov 18: a sync still writing days while the cleanup runs keeps none of them", async () => {
@@ -249,12 +252,18 @@ test("Codex review, Nov 18: a sync still writing days while the cleanup runs kee
   }
 });
 
-test("a sync with no login and no cleanup under way is just not connected, and deletes nothing", async () => {
-  const state = linked(stored());
-  state.oura_tokens = [];
-  const admin = fakeDb(state);
-  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /^Error: Oura isn't connected$/);
-  assert.equal(state.oura_days.length, 2);
+test("a login that can't be read, or a newer connection, never deletes days", async () => {
+  const unreadable = linked(stored());
+  await assert.rejects(accessToken(fakeDb(unreadable, { failRead: (table) => table === "oura_tokens" }), U, MARK, async () => revoked(), fast), /Couldn't read the Oura login/);
+  assert.equal(unreadable.oura_days.length, 2);
+  assert.equal(unreadable.oura_tokens.length, 1);
+
+  // A sync that started from an older connection finds the newer one: it is not that sync's to clean up.
+  const newer = linked(stored());
+  newer.oura_tokens = [];
+  newer.oura_connections[0].connected_at = "2026-11-17T09:00:00+00:00";
+  await assert.rejects(accessToken(fakeDb(newer), U, MARK, async () => revoked(), fast), /^Error: Oura isn't connected$/);
+  assert.equal(newer.oura_days.length, 2);
 });
 
 test("any other refresh failure keeps the login and the stored days, however often it happens", async () => {
