@@ -72,9 +72,9 @@ export async function saveDays(admin, userId, mark, rows) {
 }
 
 // When Oura takes back Insight's access (the person removed Insight in their Oura account, or Oura revoked it),
-// the Oura API agreement wants the stored Oura data gone. Insight deletes it as soon as a sync finds out, the same
-// as Disconnect, but keeps the connection row so the app says the login expired and offers Reconnect Oura. The
-// message starts with "Oura login expired" because that is what the app and the web logger read as "reconnect".
+// the Oura API agreement wants the stored Oura data gone. Insight deletes it, the same as Disconnect, but keeps the
+// connection row so the app says the login expired and offers Reconnect Oura. Every message here starts with
+// "Oura login expired" because that is what the app and the web logger read as "reconnect needed".
 export const REVOKED = "Oura login expired: Oura no longer allows Insight access, so the Oura days Insight stored were deleted. Reconnect Oura in the app to sync again.";
 
 /** Oura turned an access token down (HTTP 401). */
@@ -97,13 +97,39 @@ export async function forgetRevoked(admin, userId, mark, refreshToken) {
   await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
 }
 
+/** A short, one-way tag for a refresh token, so two refusals can be matched without storing the token. */
+export async function loginTag(refreshToken) {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(refreshToken))));
+  return Array.from(bytes.slice(0, 4), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+const suspectMessage = (tag) => `Oura login expired. Reconnect Oura in the app. (check ${tag})`;
+
+/** Oura refused this login. A single refusal can be a race: two syncs refreshing the same single-use token at once,
+ * where the loser hears `invalid_grant` before the winner has saved the new login, or a fresh access token that a
+ * parallel refresh has just replaced. So the first refusal only marks the connection (with a tag of the refused
+ * login) and deletes nothing; a winner's save, or any later sync that works, clears the mark. Only when a later sync
+ * is refused again the same way is the data deleted: `key` names the way (by default the refused refresh token).
+ * Always throws. */
+export async function refused(admin, userId, mark, refreshToken, key = refreshToken) {
+  const tag = await loginTag(key);
+  const { data: conn } = await admin.from("oura_connections").select("connected_at, last_error").eq("user_id", userId).maybeSingle();
+  if (!conn || String(conn.connected_at) !== mark) throw new Error("Oura isn't connected");
+  if (conn.last_error === suspectMessage(tag)) {
+    await forgetRevoked(admin, userId, mark, refreshToken);
+    throw new Error(REVOKED);
+  }
+  await admin.from("oura_connections").update({ last_error: suspectMessage(tag) }).eq("user_id", userId).eq("connected_at", mark);
+  throw new Error(suspectMessage(tag));
+}
+
 const usable = (t, now) => new Date(t.expires_at).getTime() > now + 120_000;
+const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 
 /** A valid access token, refreshed first if it is about to expire, or when `force` is set because Oura turned the
  * current one down. Oura refresh tokens are single-use, so the new one is always saved. `exchange(refreshToken)`
- * asks Oura's token endpoint and returns its Response. If Oura says the login was revoked, the stored Oura data is
- * deleted (forgetRevoked) and this throws REVOKED. */
-export async function accessToken(admin, userId, mark, exchange, { force = false, now = Date.now() } = {}) {
+ * asks Oura's token endpoint and returns its Response. When Oura answers `invalid_grant`, another sync may have
+ * just spent the token: its new login is waited for briefly and used. Otherwise see `refused`. */
+export async function accessToken(admin, userId, mark, exchange, { force = false, now = Date.now(), wait = pause, waits = 6 } = {}) {
   const { data: t } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
   if (!t) throw new Error("Oura isn't connected");
   if (!force && usable(t, now)) return t.access_token;
@@ -112,11 +138,12 @@ export async function accessToken(admin, userId, mark, exchange, { force = false
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     if (isRevokedGrant(res.status, body)) {
-      // Another sync may have just used this single-use refresh token and saved a new login: use that one.
-      const { data: latest } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
-      if (latest && latest.refresh_token !== t.refresh_token && usable(latest, now)) return latest.access_token;
-      if ((await connectionMark(admin, userId)) === mark) await forgetRevoked(admin, userId, mark, t.refresh_token);
-      throw new Error(REVOKED);
+      for (let i = 0; i <= waits; i++) {
+        const { data: latest } = await admin.from("oura_tokens").select("*").eq("user_id", userId).maybeSingle();
+        if (latest && latest.refresh_token !== t.refresh_token) return latest.access_token;
+        if (i < waits) await wait(500);
+      }
+      return refused(admin, userId, mark, t.refresh_token);
     }
     throw new Error(`Oura login expired. Reconnect Oura in the app. (${res.status})`);
   }
@@ -135,8 +162,7 @@ export async function accessToken(admin, userId, mark, exchange, { force = false
 }
 
 /** Runs `read(token)` with a valid token. If Oura turns the token down (OuraUnauthorized), gets a new one once and
- * tries again. Turned down again with a login Oura has just issued means Oura no longer allows access: the stored
- * Oura data is deleted and this throws REVOKED. */
+ * tries again. Turned down again with a login Oura has just issued counts as a refusal (see `refused`). */
 export async function readWithAccess(admin, userId, mark, exchange, read, opts = {}) {
   try {
     return await read(await accessToken(admin, userId, mark, exchange, opts));
@@ -148,7 +174,8 @@ export async function readWithAccess(admin, userId, mark, exchange, read, opts =
   } catch (e) {
     if (!(e instanceof OuraUnauthorized)) throw e;
     const { data: t } = await admin.from("oura_tokens").select("refresh_token").eq("user_id", userId).maybeSingle();
-    if (t && (await connectionMark(admin, userId)) === mark) await forgetRevoked(admin, userId, mark, t.refresh_token);
-    throw new Error(REVOKED);
+    if (!t) throw new Error("Oura isn't connected");
+    // Each forced refresh issues a new refresh token, so this way of being refused is matched by connection instead.
+    return refused(admin, userId, mark, t.refresh_token, `401 after a new login:${mark}`);
   }
 }
