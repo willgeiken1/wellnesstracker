@@ -46,7 +46,7 @@ You can edit or delete anything you log, delete a date range, export your data, 
 
 ## How long we keep data
 
-Until you delete it or delete your account. Crash reports already sent to Sentry and usage events already sent to PostHog aren't removed when you delete your account. Sentry keeps crash reports for **[Will to confirm]** and PostHog keeps usage events for **[Will to confirm]**.
+Until you delete it or delete your account. Crash reports already sent to Sentry and usage events already sent to PostHog aren't removed when you delete your account. Sentry keeps crash reports for 30 days and PostHog keeps usage events for one year.
 
 ## Children
 

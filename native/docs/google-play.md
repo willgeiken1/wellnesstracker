@@ -57,7 +57,7 @@ Source: support.google.com/googleplay/android-developer/answer/10787469
 
 - In the app: Settings › Account › Delete account (shipped in #180).
 - On the web: `insight-wellness-delete-account.md` in this PR, published by GitHub Pages at the address above, with the email route for people without the app.
-- Deleting the account deletes its data. Crash reports and usage events already sent to Sentry and PostHog are not deleted, and the page says so; Will to confirm how long each keeps them before the Data safety form.
+- Deleting the account deletes its data. Crash reports and usage events already sent to Sentry and PostHog are not deleted, and the page says so. On the free plans Insight uses, Sentry keeps crash reports 30 days and PostHog keeps usage events one year (each service's own retention docs, Nov 18); Will to confirm the plans before the Data safety form.
 
 Source: support.google.com/googleplay/android-developer/answer/13327111
 
@@ -71,7 +71,7 @@ Source: support.google.com/googleplay/android-developer/answer/14738291
 
 ## Other App content items
 
-- Privacy policy URL: https://willgeiken1.github.io/wellnesstracker/insight-daily-privacy. Android wording is drafted (iPhone and Android app; Apple Health iPhone only; no Health Connect; deletion page linked; Sentry and PostHog retention left for Will to fill in). It goes live only when Will merges it.
+- Privacy policy URL: https://willgeiken1.github.io/wellnesstracker/insight-daily-privacy. Android wording is drafted (iPhone and Android app; Apple Health iPhone only; no Health Connect; deletion page linked; Sentry 30 days and PostHog one year, the free plans' retention, for Will to confirm). It goes live only when Will merges it.
 - Ads: **No ads**.
 - App access: sign-in required; give Google the demo account (same as Apple's, LT-3).
 - Content rating: IARC questionnaire, expected Teen per the plan (13+).
