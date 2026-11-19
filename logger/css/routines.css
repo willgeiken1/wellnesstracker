@@ -1,0 +1,128 @@
+/* Routines tab. Loaded after polish.css so the equal-slot override wins.
+   With --tab-count unset this is five columns and a 20% bubble, matching
+   the flag-off bar. Six tabs set the variable from the pager. */
+
+#tabs {
+  grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr));
+}
+
+/* Six labels at 13px need the inset back. Five tabs leave data-tabs unset. */
+#tabs[data-tabs="6"] {
+  left: 4px;
+  right: 4px;
+  padding-left: 1px;
+  padding-right: 1px;
+}
+
+#tabs[data-tabs="6"] .tab {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#tab-bubble {
+  width: calc(100% / var(--tab-count, 5) - 8px);
+}
+
+.dr-page { display: grid; gap: 10px; }
+
+.dr-k {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.2;
+}
+
+.dr-now,
+.dr-tile,
+.dr-signin {
+  color: var(--ink);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .42),
+    inset 0 -1px 0 rgba(0, 0, 0, .06),
+    0 1px 2px rgba(0, 0, 0, .08),
+    0 16px 32px rgba(0, 0, 0, .16);
+}
+
+.dr-now { padding: 16px 18px 14px; }
+.dr-now[data-color="citrus"],
+.dr-tile[data-color="citrus"] { background: var(--green); }
+.dr-now[data-color="lavender"],
+.dr-tile[data-color="lavender"],
+.dr-signin { background: var(--lav); }
+.dr-now[data-color="pink"],
+.dr-tile[data-color="pink"] { background: var(--pink); }
+
+.dr-now .dr-k,
+.dr-tile .dr-k,
+.dr-next,
+.dr-tile-meta,
+.dr-signin p,
+.dr-empty p { color: var(--on-pastel); }
+
+.dr-now-title,
+.dr-signin h2,
+.dr-empty h2,
+.dr-tile h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: -.03em;
+  line-height: 1.08;
+}
+
+.dr-now-title { font-size: 30px; margin: 4px 0 8px; }
+.dr-next { margin: 0; font-size: 15px; line-height: 1.35; text-wrap: pretty; }
+.dr-wait { white-space: nowrap; }
+.dr-wait::before { content: " · "; }
+.dr-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 7px 12px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dr-count b {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.dr-tiles { display: grid; gap: 8px; }
+.dr-tile { padding: 12px 16px; text-align: left; }
+.dr-tile h3 { font-size: 22px; margin: 4px 0 0; color: var(--ink); }
+.dr-tile-meta { margin: 6px 0 0; font-size: 15px; }
+
+.dr-empty {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 24px;
+  padding: 16px 16px 14px;
+  box-shadow: var(--inset-hi), var(--inset-lo), var(--elev-1);
+}
+.dr-empty h2 { font-size: 22px; margin: 0; color: var(--text); }
+.dr-empty p { margin: 6px 0 14px; font-size: 15px; line-height: 1.4; color: var(--muted); }
+.dr-empty .btn { margin-top: 2px; }
+
+.dr-signin { padding: 22px 20px 20px; }
+.dr-signin h2 { font-size: 28px; margin: 0 0 8px; }
+.dr-signin p { margin: 0 0 16px; font-size: 15px; line-height: 1.4; }
+.dr-signin .btn.primary,
+.dr-now .btn.primary { background: var(--ink); color: #fff; }
+
+.dr-gear { color: var(--text); }
+
+:root[data-mode="light"] .dr-now,
+:root[data-mode="light"] .dr-tile,
+:root[data-mode="light"] .dr-signin {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    0 1px 2px rgba(20, 20, 20, .05),
+    0 14px 28px rgba(20, 20, 20, .08);
+}

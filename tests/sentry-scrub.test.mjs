@@ -346,7 +346,7 @@ test("sentry.js loads the errors-only bundle on production hosts and stays off o
   const src = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
   assert.match(src, /bundle\.min\.js/);
   assert.doesNotMatch(src, /bundle\.tracing/);
-  assert.match(src, /insight-shell-v68/);
+  assert.match(src, /insight-shell-v69/);
 
   async function bootAt(location) {
     const scripts = [];
