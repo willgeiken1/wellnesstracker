@@ -196,6 +196,10 @@
 .dr-rows,
 .dr-done { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .dr-row { display: flex; align-items: center; gap: 8px; opacity: 1; }
+.dr-row { flex-wrap: wrap; }
+.dr-row > .dr-log { flex: 1 1 100%; }
+.dr-row-done > .dr-copy { flex: 1 1 auto; }
+.dr-done-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
 .dr-log {
   flex: 1;
   min-width: 0;
@@ -435,6 +439,38 @@
 .dr-block-pick[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .dr-evidence { margin: 8px 0 12px; font-size: 14px; color: var(--muted); }
 .dr-add-block { margin-top: 2px; }
+.dr-history,
+.dr-edit-log,
+.dr-calc-open {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: rgba(20, 20, 20, .1);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.dr-calc-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+}
+.dr-next-dose { flex: 1 0 100%; font-size: 13px; font-weight: 600; }
+.dr-history-list { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
+.dr-history-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
+.dr-history-day { font-weight: 700; }
+.dr-calc-result {
+  margin: 4px 0 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--raised);
+}
+.dr-calc-result p { margin: 0 0 8px; }
+.dr-calc-note { font-size: 14px; }
+.dr-log-error { min-height: 0; margin: 0 0 12px; color: var(--red, #b42318); font-weight: 700; }
+.dr-log-error:empty { display: none; }
 
 @media (prefers-reduced-motion: no-preference) {
   .dr-page[data-routines-edit="on"] {
