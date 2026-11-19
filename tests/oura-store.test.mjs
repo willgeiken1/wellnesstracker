@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accessToken, connectionMark, DELETING, forgetRevoked, isRevokedGrant, NEWER_LOGIN, OuraUnauthorized, readWithAccess, recordSyncError, REFUSAL_GAP_MS, refused, REVOKED, saveDays } from "../supabase/functions/_shared/oura-store.js";
+import { accessToken, connectionMark, DELETING, forgetRevoked, isRevokedGrant, NEWER_LOGIN, OuraUnauthorized, readWithAccess, recordSyncError, REFUSAL_GAP_MS, refused, REVOKED, saveDays, saveLogin } from "../supabase/functions/_shared/oura-store.js";
 
 // A made-up in-memory database with just the query shapes oura-store uses. No real Oura data.
 // `or` understands only the one filter oura-store sends: rows with no `data.conn`, or one at or before a mark.
@@ -31,9 +31,10 @@ function fakeDb(state, hooks = {}) {
       },
       upsert(list, opts = {}) {
         const run = async () => {
+          if (hooks.failUpsert?.(table)) return { data: null, error: { message: "made-up failure" } };
           await hooks.duringUpsert?.();
           const added = [];
-          for (const row of list) {
+          for (const row of [].concat(list)) {
             const at = (state[table] ??= []).findIndex((r) => r.user_id === row.user_id && r.day === row.day);
             if (at < 0) { state[table].push(structuredClone(row)); added.push({ day: row.day }); }
             else if (!opts.ignoreDuplicates) state[table][at] = structuredClone(row);
@@ -438,4 +439,48 @@ test("a cleanup that finds a newer login than the refused one deletes no days an
   assert.equal(state.oura_tokens.length, 1);
   assert.equal(state.oura_days.length, 2);
   assert.equal(state.oura_connections[0].last_error, null);
+});
+
+// Saving a new login from Oura's callback (oura-callback). Made-up logins only.
+const NOW = "2026-11-19T15:00:00.000Z";
+const fresh = { access_token: "made-up-new-access", refresh_token: "made-up-new-refresh", expires_at: "2026-11-20T15:00:00.000Z" };
+const quiet = async (run) => { const log = console.error; console.error = () => {}; try { return await run(); } finally { console.error = log; } };
+
+test("a reconnect saves the new login and starts a new connection", async () => {
+  const state = linked(stored());
+  assert.equal(await saveLogin(fakeDb(state), U, fresh, NOW), "connected");
+  assert.deepEqual(state.oura_tokens, [{ user_id: U, ...fresh, updated_at: NOW }]);
+  assert.deepEqual(state.oura_connections, [{ user_id: U, connected_at: NOW, last_sync: null, last_error: null }]);
+  assert.equal(state.oura_days.length, 2);
+});
+
+test("a reconnect whose connection save fails keeps the new login, and the next sync keeps the days", async () => {
+  const state = linked(stored());
+  state.oura_connections[0].last_error = DELETING;
+  const admin = fakeDb(state, { failUpsert: (table) => table === "oura_connections" });
+  assert.equal(await quiet(() => saveLogin(admin, U, fresh, NOW)), "error");
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_tokens[0].refresh_token, fresh.refresh_token);
+  assert.deepEqual(state.oura_connections, [{ user_id: U, connected_at: MARK, last_error: null }]);
+  // The next sync still finds the old connection, now with the new login: it uses it and deletes nothing.
+  const sync = fakeDb(state);
+  assert.equal(await accessToken(sync, U, await connectionMark(sync, U), async () => { throw new Error("no refresh needed"); }, { ...fast, now: Date.parse(NOW) }), fresh.access_token);
+  assert.equal(state.oura_days.length, 2);
+});
+
+test("a first connect whose connection save fails leaves no login behind", async () => {
+  const state = { oura_tokens: [], oura_connections: [], oura_days: [] };
+  const admin = fakeDb(state, { failUpsert: (table) => table === "oura_connections" });
+  assert.equal(await quiet(() => saveLogin(admin, U, fresh, NOW)), "error");
+  assert.deepEqual(state.oura_tokens, []);
+  assert.deepEqual(state.oura_connections, []);
+});
+
+test("a login whose connection can't be read, or whose token save fails, changes nothing", async () => {
+  for (const hooks of [{ failRead: (table) => table === "oura_connections" }, { failUpsert: (table) => table === "oura_tokens" }]) {
+    const state = linked(stored());
+    const before = structuredClone(state);
+    assert.equal(await quiet(() => saveLogin(fakeDb(state, hooks), U, fresh, NOW)), "error");
+    assert.deepEqual(state, before);
+  }
 });

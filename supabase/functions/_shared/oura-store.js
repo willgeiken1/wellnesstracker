@@ -141,6 +141,30 @@ export async function recordSyncError(admin, userId, mark, message) {
   await write;
 }
 
+/** Saves a new login from Oura's callback, then starts its connection. `login` holds `access_token`,
+ * `refresh_token` and `expires_at`. The login is saved first, because a sync that finds a connection with no login
+ * deletes that connection's days (`finishRevoked`). On a reconnect the new login replaces the old one, so if the new
+ * connection then can't be saved, the new login stays on the existing connection: deleting it would leave that
+ * connection with no login, and the next sync would delete its days after one failed save. Its old message is cleared,
+ * because a login Oura has just issued means access was not revoked. Only a first connect, with no connection to
+ * keep, takes its login back. A connection that can't be read changes nothing. Returns "connected" or "error". */
+export async function saveLogin(admin, userId, login, now = new Date().toISOString()) {
+  const prior = await admin.from("oura_connections").select("connected_at").eq("user_id", userId).maybeSingle();
+  if (prior.error) { console.error("Oura connection read failed"); return "error"; }
+  const token = await admin.from("oura_tokens").upsert({ user_id: userId, ...login, updated_at: now });
+  if (token.error) { console.error("Oura token save failed"); return "error"; }
+  // last_sync stays empty so the app runs a full first sync the next time it opens.
+  const conn = await admin.from("oura_connections").upsert({ user_id: userId, connected_at: now, last_sync: null, last_error: null });
+  if (!conn.error) return "connected";
+  console.error("Oura connection save failed");
+  if (prior.data) {
+    await admin.from("oura_connections").update({ last_error: null }).eq("user_id", userId).eq("connected_at", prior.data.connected_at);
+  } else {
+    await admin.from("oura_tokens").delete().eq("user_id", userId);
+  }
+  return "error";
+}
+
 /** A short, one-way tag for a refresh token, so two refusals can be matched without storing the token. */
 export async function loginTag(refreshToken) {
   const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(refreshToken))));
