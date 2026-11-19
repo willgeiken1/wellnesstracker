@@ -2,7 +2,7 @@
 // Body: { "days": 14 } -> how far back to fetch (the first sync uses 120).
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { connectionMark, OuraUnauthorized, readWithAccess, saveDays } from "../_shared/oura-store.js";
+import { connectionMark, OuraUnauthorized, readWithAccess, recordSyncError, saveDays } from "../_shared/oura-store.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -54,9 +54,10 @@ async function fetchAll(path: string, token: string, start: string, end: string)
   return out;
 }
 
-async function syncUser(userId: string, daysBack: number) {
+async function syncUser(userId: string, daysBack: number, seen: { mark?: string | null }) {
   // The connection this sync belongs to. If it is disconnected while Oura is being read, nothing is kept.
   const mark = await connectionMark(admin, userId);
+  seen.mark = mark;
   if (!mark) throw new Error("Oura isn't connected");
   const start = isoDay(new Date(Date.now() - daysBack * 86400_000));
   const end = isoDay(new Date(Date.now() + 86400_000));
@@ -102,6 +103,7 @@ async function syncUser(userId: string, daysBack: number) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   let userId: string | null = null;
+  const seen: { mark?: string | null } = {};
   try {
     const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
     const { data: { user } } = await admin.auth.getUser(token);
@@ -109,11 +111,11 @@ Deno.serve(async (req) => {
     userId = user.id;
     const body = await req.json().catch(() => ({}));
     const daysBack = Math.min(365, Math.max(2, Number(body.days) || 14));
-    const n = await syncUser(user.id, daysBack);
+    const n = await syncUser(user.id, daysBack, seen);
     return json({ ok: true, days: n });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (userId) await admin.from("oura_connections").update({ last_error: msg }).eq("user_id", userId);
+    if (userId) await recordSyncError(admin, userId, seen.mark ?? null, msg);
     return json({ error: msg }, 500);
   }
 });
