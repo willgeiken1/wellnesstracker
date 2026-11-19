@@ -1,0 +1,75 @@
+/* Local calendar day and the next-dose countdown.
+   The day is the clock's year, month, and day. toISOString() is the UTC day,
+   so a US evening would already be tomorrow. Block times belong to the three
+   default names. A renamed block has no time, matching the now/next line. */
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export const ROUTINE_BLOCK_START_MIN = Object.freeze({
+  "Morning routine": 5 * 60,
+  "Supplement & enhancer stack": 12 * 60,
+  "Night routine": 17 * 60,
+});
+
+export function localCalendarDay(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function live(row) {
+  return !!(row && !(typeof row.deletedAt === "number" && row.deletedAt > 0));
+}
+
+function coversDay(log, itemId, day) {
+  if (!live(log) || log.itemId !== itemId || log.day !== day || log.rest === true) return false;
+  return log.status === "done" || log.status === "partial" || log.status === "skipped";
+}
+
+/* Minutes until the next block time for this item.
+   A log today, including a skip, uses tomorrow's earliest time.
+   Hours come from the Date's local clock, not its UTC fields. */
+export function nextDoseCountdown({ item, blocks, placements, logs, date, day }) {
+  if (!item || item.kind !== "dose" || typeof item.id !== "string" || !item.id) return null;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  if (typeof day !== "string" || !DAY.test(day)) return null;
+  const placed = new Set();
+  for (const place of Array.isArray(placements) ? placements : []) {
+    if (live(place) && place.itemId === item.id && typeof place.blockId === "string") placed.add(place.blockId);
+  }
+  const starts = [];
+  for (const block of Array.isArray(blocks) ? blocks : []) {
+    if (!live(block) || !placed.has(block.id)) continue;
+    const start = Object.prototype.hasOwnProperty.call(ROUTINE_BLOCK_START_MIN, block.name)
+      ? ROUTINE_BLOCK_START_MIN[block.name]
+      : null;
+    if (typeof start === "number") starts.push(start);
+  }
+  if (!starts.length) return null;
+  starts.sort((a, b) => a - b);
+  const logged = (Array.isArray(logs) ? logs : []).some((log) => coversDay(log, item.id, day));
+  const atMinutes = (minuteOfDay, nextDay) => {
+    const target = new Date(date.getTime());
+    target.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+    if (nextDay) target.setDate(target.getDate() + 1);
+    return target;
+  };
+  let target = null;
+  if (!logged) {
+    for (const start of starts) {
+      const candidate = atMinutes(start, false);
+      if (candidate.getTime() >= date.getTime()) {
+        target = candidate;
+        break;
+      }
+    }
+  }
+  if (!target) target = atMinutes(starts[0], true);
+  const waitMin = Math.round((target.getTime() - date.getTime()) / 60000);
+  const tomorrow = target.getFullYear() !== date.getFullYear()
+    || target.getMonth() !== date.getMonth()
+    || target.getDate() !== date.getDate();
+  return { waitMin, tomorrow };
+}

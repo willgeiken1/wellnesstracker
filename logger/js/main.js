@@ -25,6 +25,7 @@ import "./shared/weekly.js";
 import "./shared/routines-flag.js";
 import "./pages/daily-routines.js";
 import "./pages/daily-routines-edit.js";
+import "./pages/daily-routines-dose.js";
 import "./pages/checkin.js";
 import "./pages/home.js";
 import "./shell/workout.js";
