@@ -313,9 +313,11 @@ export function revisePlanEntity(store, collection, id, patch, now) {
   return normalized;
 }
 
+/* A deleted block is still a block row. Seeding again would drop that
+   tombstone and the placements that can restore it. */
 export function seedDefaultBlocks(store, now, newId = () => routineId("block")) {
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
-  if (liveOf(normalized.blocks).length) return normalized;
+  if (normalized.blocks.length) return normalized;
   const at = num(now);
   normalized.blocks = DEFAULT_ROUTINE_BLOCKS.map((block, index) => ({
     id: newId(block.name, index),
