@@ -597,9 +597,114 @@ photos.csv lists progress photos (date and pose). The image files are not in thi
 Meal photos sent off for a nutrition estimate are not kept, so they are not here.
 A written meal description sent for an estimate is not kept either.
 Oura rows are the days Insight has stored, not a full copy of your Oura account.
+daily_routine_blocks.csv, daily_routine_items.csv, daily_routine_placements.csv, daily_routine_logs.csv, and daily_routine_preferences.csv are the routine layout and dose logs, including rows marked deleted.
+The reconstitution calculator is not stored, so it is not in this zip.
 `;
 
 function num(v) { return v == null || v === "" ? "" : String(v); }
+
+function routineMarkedDeleted(row) {
+  return row && typeof row.deletedAt === "number" && row.deletedAt > 0 ? "yes" : "";
+}
+
+function routineLoggedTime(at) {
+  if (typeof at !== "number" || !Number.isFinite(at) || at <= 0) return "";
+  const date = new Date(at);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function rowsById(list) {
+  const map = new Map();
+  for (const row of Array.isArray(list) ? list : []) {
+    if (row && typeof row.id === "string" && row.id) map.set(row.id, row);
+  }
+  return map;
+}
+
+function namesFor(ids, rows) {
+  if (!Array.isArray(ids)) return "";
+  return ids.map((id) => {
+    const row = rows.get(id);
+    return row && row.name ? row.name : "";
+  }).filter(Boolean).join("; ");
+}
+
+/* Layout and dose logs, including rows marked deleted. The calculator is not stored. */
+function dailyRoutineFiles(state) {
+  const store = state && state.dailyRoutines && typeof state.dailyRoutines === "object" && !Array.isArray(state.dailyRoutines)
+    ? state.dailyRoutines
+    : {};
+  const blocks = rowsById(store.blocks);
+  const items = rowsById(store.items);
+  const compounds = rowsById(store.compounds);
+  const prefs = store.prefs && typeof store.prefs === "object" && !Array.isArray(store.prefs) ? store.prefs : {};
+
+  const blockRows = [["id", "name", "order", "deleted"]];
+  for (const block of blocks.values()) {
+    blockRows.push([block.id, block.name || "", num(block.order), routineMarkedDeleted(block)]);
+  }
+
+  const itemRows = [["id", "name", "kind", "planned_amount", "unit", "deleted"]];
+  for (const item of items.values()) {
+    const compound = typeof item.compoundId === "string" ? compounds.get(item.compoundId) : null;
+    itemRows.push([
+      item.id,
+      item.name || "",
+      item.kind || "",
+      compound && compound.amount != null ? num(compound.amount) : "",
+      compound && compound.unit ? compound.unit : "",
+      routineMarkedDeleted(item),
+    ]);
+  }
+
+  const placeRows = [["block_id", "item_id", "block", "item", "order", "deleted"]];
+  for (const place of Array.isArray(store.placements) ? store.placements : []) {
+    if (!place || typeof place !== "object") continue;
+    const block = typeof place.blockId === "string" ? blocks.get(place.blockId) : null;
+    const item = typeof place.itemId === "string" ? items.get(place.itemId) : null;
+    placeRows.push([
+      place.blockId || "",
+      place.itemId || "",
+      block && block.name || "",
+      item && item.name || "",
+      num(place.order),
+      routineMarkedDeleted(place),
+    ]);
+  }
+
+  const logRows = [["item_id", "item", "day", "status", "amount", "unit", "time", "deleted"]];
+  for (const log of Array.isArray(store.logs) ? store.logs : []) {
+    if (!log || typeof log !== "object") continue;
+    const item = typeof log.itemId === "string" ? items.get(log.itemId) : null;
+    logRows.push([
+      log.itemId || "",
+      item && item.name || "",
+      log.day || "",
+      log.status || "",
+      log.amount != null ? num(log.amount) : "",
+      log.unit || "",
+      routineLoggedTime(log.at),
+      routineMarkedDeleted(log),
+    ]);
+  }
+
+  const last = typeof prefs.lastBlockId === "string" ? blocks.get(prefs.lastBlockId) : null;
+  const prefRows = [
+    ["preference", "value"],
+    ["last_block", last && last.name || ""],
+    ["focus_mode", prefs.focusMode === true ? "on" : "off"],
+    ["collapsed_blocks", namesFor(prefs.collapsedBlocks, blocks)],
+    ["show_completed", namesFor(prefs.revealBlocks, blocks)],
+  ];
+
+  return [
+    { name: "daily_routine_blocks.csv", text: toCsv(blockRows) },
+    { name: "daily_routine_items.csv", text: toCsv(itemRows) },
+    { name: "daily_routine_placements.csv", text: toCsv(placeRows) },
+    { name: "daily_routine_logs.csv", text: toCsv(logRows) },
+    { name: "daily_routine_preferences.csv", text: toCsv(prefRows) },
+  ];
+}
 
 export function buildExportFiles(state, opts = {}) {
   const s = state || {};
@@ -709,6 +814,7 @@ export function buildExportFiles(state, opts = {}) {
     }
   }
   files.push({ name: "checkins.csv", text: toCsv(checks) });
+  for (const file of dailyRoutineFiles(s)) files.push(file);
   return files;
 }
 
