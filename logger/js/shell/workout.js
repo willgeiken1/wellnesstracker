@@ -165,6 +165,10 @@ function renderSheet() {
     inner = app.liveAddSheetHTML();
   } else if (app.ui.sheet === "picker") {
     inner = app.pickerSheetHTML();
+  } else if (app.ui.sheet === "routines-settings") {
+    inner = typeof app.routinesSettingsSheetHTML === "function" ? app.routinesSettingsSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-discover") {
+    inner = typeof app.routinesDiscoverSheetHTML === "function" ? app.routinesDiscoverSheetHTML() : "";
   } else if (app.ui.sheet === "exercise") {
     const editing = app.ui.sd.idx >= 0;
     inner = `<h3>${editing ? "Edit exercise" : "Add exercise"}</h3>
@@ -180,8 +184,13 @@ function renderSheet() {
   }
   const bankSheet = app.ui.sheet === "picker" || app.ui.sheet === "live-add" || app.ui.sheet === "swap";
   const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : bankSheet ? "sheet-card bank" : "sheet-card";
+  const sheetName = app.ui.sheet === "home-gallery" ? "Widget gallery"
+    : app.ui.sheet === "checkin" ? "Check-in"
+    : app.ui.sheet === "routines-settings" ? "Routines settings"
+    : app.ui.sheet === "routines-discover" ? "Discover"
+    : "Sheet";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
-    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : app.ui.sheet === "checkin" ? "Check-in" : "Sheet"}"><div class="grabber"></div>
+    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>
     ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;
 }
 app.renderSheet = renderSheet;
