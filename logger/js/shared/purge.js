@@ -1,5 +1,6 @@
 /* Pure helpers for privacy: date-range wipes, CSV, and an uncompressed zip.
    No DOM. The edge function supabase/functions/_shared/strip.ts mirrors stripRange. */
+import { purgeDailyRoutineRange } from "./daily-routines-store.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -496,6 +497,7 @@ export function stripRange(data, from, to, opts = {}) {
   }
 
   if (stripCheckins(data, from, to, before, now)) changed = true;
+  if (purgeDailyRoutineRange(data, from, to, before, now)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
 }

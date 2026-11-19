@@ -205,7 +205,8 @@ async function exportData() {
     restSeconds: app.state.restSeconds, workouts: app.state.workouts, plan: app.state.plan, planAt: app.state.planAt, sessions: app.state.sessions,
     profile: app.state.profile, food: app.state.food, cardio: app.state.cardio,
     measurements: app.state.measurements, layout: app.state.layout, machineNotes: app.state.machineNotes,
-    goals: app.state.goals, deleted: app.state.deleted, purges: app.state.purges }, null, 2);
+    goals: app.state.goals, deleted: app.state.deleted, purges: app.state.purges,
+    dailyRoutines: app.state.dailyRoutines || null }, null, 2);
   const name = `workouts-${app.today()}.json`;
   const file = new File([data], name, { type: "application/json" });
   let shared = false;

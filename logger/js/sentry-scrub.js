@@ -63,7 +63,7 @@ export function scrubData(value, depth = 0) {
   return out;
 }
 
-const HEALTH_WORD = "\\b(?:hrv|readiness|sleep(?:[\\s_-]*score)?|weigh(?:[\\s-]*in)?|weights?(?:[\\s_-]*kg)?|kcals?|calories?|proteins?|meals?|notes?)\\b|\\b(?:moods?|energy|stress)";
+const HEALTH_WORD = "\\b(?:hrv|readiness|sleep(?:[\\s_-]*score)?|weigh(?:[\\s-]*in)?|weights?(?:[\\s_-]*kg)?|kcals?|calories?|proteins?|meals?|notes?|doses?|mcg|compounds?|syringes?|reconstitut\\w*|vials?|concentrations?|doseamounts?|doseunits?|syringeunits?|vialmg|bacwaterml|dailyroutines?)\\b|\\b(?:moods?|energy|stress)";
 
 function hasHealthWord(value) {
   return new RegExp(HEALTH_WORD, "i").test(value);
