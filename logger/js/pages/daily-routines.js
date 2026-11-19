@@ -5,6 +5,7 @@ import {
   normalizeDailyRoutines,
   projectDailyRoutines,
   putDailyRoutines,
+  revisePlanEntity,
   routineId,
   routineLogId,
   seedDefaultBlocks,
@@ -25,6 +26,9 @@ import {
    derive the day from the clock's UTC instant. */
 
 const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
+export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
+export const ROUTINE_DOSE_UNITS = Object.freeze(["mcg", "mg", "IU", "mL", "units"]);
+const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
 const DEFAULT_START = new Map([
   ["Morning routine", 5],
   ["Supplement & enhancer stack", 12],
@@ -32,13 +36,6 @@ const DEFAULT_START = new Map([
 ]);
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const EXAMPLE_ITEMS = [
-  { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" },
-  { name: "Example Compound B", kind: "check" },
-  { name: "Example Compound C", kind: "check" },
-  { name: "Example Compound D", kind: "check" },
-];
-
 function esc(value) {
   if (typeof app.esc === "function") return app.esc(value);
   return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -261,8 +258,9 @@ export function routineBlockRows(projected, blockId, day) {
 }
 
 function doseText(row) {
-  const amount = row.compound ? formatAmount(row.compound.amount) : "";
-  const unit = row.compound && row.compound.unit ? row.compound.unit : "";
+  if (!row.item || row.item.kind !== "dose" || !row.compound) return "";
+  const amount = formatAmount(row.compound.amount);
+  const unit = row.compound.unit ? row.compound.unit : "";
   if (!amount) return "";
   return unit ? `${amount} ${unit}` : amount;
 }
@@ -464,58 +462,452 @@ export function toggleRoutineReveal(state, blockId) {
   });
 }
 
-/* Minimal stand-in until block and item editing ships. Four synthetic names,
-   then the button stops. The first is the example dose row. */
-export function addExampleRoutineItem(state, blockId) {
-  if (typeof blockId !== "string" || !blockId) return false;
+function cleanName(name) {
+  if (typeof name !== "string") return "";
+  const text = name.trim();
+  return text ? text.slice(0, 80) : "";
+}
+
+/* 1/4, ¼, and 0.25 all become the number 0.25. A blank or a negative is refused. */
+export function parseRoutineAmount(raw) {
+  if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : null;
+  if (typeof raw !== "string") return null;
+  const text = raw.trim().replace(",", ".");
+  const glyphs = { "¼": 0.25, "½": 0.5, "¾": 0.75, "1¼": 1.25, "1½": 1.5, "1¾": 1.75 };
+  if (Object.prototype.hasOwnProperty.call(glyphs, text)) return glyphs[text];
+  const slash = text.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (slash) {
+    const numerator = Number(slash[1]);
+    const denominator = Number(slash[2]);
+    if (!denominator || !Number.isFinite(numerator / denominator) || numerator / denominator < 0) return null;
+    return numerator / denominator;
+  }
+  if (!/^(?:\d+\.?\d*|\.\d+)$/.test(text)) return null;
+  const value = Number(text);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function liveBlocks(store) {
+  return (store.blocks || []).filter((block) => isLive(block));
+}
+
+function nextBlockColor(store) {
+  return ROUTINE_BLOCK_COLORS[liveBlocks(store).length % ROUTINE_BLOCK_COLORS.length];
+}
+
+function nextPlacementOrder(store, blockId) {
+  return (store.placements || [])
+    .filter((row) => isLive(row) && row.blockId === blockId)
+    .reduce((max, row) => Math.max(max, row.order || 0), -1) + 1;
+}
+
+function sameIdList(liveIds, orderedIds) {
+  if (!Array.isArray(orderedIds) || orderedIds.length !== liveIds.length) return false;
+  const want = new Set(liveIds);
+  if (want.size !== liveIds.length) return false;
+  const seen = new Set();
+  for (const id of orderedIds) {
+    if (typeof id !== "string" || !want.has(id) || seen.has(id)) return false;
+    seen.add(id);
+  }
+  return seen.size === want.size;
+}
+
+function rememberBlock(store, blockId, at) {
+  const live = typeof blockId === "string" && liveBlocks(store).some((block) => block.id === blockId);
+  const previous = store.prefs && typeof store.prefs.lastBlockId === "string" ? store.prefs.lastBlockId : null;
+  const lastBlockId = live ? blockId : (previous && liveBlocks(store).some((block) => block.id === previous) ? previous : (liveBlocks(store)[0] || {}).id || null);
+  store.prefs = { ...store.prefs, lastBlockId, updatedAt: at };
+  store.updatedAt = Math.max(store.updatedAt || 0, at);
+  return store;
+}
+
+function blockIdForItem(store, itemId) {
+  const place = (store.placements || []).find((row) => isLive(row) && row.itemId === itemId && liveBlocks(store).some((block) => block.id === row.blockId));
+  return place ? place.blockId : null;
+}
+
+function collapsedIds(prefs) {
+  const list = Array.isArray(prefs && prefs.collapsedBlocks) ? prefs.collapsedBlocks : [];
+  return list.filter((id) => typeof id === "string" && id);
+}
+
+/* Plan edits change order, names, and placements. They never assign logs. */
+function applyOrders(store, collection, ids, at) {
+  return ids.reduce((next, id, index) => revisePlanEntity(next, collection, id, { order: index }, at), store);
+}
+
+export function addRoutineBlock(state, name) {
+  const trimmed = cleanName(name);
+  if (!trimmed) return false;
   return withStore(state, (store, clock) => {
-    const view = projectDailyRoutines(store);
-    if (!(view.blocks || []).some((block) => block.id === blockId)) return null;
-    const used = new Set((view.items || []).map((item) => item.name));
-    const example = EXAMPLE_ITEMS.find((row) => !used.has(row.name));
-    if (!example || !DAY.test(clock.day)) return null;
     const at = stampAfter(clock.now, store.updatedAt);
-    const itemId = routineId("item");
-    let next = store;
-    let compoundId = null;
-    if (example.kind === "dose") {
-      compoundId = routineId("compound");
-      next = upsertEntity(next, "compounds", {
-        id: compoundId,
-        name: example.name,
-        amount: example.amount,
-        unit: example.unit,
-        startDate: clock.day,
-        archivedAt: null,
-        deletedAt: null,
-      }, at);
-      if (!wrote(next, "compounds", compoundId, at)) return null;
-    }
-    next = upsertEntity(next, "items", {
-      id: itemId,
-      name: example.name,
-      kind: example.kind,
-      compoundId,
-      deletedAt: null,
-    }, at);
-    if (!wrote(next, "items", itemId, at)) return null;
-    const order = (projectDailyRoutines(next).placements || [])
-      .filter((row) => row.blockId === blockId)
-      .reduce((max, row) => Math.max(max, row.order || 0), -1) + 1;
-    const placementId = routineId("place");
-    next = upsertEntity(next, "placements", {
-      id: placementId,
-      blockId,
-      itemId,
+    const id = routineId("block");
+    const order = liveBlocks(store).reduce((max, block) => Math.max(max, block.order || 0), -1) + 1;
+    let next = upsertEntity(store, "blocks", {
+      id,
+      name: trimmed,
+      color: nextBlockColor(store),
       order,
       deletedAt: null,
     }, at);
-    return wrote(next, "placements", placementId, at);
+    if (!wrote(next, "blocks", id, at)) return null;
+    return rememberBlock(next, id, at);
+  });
+}
+
+function nextLiveBlockOrder(store) {
+  return (store.blocks || []).filter(isLive).reduce((max, block) => Math.max(max, block.order || 0), -1) + 1;
+}
+
+/* Placements removed with the block come back when the block is edited or restored.
+   A placement removed on its own keeps removedWith set to its own id. */
+function reviveBlockPlacements(store, blockId, at) {
+  let next = store;
+  for (const place of store.placements || []) {
+    if (!place || place.blockId !== blockId || place.removedWith !== blockId || isLive(place)) continue;
+    next = upsertEntity(next, "placements", { ...place, deletedAt: null, removedWith: null }, at);
+  }
+  return next;
+}
+
+export function renameRoutineBlock(state, blockId, name) {
+  const trimmed = cleanName(name);
+  if (!trimmed || typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    const block = (store.blocks || []).find((row) => row && row.id === blockId && isLive(row));
+    if (!block) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, block.updatedAt || 0));
+    const revised = revisePlanEntity(store, "blocks", blockId, { name: trimmed }, at);
+    const next = reviveBlockPlacements(revised, blockId, at);
+    const row = (next.blocks || []).find((item) => item.id === blockId);
+    if (!row || row.name !== trimmed || row.updatedAt !== at) return null;
+    return rememberBlock(next, blockId, at);
+  });
+}
+
+export function setRoutineBlockColor(state, blockId, color) {
+  if (typeof blockId !== "string" || !blockId || !TILE_COLORS.has(color)) return false;
+  return withStore(state, (store, clock) => {
+    const block = (store.blocks || []).find((row) => row && row.id === blockId && isLive(row));
+    if (!block) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, block.updatedAt || 0));
+    const revised = revisePlanEntity(store, "blocks", blockId, { color }, at);
+    const next = reviveBlockPlacements(revised, blockId, at);
+    const row = (next.blocks || []).find((item) => item.id === blockId);
+    if (!row || row.color !== color) return null;
+    return rememberBlock(next, blockId, at);
+  });
+}
+
+export function deleteRoutineBlock(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    const block = (store.blocks || []).find((row) => row && row.id === blockId && isLive(row));
+    if (!block) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, block.updatedAt || 0));
+    let next = upsertEntity(store, "blocks", { ...block, deletedAt: at }, at);
+    for (const place of store.placements || []) {
+      if (!place || !isLive(place) || place.blockId !== blockId) continue;
+      next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: blockId }, at);
+    }
+    const row = (next.blocks || []).find((item) => item.id === blockId);
+    if (!row || !(row.deletedAt > 0)) return null;
+    if (next.prefs && next.prefs.lastBlockId === blockId) next.prefs = { ...next.prefs, lastBlockId: null };
+    return rememberBlock(next, null, at);
+  });
+}
+
+export function restoreRoutineBlock(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    const block = (store.blocks || []).find((row) => row && row.id === blockId);
+    if (!block || isLive(block)) return null;
+    const at = stampAfter(clock.now, Math.max(block.updatedAt || 0, block.deletedAt || 0, store.updatedAt || 0));
+    let next = upsertEntity(store, "blocks", { ...block, deletedAt: null, order: nextLiveBlockOrder(store) }, at);
+    next = reviveBlockPlacements(next, blockId, at);
+    const row = (next.blocks || []).find((item) => item.id === blockId);
+    if (!row || row.deletedAt != null || row.updatedAt !== at) return null;
+    return rememberBlock(next, blockId, at);
+  });
+}
+
+export function duplicateRoutineBlock(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    const block = (store.blocks || []).find((row) => row && row.id === blockId && isLive(row));
+    if (!block) return null;
+    const copies = (store.placements || [])
+      .filter((row) => isLive(row) && row.blockId === blockId)
+      .slice()
+      .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const at = stampAfter(clock.now, store.updatedAt);
+    const id = routineId("block");
+    const order = liveBlocks(store).reduce((max, row) => Math.max(max, row.order || 0), -1) + 1;
+    const suffix = " copy";
+    const name = `${block.name.slice(0, 80 - suffix.length).trimEnd()}${suffix}`;
+    let next = upsertEntity(store, "blocks", {
+      id,
+      name,
+      color: TILE_COLORS.has(block.color) ? block.color : "citrus",
+      order,
+      deletedAt: null,
+    }, at);
+    if (!wrote(next, "blocks", id, at)) return null;
+    for (const place of copies) {
+      const placementId = routineId("place");
+      next = upsertEntity(next, "placements", {
+        id: placementId,
+        blockId: id,
+        itemId: place.itemId,
+        order: place.order,
+        deletedAt: null,
+      }, at);
+      if (!wrote(next, "placements", placementId, at)) return null;
+    }
+    return rememberBlock(next, id, at);
+  });
+}
+
+export function reorderRoutineBlocks(state, orderedIds, movedId) {
+  return withStore(state, (store, clock) => {
+    const ids = liveBlocks(store).slice().sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((block) => block.id);
+    if (!sameIdList(ids, orderedIds)) return null;
+    if (ids.join("\0") === orderedIds.join("\0")) return null;
+    const at = stampAfter(clock.now, store.updatedAt);
+    const next = applyOrders(store, "blocks", orderedIds, at);
+    const moved = typeof movedId === "string" && orderedIds.includes(movedId) ? movedId : orderedIds[0];
+    return rememberBlock(next, moved, at);
+  });
+}
+
+export function reorderRoutinePlacements(state, blockId, orderedIds) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
+    const liveItems = new Set((store.items || []).filter((row) => isLive(row)).map((row) => row.id));
+    const ids = (store.placements || [])
+      .filter((row) => isLive(row) && row.blockId === blockId && liveItems.has(row.itemId))
+      .slice()
+      .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((row) => row.id);
+    if (!sameIdList(ids, orderedIds)) return null;
+    if (ids.join("\0") === orderedIds.join("\0")) return null;
+    const at = stampAfter(clock.now, store.updatedAt);
+    const next = applyOrders(store, "placements", orderedIds, at);
+    return rememberBlock(next, blockId, at);
+  });
+}
+
+export function renameRoutineItem(state, itemId, name) {
+  const trimmed = cleanName(name);
+  if (!trimmed || typeof itemId !== "string" || !itemId) return false;
+  return withStore(state, (store, clock) => {
+    const item = (store.items || []).find((row) => row && row.id === itemId && isLive(row));
+    if (!item) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, item.updatedAt || 0));
+    let next = revisePlanEntity(store, "items", itemId, { name: trimmed }, at);
+    const row = (next.items || []).find((entry) => entry.id === itemId);
+    if (!row || row.name !== trimmed) return null;
+    if (item.compoundId) {
+      const compound = (next.compounds || []).find((entry) => entry && entry.id === item.compoundId && isLive(entry));
+      if (compound) next = revisePlanEntity(next, "compounds", compound.id, { name: trimmed }, at);
+    }
+    return rememberBlock(next, blockIdForItem(next, itemId), at);
+  });
+}
+
+export function deleteRoutineItem(state, itemId) {
+  if (typeof itemId !== "string" || !itemId) return false;
+  return withStore(state, (store, clock) => {
+    const item = (store.items || []).find((row) => row && row.id === itemId && isLive(row));
+    if (!item) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, item.updatedAt || 0));
+    let next = upsertEntity(store, "items", { ...item, deletedAt: at }, at);
+    for (const place of store.placements || []) {
+      if (!place || !isLive(place) || place.itemId !== itemId) continue;
+      next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: itemId }, at);
+    }
+    const row = (next.items || []).find((entry) => entry.id === itemId);
+    if (!row || !(row.deletedAt > 0)) return null;
+    return next;
+  });
+}
+
+export function restoreRoutineItem(state, itemId) {
+  if (typeof itemId !== "string" || !itemId) return false;
+  return withStore(state, (store, clock) => {
+    const item = (store.items || []).find((row) => row && row.id === itemId);
+    if (!item || isLive(item)) return null;
+    const at = stampAfter(clock.now, Math.max(item.updatedAt || 0, item.deletedAt || 0, store.updatedAt || 0));
+    let next = upsertEntity(store, "items", { ...item, deletedAt: null }, at);
+    for (const place of store.placements || []) {
+      if (!place || place.itemId !== itemId || place.removedWith !== itemId || isLive(place)) continue;
+      next = upsertEntity(next, "placements", { ...place, deletedAt: null }, at);
+    }
+    const row = (next.items || []).find((entry) => entry.id === itemId);
+    if (!row || row.deletedAt != null) return null;
+    return rememberBlock(next, blockIdForItem(next, itemId), at);
+  });
+}
+
+function selectedBlockIds(store, draft) {
+  const live = new Set(liveBlocks(store).map((block) => block.id));
+  const raw = Array.isArray(draft && draft.blockIds) ? draft.blockIds : [];
+  const ids = [];
+  for (const id of raw) {
+    if (typeof id !== "string" || !live.has(id) || ids.includes(id)) continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
+function doseDraft(kind, draft) {
+  switch (kind) {
+    case "check":
+      return { amount: null, unit: "" };
+    case "dose": {
+      const amount = parseRoutineAmount(draft && draft.amount);
+      const unit = draft && typeof draft.unit === "string" ? draft.unit : "";
+      if (amount == null || !DOSE_UNIT_SET.has(unit)) return null;
+      return { amount, unit };
+    }
+    default: {
+      const unexpected = kind;
+      void unexpected;
+      return null;
+    }
+  }
+}
+
+function writeCompound(store, item, name, dose, clock, at) {
+  const previousId = item && typeof item.compoundId === "string" ? item.compoundId : "";
+  const existing = previousId ? (store.compounds || []).find((row) => row && row.id === previousId) : null;
+  const id = existing ? existing.id : routineId("compound");
+  const next = upsertEntity(store, "compounds", {
+    id,
+    name,
+    amount: dose.amount,
+    unit: dose.unit,
+    startDate: existing && existing.startDate ? existing.startDate : clock.day,
+    archivedAt: null,
+    deletedAt: null,
+  }, at);
+  return wrote(next, "compounds", id, at) ? { store: next, compoundId: id } : null;
+}
+
+function placeInBlock(store, blockId, itemId, at) {
+  const rows = (store.placements || []).filter((row) => row && row.blockId === blockId && row.itemId === itemId);
+  if (rows.some((row) => isLive(row))) return store;
+  const dead = rows.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+  if (dead) return upsertEntity(store, "placements", { ...dead, order: nextPlacementOrder(store, blockId), deletedAt: null, removedWith: null }, at);
+  const id = routineId("place");
+  return upsertEntity(store, "placements", {
+    id,
+    blockId,
+    itemId,
+    order: nextPlacementOrder(store, blockId),
+    deletedAt: null,
+  }, at);
+}
+
+/* Custom items only. Evidence from the draft is ignored. A dose stores the
+   amount and unit on its compound. Logs are not rewritten. */
+export function saveRoutineItem(state, draft) {
+  const name = cleanName(draft && draft.name);
+  const kind = draft && (draft.kind === "dose" || draft.kind === "check") ? draft.kind : "";
+  const dose = doseDraft(kind, draft);
+  if (!name || !dose) return false;
+  return withStore(state, (store, clock) => {
+    if (!DAY.test(clock.day)) return null;
+    const blockIds = selectedBlockIds(store, draft);
+    if (!blockIds.length) return null;
+    const itemId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : routineId("item");
+    const existing = (store.items || []).find((row) => row && row.id === itemId);
+    if (draft && draft.itemId && (!existing || !isLive(existing))) return null;
+    const at = stampAfter(clock.now, store.updatedAt);
+    let next = store;
+    let compoundId = existing && existing.compoundId ? existing.compoundId : null;
+    if (kind === "dose") {
+      const written = writeCompound(next, existing, name, dose, clock, at);
+      if (!written) return null;
+      next = written.store;
+      compoundId = written.compoundId;
+    }
+    const kept = { ...(existing || {}) };
+    delete kept.evidence;
+    next = upsertEntity(next, "items", {
+      ...kept,
+      id: itemId,
+      name,
+      kind,
+      compoundId: kind === "dose" ? compoundId : (existing && existing.compoundId ? existing.compoundId : null),
+      deletedAt: null,
+    }, at);
+    if (!wrote(next, "items", itemId, at)) return null;
+    const chosen = new Set(blockIds);
+    for (const blockId of blockIds) next = placeInBlock(next, blockId, itemId, at);
+    for (const place of (store.placements || []).filter((row) => isLive(row) && row.itemId === itemId && !chosen.has(row.blockId))) {
+      next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: place.id }, at);
+    }
+    const primary = chosen.has(draft.blockId) ? draft.blockId : blockIds[0];
+    return rememberBlock(next, primary, at);
+  });
+}
+
+export function addRoutineItem(state, blockId, draft) {
+  const blockIds = draft && Array.isArray(draft.blockIds) && draft.blockIds.length ? draft.blockIds : [blockId];
+  return saveRoutineItem(state, { ...(draft || {}), itemId: null, blockId, blockIds });
+}
+
+export function routineItemDraft(state, source) {
+  const store = state && normalizeDailyRoutines(state.dailyRoutines);
+  const view = projectDailyRoutines(store) || { blocks: [], items: [], placements: [], compounds: [] };
+  const itemId = source && typeof source.itemId === "string" ? source.itemId : "";
+  const item = itemId ? (view.items || []).find((row) => row.id === itemId) : null;
+  const compound = item && item.compoundId ? (view.compounds || []).find((row) => row.id === item.compoundId) : null;
+  const placed = item
+    ? (view.placements || []).filter((row) => row.itemId === item.id).map((row) => row.blockId)
+    : [];
+  const blockId = source && typeof source.blockId === "string" ? source.blockId : "";
+  const blockIds = placed.length ? placed : (blockId ? [blockId] : []);
+  const kind = item && item.kind === "dose" ? "dose" : "check";
+  return {
+    itemId: item ? item.id : null,
+    blockId: blockIds.includes(blockId) ? blockId : (blockIds[0] || blockId || null),
+    name: item ? item.name : "",
+    kind,
+    amount: kind === "dose" && compound && typeof compound.amount === "number" ? String(compound.amount) : "",
+    unit: compound && DOSE_UNIT_SET.has(compound.unit) ? compound.unit : "mcg",
+    blockIds,
+  };
+}
+
+export function rememberRoutineBlock(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
+    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    return rememberBlock(store, blockId, at);
+  });
+}
+
+export function toggleRoutineCollapsed(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
+    const current = collapsedIds(store.prefs);
+    const collapsedBlocks = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
+    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    store.prefs = { ...store.prefs, collapsedBlocks, updatedAt: at };
+    store.updatedAt = Math.max(store.updatedAt || 0, at);
+    return rememberBlock(store, blockId, at);
   });
 }
 
 /* Writes the three default blocks once, only for a signed-in flag-on session.
-   A store that already has a live block is left alone, including its logs. */
+   A store that already has a block row, including a deleted one, is left
+   alone so restoring that block still finds its placements. Logs stay put. */
 export function ensureRoutineShell(state, now = Date.now()) {
   if (!canMutateRoutines() || !state || typeof state !== "object" || accountPullPending()) return null;
   const before = state.dailyRoutines;
@@ -640,15 +1032,43 @@ function tileMeta(open, logged, skipped) {
   return open === 1 ? "1 to log" : `${open} to log`;
 }
 
+function layoutEditing() {
+  return !!(app.ui && app.ui.dailyRoutineEdit === true);
+}
+
+function placementId(row) {
+  return row.placement && row.placement.id ? row.placement.id : "";
+}
+
+function rowAttrs(row) {
+  const id = placementId(row);
+  return `data-item-id="${esc(row.item.id)}" data-placement-id="${esc(id)}" data-id="${esc(id)}"`;
+}
+
 function openRowHTML(row) {
   const dose = doseText(row);
   const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
-  return `<li class="dr-row" data-item-id="${esc(row.item.id)}" data-state="open">
+  return `<li class="dr-row" ${rowAttrs(row)} data-state="open">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>
+      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>
     </button>
+    <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     <button type="button" class="dr-skip" data-action="routines-skip" data-item-id="${esc(row.item.id)}">Skip <span class="dr-vh">${esc(row.item.name)}</span></button>
+  </li>`;
+}
+
+function editRowHTML(row) {
+  const dose = doseText(row);
+  const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+  const id = placementId(row);
+  const state = row.open ? "open" : rowState(row.log);
+  return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
+    <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
+    <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
+      <span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}
+    </button>
+    <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
   </li>`;
 }
 
@@ -675,21 +1095,41 @@ export function routineBlockTileHTML(block, projected, view) {
   const skipped = done.length - logged;
   const revealed = !!(view && view.revealed);
   const current = !!(view && view.current);
+  const collapsed = !!(view && view.collapsed);
+  const last = !!(view && view.last);
+  const editing = layoutEditing();
   const dim = !!(view && view.focus && !current);
   const color = tileColor(block.color);
-  const reveal = done.length
+  const shown = editing ? rows : open;
+  const list = !collapsed && shown.length
+    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row)).join("")}</ul>`
+    : "";
+  const reveal = !editing && !collapsed && done.length
     ? `<button type="button" class="dr-reveal" data-action="routines-reveal" data-block-id="${esc(block.id)}" aria-expanded="${revealed ? "true" : "false"}">${revealed ? "Hide" : "Show"} ${done.length === 1 ? "1 completed" : `${done.length} completed`}</button>`
     : "";
-  const doneList = revealed && done.length ? `<ul class="dr-done">${done.map(doneRowHTML).join("")}</ul>` : "";
-  const namesLeft = EXAMPLE_ITEMS.some((example) => !(projected.items || []).some((item) => item.name === example.name));
-  const add = namesLeft
-    ? `<button type="button" class="dr-add" data-action="routines-add-item" data-block-id="${esc(block.id)}">Add item <span class="dr-vh">to ${esc(block.name)}</span></button>`
+  const doneList = !editing && !collapsed && revealed && done.length ? `<ul class="dr-done">${done.map(doneRowHTML).join("")}</ul>` : "";
+  const add = `<button type="button" class="dr-add" data-action="routines-add-item" data-block-id="${esc(block.id)}">Add item <span class="dr-vh">to ${esc(block.name)}</span></button>`;
+  const swatches = editing
+    ? `<div class="dr-colors" role="radiogroup" aria-label="Color for ${esc(block.name)}. Colors follow the accent.">${ROUTINE_BLOCK_COLORS.map((token) => `<button type="button" class="dr-swatch" data-color="${token}" data-action="routines-color" data-block-id="${esc(block.id)}" aria-pressed="${color === token ? "true" : "false"}" aria-label="${token}, follows the accent"></button>`).join("")}</div>`
     : "";
-  return `<article class="dr-tile${dim ? " dr-dim" : ""}" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}">
-    <p class="dr-k">${esc(tileKicker(block))}</p>
-    <h3>${esc(block.name)}</h3>
+  const tools = editing
+    ? `<div class="dr-tools">
+        <button type="button" class="dr-handle" data-reorder="block" data-id="${esc(block.id)}" aria-label="Reorder ${esc(block.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
+        ${swatches}
+        <button type="button" class="dr-rename" data-action="routines-rename-block" data-block-id="${esc(block.id)}" aria-label="Rename ${esc(block.name)}">Rename</button>
+        <button type="button" class="dr-dup" data-action="routines-duplicate-block" data-block-id="${esc(block.id)}" aria-label="Duplicate ${esc(block.name)}">Duplicate</button>
+        <button type="button" class="dr-minus" data-action="routines-delete-block" data-block-id="${esc(block.id)}" aria-label="Delete ${esc(block.name)}"><span aria-hidden="true">−</span></button>
+      </div>`
+    : `<button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-block" data-block-id="${esc(block.id)}" aria-label="Rename ${esc(block.name)}">Rename</button>`;
+  return `<article class="dr-tile${dim ? " dr-dim" : ""}" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}" data-collapsed="${collapsed ? "true" : "false"}" data-last="${last ? "true" : "false"}" data-id="${esc(block.id)}">
+    ${tools}
+    <button type="button" class="dr-block-toggle" data-action="routines-collapse" data-block-id="${esc(block.id)}" data-rename="block" aria-expanded="${collapsed ? "false" : "true"}">
+      <span class="dr-k">${esc(tileKicker(block))}</span>
+      <span class="dr-title-line"><h3>${esc(block.name)}</h3><span class="dr-chevron" aria-hidden="true"></span></span>
+      <span class="dr-vh">Long press to rename.</span>
+    </button>
     <p class="dr-tile-meta">${esc(tileMeta(open.length, logged, skipped))}</p>
-    ${open.length ? `<ul class="dr-rows">${open.map(openRowHTML).join("")}</ul>` : ""}
+    ${list}
     ${reveal}
     ${doneList}
     ${add}
@@ -702,14 +1142,18 @@ export function routineBlockTilesHTML(projected, date) {
   const moment = routineNowNext(projected.blocks, clock);
   const focus = !!(projected.prefs && projected.prefs.focusMode === true);
   const revealed = new Set(Array.isArray(projected.prefs && projected.prefs.revealBlocks) ? projected.prefs.revealBlocks.filter((id) => typeof id === "string") : []);
+  const collapsed = new Set(collapsedIds(projected.prefs));
+  const lastId = projected.prefs && typeof projected.prefs.lastBlockId === "string" ? projected.prefs.lastBlockId : "";
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
   const tiles = (projected.blocks || []).map((block) => routineBlockTileHTML(block, projected, {
     day,
     current: block.id === currentId,
     focus,
     revealed: revealed.has(block.id),
+    collapsed: collapsed.has(block.id),
+    last: block.id === lastId,
   })).join("");
-  return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}">${tiles}</div>`;
+  return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>`;
 }
 
 function emptyDiscoverHTML() {
@@ -733,15 +1177,43 @@ function waitingHTML(date) {
   </div>`;
 }
 
+function headerTools() {
+  const editing = layoutEditing();
+  const label = editing ? "Done editing routines" : "Edit routines";
+  const edit = `<button type="button" class="dr-edit-toggle" data-action="routines-edit" aria-pressed="${editing ? "true" : "false"}" aria-label="${label}">${editing ? "Done" : "Edit"}</button>`;
+  return edit + gearButton();
+}
+
+function deletedHTML() {
+  if (!layoutEditing()) return "";
+  const raw = app.state && app.state.dailyRoutines;
+  if (!raw) return "";
+  const blocks = (raw.blocks || []).filter((row) => row && !isLive(row));
+  const items = (raw.items || []).filter((row) => row && !isLive(row));
+  if (!blocks.length && !items.length) return "";
+  const blockRows = blocks.map((block) => `<li><span>${esc(block.name || "Routine")}</span><button type="button" data-action="routines-restore-block" data-block-id="${esc(block.id)}" aria-label="Restore ${esc(block.name || "routine")}">Restore</button></li>`).join("");
+  const itemRows = items.map((item) => `<li><span>${esc(item.name || "Item")}</span><button type="button" data-action="routines-restore-item" data-item-id="${esc(item.id)}" aria-label="Restore ${esc(item.name || "item")}">Restore</button></li>`).join("");
+  return `<section class="dr-deleted" aria-labelledby="dr-deleted-title">
+    <h2 id="dr-deleted-title">Deleted</h2>
+    ${blocks.length ? `<ul class="dr-deleted-list">${blockRows}</ul>` : ""}
+    ${items.length ? `<ul class="dr-deleted-list">${itemRows}</ul>` : ""}
+  </section>`;
+}
+
 function paintShell(view, date) {
   const sub = typeof app.fmtDate === "function"
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
     : todayKey(date);
   const hasItems = (view.items || []).length > 0;
-  return `<div class="dr-page" data-routines-shell="signed-in">
-    ${pageHeader("Routines", sub, gearButton())}
+  const editing = layoutEditing();
+  const announce = app.ui && app.ui.routineAnnounce ? app.ui.routineAnnounce : "";
+  return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
+    ${pageHeader("Routines", sub, headerTools())}
+    <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
+    <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
+    ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
 }
@@ -794,7 +1266,23 @@ app.restoreRoutineLog = restoreRoutineLog;
 app.logRoutineRest = logRoutineRest;
 app.toggleRoutineFocus = toggleRoutineFocus;
 app.toggleRoutineReveal = toggleRoutineReveal;
-app.addExampleRoutineItem = addExampleRoutineItem;
+app.addRoutineBlock = addRoutineBlock;
+app.renameRoutineBlock = renameRoutineBlock;
+app.setRoutineBlockColor = setRoutineBlockColor;
+app.deleteRoutineBlock = deleteRoutineBlock;
+app.restoreRoutineBlock = restoreRoutineBlock;
+app.duplicateRoutineBlock = duplicateRoutineBlock;
+app.reorderRoutineBlocks = reorderRoutineBlocks;
+app.reorderRoutinePlacements = reorderRoutinePlacements;
+app.renameRoutineItem = renameRoutineItem;
+app.deleteRoutineItem = deleteRoutineItem;
+app.restoreRoutineItem = restoreRoutineItem;
+app.saveRoutineItem = saveRoutineItem;
+app.addRoutineItem = addRoutineItem;
+app.routineItemDraft = routineItemDraft;
+app.parseRoutineAmount = parseRoutineAmount;
+app.rememberRoutineBlock = rememberRoutineBlock;
+app.toggleRoutineCollapsed = toggleRoutineCollapsed;
 app.routineBlockRows = routineBlockRows;
 app.dailyRoutinesHTML = dailyRoutinesHTML;
 app.routineNowHTML = routineNowHTML;

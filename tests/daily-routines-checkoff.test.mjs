@@ -37,7 +37,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
 
 const { app } = await import("../logger/js/runtime.js");
 const {
-  addExampleRoutineItem,
+  addRoutineItem,
   dailyRoutinesHTML,
   logRoutineItem,
   logRoutineRest,
@@ -72,6 +72,10 @@ function blockId(name) {
   const block = app.state.dailyRoutines.blocks.find((row) => row.name === name);
   assert.ok(block, name);
   return block.id;
+}
+
+function addDose(block) {
+  return addRoutineItem(app.state, block, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" });
 }
 
 function logRow(day, status, extra = {}) {
@@ -155,7 +159,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("day rollover follows the pinned local day, not the UTC instant", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    assert.equal(addExampleRoutineItem(app.state, morning), true);
+    assert.equal(addDose(morning), true);
     pin("2026-11-19", "2026-11-20T04:30:00.000Z");
     assert.equal(logRoutineItem(app.state, app.state.dailyRoutines.items[0].id), true);
     const log = app.state.dailyRoutines.logs.find((row) => row.itemId === app.state.dailyRoutines.items[0].id);
@@ -187,7 +191,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("tap to log collapses the row, reveal shows undo, and undo drops the dose", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    assert.equal(addExampleRoutineItem(app.state, morning), true);
+    assert.equal(addDose(morning), true);
     const item = app.state.dailyRoutines.items[0];
     let html = dailyRoutinesHTML();
     assert.match(html, /Example Compound A<\/span><span class="dr-dose"> · 250 mcg<\/span>/);
@@ -255,7 +259,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("two phones logging the same item merge to one dose", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    assert.equal(addDose(morning), true);
     const item = app.state.dailyRoutines.items[0];
     assert.equal(logRoutineItem(app.state, item.id), true);
     const phoneA = structuredClone(app.state.dailyRoutines);
@@ -339,7 +343,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("a skip collapses the row, does not count, and does not reset the streak", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    addDose(morning);
     const item = app.state.dailyRoutines.items[0];
     app.state.dailyRoutines.logs.push(
       logRow("2026-11-17", "done", { id: "past-17", itemId: item.id, updatedAt: 1 }),
@@ -391,7 +395,7 @@ describe("routine check-off", { concurrency: false }, () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
     const night = blockId("Night routine");
-    addExampleRoutineItem(app.state, morning);
+    addDose(morning);
     const item = app.state.dailyRoutines.items[0];
     const next = upsertEntity(app.state.dailyRoutines, "placements", {
       id: "place-night", blockId: night, itemId: item.id, order: 0, deletedAt: null,
@@ -468,7 +472,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("logging a rest is allowed and stays quiet", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    addDose(morning);
     let html = dailyRoutinesHTML();
     assert.match(html, /data-action="routines-rest"/);
     assert.match(html, />Log rest</);
@@ -493,39 +497,38 @@ describe("routine check-off", { concurrency: false }, () => {
     const morning = blockId("Morning routine");
     const seeded = structuredClone(app.state.dailyRoutines);
     app.session = null;
-    assert.equal(addExampleRoutineItem(app.state, morning), false);
+    assert.equal(addDose(morning), false);
     assert.equal(logRoutineItem(app.state, "item-x"), false);
     assert.equal(logRoutineRest(app.state), false);
     assert.deepEqual(app.state.dailyRoutines, seeded);
     app.session = { user: { id: "synthetic-user" } };
     app.ROUTINES_ENABLED = false;
-    assert.equal(addExampleRoutineItem(app.state, morning), false);
+    assert.equal(addDose(morning), false);
     assert.equal(dailyRoutinesHTML(), "");
     app.ROUTINES_ENABLED = true;
     app.sb = { from() {} };
     app.cloudPullOk = false;
-    assert.equal(addExampleRoutineItem(app.state, morning), false);
+    assert.equal(addDose(morning), false);
     assert.equal(toggleRoutineFocus(app.state), false);
     assert.equal(app.state.dailyRoutines.blocks.length, 3);
     assert.equal(app.state.dailyRoutines.items.length, 0);
   });
 
-  test("the example add stops at four synthetic names and does not invent a stack", () => {
+  test("adding a real item leaves the add button and does not invent a stack", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    assert.equal(addExampleRoutineItem(app.state, morning), true);
-    assert.equal(addExampleRoutineItem(app.state, morning), true);
-    assert.equal(addExampleRoutineItem(app.state, morning), true);
-    assert.equal(addExampleRoutineItem(app.state, morning), true);
-    assert.equal(addExampleRoutineItem(app.state, morning), false);
+    assert.equal(addDose(morning), true);
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound B", kind: "check" }), true);
     const names = app.state.dailyRoutines.items.map((row) => row.name);
-    assert.deepEqual(names, ["Example Compound A", "Example Compound B", "Example Compound C", "Example Compound D"]);
+    assert.deepEqual(names, ["Example Compound A", "Example Compound B"]);
     assert.equal(app.state.dailyRoutines.items[0].kind, "dose");
     assert.equal(app.state.dailyRoutines.items[1].kind, "check");
     const html = dailyRoutinesHTML();
     assert.match(html, /Example Compound B/);
-    assert.doesNotMatch(html, /data-action="routines-add-item"/);
+    assert.match(html, /data-action="routines-add-item"/);
     assert.doesNotMatch(html, /Add the first item/);
+    assert.doesNotMatch(readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
+    assert.doesNotMatch(readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
   });
 
   test("the shell wires the actions and keeps motion off unless the user allows it", () => {
@@ -533,7 +536,7 @@ describe("routine check-off", { concurrency: false }, () => {
     const page = readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
     const flag = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
-    for (const name of ["routines-log", "routines-skip", "routines-undo", "routines-reveal", "routines-focus", "routines-add-item", "routines-rest"]) {
+    for (const name of ["routines-log", "routines-skip", "routines-undo", "routines-reveal", "routines-focus", "routines-add-item", "routines-collapse", "routines-rest"]) {
       assert.match(actions, new RegExp(`case "${name}"`));
     }
     assert.doesNotMatch(page, /routines-flag/);

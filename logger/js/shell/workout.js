@@ -169,6 +169,8 @@ function renderSheet() {
     inner = typeof app.routinesSettingsSheetHTML === "function" ? app.routinesSettingsSheetHTML() : "";
   } else if (app.ui.sheet === "routines-discover") {
     inner = typeof app.routinesDiscoverSheetHTML === "function" ? app.routinesDiscoverSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-item") {
+    inner = typeof app.routineItemSheetHTML === "function" ? app.routineItemSheetHTML() : "";
   } else if (app.ui.sheet === "exercise") {
     const editing = app.ui.sd.idx >= 0;
     inner = `<h3>${editing ? "Edit exercise" : "Add exercise"}</h3>
@@ -188,6 +190,7 @@ function renderSheet() {
     : app.ui.sheet === "checkin" ? "Check-in"
     : app.ui.sheet === "routines-settings" ? "Routines settings"
     : app.ui.sheet === "routines-discover" ? "Discover"
+    : app.ui.sheet === "routines-item" ? "Item"
     : "Sheet";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>
