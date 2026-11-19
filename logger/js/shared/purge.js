@@ -625,6 +625,14 @@ export function buildExportFiles(state, opts = {}) {
   }
   files.push({ name: "routines.csv", text: toCsv(routines) });
 
+  const routineLogs = [["day", "status", "amount", "unit", "deleted"]];
+  for (const log of (s.dailyRoutines && s.dailyRoutines.logs) || []) {
+    if (!log || typeof log !== "object") continue;
+    const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
+    routineLogs.push([log.day || "", log.status || "", gone ? "" : num(log.amount), gone ? "" : (log.unit || ""), gone ? "1" : ""]);
+  }
+  files.push({ name: "daily_routine_logs.csv", text: toCsv(routineLogs) });
+
   const sets = [["date", "workout_id", "workout", "exercise", "set_index", "weight", "reps", "tag", "note", "pr", "left_weight", "left_reps", "right_weight", "right_reps", "rpe"]];
   for (const sess of s.sessions || []) {
     for (const e of sess.entries || []) {

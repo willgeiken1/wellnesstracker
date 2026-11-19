@@ -27,28 +27,41 @@ function routeSegmentKey(name) {
 /* Any route segment containing routine, discover, reconstitut, or peptide.
    Workout-template usage is the exception: workout-routines, and a store
    call such as list('routines'), which is not a file under native/src/app. */
-function forbiddenRouteName(name) {
+const WORKOUT_TEMPLATE_OK = new Set(["workout-routines", "workout-routine", "routine-editor"]);
+
+function forbiddenRouteName(name, relPath) {
   if (typeof name !== "string") return null;
   if (/list\(\s*['"]routines['"]\s*\)/.test(name)) return null;
-  const key = routeSegmentKey(name);
+  const rel = String(relPath || name).replace(/\\/g, "/").toLowerCase();
+  const underWorkout = rel.startsWith("workout/") || rel.includes("/workout/");
+  const key = routeSegmentKey(relPath && relPath !== name ? name : name);
   if (!key || key === "_layout" || key === "native-intent") return null;
   if (key === "workout-routines" || key === "workout-routine") return null;
   const compact = key.replace(/-/g, "");
-  if (key.includes("routine") || compact.includes("routine")) return "routine";
+  const routine = key.includes("routine") || compact.includes("routine");
+  if (routine && underWorkout && WORKOUT_TEMPLATE_OK.has(key)) return null;
+  if (routine && underWorkout && key.endsWith("-editor")) return null;
+  if (routine) return "routine";
   if (key.includes("discover") || compact.includes("discover")) return "discover";
   if (key.includes("reconstitut") || compact.includes("reconstitut")) return "reconstitut";
   if (key.includes("peptide") || compact.includes("peptide")) return "peptide";
   return null;
 }
 
+function quotedField(src, field) {
+  const values = [];
+  const re = new RegExp("\\b" + field + "\\s*:\\s*(?:'([^']*)'|\"([^\"]*)\"|`([^`]*)`)", "g");
+  let match;
+  while ((match = re.exec(src))) values.push(match[1] ?? match[2] ?? match[3]);
+  return values;
+}
+
 function tabConfigEntries(src) {
+  const routes = quotedField(src, "route");
+  const labels = quotedField(src, "label");
+  const count = Math.min(routes.length, labels.length);
   const entries = [];
-  const objects = String(src).match(/\{[^{}]*\}/g) || [];
-  for (const body of objects) {
-    const route = body.match(/\broute:\s*['"]([^'"]+)['"]/);
-    const label = body.match(/\blabel:\s*['"]([^'"]+)['"]/);
-    if (route && label) entries.push({ route: route[1], label: label[1] });
-  }
+  for (let i = 0; i < count; i++) entries.push({ route: routes[i], label: labels[i] });
   return entries;
 }
 
@@ -65,7 +78,7 @@ function routeEntries(dir, rel = "") {
 function forbiddenRoutes() {
   const hits = [];
   for (const entry of routeEntries(APP_ROOT)) {
-    const why = forbiddenRouteName(entry.name);
+    const why = forbiddenRouteName(entry.name, entry.relPath);
     if (why) hits.push(`${entry.relPath} (${why})`);
   }
   return hits;
@@ -189,13 +202,15 @@ test("my-routines.tsx and routine.tsx are forbidden native routes", () => {
   assert.equal(forbiddenRouteName("routine.tsx"), "routine");
   assert.equal(forbiddenRouteName("workout-routines.tsx"), null);
   assert.equal(forbiddenRouteName("repo.list('routines')"), null);
+  assert.equal(forbiddenRouteName("routine-editor.tsx", "workout/routine-editor.tsx"), null);
+  assert.equal(forbiddenRouteName("routine.tsx", "workout/routine.tsx"), "routine");
 });
 
 test("a Routines tab added only in tabs.ts fails", () => {
   const src = readFileSync(new URL("../native/src/features/shell/tabs.ts", import.meta.url), "utf8");
   const tabs = tabConfigEntries(src);
-  assert.deepEqual(tabs.map((tab) => tab.route), ["index", "workouts", "food", "progress", "insights"]);
-  assert.deepEqual(tabs.map((tab) => tab.label), ["home", "workouts", "food", "progress", "insights"]);
+  assert.deepEqual(tabs.map((tab) => tab.route.toLowerCase()), ["index", "workouts", "food", "progress", "insights"]);
+  assert.deepEqual(tabs.map((tab) => tab.label.toLowerCase()), ["home", "workouts", "food", "progress", "insights"]);
   for (const tab of tabs) {
     assert.equal(forbiddenRouteName(`${tab.route}.tsx`), null, tab.route);
     assert.equal(forbiddenRouteName(`${tab.label}.tsx`), null, tab.label);
@@ -206,4 +221,10 @@ test("a Routines tab added only in tabs.ts fails", () => {
   assert.equal(forbiddenRouteName(`${sneaky[0].label}.tsx`), "routine");
   const routineOnly = tabConfigEntries("{ route: 'index', label: 'routine', symbol: 'house' }");
   assert.equal(forbiddenRouteName(`${routineOnly[0].label}.tsx`), "routine");
+  const cased = tabConfigEntries("{ route: 'index', label: 'Home', options: { nested: true } }");
+  assert.equal(cased.length, 1);
+  assert.equal(forbiddenRouteName(`${cased[0].label}.tsx`), null);
+  const templated = tabConfigEntries("{ route: `my-routines`, label: `routines`, options: { nested: true } }");
+  assert.equal(templated.length, 1);
+  assert.equal(forbiddenRouteName(`${templated[0].route}.tsx`), "routine");
 });

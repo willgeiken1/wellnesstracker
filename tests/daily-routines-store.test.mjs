@@ -54,7 +54,7 @@ const {
   revisePlanEntity,
   seedDefaultBlocks,
 } = await import("../logger/js/shared/daily-routines-store.js");
-const { applyPurges, stripRange } = await import("../logger/js/shared/purge.js");
+const { applyPurges, buildExportFiles, stripRange } = await import("../logger/js/shared/purge.js");
 
 const USER = "11111111-1111-4111-8111-111111111111";
 
@@ -160,11 +160,72 @@ test("merge keeps items created on two phones", () => {
   assert.deepEqual(liveOf(app.state.dailyRoutines.items).map((row) => row.id).sort(), ["item-a", "item-b"]);
 });
 
-test("an equal updatedAt keeps the copy already on this phone", () => {
-  const local = phoneStore([item("item-a", "Local name", 10)]);
-  const remote = phoneStore([item("item-a", "Remote name", 10)]);
-  const merged = mergeDailyRoutines(local, remote);
-  assert.equal(merged.items[0].name, "Local name");
+const TOMBSTONE_KEYS = ["day", "deletedAt", "id", "status", "updatedAt"];
+
+function assertBareTombstone(log) {
+  assert.deepEqual(Object.keys(log).sort(), TOMBSTONE_KEYS);
+  for (const key of ["amount", "unit", "compoundId", "itemId", "at", "note"]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(log, key), false, key);
+  }
+}
+
+test("two phones converge on an equal stamp, a tombstone, and a missing stamp", () => {
+  const now = 1_700_000_000_000;
+  const alpha = phoneStore([item("item-a", "Alpha", 10)]);
+  const zulu = phoneStore([item("item-a", "Zulu", 10)]);
+  const left = mergeDailyRoutines(alpha, zulu, now);
+  const right = mergeDailyRoutines(zulu, alpha, now);
+  assert.equal(left.items[0].name, right.items[0].name);
+  const live = phoneStore([item("item-a", "Zulu", 40)]);
+  const dead = phoneStore([item("item-a", "Alpha", 40, { deletedAt: 40 })]);
+  assert.equal(isLive(mergeDailyRoutines(live, dead, now).items[0]), false);
+  assert.equal(isLive(mergeDailyRoutines(dead, live, now).items[0]), false);
+  const missing = phoneStore([item("item-a", "Alpha", 0)]);
+  delete missing.items[0].updatedAt;
+  const malformed = phoneStore([item("item-a", "Zulu", 0)]);
+  malformed.items[0].updatedAt = "yesterday";
+  const one = mergeDailyRoutines(missing, malformed, now);
+  const two = mergeDailyRoutines(malformed, missing, now);
+  assert.equal(one.items[0].name, two.items[0].name);
+  assert.equal(one.items[0].updatedAt, 0);
+  const prefsA = phoneStore([]);
+  const prefsB = phoneStore([]);
+  prefsA.prefs = { lastBlockId: "morning", updatedAt: 10 };
+  prefsB.prefs = { lastBlockId: "night", updatedAt: 10 };
+  assert.equal(mergeDailyRoutines(prefsA, prefsB, now).prefs.lastBlockId, mergeDailyRoutines(prefsB, prefsA, now).prefs.lastBlockId);
+});
+
+test("a remote tombstone beats an older local log, and deletedAt counts even when updatedAt is older", () => {
+  const now = 1_700_000_000_000;
+  const local = phoneStore([], [log("log-1", "2026-11-01", 250, 10, { note: "keep me" })]);
+  const remote = phoneStore([], [log("log-1", "2026-11-01", 250, 50, { deletedAt: 50, note: "gone", compoundId: "compound-a", itemId: "item-a" })]);
+  const merged = mergeDailyRoutines(local, remote, now);
+  assertBareTombstone(merged.logs[0]);
+  const staleDelete = phoneStore([], [log("log-1", "2026-11-01", 250, 10, { deletedAt: 100 })]);
+  const newerLive = phoneStore([], [log("log-1", "2026-11-01", 500, 50)]);
+  const keptGone = mergeDailyRoutines(newerLive, staleDelete, now);
+  assert.equal(isLive(keptGone.logs[0]), false);
+  assert.equal(keptGone.logs[0].updatedAt, 100);
+});
+
+test("a duplicate id in one list resolves the same way in either order", () => {
+  const now = 1_700_000_000_000;
+  const first = log("log-1", "2026-11-01", 250, 5);
+  const second = log("log-1", "2026-11-01", 125, 5);
+  const forward = normalizeDailyRoutines(phoneStore([], [first, second]), now);
+  const backward = normalizeDailyRoutines(phoneStore([], [second, first]), now);
+  assert.equal(forward.logs.length, 1);
+  assert.equal(forward.logs[0].amount, backward.logs[0].amount);
+});
+
+test("a stamp more than a day ahead is pulled back", () => {
+  const now = 1_700_000_000_000;
+  const future = phoneStore([item("item-a", "Example Compound A", now + 10 * 86400000)]);
+  const other = phoneStore([item("item-a", "Other", now)]);
+  const merged = mergeDailyRoutines(future, other, now);
+  assert.equal(merged.items[0].updatedAt, now + 86400000);
+  assert.equal(merged.items[0].name, "Example Compound A");
+  assert.equal(mergeDailyRoutines(other, future, now).items[0].name, "Example Compound A");
 });
 
 test("a missing remote store does not wipe local routines", () => {
@@ -211,6 +272,7 @@ test("a date-range purge tombstones only that day's logs", () => {
   assert.equal(stripRange(data, "2026-11-01", "2026-11-01", { before: 4000, now: 6000 }), true);
   const byId = Object.fromEntries(data.dailyRoutines.logs.map((row) => [row.id, row]));
   assert.equal(byId["log-day-1"].deletedAt, 4000);
+  assertBareTombstone(byId["log-day-1"]);
   assert.equal(isLive(byId["log-day-2"]), true);
   assert.equal(byId["log-day-2"].amount, 250);
   assert.equal(isLive(byId["log-after"]), true);
@@ -230,6 +292,7 @@ test("a purged log is not restored by merging the other phone's older copy", () 
   const merged = mergeDailyRoutines(data.dailyRoutines, remote);
   const purged = merged.logs.find((row) => row.id === "log-day-1");
   const kept = merged.logs.find((row) => row.id === "log-day-2");
+  assertBareTombstone(purged);
   assert.equal(isLive(purged), false);
   assert.ok(purged.deletedAt > 0);
   assert.equal(isLive(kept), true);
@@ -331,8 +394,10 @@ test("the edge strip tombstones the same day's dose log and leaves the plan", ()
     const logs = Object.fromEntries(data.dailyRoutines.logs.map((row) => [row.id, row]));
     console.log(JSON.stringify({
       day1: logs["log-day-1"].deletedAt,
+      day1Keys: Object.keys(logs["log-day-1"]).sort(),
       day2: logs["log-day-2"].deletedAt,
       amount: logs["log-day-2"].amount,
+      storeAt: data.dailyRoutines.updatedAt,
       block: data.dailyRoutines.blocks[0].name,
       compound: data.dailyRoutines.compounds[0].amount,
     }));
@@ -344,8 +409,63 @@ test("the edge strip tombstones the same day's dose log and leaves the plan", ()
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const got = JSON.parse(result.stdout.trim().split("\n").pop());
   assert.equal(got.day1, 4000);
+  assert.deepEqual(got.day1Keys, ["day", "deletedAt", "id", "status", "updatedAt"]);
+  assert.equal(got.storeAt, 4000);
   assert.equal(got.day2, null);
   assert.equal(got.amount, 250);
   assert.equal(got.block, "Morning routine");
   assert.equal(got.compound, 250);
+});
+
+test("a purged dose is absent locally, in the account blob, in the backup, and in the csv", async () => {
+  signIn();
+  const previousShare = globalThis.navigator;
+  try {
+    app.render = () => {};
+    app.state.dailyRoutines = phoneStore([], [
+      log("log-1", "2026-11-01", 250, 10, { note: "extra dose note", itemId: "item-a", compoundId: "compound-a" }),
+    ]);
+    assert.equal(stripRange(app.state, "2026-11-01", "2026-11-01", { now: 4000 }), true);
+    assertBareTombstone(app.state.dailyRoutines.logs[0]);
+    assertBareTombstone(app.userDataBlob().dailyRoutines.logs[0]);
+    let captured;
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { canShare: () => true, share: async ({ files }) => { captured = JSON.parse(await files[0].text()); } },
+    });
+    await app.exportData();
+    assertBareTombstone(captured.dailyRoutines.logs[0]);
+    const csv = buildExportFiles(app.state).find((file) => file.name === "daily_routine_logs.csv").text;
+    assert.match(csv, /2026-11-01,done,,,1/);
+    assert.equal(csv.includes("250"), false);
+    assert.equal(csv.includes("mcg"), false);
+    assert.equal(csv.includes("item-a"), false);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: previousShare });
+    signOut();
+  }
+});
+
+test("undoing a log tombstones it without the dose", () => {
+  const undone = app.tombstoneLog(phoneStore([], [
+    log("log-1", "2026-11-19", 250, 10, { note: "extra dose note" }),
+  ]), "log-1", 80);
+  assertBareTombstone(undone.logs[0]);
+  assert.equal(undone.logs[0].deletedAt, 80);
+  assert.equal(undone.logs[0].status, "done");
+});
+
+test("the privacy preview counts a live routine log and skips a tombstone", () => {
+  app.food = () => ({ days: {} });
+  app.cardio = () => ({ sessions: [] });
+  app.meas = () => ({});
+  app.weighIns = () => [];
+  app.state.sessions = [];
+  app.state.plan = {};
+  app.state.dailyRoutines = phoneStore([], [
+    log("log-1", "2026-11-01", 250, 10),
+    log("log-2", "2026-11-01", 250, 10, { id: "log-2", deletedAt: 20 }),
+  ]);
+  app.state.dailyRoutines.logs[1] = { id: "log-2", day: "2026-11-01", status: "done", updatedAt: 20, deletedAt: 20 };
+  assert.match(app.rangePreviewText("2026-11-01", "2026-11-01"), /1 routine log/);
 });
