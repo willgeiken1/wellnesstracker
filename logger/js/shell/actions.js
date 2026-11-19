@@ -1169,6 +1169,13 @@ document.addEventListener("click", async (ev) => {
     case "lock-show-pass": app.ui.lockMode = "passcode"; app.ui.lockMsg = ""; app.renderLock(true); break;
     case "lock-code-go": await app.unlockWithPasscode(); break;
     case "lock-signin": await app.unlockWithPassword(); break;
+    case "routines-settings":
+    case "routines-discover":
+      if (app.ROUTINES_ENABLED !== true) break;
+      app.ui.sheet = a === "routines-settings" ? "routines-settings" : "routines-discover";
+      app.ui.sd = {};
+      app.renderSheet();
+      break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
   }

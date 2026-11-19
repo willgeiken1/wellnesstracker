@@ -1,8 +1,97 @@
 import { app } from "../runtime.js";
 
-/* Five-tab pager: equal slots, a gliding bubble, and a finger-tracked slide. */
+/* Equal-slot pager: a gliding bubble and a finger-tracked slide.
+   The flag-off order is the five tabs below. A later sync can insert
+   daily-routines after workouts when the flag is on. */
 
 app.TAB_ORDER = ["home", "workouts", "food", "progress", "insights"];
+
+const ROUTINE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h10M9 12h10M9 18h10"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>`;
+
+export function visibleTabOrder(enabled) {
+  if (enabled === true) return ["home", "workouts", "daily-routines", "food", "progress", "insights"];
+  return ["home", "workouts", "food", "progress", "insights"];
+}
+
+function tabOrdersEqual(a, b) {
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+function setTabCount(nav, count) {
+  if (!nav) return;
+  if (count === 5) {
+    nav.style.removeProperty("--tab-count");
+    nav.removeAttribute("data-tabs");
+    return;
+  }
+  nav.style.setProperty("--tab-count", String(count));
+  nav.setAttribute("data-tabs", String(count));
+}
+
+function mountRoutineChrome(order) {
+  const stage = document.getElementById("stage");
+  const nav = document.getElementById("tabs");
+  setTabCount(nav, order.length);
+  if (stage) {
+    for (const el of [...stage.querySelectorAll('[data-runtime="routine"]')]) {
+      if (!order.includes(el.getAttribute("data-slot"))) el.remove();
+    }
+  }
+  if (nav) {
+    for (const el of [...nav.querySelectorAll('[data-runtime="routine"]')]) {
+      if (!order.includes(el.getAttribute("data-tab"))) el.remove();
+    }
+  }
+  const index = order.indexOf("daily-routines");
+  if (index < 0) return;
+  const nextId = order[index + 1];
+  if (stage && !stage.querySelector('[data-slot="daily-routines"]')) {
+    const slot = document.createElement("div");
+    slot.className = "pane-slot";
+    slot.setAttribute("data-slot", "daily-routines");
+    slot.setAttribute("data-runtime", "routine");
+    const pane = document.createElement("section");
+    pane.className = "pane";
+    pane.id = "pane-daily-routines";
+    pane.setAttribute("data-pane", "daily-routines");
+    pane.setAttribute("aria-label", "Routines");
+    slot.appendChild(pane);
+    const before = nextId ? stage.querySelector(`[data-slot="${nextId}"]`) : null;
+    if (before) stage.insertBefore(slot, before);
+    else stage.appendChild(slot);
+  }
+  if (nav && !nav.querySelector('[data-tab="daily-routines"]')) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tab";
+    btn.setAttribute("data-action", "tab");
+    btn.setAttribute("data-tab", "daily-routines");
+    btn.setAttribute("data-runtime", "routine");
+    btn.setAttribute("aria-label", "Routines");
+    btn.innerHTML = `${ROUTINE_ICON}<span>Routines</span>`;
+    const before = nextId ? nav.querySelector(`[data-tab="${nextId}"]`) : null;
+    if (before) nav.insertBefore(btn, before);
+    else nav.appendChild(btn);
+  }
+}
+
+function applyTabOrder() {
+  const next = visibleTabOrder(app.ROUTINES_ENABLED === true);
+  const stage = typeof document !== "undefined" && document.getElementById ? document.getElementById("stage") : null;
+  const runtime = stage ? stage.querySelector('[data-runtime="routine"]') : null;
+  const same = tabOrdersEqual(app.TAB_ORDER, next);
+  if (app.ui && app.ui.tab === "daily-routines" && !next.includes("daily-routines")) app.ui.tab = "home";
+  if (same && !!runtime === next.includes("daily-routines")) return;
+  app.TAB_ORDER = next;
+  if (typeof document === "undefined" || !document.getElementById) return;
+  mountRoutineChrome(next);
+  const index = app.ui ? next.indexOf(app.ui.tab) : -1;
+  if (index >= 0 && app.motion && !app.motion.dragging && stage) {
+    app.motion.index = index;
+    moveTo(index, 0);
+  }
+}
+app.syncRoutineTabs = applyTabOrder;
 app.reduceMotion = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 app.motion = { index: 0, dragging: false, animating: false, hold: false, eatClick: false };
 app.slideIn = function () {};
@@ -49,6 +138,7 @@ function htmlFor(tab) {
   if (tab === "workouts") return app.ui.detail && app.workoutById(app.ui.detail) ? app.detailHTML() : app.workoutsHTML();
   if (tab === "insights") return app.insightsWrapHTML();
   if (tab === "food") return app.foodHTML();
+  if (tab === "daily-routines") return typeof app.dailyRoutinesHTML === "function" ? app.dailyRoutinesHTML() : "";
   if (tab === "cardio") return app.cardioScreenHTML();
   if (tab === "progress") return app.PH.ready ? app.photosHTML() : `<div class="page-head"><div><h1 class="page-title">Progress</h1><div class="page-sub">Loading…</div></div></div>`;
   return app.settingsHTML();
@@ -149,6 +239,7 @@ window.scrollBy = function (x, y) {
 };
 
 app.render = function () {
+  applyTabOrder();
   if (app.needsLock && app.needsLock()) {
     document.body.classList.add("locked");
     if (app.mountDonePill) app.mountDonePill();
@@ -305,6 +396,7 @@ app.pageTransition = function (toIndex, opts = {}) {
 };
 
 app.goTab = function (to, opts = {}) {
+  if (to === "daily-routines" && app.ROUTINES_ENABLED !== true) to = "home";
   if (to === "recovery") { to = "insights"; app.ui.iseg = "recovery"; }
   if (to === "photos") to = "progress";
   const fromI = app.TAB_ORDER.indexOf(app.ui.tab);
@@ -420,3 +512,5 @@ window.addEventListener("resize", () => {
   if (i >= 0) moveTo(i, 0);
   app.syncBubble(false);
 });
+
+applyTabOrder();
