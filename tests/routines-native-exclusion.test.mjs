@@ -96,11 +96,11 @@ function codeWithoutComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-test("ROUTINES_ENABLED is strictly false and cannot be switched on from the page", () => {
+test("ROUTINES_ENABLED is strictly true and cannot be switched from the page", () => {
   const src = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
-  assert.equal(ROUTINES_ENABLED, false);
-  assert.equal(app.ROUTINES_ENABLED, false);
-  assert.match(src, /^export const ROUTINES_ENABLED = false;$/m);
+  assert.equal(ROUTINES_ENABLED, true);
+  assert.equal(app.ROUTINES_ENABLED, true);
+  assert.match(src, /^export const ROUTINES_ENABLED = true;$/m);
   assert.doesNotMatch(codeWithoutComments(src), /localStorage|sessionStorage|URLSearchParams|location\.search|process\.env|import\.meta\.env|searchParams/);
 });
 
