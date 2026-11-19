@@ -18,8 +18,10 @@ Only Will does the steps that sign in to Apple or Expo. Agents never handle his 
 
    ```sh
    npx eas-cli@latest env:create --environment production --visibility plaintext --name EXPO_PUBLIC_SUPABASE_URL --value https://pvodxxmfgflvgvbdotlv.supabase.co
-   npx eas-cli@latest env:create --environment production --visibility plaintext --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value <publishable key>
+   npx eas-cli@latest env:create --environment production --visibility plaintext --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value "PASTE_PUBLISHABLE_KEY_HERE"
    ```
+
+   - Replace `PASTE_PUBLISHABLE_KEY_HERE` with the key and keep the quotes. Angle brackets would break the command in Terminal.
 
    - The publishable key starts with `sb_publishable_` and is under Project Settings, API Keys in the Supabase dashboard. Never use the secret or service-role key; `native/src/auth/config.ts` refuses anything else.
    - For an account-enabled build, reconcile the row-sync flag and the separate schema-deployment receipt against the intended target. A flag is not a migration receipt. If either is unknown, stop; do not run a migration to resolve conflicting records. See `docs/DEPLOY.md`, "Row-sync tables for the iPhone app", for the separately approved process.
