@@ -574,6 +574,8 @@ export function revisePlanEntity(store, collection, id, patch, now) {
   return normalized;
 }
 
+/* A deleted default stays a row. Seeding only adds a default id that is
+   missing, so a tombstone is not replaced and a later phone cannot duplicate it. */
 export function seedDefaultBlocks(store, now) {
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
   if (liveOf(normalized.blocks).length) return normalized;
