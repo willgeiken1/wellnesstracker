@@ -1176,6 +1176,25 @@ document.addEventListener("click", async (ev) => {
       app.ui.sd = {};
       app.renderSheet();
       break;
+    case "routines-log":
+    case "routines-skip":
+    case "routines-undo":
+    case "routines-reveal":
+    case "routines-focus":
+    case "routines-add-item":
+    case "routines-rest": {
+      if (app.ROUTINES_ENABLED !== true) break;
+      const ran = a === "routines-log" ? app.logRoutineItem(app.state, b.dataset.itemId)
+        : a === "routines-skip" ? app.skipRoutineItem(app.state, b.dataset.itemId)
+        : a === "routines-undo" ? app.undoRoutineLog(app.state, b.dataset.logId)
+        : a === "routines-reveal" ? app.toggleRoutineReveal(app.state, b.dataset.blockId)
+        : a === "routines-focus" ? app.toggleRoutineFocus(app.state)
+        : a === "routines-add-item" ? app.addExampleRoutineItem(app.state, b.dataset.blockId)
+        : app.logRoutineRest(app.state);
+      if (ran && typeof app.save === "function") app.save();
+      if (ran && typeof app.render === "function") app.render();
+      break;
+    }
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
   }
