@@ -13,6 +13,7 @@ import {
   tombstoneLog,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
+import { nextDoseCountdown } from "../shared/routine-dose.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -278,6 +279,53 @@ function doseText(row) {
   return unit ? `${amount} ${unit}` : amount;
 }
 
+/* Completed and history rows show the amount stored on the log.
+   The compound amount can change later and must not rewrite that text. */
+export function loggedAmountText(log) {
+  if (!log || log.rest === true || log.status === "skipped") return "";
+  if (typeof log.amount !== "number" || !Number.isFinite(log.amount)) return "";
+  const amount = formatAmount(log.amount);
+  if (amount === "") return "";
+  const unit = typeof log.unit === "string" ? log.unit : "";
+  return unit ? `${amount} ${unit}` : amount;
+}
+
+function amountMarkup(text) {
+  return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
+}
+
+export function doseCountdownText(projected, item, date, day) {
+  if (!projected || !item) return "";
+  const result = nextDoseCountdown({
+    item,
+    blocks: projected.blocks,
+    placements: projected.placements,
+    logs: projected.logs,
+    date,
+    day,
+  });
+  if (!result || typeof result.waitMin !== "number") return "";
+  const wait = formatRoutineWait(result.waitMin);
+  if (!wait) return "";
+  return wait === "now" ? "Next dose now" : `Next dose ${wait}`;
+}
+
+function countdownMarkup(projected, row, date, day) {
+  if (!row.item || row.item.kind !== "dose") return "";
+  const result = nextDoseCountdown({
+    item: row.item,
+    blocks: projected.blocks,
+    placements: projected.placements,
+    logs: projected.logs,
+    date,
+    day,
+  });
+  if (!result || typeof result.waitMin !== "number") return "";
+  const text = doseCountdownText(projected, row.item, date, day);
+  if (!text) return "";
+  return `<span class="dr-next-dose" data-next-dose="${result.waitMin}">${esc(text)}</span>`;
+}
+
 function rowState(log) {
   if (!log) return "open";
   if (log.status === "skipped") return "skipped";
@@ -426,6 +474,122 @@ export function restoreRoutineLog(state, logId) {
     if (!row || !isLive(row) || row.itemId !== item.id) return null;
     return next;
   });
+}
+
+function validCalendarDay(value) {
+  if (typeof value !== "string" || !DAY.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
+function amountsEqual(left, right) {
+  if (typeof left !== "number" || typeof right !== "number" || !Number.isFinite(left) || !Number.isFinite(right)) return false;
+  return Math.round(left * 1000) === Math.round(right * 1000);
+}
+
+function statusForEditedAmount(log, compound, amount) {
+  const planned = compound && typeof compound.amount === "number" ? compound.amount : null;
+  if (planned != null && amountsEqual(amount, planned)) return "done";
+  if (amountsEqual(amount, log.amount) && (log.status === "done" || log.status === "partial")) return log.status;
+  return "partial";
+}
+
+function unitForEditedLog(log, compound) {
+  if (log.unit && DOSE_UNIT_SET.has(log.unit)) return log.unit;
+  if (compound && DOSE_UNIT_SET.has(compound.unit)) return compound.unit;
+  return "";
+}
+
+/* Changes the amount and the day on one log. The day is the string the
+   user picked. It is not today's key and not the UTC day of the clock.
+   The compound row is left alone, so later edits to the item do not
+   rewrite this log. */
+export function editRoutineLog(state, logId, draft) {
+  if (typeof logId !== "string" || !logId) return false;
+  return withStore(state, (store, clock) => {
+    if (!DAY.test(clock.day)) return null;
+    const log = (store.logs || []).find((row) => row && row.id === logId);
+    if (!log || !isLive(log) || log.rest === true) return null;
+    const day = draft && typeof draft.day === "string" ? draft.day : "";
+    if (!validCalendarDay(day) || day > clock.day) return null;
+    if (log.itemId) {
+      const clash = (store.logs || []).some((row) => isLive(row) && row.id !== logId && row.itemId === log.itemId && row.day === day && row.rest !== true);
+      if (clash) return null;
+    }
+    const view = projectDailyRoutines(store);
+    const compound = (view.compounds || []).find((row) => row.id === log.compoundId) || null;
+    const item = (view.items || []).find((row) => row.id === log.itemId) || null;
+    const doseItem = item ? item.kind === "dose" : typeof log.amount === "number";
+    const at = stampAfter(clock.now, log.updatedAt);
+    const nextId = log.itemId ? checkoffLogId(log.itemId, day) : log.id;
+    if (nextId !== log.id && (store.logs || []).some((row) => isLive(row) && row.id === nextId)) return null;
+    const fields = doseItem ? null : {
+      ...log,
+      id: nextId,
+      day,
+      amount: null,
+      unit: "",
+      status: log.status === "skipped" ? "skipped" : (log.status || "done"),
+      deletedAt: null,
+    };
+    let payload = fields;
+    if (doseItem) {
+      const amount = parseRoutineAmount(draft && draft.amount);
+      if (amount == null || amount <= 0) return null;
+      const unit = unitForEditedLog(log, compound);
+      if (!unit) return null;
+      payload = {
+        ...log,
+        id: nextId,
+        day,
+        amount,
+        unit,
+        status: statusForEditedAmount(log, compound, amount),
+        deletedAt: null,
+      };
+    }
+    let next = upsertEntity(store, "logs", payload, at);
+    if (!wrote(next, "logs", nextId, at)) return null;
+    if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+    return next;
+  });
+}
+
+export function compoundDoseHistory(store, compoundId) {
+  const view = projectDailyRoutines(store);
+  if (!view || typeof compoundId !== "string" || !compoundId) return [];
+  return (view.logs || [])
+    .filter((log) => log.compoundId === compoundId && log.rest !== true)
+    .slice()
+    .sort((a, b) => {
+      if (a.day !== b.day) return a.day < b.day ? 1 : -1;
+      const at = (b.at || 0) - (a.at || 0);
+      if (at) return at;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+}
+
+export function routineLogDraft(state, logId) {
+  const store = state && normalizeDailyRoutines(state.dailyRoutines);
+  if (!store || typeof logId !== "string" || !logId) return null;
+  const log = (store.logs || []).find((row) => row && row.id === logId && isLive(row) && row.rest !== true);
+  if (!log) return null;
+  const view = projectDailyRoutines(store);
+  const item = (view.items || []).find((row) => row.id === log.itemId) || null;
+  const compound = (view.compounds || []).find((row) => row.id === log.compoundId) || null;
+  const unit = unitForEditedLog(log, compound);
+  return {
+    logId: log.id,
+    itemId: log.itemId,
+    itemName: item ? item.name : (compound && compound.name ? compound.name : "Item"),
+    compoundId: log.compoundId || null,
+    amount: typeof log.amount === "number" ? formatAmount(log.amount) : "",
+    unit,
+    kind: item && item.kind === "check" ? "check" : "dose",
+    day: log.day,
+    maxDay: routineClock().day,
+    error: "",
+  };
 }
 
 export function logRoutineRest(state) {
@@ -1058,15 +1222,26 @@ function rowAttrs(row) {
   return `data-item-id="${esc(row.item.id)}" data-placement-id="${esc(id)}" data-id="${esc(id)}"`;
 }
 
-function openRowHTML(row) {
-  const dose = doseText(row);
-  const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+function historyButton(row) {
+  if (!row.item || row.item.kind !== "dose" || !row.compound) return "";
+  return `<button type="button" class="dr-history" data-action="routines-history" data-compound-id="${esc(row.compound.id)}" data-item-id="${esc(row.item.id)}">History <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+}
+
+function editLogButton(row) {
+  if (!row.log || row.log.rest === true) return "";
+  return `<button type="button" class="dr-edit-log" data-action="routines-log-edit" data-log-id="${esc(row.log.id)}">Edit <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+}
+
+function openRowHTML(row, projected, date, day) {
+  const doseHTML = amountMarkup(doseText(row));
+  const next = countdownMarkup(projected, row, date, day);
   return `<li class="dr-row" ${rowAttrs(row)} data-state="open">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>
+      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
+    ${historyButton(row)}
     <button type="button" class="dr-skip" data-action="routines-skip" data-item-id="${esc(row.item.id)}">Skip <span class="dr-vh">${esc(row.item.name)}</span></button>
   </li>`;
 }
@@ -1085,22 +1260,23 @@ function editRowHTML(row) {
   </li>`;
 }
 
-function doneRowHTML(row) {
+function doneRowHTML(row, projected, date, day) {
   const state = rowState(row.log);
-  const label = state === "skipped" ? "Skipped" : "Logged";
+  const label = state === "skipped" ? "Skipped" : state === "partial" ? "Partial" : "Logged";
   const markClass = state === "skipped" ? "dr-mark dr-mark-skip" : "dr-mark dr-mark-on";
   const mark = state === "skipped" ? "–" : "✓";
-  const dose = doseText(row);
-  const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+  const doseHTML = amountMarkup(loggedAmountText(row.log));
+  const next = countdownMarkup(projected, row, date, day);
   return `<li class="dr-row dr-row-done" data-item-id="${esc(row.item.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}<span class="dr-state">${label}</span></span>
-    <button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button>
+    <span class="dr-copy"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}${next}<span class="dr-state">${label}</span></span>
+    <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
   </li>`;
 }
 
 export function routineBlockTileHTML(block, projected, view) {
   const day = view && view.day ? view.day : routineClock().day;
+  const date = view && view.date instanceof Date && !Number.isNaN(view.date.getTime()) ? view.date : routineClock().date;
   const rows = routineBlockRows(projected, block.id, day);
   const open = rows.filter((row) => row.open);
   const done = rows.filter((row) => !row.open);
@@ -1115,12 +1291,12 @@ export function routineBlockTileHTML(block, projected, view) {
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
-    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row)).join("")}</ul>`
+    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
     : "";
   const reveal = !editing && !collapsed && done.length
     ? `<button type="button" class="dr-reveal" data-action="routines-reveal" data-block-id="${esc(block.id)}" aria-expanded="${revealed ? "true" : "false"}">${revealed ? "Hide" : "Show"} ${done.length === 1 ? "1 completed" : `${done.length} completed`}</button>`
     : "";
-  const doneList = !editing && !collapsed && revealed && done.length ? `<ul class="dr-done">${done.map(doneRowHTML).join("")}</ul>` : "";
+  const doneList = !editing && !collapsed && revealed && done.length ? `<ul class="dr-done">${done.map((row) => doneRowHTML(row, projected, date, day)).join("")}</ul>` : "";
   const add = `<button type="button" class="dr-add" data-action="routines-add-item" data-block-id="${esc(block.id)}">Add item <span class="dr-vh">to ${esc(block.name)}</span></button>`;
   const swatches = editing
     ? `<div class="dr-colors" role="radiogroup" aria-label="Color for ${esc(block.name)}. Colors follow the accent.">${ROUTINE_BLOCK_COLORS.map((token) => `<button type="button" class="dr-swatch" data-color="${token}" data-action="routines-color" data-block-id="${esc(block.id)}" aria-pressed="${color === token ? "true" : "false"}" aria-label="${token}, follows the accent"></button>`).join("")}</div>`
@@ -1160,6 +1336,7 @@ export function routineBlockTilesHTML(projected, date) {
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
   const tiles = (projected.blocks || []).map((block) => routineBlockTileHTML(block, projected, {
     day,
+    date: clock,
     current: block.id === currentId,
     focus,
     revealed: revealed.has(block.id),
@@ -1226,6 +1403,7 @@ function paintShell(view, date) {
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
+    <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
@@ -1257,6 +1435,8 @@ export function routinesSettingsSheetHTML() {
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
     <p class="sub">Focus mode dims every block except the current one. Reminders and the FAQ come later. Notifications stay off.</p>
+    <button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
+    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>
     <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
 }
 
@@ -1273,6 +1453,11 @@ app.loggedTodayCount = loggedTodayCount;
 app.routineStreak = routineStreak;
 app.shiftRoutineDay = shiftRoutineDay;
 app.logRoutineItem = logRoutineItem;
+app.editRoutineLog = editRoutineLog;
+app.compoundDoseHistory = compoundDoseHistory;
+app.routineLogDraft = routineLogDraft;
+app.loggedAmountText = loggedAmountText;
+app.doseCountdownText = doseCountdownText;
 app.skipRoutineItem = skipRoutineItem;
 app.undoRoutineLog = undoRoutineLog;
 app.restoreRoutineLog = restoreRoutineLog;
