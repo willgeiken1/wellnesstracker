@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { connectionMark, saveDays } from "../supabase/functions/_shared/oura-store.js";
+import { accessToken, connectionMark, DELETING, forgetRevoked, isRevokedGrant, OuraUnauthorized, readWithAccess, refused, REVOKED, saveDays } from "../supabase/functions/_shared/oura-store.js";
 
 // A made-up in-memory database with just the query shapes oura-store uses. No real Oura data.
 // `or` understands only the one filter oura-store sends: rows with no `data.conn`, or one at or before a mark.
@@ -18,10 +18,10 @@ function fakeDb(state, hooks = {}) {
       select() { return chain; },
       eq(k, v) { eq(k, v); return chain; },
       in(k, v) { within(k, v); return chain; },
-      async maybeSingle() { return { data: rows()[0] ?? null, error: null }; },
+      async maybeSingle() { if (hooks.failRead?.(table)) return { data: null, error: { message: "made-up failure" } }; return { data: rows()[0] ?? null, error: null }; },
       delete() {
-        const del = { eq(k, v) { eq(k, v); return del; }, in(k, v) { within(k, v); return del; },
-          then(ok) { const gone = new Set(rows()); state[table] = (state[table] ?? []).filter((r) => !gone.has(r)); return Promise.resolve({ error: null }).then(ok); } };
+        const del = { eq(k, v) { eq(k, v); return del; }, in(k, v) { within(k, v); return del; }, or(expr) { ours(expr); return del; },
+          then(ok) { if (hooks.failDelete?.(table)) return Promise.resolve({ error: { message: "made-up failure" } }).then(ok); const gone = new Set(rows()); state[table] = (state[table] ?? []).filter((r) => !gone.has(r)); return Promise.resolve({ error: null }).then(ok); } };
         return del;
       },
       update(values) {
@@ -174,4 +174,206 @@ test("a sync whose days keep vanishing reports an error instead of success", asy
   const admin = fakeDb(state, { duringUpsert: () => { state.oura_days.push({ user_id: U, day: "2026-11-15", data: { conn: mark }, updated_at: "x" }); },
     beforeUpdate: () => { state.oura_days = state.oura_days.filter((r) => r.updated_at !== "x"); } });
   await assert.rejects(saveDays(admin, U, mark, [{ user_id: U, day: "2026-11-15", data: { steps: 1 } }]), /couldn't be saved/);
+});
+
+// Oura taking back Insight's access (LT-10, from old PR #19). Made-up tokens and days only.
+const MARK = "2026-11-16T10:00:00+00:00";
+const SOON = Date.parse("2026-11-17T12:00:00Z");
+const login = (over = {}) => ({ user_id: U, access_token: "made-up-access", refresh_token: "made-up-refresh", expires_at: "2026-11-17T11:00:00Z", ...over });
+const linked = (days = []) => ({ oura_tokens: [login()], oura_connections: [{ user_id: U, connected_at: MARK, last_error: null }], oura_days: days });
+const answer = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const revoked = () => answer(400, { error: "invalid_grant" });
+const stored = () => [{ user_id: U, day: "2026-11-15", data: { steps: 1, conn: MARK }, updated_at: "x" }, { user_id: U, day: "2026-11-14", data: { steps: 2 }, updated_at: "x" }];
+// No real waiting in tests; `waits` is how many times the stored login is read again before giving up.
+const fast = { now: SOON, wait: async () => {}, waits: 3 };
+const LATER = { ...fast, now: Date.parse("2026-11-17T10:00:00Z") };
+
+test("only an OAuth invalid_grant counts as Oura refusing the login", () => {
+  assert.equal(isRevokedGrant(400, { error: "invalid_grant" }), true);
+  assert.equal(isRevokedGrant(401, { error: "invalid_grant" }), true);
+  // A wrong app key, a rate limit, an outage or an unreadable answer never deletes anyone's days.
+  assert.equal(isRevokedGrant(401, { error: "invalid_client" }), false);
+  assert.equal(isRevokedGrant(429, { error: "invalid_grant" }), false);
+  assert.equal(isRevokedGrant(500, null), false);
+  assert.equal(isRevokedGrant(400, "invalid_grant"), false);
+});
+
+test("a first refusal deletes nothing and marks the connection; the same refusal on a later sync deletes the login and days", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /^Error: Oura login expired\. Reconnect Oura in the app\. \(check [0-9a-f]{8}\)$/);
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
+  assert.match(state.oura_connections[0].last_error, /check [0-9a-f]{8}/);
+  // The tag is one-way: the refresh token itself is never written into the message.
+  assert.doesNotMatch(state.oura_connections[0].last_error, /made-up/);
+
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_tokens, []);
+  assert.deepEqual(state.oura_days, []);
+  assert.equal(state.oura_connections.length, 1);
+  assert.equal(state.oura_connections[0].last_error, REVOKED);
+  // The app and the web logger read both messages as "reconnect needed".
+  assert.match(REVOKED, /login expired/i);
+});
+
+test("Codex review, Nov 18: a failed delete of the days is finished by the next sync, which has no login", async () => {
+  const state = linked(stored());
+  let failing = true;
+  const admin = fakeDb(state, { failDelete: (table) => failing && table === "oura_days" });
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /check [0-9a-f]{8}/);
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === DELETING);
+  assert.deepEqual(state.oura_tokens, []);
+  assert.equal(state.oura_days.length, 2);
+  assert.equal(state.oura_connections[0].last_error, DELETING);
+  assert.match(DELETING, /login expired/i);
+  // Still failing: nothing changes and the next sync tries again.
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === DELETING);
+  // Codex review, Nov 18: another sync's error handler writes over DELETING; the cleanup still finishes.
+  state.oura_connections[0].last_error = "Oura login expired. Reconnect Oura in the app. (400)";
+  failing = false;
+  await assert.rejects(accessToken(admin, U, MARK, async () => { throw new Error("no login, so Oura is never asked"); }, fast), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_days, []);
+  assert.equal(state.oura_connections[0].last_error, REVOKED);
+  // Later syncs keep saying so, until a reconnect or Disconnect.
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_days, []);
+});
+
+test("Codex review, Nov 18: a sync still writing days while the cleanup runs keeps none of them", async () => {
+  const fresh = [{ user_id: U, day: "2026-11-16", data: { steps: 3 } }];
+  for (const hook of ["duringUpsert", "afterUpsert"]) {
+    const state = linked(stored());
+    let once = true;
+    const admin = fakeDb(state, { [hook]: async () => { if (once) { once = false; await forgetRevoked(admin, U, MARK, "made-up-refresh"); } } });
+    assert.equal(await saveDays(admin, U, MARK, fresh), 0, hook);
+    assert.deepEqual(state.oura_days, [], hook);
+    assert.deepEqual(state.oura_tokens, [], hook);
+    assert.equal(state.oura_connections[0].last_error, REVOKED, hook);
+  }
+});
+
+test("a login that can't be read, or a newer connection, never deletes days", async () => {
+  const unreadable = linked(stored());
+  await assert.rejects(accessToken(fakeDb(unreadable, { failRead: (table) => table === "oura_tokens" }), U, MARK, async () => revoked(), fast), /Couldn't read the Oura login/);
+  assert.equal(unreadable.oura_days.length, 2);
+  assert.equal(unreadable.oura_tokens.length, 1);
+
+  // A sync that started from an older connection finds the newer one: it is not that sync's to clean up.
+  const newer = linked(stored());
+  newer.oura_tokens = [];
+  newer.oura_connections[0].connected_at = "2026-11-17T09:00:00+00:00";
+  await assert.rejects(accessToken(fakeDb(newer), U, MARK, async () => revoked(), fast), /^Error: Oura isn't connected$/);
+  assert.equal(newer.oura_days.length, 2);
+});
+
+test("any other refresh failure keeps the login and the stored days, however often it happens", async () => {
+  for (const res of [answer(401, { error: "invalid_client" }), answer(500, null), answer(429, { error: "slow down" })]) {
+    const state = linked(stored()), admin = fakeDb(state);
+    for (let round = 0; round < 3; round++) await assert.rejects(accessToken(admin, U, MARK, async () => res, fast), /login expired/);
+    assert.equal(state.oura_tokens.length, 1);
+    assert.equal(state.oura_days.length, 2);
+    assert.equal(state.oura_connections[0].last_error, null);
+  }
+});
+
+test("a refresh token another sync just spent is not a refusal: its new login is used and nothing is deleted", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  const exchange = async () => { state.oura_tokens = [login({ access_token: "made-up-new", refresh_token: "made-up-new-refresh", expires_at: "2026-11-18T12:00:00Z" })]; return revoked(); };
+  assert.equal(await accessToken(admin, U, MARK, exchange, fast), "made-up-new");
+  assert.equal(state.oura_days.length, 2);
+  assert.equal(state.oura_connections[0].last_error, null);
+});
+
+test("the winning refresh saving a moment after the losing one hears invalid_grant is waited for", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  let waited = 0;
+  const wait = async () => { if (++waited === 2) state.oura_tokens = [login({ access_token: "made-up-winner", refresh_token: "made-up-winner-refresh", expires_at: "2026-11-18T12:00:00Z" })]; };
+  assert.equal(await accessToken(admin, U, MARK, async () => revoked(), { ...fast, wait }), "made-up-winner");
+  assert.equal(state.oura_days.length, 2);
+});
+
+test("Codex review, Nov 18: the winning refresh saving after the loser stops waiting never deletes a good connection", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  // The loser hears invalid_grant and finds no new login in its window: only a mark, nothing deleted.
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /check [0-9a-f]{8}/);
+  // Then the winner, which Oura had accepted, saves its new login.
+  state.oura_tokens = [login({ access_token: "made-up-winner", refresh_token: "made-up-winner-refresh", expires_at: "2026-11-18T12:00:00Z" })];
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
+  // The next sync uses the winner's login without asking Oura for a new one, so it is never refused again.
+  let asked = 0;
+  assert.equal(await accessToken(admin, U, MARK, async () => { asked++; return revoked(); }, fast), "made-up-winner");
+  assert.equal(asked, 0);
+  // Even if that login later expires and is refused once, the earlier mark was for a different login: still no delete.
+  state.oura_tokens[0].expires_at = "2026-11-17T11:00:00Z";
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), /check [0-9a-f]{8}/);
+  assert.equal(state.oura_days.length, 2);
+  assert.equal(state.oura_tokens.length, 1);
+});
+
+test("a reconnect that lands during the refresh keeps its new login and days", async () => {
+  const newer = "2026-11-17T11:59:00+00:00";
+  const state = linked(stored()), admin = fakeDb(state);
+  const exchange = async () => {
+    state.oura_tokens = [login({ refresh_token: "made-up-reconnect", expires_at: "2026-11-17T12:01:00Z" })];
+    state.oura_connections = [{ user_id: U, connected_at: newer, last_error: null }];
+    state.oura_days.push({ user_id: U, day: "2026-11-16", data: { steps: 3, conn: newer }, updated_at: "y" });
+    return revoked();
+  };
+  await accessToken(admin, U, MARK, exchange, fast);
+  assert.deepEqual(state.oura_tokens.map((t) => t.refresh_token), ["made-up-reconnect"]);
+  assert.equal(state.oura_days.length, 3);
+  assert.equal(state.oura_connections[0].last_error, null);
+});
+
+test("a refusal for an older connection never marks or deletes a newer one", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  state.oura_connections = [{ user_id: U, connected_at: "2026-11-17T09:00:00+00:00", last_error: null }];
+  for (let round = 0; round < 2; round++) await assert.rejects(refused(admin, U, MARK, "made-up-refresh"), /isn't connected/);
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
+  assert.equal(state.oura_connections[0].last_error, null);
+});
+
+test("forgetting a revoked login leaves a newer connection's days alone", async () => {
+  const newer = { user_id: U, day: "2026-11-16", data: { conn: "2026-11-17T09:00:00+00:00" }, updated_at: "y" };
+  const state = linked([...stored(), { ...newer }]), admin = fakeDb(state);
+  await forgetRevoked(admin, U, MARK, "made-up-refresh");
+  assert.deepEqual(state.oura_days, [newer]);
+});
+
+test("a token turned down even after a new login is marked once, and deleted only when it happens again on a later sync", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  let exchanges = 0, reads = 0;
+  // Every forced refresh gets a different new login, so the repeat is matched by connection, not by token.
+  const exchange = async () => { exchanges++; return answer(200, { access_token: `made-up-${exchanges}`, refresh_token: `made-up-refresh-${exchanges}`, expires_in: 86400 }); };
+  const read = async () => { reads++; throw new OuraUnauthorized("401"); };
+  await assert.rejects(readWithAccess(admin, U, MARK, exchange, read, LATER), /check [0-9a-f]{8}/);
+  assert.equal(exchanges, 1);
+  assert.equal(reads, 2);
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
+  await assert.rejects(readWithAccess(admin, U, MARK, exchange, read, LATER), (e) => e.message === REVOKED);
+  assert.deepEqual(state.oura_tokens, []);
+  assert.deepEqual(state.oura_days, []);
+  assert.equal(state.oura_connections[0].last_error, REVOKED);
+});
+
+test("a token Oura turns down once is replaced and the read goes on, keeping everything", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  const seen = [];
+  const exchange = async () => answer(200, { access_token: "made-up-second", refresh_token: "made-up-second-refresh", expires_in: 86400 });
+  const read = async (token) => { seen.push(token); if (seen.length === 1) throw new OuraUnauthorized("401"); return ["ok"]; };
+  assert.deepEqual(await readWithAccess(admin, U, MARK, exchange, read, LATER), ["ok"]);
+  assert.deepEqual(seen, ["made-up-access", "made-up-second"]);
+  assert.equal(state.oura_tokens[0].refresh_token, "made-up-second-refresh");
+  assert.equal(state.oura_days.length, 2);
+});
+
+test("other read failures never delete anything", async () => {
+  const state = linked(stored()), admin = fakeDb(state);
+  const read = async () => { throw new Error("Oura sleep request failed (500)"); };
+  for (let round = 0; round < 3; round++) await assert.rejects(readWithAccess(admin, U, MARK, async () => revoked(), read, LATER), /500/);
+  assert.equal(state.oura_tokens.length, 1);
+  assert.equal(state.oura_days.length, 2);
 });

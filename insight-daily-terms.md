@@ -1,6 +1,6 @@
 # Insight Wellness Terms of Use
 
-_Effective November 12, 2026_
+_Effective November 17, 2026_
 
 By using Insight Wellness you agree to these terms and to Apple's Standard Licensed Application End User License Agreement.
 
@@ -19,6 +19,10 @@ You must be at least 13. Keep your sign-in details private. You own what you log
 ## Fair use
 
 Don't misuse the app or try to reach other people's data. We may limit access if the app is misused.
+
+## Other services
+
+If you connect Oura, your Oura account is also subject to Oura's own terms, and you can disconnect it in Settings at any time. Third-party service providers, including Oura, make no warranties of merchantability, fitness for a particular purpose or non-infringement, and are not liable for consequential damages arising from their services.
 
 ## Liability
 
