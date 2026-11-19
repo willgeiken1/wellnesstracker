@@ -1,6 +1,6 @@
 # Insight Wellness Privacy Policy
 
-_Effective November 12, 2026_
+_Effective November 18, 2026_
 
 Insight Wellness is an iPhone and Android app for logging workouts, food, body measurements and recovery. This policy explains what the app handles, where it goes and the choices you have.
 
@@ -62,4 +62,4 @@ If this policy changes, we will update the date above and tell you in the app wh
 
 ## Contact
 
-Will, insight.wellnessos@gmail.com
+insight.wellnessos@gmail.com
