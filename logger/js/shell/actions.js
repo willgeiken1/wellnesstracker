@@ -418,6 +418,8 @@ document.addEventListener("input", (ev) => {
   if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
+  if (el.id === "dr-item-name" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.name = el.value; return; }
+  if (el.id === "dr-item-amount" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.amount = el.value; return; }
   if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
   if (el.id === "checkin-note") { app.ui.sd.note = el.value; if (app.syncCheckinCard) app.syncCheckinCard(); return; }
   if (el.dataset.cf && app.ui.sheet === "cardio-log") { app.updateLogTotals(); return; }
@@ -1181,7 +1183,7 @@ document.addEventListener("click", async (ev) => {
     case "routines-undo":
     case "routines-reveal":
     case "routines-focus":
-    case "routines-add-item":
+    case "routines-collapse":
     case "routines-rest": {
       if (app.ROUTINES_ENABLED !== true) break;
       const ran = a === "routines-log" ? app.logRoutineItem(app.state, b.dataset.itemId)
@@ -1189,12 +1191,101 @@ document.addEventListener("click", async (ev) => {
         : a === "routines-undo" ? app.undoRoutineLog(app.state, b.dataset.logId)
         : a === "routines-reveal" ? app.toggleRoutineReveal(app.state, b.dataset.blockId)
         : a === "routines-focus" ? app.toggleRoutineFocus(app.state)
-        : a === "routines-add-item" ? app.addExampleRoutineItem(app.state, b.dataset.blockId)
+        : a === "routines-collapse" ? app.toggleRoutineCollapsed(app.state, b.dataset.blockId)
         : app.logRoutineRest(app.state);
       if (ran && typeof app.save === "function") app.save();
       if (ran && typeof app.render === "function") app.render();
       break;
     }
+    case "routines-edit":
+      if (app.ROUTINES_ENABLED !== true || typeof app.toggleRoutineLayoutEdit !== "function") break;
+      app.toggleRoutineLayoutEdit();
+      break;
+    case "routines-add-block": {
+      if (app.ROUTINES_ENABLED !== true || typeof app.ask !== "function") break;
+      const name = await app.ask({ title: "New routine", body: "Name this block.", ok: "Add", cancel: "Cancel", input: "" });
+      if (typeof name !== "string" || !app.addRoutineBlock(app.state, name)) break;
+      if (typeof app.save === "function") app.save();
+      if (app.ui) app.ui.routineAnnounce = "Routine added.";
+      if (typeof app.render === "function") app.render();
+      break;
+    }
+    case "routines-add-item":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineItemEditor !== "function") break;
+      app.openRoutineItemEditor(b.dataset.blockId);
+      break;
+    case "routines-edit-item":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineItemEditor !== "function") break;
+      app.openRoutineItemEditor(b.dataset.blockId, b.dataset.itemId);
+      break;
+    case "routines-rename-block":
+      if (app.ROUTINES_ENABLED !== true || typeof app.promptRoutineRename !== "function") break;
+      await app.promptRoutineRename("block", b.dataset.blockId);
+      break;
+    case "routines-rename-item":
+      if (app.ROUTINES_ENABLED !== true || typeof app.promptRoutineRename !== "function") break;
+      await app.promptRoutineRename("item", b.dataset.itemId);
+      break;
+    case "routines-delete-block":
+      if (app.ROUTINES_ENABLED !== true || typeof app.removeRoutineBlock !== "function") break;
+      app.removeRoutineBlock(b.dataset.blockId);
+      break;
+    case "routines-restore-block":
+      if (app.ROUTINES_ENABLED !== true || !app.restoreRoutineBlock(app.state, b.dataset.blockId)) break;
+      if (typeof app.save === "function") app.save();
+      if (app.ui) app.ui.routineAnnounce = "Routine restored.";
+      if (typeof app.render === "function") app.render();
+      break;
+    case "routines-delete-item":
+      if (app.ROUTINES_ENABLED !== true || typeof app.removeRoutineItem !== "function") break;
+      app.removeRoutineItem(b.dataset.itemId);
+      break;
+    case "routines-restore-item":
+      if (app.ROUTINES_ENABLED !== true || !app.restoreRoutineItem(app.state, b.dataset.itemId)) break;
+      if (typeof app.save === "function") app.save();
+      if (app.ui) app.ui.routineAnnounce = "Item restored.";
+      if (typeof app.render === "function") app.render();
+      break;
+    case "routines-duplicate-block":
+      if (app.ROUTINES_ENABLED !== true || typeof app.copyRoutineBlock !== "function") break;
+      app.copyRoutineBlock(b.dataset.blockId);
+      break;
+    case "routines-color":
+      if (app.ROUTINES_ENABLED !== true || typeof app.paintRoutineBlock !== "function") break;
+      app.paintRoutineBlock(b.dataset.blockId, b.dataset.color);
+      break;
+    case "routines-item-kind":
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      app.ui.sd.kind = b.dataset.kind === "dose" ? "dose" : "check";
+      app.renderSheet();
+      break;
+    case "routines-item-unit":
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      app.ui.sd.unit = b.dataset.unit;
+      app.renderSheet();
+      break;
+    case "routines-item-quarter":
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      app.ui.sd.kind = "dose";
+      app.ui.sd.amount = b.dataset.amount;
+      app.renderSheet();
+      break;
+    case "routines-item-block": {
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      const id = b.dataset.blockId;
+      const ids = Array.isArray(app.ui.sd.blockIds) ? app.ui.sd.blockIds.slice() : [];
+      if (ids.includes(id) && ids.length === 1) {
+        if (typeof app.toast === "function") app.toast("An item stays in at least one routine.");
+        break;
+      }
+      app.ui.sd.blockIds = ids.includes(id) ? ids.filter((row) => row !== id) : ids.concat(id);
+      app.renderSheet();
+      break;
+    }
+    case "routines-item-save":
+      if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineItemSheet !== "function") break;
+      app.commitRoutineItemSheet();
+      break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
   }
