@@ -2,6 +2,7 @@ import { app } from "../runtime.js";
 import { HOME_WIDGETS, getHomeLayout, setHomeLayout } from "../shared/home-widgets.js";
 import { migrateHomeLayout, applyHomeMigration, pickHomeV2 } from "../shared/home-migrate.js";
 import { stripProfileClockFields } from "../shared/purge.js";
+import { normalizeDailyRoutines } from "../shared/daily-routines-store.js";
 
 /* Storage, exercise catalog, and shared session helpers. */
 /* ================= Data ================= */
@@ -324,7 +325,8 @@ function migrate(d) {
     appLock: d.appLock && typeof d.appLock === "object" ? d.appLock : { enabled: false, updatedAt: 0 },
     purges: Array.isArray(d.purges) ? d.purges : [],
     checkins: d.checkins || null,
-    checkinDeleted: Array.isArray(d.checkinDeleted) ? d.checkinDeleted : [] };
+    checkinDeleted: Array.isArray(d.checkinDeleted) ? d.checkinDeleted : [],
+    dailyRoutines: normalizeDailyRoutines(d.dailyRoutines) };
 }
 app.migrate = migrate;
 
@@ -334,7 +336,7 @@ function load() {
     if (raw) { const m = app.migrate(JSON.parse(raw)); if (m) return applyHomeMigration(m); }
   } catch (e) { /* start fresh */ }
   return applyHomeMigration({ version: 2, workouts: app.copy(app.DEFAULT_WORKOUTS), sessions: [], plan: {}, restSeconds: 120, lastExport: null,
-    oura: { connected: false, lastSync: null, days: {} }, demo: false, appLock: { enabled: false, updatedAt: 0 }, purges: [], checkins: null, checkinDeleted: [] });
+    oura: { connected: false, lastSync: null, days: {} }, demo: false, appLock: { enabled: false, updatedAt: 0 }, purges: [], checkins: null, checkinDeleted: [], dailyRoutines: null });
 }
 app.load = load;
 app.HOME_WIDGETS = HOME_WIDGETS;
