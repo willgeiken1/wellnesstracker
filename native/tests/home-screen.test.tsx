@@ -30,7 +30,9 @@ beforeEach(() => {
   jest.mocked(router.push).mockClear(); jest.mocked(router.navigate).mockClear();
   hours = jest.spyOn(Date.prototype, 'getHours').mockReturnValue(10);
 });
-afterEach(() => hours.mockRestore());
+afterEach(() => { hours.mockRestore(); jest.useRealTimers(); });
+// A finished workout starts ten minutes ago, so a real clock just after midnight dates it yesterday.
+const middayToday = () => jest.useFakeTimers({ now: new Date(2026, 10, 11, 12), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'performance', 'hrtime'] });
 
 describe('contour engine', () => {
   test('draws nothing for an empty day and coloured lines per hill once there is progress', () => {
@@ -78,6 +80,7 @@ test('the map and tiles appear once something is logged, from real entries only'
   expect(router.navigate).toHaveBeenCalledWith('/food');
 });
 test('a finished workout fills training on the map, the week strip and the volume tile', async () => {
+  middayToday();
   const repo = open();
   finishWorkout(repo);
   await render(<Home />, { wrapper });
@@ -88,6 +91,7 @@ test('a finished workout fills training on the map, the week strip and the volum
   expect(screen.getAllByRole('button', { name: /^(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day/ })).toHaveLength(7);
 });
 test('tapping a day in the week strip shows that day on the map', async () => {
+  middayToday();
   const repo = open();
   finishWorkout(repo);
   await render(<Home />, { wrapper });
