@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FOOD_MODEL_ID } from "../supabase/functions/_shared/food-model.js";
+import { buildExportFiles, stripRange } from "../logger/js/shared/purge.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -159,4 +160,92 @@ test("delete account requires DELETE and removes the known tables", () => {
   assert.match(privacy, /typed !== "DELETE"/);
   assert.match(privacy, /Type DELETE in capital letters to confirm/);
   assert.match(privacy, /invoke\("delete-account", \{ body: \{ confirm: "DELETE" \} \}\)/);
+});
+
+function routineFixture() {
+  return {
+    sessions: [],
+    dailyRoutines: {
+      blocks: [{ id: "block-1", name: "Morning routine", order: 0, updatedAt: 10, deletedAt: null }],
+      items: [{ id: "item-1", name: "Example Item", kind: "dose", compoundId: "compound-1", updatedAt: 10, deletedAt: null }],
+      placements: [{ id: "place-1", blockId: "block-1", itemId: "item-1", order: 0, updatedAt: 10, deletedAt: null }],
+      compounds: [{ id: "compound-1", name: "Example Item", amount: 1, unit: "mcg", updatedAt: 10, deletedAt: null }],
+      logs: [
+        { id: "log-1", itemId: "item-1", day: "2026-11-01", status: "done", amount: 1, unit: "mcg", at: 10, updatedAt: 10, deletedAt: null },
+        { id: "log-2", itemId: "item-1", day: "2026-11-02", status: "partial", amount: 0.25, unit: "mcg", at: 20, updatedAt: 20, deletedAt: null },
+      ],
+      prefs: {
+        lastBlockId: "block-1",
+        focusMode: true,
+        collapsedBlocks: ["block-1"],
+        revealBlocks: ["block-1"],
+        updatedAt: 10,
+      },
+    },
+  };
+}
+
+test("the web privacy policy describes what daily routines store and sync", () => {
+  const policy = read("../privacy.md");
+  const page = read("../logger/js/pages/privacy.js");
+  const native = read("../insight-daily-privacy.md");
+  assert.match(policy, /_Last updated: November 19, 2026_/);
+  assert.doesNotMatch(policy, /_Last updated: October 16, 2026_/);
+  assert.match(policy, /Blocks, the items in them, which block each item is placed in, and preferences/);
+  assert.match(policy, /planned amount and unit/);
+  assert.match(policy, /the item, the day, the status \(done, partial, or skipped\), the amount and unit when you logged an amount, and the time it was logged/);
+  assert.match(policy, /save the log on an earlier day/);
+  assert.match(policy, /When you are signed in, the layout and the dose logs sync to your account/);
+  assert.match(policy, /included in the Settings backup and in the privacy export/);
+  assert.match(policy, /keeps the row and marks it deleted/);
+  assert.match(policy, /older copy on another device cannot bring the row back/);
+  assert.match(policy, /marks the dose logs on those days deleted and leaves the layout/);
+  assert.match(policy, /including the amount, until you delete the account/);
+  assert.match(policy, /Crash reports and usage analytics do not include dose amounts or item names/);
+  assert.match(policy, /does arithmetic on this device from the numbers you type/);
+  assert.match(policy, /It is not saved, it is not synced, and it is not sent anywhere/);
+  assert.match(policy, /It is not a recommendation/);
+  assert.match(page, /Dose logs on those days are marked deleted/);
+  assert.match(page, /It is not saved and it is not a recommendation/);
+  assert.doesNotMatch(policy, /discover/i);
+  assert.doesNotMatch(page, /discover/i);
+  assert.doesNotMatch(native, /dose log|reconstitution|daily routine/i);
+});
+
+test("the settings backup and the privacy export include the routine layout and dose logs", () => {
+  const actions = read("../logger/js/shell/actions.js");
+  const cloud = read("../logger/js/shared/cloud.js");
+  const exportStart = actions.indexOf("function exportData");
+  const exportBody = actions.slice(exportStart, actions.indexOf("const name =", exportStart));
+  assert.match(exportBody, /dailyRoutines: app\.state\.dailyRoutines \|\| null/);
+  assert.match(cloud, /dailyRoutines: app\.state\.dailyRoutines \|\| null/);
+
+  const data = routineFixture();
+  assert.equal(stripRange(data, "2026-11-01", "2026-11-01", { before: 4000, now: 6000 }), true);
+  const purged = data.dailyRoutines.logs.find((row) => row.id === "log-1");
+  const kept = data.dailyRoutines.logs.find((row) => row.id === "log-2");
+  assert.equal(purged.deletedAt, 4000);
+  assert.equal(purged.amount, 1);
+  assert.equal(purged.unit, "mcg");
+  assert.equal(kept.deletedAt, null);
+  assert.equal(kept.amount, 0.25);
+  assert.equal(data.dailyRoutines.blocks[0].deletedAt, null);
+  assert.equal(data.dailyRoutines.items[0].name, "Example Item");
+  assert.equal(data.dailyRoutines.placements[0].itemId, "item-1");
+
+  const files = buildExportFiles(data);
+  const byName = Object.fromEntries(files.map((file) => [file.name, file.text]));
+  assert.match(byName["about.txt"], /daily_routine_logs\.csv, and daily_routine_preferences\.csv are the routine layout and dose logs, including rows marked deleted/);
+  assert.match(byName["about.txt"], /reconstitution calculator is not stored/);
+  assert.match(byName["daily_routine_blocks.csv"], /block-1,Morning routine,0,/);
+  assert.match(byName["daily_routine_items.csv"], /item-1,Example Item,dose,1,mcg,/);
+  assert.match(byName["daily_routine_placements.csv"], /block-1,item-1,Morning routine,Example Item,0,/);
+  assert.match(byName["daily_routine_logs.csv"], /item_id,item,day,status,amount,unit,time,deleted/);
+  assert.match(byName["daily_routine_logs.csv"], /item-1,Example Item,2026-11-01,done,1,mcg,1970-01-01T00:00:00\.010Z,yes/);
+  assert.match(byName["daily_routine_logs.csv"], /item-1,Example Item,2026-11-02,partial,0\.25,mcg,1970-01-01T00:00:00\.020Z,\r/);
+  assert.match(byName["daily_routine_preferences.csv"], /last_block,Morning routine/);
+  assert.match(byName["daily_routine_preferences.csv"], /focus_mode,on/);
+  assert.match(byName["daily_routine_preferences.csv"], /collapsed_blocks,Morning routine/);
+  assert.match(byName["daily_routine_preferences.csv"], /show_completed,Morning routine/);
+  assert.doesNotMatch(Object.values(byName).join("\n"), /discover/i);
 });
