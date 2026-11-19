@@ -597,7 +597,7 @@ photos.csv lists progress photos (date and pose). The image files are not in thi
 Meal photos sent off for a nutrition estimate are not kept, so they are not here.
 A written meal description sent for an estimate is not kept either.
 Oura rows are the days Insight has stored, not a full copy of your Oura account.
-daily_routine_blocks.csv, daily_routine_items.csv, daily_routine_placements.csv, daily_routine_logs.csv, and daily_routine_preferences.csv are the routine layout and dose logs, including rows marked deleted.
+daily_routine_blocks.csv, daily_routine_items.csv, daily_routine_placements.csv, daily_routine_logs.csv, and daily_routine_preferences.csv are the routine layout and dose logs. A deleted dose log in daily_routine_logs.csv is only a marker: its id, the day, its status, and when it was deleted. The amount, the unit, and the item are not in that row.
 The reconstitution calculator is not stored, so it is not in this zip.
 `;
 
@@ -629,7 +629,7 @@ function namesFor(ids, rows) {
   }).filter(Boolean).join("; ");
 }
 
-/* Layout and dose logs, including rows marked deleted. The calculator is not stored. */
+/* Layout and dose logs. A deleted dose log is only id, day, status, and when it was deleted. The calculator is not stored. */
 function dailyRoutineFiles(state) {
   const store = state && state.dailyRoutines && typeof state.dailyRoutines === "object" && !Array.isArray(state.dailyRoutines)
     ? state.dailyRoutines
@@ -672,11 +672,27 @@ function dailyRoutineFiles(state) {
     ]);
   }
 
-  const logRows = [["item_id", "item", "day", "status", "amount", "unit", "time", "deleted"]];
+  const logRows = [["id", "item_id", "item", "day", "status", "amount", "unit", "time", "deleted"]];
   for (const log of Array.isArray(store.logs) ? store.logs : []) {
     if (!log || typeof log !== "object") continue;
+    const deleted = typeof log.deletedAt === "number" && log.deletedAt > 0;
+    if (deleted) {
+      logRows.push([
+        log.id || "",
+        "",
+        "",
+        log.day || "",
+        log.status || "",
+        "",
+        "",
+        "",
+        routineLoggedTime(log.deletedAt),
+      ]);
+      continue;
+    }
     const item = typeof log.itemId === "string" ? items.get(log.itemId) : null;
     logRows.push([
+      log.id || "",
       log.itemId || "",
       item && item.name || "",
       log.day || "",
@@ -684,7 +700,7 @@ function dailyRoutineFiles(state) {
       log.amount != null ? num(log.amount) : "",
       log.unit || "",
       routineLoggedTime(log.at),
-      routineMarkedDeleted(log),
+      "",
     ]);
   }
 
