@@ -43,22 +43,42 @@ function nextStamp(previous) {
   return now > prev ? now : prev + 1;
 }
 
-export function startedChartMarkers(store, labels) {
+function shiftDay(day, n) {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+}
+
+/* A weekly HRV point is the Monday plus the six days after it. A start on
+   Tuesday through Sunday of that week belongs on the Monday label, including
+   the last week, whose Sunday is after the last label. */
+function bucketStart(days, startDate, span) {
+  let bucket = null;
+  const endOffset = span - 1;
+  for (const day of days) {
+    if (day <= startDate && startDate <= shiftDay(day, endOffset) && (bucket == null || day > bucket)) bucket = day;
+  }
+  return bucket;
+}
+
+export function startedChartMarkers(store, labels, opts) {
   if (app.ROUTINES_ENABLED !== true || !canMutateRoutines()) return [];
   if (!Array.isArray(labels) || !labels.length) return [];
   const view = projectDailyRoutines(store);
   if (!view) return [];
   const days = labels.filter((day) => validDay(day));
   if (!days.length) return [];
+  const span = opts && opts.bucketDays === 7 ? 7 : 1;
   const first = days.reduce((a, b) => (a < b ? a : b));
   const last = days.reduce((a, b) => (a > b ? a : b));
+  const end = span === 1 ? last : shiftDay(last, span - 1);
   const markers = [];
   for (const compound of view.compounds) {
     if (!compound || compound.chartLine !== true || !validDay(compound.startDate)) continue;
-    if (compound.startDate < first || compound.startDate > last) continue;
+    if (compound.startDate < first || compound.startDate > end) continue;
+    const date = span === 1 ? compound.startDate : bucketStart(days, compound.startDate, span);
+    if (!date) continue;
     const name = displayName(compound.name);
     if (!name) continue;
-    markers.push({ date: compound.startDate, label: `Started ${name}` });
+    markers.push({ date, label: `Started ${name}` });
   }
   markers.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
   return markers;

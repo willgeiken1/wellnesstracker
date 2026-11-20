@@ -5,8 +5,9 @@ import { readinessForAdvice } from "../shared/brief.js";
 import { chartLineOptInHTML, startedChartMarkers } from "../shared/routine-chart-lines.js";
 import "./insight-widgets.js";
 
-function startedMarkers(labels) {
-  return startedChartMarkers(app.state && app.state.dailyRoutines, labels);
+function startedMarkers(labels, bucketDays) {
+  const span = bucketDays === 7 ? { bucketDays: 7 } : undefined;
+  return startedChartMarkers(app.state && app.state.dailyRoutines, labels, span);
 }
 
 /* Insights and Recovery markup. */
@@ -240,7 +241,7 @@ function insightsHTML(embedded) {
     <!--w:load--><div class="sec-h" style="margin-top:22px"><h3>${nights ? "Training load vs recovery" : "Weekly training volume"}</h3></div>
     <div class="card"><p class="sub">${loadMsg}</p>
       <div class="mini-l">Sets per week</div>${app.chartSVG({ labels: weeks, series: [{ type: "bar", data: wSets }], h: 100, yMin: 0 })}
-      ${nights ? `<div class="mini-l">Average HRV (ms)</div>${app.chartSVG({ labels: weeks, series: [{ data: wHrv, cls: "ln" }], h: 100, guide: hrvBase, markers: startedMarkers(weeks) })}` : ""}</div>
+      ${nights ? `<div class="mini-l">Average HRV (ms)</div>${app.chartSVG({ labels: weeks, series: [{ data: wHrv, cls: "ln" }], h: 100, guide: hrvBase, markers: startedMarkers(weeks, 7) })}` : ""}</div>
     <!--w:volume--><div class="sec-h" style="margin-top:22px"><h3>Weekly sets per muscle</h3><span class="sec-sub">4-week average</span></div>
     <div class="card"><p class="sub">The shaded zone is 10–20 sets a week, a range commonly recommended for muscle growth. Muscles an exercise works secondarily count as half a set.</p><div class="vol">${volHTML}</div></div>
     <!--w:balance--><div class="card"><h4>Push / pull balance</h4><p class="sub">${ppMsg}</p>
