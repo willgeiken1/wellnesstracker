@@ -40,6 +40,39 @@ for (const [field, sentinel] of Object.entries({
   });
 }
 
+for (const [field, sentinel] of Object.entries({
+  dose: "aa11bb22cc33dd44",
+  doseAmount: "aa11bb22cc33dd45",
+  doseUnit: "aa11bb22cc33dd46",
+  mcg: "aa11bb22cc33dd47",
+  compound: "aa11bb22cc33dd48",
+  syringeUnits: "aa11bb22cc33dd49",
+  concentration: "aa11bb22cc33dd4a",
+  vialMg: "aa11bb22cc33dd4b",
+  bacWaterMl: "aa11bb22cc33dd4c",
+  reconstitution: "aa11bb22cc33dd4d",
+  dailyRoutines: "aa11bb22cc33dd4e",
+})) {
+  test(`Sentry removes dose field ${field} even when its value resembles SDK metadata`, () => {
+    const record = { [field]: sentinel };
+    const event = scrubEvent({
+      message: `${field}: ${sentinel}`,
+      extra: { dailyRoutines: [record] },
+      contexts: { app: { ...record, nested: record }, browser: { name: "Chrome" } },
+      tags: record,
+      request: { url: `https://example.invalid/routines?${field}=${sentinel}`, data: record },
+      exception: { values: [{ type: "TypeError", value: sentinel,
+        mechanism: { type: "generic", handled: true, data: record } }] },
+      breadcrumbs: [{ category: "fetch", type: "http", data: {
+        method: "POST", status_code: 200, url: `https://example.invalid/?${field}=${sentinel}`,
+        ...record,
+      } }],
+    });
+    assert.equal(JSON.stringify(event).includes(sentinel), false);
+    assert.equal(event.contexts.browser.name, "Chrome");
+  });
+}
+
 test("query strings are removed from urls and left alone in prose", () => {
   assert.equal(
     stripUrlQuery("https://x.supabase.co/rest/v1/user_data?user_id=eq.abc&select=data"),
@@ -313,7 +346,7 @@ test("sentry.js loads the errors-only bundle on production hosts and stays off o
   const src = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
   assert.match(src, /bundle\.min\.js/);
   assert.doesNotMatch(src, /bundle\.tracing/);
-  assert.match(src, /insight-shell-v54/);
+  assert.match(src, /insight-shell-v57/);
 
   async function bootAt(location) {
     const scripts = [];

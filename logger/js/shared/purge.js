@@ -1,5 +1,6 @@
 /* Pure helpers for privacy: date-range wipes, CSV, and an uncompressed zip.
    No DOM. The edge function supabase/functions/_shared/strip.ts mirrors stripRange. */
+import { purgeDailyRoutineRange } from "./daily-routines-store.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -496,6 +497,7 @@ export function stripRange(data, from, to, opts = {}) {
   }
 
   if (stripCheckins(data, from, to, before, now)) changed = true;
+  if (purgeDailyRoutineRange(data, from, to, before, now)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
 }
@@ -622,6 +624,14 @@ export function buildExportFiles(state, opts = {}) {
     for (const e of w.exercises || []) routines.push([w.id, w.name, e.name, (e.muscles || []).join(" ")]);
   }
   files.push({ name: "routines.csv", text: toCsv(routines) });
+
+  const routineLogs = [["day", "status", "amount", "unit", "deleted"]];
+  for (const log of (s.dailyRoutines && s.dailyRoutines.logs) || []) {
+    if (!log || typeof log !== "object") continue;
+    const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
+    routineLogs.push([log.day || "", log.status || "", gone ? "" : num(log.amount), gone ? "" : (log.unit || ""), gone ? "1" : ""]);
+  }
+  files.push({ name: "daily_routine_logs.csv", text: toCsv(routineLogs) });
 
   const sets = [["date", "workout_id", "workout", "exercise", "set_index", "weight", "reps", "tag", "note", "pr", "left_weight", "left_reps", "right_weight", "right_reps", "rpe"]];
   for (const sess of s.sessions || []) {

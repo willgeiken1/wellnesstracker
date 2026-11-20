@@ -203,7 +203,8 @@ function rangeCounts(from, to) {
   const oura = Object.keys((app.state.oura && app.state.oura.days) || {}).filter((d) => d >= from && d <= to).length;
   const photos = (app.myPhotos ? app.myPhotos() : []).filter((p) => p.date >= from && p.date <= to).length;
   const plan = Object.keys(app.state.plan || {}).filter((d) => d >= from && d <= to).length;
-  return { sessions, meals, cardio, meas, weighs, checks, oura, photos, plan };
+  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && log.day >= from && log.day <= to).length;
+  return { sessions, meals, cardio, meas, weighs, checks, oura, photos, plan, routineLogs };
 }
 app.rangeCounts = rangeCounts;
 
@@ -220,6 +221,7 @@ function rangePreviewText(from, to) {
   if (c.oura) bits.push(app.pl(c.oura, "Oura day"));
   if (c.photos) bits.push(app.pl(c.photos, "progress photo"));
   if (c.plan) bits.push(app.pl(c.plan, "planned day"));
+  if (c.routineLogs) bits.push(app.pl(c.routineLogs, "routine log"));
   if (!bits.length) return "Nothing on this phone falls in that range. If you're signed in, the account copy is still checked.";
   return "On this phone: " + bits.join(", ") + ".";
 }

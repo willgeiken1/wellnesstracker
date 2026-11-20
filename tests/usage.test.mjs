@@ -45,6 +45,38 @@ test("PostHog drops check-in sentinels from events and person properties", () =>
   });
 });
 
+test("PostHog drops dose sentinels from events and person properties", () => {
+  const dose = {
+    dose: 887661,
+    doseAmount: 887662,
+    doseUnit: 887663,
+    mcg: 887664,
+    compound: 887665,
+    syringeUnits: 887666,
+    concentration: 887667,
+    vialMg: 887668,
+    bacWaterMl: 887669,
+    reconstitution: 887670,
+    dailyRoutines: 887671,
+  };
+  const event = sanitizePosthogEvent({
+    event: "tab_viewed",
+    properties: { tab: "home", ...dose, dailyRoutines: dose,
+      $dose: dose.dose, $mcg: dose.mcg, $compound: dose.compound,
+      $current_url: `https://example.invalid/?dose=${dose.dose}#mcg=${dose.mcg}` },
+    $set: dose,
+    $set_once: { dailyRoutines: dose, ...dose },
+  });
+  assert.deepEqual(event, { event: "tab_viewed", properties: {
+    tab: "home", $current_url: "https://example.invalid", $geoip_disable: true,
+  } });
+  for (const sentinel of Object.values(dose)) assert.equal(JSON.stringify(event).includes(String(sentinel)), false);
+  assert.deepEqual(sanitizeCapture("tab_viewed", { tab: "home", ...dose }), {
+    event: "tab_viewed", properties: { tab: "home" },
+  });
+  assert.equal(sanitizeCapture("dose_logged", dose), null);
+});
+
 test("crash reports default on and only an explicit off turns them off", () => {
   const store = memoryStorage();
   assert.equal(usageSharingOn(store), true);
@@ -454,9 +486,9 @@ test("local development never loads PostHog", async () => {
 test("the shell caches the usage modules with the v50 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v54/);
+  assert.match(sw, /insight-shell-v57/);
   assert.match(sw, /\.\/js\/usage\.js/);
   assert.match(sw, /\.\/js\/usage-events\.js/);
   assert.match(sw, /\.\/js\/usage-pref\.js/);
-  assert.match(sentry, /insight-shell-v54/);
+  assert.match(sentry, /insight-shell-v57/);
 });

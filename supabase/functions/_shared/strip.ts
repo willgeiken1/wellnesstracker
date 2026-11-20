@@ -366,6 +366,30 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
     }
   }
 
+  // Daily routine logs in the range become tombstones with no dose fields.
+  // Keep this in step with purgeDailyRoutineRange in logger/js/shared/daily-routines-store.js.
+  const routines = data.dailyRoutines;
+  if (routines && typeof routines === "object" && !Array.isArray(routines) && Array.isArray(routines.logs)) {
+    const keep = ["id", "day", "status", "updatedAt", "deletedAt"];
+    let routinesChanged = false;
+    routines.logs = routines.logs.map((log: Bag) => {
+      if (!log || typeof log !== "object" || !inRange(log.day, from, to)) return log;
+      const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
+      if (!gone && !dropBefore(latestTime(log, ITEM_KEYS), before, now)) return log;
+      const keys = Object.keys(log);
+      if (gone && keys.length === keep.length && keep.every((key) => keys.includes(key))) return log;
+      routinesChanged = true;
+      const deletedAt = gone ? log.deletedAt : stamp;
+      const prev = typeof log.updatedAt === "number" && Number.isFinite(log.updatedAt) ? log.updatedAt : 0;
+      const status = typeof log.status === "string" && log.status ? log.status : "done";
+      return { id: log.id, day: log.day, status, updatedAt: Math.max(prev, deletedAt), deletedAt };
+    });
+    if (routinesChanged) {
+      const prevStore = typeof routines.updatedAt === "number" && Number.isFinite(routines.updatedAt) ? routines.updatedAt : 0;
+      routines.updatedAt = Math.max(prevStore, stamp);
+    }
+  }
+
   data.updatedAt = Date.now();
   return data;
 }
