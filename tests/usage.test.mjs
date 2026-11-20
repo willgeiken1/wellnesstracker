@@ -58,6 +58,10 @@ test("PostHog drops dose sentinels from events and person properties", () => {
     bacWaterMl: 887669,
     reconstitution: 887670,
     dailyRoutines: 887671,
+    site: 887672,
+    lastSite: 887673,
+    injectionSite: 887674,
+    siteId: 887675,
   };
   const event = sanitizePosthogEvent({
     event: "tab_viewed",

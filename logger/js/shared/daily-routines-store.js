@@ -25,6 +25,31 @@ const STATUSES = new Set(["done", "skipped", "partial"]);
 const LOG_STAMPS = ["loggedAt", "updatedAt", "createdAt", "at", "mod"];
 const FEELING_KEYS = ["mood", "energy", "stress", "feeling", "felt"];
 
+/* Optional injection site on a dose log. Only these ids are kept.
+   The list is the whole picker. There is no body map. */
+export const ROUTINE_SITES = Object.freeze([
+  Object.freeze({ id: "left-belly", label: "Left belly" }),
+  Object.freeze({ id: "right-belly", label: "Right belly" }),
+  Object.freeze({ id: "left-thigh", label: "Left thigh" }),
+  Object.freeze({ id: "right-thigh", label: "Right thigh" }),
+  Object.freeze({ id: "left-arm", label: "Left arm" }),
+  Object.freeze({ id: "right-arm", label: "Right arm" }),
+  Object.freeze({ id: "left-glute", label: "Left glute" }),
+  Object.freeze({ id: "right-glute", label: "Right glute" }),
+]);
+const SITE_IDS = new Set(ROUTINE_SITES.map((site) => site.id));
+
+export function routineSiteId(value) {
+  if (typeof value !== "string") return "";
+  const id = value.trim();
+  return SITE_IDS.has(id) ? id : "";
+}
+
+export function routineSiteLabel(id) {
+  const site = ROUTINE_SITES.find((row) => row.id === id);
+  return site ? site.label : "";
+}
+
 export const DEFAULT_ROUTINE_BLOCKS = Object.freeze([
   Object.freeze({ name: "Morning routine", color: "citrus" }),
   Object.freeze({ name: "Supplement & enhancer stack", color: "lavender" }),
@@ -123,6 +148,10 @@ function normalizeLog(raw) {
   const note = clip(typeof raw.note === "string" ? raw.note : "", NOTE_MAX);
   if (note) next.note = note;
   else delete next.note;
+  const taken = (raw.status === "done" || raw.status === "partial") && raw.rest !== true;
+  const site = taken ? routineSiteId(raw.site) : "";
+  if (site) next.site = site;
+  else delete next.site;
   for (const key of FEELING_KEYS) delete next[key];
   return next;
 }
@@ -202,6 +231,27 @@ export function projectDailyRoutines(store) {
     compounds: liveOf(normalized.compounds),
     logs: liveOf(normalized.logs),
   };
+}
+
+/* The newest other taken log for this item that still has a site.
+   A skip, a rest, and a tombstone do not count. The log being edited
+   is excluded so it is not its own last site. */
+export function lastRoutineSite(store, itemId, exceptLogId) {
+  const view = projectDailyRoutines(store);
+  if (!view || typeof itemId !== "string" || !itemId) return "";
+  const rows = (view.logs || []).filter((log) => {
+    if (!log || log.itemId !== itemId || log.rest === true) return false;
+    if (exceptLogId && log.id === exceptLogId) return false;
+    if (log.status !== "done" && log.status !== "partial") return false;
+    return !!routineSiteId(log.site);
+  });
+  rows.sort((a, b) => {
+    if (a.day !== b.day) return a.day < b.day ? 1 : -1;
+    const at = (b.at || 0) - (a.at || 0);
+    if (at) return at;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  return rows[0] ? routineSiteId(rows[0].site) : "";
 }
 
 function copyEntity(entity) {
