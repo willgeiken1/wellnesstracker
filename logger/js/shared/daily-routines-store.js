@@ -17,11 +17,13 @@ import { app } from "../runtime.js";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const CLOCK_SKEW_MS = 60_000;
+const NOTE_MAX = 500;
 const PLAN = new Set(["blocks", "items", "placements", "compounds"]);
 const COLLECTIONS = new Set([...PLAN, "logs"]);
 const KINDS = new Set(["check", "dose"]);
 const STATUSES = new Set(["done", "skipped", "partial"]);
 const LOG_STAMPS = ["loggedAt", "updatedAt", "createdAt", "at", "mod"];
+const FEELING_KEYS = ["mood", "energy", "stress", "feeling", "felt"];
 
 export const DEFAULT_ROUTINE_BLOCKS = Object.freeze([
   Object.freeze({ name: "Morning routine", color: "citrus" }),
@@ -107,7 +109,7 @@ function normalizeCompound(raw) {
 function normalizeLog(raw) {
   const base = entityBase(raw);
   if (!base || !validDay(raw.day) || !STATUSES.has(raw.status)) return null;
-  return {
+  const next = {
     ...plainFields(raw),
     ...base,
     itemId: typeof raw.itemId === "string" && raw.itemId ? raw.itemId : null,
@@ -118,6 +120,11 @@ function normalizeLog(raw) {
     unit: clip(raw.unit, 16),
     at: num(raw.at),
   };
+  const note = clip(typeof raw.note === "string" ? raw.note : "", NOTE_MAX);
+  if (note) next.note = note;
+  else delete next.note;
+  for (const key of FEELING_KEYS) delete next[key];
+  return next;
 }
 
 const NORMALIZE = {

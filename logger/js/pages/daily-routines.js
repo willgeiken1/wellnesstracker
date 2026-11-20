@@ -27,8 +27,8 @@ import { nextDoseCountdown } from "../shared/routine-dose.js";
    Log all writes one done log per open item in that block. A skip already
    covers its item. A whole-day rest covers the day, so Log all writes
    nothing on a rest day and does not rewrite a rest row. A log tap shows
-   "Logged · Undo" for 3 seconds. This file does not listen for the pointer,
-   so a long press stays available for rename and details. */
+   "Logged · Undo" for 3 seconds. This file does not listen for the pointer.
+   Outside edit mode a long press opens details. Edit mode still renames. */
 
 const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
@@ -105,6 +105,15 @@ export function formatRoutineClock(date) {
   hour %= 12;
   if (hour === 0) hour = 12;
   return `${hour}:${min} ${suffix}`;
+}
+
+/* The dose clock on a log is `at`, read in the phone's local zone.
+   The value is HH:MM so a time input can show it. */
+export function routineClockTime(stamp) {
+  if (typeof stamp !== "number" || !Number.isFinite(stamp) || stamp <= 0) return "";
+  const date = new Date(stamp);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 export function formatRoutineWait(waitMin) {
@@ -716,6 +725,40 @@ function validCalendarDay(value) {
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
 }
 
+const NOTE_MAX = 500;
+const TIME_RE = /^(\d{1,2}):([0-5]\d)$/;
+
+function clipNote(value) {
+  if (typeof value !== "string") return "";
+  const text = value.trim();
+  return text.length > NOTE_MAX ? text.slice(0, NOTE_MAX) : text;
+}
+
+/* Hours and minutes on a local clock. "8:02" and "08:02" are the same time. */
+export function parseRoutineTime(raw) {
+  if (typeof raw !== "string") return null;
+  const match = TIME_RE.exec(raw.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || hour > 23 || !Number.isInteger(minute)) return null;
+  return { hour, minute };
+}
+
+/* The stamp's local calendar day must be the day the user picked.
+   A missing local hour, such as a spring-forward gap, is refused. */
+function stampOnDay(day, hour, minute) {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  const stamp = new Date(year, month - 1, date, hour, minute, 0, 0).getTime();
+  if (!Number.isFinite(stamp)) return null;
+  const back = new Date(stamp);
+  const local = `${back.getFullYear()}-${String(back.getMonth() + 1).padStart(2, "0")}-${String(back.getDate()).padStart(2, "0")}`;
+  if (local !== day || back.getHours() !== hour || back.getMinutes() !== minute) return null;
+  return stamp;
+}
+
 function amountsEqual(left, right) {
   if (typeof left !== "number" || typeof right !== "number" || !Number.isFinite(left) || !Number.isFinite(right)) return false;
   return Math.round(left * 1000) === Math.round(right * 1000);
@@ -736,8 +779,10 @@ function unitForEditedLog(log, compound) {
 
 /* Changes the amount and the day on one log. The day is the string the
    user picked. It is not today's key and not the UTC day of the clock.
+   A time is applied only when that day is before today. A same-day edit
+   leaves `at` alone. A note is stored only when the draft includes one.
    The compound row is left alone, so later edits to the item do not
-   rewrite this log. */
+   rewrite this log. A rest log is never edited. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
@@ -756,15 +801,34 @@ export function editRoutineLog(state, logId, draft) {
     const item = (view.items || []).find((row) => row.id === log.itemId) || null;
     const unit = unitForEditedLog(log, compound);
     if (item && item.kind === "dose" && !unit) return null;
-    const at = stampAfter(clock.now, log.updatedAt);
-    const next = upsertEntity(store, "logs", {
+    let doseAt = typeof log.at === "number" && Number.isFinite(log.at) ? log.at : 0;
+    if (day < clock.day && draft && draft.time != null) {
+      if (typeof draft.time !== "string") return null;
+      const text = draft.time.trim();
+      if (text) {
+        const parsed = parseRoutineTime(text);
+        const stamped = parsed && stampOnDay(day, parsed.hour, parsed.minute);
+        if (stamped == null) return null;
+        doseAt = stamped;
+      }
+    }
+    const patch = {
       ...log,
       day,
       amount,
       unit,
       status: statusForEditedAmount(log, compound, amount),
+      at: doseAt,
       deletedAt: null,
-    }, at);
+    };
+    if (draft && Object.prototype.hasOwnProperty.call(draft, "note")) {
+      if (draft.note != null && typeof draft.note !== "string") return null;
+      const note = clipNote(typeof draft.note === "string" ? draft.note : "");
+      if (note) patch.note = note;
+      else delete patch.note;
+    }
+    const at = stampAfter(clock.now, log.updatedAt);
+    const next = upsertEntity(store, "logs", patch, at);
     return wrote(next, "logs", logId, at);
   });
 }
@@ -801,6 +865,8 @@ export function routineLogDraft(state, logId) {
     unit,
     day: log.day,
     maxDay: routineClock().day,
+    time: routineClockTime(log.at),
+    note: typeof log.note === "string" ? log.note : "",
     error: "",
   };
 }
@@ -1457,7 +1523,7 @@ function openRowHTML(row, projected, date, day) {
   /* The row itself logs. Skip, history, and rename keep their own actions,
      and the click handler uses the inner one. No pointer listener here, so
      a long press still reaches rename and the later details page. */
-  return `<li class="dr-row" ${rowAttrs(row)} data-state="open"${overdue} data-action="routines-log">
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
       <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}</span>
@@ -1489,7 +1555,7 @@ function doneRowHTML(row, projected, date, day) {
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
   const detail = rowDetailMarkup(projected, row, date, day);
-  return `<li class="dr-row dr-row-done" data-item-id="${esc(row.item.id)}" data-state="${state}">
+  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
     <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}<span class="dr-state">${label}</span></span>
     <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
@@ -1726,6 +1792,8 @@ app.saveRoutineItem = saveRoutineItem;
 app.addRoutineItem = addRoutineItem;
 app.routineItemDraft = routineItemDraft;
 app.parseRoutineAmount = parseRoutineAmount;
+app.parseRoutineTime = parseRoutineTime;
+app.routineClockTime = routineClockTime;
 app.rememberRoutineBlock = rememberRoutineBlock;
 app.toggleRoutineCollapsed = toggleRoutineCollapsed;
 app.routineBlockRows = routineBlockRows;
