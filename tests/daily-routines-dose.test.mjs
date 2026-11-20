@@ -196,18 +196,19 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     });
     const remote = structuredClone(app.state.dailyRoutines);
     assert.equal(editRoutineLog(app.state, source.id, { day: "2026-11-18" }), true);
-    const moved = app.state.dailyRoutines.logs.find((row) => row.id === destId);
+    const moved = app.state.dailyRoutines.logs.find((row) => row.id === source.id);
     assert.equal(isLive(moved), true);
     assert.equal(moved.day, "2026-11-18");
     assert.equal(moved.amount, 250);
     assert.equal(moved.unit, "mcg");
-    assert.ok(moved.updatedAt > ahead);
-    const sourceRow = app.state.dailyRoutines.logs.find((row) => row.id === source.id);
-    assert.equal(isLive(sourceRow), false);
-    assert.ok(sourceRow.updatedAt > source.updatedAt);
+    assert.ok(moved.updatedAt > source.updatedAt);
+    const dest = app.state.dailyRoutines.logs.find((row) => row.id === destId);
+    assert.equal(isLive(dest), false);
+    assert.equal(dest.deletedAt, ahead);
     const merged = mergeDailyRoutines(app.state.dailyRoutines, remote);
     const live = merged.logs.filter((row) => isLive(row) && row.day === "2026-11-18");
     assert.equal(live.length, 1);
+    assert.equal(live[0].id, source.id);
     assert.equal(live[0].amount, 250);
   });
 
