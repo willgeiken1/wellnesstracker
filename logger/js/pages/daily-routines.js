@@ -835,7 +835,13 @@ function writeCompound(store, item, name, dose, clock, at) {
 
 function placeInBlock(store, blockId, itemId, at) {
   const rows = (store.placements || []).filter((row) => row && row.blockId === blockId && row.itemId === itemId);
-  if (rows.some((row) => isLive(row))) return store;
+  const live = rows.find((row) => isLive(row));
+  /* A kept block is part of this save. Stamp it at the save revision so the
+     other phone's older removal cannot beat a membership this edit kept. */
+  if (live) {
+    if ((live.updatedAt || 0) >= at && live.deletedAt == null) return store;
+    return upsertEntity(store, "placements", { ...live, deletedAt: null }, at);
+  }
   const dead = rows.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
   if (dead) return upsertEntity(store, "placements", { ...dead, order: nextPlacementOrder(store, blockId), deletedAt: null, removedWith: null }, at);
   const id = routinePlacementId(blockId, itemId);
