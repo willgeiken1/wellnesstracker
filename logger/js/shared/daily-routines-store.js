@@ -437,6 +437,13 @@ export function routineId(prefix) {
   return `${prefix || "r"}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/* One check-off row per item and day, and one rest row per day. Two phones
+   that log the same item before a sync write the same id, so the merge keeps
+   one row. */
+export function routineLogId(itemId, day) {
+  return typeof itemId === "string" && itemId ? `log_${itemId}_${day}` : `rest_${day}`;
+}
+
 export function canMutateRoutines() {
   return app.ROUTINES_ENABLED === true && !!(app.session && app.session.user);
 }
@@ -502,6 +509,7 @@ app.normalizeDailyRoutines = normalizeDailyRoutines;
 app.mergeDailyRoutines = mergeDailyRoutines;
 app.purgeDailyRoutineRange = purgeDailyRoutineRange;
 app.tombstoneLog = tombstoneLog;
+app.routineLogId = routineLogId;
 app.canMutateRoutines = canMutateRoutines;
 app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;
