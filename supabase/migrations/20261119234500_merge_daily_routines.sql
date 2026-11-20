@@ -243,7 +243,7 @@ begin
   end if;
   prep_c := public.daily_routines_prepare(p_candidate, p_kind, p_now);
   prep_p := public.daily_routines_prepare(p_current, p_kind, p_now);
-  return public.daily_routines_stable(prep_c) > public.daily_routines_stable(prep_p);
+  return public.daily_routines_stable(prep_c) collate "C" > public.daily_routines_stable(prep_p) collate "C";
 end;
 $$;
 
@@ -299,7 +299,7 @@ as $$
       id,
       stamp desc,
       tomb desc,
-      case when tied > 1 then public.daily_routines_stable(prepared) end desc,
+      case when tied > 1 then public.daily_routines_stable(prepared) end collate "C" desc,
       ord
   )
   select coalesce(jsonb_agg(w.prepared order by f.first_ord), '[]'::jsonb)
@@ -353,7 +353,7 @@ begin
   end if;
   left_s := public.daily_routines_stable(left_prefs);
   right_s := public.daily_routines_stable(right_prefs);
-  if left_s > right_s or left_s = right_s then
+  if left_s collate "C" > right_s collate "C" or left_s = right_s then
     return left_prefs;
   end if;
   return right_prefs;

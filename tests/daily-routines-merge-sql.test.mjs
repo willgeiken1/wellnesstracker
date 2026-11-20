@@ -556,3 +556,57 @@ test("merging thousands of logs stays well inside the statement timeout", { time
   assert.deepEqual(merged, mergeRoutines(stored, incoming, 0));
   assert.ok(elapsed < 4000, `${count} logs per side took ${elapsed} ms`);
 });
+
+test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { timeout: 120_000 }, () => {
+  assert.equal(query(`create database icu_tie template template0 locale_provider icu icu_locale 'en-US' encoding 'UTF8';`), "");
+  const base = ctx.base.map((arg, i, all) => (all[i - 1] === "-d" ? "icu_tie" : arg));
+  const env = { ...process.env, PGUSER: ctx.user };
+  const exec = (text) => {
+    const path = join(ctx.dir, "icu.sql");
+    writeFileSync(path, text);
+    const result = run(ctx.psql, [...base, "-q", "-t", "-A", "-f", path], { env });
+    if (result.status !== 0) throw new Error(result.stderr || result.stdout || "psql failed");
+    return result.stdout;
+  };
+  exec(`
+    create schema if not exists auth;
+    create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+    do $roles$
+    begin
+      if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon; end if;
+      if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated; end if;
+      if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if;
+    end
+    $roles$;
+    create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
+  `);
+  for (const rel of [...PREVIOUS, MIGRATION]) {
+    const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
+    assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
+  }
+  assert.equal(exec(`select datlocprovider::text || '|' || daticulocale from pg_database where datname = 'icu_tie';`).trim(), "i|en-US");
+  assert.equal(exec(`select ('apple' < 'Zinc')::text;`).trim(), "true", "the database really sorts text with ICU rules");
+
+  // "Zinc" < "apple" in code-unit order (the client), "apple" < "Zinc" under en-US rules.
+  const block = (name) => ({ id: "A", name, updatedAt: 10 });
+  const merge = (a, b) =>
+    JSON.parse(exec(`select public.daily_routines_merge($a$${JSON.stringify(a)}$a$::jsonb, $b$${JSON.stringify(b)}$b$::jsonb, 0)::text;`));
+  for (const [stored, incoming] of [
+    [{ blocks: [block("Zinc")] }, { blocks: [block("apple")] }],
+    [{ blocks: [block("apple")] }, { blocks: [block("Zinc")] }],
+  ]) {
+    const expected = mergeRoutines(stored, incoming, 0);
+    assert.equal(expected.blocks[0].name, "apple");
+    assert.deepEqual(merge(stored, incoming), expected, "blocks tie");
+  }
+  const beats = exec(`select public.daily_routines_beats($a$${JSON.stringify(block("Zinc"))}$a$::jsonb, $b$${JSON.stringify(block("apple"))}$b$::jsonb, 'blocks', 0)::text;`).trim();
+  assert.equal(beats, "false", "pairwise rule");
+  const pref = (note) => ({ lastBlockId: "A", note, updatedAt: 10 });
+  for (const [a, b] of [["Zinc", "apple"], ["apple", "Zinc"]]) {
+    const stored = { prefs: pref(a) };
+    const incoming = { prefs: pref(b) };
+    const expected = mergeRoutines(stored, incoming, 0);
+    assert.equal(expected.prefs.note, "apple");
+    assert.deepEqual(merge(stored, incoming).prefs, expected.prefs, "prefs tie");
+  }
+});
