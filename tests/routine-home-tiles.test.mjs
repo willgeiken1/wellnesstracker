@@ -16,7 +16,9 @@ import {
   openRoutineTile,
   legacyNextUpHTML,
   legacyNextUpWanted,
+  refreshHomeRoutineGates,
   renderRoutineTileHTML,
+  routineGateRefresh,
   routineBlockTileId,
   routineHaptic,
   routineItemTileId,
@@ -461,6 +463,66 @@ test("a tile jump scrolls the routine row, not the Home log button", () => {
   } finally {
     globalThis.document = previous;
   }
+});
+
+test("gated Home tiles recheck a pinned clock while Home stays open", () => {
+  const layout = {
+    v: 2,
+    items: [NEXT_UP_TILE_ID, "today"],
+    hidden: [],
+    routineGates: { [NEXT_UP_TILE_ID]: { start: "05:30", end: "06:30" } },
+  };
+  const at = (hour, minute) => new Date(2026, 10, 20, hour, minute);
+  const open = routineGateRefresh(null, layout, at(6, 0));
+  assert.equal(open.changed, false);
+  assert.equal(open.signature, NEXT_UP_TILE_ID);
+  const still = routineGateRefresh(open.signature, layout, at(6, 29));
+  assert.equal(still.changed, false);
+  const closed = routineGateRefresh(still.signature, layout, at(6, 30));
+  assert.equal(closed.changed, true);
+  assert.equal(closed.signature, "");
+  const again = routineGateRefresh(closed.signature, layout, at(6, 45));
+  assert.equal(again.changed, false);
+  const reopened = routineGateRefresh(again.signature, layout, at(5, 30));
+  assert.equal(reopened.changed, true);
+  assert.equal(reopened.signature, NEXT_UP_TILE_ID);
+  const overnight = routineGateRefresh("", { ...layout, routineGates: { [NEXT_UP_TILE_ID]: { start: "22:00", end: "06:30" } } }, at(22, 0));
+  assert.equal(overnight.changed, true);
+  assert.equal(overnight.signature, NEXT_UP_TILE_ID);
+
+  app.ROUTINES_ENABLED = true;
+  app.ui = { tab: "home" };
+  app.state = { layout: { homeV2: layout } };
+  app.routineGateShown = undefined;
+  let renders = 0;
+  app.render = () => { renders += 1; };
+  app.routineNow = () => at(6, 0);
+  assert.equal(refreshHomeRoutineGates(), false);
+  assert.equal(renders, 0);
+  app.routineNow = () => at(6, 30);
+  assert.equal(refreshHomeRoutineGates(), true);
+  assert.equal(renders, 1);
+  app.routineNow = () => at(6, 31);
+  assert.equal(refreshHomeRoutineGates(), false);
+  assert.equal(renders, 1);
+  app.ui.tab = "food";
+  app.routineNow = () => at(5, 30);
+  assert.equal(refreshHomeRoutineGates(), false);
+  assert.equal(renders, 1);
+  app.ROUTINES_ENABLED = false;
+  app.ui.tab = "home";
+  app.routineNow = () => at(6, 0);
+  assert.equal(refreshHomeRoutineGates(), false);
+  assert.equal(renders, 1);
+  const timer = readFileSync(new URL("../logger/js/shell/timer.js", import.meta.url), "utf8");
+  assert.match(timer, /refreshHomeRoutineGates/);
+  const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
+  const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
+  assert.match(sw, /const CACHE = "insight-shell-v65"/);
+  assert.match(sentry, /insight-shell-v65/);
+  app.routineNow = undefined;
+  app.routineGateShown = undefined;
+  app.render = undefined;
 });
 
 test("stacks and the long-press preview are not wired, and the shell cache is unchanged", () => {
