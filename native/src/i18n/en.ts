@@ -879,7 +879,7 @@ export const en = {
   connectPrivacyOura: 'Apple Health values stay on your phone. Oura days are kept in your Insight account. Neither is ever sent to AI or analytics.',
   connectPrivacy: 'Health values stay on your phone. They are never sent to AI or analytics.',
   health: 'Health & devices', notifications: 'Notifications', privacy: 'Privacy', data: 'Data', about: 'About',
-  licenses: 'Licenses', licensesHint: 'Lexend (SIL Open Font License 1.1) and RepDB. Full notices coming soon.',
+  licenses: 'Licenses',
   settingsBack: 'Back', settingsSearch: 'Search settings', settingsSearchHint: 'Search settings, like "rest" or "units"',
   settingsNoMatch: 'No setting matches. Try "rest" or "units".',
   settingsGroupYou: 'You', settingsGroupApp: 'App', settingsGroupData: 'Data & privacy', settingsGroupAbout: 'About',
@@ -917,6 +917,14 @@ export const en = {
   welcome: 'Your daily space', welcomeBody: 'The foundation is ready. Workout and food logging arrive in M2/M3.',
   workout: 'Active workout', foodLog: 'Food log', segments: 'Sections',
   fontError: 'The heading font could not load. System text is available.',
+  // About and Licenses.
+  privacyPolicy: 'Privacy policy', termsOfUse: 'Terms of use', supportPage: 'Help and support',
+  linkFailed: 'The page did not open. Check your connection and try again.',
+  aboutDisclaimer: 'Insight is for general fitness. Its estimates, targets and scores are not medical advice.',
+  licensesIntro: 'Insight is built with the work of others. Their licenses are listed here in full.',
+  licensesFont: 'Font', licensesCredits: 'Data and colours', licensesSoftware: 'Open-source software ({n} packages)',
+  licenseOfl: 'Open Font License', licenseFontHint: 'SIL Open Font License 1.1, by the Lexend Project Authors',
+  licensesRepdb: 'Exercise data by RepDB', licensesColours: 'Body map colours',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
