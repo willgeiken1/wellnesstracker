@@ -468,7 +468,16 @@ document.addEventListener("click", async (ev) => {
       if (b.dataset.id) { app.state.plan[app.ui.sd.date] = b.dataset.id; app.state.planAt[app.ui.sd.date] = Date.now(); }
       else { delete app.state.plan[app.ui.sd.date]; delete app.state.planAt[app.ui.sd.date]; }
       app.save(); app.ui.sheet = null; app.render(); break;
-    case "sheet-close": app.ui.sheet = null; app.renderSheet(); break;
+    case "sheet-close": {
+      const closingQuiz = !!(app.ui && app.ui.sheet === "routines-quiz");
+      if (closingQuiz && typeof app.skipRoutineQuiz === "function" && app.skipRoutineQuiz(app.state)) {
+        if (typeof app.save === "function") app.save();
+      }
+      if (app.ui) app.ui.sheet = null;
+      if (closingQuiz && typeof app.render === "function") app.render();
+      else app.renderSheet();
+      break;
+    }
     case "start": app.startWorkout(b.dataset.id); break;
     case "start-freestyle": await app.startFreestyle(); break;
     case "resume": app.openWorkout(); break;
@@ -1319,6 +1328,32 @@ document.addEventListener("click", async (ev) => {
     case "routines-calc-dose-unit":
       if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
       app.setReconstitutionUnit("dose", b.dataset.unit);
+      break;
+    case "routines-quiz-skip":
+      if (app.ROUTINES_ENABLED !== true || typeof app.skipRoutineQuiz !== "function") break;
+      if (app.skipRoutineQuiz(app.state) && typeof app.save === "function") app.save();
+      if (app.ui) app.ui.sheet = null;
+      if (typeof app.render === "function") app.render();
+      break;
+    case "routines-quiz-finish":
+      if (app.ROUTINES_ENABLED !== true || typeof app.finishRoutineQuiz !== "function") break;
+      if (!app.finishRoutineQuiz(app.state)) break;
+      if (typeof app.save === "function") app.save();
+      if (app.ui) app.ui.sheet = null;
+      if (typeof app.render === "function") app.render();
+      break;
+    case "routines-quiz-tracks":
+    case "routines-quiz-wake":
+    case "routines-quiz-bed": {
+      if (app.ROUTINES_ENABLED !== true || typeof app.chooseRoutineQuiz !== "function") break;
+      const step = a === "routines-quiz-tracks" ? "tracks" : a === "routines-quiz-wake" ? "wake" : "bed";
+      const value = step === "tracks" ? b.dataset.tracks : b.dataset.time;
+      if (app.chooseRoutineQuiz(step, value) && typeof app.renderSheet === "function") app.renderSheet();
+      break;
+    }
+    case "routines-quiz-block":
+      if (app.ROUTINES_ENABLED !== true || typeof app.toggleRoutineQuizBlock !== "function") break;
+      if (app.toggleRoutineQuizBlock(b.dataset.block) && typeof app.renderSheet === "function") app.renderSheet();
       break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;

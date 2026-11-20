@@ -277,6 +277,43 @@ function normalizePrefs(raw, now = Date.now()) {
   };
 }
 
+const QUIZ_TRACKS = new Set(["checks", "supplements", "both"]);
+const QUIZ_BLOCK_KEYS = ["morning", "stack", "night"];
+const QUIZ_CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function quizClock(value) {
+  return typeof value === "string" && QUIZ_CLOCK.test(value) ? value : null;
+}
+
+/* Wake and bed stay on the quiz until a block already has startTime.
+   PR 16 adds that field. This does not invent it. */
+function normalizeQuiz(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const updatedAt = num(raw.updatedAt);
+  if (raw.status === "skipped") {
+    return { status: "skipped", wake: null, bed: null, tracks: null, kept: null, updatedAt };
+  }
+  if (raw.status !== "done") return null;
+  const seen = new Set(Array.isArray(raw.kept) ? raw.kept : []);
+  const kept = [];
+  for (const key of QUIZ_BLOCK_KEYS) if (seen.has(key)) kept.push(key);
+  return {
+    status: "done",
+    wake: quizClock(raw.wake),
+    bed: quizClock(raw.bed),
+    tracks: QUIZ_TRACKS.has(raw.tracks) ? raw.tracks : null,
+    kept,
+    updatedAt,
+  };
+}
+
+function mergeQuiz(local, remote) {
+  if (!local) return remote || null;
+  if (!remote) return local;
+  if (num(local.updatedAt) >= num(remote.updatedAt)) return local;
+  return remote;
+}
+
 export function emptyDailyRoutines(now = 0) {
   return {
     updatedAt: num(now),
@@ -286,6 +323,7 @@ export function emptyDailyRoutines(now = 0) {
     compounds: [],
     logs: [],
     prefs: { lastBlockId: null, updatedAt: num(now) },
+    quiz: null,
   };
 }
 
@@ -300,11 +338,39 @@ export function normalizeDailyRoutines(raw, now = Date.now()) {
     compounds: normalizeList(raw.compounds, normalizeCompound, now),
     logs: normalizeList(raw.logs, normalizeLog, now),
     prefs,
+    quiz: normalizeQuiz(raw.quiz),
   });
 }
 
 export function isLive(entity) {
   return !!(entity && !(typeof entity.deletedAt === "number" && entity.deletedAt > 0));
+}
+
+const QUIZ_START_NAMES = new Map([
+  ["Morning routine", "wake"],
+  ["Night routine", "bed"],
+]);
+
+/* Writes wake onto Morning and bed onto Night only when that block already
+   has startTime. A block without the field is left untouched. */
+export function applyStoredQuizStartTimes(store) {
+  const normalized = normalizeDailyRoutines(store);
+  if (!normalized || !normalized.quiz || normalized.quiz.status !== "done") return { store: normalized, applied: false };
+  let applied = false;
+  const blocks = normalized.blocks.map((block) => {
+    if (!isLive(block) || !Object.prototype.hasOwnProperty.call(block, "startTime")) return block;
+    const field = QUIZ_START_NAMES.get(block.name);
+    const time = field ? normalized.quiz[field] : null;
+    if (!time || block.startTime === time) return block;
+    applied = true;
+    const at = Math.max(num(block.updatedAt), num(normalized.quiz.updatedAt));
+    return { ...block, startTime: time, updatedAt: at > num(block.updatedAt) ? at : num(block.updatedAt) + 1 };
+  });
+  if (!applied) return { store: normalized, applied: false };
+  return {
+    store: { ...normalized, blocks, updatedAt: Math.max(num(normalized.updatedAt), num(normalized.quiz.updatedAt)) },
+    applied: true,
+  };
 }
 
 export function liveOf(list) {
@@ -368,6 +434,7 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
+    quiz: mergeQuiz(left.quiz, right.quiz),
   };
 }
 
@@ -584,3 +651,4 @@ app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;
 app.seedDefaultBlocks = seedDefaultBlocks;
 app.projectDailyRoutines = projectDailyRoutines;
+app.applyStoredQuizStartTimes = applyStoredQuizStartTimes;

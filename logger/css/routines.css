@@ -471,6 +471,11 @@
 .dr-calc-note { font-size: 14px; }
 .dr-log-error { min-height: 0; margin: 0 0 12px; color: var(--red, #b42318); font-weight: 700; }
 .dr-log-error:empty { display: none; }
+.dr-quiz-count { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.dr-quiz-choices { display: grid; gap: 8px; margin: 12px 0; }
+.dr-quiz-choices .btn,
+.dr-quiz .btn { min-height: 44px; }
+.dr-quiz-skip { margin-top: 4px; }
 
 @media (prefers-reduced-motion: no-preference) {
   .dr-page[data-routines-edit="on"] {
