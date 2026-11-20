@@ -640,11 +640,22 @@ function collapsePlacementPairs(list) {
     out.push(kept);
     for (const row of others) {
       const stamp = Math.max(rowStamp(row), 1);
-      const tomb = { ...row, deletedAt: stamp, updatedAt: Math.max(row.updatedAt || 0, stamp) };
+      /* removedWith is this placement's own id, not the item or block. A later
+         restore of that item or block must not bring the duplicate back. */
+      const tomb = { ...row, deletedAt: stamp, updatedAt: Math.max(row.updatedAt || 0, stamp), removedWith: row.id };
+      if (row.removedWith !== row.id && beats(row, tomb)) {
+        const bumped = Math.max(rowStamp(row), stamp) + 1;
+        out.push({ ...row, deletedAt: bumped, updatedAt: bumped, removedWith: row.id });
+        continue;
+      }
       out.push(beats(row, tomb) ? row : tomb);
     }
   }
   return out;
+}
+
+export function dedupePlacementPairs(list) {
+  return collapsePlacementPairs(Array.isArray(list) ? list : []);
 }
 
 export function canMutateRoutines() {
@@ -717,6 +728,7 @@ app.tombstoneLog = tombstoneLog;
 app.markLogUndone = markLogUndone;
 app.routineLogId = routineLogId;
 app.routinePlacementId = routinePlacementId;
+app.dedupePlacementPairs = dedupePlacementPairs;
 app.canMutateRoutines = canMutateRoutines;
 app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;

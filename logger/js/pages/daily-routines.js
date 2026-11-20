@@ -10,6 +10,7 @@ import {
   markLogUndone,
   routineLogId,
   routinePlacementId,
+  dedupePlacementPairs,
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
@@ -667,6 +668,7 @@ export function restoreRoutineBlock(state, blockId) {
     const at = stampAfter(clock.now, Math.max(block.updatedAt || 0, block.deletedAt || 0, store.updatedAt || 0));
     let next = upsertEntity(store, "blocks", { ...block, deletedAt: null, order: nextLiveBlockOrder(store) }, at);
     next = reviveBlockPlacements(next, blockId, at);
+    next.placements = dedupePlacementPairs(next.placements);
     const row = (next.blocks || []).find((item) => item.id === blockId);
     if (!row || row.deletedAt != null || row.updatedAt !== at) return null;
     return rememberBlock(next, blockId, at);
@@ -786,6 +788,7 @@ export function restoreRoutineItem(state, itemId) {
       if (!place || place.itemId !== itemId || place.removedWith !== itemId || isLive(place)) continue;
       next = upsertEntity(next, "placements", { ...place, deletedAt: null }, at);
     }
+    next.placements = dedupePlacementPairs(next.placements);
     const row = (next.items || []).find((entry) => entry.id === itemId);
     if (!row || row.deletedAt != null) return null;
     return rememberBlock(next, blockIdForItem(next, itemId), at);

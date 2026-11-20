@@ -496,6 +496,37 @@ describe("routine editing", { concurrency: false }, () => {
     }
   });
 
+  test("deleting and restoring an item after that merge does not bring the duplicate back", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "check" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const canonical = app.state.dailyRoutines.placements.find((row) => row.itemId === item.id && row.blockId === morning);
+    const withBoth = structuredClone(app.state.dailyRoutines);
+    withBoth.placements.push({ ...canonical, id: "place_legacy" });
+    app.state.dailyRoutines = structuredClone(withBoth);
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(deleteRoutineItem(app.state, item.id), true);
+    const deleted = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(withBoth);
+    app.routineNow = () => new Date(2026, 10, 19, 10, 0);
+    assert.equal(renameRoutineItem(app.state, item.id, "Renamed Example"), true);
+    const renamed = structuredClone(app.state.dailyRoutines);
+    const merged = mergeDailyRoutines(deleted, renamed);
+    const suppressed = merged.placements.find((row) => !isLive(row) && row.itemId === item.id && row.blockId === morning);
+    assert.ok(suppressed);
+    assert.equal(suppressed.removedWith, suppressed.id);
+    app.state.dailyRoutines = merged;
+    app.routineNow = () => new Date(2026, 10, 19, 11, 0);
+    assert.equal(deleteRoutineItem(app.state, item.id), true);
+    app.routineNow = () => new Date(2026, 10, 19, 12, 0);
+    assert.equal(restoreRoutineItem(app.state, item.id), true);
+    const live = app.state.dailyRoutines.placements.filter((row) => isLive(row) && row.itemId === item.id && row.blockId === morning);
+    assert.equal(live.length, 1);
+    const view = projectDailyRoutines(app.state.dailyRoutines);
+    assert.equal(view.placements.filter((row) => row.itemId === item.id && row.blockId === morning).length, 1);
+  });
+
   test("a newer block rename beats the other phone's block delete and keeps placements", () => {
     signIn();
     const morning = blockId("Morning routine");
@@ -594,8 +625,8 @@ describe("routine editing", { concurrency: false }, () => {
     const edit = readFileSync(new URL("../logger/js/pages/daily-routines-edit.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v61"/);
-    assert.match(sentry, /insight-shell-v61/);
+    assert.match(sw, /const CACHE = "insight-shell-v62"/);
+    assert.match(sentry, /insight-shell-v62/);
     assert.match(sw, /js\/pages\/daily-routines-edit\.js/);
     assert.match(main, /import "\.\/pages\/daily-routines-edit\.js";/);
     assert.equal(main.match(/routines-flag/g).length, 1);
