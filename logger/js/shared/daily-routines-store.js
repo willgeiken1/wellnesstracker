@@ -409,14 +409,23 @@ export function seedDefaultBlocks(store, now, newId = () => routineId("block")) 
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
   if (liveOf(normalized.blocks).length) return normalized;
   const at = num(now);
-  normalized.blocks = DEFAULT_ROUTINE_BLOCKS.map((block, index) => ({
-    id: newId(block.name, index),
-    name: block.name,
-    color: block.color,
-    order: index,
-    updatedAt: at,
-    deletedAt: null,
-  }));
+  const known = new Set(normalized.blocks.map((block) => block.id));
+  const fresh = [];
+  for (const [index, block] of DEFAULT_ROUTINE_BLOCKS.entries()) {
+    const id = newId(block.name, index);
+    if (typeof id !== "string" || !id || known.has(id)) continue;
+    known.add(id);
+    fresh.push({
+      id,
+      name: block.name,
+      color: block.color,
+      order: index,
+      updatedAt: at,
+      deletedAt: null,
+    });
+  }
+  if (!fresh.length) return normalized;
+  normalized.blocks = [...normalized.blocks, ...fresh];
   normalized.updatedAt = at;
   return normalized;
 }

@@ -378,6 +378,27 @@ test("default blocks are the three routine sections and are not seeded by migrat
   assert.equal(app.migrate({ version: 2, sessions: [] }).dailyRoutines, null);
 });
 
+test("reseeding after every block is deleted keeps the tombstones", () => {
+  const deleted = emptyDailyRoutines(10);
+  deleted.blocks = [{
+    id: "block-old", name: "Morning routine", color: "citrus", order: 0, updatedAt: 20, deletedAt: 20,
+  }];
+  deleted.updatedAt = 20;
+  let next = 0;
+  const seeded = seedDefaultBlocks(deleted, 30, () => `block-new-${next++}`);
+  assert.equal(seeded.blocks.find((row) => row.id === "block-old").deletedAt, 20);
+  assert.equal(liveOf(seeded.blocks).length, 3);
+  const stale = emptyDailyRoutines(10);
+  stale.blocks = [{
+    id: "block-old", name: "Morning routine", color: "citrus", order: 0, updatedAt: 10, deletedAt: null,
+  }];
+  const merged = mergeDailyRoutines(seeded, stale, 40);
+  const old = merged.blocks.find((row) => row.id === "block-old");
+  assert.equal(isLive(old), false);
+  assert.equal(old.deletedAt, 20);
+  assert.equal(liveOf(merged.blocks).length, 3);
+});
+
 test("the edge strip tombstones the same day's dose log and leaves the plan", () => {
   const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
   const blob = {
