@@ -280,9 +280,26 @@ function tombstoneAt(before, now) {
   return Date.now();
 }
 
-/* Tombstones logs whose day is inside the range. Blocks, items, placements,
-   and compounds stay. The tombstone is what stops the other phone's older
-   live log from coming back on the next merge. */
+/* Calendar step for a YYYY-MM-DD string. UTC is only the calculator. */
+function dayBefore(day) {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+}
+
+/* A 1:30 AM dose on the first selected calendar day is stored on the previous
+   routine day. The match starts one day before `from` so that dose is removed.
+   The day after `to` stays. The extra previous afternoon can go too; deleting
+   more is the privacy-safe direction. The edge strip uses the same window. */
+export function routineLogDayInPurge(day, from, to) {
+  if (!validDay(day) || !validDay(from) || !validDay(to) || from > to) return false;
+  return day >= dayBefore(from) && day <= to;
+}
+
+/* Tombstones logs whose day is inside the widened range. Blocks, items,
+   placements, and compounds stay. The tombstone is what stops the other
+   phone's older live log from coming back on the next merge. */
 export function purgeDailyRoutineRange(data, from, to, before, now = Date.now()) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   const routines = data.dailyRoutines;
@@ -292,7 +309,7 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   for (const log of routines.logs) {
     if (!log || typeof log !== "object") continue;
     if (typeof log.deletedAt === "number" && log.deletedAt > 0) continue;
-    if (!validDay(log.day) || log.day < from || log.day > to) continue;
+    if (!routineLogDayInPurge(log.day, from, to)) continue;
     if (!dropBefore(latestStamp(log), before, now)) continue;
     log.deletedAt = cutoff;
     log.updatedAt = Math.max(num(log.updatedAt), cutoff);

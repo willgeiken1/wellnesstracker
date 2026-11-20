@@ -8,12 +8,15 @@
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export const DEFAULT_DAY_ROLLOVER_HOUR = 4;
+export const MAX_DAY_ROLLOVER_HOUR = 6;
 
-/* 0 is midnight. Anything else that is not a whole hour from 0 through 23
-   reads as the default, so a bad stored value cannot move the day. */
+/* 0 is midnight. 6 is the latest hour a user can pick. An older stored hour
+   above 6 is clamped to 6. Anything else that is not a whole hour reads as
+   the default, so a bad value cannot move the day. */
 export function routineDayRolloverHour(value) {
-  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 23) return value;
-  return DEFAULT_DAY_ROLLOVER_HOUR;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return DEFAULT_DAY_ROLLOVER_HOUR;
+  if (value > MAX_DAY_ROLLOVER_HOUR) return MAX_DAY_ROLLOVER_HOUR;
+  return value;
 }
 
 /* Previous local calendar day when the clock is still before the rollover

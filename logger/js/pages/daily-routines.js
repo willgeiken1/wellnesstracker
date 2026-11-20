@@ -10,7 +10,7 @@ import {
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { nextDoseCountdown, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
+import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -501,7 +501,7 @@ export function logRoutineRest(state) {
 /* Changes which local clock hour starts the routine day. Logs keep the
    day they were stored with. */
 export function setRoutineDayRollover(state, hour) {
-  if (typeof hour !== "number" || !Number.isInteger(hour) || hour < 0 || hour > 23) return false;
+  if (typeof hour !== "number" || !Number.isInteger(hour) || hour < 0 || hour > MAX_DAY_ROLLOVER_HOUR) return false;
   return withStore(state, (store, clock) => {
     const at = stampAfter(clock.now, store.settings && store.settings.updatedAt);
     store.settings = { ...store.settings, dayRolloverHour: hour, updatedAt: at };
@@ -1310,7 +1310,7 @@ function rolloverHourLabel(hour) {
 export function routineDayRolloverControlHTML(hour) {
   const selected = routineDayRolloverHour(hour);
   const options = [];
-  for (let value = 0; value < 24; value += 1) {
+  for (let value = 0; value <= MAX_DAY_ROLLOVER_HOUR; value += 1) {
     options.push(`<option value="${value}"${value === selected ? " selected" : ""}>${rolloverHourLabel(value)}</option>`);
   }
   return `<div class="dr-set-row">
