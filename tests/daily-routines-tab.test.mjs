@@ -396,6 +396,29 @@ test("a signed-in pull in flight does not seed or save", () => {
   app.cloudPullOk = false;
 });
 
+test("deleted default blocks are not seeded again and a paint does not save", () => {
+  const state = { dailyRoutines: null };
+  app.state = state;
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.routineNow = () => new Date(2026, 10, 19, 8, 30);
+  let saves = 0;
+  app.save = () => { saves += 1; };
+  ensureRoutineShell(state, 1_000);
+  assert.equal(saves, 1);
+  for (const block of state.dailyRoutines.blocks) {
+    block.deletedAt = 2_000;
+    block.updatedAt = 2_000;
+  }
+  app.save = () => { throw new Error("deleted defaults must not be seeded or saved"); };
+  const html = dailyRoutinesHTML();
+  assert.match(html, /data-routines-shell="signed-in"/);
+  assert.doesNotMatch(html, /Morning routine/);
+  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.every((block) => block.deletedAt === 2_000), true);
+});
+
 test("flag off does not paint the shell or write a store", () => {
   const state = { dailyRoutines: null };
   app.state = state;
