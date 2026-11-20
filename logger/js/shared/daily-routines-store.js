@@ -77,13 +77,18 @@ function normalizeBlock(raw) {
 function normalizeItem(raw) {
   const base = entityBase(raw);
   if (!base) return null;
-  return {
+  const next = {
     ...plainFields(raw),
     ...base,
     name: clip(raw.name, 80),
     kind: KINDS.has(raw.kind) ? raw.kind : "check",
     compoundId: typeof raw.compoundId === "string" && raw.compoundId ? raw.compoundId : null,
   };
+  const note = clip(typeof raw.note === "string" ? raw.note : "", NOTE_MAX);
+  if (note) next.note = note;
+  else delete next.note;
+  for (const key of FEELING_KEYS) delete next[key];
+  return next;
 }
 
 function normalizePlacement(raw) {

@@ -1341,7 +1341,11 @@ document.addEventListener("click", async (ev) => {
       break;
     case "routines-calc":
       if (app.ROUTINES_ENABLED !== true || typeof app.openReconstitution !== "function") break;
-      app.openReconstitution();
+      app.openReconstitution(b.dataset.itemId);
+      break;
+    case "routines-calc-save":
+      if (app.ROUTINES_ENABLED !== true || typeof app.saveReconstitutionNote !== "function") break;
+      app.saveReconstitutionNote();
       break;
     case "routines-calc-vial-unit":
       if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;

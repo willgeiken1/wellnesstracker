@@ -421,6 +421,14 @@ function amountMarkup(text) {
   return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
 }
 
+/* Calculator note on the item. A per-dose log note stays off this row. */
+function itemNoteMarkup(item) {
+  if (!item || item.kind !== "dose" || typeof item.note !== "string") return "";
+  const note = item.note.trim();
+  if (!note) return "";
+  return `<span class="dr-item-note">${esc(note)}</span>`;
+}
+
 export function doseCountdownText(projected, item, date, day) {
   if (!projected || !item) return "";
   const result = nextDoseCountdown({
@@ -1150,6 +1158,22 @@ export function reorderRoutinePlacements(state, blockId, orderedIds) {
   });
 }
 
+/* The calculator note is on the item. It does not add or rewrite a log. */
+export function saveRoutineItemNote(state, itemId, note) {
+  if (typeof itemId !== "string" || !itemId || typeof note !== "string") return false;
+  return withStore(state, (store, clock) => {
+    const item = (store.items || []).find((row) => row && row.id === itemId && isLive(row));
+    if (!item || item.kind !== "dose") return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, item.updatedAt || 0));
+    const logs = JSON.stringify(store.logs);
+    const next = revisePlanEntity(store, "items", itemId, { note }, at);
+    const row = (next.items || []).find((entry) => entry.id === itemId);
+    if (!row || (row.note || "") !== clipNote(note)) return null;
+    if (JSON.stringify(next.logs) !== logs) return null;
+    return next;
+  });
+}
+
 export function renameRoutineItem(state, itemId, name) {
   const trimmed = cleanName(name);
   if (!trimmed || typeof itemId !== "string" || !itemId) return false;
@@ -1526,7 +1550,7 @@ function openRowHTML(row, projected, date, day) {
   return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item)}${detail}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     ${historyButton(row)}
@@ -1542,7 +1566,7 @@ function editRowHTML(row) {
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
-      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>
+      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item)}
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Delete ${esc(row.item.name)}"><span aria-hidden="true">−</span></button>
   </li>`;
@@ -1557,7 +1581,7 @@ function doneRowHTML(row, projected, date, day) {
   const detail = rowDetailMarkup(projected, row, date, day);
   return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}<span class="dr-state">${label}</span></span>
+    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item)}${detail}<span class="dr-state">${label}</span></span>
     <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
   </li>`;
 }
@@ -1785,6 +1809,7 @@ app.restoreRoutineBlock = restoreRoutineBlock;
 app.duplicateRoutineBlock = duplicateRoutineBlock;
 app.reorderRoutineBlocks = reorderRoutineBlocks;
 app.reorderRoutinePlacements = reorderRoutinePlacements;
+app.saveRoutineItemNote = saveRoutineItemNote;
 app.renameRoutineItem = renameRoutineItem;
 app.deleteRoutineItem = deleteRoutineItem;
 app.restoreRoutineItem = restoreRoutineItem;
