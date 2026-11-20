@@ -378,7 +378,32 @@ function withStore(state, mutate) {
   const current = followParentEdits(normalized);
   const next = mutate(current, clock);
   if (!next) return false;
-  return putDailyRoutines(state, next);
+  return putDailyRoutines(state, keepInferredRevivalsInView(normalized, current, next));
+}
+
+/* followParentEdits can bring a placement back for the view. A write only
+   keeps that revival when it changed the placement itself. Otherwise the
+   stored row stays as it was, so an unrelated write (a focus toggle) cannot
+   save an inferred revival that a later removal from another phone should
+   still beat. */
+function keepInferredRevivalsInView(stored, current, next) {
+  if (!next || !Array.isArray(next.placements)) return next;
+  const before = new Map();
+  for (const row of stored.placements || []) if (row && typeof row.id === "string") before.set(row.id, row);
+  const inferred = new Map();
+  for (const row of current.placements || []) {
+    if (!row || typeof row.id !== "string") continue;
+    const raw = before.get(row.id);
+    if (raw && raw !== row && !isLive(raw) && isLive(row)) inferred.set(row.id, { raw, revived: JSON.stringify(row) });
+  }
+  if (!inferred.size) return next;
+  return {
+    ...next,
+    placements: next.placements.map((row) => {
+      const seen = row && inferred.get(row.id);
+      return seen && JSON.stringify(row) === seen.revived ? seen.raw : row;
+    }),
+  };
 }
 
 function wrote(next, collection, id, at) {

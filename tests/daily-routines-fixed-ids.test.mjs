@@ -48,6 +48,7 @@ const {
   routineLogDraft,
   saveRoutineItem,
   skipRoutineItem,
+  toggleRoutineFocus,
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineLogSheetHTML } = await import("../logger/js/pages/daily-routines-dose.js");
@@ -254,6 +255,28 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: item.name, kind: "check", blockId: night, blockIds: [night] }), true);
     const moved = view(app.state.dailyRoutines).placements.filter((row) => row.itemId === item.id);
     assert.deepEqual(moved.map((row) => row.blockId), [night]);
+  });
+
+  test("an unrelated write does not save a revival that a later removal beats", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    const night = blockId("Night routine");
+    const item = addCheck(morning);
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", 9, 0);
+    const deleted = onPhone(base, () => assert.equal(deleteRoutineBlock(app.state, morning), true));
+    pin("2026-11-19", 10, 0);
+    const moved = onPhone(base, () => assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: item.name, kind: "check", blockId: night, blockIds: [night] }), true));
+    pin("2026-11-19", 11, 0);
+    const renamed = onPhone(base, () => assert.equal(renameRoutineBlock(app.state, morning, "Early routine"), true));
+    const blocksOf = (store) => view(store).placements.filter((row) => row.itemId === item.id).map((row) => row.blockId).sort();
+    assert.deepEqual(blocksOf(mergeDailyRoutines(mergeDailyRoutines(deleted, renamed), moved)), [night]);
+    pin("2026-11-19", 11, 30);
+    app.state = { dailyRoutines: mergeDailyRoutines(deleted, renamed) };
+    assert.equal(toggleRoutineFocus(app.state), true);
+    const delayed = mergeDailyRoutines(app.state.dailyRoutines, moved);
+    assert.deepEqual(blocksOf(delayed), [night]);
+    assert.deepEqual(blocksOf(mergeDailyRoutines(moved, app.state.dailyRoutines)), [night]);
   });
 
   test("an item deleted on one phone and renamed later on the other keeps its placement", () => {
