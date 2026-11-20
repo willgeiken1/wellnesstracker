@@ -364,7 +364,7 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
     blocks: mergeEntityLists(left.blocks, right.blocks, now),
     items: mergeEntityLists(left.items, right.items, now),
-    placements: mergeEntityLists(left.placements, right.placements, now),
+    placements: collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)),
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
@@ -444,6 +444,72 @@ export function routineLogId(itemId, day) {
   return typeof itemId === "string" && itemId ? `log_${itemId}_${day}` : `rest_${day}`;
 }
 
+function placementHash(text) {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x811c9dc5);
+  }
+  return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+}
+
+/* One placement per item and block. Two phones that add the same item to the
+   same routine write the same id, so the merge cannot render it twice. */
+export function routinePlacementId(blockId, itemId) {
+  const plain = `place_${blockId}_${itemId}`;
+  if (plain.length <= 80) return plain;
+  return `place_${placementHash(`${blockId}\0${itemId}`)}`;
+}
+
+/* Different ids for one item in one block become one row. The winner follows
+   the same stamp rule as every other merge. The rest are tombstones, so the
+   other phone's older live copy cannot bring the duplicate back. */
+function collapsePlacementPairs(list) {
+  const groups = new Map();
+  const order = [];
+  for (const row of list) {
+    if (!row || typeof row.blockId !== "string" || typeof row.itemId !== "string") {
+      order.push({ row });
+      continue;
+    }
+    const key = `${row.blockId}\0${row.itemId}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push({ key });
+    }
+    groups.get(key).push(row);
+  }
+  const out = [];
+  for (const slot of order) {
+    if (!slot.key) {
+      out.push(slot.row);
+      continue;
+    }
+    const group = groups.get(slot.key);
+    groups.delete(slot.key);
+    if (!group || !group.length) continue;
+    let winner = group[0];
+    for (let i = 1; i < group.length; i += 1) if (beats(group[i], winner)) winner = group[i];
+    const others = group.filter((row) => row.id !== winner.id);
+    const loserStamp = others.reduce((max, row) => Math.max(max, rowStamp(row)), 0);
+    /* A tombstone at the winner's stamp would beat the winner, because a tie
+       keeps the tombstone. Stamp the loser at its own time, and move the
+       live winner one past that only when the stamps are equal. */
+    const kept = others.length && isLive(winner) && rowStamp(winner) <= loserStamp
+      ? { ...winner, updatedAt: loserStamp + 1, deletedAt: null }
+      : winner;
+    out.push(kept);
+    for (const row of others) {
+      const stamp = Math.max(rowStamp(row), 1);
+      const tomb = { ...row, deletedAt: stamp, updatedAt: Math.max(row.updatedAt || 0, stamp) };
+      out.push(beats(row, tomb) ? row : tomb);
+    }
+  }
+  return out;
+}
+
 export function canMutateRoutines() {
   return app.ROUTINES_ENABLED === true && !!(app.session && app.session.user);
 }
@@ -512,6 +578,7 @@ app.mergeDailyRoutines = mergeDailyRoutines;
 app.purgeDailyRoutineRange = purgeDailyRoutineRange;
 app.tombstoneLog = tombstoneLog;
 app.routineLogId = routineLogId;
+app.routinePlacementId = routinePlacementId;
 app.canMutateRoutines = canMutateRoutines;
 app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;
