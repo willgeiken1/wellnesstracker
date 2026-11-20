@@ -219,11 +219,18 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.match(html, new RegExp(`data-action="routines-undo" data-log-id="${live.id}"`));
     assert.match(html, /Logged/);
 
+    app.state.dailyRoutines.logs.find((row) => row.id === live.id).note = "keep this note";
+    const compound = app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId);
     assert.equal(undoRoutineLog(app.state, live.id), true);
     const undone = app.state.dailyRoutines.logs.find((row) => row.id === live.id);
     assert.equal(isLive(undone), false);
     assert.ok(undone.deletedAt > live.updatedAt);
-    assert.deepEqual(Object.keys(undone).sort(), ["day", "deletedAt", "id", "status", "updatedAt"]);
+    assert.equal(undone.undone, true);
+    assert.equal(undone.amount, 250);
+    assert.equal(undone.unit, "mcg");
+    assert.equal(undone.note, "keep this note");
+    assert.notDeepEqual(Object.keys(undone).sort(), ["day", "deletedAt", "id", "status", "updatedAt"]);
+    compound.amount = 125;
     assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 0);
     const merged = mergeDailyRoutines(app.state.dailyRoutines, older);
     const otherWay = mergeDailyRoutines(older, app.state.dailyRoutines);
@@ -247,6 +254,9 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 1);
     assert.equal(revived.itemId, item.id);
     assert.equal(revived.amount, 250);
+    assert.equal(revived.unit, "mcg");
+    assert.equal(revived.note, "keep this note");
+    assert.notEqual(revived.undone, true);
     html = dailyRoutinesHTML();
     assert.match(html, /data-logged="1"/);
     assert.match(html, new RegExp(`data-state="done"[^>]*data-item-id="${item.id}"|data-item-id="${item.id}"[^>]*data-state="done"`));

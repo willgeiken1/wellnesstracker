@@ -10,8 +10,9 @@ import { app } from "../runtime.js";
    malformed stamp is 0. A stamp more than a day ahead is pulled back to
    now + 1 day. The same stamp keeps the tombstone, then the greater stable
    JSON, so two phones pick the same row. `deletedAt` > 0 is a tombstone.
-   A log tombstone keeps only id, day, status, updatedAt, and deletedAt.
-   A newer live row is how a delete is undone.
+   A date-range delete keeps only id, day, status, updatedAt, and deletedAt.
+   Undo keeps the log, including its amount, unit, and note, and marks it
+   undone so a restore can bring those fields back.
 
    Creating or replacing the store requires the compile-time flag and a
    signed-in session. Reading, merging, purging, and backup still round-trip
@@ -199,6 +200,29 @@ function reducedLogTombstone(log, deletedAt, updatedAt) {
   return { id: log.id, day: log.day, status, updatedAt: at, deletedAt: num(deletedAt) || at };
 }
 
+/* Undo hides the log without dropping the dose. A date-range delete still
+   uses the five-key marker. undone is what tells those two apart. */
+function undoneLog(log, deletedAt, updatedAt) {
+  const status = logStatus(log && log.status) || "done";
+  const at = Math.max(num(updatedAt), num(deletedAt));
+  const row = {
+    id: log.id,
+    itemId: typeof log.itemId === "string" && log.itemId ? log.itemId : null,
+    compoundId: typeof log.compoundId === "string" && log.compoundId ? log.compoundId : null,
+    day: log.day,
+    status,
+    amount: amountOf(log.amount),
+    unit: clip(log.unit, 16),
+    note: typeof log.note === "string" ? clip(log.note, 280) : "",
+    at: num(log.at),
+    updatedAt: at,
+    deletedAt: num(deletedAt) || at,
+    undone: true,
+  };
+  if (log.rest === true) row.rest = true;
+  return row;
+}
+
 function isReducedLog(log) {
   if (!log || typeof log !== "object") return false;
   const keys = Object.keys(log);
@@ -209,7 +233,10 @@ function normalizeLog(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   const status = logStatus(raw && raw.status);
   if (!base || !validDay(raw.day) || !status) return null;
-  if (base.deletedAt) return reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
+  if (base.deletedAt) {
+    if (raw.undone === true) return undoneLog({ ...raw, status }, base.deletedAt, base.updatedAt);
+    return reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
+  }
   return {
     ...plainFields(raw),
     ...base,
@@ -417,8 +444,8 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   return changed;
 }
 
-/* Undo of a logged dose. The row stays so an older live copy cannot return,
-   and the dose fields do not. */
+/* Date-range delete and a day move. The row stays so an older live copy
+   cannot return, and the dose fields do not. */
 export function tombstoneLog(store, id, now = Date.now()) {
   const normalized = normalizeDailyRoutines(store, now);
   if (!normalized || typeof id !== "string") return normalized;
@@ -428,6 +455,22 @@ export function tombstoneLog(store, id, now = Date.now()) {
     changed = true;
     const deletedAt = clampStamp(now, now) || now;
     return reducedLogTombstone(log, deletedAt, Math.max(rowStamp(log), deletedAt));
+  });
+  if (changed) normalized.updatedAt = Math.max(num(normalized.updatedAt), clampStamp(now, now));
+  return normalized;
+}
+
+/* Undo. The log stays, with its amount, unit, and note, and is marked undone.
+   A newer live row is still how the other phone wins. */
+export function markLogUndone(store, id, now = Date.now()) {
+  const normalized = normalizeDailyRoutines(store, now);
+  if (!normalized || typeof id !== "string") return normalized;
+  let changed = false;
+  normalized.logs = normalized.logs.map((log) => {
+    if (!log || log.id !== id || !isLive(log)) return log;
+    changed = true;
+    const deletedAt = clampStamp(now, now) || now;
+    return undoneLog(log, deletedAt, Math.max(rowStamp(log), deletedAt));
   });
   if (changed) normalized.updatedAt = Math.max(num(normalized.updatedAt), clampStamp(now, now));
   return normalized;
@@ -509,6 +552,7 @@ app.normalizeDailyRoutines = normalizeDailyRoutines;
 app.mergeDailyRoutines = mergeDailyRoutines;
 app.purgeDailyRoutineRange = purgeDailyRoutineRange;
 app.tombstoneLog = tombstoneLog;
+app.markLogUndone = markLogUndone;
 app.routineLogId = routineLogId;
 app.canMutateRoutines = canMutateRoutines;
 app.putDailyRoutines = putDailyRoutines;
