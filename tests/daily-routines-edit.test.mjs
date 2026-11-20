@@ -58,7 +58,7 @@ const {
   toggleRoutineCollapsed,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
-const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
+const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, projectDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day = "2026-11-19") {
   app.today = () => day;
@@ -404,6 +404,44 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(isLive(collapsed.placements.find((row) => row.id === "place_phone_a")), false);
     const again = mergeDailyRoutines(collapsed, phoneLeft);
     assert.equal(again.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id).length, 1);
+  });
+
+  test("a newer rename beats the other phone's item delete and keeps the placements", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    const night = blockId("Night routine");
+    assert.equal(saveRoutineItem(app.state, {
+      name: "Example Compound A", kind: "check", blockId: morning, blockIds: [morning, night],
+    }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const before = structuredClone(app.state.dailyRoutines);
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(deleteRoutineItem(app.state, item.id), true);
+    const deleted = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(before);
+    app.routineNow = () => new Date(2026, 10, 19, 10, 0);
+    assert.equal(renameRoutineItem(app.state, item.id, "Renamed Example"), true);
+    const renamed = structuredClone(app.state.dailyRoutines);
+    for (const merged of [mergeDailyRoutines(deleted, renamed), mergeDailyRoutines(renamed, deleted)]) {
+      const winner = merged.items.find((row) => row.id === item.id);
+      assert.equal(isLive(winner), true);
+      assert.equal(winner.name, "Renamed Example");
+      const places = merged.placements.filter((row) => isLive(row) && row.itemId === item.id);
+      assert.equal(places.length, 2);
+      const view = projectDailyRoutines(merged);
+      assert.ok(view.items.some((row) => row.id === item.id));
+      assert.equal(view.placements.filter((row) => row.itemId === item.id).length, 2);
+      app.state.dailyRoutines = merged;
+      assert.equal(restoreRoutineItem(app.state, item.id), false);
+      assert.match(dailyRoutinesHTML(), /Renamed Example/);
+    }
+    app.state.dailyRoutines = structuredClone(renamed);
+    app.routineNow = () => new Date(2026, 10, 19, 11, 0);
+    assert.equal(deleteRoutineItem(app.state, item.id), true);
+    const laterDelete = structuredClone(app.state.dailyRoutines);
+    const removed = mergeDailyRoutines(laterDelete, renamed);
+    assert.equal(isLive(removed.items.find((row) => row.id === item.id)), false);
+    assert.equal(removed.placements.filter((row) => isLive(row) && row.itemId === item.id).length, 0);
   });
 
   test("converting a dose to a check stops new logs from keeping the old amount", () => {

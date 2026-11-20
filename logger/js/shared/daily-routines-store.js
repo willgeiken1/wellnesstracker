@@ -409,17 +409,36 @@ function mergePrefs(local, remote, now) {
   return stableStringify(left) >= stableStringify(right) ? left : right;
 }
 
+/* An item delete also tombstones its placements, tagged removedWith the item
+   id. If the other phone's newer edit keeps the item, those placements come
+   back with it. A placement removed on its own, or by a block delete, stays
+   gone. The revive stamp is the item's stamp, so both phones agree. */
+function reconcileItemPlacementTombstones(items, placements) {
+  const liveItems = new Map();
+  for (const item of items || []) {
+    if (isLive(item)) liveItems.set(item.id, item);
+  }
+  return (placements || []).map((place) => {
+    if (!place || isLive(place) || place.removedWith !== place.itemId) return place;
+    const item = liveItems.get(place.itemId);
+    if (!item || rowStamp(item) <= rowStamp(place)) return place;
+    return { ...place, deletedAt: null, updatedAt: rowStamp(item) };
+  });
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
   const left = normalizeDailyRoutines(local, now);
   const right = normalizeDailyRoutines(remote, now);
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
+  const items = mergeEntityLists(left.items, right.items, now);
+  const placements = reconcileItemPlacementTombstones(items, collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)));
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
     blocks: mergeEntityLists(left.blocks, right.blocks, now),
-    items: mergeEntityLists(left.items, right.items, now),
-    placements: collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)),
+    items,
+    placements,
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
