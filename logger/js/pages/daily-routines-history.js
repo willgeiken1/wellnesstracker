@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { canMutateRoutines, normalizeDailyRoutines, projectDailyRoutines, putDailyRoutines } from "../shared/daily-routines-store.js";
+import { canMutateRoutines, normalizeDailyRoutines, putDailyRoutines } from "../shared/daily-routines-store.js";
 import {
   longRoutineDay,
   routineGraphTab,
@@ -67,7 +67,8 @@ function marksHTML(marks) {
 }
 
 function historyModel() {
-  const view = projectDailyRoutines(app.state && app.state.dailyRoutines) || {
+  /* Keep tombstoned plan rows so a removed item's name can still label its log. */
+  const view = normalizeDailyRoutines(app.state && app.state.dailyRoutines) || {
     blocks: [],
     items: [],
     placements: [],

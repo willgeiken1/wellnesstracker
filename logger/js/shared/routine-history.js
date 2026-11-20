@@ -142,6 +142,43 @@ function itemMark(log, day, today, rest, start) {
   return "none";
 }
 
+function markFromStatus(status) {
+  switch (status) {
+    case "skipped":
+      return "skipped";
+    case "partial":
+      return "partial";
+    case "done":
+      return "logged";
+    default: {
+      const unexpected = status;
+      void unexpected;
+      return "none";
+    }
+  }
+}
+
+function rememberedName(view, itemId) {
+  const item = (view.items || []).find((row) => row && row.id === itemId);
+  if (item && typeof item.name === "string" && item.name) return item.name;
+  const compoundId = item && typeof item.compoundId === "string" ? item.compoundId : "";
+  const compound = compoundId ? (view.compounds || []).find((row) => row && row.id === compoundId) : null;
+  if (compound && typeof compound.name === "string" && compound.name) return compound.name;
+  return "Item";
+}
+
+/* A deleted block or item keeps its logs. Those logs still belong on the
+   day they were written, even though the plan row is no longer placed. */
+function rememberedLogs(dayLogs, seen) {
+  const byItem = new Map();
+  for (const log of dayLogs) {
+    if (!isLive(log) || isRestLog(log) || typeof log.itemId !== "string" || !log.itemId || seen.has(log.itemId)) continue;
+    const current = byItem.get(log.itemId);
+    if (!current || (log.updatedAt || 0) >= (current.updatedAt || 0)) byItem.set(log.itemId, log);
+  }
+  return [...byItem.values()];
+}
+
 function logSnapshot(log) {
   if (!log) return null;
   return {
@@ -278,6 +315,17 @@ export function routineHistoryView(view, options) {
       rows.push({
         itemId: entry.item.id,
         name: entry.item.name || "Item",
+        mark,
+        log: logSnapshot(log),
+      });
+    }
+    const seen = new Set(rows.map((row) => row.itemId));
+    for (const log of rememberedLogs(dayLogs, seen)) {
+      const mark = markFromStatus(log.status);
+      if (mark === "none") continue;
+      rows.push({
+        itemId: log.itemId,
+        name: rememberedName(source, log.itemId),
         mark,
         log: logSnapshot(log),
       });
