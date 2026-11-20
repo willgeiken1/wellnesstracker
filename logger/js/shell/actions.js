@@ -420,6 +420,12 @@ document.addEventListener("input", (ev) => {
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
   if (el.id === "dr-item-name" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.name = el.value; return; }
   if (el.id === "dr-item-amount" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.amount = el.value; return; }
+  if (el.id === "dr-log-amount" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.amount = el.value; app.ui.sd.error = ""; return; }
+  if (el.id === "dr-log-day" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.day = el.value; app.ui.sd.error = ""; return; }
+  if ((el.id === "dr-calc-vial" || el.id === "dr-calc-water" || el.id === "dr-calc-dose") && app.ui && app.ui.sheet === "routines-calc" && typeof app.noteReconstitutionField === "function") {
+    app.noteReconstitutionField(el.id, el.value);
+    return;
+  }
   if (el.id === "food-describe") { app.ui.sd.text = el.value; return; }
   if (el.id === "checkin-note") { app.ui.sd.note = el.value; if (app.syncCheckinCard) app.syncCheckinCard(); return; }
   if (el.dataset.cf && app.ui.sheet === "cardio-log") { app.updateLogTotals(); return; }
@@ -1285,6 +1291,34 @@ document.addEventListener("click", async (ev) => {
     case "routines-item-save":
       if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineItemSheet !== "function") break;
       app.commitRoutineItemSheet();
+      break;
+    case "routines-history":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineHistory !== "function") break;
+      app.openRoutineHistory(b.dataset.compoundId, b.dataset.itemId);
+      break;
+    case "routines-log-edit":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineLogEditor !== "function") break;
+      app.openRoutineLogEditor(b.dataset.logId);
+      break;
+    case "routines-log-save":
+      if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineLogSheet !== "function") break;
+      app.commitRoutineLogSheet();
+      break;
+    case "routines-log-quarter":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineLogQuarter !== "function") break;
+      app.setRoutineLogQuarter(b.dataset.amount);
+      break;
+    case "routines-calc":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openReconstitution !== "function") break;
+      app.openReconstitution();
+      break;
+    case "routines-calc-vial-unit":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
+      app.setReconstitutionUnit("vial", b.dataset.unit);
+      break;
+    case "routines-calc-dose-unit":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
+      app.setReconstitutionUnit("dose", b.dataset.unit);
       break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
