@@ -349,3 +349,84 @@ test("the edge strip tombstones the same day's dose log and leaves the plan", ()
   assert.equal(got.block, "Morning routine");
   assert.equal(got.compound, 250);
 });
+
+test("the account range delete stores a routine tombstone without the note, amount, or unit", () => {
+  const rangeUrl = new URL("../supabase/functions/_shared/range.ts", import.meta.url).href;
+  const script = `
+    import { deleteRange } from ${JSON.stringify(rangeUrl)};
+    const note = "qq4419-scribble-text";
+    const keptNote = "qq4419-other-day";
+    const blob = {
+      dailyRoutines: {
+        updatedAt: 10,
+        blocks: [{ id: "block-morning", name: "Morning routine", deletedAt: null }],
+        items: [{ id: "item-a", name: "Example Compound A", kind: "dose" }],
+        compounds: [{ id: "compound-a", name: "Example Compound A", amount: 250, unit: "mcg" }],
+        logs: [
+          {
+            id: "log-day-1", itemId: "item-a", compoundId: "compound-a",
+            day: "2026-11-01", status: "done", amount: 250, unit: "mcg",
+            at: 10, updatedAt: 10, deletedAt: null, note, mood: 2, energy: 3, stress: 1,
+          },
+          {
+            id: "log-rest", day: "2026-11-01", status: "done", rest: true,
+            amount: null, unit: "", at: 10, updatedAt: 10, deletedAt: null, note,
+          },
+          {
+            id: "log-day-2", itemId: "item-a", compoundId: "compound-a",
+            day: "2026-11-02", status: "done", amount: 125, unit: "mcg",
+            at: 20, updatedAt: 20, deletedAt: null, note: keptNote,
+          },
+        ],
+      },
+    };
+    let saved = null;
+    const admin = {
+      from(table) {
+        const api = {
+          op: "select",
+          select() { api.op = "select"; return api; },
+          delete() { api.op = "delete"; return api; },
+          eq() { return api; },
+          gte() { return api; },
+          lte() { return api; },
+          in() { return api; },
+          upsert(row) { saved = row; return Promise.resolve({ error: null }); },
+          maybeSingle() { return Promise.resolve({ data: { data: blob }, error: null }); },
+          then(resolve, reject) {
+            const payload = table === "progress_photos" && api.op === "select" ? { data: [], error: null } : { error: null };
+            return Promise.resolve(payload).then(resolve, reject);
+          },
+        };
+        return api;
+      },
+      storage: { from() { return { remove() { return Promise.resolve({ error: null }); } }; } },
+      rpc() { return Promise.resolve({ error: { message: "could not find the function" } }); },
+    };
+    const res = await deleteRange(admin, "user-1", { from: "2026-11-01", to: "2026-11-01", deletedAt: 4000 }, 6000);
+    const logs = Object.fromEntries(saved.data.dailyRoutines.logs.map((row) => [row.id, row]));
+    console.log(JSON.stringify({
+      status: res.status,
+      day1: Object.keys(logs["log-day-1"]).sort(),
+      rest: Object.keys(logs["log-rest"]).sort(),
+      other: logs["log-day-2"],
+      compound: saved.data.dailyRoutines.compounds[0].amount,
+      raw: JSON.stringify(saved.data),
+    }));
+  `;
+  const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const got = JSON.parse(result.stdout.trim().split("\n").pop());
+  assert.equal(got.status, 200);
+  assert.deepEqual(got.day1, ["day", "deletedAt", "id", "status", "updatedAt"]);
+  assert.deepEqual(got.rest, ["day", "deletedAt", "id", "rest", "status", "updatedAt"]);
+  assert.equal(got.other.note, "qq4419-other-day");
+  assert.equal(got.other.amount, 125);
+  assert.equal(got.other.unit, "mcg");
+  assert.equal(got.compound, 250);
+  assert.equal(got.raw.includes("qq4419-scribble-text"), false);
+  assert.equal(got.raw.includes("\"mood\""), false);
+});

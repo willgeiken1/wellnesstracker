@@ -367,16 +367,27 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
   }
 
   // Daily routine logs in the range become tombstones. The plan rows stay.
-  // Keep this in step with purgeDailyRoutineRange in logger/js/shared/daily-routines-store.js.
+  // A purged log keeps only id, day, status, updatedAt, and deletedAt, plus
+  // rest when the row was a rest day. The note, amount, and unit do not stay
+  // in the account blob. Keep this in step with reducedLogTombstone in
+  // logger/js/shared/daily-routines-store.js.
   const routines = data.dailyRoutines;
   if (routines && typeof routines === "object" && !Array.isArray(routines) && Array.isArray(routines.logs)) {
     for (const log of routines.logs) {
       if (!log || typeof log !== "object") continue;
       if (typeof log.deletedAt === "number" && log.deletedAt > 0) continue;
       if (!inRange(log.day, from, to) || !dropBefore(latestTime(log, ITEM_KEYS), before, now)) continue;
-      log.deletedAt = stamp;
       const prev = typeof log.updatedAt === "number" && Number.isFinite(log.updatedAt) ? log.updatedAt : 0;
-      log.updatedAt = Math.max(prev, stamp);
+      const kept: Bag = {
+        id: log.id,
+        day: log.day,
+        status: log.status,
+        updatedAt: Math.max(prev, stamp),
+        deletedAt: stamp,
+      };
+      if (log.rest === true) kept.rest = true;
+      for (const key of Object.keys(log)) delete log[key];
+      Object.assign(log, kept);
     }
   }
 
