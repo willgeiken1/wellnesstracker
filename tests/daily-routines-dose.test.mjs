@@ -55,6 +55,7 @@ const {
   routineLogDraft,
   saveRoutineItem,
   skipRoutineItem,
+  toggleRoutineCollapsed,
   toggleRoutineReveal,
 } = await import("../logger/js/pages/daily-routines.js");
 const {
@@ -546,6 +547,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(log.amount, 250);
     assert.equal(log.unit, "mcg");
     assert.equal(loggedAmountText(log), "250 mcg");
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     assert.equal(toggleRoutineReveal(app.state, morning), true);
     html = dailyRoutinesHTML();
     assert.match(html, /Example Compound A<\/span><span class="dr-dose"> · 250 mcg<\/span>/);
@@ -657,10 +659,12 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.match(html, /data-next-dose="60"/);
     assert.match(html, /Next dose in 1 hr/);
     assert.equal(logRoutineItem(app.state, row.id), true);
+    assert.equal(toggleRoutineCollapsed(app.state, morningId), true);
     assert.equal(toggleRoutineReveal(app.state, morningId), true);
     html = dailyRoutinesHTML();
-    assert.match(html, /data-next-dose="1500"/);
-    assert.match(html, /Next dose in 25 hr/);
+    assert.match(html, /last: 4:00 AM/);
+    assert.doesNotMatch(html, /data-next-dose="1500"/);
+    assert.doesNotMatch(html, /Next dose in 25 hr/);
     assert.doesNotMatch(html, /data-next-dose="60"/);
 
     const loggedId = liveLog(row.id).id;

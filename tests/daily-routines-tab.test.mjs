@@ -330,8 +330,9 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   assert.match(html, /data-routines-shell="signed-in"/);
   assert.match(html, /Now · Morning · 8:30 AM/);
   assert.match(html, /Morning routine/);
-  assert.match(html, /Next · Supplement &amp; enhancer stack<span class="dr-wait">in 3 hr 30 min<\/span>/);
-  assert.match(html, /<b>0<\/b> logged today/);
+  assert.match(html, /Nothing to log yet/);
+  assert.match(html, /<b>0<\/b> of 0 today/);
+  assert.match(html, /data-due="0"/);
   assert.match(html, /aria-label="Routines settings"/);
   assert.match(html, /data-action="routines-discover"/);
   assert.match(html, /Add the first item/);
@@ -352,7 +353,7 @@ test("signed in with the flag on paints the shell and seeds the three default bl
     { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 4, deletedAt: null },
   );
   const counted = dailyRoutinesHTML();
-  assert.match(counted, /<b>1<\/b> logged today/);
+  assert.match(counted, /<b>0<\/b> of 0 today/);
   assert.doesNotMatch(counted, /0\.25|mcg|>9</);
   assert.equal(loggedTodayCount(state.dailyRoutines.logs, "2026-11-19"), 1);
 });
@@ -362,7 +363,7 @@ test("a night clock names the night block and the morning that follows", () => {
   const html = dailyRoutinesHTML();
   assert.match(html, /Now · Night · 9:15 PM/);
   assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Night routine<\/h2>/);
-  assert.match(html, /Next · Morning routine<span class="dr-wait">in 7 hr 45 min<\/span>/);
+  assert.match(html, /Nothing to log yet/);
   const moment = routineNowNext(app.state.dailyRoutines.blocks, new Date(2026, 10, 19, 3, 0));
   assert.equal(moment.nowBlock.name, "Night routine");
   assert.equal(moment.nextBlock.name, "Morning routine");

@@ -163,10 +163,14 @@
   font-weight: 700;
   font-size: 15px;
 }
-.dr-now .switch { background: rgba(20, 20, 20, .18); }
-.dr-now .switch i { background: #fff; }
-.dr-now .switch[aria-checked="true"] { background: var(--ink); }
-.dr-now .switch[aria-checked="true"] i { background: #fff; transform: translateX(20px); }
+.dr-now .switch,
+.dr-all-done .switch { background: rgba(20, 20, 20, .18); }
+.dr-now .switch i,
+.dr-all-done .switch i { background: #fff; }
+.dr-now .switch[aria-checked="true"],
+.dr-all-done .switch[aria-checked="true"] { background: var(--ink); }
+.dr-now .switch[aria-checked="true"] i,
+.dr-all-done .switch[aria-checked="true"] i { background: #fff; transform: translateX(20px); }
 
 .dr-rest {
   display: flex;
@@ -213,9 +217,27 @@
   color: var(--ink);
   text-align: left;
 }
-.dr-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; min-width: 0; }
-.dr-name { font-weight: 700; font-size: 16px; }
+.dr-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; min-width: 0; flex: 1 1 auto; }
+.dr-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; min-width: 0; width: 100%; }
+.dr-name {
+  font-weight: 700;
+  font-size: 16px;
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
+}
 .dr-dose, .dr-state { font-size: 14px; font-weight: 600; color: var(--ink); }
+/* The amount stays whole at a large text size. The name wraps; the dose does not shrink or clip. */
+.dr-dose {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
 .dr-row-done .dr-copy { flex: 1; flex-direction: column; align-items: flex-start; gap: 1px; }
 .dr-mark {
   width: 22px;
@@ -269,6 +291,12 @@
   .dr-mark-on { transition: scale 180ms ease; }
   @starting-style {
     .dr-mark-on { scale: .7; }
+  }
+  .dr-all-done { animation: dr-all-done-in 180ms ease; }
+  .dr-chevron { transition: transform 180ms ease, margin-top 180ms ease; }
+  @keyframes dr-all-done-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 }
 
@@ -457,7 +485,32 @@
   width: 100%;
   margin-top: 8px;
 }
-.dr-next-dose { flex: 1 0 100%; font-size: 13px; font-weight: 600; }
+.dr-next-dose { font-size: 13px; font-weight: 600; }
+.dr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.dr-last { font-size: 13px; font-weight: 600; }
+.dr-overdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: #f6c56b;
+  color: #5c3b00;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.dr-overdue-icon { width: 14px; height: 14px; flex: 0 0 auto; }
+.dr-all-done {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 28px;
+  padding: 16px 18px 14px;
+  box-shadow: var(--inset-hi), var(--inset-lo), var(--elev-1);
+}
+.dr-all-done .dr-now-title { font-size: 22px; margin: 0 0 8px; color: var(--text); }
+.dr-all-done-mark { width: 22px; height: 22px; margin-right: 8px; vertical-align: -4px; }
 .dr-history-list { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
 .dr-history-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
 .dr-history-day { font-weight: 700; }
@@ -496,6 +549,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .dr-all-done,
+  .dr-chevron,
+  .dr-tile,
   .dr-page[data-routines-edit="on"] .dr-tile,
   .dr-page[data-routines-edit="on"] .dr-row { animation: none; transition: none; }
   #sheet[data-routines-details="open"] .sheet-card.dr-details { animation: none; }
