@@ -30,7 +30,12 @@ import { nextDoseCountdown } from "../shared/routine-dose.js";
    (or rest) and day. Restore writes those fields back.
 
    The day key is app.today(). The clock face is app.routineNow(). Do not
-   derive the day from the clock's UTC instant. */
+   derive the day from the clock's UTC instant.
+
+   Log all writes one done log per open item in that block. A skip already
+   covers its item, and a rest log is not an item row, so neither is written.
+   A log tap shows "Logged · Undo" for 3 seconds. This file does not listen
+   for the pointer, so a long press stays available for rename and details. */
 
 const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
@@ -43,6 +48,9 @@ const DEFAULT_START = new Map([
 ]);
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export const ROUTINE_LOG_TOAST_MS = 3000;
+let logToast = null;
+let logToastTimer = 0;
 function esc(value) {
   if (typeof app.esc === "function") return app.esc(value);
   return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -76,6 +84,11 @@ export function routineClock() {
     day: typeof day === "string" ? day : "",
     now: Number.isFinite(stamp) ? stamp : 0,
   };
+}
+
+function toastNow() {
+  const clock = routineClock();
+  return clock.now > 0 ? clock.now : Date.now();
 }
 
 function stampAfter(now, previous) {
@@ -760,6 +773,121 @@ export function restoreRoutineLog(state, logId) {
     if (!row || !isLive(row) || row.itemId !== item.id) return null;
     return next;
   });
+}
+
+/* One done log per open item in the block. Skipped and already logged items
+   are not open. A rest log has no item row, so it is left alone. Edit mode
+   does not log. */
+export function logAllRoutineBlock(state, blockId) {
+  if (layoutEditing()) return false;
+  if (typeof blockId !== "string" || !blockId) return false;
+  if (refuseWrite() || !state || typeof state !== "object") return false;
+  const clock = routineClock();
+  if (!DAY.test(clock.day)) return false;
+  const current = normalizeDailyRoutines(state.dailyRoutines);
+  if (!current) return false;
+  const view = projectDailyRoutines(current);
+  if (!view || !(view.blocks || []).some((block) => block.id === blockId)) return false;
+  const seen = new Set();
+  const rows = [];
+  for (const row of routineBlockRows(view, blockId, clock.day)) {
+    if (!row.open || !row.item || seen.has(row.item.id)) continue;
+    seen.add(row.item.id);
+    rows.push(row);
+  }
+  if (!rows.length) return false;
+  let next = current;
+  let at = stampAfter(clock.now, current.updatedAt);
+  const ids = [];
+  for (const row of rows) {
+    const compound = row.item.kind === "dose" ? compoundFor(view, row.item) : null;
+    const id = routineId("log");
+    ids.push(id);
+    next = upsertEntity(next, "logs", {
+      id,
+      itemId: row.item.id,
+      compoundId: row.item.compoundId || null,
+      day: clock.day,
+      status: "done",
+      amount: compound && typeof compound.amount === "number" ? compound.amount : null,
+      unit: compound && compound.unit ? compound.unit : "",
+      at: clock.now,
+      deletedAt: null,
+    }, at);
+    const saved = (next.logs || []).find((log) => log.id === id);
+    if (!saved || saved.updatedAt !== at || saved.deletedAt != null || saved.rest === true) return false;
+    at += 1;
+  }
+  if (!putDailyRoutines(state, next)) return false;
+  return ids;
+}
+
+export function undoRoutineLogs(state, logIds) {
+  if (!Array.isArray(logIds) || !logIds.length) return false;
+  const seen = new Set();
+  let any = false;
+  for (const id of logIds) {
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    if (undoRoutineLog(state, id)) any = true;
+  }
+  return any;
+}
+
+export function clearRoutineLogToast() {
+  if (logToastTimer) clearTimeout(logToastTimer);
+  logToastTimer = 0;
+  logToast = null;
+}
+
+/* Visible while the pinned clock is still inside the 3 second window.
+   The timer hides it in the live app. Reduce Motion skips the fade only. */
+export function routineLogToast(now) {
+  if (!logToast) return null;
+  const at = typeof now === "number" && Number.isFinite(now) ? now : toastNow();
+  if (at >= logToast.until) return null;
+  return { ids: logToast.ids.slice(), until: logToast.until };
+}
+
+export function showRoutineLogToast(ids) {
+  const seen = new Set();
+  const list = [];
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    list.push(id);
+  }
+  clearRoutineLogToast();
+  if (!list.length) return false;
+  const token = {};
+  const now = toastNow();
+  logToast = { ids: list, until: now + ROUTINE_LOG_TOAST_MS, token };
+  const timer = setTimeout(() => {
+    if (!logToast || logToast.token !== token) return;
+    logToast = null;
+    logToastTimer = 0;
+    const node = typeof document !== "undefined" && document.querySelector ? document.querySelector("[data-log-toast]") : null;
+    if (node && typeof node.remove === "function") node.remove();
+  }, ROUTINE_LOG_TOAST_MS);
+  if (timer && typeof timer.unref === "function") timer.unref();
+  logToastTimer = timer;
+  return true;
+}
+
+export function undoRoutineLogToast(state) {
+  const toast = routineLogToast();
+  clearRoutineLogToast();
+  if (!toast) return false;
+  return undoRoutineLogs(state, toast.ids);
+}
+
+export function latestRoutineLogId(state, itemId) {
+  const store = state && state.dailyRoutines;
+  if (!store || typeof itemId !== "string" || !itemId) return "";
+  const day = routineClock().day;
+  const logs = (store.logs || []).filter((log) => isLive(log) && log.itemId === itemId && log.day === day && log.rest !== true && (log.status === "done" || log.status === "partial"));
+  logs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  return logs[0] ? logs[0].id : "";
 }
 
 function validCalendarDay(value) {
@@ -1616,6 +1744,8 @@ function openRowHTML(row, projected, date, day) {
   const timing = row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
   const detail = rowDetailMarkup(projected, row, date, day);
   const overdue = timing.overdue ? ` data-overdue="true"` : "";
+  /* Skip, history, and rename keep their own actions. The log button is the
+     one the click handler uses, so a long press still reaches the details page. */
   return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue}>
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
@@ -1674,6 +1804,9 @@ export function routineBlockTileHTML(block, projected, view) {
   const list = !collapsed && shown.length
     ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
     : "";
+  const logAll = !editing && !collapsed && open.length
+    ? `<button type="button" class="dr-log-all" data-action="routines-log-all" data-block-id="${esc(block.id)}">Log all <span class="dr-vh">in ${esc(block.name)}</span></button>`
+    : "";
   const reveal = !editing && !collapsed && done.length
     ? `<button type="button" class="dr-reveal" data-action="routines-reveal" data-block-id="${esc(block.id)}" aria-expanded="${revealed ? "true" : "false"}">${revealed ? "Hide" : "Show"} ${done.length === 1 ? "1 completed" : `${done.length} completed`}</button>`
     : "";
@@ -1700,6 +1833,7 @@ export function routineBlockTileHTML(block, projected, view) {
     </button>
     <p class="dr-tile-meta">${esc(tileMeta(open.length, logged, skipped))}</p>
     ${list}
+    ${logAll}
     ${reveal}
     ${doneList}
     ${add}
@@ -1773,6 +1907,11 @@ function deletedHTML() {
   </section>`;
 }
 
+function logToastHTML() {
+  if (!routineLogToast()) return "";
+  return `<div class="dr-log-toast" data-log-toast="true" role="status"><span class="dr-log-toast-line">Logged · <button type="button" data-action="routines-toast-undo">Undo</button></span></div>`;
+}
+
 function paintShell(view, date) {
   const sub = typeof app.fmtDate === "function"
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
@@ -1789,6 +1928,7 @@ function paintShell(view, date) {
     <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
+    ${logToastHTML()}
   </div>`;
 }
 
@@ -1903,6 +2043,13 @@ app.lastDoseLabel = lastDoseLabel;
 app.routineStreak = routineStreak;
 app.shiftRoutineDay = shiftRoutineDay;
 app.logRoutineItem = logRoutineItem;
+app.logAllRoutineBlock = logAllRoutineBlock;
+app.undoRoutineLogs = undoRoutineLogs;
+app.showRoutineLogToast = showRoutineLogToast;
+app.routineLogToast = routineLogToast;
+app.clearRoutineLogToast = clearRoutineLogToast;
+app.undoRoutineLogToast = undoRoutineLogToast;
+app.latestRoutineLogId = latestRoutineLogId;
 app.editRoutineLog = editRoutineLog;
 app.compoundDoseHistory = compoundDoseHistory;
 app.routineLogDraft = routineLogDraft;
