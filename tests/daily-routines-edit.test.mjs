@@ -555,8 +555,8 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(restoreRoutineLog(app.state, first.id), true);
     const restored = app.state.dailyRoutines.logs.find((row) => row.id === first.id);
     assert.equal(isLive(restored), true);
-    assert.equal(restored.amount, null);
-    assert.equal(restored.unit, "");
+    assert.equal(restored.amount, 250);
+    assert.equal(restored.unit, "mcg");
   });
 
   test("the flag stays off in source and the new file is in the shell", () => {
