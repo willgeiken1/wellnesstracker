@@ -197,7 +197,7 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(policy, /save the log on an earlier day/);
   assert.match(policy, /When you are signed in, the layout and the dose logs sync to your account/);
   assert.match(policy, /included in the Settings backup and in the privacy export/);
-  assert.match(policy, /A deleted dose log keeps only a small marker \(its id, the day, its status, and when it was deleted\) so an older device cannot bring it back\. The amount, the unit, and the item are removed\./);
+  assert.match(policy, /A deleted dose log keeps only a small marker \(its id, the day, its status, and when it was deleted\) so an older device cannot bring it back\. The id links the marker to the routine item\. The amount, the unit, and the dose details are removed\./);
   assert.match(policy, /That is the copy on this device, in your account, in the Settings backup, and in the privacy export/);
   assert.match(policy, /replaces the dose logs on those days with the same marker and leaves the layout/);
   assert.doesNotMatch(policy, /including the amount/);
@@ -209,7 +209,7 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(page, /Crash reports and usage analytics do not include dose amounts or item names/);
   assert.match(page, /No workouts, food, notes, photos, email, dose amounts, or item names/);
   assert.match(page, /A deleted dose log keeps only a small marker/);
-  assert.match(page, /The amount, the unit, and the item are removed/);
+  assert.match(page, /The id links the marker to the routine item\. The amount, the unit, and the dose details are removed/);
   assert.doesNotMatch(page, /including the amount/);
   assert.match(page, /It is not saved and it is not a recommendation/);
   assert.doesNotMatch(policy, /discover/i);
@@ -238,8 +238,8 @@ test("the settings backup and the privacy export include the routine layout and 
 
   const files = buildExportFiles(data);
   const byName = Object.fromEntries(files.map((file) => [file.name, file.text]));
-  assert.match(byName["about.txt"], /A deleted dose log in daily_routine_logs\.csv is only a marker: its id, the day, its status, and when it was deleted/);
-  assert.match(byName["about.txt"], /The amount, the unit, and the item are not in that row/);
+  assert.match(byName["about.txt"], /A deleted dose log in daily_routine_logs\.csv is only a marker: its id \(which links it to the routine item\), the day, its status, and when it was deleted/);
+  assert.match(byName["about.txt"], /The amount, the unit, and the dose details are not in that row/);
   assert.match(byName["about.txt"], /reconstitution calculator is not stored/);
   assert.match(byName["daily_routine_blocks.csv"], /block-1,Morning routine,0,/);
   assert.match(byName["daily_routine_items.csv"], /item-1,Example Item,dose,1,mcg,/);
