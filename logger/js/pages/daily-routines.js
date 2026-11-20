@@ -567,9 +567,15 @@ function collapsedIds(prefs) {
   return list.filter((id) => typeof id === "string" && id);
 }
 
-/* Plan edits change order, names, and placements. They never assign logs. */
+/* A reorder records orderAt and does not move updatedAt. A tombstone from
+   the other phone still beats the reorder. Rows whose order did not change
+   are left alone. */
 function applyOrders(store, collection, ids, at) {
-  return ids.reduce((next, id, index) => revisePlanEntity(next, collection, id, { order: index }, at), store);
+  return ids.reduce((next, id, index) => {
+    const row = (next[collection] || []).find((entity) => entity && entity.id === id);
+    if (!row || row.order === index) return next;
+    return revisePlanEntity(next, collection, id, { order: index, orderAt: at }, row.updatedAt || at);
+  }, store);
 }
 
 export function addRoutineBlock(state, name) {

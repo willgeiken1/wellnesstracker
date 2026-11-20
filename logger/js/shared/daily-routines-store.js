@@ -165,10 +165,21 @@ function entityBase(raw, now = Date.now()) {
   return base;
 }
 
+function orderAtOf(raw, now) {
+  return typeof raw.orderAt === "number" && raw.orderAt > 0 ? clampStamp(raw.orderAt, now) : 0;
+}
+
+function withOrderAt(raw, row, now) {
+  const orderAt = orderAtOf(raw, now);
+  if (orderAt) row.orderAt = orderAt;
+  else delete row.orderAt;
+  return row;
+}
+
 function normalizeBlock(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base) return null;
-  return { ...plainFields(raw), ...base, name: clip(raw.name, 80), color: clip(raw.color, 24) || "citrus", order: num(raw.order) };
+  return withOrderAt(raw, { ...plainFields(raw), ...base, name: clip(raw.name, 80), color: clip(raw.color, 24) || "citrus", order: num(raw.order) }, now);
 }
 
 function normalizeItem(raw, now = Date.now()) {
@@ -186,7 +197,7 @@ function normalizeItem(raw, now = Date.now()) {
 function normalizePlacement(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base || typeof raw.blockId !== "string" || !raw.blockId || typeof raw.itemId !== "string" || !raw.itemId) return null;
-  return { ...plainFields(raw), ...base, blockId: raw.blockId, itemId: raw.itemId, order: num(raw.order) };
+  return withOrderAt(raw, { ...plainFields(raw), ...base, blockId: raw.blockId, itemId: raw.itemId, order: num(raw.order) }, now);
 }
 
 function normalizeCompound(raw, now = Date.now()) {
@@ -397,9 +408,25 @@ export function mergeEntityLists(local, remote, now = Date.now()) {
       if (entity.updatedAt < entity.deletedAt) entity.updatedAt = entity.deletedAt;
     }
     const current = byId.get(entity.id);
-    if (!current || beats(entity, current)) byId.set(entity.id, entity);
+    if (!current) {
+      byId.set(entity.id, entity);
+      continue;
+    }
+    const winner = beats(entity, current) ? entity : current;
+    const other = winner === entity ? current : entity;
+    byId.set(entity.id, liveOrder(winner, other));
   }
   return [...byId.values()];
+}
+
+/* A reorder stamps orderAt and leaves updatedAt alone, so a delete's
+   tombstone still beats it. Two live reorders keep the newer order. */
+function liveOrder(winner, other) {
+  if (!isLive(winner) || !other) return winner;
+  const winAt = num(winner.orderAt);
+  const otherAt = num(other.orderAt);
+  if (otherAt > winAt && typeof other.order === "number") return { ...winner, order: other.order, orderAt: otherAt };
+  return winner;
 }
 
 function mergePrefs(local, remote, now) {

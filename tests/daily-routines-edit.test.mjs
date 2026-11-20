@@ -146,6 +146,32 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(reorderRoutinePlacements(app.state, morning, places.slice(0, 1)), false);
   });
 
+  test("a reorder does not bring back the other phone's deleted item", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    const stack = blockId("Supplement & enhancer stack");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "check" }), true);
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound B", kind: "check" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const shared = structuredClone(app.state.dailyRoutines);
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(deleteRoutineItem(app.state, item.id), true);
+    const deleted = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(shared);
+    app.routineNow = () => new Date(2026, 10, 19, 10, 0);
+    const places = livePlacements(morning).map((row) => row.id);
+    assert.equal(reorderRoutinePlacements(app.state, morning, places.slice().reverse()), true);
+    assert.equal(reorderRoutineBlocks(app.state, [stack, morning, blockId("Night routine")], stack), true);
+    const reordered = structuredClone(app.state.dailyRoutines);
+    for (const merged of [mergeDailyRoutines(deleted, reordered), mergeDailyRoutines(reordered, deleted)]) {
+      assert.equal(isLive(merged.items.find((row) => row.id === item.id)), false);
+      assert.equal(merged.placements.filter((row) => isLive(row) && row.itemId === item.id).length, 0);
+      const view = projectDailyRoutines(merged);
+      assert.equal(view.items.some((row) => row.id === item.id), false);
+      assert.equal(view.placements.some((row) => row.itemId === item.id), false);
+    }
+  });
+
   test("a deleted block restores with its placements and keeps the log", () => {
     signIn();
     const morning = blockId("Morning routine");
