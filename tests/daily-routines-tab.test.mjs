@@ -347,7 +347,7 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   state.dailyRoutines.logs.push(
     { id: "log-done", itemId: "item-a", day: "2026-11-19", status: "done", amount: 0.25, unit: "mcg", updatedAt: 5, deletedAt: null },
     { id: "log-part", itemId: "item-a", day: "2026-11-19", status: "partial", amount: 1, unit: "mg", updatedAt: 6, deletedAt: null },
-    { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 7, deletedAt: null },
+    { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 4, deletedAt: null },
   );
   const counted = dailyRoutinesHTML();
   assert.match(counted, /<b>1<\/b> logged today/);

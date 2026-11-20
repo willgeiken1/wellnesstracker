@@ -424,12 +424,11 @@ describe("routine editing", { concurrency: false }, () => {
       placements: [{ id: "place_phone_b", blockId: night, itemId: item.id, order: 1, updatedAt: 30, deletedAt: null }],
     };
     const collapsed = mergeDailyRoutines(phoneLeft, phoneRight);
-    const shown = collapsed.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id);
+    const shown = projectDailyRoutines(collapsed).placements.filter((row) => row.blockId === night && row.itemId === item.id);
     assert.equal(shown.length, 1);
     assert.equal(shown[0].id, "place_phone_b");
-    assert.equal(isLive(collapsed.placements.find((row) => row.id === "place_phone_a")), false);
     const again = mergeDailyRoutines(collapsed, phoneLeft);
-    assert.equal(again.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id).length, 1);
+    assert.equal(projectDailyRoutines(again).placements.filter((row) => row.blockId === night && row.itemId === item.id).length, 1);
   });
 
   test("a newer rename beats the other phone's item delete and keeps the placements", () => {

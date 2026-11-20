@@ -51,7 +51,7 @@ const {
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineLogSheetHTML } = await import("../logger/js/pages/daily-routines-dose.js");
-const { emptyDailyRoutines, isLive, mergeDailyRoutines, routineLogId } = await import("../logger/js/shared/daily-routines-store.js");
+const { emptyDailyRoutines, isLive, mergeDailyRoutines, projectDailyRoutines, routineLogId } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day, hour = 8, minute = 30) {
   const [y, m, d] = day.split("-").map(Number);
@@ -113,8 +113,13 @@ function converge(phoneA, phoneB) {
         assert.deepEqual(rows(again, collection), rows(ab, collection), `${collection} after a stale copy`);
       }
     }
+    assert.deepEqual(rows(view(ba), collection), rows(view(ab), collection), `${collection} view in either order`);
   }
   return ab;
+}
+
+function view(store) {
+  return projectDailyRoutines(store);
 }
 
 function liveLogs(store, itemId, day) {
@@ -130,14 +135,12 @@ describe("routine fixed ids", { concurrency: false }, () => {
     const phoneA = { ...emptyDailyRoutines(10), logs: [logA, restA] };
     const phoneB = { ...emptyDailyRoutines(12), logs: [logB, restB] };
     const merged = converge(phoneA, phoneB);
-    const live = liveLogs(merged, "item-a", "2026-11-19");
+    const live = liveLogs(view(merged), "item-a", "2026-11-19");
     assert.equal(live.length, 1);
     assert.equal(live[0].id, "log_old_phone_b");
     assert.equal(live[0].status, "skipped");
-    assert.equal(merged.logs.filter((row) => isLive(row) && row.rest === true).length, 1);
-    const loser = merged.logs.find((row) => row.id === "log_old_phone_a");
-    assert.equal(isLive(loser), false);
-    assert.equal(loser.amount, undefined);
+    assert.equal(view(merged).logs.filter((row) => row.rest === true).length, 1);
+    assert.equal(isLive(merged.logs.find((row) => row.id === "log_old_phone_a")), true);
   });
 
   test("two phones moving one log to different days keep one live log", () => {
@@ -151,7 +154,7 @@ describe("routine fixed ids", { concurrency: false }, () => {
     pin("2026-11-19", 9, 5);
     const phoneB = onPhone(base, () => assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-17" }), true));
     const merged = converge(phoneA, phoneB);
-    const live = liveLogs(merged, item.id);
+    const live = liveLogs(view(merged), item.id);
     assert.equal(live.length, 1);
     assert.equal(liveLogs(phoneA, item.id)[0].id, log.id);
     assert.equal(liveLogs(phoneB, item.id)[0].id, log.id);
@@ -178,9 +181,9 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(freshA.id, freshB.id);
     assert.equal(phoneA.logs.find((row) => row.id === log.id).day, "2026-11-18");
     const merged = converge(phoneA, phoneB);
-    assert.equal(liveLogs(merged, item.id, "2026-11-18").length, 1);
-    assert.equal(liveLogs(merged, item.id, "2026-11-19").length, 1);
-    assert.equal(liveLogs(merged, item.id, "2026-11-19")[0].status, "skipped");
+    assert.equal(liveLogs(view(merged), item.id, "2026-11-18").length, 1);
+    assert.equal(liveLogs(view(merged), item.id, "2026-11-19").length, 1);
+    assert.equal(liveLogs(view(merged), item.id, "2026-11-19")[0].status, "skipped");
     app.state = { dailyRoutines: structuredClone(merged) };
     pin("2026-11-19", 9, 30);
     assert.equal(undoRoutineLog(app.state, log.id), true);
@@ -203,8 +206,8 @@ describe("routine fixed ids", { concurrency: false }, () => {
     pin("2026-11-20", 9, 5);
     const phoneB = onPhone(base, () => assert.equal(logRoutineItem(app.state, item.id), true));
     const merged = converge(phoneA, phoneB);
-    assert.equal(liveLogs(merged, item.id, "2026-11-20").length, 1);
-    assert.equal(liveLogs(merged, item.id).length, 1);
+    assert.equal(liveLogs(view(merged), item.id, "2026-11-20").length, 1);
+    assert.equal(liveLogs(view(merged), item.id).length, 1);
   });
 
   test("a block deleted on one phone and renamed later on the other keeps its items", () => {
@@ -220,9 +223,14 @@ describe("routine fixed ids", { concurrency: false }, () => {
     const block = merged.blocks.find((row) => row.id === morning);
     assert.equal(isLive(block), true);
     assert.equal(block.name, "Early routine");
-    assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning && row.itemId === item.id).length, 1);
+    assert.equal(view(merged).placements.filter((row) => row.blockId === morning && row.itemId === item.id).length, 1);
     app.state = { dailyRoutines: merged };
     assert.match(dailyRoutinesHTML(), new RegExp(`data-item-id="${item.id}"`));
+    const night = blockId("Night routine");
+    pin("2026-11-19", 10, 0);
+    assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: item.name, kind: "check", blockId: night, blockIds: [night] }), true);
+    const moved = view(app.state.dailyRoutines).placements.filter((row) => row.itemId === item.id);
+    assert.deepEqual(moved.map((row) => row.blockId), [night]);
   });
 
   test("an item deleted on one phone and renamed later on the other keeps its placement", () => {
@@ -236,7 +244,7 @@ describe("routine fixed ids", { concurrency: false }, () => {
     const phoneB = onPhone(base, () => assert.equal(renameRoutineItem(app.state, item.id, "Example Check C"), true));
     const merged = converge(phoneA, phoneB);
     assert.equal(isLive(merged.items.find((row) => row.id === item.id)), true);
-    assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning && row.itemId === item.id).length, 1);
+    assert.equal(view(merged).placements.filter((row) => row.blockId === morning && row.itemId === item.id).length, 1);
   });
 
   test("a later delete still wins over an earlier rename", () => {
@@ -250,7 +258,7 @@ describe("routine fixed ids", { concurrency: false }, () => {
     const phoneA = onPhone(base, () => assert.equal(deleteRoutineBlock(app.state, morning), true));
     const merged = converge(phoneA, phoneB);
     assert.equal(isLive(merged.blocks.find((row) => row.id === morning)), false);
-    assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning).length, 0);
+    assert.equal(view(merged).placements.filter((row) => row.blockId === morning).length, 0);
   });
 
   test("editing the day of a dose logged before the item became a check keeps the amount", () => {
@@ -302,5 +310,75 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(moved.amount, null);
     assert.equal(moved.unit, "");
     assert.doesNotMatch(routineLogSheetHTML(), /id="dr-log-amount"/);
+  });
+
+  test("a day collision in out-of-order snapshots does not erase a check-off", () => {
+    const logX = { id: "log_x", itemId: "item-a", day: "2026-11-18", status: "done", amount: null, unit: "", updatedAt: 10, deletedAt: null };
+    const logY = { id: "log_y", itemId: "item-a", day: "2026-11-18", status: "done", amount: null, unit: "", updatedAt: 20, deletedAt: null };
+    const phoneA = { ...emptyDailyRoutines(10), logs: [logX] };
+    const phoneB = { ...emptyDailyRoutines(20), logs: [logY] };
+    const phoneC = { ...emptyDailyRoutines(30), logs: [{ ...logY, day: "2026-11-19", updatedAt: 30 }] };
+    const leftFirst = mergeDailyRoutines(mergeDailyRoutines(phoneA, phoneB), phoneC);
+    const rightFirst = mergeDailyRoutines(phoneA, mergeDailyRoutines(phoneB, phoneC));
+    assert.deepEqual(rows(leftFirst, "logs"), rows(rightFirst, "logs"));
+    for (const merged of [leftFirst, rightFirst]) {
+      assert.deepEqual(liveLogs(view(merged), "item-a").map((row) => [row.id, row.day]).sort(), [["log_x", "2026-11-18"], ["log_y", "2026-11-19"]]);
+    }
+    const collided = mergeDailyRoutines(phoneA, phoneB);
+    assert.deepEqual(liveLogs(view(collided), "item-a").map((row) => row.id), ["log_y"]);
+  });
+
+  test("any merge order or grouping of four snapshots ends in the same rows", () => {
+    const stamp = (row, updatedAt, deletedAt = null) => ({ ...row, updatedAt, deletedAt });
+    const block = { id: "block_x", name: "Example block", color: "citrus", order: 0 };
+    const place = { id: "place_block_x_item_a", blockId: "block_x", itemId: "item-a", order: 0 };
+    const item = { id: "item-a", name: "Example Check A", kind: "check", compoundId: null };
+    const log = { itemId: "item-a", status: "done", amount: null, unit: "" };
+    const snapshots = [
+      {
+        ...emptyDailyRoutines(10),
+        blocks: [stamp(block, 10, 10)],
+        items: [stamp(item, 5)],
+        placements: [{ ...stamp(place, 10, 10), removedWith: "block_x" }, stamp({ id: "place_old_a", blockId: "block_y", itemId: "item-a", order: 0 }, 10)],
+        logs: [stamp({ ...log, id: "log_x", day: "2026-11-18" }, 10), stamp({ id: "rest_old_a", itemId: null, day: "2026-11-18", status: "done", rest: true }, 10)],
+      },
+      {
+        ...emptyDailyRoutines(20),
+        blocks: [stamp({ ...block, name: "Renamed block" }, 20)],
+        items: [stamp(item, 5)],
+        placements: [stamp(place, 5), stamp({ id: "place_old_b", blockId: "block_y", itemId: "item-a", order: 1 }, 10)],
+        logs: [stamp({ ...log, id: "log_y", day: "2026-11-18" }, 20), stamp({ id: "rest_old_b", itemId: null, day: "2026-11-18", status: "done", rest: true }, 10)],
+      },
+      {
+        ...emptyDailyRoutines(30),
+        placements: [stamp({ id: "place_old_a", blockId: "block_y", itemId: "item-a", order: 3 }, 11)],
+        logs: [stamp({ ...log, id: "log_y", day: "2026-11-19" }, 30)],
+      },
+      {
+        ...emptyDailyRoutines(40),
+        blocks: [stamp(block, 40, 40)],
+        placements: [{ ...stamp(place, 40, 40), removedWith: "block_x" }],
+        logs: [stamp({ ...log, id: "log_z", day: "2026-11-19", status: "skipped" }, 25)],
+      },
+    ];
+    const permutations = (list) => (list.length <= 1 ? [list] : list.flatMap((first, index) => permutations([...list.slice(0, index), ...list.slice(index + 1)]).map((rest) => [first, ...rest])));
+    const results = [];
+    for (const order of permutations(snapshots)) {
+      results.push(order.reduce((acc, next) => mergeDailyRoutines(acc, next)));
+      results.push(order.reduceRight((acc, next) => mergeDailyRoutines(next, acc)));
+      results.push(mergeDailyRoutines(mergeDailyRoutines(order[0], order[1]), mergeDailyRoutines(order[2], order[3])));
+    }
+    const first = results[0];
+    for (const merged of results) {
+      for (const collection of ["blocks", "items", "placements", "logs"]) {
+        assert.deepEqual(rows(merged, collection), rows(first, collection), collection);
+        assert.deepEqual(rows(view(merged), collection), rows(view(first), collection), `${collection} view`);
+      }
+    }
+    const shown = view(first);
+    assert.deepEqual(shown.logs.filter((row) => row.itemId === "item-a").map((row) => [row.id, row.day]).sort(), [["log_x", "2026-11-18"], ["log_y", "2026-11-19"]]);
+    assert.equal(shown.logs.filter((row) => row.rest === true).length, 1);
+    assert.deepEqual(shown.placements.map((row) => row.id), ["place_old_a"]);
+    assert.equal(shown.blocks.some((row) => row.id === "block_x"), false);
   });
 });
