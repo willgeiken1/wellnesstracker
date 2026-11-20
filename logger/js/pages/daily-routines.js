@@ -22,9 +22,11 @@ import { nextDoseCountdown } from "../shared/routine-dose.js";
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
    and no dailyRoutines write.
 
-   Check-off writes one log per item and day (routineLogId). Undo keeps the
-   amount, unit, and note and marks that log undone, on every live log for
-   that item (or rest) and day. Restore writes those fields back.
+   Check-off writes one log per item and day (routineLogId). A log moved to
+   another day keeps its id, so a later check-off on the old day takes the
+   next free id for that item and day (checkOffId). Undo keeps the amount,
+   unit, and note and marks that log undone, on every live log for that item
+   (or rest) and day. Restore writes those fields back.
 
    The day key is app.today(). The clock face is app.routineNow(). Do not
    derive the day from the clock's UTC instant. */
@@ -94,6 +96,20 @@ function existingLogStamp(store, id) {
   const log = (store.logs || []).find((row) => row && row.id === id);
   if (!log) return 0;
   return maxStamp(log.updatedAt, log.deletedAt);
+}
+
+/* The id a new check-off for this item and day writes. A log moved to
+   another day keeps its id, and that id is not reused for the old day. The
+   next suffix is taken instead, so two phones with the same rows still pick
+   the same id. */
+function checkOffId(store, itemId, day) {
+  const base = routineLogId(itemId, day);
+  for (let n = 1; n < 100; n += 1) {
+    const id = n === 1 ? base : `${base}_${n}`;
+    const row = (store.logs || []).find((log) => log && log.id === id);
+    if (!row || row.day === day) return id;
+  }
+  return null;
 }
 
 /* A replacement has to beat the row it replaces, including a tombstone,
@@ -182,11 +198,8 @@ function parseRoutineLogId(id) {
     const day = id.slice(5);
     return DAY.test(day) ? { rest: true, day } : null;
   }
-  if (id.startsWith("log_") && id.length > 15 && id.charAt(id.length - 11) === "_" && DAY.test(id.slice(-10))) {
-    const itemId = id.slice(4, -11);
-    return itemId ? { itemId, day: id.slice(-10) } : null;
-  }
-  return null;
+  const match = /^log_(.+)_(\d{4}-\d{2}-\d{2})(?:_(\d+))?$/.exec(id);
+  return match ? { itemId: match[1], day: match[2] } : null;
 }
 
 /* Calendar steps stay on the year-month-day fields. The UTC date is only
@@ -379,7 +392,8 @@ export function logRoutineItem(state, itemId) {
     const item = (view.items || []).find((row) => row.id === itemId);
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
     const dose = loggedDose(view, item);
-    const id = routineLogId(item.id, clock.day);
+    const id = checkOffId(store, item.id, clock.day);
+    if (!id) return null;
     const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", carryFuture({
       id,
@@ -403,7 +417,8 @@ export function skipRoutineItem(state, itemId) {
     const view = projectDailyRoutines(store);
     const item = (view.items || []).find((row) => row.id === itemId);
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
-    const id = routineLogId(item.id, clock.day);
+    const id = checkOffId(store, item.id, clock.day);
+    if (!id) return null;
     const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", carryFuture({
       id,
@@ -468,7 +483,8 @@ export function restoreRoutineLog(state, logId) {
     }
     const view = projectDailyRoutines(store);
     const item = (view.items || []).find((row) => row.id === parsed.itemId);
-    if (!item) return null;
+    const day = validCalendarDay(log.day) ? log.day : parsed.day;
+    if (!item || coveringLog(view.logs, item.id, day)) return null;
     const dose = loggedDose(view, item);
     const skipped = log.status === "skipped";
     const storedAmount = typeof log.amount === "number" && Number.isFinite(log.amount) ? log.amount : null;
@@ -478,7 +494,7 @@ export function restoreRoutineLog(state, logId) {
       id: logId,
       itemId: item.id,
       compoundId: skipped ? null : dose.compoundId,
-      day: parsed.day,
+      day,
       status: skipped ? "skipped" : "done",
       amount: skipped ? null : (storedAmount != null ? storedAmount : dose.amount),
       unit: skipped ? "" : (storedUnit || dose.unit),
@@ -546,8 +562,9 @@ function logHasSavedDose(log) {
 
 /* Changes the amount and the day on one log. The day is the string the
    user picked. It is not today's key and not the UTC day of the clock.
-   The compound row is left alone, so later edits to the item do not
-   rewrite this log. */
+   The log keeps its id, so two phones that move it to different days
+   still hold one row. The compound row is left alone, so later edits to
+   the item do not rewrite this log. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
@@ -563,12 +580,10 @@ export function editRoutineLog(state, logId, draft) {
     const view = projectDailyRoutines(store);
     const compound = (view.compounds || []).find((row) => row.id === log.compoundId) || null;
     const doseItem = logHasSavedDose(log);
-    const nextId = log.itemId ? routineLogId(log.itemId, day) : log.id;
-    if (nextId !== log.id && (store.logs || []).some((row) => isLive(row) && row.id === nextId)) return null;
-    const at = writeStamp(store, clock, nextId);
+    const at = writeStamp(store, clock, logId);
     const fields = doseItem ? null : {
       ...log,
-      id: nextId,
+      id: logId,
       day,
       amount: null,
       unit: "",
@@ -584,7 +599,7 @@ export function editRoutineLog(state, logId, draft) {
       if (!unit) return null;
       payload = {
         ...log,
-        id: nextId,
+        id: logId,
         day,
         amount,
         unit,
@@ -592,10 +607,8 @@ export function editRoutineLog(state, logId, draft) {
         deletedAt: null,
       };
     }
-    let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
-    if (!wrote(next, "logs", nextId, at)) return null;
-    if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
-    return next;
+    const next = upsertEntity(store, "logs", carryFuture(payload, store, logId), at);
+    return wrote(next, "logs", logId, at);
   });
 }
 
