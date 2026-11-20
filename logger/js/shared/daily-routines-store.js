@@ -106,8 +106,9 @@ function normalizeCompound(raw) {
   };
 }
 
-/* A log tombstone keeps only id, day, status, updatedAt, and deletedAt, so a
-   deleted note, amount, or unit does not stay in the synced blob. */
+/* A privacy-range purge drops the note, amount, and unit. An ordinary Undo
+   tombstone still carries the item and the dose, so Restore can put that
+   log back. A purge row has already lost those fields. */
 function reducedLogTombstone(log, deletedAt, updatedAt) {
   const at = Math.max(num(updatedAt), num(deletedAt));
   const out = { id: log.id, day: log.day, status: log.status, updatedAt: at, deletedAt: num(deletedAt) || at };
@@ -115,10 +116,23 @@ function reducedLogTombstone(log, deletedAt, updatedAt) {
   return out;
 }
 
+function isReducedLogTombstone(raw) {
+  if (typeof raw.itemId === "string" && raw.itemId) return false;
+  if (typeof raw.compoundId === "string" && raw.compoundId) return false;
+  if (typeof raw.note === "string" && raw.note.trim()) return false;
+  if (typeof raw.amount === "number" && Number.isFinite(raw.amount)) return false;
+  if (typeof raw.unit === "string" && raw.unit.trim()) return false;
+  if (typeof raw.at === "number" && raw.at > 0) return false;
+  for (const key of FEELING_KEYS) {
+    if (raw[key] != null && raw[key] !== "") return false;
+  }
+  return true;
+}
+
 function normalizeLog(raw) {
   const base = entityBase(raw);
   if (!base || !validDay(raw.day) || !STATUSES.has(raw.status)) return null;
-  if (base.deletedAt) return reducedLogTombstone(raw, base.deletedAt, base.updatedAt);
+  if (base.deletedAt && isReducedLogTombstone(raw)) return reducedLogTombstone(raw, base.deletedAt, base.updatedAt);
   const next = {
     ...plainFields(raw),
     ...base,

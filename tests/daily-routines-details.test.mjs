@@ -44,12 +44,15 @@ const {
   dailyRoutinesHTML,
   editRoutineLog,
   lastDoseLabel,
+  compoundDoseHistory,
   logRoutineItem,
   logRoutineRest,
   parseRoutineTime,
+  restoreRoutineLog,
   routineClockTime,
   routineRestLog,
   toggleRoutineReveal,
+  undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
 const {
   closeRoutineDetails,
@@ -517,6 +520,42 @@ describe("routine details", { concurrency: false }, () => {
     check(normalizeDailyRoutines(app.state.dailyRoutines));
     check(mergeDailyRoutines(app.state.dailyRoutines, older));
     check(mergeDailyRoutines(older, app.state.dailyRoutines));
+  });
+
+  test("undo then restore keeps the dose, the note, and the item coverage", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = itemNamed("Example Compound A");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLog(item.id);
+    const loggedAt = log.at;
+    assert.equal(editRoutineLog(app.state, log.id, { amount: "0.25", day: "2026-11-18", time: "08:02", note: SENTINEL }), true);
+    const edited = app.state.dailyRoutines.logs.find((row) => row.id === log.id);
+    assert.equal(undoRoutineLog(app.state, log.id), true);
+    const tombstone = app.state.dailyRoutines.logs.find((row) => row.id === log.id);
+    assert.ok(tombstone.deletedAt > 0);
+    assert.equal(tombstone.itemId, item.id);
+    assert.equal(tombstone.compoundId, item.compoundId);
+    assert.equal(tombstone.amount, 0.25);
+    assert.equal(tombstone.unit, "mcg");
+    assert.equal(tombstone.note, SENTINEL);
+    assert.equal(routineClockTime(tombstone.at), "08:02");
+    assert.equal(restoreRoutineLog(app.state, log.id), true);
+    const restored = app.state.dailyRoutines.logs.find((row) => row.id === log.id);
+    assert.equal(restored.deletedAt, null);
+    assert.equal(restored.itemId, item.id);
+    assert.equal(restored.compoundId, item.compoundId);
+    assert.equal(restored.day, "2026-11-18");
+    assert.equal(restored.amount, 0.25);
+    assert.equal(restored.unit, "mcg");
+    assert.equal(restored.note, SENTINEL);
+    assert.equal(routineClockTime(restored.at), "08:02");
+    assert.notEqual(restored.at, loggedAt);
+    assert.equal(compoundDoseHistory(app.state.dailyRoutines, item.compoundId).some((row) => row.id === log.id), true);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && row.day === "2026-11-19" && !(row.deletedAt > 0)).length, 1);
+    assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && row.day === "2026-11-18" && !(row.deletedAt > 0)).length, 1);
   });
 
 });
