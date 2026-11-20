@@ -286,6 +286,51 @@ test("a date-range purge tombstones only that day's logs", () => {
   assert.equal(stripRange(data, "2026-11-01", "2026-11-01", { before: 4000, now: 6000 }), false);
 });
 
+test("an earlier range delete does not strip a later undone log", () => {
+  const undone = log("log-undo", "2026-11-01", 250, 1000, {
+    note: "extra dose note",
+    deletedAt: 5000,
+    updatedAt: 5000,
+    undone: true,
+  });
+  const data = { dailyRoutines: phoneStore([], [undone]) };
+  assert.equal(purgeDailyRoutineRange(data, "2026-11-01", "2026-11-01", 3000, 8000), false);
+  assert.equal(data.dailyRoutines.logs[0].amount, 250);
+  assert.equal(data.dailyRoutines.logs[0].unit, "mcg");
+  assert.equal(data.dailyRoutines.logs[0].note, "extra dose note");
+  assert.equal(data.dailyRoutines.logs[0].undone, true);
+
+  const earlier = log("log-early", "2026-11-01", 250, 1000, {
+    note: "extra dose note",
+    deletedAt: 2000,
+    updatedAt: 2000,
+    undone: true,
+  });
+  const old = { dailyRoutines: phoneStore([], [earlier]) };
+  assert.equal(purgeDailyRoutineRange(old, "2026-11-01", "2026-11-01", 3000, 8000), true);
+  assert.deepEqual(Object.keys(old.dailyRoutines.logs[0]).sort(), ["day", "deletedAt", "id", "status", "updatedAt"]);
+
+  const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+  const script = `
+    import { stripRange } from ${JSON.stringify(stripUrl)};
+    const kept = stripRange(${JSON.stringify({ sessions: [], dailyRoutines: phoneStore([], [undone]) })}, "2026-11-01", "2026-11-01", 3000, 8000);
+    const stripped = stripRange(${JSON.stringify({ sessions: [], dailyRoutines: phoneStore([], [earlier]) })}, "2026-11-01", "2026-11-01", 3000, 8000);
+    console.log(JSON.stringify({
+      kept: kept.dailyRoutines.logs[0],
+      stripped: Object.keys(stripped.dailyRoutines.logs[0]).sort(),
+    }));
+  `;
+  const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout.trim().split("\n").pop());
+  assert.equal(parsed.kept.amount, 250);
+  assert.equal(parsed.kept.note, "extra dose note");
+  assert.deepEqual(parsed.stripped, ["day", "deletedAt", "id", "status", "updatedAt"]);
+});
+
 test("a purged log is not restored by merging the other phone's older copy", () => {
   const data = {
     sessions: [],

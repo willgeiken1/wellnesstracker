@@ -375,7 +375,7 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
     routines.logs = routines.logs.map((log: Bag) => {
       if (!log || typeof log !== "object" || !inRange(log.day, from, to)) return log;
       const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
-      if (!gone && !dropBefore(latestTime(log, ITEM_KEYS), before, now)) return log;
+      if (!dropBefore(latestTime(log, ITEM_KEYS), before, now)) return log;
       const keys = Object.keys(log);
       if (gone && keys.length === keep.length && keep.every((key) => keys.includes(key))) return log;
       routinesChanged = true;
