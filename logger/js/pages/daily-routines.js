@@ -2,6 +2,7 @@ import { app } from "../runtime.js";
 import {
   canMutateRoutines,
   isLive,
+  normalizeDailyRoutines,
   projectDailyRoutines,
   putDailyRoutines,
   seedDefaultBlocks,
@@ -124,9 +125,14 @@ export function ensureRoutineShell(state, now = Date.now()) {
   const before = state.dailyRoutines;
   const hadLive = !!(before && Array.isArray(before.blocks) && before.blocks.some((block) => isLive(block)));
   if (!hadLive) {
+    const prior = normalizeDailyRoutines(before);
     const seeded = seedDefaultBlocks(before, now);
-    if (!putDailyRoutines(state, seeded)) return null;
-    if (typeof app.save === "function") app.save();
+    /* Every default already has a row (a deleted one keeps its tombstone):
+       nothing to write, so no save and no push on each paint. */
+    if (!prior || seeded.blocks.length > prior.blocks.length) {
+      if (!putDailyRoutines(state, seeded)) return null;
+      if (typeof app.save === "function") app.save();
+    }
   }
   return projectDailyRoutines(state.dailyRoutines);
 }
