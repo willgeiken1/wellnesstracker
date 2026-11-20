@@ -206,4 +206,50 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(liveLogs(merged, item.id, "2026-11-20").length, 1);
     assert.equal(liveLogs(merged, item.id).length, 1);
   });
+
+  test("a block deleted on one phone and renamed later on the other keeps its items", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    const item = addCheck(morning);
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", 9, 0);
+    const phoneA = onPhone(base, () => assert.equal(deleteRoutineBlock(app.state, morning), true));
+    pin("2026-11-19", 9, 30);
+    const phoneB = onPhone(base, () => assert.equal(renameRoutineBlock(app.state, morning, "Early routine"), true));
+    const merged = converge(phoneA, phoneB);
+    const block = merged.blocks.find((row) => row.id === morning);
+    assert.equal(isLive(block), true);
+    assert.equal(block.name, "Early routine");
+    assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning && row.itemId === item.id).length, 1);
+    app.state = { dailyRoutines: merged };
+    assert.match(dailyRoutinesHTML(), new RegExp(`data-item-id="${item.id}"`));
+  });
+
+  test("an item deleted on one phone and renamed later on the other keeps its placement", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    const item = addCheck(morning);
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", 9, 0);
+    const phoneA = onPhone(base, () => assert.equal(deleteRoutineItem(app.state, item.id), true));
+    pin("2026-11-19", 9, 30);
+    const phoneB = onPhone(base, () => assert.equal(renameRoutineItem(app.state, item.id, "Example Check C"), true));
+    const merged = converge(phoneA, phoneB);
+    assert.equal(isLive(merged.items.find((row) => row.id === item.id)), true);
+    assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning && row.itemId === item.id).length, 1);
+  });
+
+  test("a later delete still wins over an earlier rename", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addCheck(morning);
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", 9, 0);
+    const phoneB = onPhone(base, () => assert.equal(renameRoutineBlock(app.state, morning, "Early routine"), true));
+    pin("2026-11-19", 9, 30);
+    const phoneA = onPhone(base, () => assert.equal(deleteRoutineBlock(app.state, morning), true));
+    const merged = converge(phoneA, phoneB);
+    assert.equal(isLive(merged.blocks.find((row) => row.id === morning)), false);
+    assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning).length, 0);
+  });
 });
