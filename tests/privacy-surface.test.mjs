@@ -223,7 +223,7 @@ test("the settings backup and the privacy export include the routine layout and 
   const exportStart = actions.indexOf("function exportData");
   const exportBody = actions.slice(exportStart, actions.indexOf("const name =", exportStart));
   assert.match(exportBody, /dailyRoutines: app\.state\.dailyRoutines \|\| null/);
-  assert.match(cloud, /dailyRoutines: app\.state\.dailyRoutines \|\| null/);
+  assert.match(cloud, /dailyRoutines: app\.state\.dailyRoutines \? wellFormedDeep\(app\.state\.dailyRoutines\) : null/);
 
   const data = routineFixture();
   assert.equal(stripRange(data, "2026-11-01", "2026-11-01", { before: 4000, now: 6000 }), true);
