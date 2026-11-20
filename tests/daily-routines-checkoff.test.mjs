@@ -523,7 +523,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("a check-off stays live when a days-ahead tombstone is merged again later", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    addDose(morning);
     const item = app.state.dailyRoutines.items[0];
     const id = routineLogId(item.id, "2026-11-19");
     const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
