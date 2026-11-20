@@ -37,10 +37,64 @@ function num(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function clip(value, max) {
+/* A lone surrogate becomes U+FFFD. Postgres jsonb rejects an unpaired \uD8xx escape, so one
+   broken character would make every later push from this phone fail. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+export function wellFormed(text) {
+  if (typeof text !== "string") return text;
+  if (typeof text.toWellFormed === "function") return text.toWellFormed();
+  return text.replace(LONE_SURROGATE, "\uFFFD");
+}
+
+export function wellFormedDeep(value) {
+  if (typeof value === "string") return wellFormed(value);
+  if (Array.isArray(value)) return value.map(wellFormedDeep);
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  for (const key of Object.keys(value)) {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+    out[wellFormed(key)] = wellFormedDeep(value[key]);
+  }
+  return out;
+}
+
+let graphemes = null;
+function graphemeSegmenter() {
+  if (graphemes === null) {
+    try {
+      graphemes = typeof Intl === "object" && typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : false;
+    } catch (e) {
+      graphemes = false;
+    }
+  }
+  return graphemes;
+}
+
+/* Cuts to at most max UTF-16 units without splitting a character: whole graphemes (emoji, ZWJ
+   sequences, flags) where Intl.Segmenter exists, else whole code points. */
+export function clipText(value, max) {
   if (typeof value !== "string") return "";
-  const text = value.trim();
-  return text.length > max ? text.slice(0, max) : text;
+  const text = wellFormed(value.trim());
+  if (text.length <= max) return text;
+  let out = "";
+  const segmenter = graphemeSegmenter();
+  if (segmenter) {
+    for (const { segment } of segmenter.segment(text)) {
+      if (out.length + segment.length > max) break;
+      out += segment;
+    }
+    if (out) return out.trimEnd();
+  }
+  for (const point of text) {
+    if (out.length + point.length > max) break;
+    out += point;
+  }
+  return out.trimEnd();
+}
+
+function clip(value, max) {
+  return clipText(value, max);
 }
 
 function validDay(value) {
@@ -67,14 +121,13 @@ function amountOf(value) {
 
 function itemKind(value) {
   if (KINDS.has(value)) return value;
-  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 24);
+  if (typeof value === "string" && value.trim()) return clipText(value, 24);
   return "check";
 }
 
 function logStatus(value) {
   if (typeof value !== "string") return "";
-  const text = value.trim();
-  return text ? text.slice(0, 24) : "";
+  return clipText(value, 24);
 }
 
 /* A stamp more than a day ahead is stored as now + 1 day, same window as homeV2. */
@@ -231,7 +284,7 @@ export function emptyDailyRoutines(now = 0) {
 export function normalizeDailyRoutines(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const prefs = normalizePrefs(raw.prefs, now);
-  return {
+  return wellFormedDeep({
     updatedAt: clampStamp(raw.updatedAt, now),
     blocks: normalizeList(raw.blocks, normalizeBlock, now),
     items: normalizeList(raw.items, normalizeItem, now),
@@ -239,7 +292,7 @@ export function normalizeDailyRoutines(raw, now = Date.now()) {
     compounds: normalizeList(raw.compounds, normalizeCompound, now),
     logs: normalizeList(raw.logs, normalizeLog, now),
     prefs,
-  };
+  });
 }
 
 export function isLive(entity) {

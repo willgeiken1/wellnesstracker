@@ -45,6 +45,7 @@ await import("../logger/js/pages/privacy.js");
 await import("../logger/js/shell/actions.js");
 const {
   DEFAULT_ROUTINE_BLOCKS,
+  clipText,
   emptyDailyRoutines,
   isLive,
   liveOf,
@@ -489,4 +490,107 @@ test("the privacy preview counts a live routine log and skips a tombstone", () =
   ]);
   app.state.dailyRoutines.logs[1] = { id: "log-2", day: "2026-11-01", status: "done", updatedAt: 20, deletedAt: 20 };
   assert.match(app.rangePreviewText("2026-11-01", "2026-11-01"), /1 routine log/);
+});
+
+/* Emoji at the clip boundary. A cut through a surrogate pair leaves a lone surrogate, and Postgres jsonb
+   rejects that escape, so every later push from the phone would fail. */
+const THUMB = "\u{1F44D}";
+const THUMB_TONE = "\u{1F44D}\u{1F3FD}";
+const FAMILY = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}";
+const FLAG = "\u{1F1FA}\u{1F1F8}";
+const BOUNDARY_GLYPHS = [THUMB, THUMB_TONE, FAMILY, FLAG];
+
+function wellFormedJson(value) {
+  return JSON.stringify(value).isWellFormed() && !/\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])/i.test(JSON.stringify(value));
+}
+
+test("clipText never splits an emoji, a ZWJ sequence or a flag at the limit", () => {
+  for (const glyph of BOUNDARY_GLYPHS) {
+    for (let lead = 80 - glyph.length - 1; lead <= 80; lead += 1) {
+      const text = `${"a".repeat(lead)}${glyph}tail`;
+      const out = clipText(text, 80);
+      assert.ok(out.length <= 80, `${lead}: length ${out.length}`);
+      assert.ok(out.isWellFormed(), `${lead}: lone surrogate`);
+      const keepsGlyph = lead + glyph.length <= 80;
+      assert.equal(out.startsWith(`${"a".repeat(lead)}${glyph}`), keepsGlyph, `${lead}: whole glyph kept or dropped`);
+      if (!keepsGlyph) assert.equal(out, "a".repeat(lead));
+    }
+  }
+  assert.equal(clipText(`  ${"b".repeat(5)}  `, 80), "bbbbb");
+  assert.equal(clipText(42, 80), "");
+});
+
+test("routine names, units and kinds with emoji at the limit stay well formed through normalize, reload and the account blob", () => {
+  signIn();
+  try {
+    const longName = `${"a".repeat(79)}${FAMILY}`;
+    const store = phoneStore(
+      [item("item-a", longName, 10, { kind: `${"k".repeat(23)}${THUMB}` })],
+      [log("log-1", "2026-11-19", 250, 10, { unit: `${"u".repeat(15)}${FLAG}` })],
+      [compound("compound-a", 250, 10, { name: `${"c".repeat(79)}${THUMB_TONE}`, unit: `${"u".repeat(15)}${THUMB}` })],
+    );
+    store.blocks[0].name = `${"b".repeat(79)}${THUMB}`;
+    store.blocks[0].color = `${"c".repeat(23)}${FLAG}`;
+    assert.equal(app.putDailyRoutines(app.state, store), true);
+    const saved = app.state.dailyRoutines;
+    assert.equal(saved.blocks[0].name, "b".repeat(79));
+    assert.equal(saved.blocks[0].color, "c".repeat(23));
+    assert.equal(saved.items[0].name, "a".repeat(79));
+    assert.equal(saved.items[0].kind, "k".repeat(23));
+    assert.equal(saved.compounds[0].name, "c".repeat(79));
+    assert.equal(saved.compounds[0].unit, "u".repeat(15));
+    assert.equal(saved.logs[0].unit, "u".repeat(15));
+    app.save();
+    const again = app.migrate(JSON.parse(localStorage.getItem(app.KEY)));
+    assert.ok(wellFormedJson(again.dailyRoutines));
+    assert.ok(wellFormedJson(app.userDataBlob()));
+  } finally {
+    signOut();
+  }
+});
+
+test("a whole emoji that fits is kept", () => {
+  const name = `${"a".repeat(80 - FAMILY.length)}${FAMILY}`;
+  const normalized = normalizeDailyRoutines(phoneStore([item("item-a", name, 10)]));
+  assert.equal(normalized.items[0].name, name);
+});
+
+test("a lone surrogate already stored by an older build is replaced before it can reach a push", () => {
+  signIn();
+  try {
+    const broken = `${"a".repeat(79)}\uD83D`;
+    const store = phoneStore([item("item-a", broken, 10, { note: "x\uDC4Dy", ["k\uD83D"]: "v" })]);
+    store.blocks[0].name = `Morning \uD83D routine`;
+    app.state.dailyRoutines = store;
+    const blob = app.userDataBlob();
+    assert.ok(wellFormedJson(blob));
+    assert.equal(blob.dailyRoutines.blocks[0].name, "Morning \uFFFD routine");
+    const normalized = normalizeDailyRoutines(store);
+    assert.ok(wellFormedJson(normalized));
+    assert.equal(normalized.items[0].name, `${"a".repeat(79)}\uFFFD`);
+    assert.equal(normalized.items[0].note, "x\uFFFDy");
+    assert.equal(normalized.items[0]["k\uFFFD"], "v");
+    const merged = mergeDailyRoutines(normalizeDailyRoutines(phoneStore([])), store);
+    assert.ok(wellFormedJson(merged));
+  } finally {
+    app.state.dailyRoutines = null;
+    signOut();
+  }
+});
+
+test("without Intl.Segmenter the clip still keeps whole code points", () => {
+  const storeUrl = new URL("../logger/js/shared/daily-routines-store.js", import.meta.url).href;
+  const script = `
+    delete Intl.Segmenter;
+    const { clipText } = await import(${JSON.stringify(storeUrl)});
+    const out = [
+      clipText("${"a".repeat(79)}\\u{1F44D}", 80),
+      clipText("${"a".repeat(78)}\\u{1F1FA}\\u{1F1F8}", 80),
+      clipText("${"a".repeat(77)}\\u{1F1FA}\\u{1F1F8}", 80),
+    ];
+    process.stdout.write(JSON.stringify(out.map((s) => [s.length, s.isWellFormed()])));
+  `;
+  const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), [[79, true], [80, true], [79, true]]);
 });

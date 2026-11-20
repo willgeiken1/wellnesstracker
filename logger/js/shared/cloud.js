@@ -1,7 +1,7 @@
 import { app } from "../runtime.js";
 import { applyHomeMigration, homeV2Migrated, pickHomeV2 } from "./home-migrate.js";
 import { noteOuraConnected, ouraReturnDialog } from "./oura-gate.js";
-import { mergeDailyRoutines } from "./daily-routines-store.js";
+import { mergeDailyRoutines, wellFormedDeep } from "./daily-routines-store.js";
 
 /* Supabase account, backup, and Oura sync. */
 /* ================= Cloud: account, backup, Oura ================= */
@@ -48,7 +48,7 @@ function userDataBlob() {
   return { machineNotes: app.state.machineNotes || {}, measurements: app.state.measurements || {}, uniEx: app.state.uniEx || {}, layout: app.state.layout || {}, brief: app.state.brief || null, weeklyReports: app.state.weeklyReports || null, muscleMode: app.state.muscleMode, showProgression: app.state.showProgression !== false, settingsAt: app.state.settingsAt || 0, cardio: app.state.cardio ? { ...app.state.cardio, live: null } : null, food: app.state.food, goals: app.state.goals, theme: app.state.theme, profile: app.state.profile, workouts: app.state.workouts, sessions: app.state.sessions, plan: app.state.plan, restSeconds: app.state.restSeconds,
            deleted: app.state.deleted || [], updatedAt: app.state.updatedAt || Date.now(), planAt: app.state.planAt || {},
            appLock: syncedAppLock(app.state.appLock), purges: app.state.purges || [], checkins: app.state.checkins || null, checkinDeleted: app.state.checkinDeleted || [],
-           dailyRoutines: app.state.dailyRoutines || null };
+           dailyRoutines: app.state.dailyRoutines ? wellFormedDeep(app.state.dailyRoutines) : null };
 }
 app.userDataBlob = userDataBlob;
 
