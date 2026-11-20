@@ -516,7 +516,7 @@ test("a purged dose is absent locally, in the account blob, in the backup, and i
   }
 });
 
-test("undo, a range delete, and the server strip keep exactly the tombstone keys", () => {
+test("undo keeps the amount, unit, and note, while a range delete and the server strip keep the tombstone keys", () => {
   const keys = ["day", "deletedAt", "id", "status", "updatedAt"];
   signIn();
   app.sb = null;
@@ -529,7 +529,12 @@ test("undo, a range delete, and the server strip keep exactly the tombstone keys
       log("log-undo", "2026-11-19", 250, 10, { note: "extra dose note" }),
     ]);
     assert.equal(undoRoutineLog(app.state, "log-undo"), true);
-    assert.deepEqual(Object.keys(app.state.dailyRoutines.logs[0]).sort(), keys);
+    const undone = app.state.dailyRoutines.logs[0];
+    assert.equal(undone.undone, true);
+    assert.equal(undone.amount, 250);
+    assert.equal(undone.unit, "mcg");
+    assert.equal(undone.note, "extra dose note");
+    assert.notDeepEqual(Object.keys(undone).sort(), keys);
 
     const range = {
       dailyRoutines: phoneStore([], [
@@ -659,18 +664,21 @@ test("the policy names exactly the keys a real deleted dose log keeps, and no mo
     );
     assert.equal(logRoutineItem(app.state, "item-a"), true);
     const todayId = "log_item-a_2026-11-19";
+    app.state.dailyRoutines.logs.find((row) => row.id === todayId).note = "extra dose note";
     assert.equal(undoRoutineLog(app.state, todayId), true);
     assert.equal(purgeDailyRoutineRange(app.state, "2026-11-01", "2026-11-01", null, 4000), true);
-    const markers = app.state.dailyRoutines.logs.filter((row) => !isLive(row));
-    assert.deepEqual(markers.map((row) => row.id).sort(), ["log_item-a_2026-11-01", todayId]);
+    const undone = app.state.dailyRoutines.logs.find((row) => row.id === todayId);
+    const marker = app.state.dailyRoutines.logs.find((row) => row.id === "log_item-a_2026-11-01");
+    assert.equal(undone.undone, true);
+    assert.equal(undone.amount, 250);
+    assert.equal(undone.unit, "mcg");
+    assert.equal(undone.note, "extra dose note");
+    assert.equal(marker.id.includes("item-a"), true, "the id still links to the item");
 
-    // The policy's list of kept fields: id, day, status, deleted time. updatedAt is the same stamp.
+    // The marker's list of kept fields: id, day, status, deleted time. updatedAt is the same stamp.
     const POLICY_FIELDS = { id: /\bits id\b/, day: /\bthe day\b/, status: /\bits status\b/, deletedAt: /when it was deleted/, updatedAt: null };
     assert.deepEqual(Object.keys(POLICY_FIELDS).sort(), TOMBSTONE_KEYS);
-    for (const marker of markers) {
-      assert.deepEqual(Object.keys(marker).sort(), TOMBSTONE_KEYS);
-      assert.equal(marker.id.includes("item-a"), true, "the id still links to the item");
-    }
+    assert.deepEqual(Object.keys(marker).sort(), TOMBSTONE_KEYS);
 
     const root = new URL("..", import.meta.url);
     const aboutTxt = buildExportFiles(app.state).find((file) => file.name === "about.txt").text;
