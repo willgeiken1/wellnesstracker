@@ -126,7 +126,7 @@ export function openRoutineDetails(itemId, logId) {
   app.ui.sd = {
     itemId: item.id,
     itemName: item.name,
-    kind: item.kind,
+    kind: draft && draft.kind ? draft.kind : item.kind,
     logId: draft ? draft.logId : "",
     compoundId: item.compoundId || (draft && draft.compoundId) || "",
     amount: draft ? draft.amount : "",
