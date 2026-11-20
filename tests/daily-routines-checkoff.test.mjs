@@ -278,7 +278,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("after a two-phone merge one Undo reopens the row, in either merge order", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    assert.equal(addDose(morning), true);
     const item = app.state.dailyRoutines.items[0];
     const phoneB = { dailyRoutines: structuredClone(app.state.dailyRoutines) };
     assert.equal(logRoutineItem(app.state, item.id), true);
@@ -304,7 +304,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("older random-id rows for one item count once, and one Undo removes both", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    assert.equal(addDose(morning), true);
     const item = app.state.dailyRoutines.items[0];
     app.state.dailyRoutines.logs.push(
       logRow("2026-11-19", "done", { id: "log_old_phone_a", itemId: item.id, updatedAt: 5 }),
@@ -323,7 +323,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("a restored rest stays a rest and does not cover an item row", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    assert.equal(addDose(morning), true);
     assert.equal(logRoutineRest(app.state), true);
     const rest = app.state.dailyRoutines.logs.find((row) => row.rest === true);
     assert.equal(rest.id, routineLogId(null, "2026-11-19"));
