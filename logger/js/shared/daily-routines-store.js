@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { attachSupply } from "./routine-supply.js";
 
 /* Daily routines live on the liftlog-v1 blob under `dailyRoutines`.
    `routines` is already the workout-template list. Do not reuse that key.
@@ -203,13 +204,13 @@ function normalizeBlock(raw, now = Date.now()) {
 function normalizeItem(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base) return null;
-  return {
+  return attachSupply({
     ...plainFields(raw),
     ...base,
     name: clip(raw.name, 80),
     kind: itemKind(raw.kind),
     compoundId: typeof raw.compoundId === "string" && raw.compoundId ? raw.compoundId : null,
-  };
+  });
 }
 
 function normalizePlacement(raw, now = Date.now()) {

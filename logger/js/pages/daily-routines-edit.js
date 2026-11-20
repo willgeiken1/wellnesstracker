@@ -13,10 +13,12 @@ import {
   reorderRoutinePlacements,
   restoreRoutineBlock,
   restoreRoutineItem,
+  routineClock,
   routineItemDraft,
   saveRoutineItem,
   setRoutineBlockColor,
 } from "./daily-routines.js";
+import { supplyDraftError } from "../shared/routine-supply.js";
 
 /* Block and item editing. Logging stays a tap on the row.
    Drag follows home-drag.js: a handle starts the drag, the card uses
@@ -161,8 +163,17 @@ export function commitRoutineItemSheet() {
   if (!sd) return false;
   const nameEl = typeof app.$ === "function" ? app.$("#dr-item-name") : null;
   const amountEl = typeof app.$ === "function" ? app.$("#dr-item-amount") : null;
+  const onHandEl = typeof app.$ === "function" ? app.$("#dr-item-on-hand") : null;
+  const mixedEl = typeof app.$ === "function" ? app.$("#dr-item-mixed-on") : null;
   if (nameEl) sd.name = nameEl.value;
   if (amountEl) sd.amount = amountEl.value;
+  if (onHandEl && typeof onHandEl.value === "string") sd.onHand = onHandEl.value;
+  if (mixedEl && typeof mixedEl.value === "string") sd.mixedOn = mixedEl.value;
+  const supplyProblem = supplyDraftError(sd, routineClock().day);
+  if (supplyProblem) {
+    if (typeof app.toast === "function") app.toast(supplyProblem);
+    return false;
+  }
   if (!saveRoutineItem(app.state, sd)) {
     if (typeof app.toast === "function") app.toast(sd.kind === "dose" ? "Add a name, an amount, and a unit." : "Add a name.");
     return false;
@@ -184,6 +195,7 @@ export function routineItemSheetHTML() {
   const units = ROUTINE_DOSE_UNITS.map((unit) => `<button type="button" class="dr-unit" data-action="routines-item-unit" data-unit="${esc(unit)}" aria-pressed="${sd.unit === unit ? "true" : "false"}">${esc(unit)}</button>`).join("");
   const quarters = QUARTERS.map((chip) => `<button type="button" class="dr-quarter" data-action="routines-item-quarter" data-amount="${chip.value}" aria-pressed="${amount === chip.value ? "true" : "false"}" aria-label="${chip.value}">${chip.label}</button>`).join("");
   const blocks = (view.blocks || []).map((block) => `<button type="button" class="dr-block-pick" data-action="routines-item-block" data-block-id="${esc(block.id)}" aria-pressed="${selected.has(block.id) ? "true" : "false"}">${esc(block.name)}</button>`).join("");
+  const today = routineClock().day;
   const dose = kind === "dose" ? `<label class="field-label" for="dr-item-amount">Amount</label>
     <input class="text-in" id="dr-item-amount" inputmode="decimal" autocomplete="off" enterkeyhint="done" value="${esc(sd.amount || "")}">
     <span class="field-label" id="dr-quarter-label">Quarter amounts</span>
@@ -191,6 +203,13 @@ export function routineItemSheetHTML() {
     <span class="field-label" id="dr-unit-label">Unit</span>
     <div class="dr-units" role="group" aria-labelledby="dr-unit-label">${units}</div>
     <p class="sub">The amount and unit are what you type. Nothing here suggests a dose.</p>` : "";
+  const mixed = kind === "dose" ? `<label class="field-label" for="dr-item-mixed-on">Mixed on, optional</label>
+    <input class="text-in" id="dr-item-mixed-on" type="date" autocomplete="off" max="${esc(today)}" value="${esc(sd.mixedOn || "")}">
+    <p class="sub">Leave this blank unless a vial was mixed. It shows how many days ago.</p>` : "";
+  const supply = `<label class="field-label" for="dr-item-on-hand">On hand, optional</label>
+    <input class="text-in" id="dr-item-on-hand" inputmode="numeric" autocomplete="off" enterkeyhint="done" value="${esc(sd.onHand || "")}">
+    <p class="sub">Leave this blank to hide it. Days left uses this count and the days you logged.</p>
+    ${mixed}`;
   const remove = sd.itemId
     ? `<button type="button" class="btn block" data-action="routines-delete-item" data-item-id="${esc(sd.itemId)}">Remove from all routines</button>`
     : "";
@@ -203,6 +222,7 @@ export function routineItemSheetHTML() {
       <button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>
     </div>
     ${dose}
+    ${supply}
     <span class="field-label" id="dr-blocks-label">Routines</span>
     <div class="dr-block-picks" role="group" aria-labelledby="dr-blocks-label">${blocks}</div>
     <p class="sub">The same item can sit in more than one routine. Logging it once covers all of them.</p>

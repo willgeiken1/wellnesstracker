@@ -18,6 +18,7 @@ import {
   upsertEntity,
 } from "../shared/daily-routines-store.js";
 import { nextDoseCountdown } from "../shared/routine-dose.js";
+import { routineSupplyView, supplyFromDraft } from "../shared/routine-supply.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -415,6 +416,52 @@ function countdownMarkup(projected, row, date, day) {
   const text = doseCountdownText(projected, row.item, date, day);
   if (!text) return "";
   return `<span class="dr-next-dose" data-next-dose="${result.waitMin}">${esc(text)}</span>`;
+}
+
+const OVERDUE_ICON = `<svg class="dr-overdue-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16.2h.01"/></svg>`;
+const DONE_MARK = `<svg class="dr-all-done-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.2 16.7 19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function overdueMarkup() {
+  return `<span class="dr-overdue">${OVERDUE_ICON}<span class="dr-overdue-text">overdue</span></span>`;
+}
+
+function latestTakenLog(logs, itemId) {
+  const rows = (Array.isArray(logs) ? logs : []).filter((log) => {
+    if (!isLive(log) || log.itemId !== itemId || log.rest === true) return false;
+    if (log.status !== "done" && log.status !== "partial") return false;
+    return typeof log.at === "number" && log.at > 0;
+  });
+  rows.sort((a, b) => {
+    if (a.day !== b.day) return a.day < b.day ? 1 : -1;
+    if (a.at !== b.at) return b.at - a.at;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  return rows[0] || null;
+}
+
+/* An open row that is still upcoming shows the countdown. A taken row shows
+   the clock time stored on that log. Overdue replaces the countdown and
+   keeps a previous clock time when one exists. */
+function rowDetailMarkup(projected, row, date, day) {
+  const open = !!row.open;
+  const timing = open && row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const state = open ? "open" : rowState(row.log);
+  const overdue = open && timing.overdue;
+  const countdown = !overdue && state !== "done" && state !== "partial" ? countdownMarkup(projected, row, date, day) : "";
+  const taken = state === "done" || state === "partial" ? row.log : (!countdown && row.item ? latestTakenLog(projected && projected.logs, row.item.id) : null);
+  const last = !countdown ? lastDoseLabel(taken) : "";
+  const lastHTML = last ? `<span class="dr-last">${esc(last)}</span>` : "";
+  const tag = overdue ? overdueMarkup() : "";
+  const supply = supplyMarkup(projected, row, day);
+  if (!tag && !countdown && !lastHTML && !supply) return "";
+  return `<span class="dr-meta">${tag}${countdown}${lastHTML}${supply}</span>`;
+}
+
+function supplyMarkup(projected, row, day) {
+  if (!row || !row.item) return "";
+  const supply = routineSupplyView({ item: row.item, logs: projected && projected.logs, today: day });
+  if (!supply.text) return "";
+  return `<span class="dr-supply" data-supply="${esc(supply.state)}">${esc(supply.text)}</span>`;
 }
 
 function rowState(log) {
@@ -1184,7 +1231,8 @@ function placeInBlock(store, blockId, itemId, at) {
 }
 
 /* Custom items only. Evidence from the draft is ignored. A dose stores the
-   amount and unit on its compound. Logs are not rewritten. */
+   amount and unit on its compound. Optional on-hand count and mixed-on date
+   live on the item. A blank value clears that field. Logs are not rewritten. */
 export function saveRoutineItem(state, draft) {
   const name = cleanName(draft && draft.name);
   const kind = draft && (draft.kind === "dose" || draft.kind === "check") ? draft.kind : "";
@@ -1208,8 +1256,11 @@ export function saveRoutineItem(state, draft) {
     }
     const kept = { ...(existing || {}) };
     delete kept.evidence;
+    const supply = supplyFromDraft(draft, kind, clock.day);
+    if (!supply) return null;
     next = upsertEntity(next, "items", {
       ...kept,
+      ...supply,
       id: itemId,
       name,
       kind,
@@ -1251,6 +1302,8 @@ export function routineItemDraft(state, source) {
     kind,
     amount: kind === "dose" && compound && typeof compound.amount === "number" ? String(compound.amount) : "",
     unit: compound && DOSE_UNIT_SET.has(compound.unit) ? compound.unit : "mcg",
+    onHand: item && Number.isInteger(item.onHand) ? String(item.onHand) : "",
+    mixedOn: item && typeof item.mixedOn === "string" ? item.mixedOn : "",
     blockIds,
   };
 }
@@ -1441,15 +1494,17 @@ function openRowHTML(row, projected, date, day) {
   </li>`;
 }
 
-function editRowHTML(row) {
+function editRowHTML(row, projected, day) {
   const dose = doseText(row);
   const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+  const supply = supplyMarkup(projected, row, day);
   const id = placementId(row);
   const state = row.open ? "open" : rowState(row.log);
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
       <span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}
+      ${supply}
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
   </li>`;
@@ -1486,7 +1541,7 @@ export function routineBlockTileHTML(block, projected, view) {
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
-    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
+    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row, projected, day) : openRowHTML(row, projected, date, day)).join("")}</ul>`
     : "";
   const reveal = !editing && !collapsed && done.length
     ? `<button type="button" class="dr-reveal" data-action="routines-reveal" data-block-id="${esc(block.id)}" aria-expanded="${revealed ? "true" : "false"}">${revealed ? "Hide" : "Show"} ${done.length === 1 ? "1 completed" : `${done.length} completed`}</button>`
