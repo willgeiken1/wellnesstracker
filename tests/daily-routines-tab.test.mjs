@@ -307,6 +307,8 @@ test("signed out with the flag on asks for sign-in and creates no store", () => 
   const html = dailyRoutinesHTML();
   assert.match(html, /data-routines-shell="signed-out"/);
   assert.match(html, /Sign in to use Routines/);
+  assert.match(html, /Sign in to see and change your routines/);
+  assert.doesNotMatch(html, /Nothing is saved on this phone/);
   assert.match(html, /data-action="auth-open"/);
   assert.doesNotMatch(html, /Morning routine/);
   assert.equal(state.dailyRoutines, null);
