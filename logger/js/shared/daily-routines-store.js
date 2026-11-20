@@ -354,6 +354,50 @@ function mergePrefs(local, remote, now) {
   return stableStringify(left) >= stableStringify(right) ? left : right;
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function logDecisionStamp(log) {
+  return Math.max(num(log && log.updatedAt), num(log && log.deletedAt));
+}
+
+/* One live log per item per day. A later stamp wins. An equal stamp keeps the
+   greater stable JSON. The other log becomes a tombstone newer than both
+   copies, so the next merge cannot bring it back. Rest logs are not item logs. */
+function reconcileItemDayLogs(logs) {
+  const groups = new Map();
+  for (const log of logs) {
+    if (!isLive(log) || log.rest === true) continue;
+    if (typeof log.itemId !== "string" || !log.itemId || typeof log.day !== "string" || !log.day) continue;
+    const key = `${log.itemId}\n${log.day}`;
+    const list = groups.get(key);
+    if (list) list.push(log);
+    else groups.set(key, [log]);
+  }
+  const replace = new Map();
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    let winner = list[0];
+    for (const log of list.slice(1)) {
+      const left = logDecisionStamp(log);
+      const right = logDecisionStamp(winner);
+      if (left > right || (left === right && stableJson(log) > stableJson(winner))) winner = log;
+    }
+    const at = list.reduce((max, log) => Math.max(max, logDecisionStamp(log)), 0) + 1;
+    for (const log of list) {
+      if (log.id === winner.id) continue;
+      replace.set(log.id, { id: log.id, day: log.day, status: log.status, updatedAt: at, deletedAt: at });
+    }
+  }
+  if (!replace.size) return logs;
+  return logs.map((log) => replace.get(log.id) || log);
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
   const left = normalizeDailyRoutines(local, now);
   const right = normalizeDailyRoutines(remote, now);
@@ -366,7 +410,7 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
     items: mergeEntityLists(left.items, right.items, now),
     placements: collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)),
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
-    logs: mergeEntityLists(left.logs, right.logs, now),
+    logs: reconcileItemDayLogs(mergeEntityLists(left.logs, right.logs, now)),
     prefs: mergePrefs(left.prefs, right.prefs, now),
   };
 }
