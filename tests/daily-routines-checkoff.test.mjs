@@ -359,6 +359,27 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.match(html, /data-streak="3"/);
     assert.match(html, /data-logged="0"/);
     assert.doesNotMatch(html, /<b>250<\/b>/);
+    assert.doesNotMatch(html, /250 mcg/);
+  });
+
+  test("a completed row shows the logged amount, not the current compound amount", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id);
+    log.status = "partial";
+    log.amount = 125;
+    log.unit = "mcg";
+    const compound = app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId);
+    compound.amount = 250;
+    toggleRoutineReveal(app.state, morning);
+    const html = dailyRoutinesHTML();
+    assert.match(html, /data-state="partial"/);
+    assert.match(html, / · 125 mcg/);
+    assert.doesNotMatch(html, /250 mcg/);
+    assert.match(html, /data-logged="1"/);
   });
 
   test("a quarter amount stays a number and still counts as one dose", () => {
