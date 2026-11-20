@@ -519,7 +519,14 @@ begin
     end if;
   end if;
 
-  row := public.daily_routines_plain(p_row) || jsonb_build_object(
+  -- plain() drops constructor / prototype / __proto__. Skip the scan when
+  -- those keys are absent, which is every normal row.
+  if p_row ? '__proto__' or p_row ? 'constructor' or p_row ? 'prototype' then
+    row := public.daily_routines_plain(p_row);
+  else
+    row := p_row;
+  end if;
+  row := row || jsonb_build_object(
     'id', id,
     'updatedAt', public.daily_routines_json_number(updated_at),
     'deletedAt', case
