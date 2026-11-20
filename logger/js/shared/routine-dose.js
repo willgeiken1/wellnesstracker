@@ -51,10 +51,26 @@ function coversDay(log, itemId, day) {
   return log.status === "done" || log.status === "partial" || log.status === "skipped";
 }
 
+function shiftCalendarDay(day, delta) {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  return localCalendarDay(new Date(year, month - 1, date + delta));
+}
+
+/* A start before the rollover hour falls on the next calendar morning and
+   still belongs to the routine day that began the previous morning. */
+function routineDayOfStart(calendarDay, startMin, boundaryMin) {
+  if (startMin >= boundaryMin) return calendarDay;
+  return shiftCalendarDay(calendarDay, -1);
+}
+
 /* Minutes until the next block time for this item.
-   A log today, including a skip, uses tomorrow's earliest time.
-   Hours come from the Date's local clock, not its UTC fields. */
-export function nextDoseCountdown({ item, blocks, placements, logs, date, day }) {
+   A log for this routine day, including a skip, moves the countdown to the
+   next routine day's start. That start can be later this calendar morning
+   when the clock is still before the rollover hour. Hours come from the
+   Date's local clock, not its UTC fields. */
+export function nextDoseCountdown({ item, blocks, placements, logs, date, day, hour }) {
   if (!item || item.kind !== "dose" || typeof item.id !== "string" || !item.id) return null;
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
   if (typeof day !== "string" || !DAY.test(day)) return null;
@@ -71,18 +87,25 @@ export function nextDoseCountdown({ item, blocks, placements, logs, date, day })
     if (typeof start === "number") starts.push(start);
   }
   if (!starts.length) return null;
-  starts.sort((a, b) => a - b);
+  const boundaryMin = routineDayRolloverHour(hour) * 60;
   const nowMin = date.getHours() * 60 + date.getMinutes();
+  const calendarDay = localCalendarDay(date);
   const logged = (Array.isArray(logs) ? logs : []).some((log) => coversDay(log, item.id, day));
-  let target = null;
-  if (!logged) {
-    for (const start of starts) {
-      if (start >= nowMin) {
-        target = start;
-        break;
-      }
+  const due = [];
+  const later = [];
+  for (const start of starts) {
+    for (let ahead = 0; ahead <= 2; ahead += 1) {
+      const minutes = start + ahead * 24 * 60;
+      if (minutes < nowMin) continue;
+      const instantDay = ahead === 0 ? calendarDay : shiftCalendarDay(calendarDay, ahead);
+      const belongs = routineDayOfStart(instantDay, start, boundaryMin);
+      const candidate = { waitMin: minutes - nowMin, belongs };
+      if (belongs === day) due.push(candidate);
+      else if (belongs > day) later.push(candidate);
     }
   }
-  if (target == null) target = starts[0] + 24 * 60;
-  return { waitMin: target - nowMin, tomorrow: target >= 24 * 60 };
+  const pool = !logged && due.length ? due : later;
+  if (!pool.length) return null;
+  pool.sort((a, b) => a.waitMin - b.waitMin);
+  return { waitMin: pool[0].waitMin, tomorrow: pool[0].belongs !== day };
 }

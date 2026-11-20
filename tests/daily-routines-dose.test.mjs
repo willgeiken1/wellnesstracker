@@ -284,7 +284,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
       date: atFour,
       day: "2026-11-18",
     });
-    assert.equal(logged.waitMin, 1500);
+    // Nov 18 is already covered, and Nov 19's 5:00 AM dose is one hour away.
+    assert.equal(logged.waitMin, 60);
     const skipped = nextDoseCountdown({
       item,
       blocks: morning,
