@@ -403,6 +403,45 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.doesNotMatch(html, /data-action="routines-log"/);
   });
 
+  test("a preference toggle keeps a newer store stamp, and the next check-off beats the tombstone", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    const ahead = Date.parse("2026-11-19T18:00:00Z");
+    const behind = Date.parse("2026-11-19T08:30:00Z");
+    const id = routineLogId(item.id, "2026-11-19");
+    app.state.dailyRoutines.updatedAt = ahead;
+    app.state.dailyRoutines.prefs = { ...app.state.dailyRoutines.prefs, updatedAt: 10, focusMode: false };
+    app.state.dailyRoutines.logs.push({
+      id,
+      itemId: item.id,
+      day: "2026-11-19",
+      status: "done",
+      amount: null,
+      unit: "",
+      updatedAt: ahead,
+      deletedAt: ahead,
+    });
+    app.routineNow = () => new Date(behind);
+    const otherPhone = structuredClone(app.state.dailyRoutines);
+    assert.equal(toggleRoutineFocus(app.state), true);
+    assert.equal(app.state.dailyRoutines.prefs.focusMode, true);
+    assert.ok(app.state.dailyRoutines.updatedAt > ahead);
+    assert.ok(app.state.dailyRoutines.prefs.updatedAt > ahead);
+    assert.equal(toggleRoutineReveal(app.state, morning), true);
+    assert.ok(app.state.dailyRoutines.updatedAt > ahead);
+    app.state.dailyRoutines.updatedAt = behind;
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = app.state.dailyRoutines.logs.find((row) => row.id === id);
+    assert.equal(isLive(log), true);
+    assert.ok(log.updatedAt > ahead);
+    const merged = mergeDailyRoutines(app.state.dailyRoutines, otherPhone);
+    const kept = merged.logs.find((row) => row.id === id);
+    assert.equal(isLive(kept), true);
+    assert.ok(kept.updatedAt > ahead);
+  });
+
   test("focus mode dims every block except the current one", () => {
     signIn("2026-11-19");
     app.routineNow = () => new Date(2026, 10, 19, 14, 30);

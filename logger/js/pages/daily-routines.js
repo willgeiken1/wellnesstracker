@@ -81,6 +81,30 @@ function stampAfter(now, previous) {
   return next > 0 ? next : 1;
 }
 
+function maxStamp(...values) {
+  let best = 0;
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value) && value > best) best = value;
+  }
+  return best;
+}
+
+function existingLogStamp(store, id) {
+  const log = (store.logs || []).find((row) => row && row.id === id);
+  if (!log) return 0;
+  return maxStamp(log.updatedAt, log.deletedAt);
+}
+
+/* A replacement has to beat the row it replaces, including a tombstone,
+   and the store clock. A preference edit must not rewind that clock. */
+function writeStamp(store, clock, id) {
+  return stampAfter(clock.now, maxStamp(store.updatedAt, existingLogStamp(store, id)));
+}
+
+function prefStamp(store, clock) {
+  return stampAfter(clock.now, maxStamp(store.updatedAt, store.prefs && store.prefs.updatedAt));
+}
+
 export function routineSlotIndex(date) {
   const hour = date.getHours();
   if (hour >= 5 && hour < 12) return 0;
@@ -284,8 +308,8 @@ export function logRoutineItem(state, itemId) {
     const item = (view.items || []).find((row) => row.id === itemId);
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
     const compound = compoundFor(view, item);
-    const at = stampAfter(clock.now, store.updatedAt);
     const id = routineLogId(item.id, clock.day);
+    const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", {
       id,
       itemId: item.id,
@@ -308,8 +332,8 @@ export function skipRoutineItem(state, itemId) {
     const view = projectDailyRoutines(store);
     const item = (view.items || []).find((row) => row.id === itemId);
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
-    const at = stampAfter(clock.now, store.updatedAt);
     const id = routineLogId(item.id, clock.day);
+    const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", {
       id,
       itemId: item.id,
@@ -398,8 +422,8 @@ export function logRoutineRest(state) {
     if (!DAY.test(clock.day)) return null;
     const view = projectDailyRoutines(store);
     if ((view.logs || []).some((log) => log.rest === true && log.day === clock.day)) return null;
-    const at = stampAfter(clock.now, store.updatedAt);
     const id = routineLogId(null, clock.day);
+    const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", {
       id,
       itemId: null,
@@ -418,7 +442,7 @@ export function logRoutineRest(state) {
 
 export function toggleRoutineFocus(state) {
   return withStore(state, (store, clock) => {
-    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    const at = prefStamp(store, clock);
     store.prefs = { ...store.prefs, focusMode: !(store.prefs && store.prefs.focusMode === true), updatedAt: at };
     store.updatedAt = at;
     return store;
@@ -433,7 +457,7 @@ export function toggleRoutineReveal(state, blockId) {
       ? store.prefs.revealBlocks.filter((id) => typeof id === "string" && id)
       : [];
     const revealBlocks = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
-    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    const at = prefStamp(store, clock);
     store.prefs = { ...store.prefs, revealBlocks, updatedAt: at };
     store.updatedAt = at;
     return store;
