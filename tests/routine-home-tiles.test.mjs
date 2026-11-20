@@ -434,6 +434,35 @@ test("a tile jump opens a collapsed routine before the tab renders", () => {
   assert.equal(saves, again);
 });
 
+test("a tile jump scrolls the routine row, not the Home log button", () => {
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.today = () => "2026-11-20";
+  app.state = sampleState();
+  app.goTab = () => {};
+  const scrolled = [];
+  const pane = {
+    querySelector(selector) {
+      scrolled.push(selector);
+      return { scrollIntoView() { scrolled.push("pane"); } };
+    },
+  };
+  const previous = globalThis.document;
+  globalThis.document = {
+    querySelector(selector) {
+      if (selector === "#pane-daily-routines") return pane;
+      if (selector.includes("item-a")) scrolled.push("home");
+      return null;
+    },
+  };
+  try {
+    assert.equal(openRoutineTile(routineItemTileId("item-a")), true);
+    assert.deepEqual(scrolled, [`.dr-row[data-item-id="item-a"]`, "pane"]);
+  } finally {
+    globalThis.document = previous;
+  }
+});
+
 test("stacks and the long-press preview are not wired, and the shell cache is unchanged", () => {
   const root = new URL("../logger/", import.meta.url);
   const read = (path) => readFileSync(new URL(path, root), "utf8");
