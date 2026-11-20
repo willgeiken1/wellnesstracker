@@ -444,6 +444,62 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(removed.placements.filter((row) => isLive(row) && row.itemId === item.id).length, 0);
   });
 
+  test("a newer block rename beats the other phone's block delete and keeps placements", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "check" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const before = structuredClone(app.state.dailyRoutines);
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(deleteRoutineBlock(app.state, morning), true);
+    const deleted = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(before);
+    app.routineNow = () => new Date(2026, 10, 19, 10, 0);
+    assert.equal(renameRoutineBlock(app.state, morning, "Early routine"), true);
+    const renamed = structuredClone(app.state.dailyRoutines);
+    for (const merged of [mergeDailyRoutines(deleted, renamed), mergeDailyRoutines(renamed, deleted)]) {
+      const block = merged.blocks.find((row) => row.id === morning);
+      assert.equal(isLive(block), true);
+      assert.equal(block.name, "Early routine");
+      const view = projectDailyRoutines(merged);
+      assert.equal(view.placements.filter((row) => row.blockId === morning && row.itemId === item.id).length, 1);
+      assert.ok(view.items.some((row) => row.id === item.id));
+    }
+    app.state.dailyRoutines = structuredClone(renamed);
+    app.routineNow = () => new Date(2026, 10, 19, 11, 0);
+    assert.equal(deleteRoutineBlock(app.state, morning), true);
+    const later = mergeDailyRoutines(app.state.dailyRoutines, renamed);
+    assert.equal(isLive(later.blocks.find((row) => row.id === morning)), false);
+    assert.equal(later.placements.filter((row) => isLive(row) && row.blockId === morning).length, 0);
+  });
+
+  test("the later membership edit keeps the blocks it still uses", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    const night = blockId("Night routine");
+    assert.equal(saveRoutineItem(app.state, {
+      name: "Example Compound A", kind: "check", blockId: morning, blockIds: [morning, night],
+    }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const before = structuredClone(app.state.dailyRoutines);
+    const draft = (kept, blockIds) => ({ itemId: item.id, name: item.name, kind: "check", blockId: kept, blockIds });
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(saveRoutineItem(app.state, draft(morning, [morning])), true);
+    const keepMorning = structuredClone(app.state.dailyRoutines);
+    const morningPlace = keepMorning.placements.find((row) => isLive(row) && row.blockId === morning && row.itemId === item.id);
+    assert.ok(morningPlace.updatedAt > before.placements.find((row) => row.blockId === morning && row.itemId === item.id).updatedAt);
+    app.state.dailyRoutines = structuredClone(before);
+    app.routineNow = () => new Date(2026, 10, 19, 10, 0);
+    assert.equal(saveRoutineItem(app.state, draft(night, [night])), true);
+    const keepNight = structuredClone(app.state.dailyRoutines);
+    for (const merged of [mergeDailyRoutines(keepMorning, keepNight), mergeDailyRoutines(keepNight, keepMorning)]) {
+      const view = projectDailyRoutines(merged);
+      const places = view.placements.filter((row) => row.itemId === item.id);
+      assert.deepEqual(places.map((row) => row.blockId), [night]);
+      assert.ok(view.items.some((row) => row.id === item.id));
+    }
+  });
+
   test("converting a dose to a check stops new logs from keeping the old amount", () => {
     signIn();
     const morning = blockId("Morning routine");

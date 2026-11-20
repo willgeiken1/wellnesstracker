@@ -426,6 +426,22 @@ function reconcileItemPlacementTombstones(items, placements) {
   });
 }
 
+/* A block delete tombstones that block's placements with removedWith set to
+   the block id. A newer rename or recolor keeps the block, so those
+   placements come back. A placement removed on its own stays gone. */
+function reconcileBlockPlacementTombstones(blocks, placements) {
+  const liveBlocks = new Map();
+  for (const block of blocks || []) {
+    if (isLive(block)) liveBlocks.set(block.id, block);
+  }
+  return (placements || []).map((place) => {
+    if (!place || isLive(place) || place.removedWith !== place.blockId) return place;
+    const block = liveBlocks.get(place.blockId);
+    if (!block || rowStamp(block) <= rowStamp(place)) return place;
+    return { ...place, deletedAt: null, updatedAt: rowStamp(block) };
+  });
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
   const left = normalizeDailyRoutines(local, now);
   const right = normalizeDailyRoutines(remote, now);
@@ -433,10 +449,11 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
   if (!left) return right;
   if (!right) return left;
   const items = mergeEntityLists(left.items, right.items, now);
-  const placements = reconcileItemPlacementTombstones(items, collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)));
+  const blocks = mergeEntityLists(left.blocks, right.blocks, now);
+  const placements = reconcileBlockPlacementTombstones(blocks, reconcileItemPlacementTombstones(items, collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now))));
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
-    blocks: mergeEntityLists(left.blocks, right.blocks, now),
+    blocks,
     items,
     placements,
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
