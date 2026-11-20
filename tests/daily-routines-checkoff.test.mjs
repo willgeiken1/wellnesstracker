@@ -441,7 +441,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("a preference toggle keeps a newer store stamp, and the next check-off beats the tombstone", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    assert.equal(addDose(morning), true);
     const item = app.state.dailyRoutines.items[0];
     const ahead = Date.parse("2026-11-19T18:00:00Z");
     const behind = Date.parse("2026-11-19T08:30:00Z");
