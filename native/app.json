@@ -223,6 +223,14 @@
           "NSHealthUpdateUsageDescription": false,
           "background": false
         }
+      ],
+      [
+        "./plugins/withSentryUploads",
+        {
+          "url": "https://sentry.io/",
+          "organization": "insight-0j",
+          "project": "insight-app"
+        }
       ]
     ],
     "extra": {
