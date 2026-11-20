@@ -147,12 +147,14 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(routineStreak(logs, "2026-11-19"), 2);
   });
 
-  test("a rest log keeps the streak and is not a dose", () => {
+  test("a rest log pauses the streak and is not a dose", () => {
     const logs = [
       logRow("2026-11-18", "done", { id: "d18" }),
       logRow("2026-11-19", "done", { id: "rest", itemId: null, rest: true, amount: 80 }),
     ];
-    assert.equal(routineStreak(logs, "2026-11-19"), 2);
+    assert.equal(routineStreak(logs, "2026-11-19"), 1);
+    assert.notEqual(routineStreak(logs, "2026-11-19"), 2);
+    assert.notEqual(routineStreak(logs, "2026-11-19"), 0);
     assert.equal(loggedTodayCount(logs, "2026-11-19"), 0);
   });
 
