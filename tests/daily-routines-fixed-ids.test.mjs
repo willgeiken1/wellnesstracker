@@ -252,4 +252,40 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(isLive(merged.blocks.find((row) => row.id === morning)), false);
     assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === morning).length, 0);
   });
+
+  test("editing the day of a dose logged before the item became a check keeps the amount", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    const item = addDose(morning);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    pin("2026-11-19", 9, 0);
+    assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: item.name, kind: "check", blockId: morning, blockIds: [morning] }), true);
+    const draft = routineLogDraft(app.state, log.id);
+    assert.equal(draft.amount, "250");
+    pin("2026-11-19", 9, 10);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: draft.amount, day: "2026-11-18" }), true);
+    const moved = app.state.dailyRoutines.logs.find((row) => row.day === "2026-11-18" && row.itemId === item.id);
+    assert.equal(moved.amount, 250);
+    assert.equal(moved.unit, "mcg");
+    assert.equal(moved.status, "done");
+    assert.equal(draft.kind, "dose");
+  });
+
+  test("editing the day of a check logged before the item became a dose needs no amount", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    const item = addCheck(morning);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    pin("2026-11-19", 9, 0);
+    assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: item.name, kind: "dose", amount: 250, unit: "mcg", blockId: morning, blockIds: [morning] }), true);
+    const draft = routineLogDraft(app.state, log.id);
+    pin("2026-11-19", 9, 10);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: "", day: "2026-11-18" }), true);
+    const moved = app.state.dailyRoutines.logs.find((row) => row.day === "2026-11-18" && row.itemId === item.id);
+    assert.equal(moved.amount, null);
+    assert.equal(moved.unit, "");
+    assert.equal(draft.kind, "check");
+  });
 });
