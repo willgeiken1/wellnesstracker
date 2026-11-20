@@ -127,6 +127,46 @@ export function routineTileOnNow(id, layout, date) {
   return tileGateVisible(gate, date);
 }
 
+function gatedIds(layout) {
+  if (!layout || typeof layout !== "object") return [];
+  const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
+  const items = Array.isArray(layout.items) ? layout.items : [];
+  const ids = [];
+  items.forEach((id) => {
+    if (typeof id !== "string" || hidden.has(id) || !isRoutineTileId(id)) return;
+    if (!normalizeTileGate(layout.routineGates && layout.routineGates[id])) return;
+    ids.push(id);
+  });
+  if (layout.routineNextAside === true && !items.includes(NEXT_UP_TILE_ID) && !hidden.has(NEXT_UP_TILE_ID)) {
+    if (normalizeTileGate(layout.routineGates && layout.routineGates[NEXT_UP_TILE_ID])) ids.push(NEXT_UP_TILE_ID);
+  }
+  return ids;
+}
+
+/* Ids whose clock window is open. Tiles without a window are omitted, so the
+   signature changes only when a gate opens or closes. */
+export function routineGateSignature(layout, date) {
+  return gatedIds(layout).filter((id) => routineTileOnNow(id, layout, date)).join("\n");
+}
+
+export function routineGateRefresh(previous, layout, date) {
+  const signature = routineGateSignature(layout, date);
+  return { signature, changed: previous != null && previous !== signature };
+}
+
+/* Called from the rest timer while Home is on screen. The first look records
+   the open gates and does not paint. A later look paints only when a window
+   has opened or closed. */
+export function refreshHomeRoutineGates() {
+  if (app.ROUTINES_ENABLED !== true || !app.ui || app.ui.tab !== "home" || app.ui.homeEdit || app.ui.sheet) return false;
+  const layout = app.state && app.state.layout && app.state.layout.homeV2;
+  const result = routineGateRefresh(app.routineGateShown, layout, paintDate());
+  app.routineGateShown = result.signature;
+  if (!result.changed) return false;
+  if (typeof app.render === "function") app.render();
+  return true;
+}
+
 function routinesView(state) {
   return projectDailyRoutines(state && state.dailyRoutines) || {
     blocks: [], items: [], placements: [], compounds: [], logs: [], prefs: {},
@@ -556,6 +596,7 @@ app.routineTrayHTML = routineTrayHTML;
 app.addRoutineTile = addRoutineTile;
 app.openRoutineTile = openRoutineTile;
 app.forgetRoutineTrayQuery = forgetRoutineTrayQuery;
+app.refreshHomeRoutineGates = refreshHomeRoutineGates;
 app.hideLegacyNextUp = hideLegacyNextUp;
 app.showLegacyNextUp = showLegacyNextUp;
 app.revealRoutineJump = revealRoutineJump;
