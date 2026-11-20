@@ -1541,10 +1541,19 @@ export function routineBlockTilesHTML(projected, date) {
   return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>`;
 }
 
+/* Discover stays closed. The top button and the empty state both open the
+   coming-soon sheet. There is no library, no seed row, and no recommendation. */
+function discoverEntryHTML() {
+  return `<button type="button" class="dr-discover" data-action="routines-discover" data-routines-discover="entry">
+    <span class="dr-discover-name">Discover</span>
+    <span class="dr-discover-soon">Coming soon</span>
+  </button>`;
+}
+
 function emptyDiscoverHTML() {
-  return `<section class="dr-empty">
-    <h2>Add the first item</h2>
-    <p>Discover will list entries from real studies. Nothing is added until you choose it.</p>
+  return `<section class="dr-empty" data-routines-discover="empty">
+    <h2>Coming soon</h2>
+    <p>Discover stays closed until cited entries are ready. Nothing is listed here.</p>
     <button type="button" class="btn primary block" data-action="routines-discover">Discover</button>
   </section>`;
 }
@@ -1594,6 +1603,7 @@ function paintShell(view, date) {
   const announce = app.ui && app.ui.routineAnnounce ? app.ui.routineAnnounce : "";
   return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
     ${pageHeader("Routines", sub, headerTools())}
+    ${discoverEntryHTML()}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
@@ -1699,8 +1709,8 @@ export function routinesSettingsSheetHTML() {
 }
 
 export function routinesDiscoverSheetHTML() {
-  return `<h3>Discover</h3>
-    <p class="sub">Study-backed entries are not in the app yet. This does not add an item, and it does not suggest a dose.</p>
+  return `<h3>Coming soon</h3>
+    <p class="sub">Discover is not open yet. There is no library here. This does not add an item, and it does not suggest a dose.</p>
     <button type="button" class="btn primary block" data-action="sheet-close">Close</button>`;
 }
 
