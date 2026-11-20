@@ -478,7 +478,10 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
   if (!right) return left;
   const items = mergeEntityLists(left.items, right.items, now);
   const blocks = mergeEntityLists(left.blocks, right.blocks, now);
-  const placements = reconcileBlockPlacementTombstones(blocks, reconcileItemPlacementTombstones(items, collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now))));
+  const reconciled = reconcileBlockPlacementTombstones(blocks, reconcileItemPlacementTombstones(items, collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now))));
+  /* A revive can bring a duplicate-pair loser back to life. Dedupe again so
+     one item still appears once in the block. */
+  const placements = collapsePlacementPairs(reconciled);
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
     blocks,
