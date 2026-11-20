@@ -430,3 +430,42 @@ test("the account range delete stores a routine tombstone without the note, amou
   assert.equal(got.raw.includes("qq4419-scribble-text"), false);
   assert.equal(got.raw.includes("\"mood\""), false);
 });
+
+test("the account range delete also scrubs a dose that was already undone", () => {
+  const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+  const script = `
+    import { stripRange } from ${JSON.stringify(stripUrl)};
+    const data = {
+      dailyRoutines: {
+        logs: [
+          {
+            id: "log-undone", itemId: "item-a", compoundId: "compound-a",
+            day: "2026-11-01", status: "done", amount: 250, unit: "mcg",
+            at: 10, note: "qq4419-scribble-text", updatedAt: 20, deletedAt: 20,
+          },
+          {
+            id: "log-later", itemId: "item-a", compoundId: "compound-a",
+            day: "2026-11-01", status: "done", amount: 1, unit: "mg",
+            at: 9000, note: "qq4419-kept-note", updatedAt: 9000, deletedAt: 9000,
+          },
+        ],
+      },
+    };
+    stripRange(data, "2026-11-01", "2026-11-01", 4000, 6000);
+    const logs = Object.fromEntries(data.dailyRoutines.logs.map((row) => [row.id, row]));
+    console.log(JSON.stringify({
+      undone: Object.keys(logs["log-undone"]).sort(),
+      later: logs["log-later"].note,
+      raw: JSON.stringify(logs["log-undone"]),
+    }));
+  `;
+  const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const got = JSON.parse(result.stdout.trim().split("\n").pop());
+  assert.deepEqual(got.undone, ["day", "deletedAt", "id", "status", "updatedAt"]);
+  assert.equal(got.raw.includes("qq4419-scribble-text"), false);
+  assert.equal(got.later, "qq4419-kept-note");
+});

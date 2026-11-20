@@ -300,10 +300,12 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   let changed = false;
   for (const log of routines.logs) {
     if (!log || typeof log !== "object") continue;
-    if (typeof log.deletedAt === "number" && log.deletedAt > 0) continue;
     if (!validDay(log.day) || log.day < from || log.day > to) continue;
     if (!dropBefore(latestStamp(log), before, now)) continue;
-    const kept = reducedLogTombstone(log, cutoff, Math.max(num(log.updatedAt), cutoff));
+    const already = typeof log.deletedAt === "number" && log.deletedAt > 0;
+    if (already && isReducedLogTombstone(log)) continue;
+    const deletedAt = already ? Math.max(num(log.deletedAt), cutoff) : cutoff;
+    const kept = reducedLogTombstone(log, deletedAt, Math.max(num(log.updatedAt), deletedAt));
     for (const key of Object.keys(log)) delete log[key];
     Object.assign(log, kept);
     changed = true;

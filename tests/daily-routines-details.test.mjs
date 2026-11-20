@@ -69,7 +69,7 @@ const {
   ROUTINE_DETAILS_MOTION_MS,
   moveRoutineDetails,
 } = await import("../logger/js/pages/daily-routines-details.js");
-const { commitRoutineLogSheet, openRoutineLogEditor, routineLogSheetHTML } = await import("../logger/js/pages/daily-routines-dose.js");
+const { commitRoutineLogSheet, openRoutineHistory, openRoutineLogEditor, routineHistorySheetHTML, routineLogSheetHTML } = await import("../logger/js/pages/daily-routines-dose.js");
 const { mergeDailyRoutines, normalizeDailyRoutines, purgeDailyRoutineRange } = await import("../logger/js/shared/daily-routines-store.js");
 const { sanitizeCapture, sanitizePosthogEvent } = await import("../logger/js/usage-events.js");
 const { scrubBreadcrumb, scrubEvent } = await import("../logger/js/sentry-scrub.js");
@@ -556,6 +556,76 @@ describe("routine details", { concurrency: false }, () => {
     assert.equal(logRoutineItem(app.state, item.id), true);
     assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && row.day === "2026-11-19" && !(row.deletedAt > 0)).length, 1);
     assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && row.day === "2026-11-18" && !(row.deletedAt > 0)).length, 1);
+  });
+
+  test("a range purge scrubs an undone dose and leaves a newer undo alone", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound B", kind: "dose", amount: 1, unit: "mg" }), true);
+    const older = itemNamed("Example Compound A");
+    const newer = itemNamed("Example Compound B");
+    assert.equal(logRoutineItem(app.state, older.id), true);
+    assert.equal(logRoutineItem(app.state, newer.id), true);
+    assert.equal(editRoutineLog(app.state, liveLog(older.id).id, { amount: 250, day: "2026-11-19", note: SENTINEL }), true);
+    assert.equal(editRoutineLog(app.state, liveLog(newer.id).id, { amount: 1, day: "2026-11-19", note: "qq4419-kept-note" }), true);
+    assert.equal(undoRoutineLog(app.state, liveLog(older.id).id), true);
+    assert.equal(undoRoutineLog(app.state, liveLog(newer.id).id), true);
+    const kept = app.state.dailyRoutines.logs.find((row) => row.itemId === newer.id);
+    const early = app.state.dailyRoutines.logs.find((row) => row.itemId === older.id);
+    kept.updatedAt = early.updatedAt + 50_000;
+    kept.deletedAt = kept.updatedAt;
+    kept.at = kept.updatedAt;
+    const cutoff = early.updatedAt + 1000;
+    assert.equal(purgeDailyRoutineRange(app.state, "2026-11-19", "2026-11-19", cutoff, cutoff + 120_000), true);
+    const scrubbed = app.state.dailyRoutines.logs.find((row) => row.id === early.id);
+    assert.deepEqual(Object.keys(scrubbed).sort(), ["day", "deletedAt", "id", "status", "updatedAt"]);
+    assert.equal(JSON.stringify(scrubbed).includes(SENTINEL), false);
+    assert.equal(restoreRoutineLog(app.state, early.id), true);
+    const revived = app.state.dailyRoutines.logs.find((row) => row.id === early.id);
+    assert.equal(revived.note, undefined);
+    assert.equal(revived.itemId, null);
+    assert.equal(revived.amount, null);
+    const spared = app.state.dailyRoutines.logs.find((row) => row.id === kept.id);
+    assert.equal(spared.note, "qq4419-kept-note");
+    assert.equal(spared.itemId, newer.id);
+    assert.equal(restoreRoutineLog(app.state, kept.id), true);
+    assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === kept.id).note, "qq4419-kept-note");
+    assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === kept.id).amount, 1);
+  });
+
+  test("history opens the details page for a backdated log", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = itemNamed("Example Compound A");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLog(item.id);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: "0.25", day: "2026-11-18", time: "08:02", note: SENTINEL }), true);
+    assert.equal(openRoutineHistory(item.compoundId, item.id), true);
+    const history = routineHistorySheetHTML();
+    assert.match(history, new RegExp(`data-action="routines-details-open" data-item-id="${item.id}" data-log-id="${log.id}"`));
+    assert.doesNotMatch(history, /data-action="routines-log-edit"/);
+    assert.equal(openRoutineDetails(item.id, log.id), true);
+    const sheet = routineDetailsSheetHTML();
+    assert.match(sheet, new RegExp(SENTINEL));
+    assert.doesNotMatch(sheet, /id="dr-details-time-wrap" hidden/);
+    assert.match(sheet, /value="08:02"/);
+    app.$ = (sel) => {
+      const id = String(sel).replace(/^#/, "");
+      const values = {
+        "dr-details-amount": "0.25",
+        "dr-details-day": "2026-11-18",
+        "dr-details-time": "09:15",
+        "dr-details-note": "qq4419-kept-note",
+      };
+      return Object.prototype.hasOwnProperty.call(values, id) ? { value: values[id] } : null;
+    };
+    assert.equal(commitRoutineDetails(), true);
+    const saved = app.state.dailyRoutines.logs.find((row) => row.id === log.id);
+    assert.equal(saved.day, "2026-11-18");
+    assert.equal(saved.note, "qq4419-kept-note");
+    assert.equal(routineClockTime(saved.at), "09:15");
   });
 
 });

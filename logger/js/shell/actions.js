@@ -1319,6 +1319,10 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineLogEditor !== "function") break;
       app.openRoutineLogEditor(b.dataset.logId);
       break;
+    case "routines-details-open":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineDetails !== "function") break;
+      app.openRoutineDetails(b.dataset.itemId, b.dataset.logId);
+      break;
     case "routines-details-save":
       if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineDetails !== "function") break;
       app.commitRoutineDetails();

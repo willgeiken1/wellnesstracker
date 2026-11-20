@@ -236,6 +236,19 @@ function withPurgedSession(list: unknown, id: string, stamp: number): unknown[] 
   return next;
 }
 
+function routineTombstoneReduced(log: Bag): boolean {
+  if (typeof log.itemId === "string" && log.itemId) return false;
+  if (typeof log.compoundId === "string" && log.compoundId) return false;
+  if (typeof log.note === "string" && log.note.trim()) return false;
+  if (typeof log.amount === "number" && Number.isFinite(log.amount)) return false;
+  if (typeof log.unit === "string" && log.unit.trim()) return false;
+  if (typeof log.at === "number" && log.at > 0) return false;
+  for (const key of ["mood", "energy", "stress", "feeling", "felt"]) {
+    if (log[key] != null && log[key] !== "") return false;
+  }
+  return true;
+}
+
 export function stripRange(data: Bag, from: string, to: string, before?: number | null, now = Date.now()): Bag {
   if (!data || typeof data !== "object") data = {};
   if (!validDay(from) || !validDay(to) || from > to) return data;
@@ -375,15 +388,17 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
   if (routines && typeof routines === "object" && !Array.isArray(routines) && Array.isArray(routines.logs)) {
     for (const log of routines.logs) {
       if (!log || typeof log !== "object") continue;
-      if (typeof log.deletedAt === "number" && log.deletedAt > 0) continue;
       if (!inRange(log.day, from, to) || !dropBefore(latestTime(log, ITEM_KEYS), before, now)) continue;
+      const already = typeof log.deletedAt === "number" && log.deletedAt > 0;
+      if (already && routineTombstoneReduced(log)) continue;
       const prev = typeof log.updatedAt === "number" && Number.isFinite(log.updatedAt) ? log.updatedAt : 0;
+      const deletedAt = already ? Math.max(log.deletedAt, stamp) : stamp;
       const kept: Bag = {
         id: log.id,
         day: log.day,
         status: log.status,
-        updatedAt: Math.max(prev, stamp),
-        deletedAt: stamp,
+        updatedAt: Math.max(prev, deletedAt),
+        deletedAt,
       };
       if (log.rest === true) kept.rest = true;
       for (const key of Object.keys(log)) delete log[key];
