@@ -150,10 +150,19 @@ function clampStamp(value, now) {
 function entityBase(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   if (typeof raw.id !== "string" || !raw.id || raw.id.length > 80) return null;
-  const deletedAt = typeof raw.deletedAt === "number" && raw.deletedAt > 0 ? clampStamp(raw.deletedAt, now) : null;
-  let updatedAt = clampStamp(raw.updatedAt, now);
+  const clock = typeof now === "number" && Number.isFinite(now) ? now : Date.now();
+  const cap = clock + FUTURE_SLACK_MS;
+  const rawDeleted = typeof raw.deletedAt === "number" && raw.deletedAt > 0 ? raw.deletedAt : 0;
+  const rawStamp = Math.max(num(raw.updatedAt), rawDeleted);
+  const deletedAt = rawDeleted ? clampStamp(raw.deletedAt, clock) : null;
+  let updatedAt = clampStamp(raw.updatedAt, clock);
   if (deletedAt && updatedAt < deletedAt) updatedAt = deletedAt;
-  return { id: raw.id, updatedAt, deletedAt };
+  const base = { id: raw.id, updatedAt, deletedAt };
+  const carried = typeof raw.sourceAt === "number" && raw.sourceAt > cap ? raw.sourceAt : 0;
+  if (carried) base.sourceAt = carried;
+  else if (rawStamp > cap) base.sourceAt = rawStamp;
+  if (raw.supersedes === true && base.sourceAt) base.supersedes = true;
+  return base;
 }
 
 function normalizeBlock(raw, now = Date.now()) {
@@ -220,6 +229,8 @@ function undoneLog(log, deletedAt, updatedAt) {
     undone: true,
   };
   if (log.rest === true) row.rest = true;
+  if (typeof log.sourceAt === "number" && log.sourceAt > at) row.sourceAt = log.sourceAt;
+  if (log.supersedes === true && row.sourceAt) row.supersedes = true;
   return row;
 }
 
@@ -235,7 +246,10 @@ function normalizeLog(raw, now = Date.now()) {
   if (!base || !validDay(raw.day) || !status) return null;
   if (base.deletedAt) {
     if (raw.undone === true) return undoneLog({ ...raw, status }, base.deletedAt, base.updatedAt);
-    return reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
+    const reduced = reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
+    if (base.sourceAt) reduced.sourceAt = base.sourceAt;
+    if (base.supersedes && reduced.sourceAt) reduced.supersedes = true;
+    return reduced;
   }
   return {
     ...plainFields(raw),
@@ -272,10 +286,20 @@ function stableStringify(value) {
   return JSON.stringify(value) ?? "null";
 }
 
-/* Higher stamp wins. A tie keeps the tombstone, then the greater stable JSON. */
+/* Higher stamp wins. A tie keeps the tombstone, then the greater stable JSON.
+   A stamp past the cap is remembered on sourceAt so a later pull, which clamps
+   that same raw stamp to a higher ceiling, cannot pass a row that already
+   replaced it. supersedes sorts one step above the raw stamp it replaced. */
+function orderStamp(entity) {
+  const stored = rowStamp(entity);
+  const src = typeof entity.sourceAt === "number" && entity.sourceAt > stored ? entity.sourceAt : stored;
+  if (entity.supersedes === true && src > stored) return src + 1;
+  return src;
+}
+
 function beats(candidate, current) {
-  const stampC = rowStamp(candidate);
-  const stampP = rowStamp(current);
+  const stampC = orderStamp(candidate);
+  const stampP = orderStamp(current);
   if (stampC !== stampP) return stampC > stampP;
   const tombC = typeof candidate.deletedAt === "number" && candidate.deletedAt > 0;
   const tombP = typeof current.deletedAt === "number" && current.deletedAt > 0;
@@ -363,6 +387,10 @@ export function mergeEntityLists(local, remote, now = Date.now()) {
   for (const raw of incoming) {
     if (!raw || typeof raw.id !== "string" || !raw.id) continue;
     const entity = copyEntity(raw);
+    const rawDeleted = typeof entity.deletedAt === "number" && entity.deletedAt > 0 ? entity.deletedAt : 0;
+    const rawStamp = Math.max(num(entity.updatedAt), rawDeleted);
+    const cap = (typeof now === "number" && Number.isFinite(now) ? now : Date.now()) + FUTURE_SLACK_MS;
+    if (!(typeof entity.sourceAt === "number" && entity.sourceAt > cap) && rawStamp > cap) entity.sourceAt = rawStamp;
     entity.updatedAt = clampStamp(entity.updatedAt, now);
     if (typeof entity.deletedAt === "number" && entity.deletedAt > 0) {
       entity.deletedAt = clampStamp(entity.deletedAt, now);

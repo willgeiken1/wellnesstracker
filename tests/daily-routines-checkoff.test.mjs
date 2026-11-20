@@ -473,6 +473,34 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.ok(kept.updatedAt > ahead);
   });
 
+  test("a check-off stays live when a days-ahead tombstone is merged again later", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    const id = routineLogId(item.id, "2026-11-19");
+    const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    app.state.dailyRoutines.logs.push({
+      id,
+      itemId: item.id,
+      day: "2026-11-19",
+      status: "done",
+      amount: 250,
+      unit: "mcg",
+      updatedAt: future,
+      deletedAt: future,
+    });
+    app.state.dailyRoutines.updatedAt = future;
+    const remote = structuredClone(app.state.dailyRoutines);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = app.state.dailyRoutines.logs.find((row) => row.id === id);
+    assert.equal(isLive(log), true);
+    const merged = mergeDailyRoutines(app.state.dailyRoutines, remote, Date.now() + 1000);
+    const kept = merged.logs.find((row) => row.id === id);
+    assert.equal(isLive(kept), true);
+    assert.equal(kept.amount, 250);
+  });
+
   test("focus mode dims every block except the current one", () => {
     signIn("2026-11-19");
     app.routineNow = () => new Date(2026, 10, 19, 14, 30);
