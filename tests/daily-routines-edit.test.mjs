@@ -58,7 +58,7 @@ const {
   toggleRoutineCollapsed,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
-const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
+const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, projectDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day = "2026-11-19") {
   app.today = () => day;
@@ -398,12 +398,11 @@ describe("routine editing", { concurrency: false }, () => {
       placements: [{ id: "place_phone_b", blockId: night, itemId: item.id, order: 1, updatedAt: 30, deletedAt: null }],
     };
     const collapsed = mergeDailyRoutines(phoneLeft, phoneRight);
-    const shown = collapsed.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id);
+    const shown = projectDailyRoutines(collapsed).placements.filter((row) => row.blockId === night && row.itemId === item.id);
     assert.equal(shown.length, 1);
     assert.equal(shown[0].id, "place_phone_b");
-    assert.equal(isLive(collapsed.placements.find((row) => row.id === "place_phone_a")), false);
     const again = mergeDailyRoutines(collapsed, phoneLeft);
-    assert.equal(again.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id).length, 1);
+    assert.equal(projectDailyRoutines(again).placements.filter((row) => row.blockId === night && row.itemId === item.id).length, 1);
   });
 
   test("converting a dose to a check stops new logs from keeping the old amount", () => {
@@ -448,8 +447,8 @@ describe("routine editing", { concurrency: false }, () => {
     const edit = readFileSync(new URL("../logger/js/pages/daily-routines-edit.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v62"/);
-    assert.match(sentry, /insight-shell-v62/);
+    assert.match(sw, /const CACHE = "insight-shell-v66"/);
+    assert.match(sentry, /insight-shell-v66/);
     assert.match(sw, /js\/pages\/daily-routines-edit\.js/);
     assert.match(main, /import "\.\/pages\/daily-routines-edit\.js";/);
     assert.equal(main.match(/routines-flag/g).length, 1);

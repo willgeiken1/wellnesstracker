@@ -345,7 +345,7 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   state.dailyRoutines.logs.push(
     { id: "log-done", itemId: "item-a", day: "2026-11-19", status: "done", amount: 0.25, unit: "mcg", updatedAt: 5, deletedAt: null },
     { id: "log-part", itemId: "item-a", day: "2026-11-19", status: "partial", amount: 1, unit: "mg", updatedAt: 6, deletedAt: null },
-    { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 7, deletedAt: null },
+    { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 4, deletedAt: null },
   );
   const counted = dailyRoutinesHTML();
   assert.match(counted, /<b>1<\/b> logged today/);
@@ -463,8 +463,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v62"/);
-  assert.match(sentry, /insight-shell-v62/);
+  assert.match(sw, /const CACHE = "insight-shell-v66"/);
+  assert.match(sentry, /insight-shell-v66/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);

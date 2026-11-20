@@ -144,14 +144,16 @@ export function routineLogSheetHTML() {
   const invalid = sd.error ? "true" : "false";
   const error = sd.error ? `<p class="dr-log-error" id="dr-log-error" role="alert">${esc(sd.error)}</p>` : `<p class="dr-log-error" id="dr-log-error"></p>`;
   const unit = sd.unit ? `<p class="sub">Unit: ${esc(sd.unit)}. This is the unit already on the log.</p>` : "";
-  const amountFields = sd.kind === "check" ? "" : `<label class="field-label" for="dr-log-amount">Amount</label>
+  const amountFields = sd.kind === "check" || sd.skipped === true ? "" : `<label class="field-label" for="dr-log-amount">Amount</label>
     <input class="text-in" id="dr-log-amount" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-invalid="${invalid}" aria-describedby="dr-log-error" value="${esc(sd.amount || "")}">
     <span class="field-label" id="dr-log-quarter-label">Quarter amounts</span>
     <div class="dr-quarters" role="group" aria-labelledby="dr-log-quarter-label">${quarters}</div>
     ${unit}`;
-  const intro = sd.kind === "check"
-    ? "This saves the day you enter. The check stays a check."
-    : "This saves the amount and the day you enter. It does not suggest an amount.";
+  const intro = sd.skipped === true
+    ? "This saves the day you enter. The skip stays a skip."
+    : sd.kind === "check"
+      ? "This saves the day you enter. The check stays a check."
+      : "This saves the amount and the day you enter. It does not suggest an amount.";
   return `<h3>Edit log</h3>
     <p class="sub">${esc(sd.itemName || "Item")}. ${intro}</p>
     ${amountFields}
