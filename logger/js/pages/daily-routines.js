@@ -1224,7 +1224,7 @@ function signInHTML() {
     ${pageHeader("Routines", "Sign in required")}
     <section class="dr-signin">
       <h2>Sign in to use Routines</h2>
-      <p>Routines stay on your Insight account. Nothing is saved on this phone until you sign in.</p>
+      <p>Sign in to see and change your routines.</p>
       <button type="button" class="btn primary block" data-action="auth-open">Sign in</button>
     </section>
   </div>`;
