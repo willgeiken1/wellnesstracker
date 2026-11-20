@@ -56,7 +56,8 @@ const {
   revisePlanEntity,
   seedDefaultBlocks,
 } = await import("../logger/js/shared/daily-routines-store.js");
-const { undoRoutineLog } = await import("../logger/js/pages/daily-routines.js");
+const { logRoutineItem, undoRoutineLog } = await import("../logger/js/pages/daily-routines.js");
+const { readFileSync } = await import("node:fs");
 const { applyPurges, buildExportFiles, stripRange } = await import("../logger/js/shared/purge.js");
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -505,7 +506,7 @@ test("a purged dose is absent locally, in the account blob, in the backup, and i
     await app.exportData();
     assertBareTombstone(captured.dailyRoutines.logs[0]);
     const csv = buildExportFiles(app.state).find((file) => file.name === "daily_routine_logs.csv").text;
-    assert.match(csv, /2026-11-01,done,,,1/);
+    assert.match(csv, /log-1,,,2026-11-01,done,,,,1970-01-01T00:00:04\.000Z/);
     assert.equal(csv.includes("250"), false);
     assert.equal(csv.includes("mcg"), false);
     assert.equal(csv.includes("item-a"), false);
@@ -643,6 +644,53 @@ test("routine names, units and kinds with emoji at the limit stay well formed th
   }
 });
 
+test("the policy names exactly the keys a real deleted dose log keeps, and no more", () => {
+  signIn();
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date(2026, 10, 19, 8, 30, 0);
+  try {
+    app.state.dailyRoutines = phoneStore(
+      [item("item-a", "Example Compound A", 10)],
+      [log("log_item-a_2026-11-01", "2026-11-01", 250, 10, { note: "extra dose note" })],
+      [compound("compound-a", 250, 10)],
+    );
+    assert.equal(logRoutineItem(app.state, "item-a"), true);
+    const todayId = "log_item-a_2026-11-19";
+    assert.equal(undoRoutineLog(app.state, todayId), true);
+    assert.equal(purgeDailyRoutineRange(app.state, "2026-11-01", "2026-11-01", null, 4000), true);
+    const markers = app.state.dailyRoutines.logs.filter((row) => !isLive(row));
+    assert.deepEqual(markers.map((row) => row.id).sort(), ["log_item-a_2026-11-01", todayId]);
+
+    // The policy's list of kept fields: id, day, status, deleted time. updatedAt is the same stamp.
+    const POLICY_FIELDS = { id: /\bits id\b/, day: /\bthe day\b/, status: /\bits status\b/, deletedAt: /when it was deleted/, updatedAt: null };
+    assert.deepEqual(Object.keys(POLICY_FIELDS).sort(), TOMBSTONE_KEYS);
+    for (const marker of markers) {
+      assert.deepEqual(Object.keys(marker).sort(), TOMBSTONE_KEYS);
+      assert.equal(marker.id.includes("item-a"), true, "the id still links to the item");
+    }
+
+    const root = new URL("..", import.meta.url);
+    const aboutTxt = buildExportFiles(app.state).find((file) => file.name === "about.txt").text;
+    const texts = {
+      "privacy.md": readFileSync(new URL("privacy.md", root), "utf8"),
+      "privacy.js": readFileSync(new URL("logger/js/pages/privacy.js", root), "utf8"),
+      "about.txt": aboutTxt,
+    };
+    for (const [name, text] of Object.entries(texts)) {
+      assert.doesNotMatch(text, /the unit, and the item (are|is) (removed|not)/, name);
+      assert.doesNotMatch(text, /item (is|are) removed/, name);
+      assert.match(text, /the unit, and the dose details are (removed|not in that row)/, name);
+      assert.match(text, /links (it|the marker) to the (routine )?item/, name);
+      for (const [key, re] of Object.entries(POLICY_FIELDS)) if (re) assert.match(text, re, `${name} names ${key}`);
+    }
+  } finally {
+    signOut();
+  }
+});
+
 test("a whole emoji that fits is kept", () => {
   const name = `${"a".repeat(80 - FAMILY.length)}${FAMILY}`;
   const normalized = normalizeDailyRoutines(phoneStore([item("item-a", name, 10)]));
@@ -687,4 +735,11 @@ test("without Intl.Segmenter the clip still keeps whole code points", () => {
   const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout), [[79, true], [80, true], [79, true]]);
+});
+
+test("the export zip has unique file names", () => {
+  const data = { sessions: [], dailyRoutines: phoneStore([item("item-a", "Example Compound A", 10)], [log("log-1", "2026-11-01", 250, 10)]) };
+  const names = buildExportFiles(data).map((file) => file.name);
+  assert.deepEqual(names, [...new Set(names)]);
+  assert.equal(names.filter((name) => name === "daily_routine_logs.csv").length, 1);
 });

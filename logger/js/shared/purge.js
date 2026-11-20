@@ -597,7 +597,7 @@ photos.csv lists progress photos (date and pose). The image files are not in thi
 Meal photos sent off for a nutrition estimate are not kept, so they are not here.
 A written meal description sent for an estimate is not kept either.
 Oura rows are the days Insight has stored, not a full copy of your Oura account.
-daily_routine_blocks.csv, daily_routine_items.csv, daily_routine_placements.csv, daily_routine_logs.csv, and daily_routine_preferences.csv are the routine layout and dose logs. A deleted dose log in daily_routine_logs.csv is only a marker: its id, the day, its status, and when it was deleted. The amount, the unit, and the item are not in that row.
+daily_routine_blocks.csv, daily_routine_items.csv, daily_routine_placements.csv, daily_routine_logs.csv, and daily_routine_preferences.csv are the routine layout and dose logs. A deleted dose log in daily_routine_logs.csv is only a marker: its id (which links it to the routine item), the day, its status, and when it was deleted. The amount, the unit, and the dose details are not in that row.
 The reconstitution calculator is not stored, so it is not in this zip.
 `;
 
@@ -745,14 +745,6 @@ export function buildExportFiles(state, opts = {}) {
     for (const e of w.exercises || []) routines.push([w.id, w.name, e.name, (e.muscles || []).join(" ")]);
   }
   files.push({ name: "routines.csv", text: toCsv(routines) });
-
-  const routineLogs = [["day", "status", "amount", "unit", "deleted"]];
-  for (const log of (s.dailyRoutines && s.dailyRoutines.logs) || []) {
-    if (!log || typeof log !== "object") continue;
-    const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
-    routineLogs.push([log.day || "", log.status || "", gone ? "" : num(log.amount), gone ? "" : (log.unit || ""), gone ? "1" : ""]);
-  }
-  files.push({ name: "daily_routine_logs.csv", text: toCsv(routineLogs) });
 
   const sets = [["date", "workout_id", "workout", "exercise", "set_index", "weight", "reps", "tag", "note", "pr", "left_weight", "left_reps", "right_weight", "right_reps", "rpe"]];
   for (const sess of s.sessions || []) {
