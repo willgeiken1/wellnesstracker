@@ -7,8 +7,8 @@ import {
   putDailyRoutines,
   routineId,
   routineLogId,
+  markLogUndone,
   seedDefaultBlocks,
-  tombstoneLog,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
 
@@ -16,10 +16,9 @@ import {
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
    and no dailyRoutines write.
 
-   Check-off writes one log per item and day (routineLogId). Undo calls
-   tombstoneLog, which keeps only id, day, status, and the stamps, on every
-   live log for that item (or rest) and day. Restore writes a fresh log for
-   that item and day.
+   Check-off writes one log per item and day (routineLogId). Undo keeps the
+   amount, unit, and note and marks that log undone, on every live log for
+   that item (or rest) and day. Restore writes those fields back.
 
    The day key is app.today(). The clock face is app.routineNow(). Do not
    derive the day from the clock's UTC instant. */
@@ -364,8 +363,8 @@ function sameCheckOff(a, b) {
   return !!a.itemId && a.itemId === b.itemId;
 }
 
-/* Removes a check-off, skip, or rest from today. tombstoneLog keeps only
-   id, day, status, updatedAt, and deletedAt, newer than the live copy.
+/* Removes a check-off, skip, or rest from today. The log keeps its amount,
+   unit, and note, and is marked undone, newer than the live copy.
    Every live log for the same item (or rest) and day goes, so an older
    random-id copy from the other phone does not leave the row done. */
 export function undoRoutineLog(state, logId) {
@@ -377,7 +376,7 @@ export function undoRoutineLog(state, logId) {
     const latest = Math.max(store.updatedAt || 0, ...store.logs.filter((row) => ids.includes(row.id)).map((row) => row.updatedAt || 0));
     const at = stampAfter(clock.now, latest);
     let next = store;
-    for (const id of ids) next = next && tombstoneLog(next, id, at);
+    for (const id of ids) next = next && markLogUndone(next, id, at);
     const rows = (next && next.logs || []).filter((item) => ids.includes(item.id));
     if (rows.length !== ids.length || rows.some((row) => !(row.deletedAt > 0))) return null;
     const row = rows.find((item) => item.id === logId);
@@ -386,8 +385,8 @@ export function undoRoutineLog(state, logId) {
   });
 }
 
-/* The tombstone no longer carries the item or the amount. A restore writes a
-   fresh log for that item and day, or a fresh rest, at a newer stamp. */
+/* Restore brings back the amount, unit, and note the undo kept. A rest
+   comes back as a rest. An old five-key marker still restores from the item. */
 export function restoreRoutineLog(state, logId) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
@@ -409,17 +408,22 @@ export function restoreRoutineLog(state, logId) {
     if (!item) return null;
     const compound = compoundFor(view, item);
     const skipped = log.status === "skipped";
-    const next = upsertEntity(store, "logs", {
+    const storedAmount = typeof log.amount === "number" && Number.isFinite(log.amount) ? log.amount : null;
+    const storedUnit = typeof log.unit === "string" && log.unit ? log.unit : "";
+    const storedNote = typeof log.note === "string" ? log.note : "";
+    const payload = {
       id: logId,
       itemId: item.id,
       compoundId: item.compoundId || null,
       day: parsed.day,
       status: skipped ? "skipped" : "done",
-      amount: skipped ? null : (compound && typeof compound.amount === "number" ? compound.amount : null),
-      unit: skipped ? "" : (compound && compound.unit ? compound.unit : ""),
-      at: clock.now,
+      amount: skipped ? null : (storedAmount != null ? storedAmount : (compound && typeof compound.amount === "number" ? compound.amount : null)),
+      unit: skipped ? "" : (storedUnit || (compound && compound.unit ? compound.unit : "")),
+      at: typeof log.at === "number" && Number.isFinite(log.at) ? log.at : clock.now,
       deletedAt: null,
-    }, at);
+    };
+    if (storedNote) payload.note = storedNote;
+    const next = upsertEntity(store, "logs", payload, at);
     const row = (next.logs || []).find((itemRow) => itemRow.id === logId);
     if (!row || !isLive(row) || row.itemId !== item.id) return null;
     return next;
