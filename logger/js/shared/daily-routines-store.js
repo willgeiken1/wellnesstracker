@@ -106,9 +106,19 @@ function normalizeCompound(raw) {
   };
 }
 
+/* A log tombstone keeps only id, day, status, updatedAt, and deletedAt, so a
+   deleted note, amount, or unit does not stay in the synced blob. */
+function reducedLogTombstone(log, deletedAt, updatedAt) {
+  const at = Math.max(num(updatedAt), num(deletedAt));
+  const out = { id: log.id, day: log.day, status: log.status, updatedAt: at, deletedAt: num(deletedAt) || at };
+  if (log.rest === true) out.rest = true; /* a flag, not health text; a restored rest day needs it */
+  return out;
+}
+
 function normalizeLog(raw) {
   const base = entityBase(raw);
   if (!base || !validDay(raw.day) || !STATUSES.has(raw.status)) return null;
+  if (base.deletedAt) return reducedLogTombstone(raw, base.deletedAt, base.updatedAt);
   const next = {
     ...plainFields(raw),
     ...base,
@@ -279,8 +289,9 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
     if (typeof log.deletedAt === "number" && log.deletedAt > 0) continue;
     if (!validDay(log.day) || log.day < from || log.day > to) continue;
     if (!dropBefore(latestStamp(log), before, now)) continue;
-    log.deletedAt = cutoff;
-    log.updatedAt = Math.max(num(log.updatedAt), cutoff);
+    const kept = reducedLogTombstone(log, cutoff, Math.max(num(log.updatedAt), cutoff));
+    for (const key of Object.keys(log)) delete log[key];
+    Object.assign(log, kept);
     changed = true;
   }
   if (changed) routines.updatedAt = Math.max(num(routines.updatedAt), cutoff);

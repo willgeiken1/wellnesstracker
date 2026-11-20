@@ -67,7 +67,7 @@ const {
   moveRoutineDetails,
 } = await import("../logger/js/pages/daily-routines-details.js");
 const { commitRoutineLogSheet, openRoutineLogEditor, routineLogSheetHTML } = await import("../logger/js/pages/daily-routines-dose.js");
-const { normalizeDailyRoutines } = await import("../logger/js/shared/daily-routines-store.js");
+const { mergeDailyRoutines, normalizeDailyRoutines, purgeDailyRoutineRange } = await import("../logger/js/shared/daily-routines-store.js");
 const { sanitizeCapture, sanitizePosthogEvent } = await import("../logger/js/usage-events.js");
 const { scrubBreadcrumb, scrubEvent } = await import("../logger/js/sentry-scrub.js");
 
@@ -494,4 +494,29 @@ describe("routine details", { concurrency: false }, () => {
     assert.match(closeCase, /sheet-x/);
     assert.match(actions, /case "routines-checkin"/);
   });
+  test("a range purge strips note, amount and unit from the tombstone, even after merging an older copy", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound P", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = itemNamed("Example Compound P");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLog(item.id);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: 250, day: "2026-11-19", note: SENTINEL }), true);
+    const older = JSON.parse(JSON.stringify(app.state.dailyRoutines));
+    assert.equal(older.logs.find((row) => row.id === log.id).note, SENTINEL);
+
+    assert.equal(purgeDailyRoutineRange(app.state, "2026-11-19", "2026-11-19", undefined, Date.now() + 5000), true);
+    const check = (routines) => {
+      const row = routines.logs.find((entry) => entry.id === log.id);
+      assert.ok(row.deletedAt > 0);
+      assert.deepEqual(Object.keys(row).sort(), ["day", "deletedAt", "id", "status", "updatedAt"]);
+      assert.doesNotMatch(JSON.stringify(routines), new RegExp(SENTINEL));
+    };
+    check(app.state.dailyRoutines);
+    check(JSON.parse(JSON.stringify({ dailyRoutines: app.state.dailyRoutines })).dailyRoutines);
+    check(normalizeDailyRoutines(app.state.dailyRoutines));
+    check(mergeDailyRoutines(app.state.dailyRoutines, older));
+    check(mergeDailyRoutines(older, app.state.dailyRoutines));
+  });
+
 });
