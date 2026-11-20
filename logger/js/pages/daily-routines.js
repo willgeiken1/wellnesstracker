@@ -1266,6 +1266,7 @@ function paintShell(view, date) {
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
     <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
+    <button type="button" class="dr-history-open" data-action="routines-history-open">History <span class="dr-vh">calendar and graph</span></button>
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
