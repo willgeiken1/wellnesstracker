@@ -468,7 +468,13 @@ document.addEventListener("click", async (ev) => {
       if (b.dataset.id) { app.state.plan[app.ui.sd.date] = b.dataset.id; app.state.planAt[app.ui.sd.date] = Date.now(); }
       else { delete app.state.plan[app.ui.sd.date]; delete app.state.planAt[app.ui.sd.date]; }
       app.save(); app.ui.sheet = null; app.render(); break;
-    case "sheet-close": app.ui.sheet = null; app.renderSheet(); break;
+    case "sheet-close":
+      if (app.ui && app.ui.sheet === "routines-details") {
+        const fromX = !!(ev.target && ev.target.closest && ev.target.closest(".sheet-x"));
+        if (fromX && typeof app.closeRoutineDetails === "function") app.closeRoutineDetails("x");
+        break;
+      }
+      app.ui.sheet = null; app.renderSheet(); break;
     case "start": app.startWorkout(b.dataset.id); break;
     case "start-freestyle": await app.startFreestyle(); break;
     case "resume": app.openWorkout(); break;
@@ -1299,6 +1305,22 @@ document.addEventListener("click", async (ev) => {
     case "routines-log-edit":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineLogEditor !== "function") break;
       app.openRoutineLogEditor(b.dataset.logId);
+      break;
+    case "routines-details-open":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineDetails !== "function") break;
+      app.openRoutineDetails(b.dataset.itemId, b.dataset.logId);
+      break;
+    case "routines-details-save":
+      if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineDetails !== "function") break;
+      app.commitRoutineDetails();
+      break;
+    case "routines-details-quarter":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineDetailsQuarter !== "function") break;
+      app.setRoutineDetailsQuarter(b.dataset.amount);
+      break;
+    case "routines-checkin":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineCheckin !== "function") break;
+      app.openRoutineCheckin();
       break;
     case "routines-log-save":
       if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineLogSheet !== "function") break;
