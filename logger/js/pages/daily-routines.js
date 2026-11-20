@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import {
   canMutateRoutines,
+  followParentEdits,
   isLive,
   normalizeDailyRoutines,
   projectDailyRoutines,
@@ -372,8 +373,9 @@ function refuseWrite() {
 function withStore(state, mutate) {
   if (refuseWrite() || !state || typeof state !== "object") return false;
   const clock = routineClock();
-  const current = normalizeDailyRoutines(state.dailyRoutines);
-  if (!current) return false;
+  const normalized = normalizeDailyRoutines(state.dailyRoutines);
+  if (!normalized) return false;
+  const current = followParentEdits(normalized);
   const next = mutate(current, clock);
   if (!next) return false;
   return putDailyRoutines(state, next);
@@ -929,8 +931,8 @@ export function reorderRoutinePlacements(state, blockId, orderedIds) {
   return withStore(state, (store, clock) => {
     if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
     const liveItems = new Set((store.items || []).filter((row) => isLive(row)).map((row) => row.id));
-    const ids = (store.placements || [])
-      .filter((row) => isLive(row) && row.blockId === blockId && liveItems.has(row.itemId))
+    const ids = (projectDailyRoutines(store).placements || [])
+      .filter((row) => row.blockId === blockId && liveItems.has(row.itemId))
       .slice()
       .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((row) => row.id);

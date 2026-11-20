@@ -413,13 +413,14 @@ export function projectDailyRoutines(store) {
   const normalized = normalizeDailyRoutines(store);
   if (!normalized) return null;
   const blocks = liveOf(normalized.blocks).slice().sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const settled = followParentEdits(normalized);
   return {
     ...normalized,
     blocks,
     items: liveOf(normalized.items),
-    placements: liveOf(normalized.placements),
+    placements: oneLivePer(liveOf(settled.placements), placementKey),
     compounds: liveOf(normalized.compounds),
-    logs: liveOf(normalized.logs),
+    logs: oneLivePer(liveOf(normalized.logs), checkOffKey),
   };
 }
 
@@ -511,19 +512,13 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
-  const blocks = mergeEntityLists(left.blocks, right.blocks, now);
-  const items = mergeEntityLists(left.items, right.items, now);
-  const reconciled = followParentEdits(collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)), blocks, items);
-  /* A revive can bring a duplicate-pair loser back to life. Dedupe again so
-     one item still appears once in the block. */
-  const placements = collapsePlacementPairs(reconciled);
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
-    blocks,
-    items,
-    placements,
+    blocks: mergeEntityLists(left.blocks, right.blocks, now),
+    items: mergeEntityLists(left.items, right.items, now),
+    placements: mergeEntityLists(left.placements, right.placements, now),
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
-    logs: collapseLogPairs(mergeEntityLists(left.logs, right.logs, now)),
+    logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
   };
 }
@@ -701,19 +696,29 @@ function collapsePlacementPairs(list) {
 }
 
 /* A placement removed with its block or item (removedWith is that parent's
-   id) follows the parent. When the merged parent is live with a newer stamp
-   than the removal, another phone edited it after the delete, so the
-   placement is live again at the parent's stamp. */
-function followParentEdits(list, blocks, items) {
+   id) follows the parent. When the parent is live with a newer stamp than
+   the removal, another phone edited it after the delete, so the placement
+   is live again at the parent's stamp. The view and every write start from
+   this, so the merge itself can stay per-row last write wins. */
+export function followParentEdits(store) {
+  if (!store || !Array.isArray(store.placements)) return store;
   const parents = new Map();
-  for (const row of [...blocks, ...items]) if (row && typeof row.id === "string") parents.set(row.id, row);
-  return list.map((row) => {
-    if (!row || isLive(row) || typeof row.removedWith !== "string") return row;
-    if (row.removedWith !== row.blockId && row.removedWith !== row.itemId) return row;
-    const parent = parents.get(row.removedWith);
-    if (!parent || !isLive(parent) || rowStamp(parent) <= rowStamp(row)) return row;
-    return { ...row, deletedAt: null, removedWith: null, updatedAt: rowStamp(parent) };
-  });
+  for (const row of [...(store.blocks || []), ...(store.items || [])]) if (row && typeof row.id === "string") parents.set(row.id, row);
+  return {
+    ...store,
+    placements: store.placements.map((row) => {
+      if (!row || isLive(row) || typeof row.removedWith !== "string") return row;
+      if (row.removedWith !== row.blockId && row.removedWith !== row.itemId) return row;
+      const parent = parents.get(row.removedWith);
+      if (!parent || !isLive(parent) || rowStamp(parent) <= rowStamp(row)) return row;
+      return { ...row, deletedAt: null, removedWith: null, updatedAt: rowStamp(parent) };
+    }),
+  };
+}
+
+function placementKey(row) {
+  if (!isLive(row) || typeof row.blockId !== "string" || typeof row.itemId !== "string") return "";
+  return `${row.blockId}\0${row.itemId}`;
 }
 
 function checkOffKey(log) {
@@ -722,24 +727,23 @@ function checkOffKey(log) {
   return typeof log.itemId === "string" && log.itemId ? `item\0${log.itemId}\0${log.day}` : "";
 }
 
-/* One live log per item and day, and one rest per day. Older random-id rows,
-   or a moved log that lands on a day the other phone checked off, can hold
-   two. The winner follows the stamp rule. Each other one becomes a log
-   tombstone at its own stamp, which a tie keeps, so a stale live copy
-   cannot bring it back. */
-function collapseLogPairs(list) {
+/* One live row per key in the view: one placement per block and item, one
+   log per item and day, one rest per day. The stamp winner shows. Older
+   random-id rows, or a moved log that lands on a day the other phone checked
+   off, can hold two. The other rows stay in the store as they are, so a log
+   shows again once the winner moves to another day, and any order of merges
+   ends in the same rows. */
+function oneLivePer(list, keyOf) {
   const winners = new Map();
   for (const row of list) {
-    const key = checkOffKey(row);
+    const key = keyOf(row);
     if (!key) continue;
     const current = winners.get(key);
     if (!current || beats(row, current)) winners.set(key, row);
   }
-  return list.map((row) => {
-    const key = checkOffKey(row);
-    if (!key || winners.get(key) === row) return row;
-    const stamp = Math.max(rowStamp(row), 1);
-    return reducedLogTombstone(row, stamp, stamp);
+  return list.filter((row) => {
+    const key = keyOf(row);
+    return !key || winners.get(key) === row;
   });
 }
 
@@ -823,3 +827,4 @@ app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;
 app.seedDefaultBlocks = seedDefaultBlocks;
 app.projectDailyRoutines = projectDailyRoutines;
+app.followParentEdits = followParentEdits;
