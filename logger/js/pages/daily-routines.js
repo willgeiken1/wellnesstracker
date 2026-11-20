@@ -6,6 +6,7 @@ import {
   projectDailyRoutines,
   putDailyRoutines,
   routineId,
+  routineLogId,
   seedDefaultBlocks,
   tombstoneLog,
   upsertEntity,
@@ -15,9 +16,10 @@ import {
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
    and no dailyRoutines write.
 
-   Check-off writes one log per item and day (`log_<itemId>_<day>`). Undo calls
-   tombstoneLog, which keeps only id, day, status, and the stamps. Restore
-   writes a fresh log for that item and day.
+   Check-off writes one log per item and day (routineLogId). Undo calls
+   tombstoneLog, which keeps only id, day, status, and the stamps, on every
+   live log for that item (or rest) and day. Restore writes a fresh log for
+   that item and day.
 
    The day key is app.today(). The clock face is app.routineNow(). Do not
    derive the day from the clock's UTC instant. */
@@ -137,14 +139,6 @@ export function loggedTodayCount(logs, day) {
     seen.add(log.itemId || log.id);
   }
   return seen.size;
-}
-
-function checkoffLogId(itemId, day) {
-  return `log_${itemId}_${day}`;
-}
-
-function restLogId(day) {
-  return `rest_${day}`;
 }
 
 function parseRoutineLogId(id) {
@@ -291,7 +285,7 @@ export function logRoutineItem(state, itemId) {
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
     const compound = compoundFor(view, item);
     const at = stampAfter(clock.now, store.updatedAt);
-    const id = checkoffLogId(item.id, clock.day);
+    const id = routineLogId(item.id, clock.day);
     const next = upsertEntity(store, "logs", {
       id,
       itemId: item.id,
@@ -315,7 +309,7 @@ export function skipRoutineItem(state, itemId) {
     const item = (view.items || []).find((row) => row.id === itemId);
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
     const at = stampAfter(clock.now, store.updatedAt);
-    const id = checkoffLogId(item.id, clock.day);
+    const id = routineLogId(item.id, clock.day);
     const next = upsertEntity(store, "logs", {
       id,
       itemId: item.id,
@@ -331,17 +325,30 @@ export function skipRoutineItem(state, itemId) {
   });
 }
 
+function sameCheckOff(a, b) {
+  if (!a || !b || a.day !== b.day) return false;
+  if (a.rest === true || b.rest === true) return a.rest === true && b.rest === true;
+  return !!a.itemId && a.itemId === b.itemId;
+}
+
 /* Removes a check-off, skip, or rest from today. tombstoneLog keeps only
-   id, day, status, updatedAt, and deletedAt, newer than the live copy. */
+   id, day, status, updatedAt, and deletedAt, newer than the live copy.
+   Every live log for the same item (or rest) and day goes, so an older
+   random-id copy from the other phone does not leave the row done. */
 export function undoRoutineLog(state, logId) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
     const log = (store.logs || []).find((row) => row && row.id === logId);
     if (!log || !isLive(log)) return null;
-    const at = stampAfter(clock.now, Math.max(log.updatedAt || 0, store.updatedAt || 0));
-    const next = tombstoneLog(store, logId, at);
-    const row = (next && next.logs || []).find((item) => item.id === logId);
-    if (!row || !(row.deletedAt > 0) || row.updatedAt !== at) return null;
+    const ids = (store.logs || []).filter((row) => isLive(row) && (row.id === logId || sameCheckOff(row, log))).map((row) => row.id);
+    const latest = Math.max(store.updatedAt || 0, ...store.logs.filter((row) => ids.includes(row.id)).map((row) => row.updatedAt || 0));
+    const at = stampAfter(clock.now, latest);
+    let next = store;
+    for (const id of ids) next = next && tombstoneLog(next, id, at);
+    const rows = (next && next.logs || []).filter((item) => ids.includes(item.id));
+    if (rows.length !== ids.length || rows.some((row) => !(row.deletedAt > 0))) return null;
+    const row = rows.find((item) => item.id === logId);
+    if (!row || row.updatedAt !== at) return null;
     return next;
   });
 }
@@ -392,7 +399,7 @@ export function logRoutineRest(state) {
     const view = projectDailyRoutines(store);
     if ((view.logs || []).some((log) => log.rest === true && log.day === clock.day)) return null;
     const at = stampAfter(clock.now, store.updatedAt);
-    const id = restLogId(clock.day);
+    const id = routineLogId(null, clock.day);
     const next = upsertEntity(store, "logs", {
       id,
       itemId: null,
