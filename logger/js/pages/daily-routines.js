@@ -502,9 +502,27 @@ function amountsEqual(left, right) {
   return Math.round(left * 1000) === Math.round(right * 1000);
 }
 
-function statusForEditedAmount(log, compound, amount) {
-  const planned = compound && typeof compound.amount === "number" ? compound.amount : null;
-  if (planned != null && amountsEqual(amount, planned)) return "done";
+function massMcg(amount, unit) {
+  if (unit === "mcg") return amount;
+  if (unit === "mg") return amount * 1000;
+  return null;
+}
+
+/* 500 mcg is not 500 mg. Same numbers count as the planned dose only when
+   the units match, or when both are a mass that converts as 1 mg = 1000 mcg.
+   The log keeps the unit it was saved with. */
+function samePlannedDose(amount, unit, compound) {
+  if (!compound || typeof compound.amount !== "number" || !Number.isFinite(compound.amount)) return false;
+  const plannedUnit = typeof compound.unit === "string" ? compound.unit : "";
+  if (unit === plannedUnit) return amountsEqual(amount, compound.amount);
+  const logged = massMcg(amount, unit);
+  const planned = massMcg(compound.amount, plannedUnit);
+  if (logged == null || planned == null) return false;
+  return amountsEqual(logged, planned);
+}
+
+function statusForEditedAmount(log, compound, amount, unit) {
+  if (samePlannedDose(amount, unit, compound)) return "done";
   if (amountsEqual(amount, log.amount) && (log.status === "done" || log.status === "partial")) return log.status;
   return "partial";
 }
@@ -568,7 +586,7 @@ export function editRoutineLog(state, logId, draft) {
         day,
         amount,
         unit,
-        status: statusForEditedAmount(log, compound, amount),
+        status: statusForEditedAmount(log, compound, amount, unit),
         deletedAt: null,
       };
     }
