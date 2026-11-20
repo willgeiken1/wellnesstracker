@@ -889,6 +889,9 @@ export function saveRoutineItem(state, draft) {
       name,
       kind,
       compoundId: kind === "dose" ? compoundId : (existing && existing.compoundId ? existing.compoundId : null),
+      /* A new check has no compound start day. Keep the day it was added
+         so a later miss is still a miss. Edits do not move that day. */
+      ...(existing ? {} : { startDate: clock.day }),
       deletedAt: null,
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;

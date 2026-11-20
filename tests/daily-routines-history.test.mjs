@@ -36,7 +36,7 @@ globalThis.window = globalThis;
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 
 const { app } = await import("../logger/js/runtime.js");
-const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+const { addRoutineItem, dailyRoutinesHTML, deleteRoutineItem, editRoutineLog, logRoutineItem, renameRoutineItem } = await import("../logger/js/pages/daily-routines.js");
 const {
   openRoutineDayHistory,
   rememberRoutineGraphTab,
@@ -245,6 +245,48 @@ describe("routine history, calendar, and graph", { concurrency: false }, () => {
       assert.doesNotMatch(src, /week-strip|weekStrip|adherence|constellation|rising tide|orbit dial/);
       assert.doesNotMatch(src, /routines-flag/);
     }
+  });
+
+  test("a removed item's log stays on its day", () => {
+    signIn("2026-11-19");
+    const item = addDose("Example Compound A", 250, "mcg");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id && !(row.deletedAt > 0));
+    assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-15" }), true);
+    assert.equal(deleteRoutineItem(app.state, item.id), true);
+    assert.equal(openRoutineDayHistory(), true);
+    assert.equal(setRoutineHistoryCursor({ day: "2026-11-15" }), true);
+    const html = routineDayHistorySheetHTML();
+    const view = routineHistoryView(app.state.dailyRoutines, {
+      month: "2026-11",
+      day: "2026-11-15",
+      today: "2026-11-19",
+      tab: "logged",
+    });
+    const day = view.days.find((row) => row.day === "2026-11-15");
+    assert.equal(day.items.some((row) => row.itemId === item.id && row.name === "Example Compound A" && row.mark === "logged"), true);
+    assert.equal(view.graph.points.find((row) => row.day === "2026-11-15").count, 1);
+    assert.match(html, /Example Compound A/);
+    assert.match(html, /250 mcg/);
+    assert.match(html, /data-day="2026-11-15" data-count="1"/);
+    assert.doesNotMatch(html, /Nothing logged this day/);
+  });
+
+  test("a new check keeps the day it was added", () => {
+    signIn("2026-11-16");
+    assert.equal(addRoutineItem(app.state, blockId("Morning routine"), { name: "Example Check", kind: "check" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Check");
+    assert.equal(item.startDate, "2026-11-16");
+    assert.equal(renameRoutineItem(app.state, item.id, "Example Check"), true);
+    assert.equal(app.state.dailyRoutines.items.find((row) => row.id === item.id).startDate, "2026-11-16");
+    pin("2026-11-18");
+    assert.equal(openRoutineDayHistory(), true);
+    const html = routineDayHistorySheetHTML();
+    assert.match(html, /data-day="2026-11-16"[^>]*data-marks="missed"/);
+    assert.match(html, /data-day="2026-11-17"[^>]*data-marks="missed"/);
+    assert.match(html, /data-mark="missed"><i class="dr-h-ring"/);
+    assert.match(html, /data-day="2026-11-18"[^>]*data-marks=""/);
+    assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && !(row.deletedAt > 0)).length, 0);
   });
 
   test("history stays behind the flag, and the shell cache is unchanged", () => {
