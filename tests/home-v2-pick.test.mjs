@@ -13,6 +13,7 @@ const MIGRATIONS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
   "supabase/migrations/20261005000000_home_v2_brief_rank.sql",
+  "supabase/migrations/20261120120000_home_v2_routine_tiles.sql",
 ];
 const IDS = Object.keys(HOME_WIDGETS);
 const UID = "11111111-1111-1111-1111-111111111111";
@@ -212,6 +213,21 @@ select ${index}, 'poor-then-rich', (public.merge_user_data('${richSecond}'::json
       assert.equal(sig(got["rich-then-poor"]), sig(client), `merge rich-then-poor ${index}`);
       assert.equal(sig(got["poor-then-rich"]), sig(client), `merge poor-then-rich ${index}`);
     });
+
+    const routineOnly = { v: 2, items: ["routine-block:b1"], hidden: [], updatedAt: 80 };
+    const olderCatalog = { v: 2, items: ["today"], hidden: [], updatedAt: 10 };
+    const routinePick = sqlText(`
+      select public.home_v2_copy('${JSON.stringify(routineOnly)}'::jsonb, 1000) is not null as kept,
+             public.home_v2_copy('{"v":2,"items":["future-widget"],"hidden":[],"updatedAt":80}'::jsonb, 1000) is null as rejected,
+             public.home_v2_pick('${JSON.stringify(olderCatalog)}'::jsonb, '${JSON.stringify(routineOnly)}'::jsonb, 1000)::text as picked;
+    `);
+    assert.equal(routinePick.status, 0, routinePick.stderr);
+    const [kept, rejected, pickedRaw] = routinePick.stdout.trim().split("|");
+    assert.equal(kept, "t");
+    assert.equal(rejected, "t");
+    const clientRoutine = pickHomeV2({ homeV2: olderCatalog }, { homeV2: routineOnly }, 1000);
+    assert.equal(sig(JSON.parse(pickedRaw)), sig(clientRoutine));
+    assert.deepEqual(clientRoutine.items, ["routine-block:b1"]);
   } finally {
     if (started.ok) run(pgCtl, ["-D", dir, "-w", "-m", "immediate", "stop"]);
     rmSync(dir, { recursive: true, force: true });

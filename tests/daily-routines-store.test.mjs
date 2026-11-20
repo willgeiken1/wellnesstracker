@@ -249,6 +249,44 @@ test("a tombstone stays gone when an older live copy is merged", () => {
   assert.equal(isLive(again.items[0]), false);
 });
 
+test("two phones logging the same item on the same day keep one live log", () => {
+  const day = "2026-11-19";
+  const done = log("log-phone-a", day, 250, 30);
+  const older = log("log-phone-b", day, 100, 10);
+  const merged = mergeDailyRoutines(phoneStore([], [done]), phoneStore([], [older]));
+  const live = merged.logs.filter(isLive);
+  assert.deepEqual(live.map((row) => row.id), ["log-phone-a"]);
+  assert.equal(live[0].amount, 250);
+  const loser = merged.logs.find((row) => row.id === "log-phone-b");
+  assert.ok(loser.deletedAt > 10);
+  assert.equal(loser.updatedAt, loser.deletedAt);
+  const again = mergeDailyRoutines(merged, phoneStore([], [older]));
+  assert.deepEqual(again.logs.filter(isLive).map((row) => row.id), ["log-phone-a"]);
+
+  const skip = log("log-skip", day, null, 40, { status: "skipped", amount: null, unit: "" });
+  const skipWins = mergeDailyRoutines(phoneStore([], [skip]), phoneStore([], [done]));
+  assert.equal(skipWins.logs.find((row) => isLive(row)).status, "skipped");
+  const undone = mergeDailyRoutines(merged, phoneStore([], [log("log-phone-a", day, 250, 80, { deletedAt: 80 })]));
+  assert.equal(undone.logs.filter(isLive).length, 0);
+
+  const otherDay = mergeDailyRoutines(
+    phoneStore([], [log("log-day", "2026-11-18", 250, 10)]),
+    phoneStore([], [log("log-other", day, 250, 10, { itemId: "item-b" })]),
+  );
+  assert.equal(otherDay.logs.filter(isLive).length, 2);
+  const rest = mergeDailyRoutines(
+    phoneStore([], [done]),
+    phoneStore([], [log("log-rest", day, null, 5, { rest: true, itemId: null, status: "done", amount: null, unit: "" })]),
+  );
+  assert.equal(rest.logs.filter(isLive).length, 2);
+
+  const tieA = log("log-a", day, 1, 15);
+  const tieB = log("log-b", day, 1, 15);
+  const forward = mergeDailyRoutines(phoneStore([], [tieA]), phoneStore([], [tieB]));
+  const backward = mergeDailyRoutines(phoneStore([], [tieB]), phoneStore([], [tieA]));
+  assert.equal(forward.logs.find(isLive).id, backward.logs.find(isLive).id);
+});
+
 test("a newer edit brings back a tombstoned row", () => {
   const local = phoneStore([item("item-a", "Example Compound A", 80)]);
   const remote = phoneStore([item("item-a", "Example Compound A", 50, { deletedAt: 50 })]);

@@ -23,8 +23,9 @@
    an items array; hidden, when present, must be an array. Ids are strings.
    Unknown strings stay in items and hidden so a newer client's cards are not
    dropped. An empty items array is a real layout that shows nothing and can
-   win. A non-empty items array that contains none of the HOME_WIDGETS ids is
-   malformed, and pickHomeV2 keeps the other copy.
+   win. A non-empty items array that contains neither a HOME_WIDGETS id nor a
+   routine tile id is malformed, and pickHomeV2 keeps the other copy. A Home
+   made only of routine tiles is a real layout.
 
    Old keys stay in place so a cached older client still has its order.
    Never-customized state returns null (missing layout, empty order, or only
@@ -40,7 +41,9 @@
    Duplicates keep the first id. A visible source wins over a hidden one.
 */
 
+import { app } from "../runtime.js";
 import { HOME_WIDGETS } from "./home-widgets.js";
+import { NEXT_UP_TILE_ID, isRoutineTileId } from "./routine-home-tiles.js";
 
 const NATURAL = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
 const BRIEF_ORDER = ["pattern", "oura", "train", "food", "week", "weight"];
@@ -148,16 +151,20 @@ function clampAt(at, now) {
   return at > cap ? cap : at;
 }
 
+function acceptedTile(id) {
+  return !!(HOME_WIDGETS[id] || isRoutineTileId(id));
+}
+
 /* null when the record cannot be a layout. A clean record is returned as-is.
-   items: [] is valid. A non-empty list with no HOME_WIDGETS id is not.
-   Unknown string ids are kept. */
+   items: [] is valid. A non-empty list with no catalog id and no routine tile
+   id is not. Unknown string ids are kept. Routine-only lists are real layouts. */
 function asV2(home, now) {
   if (!home || typeof home !== "object" || Array.isArray(home)) return null;
   if (typeof home.v !== "number" || home.v !== 2) return null;
   if (!Array.isArray(home.items)) return null;
   if ("hidden" in home && home.hidden != null && !Array.isArray(home.hidden)) return null;
   const items = storedIds(home.items);
-  if (home.items.length > 0 && !items.some((id) => HOME_WIDGETS[id])) return null;
+  if (home.items.length > 0 && !items.some(acceptedTile)) return null;
   const hidden = storedIds(Array.isArray(home.hidden) ? home.hidden : []).filter((id) => !items.includes(id));
   const at = clampAt(home.updatedAt, now);
   const sameItems = items.length === home.items.length && items.every((id, i) => id === home.items[i]);
@@ -248,23 +255,56 @@ export function migrateHomeLayout(state) {
   return { v: 2, items, hidden, updatedAt: sourceStamp(state) };
 }
 
+/* Appends Next up once, and only when the flag is on and this copy is a real
+   edit that already has a catalog tile. A migration is left alone. An edit
+   with no catalog tile gets a paint flag instead of an items change.
+   A saved homeNextHidden preference is a decision: the seed marks itself
+   done and does not add the tile. updatedAt is not moved: a seed must not
+   outrank a newer edit. */
+export function seedRoutineNextUp(state) {
+  if (!state || typeof state !== "object" || app.ROUTINES_ENABLED !== true) return state;
+  const home = state.layout && state.layout.homeV2;
+  if (!home || typeof home !== "object" || Array.isArray(home) || home.v !== 2 || !Array.isArray(home.items)) return state;
+  if (home.migrated === true || (typeof home.migratedAt === "number" && home.migratedAt > 0)) return state;
+  const hidden = Array.isArray(home.hidden) ? home.hidden : [];
+  const present = home.items.includes(NEXT_UP_TILE_ID) || hidden.includes(NEXT_UP_TILE_ID);
+  if (present) {
+    if (home.routineNextSeeded !== true) home.routineNextSeeded = true;
+    return state;
+  }
+  if (home.routineNextSeeded === true) return state;
+  const prefs = state.dailyRoutines && state.dailyRoutines.prefs;
+  if (prefs && prefs.homeNextHidden === true) {
+    home.routineNextSeeded = true;
+    return state;
+  }
+  const hasCatalog = home.items.some((id) => typeof id === "string" && HOME_WIDGETS[id]);
+  home.routineNextSeeded = true;
+  if (!hasCatalog) {
+    home.routineNextAside = true;
+    return state;
+  }
+  home.items = home.items.concat(NEXT_UP_TILE_ID);
+  return state;
+}
+
 /* Writes homeV2. Pass { afterMerge: true } only after mergeRemote. */
 export function applyHomeMigration(state, now = Date.now(), opts) {
-  if (!state || typeof state !== "object") return state;
+  if (!state || typeof state !== "object") return seedRoutineNextUp(state);
   const afterMerge = !!(opts && opts.afterMerge);
   const existing = state.layout && state.layout.homeV2;
   const clean = asV2(existing, now);
 
-  if (clean && !homeV2Migrated(clean)) return state;
+  if (clean && !homeV2Migrated(clean)) return seedRoutineNextUp(state);
 
   const built = migrateHomeLayout(state);
   if (clean && homeV2Migrated(clean)) {
     const from = typeof clean.updatedAt === "number" ? clean.updatedAt : 0;
     const source = built ? built.updatedAt : 0;
     const keysChanged = typeof clean.migratedFrom === "string" && clean.migratedFrom !== sourceKey(state);
-    if (!(afterMerge && built && keysChanged && source > from)) return state;
+    if (!(afterMerge && built && keysChanged && source > from)) return seedRoutineNextUp(state);
   }
-  if (!built) return state;
+  if (!built) return seedRoutineNextUp(state);
   if (!state.layout || typeof state.layout !== "object" || Array.isArray(state.layout)) state.layout = {};
   const base = existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {};
   state.layout.homeV2 = {
@@ -277,7 +317,7 @@ export function applyHomeMigration(state, now = Date.now(), opts) {
     migrated: true,
     migratedFrom: sourceKey(state),
   };
-  return state;
+  return seedRoutineNextUp(state);
 }
 
 /* Same kind: newer updatedAt, then more distinct ids, then items, hidden, and sizes.
