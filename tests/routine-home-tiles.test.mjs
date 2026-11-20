@@ -482,8 +482,8 @@ test("stacks and the long-press preview are not wired, and the shell cache is un
   assert.match(actions, /case "routine-tile-hide"/);
   const sw = read("sw.js");
   const sentry = read("js/sentry.js");
-  assert.match(sw, /const CACHE = "insight-shell-v59"/);
-  assert.match(sentry, /insight-shell-v59/);
+  assert.match(sw, /const CACHE = "insight-shell-v65"/);
+  assert.match(sentry, /insight-shell-v65/);
   assert.match(sw, /js\/shared\/routine-home-tiles\.js/);
 });
 
