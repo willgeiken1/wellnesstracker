@@ -97,7 +97,16 @@ function existingLogStamp(store, id) {
 /* A replacement has to beat the row it replaces, including a tombstone,
    and the store clock. A preference edit must not rewind that clock. */
 function writeStamp(store, clock, id) {
-  return stampAfter(clock.now, maxStamp(store.updatedAt, existingLogStamp(store, id)));
+  const at = stampAfter(clock.now, maxStamp(store.updatedAt, existingLogStamp(store, id)));
+  const cap = Date.now() + 24 * 60 * 60 * 1000;
+  return at > cap ? cap : at;
+}
+
+function carryFuture(payload, store, id) {
+  const log = (store.logs || []).find((row) => row && row.id === id);
+  const stored = log ? maxStamp(log.updatedAt, log.deletedAt) : 0;
+  if (!log || typeof log.sourceAt !== "number" || !(log.sourceAt > stored)) return payload;
+  return { ...payload, sourceAt: log.sourceAt, supersedes: true };
 }
 
 function prefStamp(store, clock) {
@@ -318,7 +327,7 @@ export function logRoutineItem(state, itemId) {
     const compound = compoundFor(view, item);
     const id = routineLogId(item.id, clock.day);
     const at = writeStamp(store, clock, id);
-    const next = upsertEntity(store, "logs", {
+    const next = upsertEntity(store, "logs", carryFuture({
       id,
       itemId: item.id,
       compoundId: item.compoundId || null,
@@ -328,7 +337,7 @@ export function logRoutineItem(state, itemId) {
       unit: compound && compound.unit ? compound.unit : "",
       at: clock.now,
       deletedAt: null,
-    }, at);
+    }, store, id), at);
     return wrote(next, "logs", id, at);
   });
 }
@@ -342,7 +351,7 @@ export function skipRoutineItem(state, itemId) {
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
     const id = routineLogId(item.id, clock.day);
     const at = writeStamp(store, clock, id);
-    const next = upsertEntity(store, "logs", {
+    const next = upsertEntity(store, "logs", carryFuture({
       id,
       itemId: item.id,
       compoundId: item.compoundId || null,
@@ -352,7 +361,7 @@ export function skipRoutineItem(state, itemId) {
       unit: "",
       at: clock.now,
       deletedAt: null,
-    }, at);
+    }, store, id), at);
     return wrote(next, "logs", id, at);
   });
 }
@@ -395,10 +404,10 @@ export function restoreRoutineLog(state, logId) {
     if (!log || isLive(log) || !parsed) return null;
     const at = stampAfter(clock.now, Math.max(log.updatedAt || 0, log.deletedAt || 0, store.updatedAt || 0));
     if (parsed.rest) {
-      const next = upsertEntity(store, "logs", {
+      const next = upsertEntity(store, "logs", carryFuture({
         id: logId, itemId: null, compoundId: null, day: parsed.day, status: "done",
         amount: null, unit: "", at: clock.now, rest: true, deletedAt: null,
-      }, at);
+      }, store, logId), at);
       const row = (next.logs || []).find((item) => item.id === logId);
       if (!row || !isLive(row) || row.rest !== true) return null;
       return next;
@@ -423,7 +432,7 @@ export function restoreRoutineLog(state, logId) {
       deletedAt: null,
     };
     if (storedNote) payload.note = storedNote;
-    const next = upsertEntity(store, "logs", payload, at);
+    const next = upsertEntity(store, "logs", carryFuture(payload, store, logId), at);
     const row = (next.logs || []).find((itemRow) => itemRow.id === logId);
     if (!row || !isLive(row) || row.itemId !== item.id) return null;
     return next;
@@ -437,7 +446,7 @@ export function logRoutineRest(state) {
     if ((view.logs || []).some((log) => log.rest === true && log.day === clock.day)) return null;
     const id = routineLogId(null, clock.day);
     const at = writeStamp(store, clock, id);
-    const next = upsertEntity(store, "logs", {
+    const next = upsertEntity(store, "logs", carryFuture({
       id,
       itemId: null,
       compoundId: null,
@@ -448,7 +457,7 @@ export function logRoutineRest(state) {
       at: clock.now,
       rest: true,
       deletedAt: null,
-    }, at);
+    }, store, id), at);
     return wrote(next, "logs", id, at);
   });
 }
