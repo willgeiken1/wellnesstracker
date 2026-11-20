@@ -7,9 +7,10 @@ import {
   putDailyRoutines,
   revisePlanEntity,
   routineId,
-  routineLogId,
   markLogUndone,
   futureCarry,
+  routineLogId,
+  routinePlacementId,
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
@@ -242,6 +243,18 @@ function compoundFor(projected, item) {
   return (projected.compounds || []).find((row) => row.id === item.compoundId) || null;
 }
 
+/* A check item records no amount, even if it used to be a dose. The old log
+   stays as it was. A new log or a restore uses the item as it is now. */
+function loggedDose(view, item) {
+  if (!item || item.kind !== "dose") return { compoundId: null, amount: null, unit: "" };
+  const compound = compoundFor(view, item);
+  return {
+    compoundId: item.compoundId || null,
+    amount: compound && typeof compound.amount === "number" ? compound.amount : null,
+    unit: compound && compound.unit ? compound.unit : "",
+  };
+}
+
 function blockItems(projected, blockId) {
   const items = new Map((projected.items || []).map((item) => [item.id, item]));
   return (projected.placements || [])
@@ -324,17 +337,17 @@ export function logRoutineItem(state, itemId) {
     const view = projectDailyRoutines(store);
     const item = (view.items || []).find((row) => row.id === itemId);
     if (!item || coveringLog(view.logs, item.id, clock.day)) return null;
-    const compound = compoundFor(view, item);
+    const dose = loggedDose(view, item);
     const id = routineLogId(item.id, clock.day);
     const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", carryFuture({
       id,
       itemId: item.id,
-      compoundId: item.compoundId || null,
+      compoundId: dose.compoundId,
       day: clock.day,
       status: "done",
-      amount: compound && typeof compound.amount === "number" ? compound.amount : null,
-      unit: compound && compound.unit ? compound.unit : "",
+      amount: dose.amount,
+      unit: dose.unit,
       at: clock.now,
       deletedAt: null,
     }, store, id), at);
@@ -354,7 +367,7 @@ export function skipRoutineItem(state, itemId) {
     const next = upsertEntity(store, "logs", carryFuture({
       id,
       itemId: item.id,
-      compoundId: item.compoundId || null,
+      compoundId: item.kind === "dose" ? (item.compoundId || null) : null,
       day: clock.day,
       status: "skipped",
       amount: null,
@@ -415,7 +428,7 @@ export function restoreRoutineLog(state, logId) {
     const view = projectDailyRoutines(store);
     const item = (view.items || []).find((row) => row.id === parsed.itemId);
     if (!item) return null;
-    const compound = compoundFor(view, item);
+    const dose = loggedDose(view, item);
     const skipped = log.status === "skipped";
     const storedAmount = typeof log.amount === "number" && Number.isFinite(log.amount) ? log.amount : null;
     const storedUnit = typeof log.unit === "string" && log.unit ? log.unit : "";
@@ -423,11 +436,11 @@ export function restoreRoutineLog(state, logId) {
     const payload = {
       id: logId,
       itemId: item.id,
-      compoundId: item.compoundId || null,
+      compoundId: skipped ? null : dose.compoundId,
       day: parsed.day,
       status: skipped ? "skipped" : "done",
-      amount: skipped ? null : (storedAmount != null ? storedAmount : (compound && typeof compound.amount === "number" ? compound.amount : null)),
-      unit: skipped ? "" : (storedUnit || (compound && compound.unit ? compound.unit : "")),
+      amount: skipped ? null : (storedAmount != null ? storedAmount : dose.amount),
+      unit: skipped ? "" : (storedUnit || dose.unit),
       at: typeof log.at === "number" && Number.isFinite(log.at) ? log.at : clock.now,
       deletedAt: null,
     };
@@ -679,7 +692,7 @@ export function duplicateRoutineBlock(state, blockId) {
     }, at);
     if (!wrote(next, "blocks", id, at)) return null;
     for (const place of copies) {
-      const placementId = routineId("place");
+      const placementId = routinePlacementId(id, place.itemId);
       next = upsertEntity(next, "placements", {
         id: placementId,
         blockId: id,
@@ -825,7 +838,7 @@ function placeInBlock(store, blockId, itemId, at) {
   if (rows.some((row) => isLive(row))) return store;
   const dead = rows.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
   if (dead) return upsertEntity(store, "placements", { ...dead, order: nextPlacementOrder(store, blockId), deletedAt: null, removedWith: null }, at);
-  const id = routineId("place");
+  const id = routinePlacementId(blockId, itemId);
   return upsertEntity(store, "placements", {
     id,
     blockId,
@@ -865,7 +878,7 @@ export function saveRoutineItem(state, draft) {
       id: itemId,
       name,
       kind,
-      compoundId: kind === "dose" ? compoundId : (existing && existing.compoundId ? existing.compoundId : null),
+      compoundId: kind === "dose" ? compoundId : null,
       deletedAt: null,
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;
