@@ -343,18 +343,62 @@ function writeHiddenPref(state, hidden) {
   return putDailyRoutines(state, { ...current, prefs, updatedAt: Math.max(current.updatedAt || 0, at) });
 }
 
+function saveLive(state) {
+  if (state === app.state && typeof app.save === "function") app.save();
+}
+
 export function hideLegacyNextUp(state) {
   if (app.ROUTINES_ENABLED !== true || !state) return false;
   if (app.ui) app.ui.homeNextHidden = true;
-  writeHiddenPref(state, true);
+  if (writeHiddenPref(state, true)) saveLive(state);
   return true;
 }
 
 export function showLegacyNextUp(state) {
   if (app.ROUTINES_ENABLED !== true || !state) return false;
   if (app.ui) app.ui.homeNextHidden = false;
-  writeHiddenPref(state, false);
+  if (writeHiddenPref(state, false)) saveLive(state);
   return true;
+}
+
+function stringList(list) {
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach((id) => {
+    if (typeof id === "string" && id && !out.includes(id)) out.push(id);
+  });
+  return out;
+}
+
+function blockIdForItem(view, itemId) {
+  const blocks = new Map((view.blocks || []).map((block) => [block.id, block]));
+  const places = (view.placements || []).filter((row) => row && row.itemId === itemId && blocks.has(row.blockId));
+  places.sort((a, b) => {
+    const left = blocks.get(a.blockId);
+    const right = blocks.get(b.blockId);
+    return (left.order || 0) - (right.order || 0) || (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  });
+  return places.length ? places[0].blockId : "";
+}
+
+/* A collapsed block does not paint its rows, and a finished item stays hidden
+   until that block is revealed. Open the block that holds the target so the
+   row exists after the next render. A pull that has not finished does not write. */
+export function revealRoutineJump(state, jump) {
+  if (!jump || !state || !canMutateRoutines() || pullPending()) return false;
+  const current = normalizeDailyRoutines(state.dailyRoutines);
+  if (!current) return false;
+  const view = projectDailyRoutines(current) || { blocks: [], placements: [], logs: [] };
+  const blockId = jump.blockId || (jump.itemId ? blockIdForItem(view, jump.itemId) : "");
+  if (!blockId || !(view.blocks || []).some((block) => block.id === blockId)) return false;
+  const collapsed = stringList(current.prefs && current.prefs.collapsedBlocks);
+  const revealed = stringList(current.prefs && current.prefs.revealBlocks);
+  const nextCollapsed = collapsed.filter((id) => id !== blockId);
+  const needsReveal = !!(jump.itemId && coveringLog(view.logs, jump.itemId, dayKey()));
+  const nextRevealed = needsReveal && !revealed.includes(blockId) ? revealed.concat(blockId) : revealed;
+  if (nextCollapsed.length === collapsed.length && nextRevealed.length === revealed.length) return false;
+  const at = Date.now();
+  const prefs = { ...current.prefs, collapsedBlocks: nextCollapsed, revealBlocks: nextRevealed, updatedAt: at };
+  return putDailyRoutines(state, { ...current, prefs, updatedAt: Math.max(current.updatedAt || 0, at) });
 }
 
 /* Titles only. Amounts, units, and the row subtitle are not searched. */
@@ -466,6 +510,7 @@ export function openRoutineTile(tileId) {
   }
   if (!app.ui) app.ui = {};
   app.ui.routineJump = jump;
+  if (revealRoutineJump(app.state, jump)) saveLive(app.state);
   if (typeof app.goTab === "function") app.goTab("daily-routines");
   else if (app.ui) app.ui.tab = "daily-routines";
   if (typeof document === "undefined" || !jump) return true;
@@ -507,4 +552,5 @@ app.openRoutineTile = openRoutineTile;
 app.forgetRoutineTrayQuery = forgetRoutineTrayQuery;
 app.hideLegacyNextUp = hideLegacyNextUp;
 app.showLegacyNextUp = showLegacyNextUp;
+app.revealRoutineJump = revealRoutineJump;
 app.routineHaptic = routineHaptic;

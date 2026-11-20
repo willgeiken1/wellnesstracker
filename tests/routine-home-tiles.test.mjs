@@ -13,6 +13,7 @@ import {
   forgetRoutineTrayQuery,
   hideLegacyNextUp,
   isRoutineTileId,
+  openRoutineTile,
   legacyNextUpHTML,
   legacyNextUpWanted,
   renderRoutineTileHTML,
@@ -303,10 +304,23 @@ test("removing a tile returns it to the tray and does not delete the routine", (
   app.sb = {};
   app.cloudPullOk = false;
   app.ui = {};
+  let pendingSaves = 0;
+  app.save = () => { pendingSaves += 1; };
   hideLegacyNextUp(pending);
   assert.equal(pending.dailyRoutines.prefs.homeNextHidden, undefined);
+  assert.equal(pendingSaves, 0);
   assert.equal(app.ui.homeNextHidden, true);
   assert.equal(legacyNextUpWanted(pending), false);
+
+  const live = sampleState();
+  app.sb = null;
+  app.cloudPullOk = null;
+  app.state = live;
+  let liveSaves = 0;
+  app.save = () => { liveSaves += 1; };
+  hideLegacyNextUp(live);
+  assert.equal(live.dailyRoutines.prefs.homeNextHidden, true);
+  assert.equal(liveSaves, 1);
 
   const pulses = [];
   const nav = globalThis.navigator;
@@ -324,6 +338,45 @@ test("removing a tile returns it to the tray and does not delete the routine", (
   globalThis.window = previousWindow;
   assert.equal(trayHeightAfterDrag(220, -30, { reduce: false }), 250);
   assert.equal(addToDraft({ items: [], hidden: [], sizes: {} }, NEXT_UP_TILE_ID, "medium").items.length, 0);
+});
+
+test("a tile jump opens a collapsed routine before the tab renders", () => {
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.today = () => "2026-11-20";
+  const state = sampleState();
+  state.dailyRoutines.prefs.collapsedBlocks = ["block-m", "block-n"];
+  state.dailyRoutines.logs.push({
+    id: "log-b", itemId: "item-b", compoundId: "compound-a", day: "2026-11-20", status: "done",
+    amount: 250, unit: "mcg", at: 10, updatedAt: 10, deletedAt: null,
+  });
+  app.state = state;
+  const seen = [];
+  let saves = 0;
+  app.save = () => { saves += 1; };
+  app.goTab = () => { seen.push({
+    collapsed: state.dailyRoutines.prefs.collapsedBlocks.slice(),
+    revealed: (state.dailyRoutines.prefs.revealBlocks || []).slice(),
+  }); };
+  assert.equal(openRoutineTile(routineItemTileId("item-a")), true);
+  assert.deepEqual(seen, [{ collapsed: ["block-n"], revealed: [] }]);
+  assert.equal(saves, 1);
+
+  openRoutineTile(routineItemTileId("item-b"));
+  assert.deepEqual(seen[1].collapsed, []);
+  assert.deepEqual(seen[1].revealed, ["block-n"]);
+  assert.equal(saves, 2);
+
+  const again = saves;
+  openRoutineTile(routineItemTileId("item-a"));
+  assert.equal(saves, again);
+
+  app.sb = {};
+  app.cloudPullOk = false;
+  state.dailyRoutines.prefs.collapsedBlocks = ["block-m"];
+  openRoutineTile(NEXT_UP_TILE_ID);
+  assert.deepEqual(state.dailyRoutines.prefs.collapsedBlocks, ["block-m"]);
+  assert.equal(saves, again);
 });
 
 test("stacks and the long-press preview are not wired, and the shell cache is unchanged", () => {
