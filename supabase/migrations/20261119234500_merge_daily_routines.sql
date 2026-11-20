@@ -100,6 +100,12 @@ begin
   if p_value is null then
     return 'null';
   end if;
+  -- Integers and short decimals already match JSON.stringify. Only tiny
+  -- fractions and huge magnitudes need the float8 rewrite below.
+  raw := trim_scale(p_value)::text;
+  if raw ~ '^-?(0|[1-9][0-9]{0,20})(\.[0-9]*[1-9])?$' and raw !~ '^-?0\.0{6}' then
+    return raw;
+  end if;
   begin
     d := p_value::float8;
   exception when others then
@@ -140,9 +146,30 @@ begin
 end;
 $$;
 
+-- True when the text contains a character above U+FFFF. UTF-8 byte order
+-- matches UTF-16 code units for every other character, so the tie-break can
+-- stay on COLLATE "C" unless one of these is present.
+create or replace function public.daily_routines_has_supplementary(p_text text)
+returns boolean
+language sql
+immutable
+strict
+set search_path = public
+as $$
+  select octet_length(p_text) > char_length(p_text)
+    and (
+      position('\xf0'::bytea in convert_to(p_text, 'UTF8')) > 0
+      or position('\xf1'::bytea in convert_to(p_text, 'UTF8')) > 0
+      or position('\xf2'::bytea in convert_to(p_text, 'UTF8')) > 0
+      or position('\xf3'::bytea in convert_to(p_text, 'UTF8')) > 0
+      or position('\xf4'::bytea in convert_to(p_text, 'UTF8')) > 0
+    );
+$$;
+
 -- JavaScript compares strings by UTF-16 code units. COLLATE "C" compares
 -- UTF-8 bytes, which puts a supplementary character after U+FFFF instead of
--- at its surrogate pair.
+-- at its surrogate pair. Call this only when a supplementary character is
+-- present; ASCII and the rest of the BMP already match COLLATE "C".
 create or replace function public.daily_routines_utf16be(p_text text)
 returns bytea
 language plpgsql
@@ -181,6 +208,38 @@ begin
 end;
 $$;
 
+-- Greater-than for stable JSON. COLLATE "C" matches UTF-16 code units until
+-- a supplementary character shows up; then both sides use UTF-16.
+create or replace function public.daily_routines_text_gt(p_left text, p_right text)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when p_left is null or p_right is null then false
+    when not public.daily_routines_has_supplementary(p_left)
+     and not public.daily_routines_has_supplementary(p_right)
+      then p_left collate "C" > p_right collate "C"
+    else public.daily_routines_utf16be(p_left) > public.daily_routines_utf16be(p_right)
+  end;
+$$;
+
+create or replace function public.daily_routines_text_eq(p_left text, p_right text)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when p_left is null or p_right is null then p_left is not distinct from p_right
+    when not public.daily_routines_has_supplementary(p_left)
+     and not public.daily_routines_has_supplementary(p_right)
+      then p_left collate "C" = p_right collate "C"
+    else public.daily_routines_utf16be(p_left) = public.daily_routines_utf16be(p_right)
+  end;
+$$;
+
 create or replace function public.daily_routines_stable(p_value jsonb)
 returns text
 language plpgsql
@@ -193,6 +252,8 @@ declare
   key text;
   keys text[];
   parts text[] := '{}';
+  supp boolean := false;
+  raw text;
 begin
   if p_value is null or kind is null or kind = 'null' then
     return 'null';
@@ -205,11 +266,18 @@ begin
     return '[' || array_to_string(parts, ',') || ']';
   end if;
   if kind = 'object' then
-    select coalesce((
-      select array_agg(obj_key order by public.daily_routines_utf16be(obj_key))
-      from jsonb_object_keys(p_value) as obj_key
-    ), '{}'::text[])
-    into keys;
+    raw := p_value::text;
+    supp := octet_length(raw) > char_length(raw)
+      and public.daily_routines_has_supplementary(raw);
+    if supp then
+      select coalesce(array_agg(obj_key order by public.daily_routines_utf16be(obj_key)), '{}'::text[])
+      into keys
+      from jsonb_object_keys(p_value) as obj_key;
+    else
+      select coalesce(array_agg(obj_key order by obj_key collate "C"), '{}'::text[])
+      into keys
+      from jsonb_object_keys(p_value) as obj_key;
+    end if;
     if keys is null then
       keys := '{}'::text[];
     end if;
@@ -220,7 +288,14 @@ begin
     return '{' || array_to_string(parts, ',') || '}';
   end if;
   if kind = 'number' then
-    return public.daily_routines_json_number_text((p_value #>> '{}')::numeric);
+    raw := p_value #>> '{}';
+    -- Small integers already match JSON.stringify. Anything with a fraction,
+    -- an exponent, or more than 21 digits goes through the float8 formatter.
+    if position('e' in raw) = 0 and position('E' in raw) = 0
+       and position('.' in raw) = 0 and char_length(raw) <= 21 then
+      return raw;
+    end if;
+    return public.daily_routines_json_number_text(raw::numeric);
   end if;
   return p_value::text;
 end;
@@ -534,8 +609,10 @@ begin
   end if;
   prep_c := public.daily_routines_prepare(p_candidate, p_kind, p_now);
   prep_p := public.daily_routines_prepare(p_current, p_kind, p_now);
-  return public.daily_routines_utf16be(public.daily_routines_stable(prep_c))
-       > public.daily_routines_utf16be(public.daily_routines_stable(prep_p));
+  return public.daily_routines_text_gt(
+    public.daily_routines_stable(prep_c),
+    public.daily_routines_stable(prep_p)
+  );
 end;
 $$;
 
@@ -579,20 +656,48 @@ as $$
       count(*) over (partition by id, stamp, tomb) as tied
     from stamped
   ),
+  ranked as (
+    select
+      ord,
+      prepared,
+      id,
+      stamp,
+      tomb,
+      tied,
+      case when tied > 1 then public.daily_routines_stable(prepared) end as stable
+    from ready
+  ),
+  tie_mode as (
+    select
+      id,
+      stamp,
+      tomb,
+      bool_or(public.daily_routines_has_supplementary(stable)) as use_utf16
+    from ranked
+    where tied > 1
+    group by id, stamp, tomb
+  ),
   firsts as (
     select id, min(ord) as first_ord
-    from ready
+    from ranked
     group by id
   ),
   winners as (
-    select distinct on (id) id, prepared
-    from ready
+    select distinct on (r.id) r.id, r.prepared
+    from ranked r
+    left join tie_mode m
+      on m.id = r.id and m.stamp = r.stamp and m.tomb = r.tomb
     order by
-      id,
-      stamp desc,
-      tomb desc,
-      case when tied > 1 then public.daily_routines_utf16be(public.daily_routines_stable(prepared)) end desc,
-      ord
+      r.id,
+      r.stamp desc,
+      r.tomb desc,
+      case
+        when r.tied > 1 and coalesce(m.use_utf16, false)
+          then encode(public.daily_routines_utf16be(r.stable), 'hex')
+        when r.tied > 1
+          then r.stable
+      end collate "C" desc,
+      r.ord
   )
   select coalesce(jsonb_agg(w.prepared order by f.first_ord), '[]'::jsonb)
   from winners w
@@ -645,8 +750,8 @@ begin
   end if;
   left_s := public.daily_routines_stable(left_prefs);
   right_s := public.daily_routines_stable(right_prefs);
-  if public.daily_routines_utf16be(left_s) > public.daily_routines_utf16be(right_s)
-     or public.daily_routines_utf16be(left_s) = public.daily_routines_utf16be(right_s) then
+  if public.daily_routines_text_gt(left_s, right_s)
+     or public.daily_routines_text_eq(left_s, right_s) then
     return left_prefs;
   end if;
   return right_prefs;
@@ -816,7 +921,10 @@ revoke all on function public.daily_routines_clamp_ms(numeric, numeric) from pub
 revoke all on function public.daily_routines_stamp(jsonb, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_tombstone(jsonb, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_json_number_text(numeric) from public, anon, authenticated;
+revoke all on function public.daily_routines_has_supplementary(text) from public, anon, authenticated;
 revoke all on function public.daily_routines_utf16be(text) from public, anon, authenticated;
+revoke all on function public.daily_routines_text_gt(text, text) from public, anon, authenticated;
+revoke all on function public.daily_routines_text_eq(text, text) from public, anon, authenticated;
 revoke all on function public.daily_routines_stable(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_day(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_clip(jsonb, integer) from public, anon, authenticated;
