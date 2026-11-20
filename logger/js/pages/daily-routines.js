@@ -11,6 +11,7 @@ import {
   markLogUndone,
   futureCarry,
   routineLogId,
+  routineSiteId,
   tombstoneLog,
   routinePlacementId,
   dedupePlacementPairs,
@@ -657,7 +658,9 @@ function logHasSavedDose(log) {
    A day change writes the destination id and tombstones this one, so the
    other phone's fresh check-off of the old day stays. A time is applied
    only when that day is before today. A note is stored only when the draft
-   includes one. The compound row is
+   includes one. A site is stored only when the draft includes one. A blank
+   site removes it. A missing site key leaves the old site. An unknown site
+   is refused. A check cannot store a site. The compound row is
    left alone, so later edits to the item do not rewrite this log. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
@@ -709,6 +712,19 @@ export function editRoutineLog(state, logId, draft) {
     }
     payload = withDetailsFields(payload, draft, clockEdit.at);
     if (!payload) return null;
+    if (draft && Object.prototype.hasOwnProperty.call(draft, "site")) {
+      if (!doseItem) {
+        if (draft.site != null && draft.site !== "") return null;
+        delete payload.site;
+      } else {
+        if (draft.site != null && typeof draft.site !== "string") return null;
+        const raw = typeof draft.site === "string" ? draft.site.trim() : "";
+        const site = routineSiteId(raw);
+        if (raw && !site) return null;
+        if (site) payload.site = site;
+        else delete payload.site;
+      }
+    }
     let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
     if (!wrote(next, "logs", nextId, at)) return null;
     if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
@@ -752,6 +768,7 @@ export function routineLogDraft(state, logId) {
     maxDay: routineClock().day,
     time: routineClockTime(log.at),
     note: typeof log.note === "string" ? log.note : "",
+    site: routineSiteId(log.site),
     error: "",
   };
 }
