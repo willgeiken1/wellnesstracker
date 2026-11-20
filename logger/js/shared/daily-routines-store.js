@@ -27,11 +27,19 @@ const KINDS = new Set(["check", "dose"]);
 const STATUSES = new Set(["done", "skipped", "partial"]);
 const LOG_STAMPS = ["loggedAt", "updatedAt", "createdAt", "at", "mod"];
 
+/* Default sections have fixed ids, so two phones that seed an empty store at
+   the same time merge into one set. A default's tombstone keeps that id, so a
+   deleted default is never seeded again. */
 export const DEFAULT_ROUTINE_BLOCKS = Object.freeze([
-  Object.freeze({ name: "Morning routine", color: "citrus" }),
-  Object.freeze({ name: "Supplement & enhancer stack", color: "lavender" }),
-  Object.freeze({ name: "Night routine", color: "pink" }),
+  Object.freeze({ id: "block_default_morning", name: "Morning routine", color: "citrus" }),
+  Object.freeze({ id: "block_default_stack", name: "Supplement & enhancer stack", color: "lavender" }),
+  Object.freeze({ id: "block_default_night", name: "Night routine", color: "pink" }),
 ]);
+
+/* Seeded rows carry this stamp, not the seed time. Any real edit or delete of
+   a default is newer, so another phone's later seed cannot undo it in a merge.
+   Two seeds tie and are the same row. */
+export const DEFAULT_BLOCK_STAMP = 1;
 
 function num(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -405,19 +413,23 @@ export function revisePlanEntity(store, collection, id, patch, now) {
   return normalized;
 }
 
-export function seedDefaultBlocks(store, now, newId = () => routineId("block")) {
+export function seedDefaultBlocks(store, now) {
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
   if (liveOf(normalized.blocks).length) return normalized;
-  const at = num(now);
-  normalized.blocks = DEFAULT_ROUTINE_BLOCKS.map((block, index) => ({
-    id: newId(block.name, index),
-    name: block.name,
-    color: block.color,
-    order: index,
-    updatedAt: at,
-    deletedAt: null,
-  }));
-  normalized.updatedAt = at;
+  const known = new Set(normalized.blocks.map((block) => block.id));
+  const missing = DEFAULT_ROUTINE_BLOCKS.map((block, index) => ({ block, index })).filter(({ block }) => !known.has(block.id));
+  if (!missing.length) return normalized;
+  for (const { block, index } of missing) {
+    normalized.blocks.push({
+      id: block.id,
+      name: block.name,
+      color: block.color,
+      order: index,
+      updatedAt: DEFAULT_BLOCK_STAMP,
+      deletedAt: null,
+    });
+  }
+  normalized.updatedAt = num(now);
   return normalized;
 }
 
