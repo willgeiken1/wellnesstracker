@@ -111,14 +111,25 @@ function alreadyPlaced(store, blockId, name) {
 
 function seedStarter(state, keys) {
   const wanted = new Set(keys);
-  for (const row of GENERIC_STARTER_ITEMS) {
+  for (const [index, row] of GENERIC_STARTER_ITEMS.entries()) {
     if (!wanted.has(row.block)) continue;
     const store = normalizeDailyRoutines(state.dailyRoutines);
     if (!store) return false;
     const block = liveBlock(store, row.block);
     if (!block) continue;
     if (alreadyPlaced(store, block.id, row.name)) continue;
-    const added = addRoutineItem(state, block.id, { name: row.name, kind: "check", blockIds: [block.id] });
+    /* Fixed ids, so two phones that both seed the same store converge on one
+       copy at merge. A row that exists at all, even deleted, is left alone so
+       a removed starter stays removed. */
+    const itemId = `item_starter_${block.id}_${index}`;
+    if ((store.items || []).some((item) => item && item.id === itemId)) continue;
+    const added = addRoutineItem(state, block.id, {
+      name: row.name,
+      kind: "check",
+      blockIds: [block.id],
+      newItemId: itemId,
+      newPlacementId: `place_starter_${block.id}_${index}`,
+    });
     if (!added) return false;
   }
   return true;

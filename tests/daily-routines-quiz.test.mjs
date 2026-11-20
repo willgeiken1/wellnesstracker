@@ -35,7 +35,7 @@ globalThis.window = globalThis;
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 
 const { app } = await import("../logger/js/runtime.js");
-const { dailyRoutinesHTML, routinesSettingsSheetHTML } = await import("../logger/js/pages/daily-routines.js");
+const { dailyRoutinesHTML, deleteRoutineItem, ensureRoutineShell, routinesSettingsSheetHTML } = await import("../logger/js/pages/daily-routines.js");
 const {
   chooseRoutineQuiz,
   finishRoutineQuiz,
@@ -399,4 +399,42 @@ describe("routine setup quiz", { concurrency: false }, () => {
     assert.match(sw, /js\/shared\/routine-starter\.js/);
     assert.equal(fileURLToPath(import.meta.url).includes("/native/"), false);
   });
+  for (const mode of ["finish", "skip"]) {
+    test(`two clients that each ${mode} the quiz converge on one starter after a merge`, () => {
+      signIn();
+      ensureRoutineShell(app.state);
+      const shared = JSON.stringify(app.state.dailyRoutines);
+      const clients = [];
+      for (let i = 0; i < 2; i += 1) {
+        app.state = { dailyRoutines: JSON.parse(shared) };
+        app.ui = { sheet: null, routineQuiz: null };
+        if (mode === "skip") assert.equal(skipRoutineQuiz(app.state), true);
+        else {
+          answer();
+          assert.equal(finishRoutineQuiz(app.state), true);
+        }
+        clients.push(app.state.dailyRoutines);
+      }
+      const total = GENERIC_STARTER_ITEMS.length;
+      for (const [left, right] of [[clients[0], clients[1]], [clients[1], clients[0]]]) {
+        const merged = mergeDailyRoutines(left, right);
+        assert.equal(merged.items.filter(isLive).length, total);
+        assert.equal(merged.placements.filter(isLive).length, total);
+        assert.equal(merged.items.length, total);
+        assert.equal(merged.placements.length, total);
+      }
+
+      // A starter deleted on one phone stays deleted after the other phone merges.
+      app.state = { dailyRoutines: clients[0] };
+      const victim = clients[0].items.find((item) => item.name === "Morning check");
+      app.routineNow = () => new Date(2026, 10, 19, 9, 30);
+      assert.equal(deleteRoutineItem(app.state, victim.id), true);
+      for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, clients[1]), mergeDailyRoutines(clients[1], app.state.dailyRoutines)]) {
+        assert.equal(merged.items.filter(isLive).length, total - 1);
+        assert.equal(merged.items.filter(isLive).some((item) => item.id === victim.id), false);
+        const placed = merged.placements.filter((row) => isLive(row) && row.itemId === victim.id);
+        assert.equal(placed.length, 0);
+      }
+    });
+  }
 });
