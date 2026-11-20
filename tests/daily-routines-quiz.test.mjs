@@ -401,8 +401,8 @@ describe("routine setup quiz", { concurrency: false }, () => {
     assert.match(flag, /ROUTINES_ENABLED = false/);
     assert.equal(main.match(/routines-flag/g).length, 1);
     assert.match(main, /import "\.\/pages\/daily-routines-quiz\.js";/);
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
+    assert.match(sw, /const CACHE = "insight-shell-v64"/);
+    assert.match(sentry, /insight-shell-v64/);
     assert.match(sw, /js\/pages\/daily-routines-quiz\.js/);
     assert.match(sw, /js\/shared\/routine-starter\.js/);
     assert.equal(fileURLToPath(import.meta.url).includes("/native/"), false);
