@@ -67,7 +67,7 @@ const {
 } = await import("../logger/js/pages/daily-routines-dose.js");
 const { formatCalcNumber, reconstitutionResult, reconstitutionResultHTML } = await import("../logger/js/pages/reconstitution.js");
 const { nextDoseCountdown, localCalendarDay } = await import("../logger/js/shared/routine-dose.js");
-const { isLive, putDailyRoutines, upsertEntity } = await import("../logger/js/shared/daily-routines-store.js");
+const { isLive, mergeDailyRoutines, putDailyRoutines, upsertEntity } = await import("../logger/js/shared/daily-routines-store.js");
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -173,6 +173,90 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(editRoutineLog(app.state, second.id, { amount: "0.25", day: "2026-11-18" }), false);
     assert.equal(second.day, "2026-11-19");
     assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && row.day === "2026-11-18" && !(row.deletedAt > 0)).length, 1);
+  });
+
+  test("a moved log stays live when the destination day has a newer tombstone", () => {
+    signIn("2026-11-19");
+    pin("2026-11-19", "2026-11-19T15:00:00.000Z");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const source = liveLog(item.id);
+    const ahead = source.updatedAt + 1_000_000;
+    const destId = `log_${item.id}_2026-11-18`;
+    app.state.dailyRoutines.logs.push({
+      id: destId,
+      day: "2026-11-18",
+      status: "done",
+      updatedAt: ahead,
+      deletedAt: ahead,
+    });
+    const remote = structuredClone(app.state.dailyRoutines);
+    assert.equal(editRoutineLog(app.state, source.id, { day: "2026-11-18" }), true);
+    const moved = app.state.dailyRoutines.logs.find((row) => row.id === destId);
+    assert.equal(isLive(moved), true);
+    assert.equal(moved.day, "2026-11-18");
+    assert.equal(moved.amount, 250);
+    assert.equal(moved.unit, "mcg");
+    assert.ok(moved.updatedAt > ahead);
+    const sourceRow = app.state.dailyRoutines.logs.find((row) => row.id === source.id);
+    assert.equal(isLive(sourceRow), false);
+    assert.ok(sourceRow.updatedAt > source.updatedAt);
+    const merged = mergeDailyRoutines(app.state.dailyRoutines, remote);
+    const live = merged.logs.filter((row) => isLive(row) && row.day === "2026-11-18");
+    assert.equal(live.length, 1);
+    assert.equal(live[0].amount, 250);
+    assert.equal(merged.logs.some((row) => isLive(row) && row.day === "2026-11-19"), false);
+  });
+
+  test("editing a log follows the saved dose, not the item's current kind", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = liveLog(item.id);
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id,
+      name: "Example Compound A",
+      kind: "check",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(app.state.dailyRoutines.items.find((row) => row.id === item.id).kind, "check");
+    assert.equal(openRoutineLogEditor(logged.id), true);
+    assert.equal(app.ui.sd.kind, "dose");
+    assert.match(routineLogSheetHTML(), /id="dr-log-amount"/);
+    assert.match(routineLogSheetHTML(), /value="250"/);
+    assert.equal(editRoutineLog(app.state, logged.id, { day: "2026-11-18" }), true);
+    const kept = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.day === "2026-11-18");
+    assert.equal(kept.amount, 250);
+    assert.equal(kept.unit, "mcg");
+
+    signIn("2026-11-19");
+    assert.equal(addRoutineItem(app.state, blockId("Morning routine"), { name: "Example Compound B", kind: "check" }), true);
+    const check = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound B");
+    assert.equal(logRoutineItem(app.state, check.id), true);
+    const checkLog = liveLog(check.id);
+    assert.equal(checkLog.amount, null);
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: check.id,
+      name: "Example Compound B",
+      kind: "dose",
+      amount: "10",
+      unit: "mg",
+      blockId: blockId("Morning routine"),
+      blockIds: [blockId("Morning routine")],
+    }), true);
+    assert.equal(openRoutineLogEditor(checkLog.id), true);
+    assert.equal(app.ui.sd.kind, "check");
+    assert.doesNotMatch(routineLogSheetHTML(), /id="dr-log-amount"/);
+    assert.equal(editRoutineLog(app.state, checkLog.id, { day: "2026-11-18" }), true);
+    const movedCheck = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.day === "2026-11-18");
+    assert.equal(movedCheck.amount, null);
+    assert.equal(movedCheck.unit, "");
+    assert.equal(movedCheck.status, "done");
   });
 
   test("history and completed rows show the logged amount after the compound amount changes", () => {
@@ -560,8 +644,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     const flag = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v61"/);
-    assert.match(sentry, /insight-shell-v61/);
+    assert.match(sw, /const CACHE = "insight-shell-v62"/);
+    assert.match(sentry, /insight-shell-v62/);
     assert.match(sw, /js\/pages\/daily-routines-dose\.js/);
     assert.match(sw, /js\/pages\/reconstitution\.js/);
     assert.match(sw, /js\/shared\/routine-dose\.js/);

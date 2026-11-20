@@ -500,6 +500,15 @@ function unitForEditedLog(log, compound) {
   return "";
 }
 
+/* A saved dose log keeps its amount or unit. The item's current kind is
+   not that record: switching the item to a check must not wipe the log,
+   and switching a check to a dose must not demand an amount for an old check. */
+function logHasSavedDose(log) {
+  if (!log || log.rest === true) return false;
+  if (typeof log.amount === "number" && Number.isFinite(log.amount)) return true;
+  return typeof log.unit === "string" && DOSE_UNIT_SET.has(log.unit);
+}
+
 /* Changes the amount and the day on one log. The day is the string the
    user picked. It is not today's key and not the UTC day of the clock.
    The compound row is left alone, so later edits to the item do not
@@ -518,11 +527,10 @@ export function editRoutineLog(state, logId, draft) {
     }
     const view = projectDailyRoutines(store);
     const compound = (view.compounds || []).find((row) => row.id === log.compoundId) || null;
-    const item = (view.items || []).find((row) => row.id === log.itemId) || null;
-    const doseItem = item ? item.kind === "dose" : typeof log.amount === "number";
-    const at = stampAfter(clock.now, log.updatedAt);
+    const doseItem = logHasSavedDose(log);
     const nextId = log.itemId ? routineLogId(log.itemId, day) : log.id;
     if (nextId !== log.id && (store.logs || []).some((row) => isLive(row) && row.id === nextId)) return null;
+    const at = writeStamp(store, clock, nextId);
     const fields = doseItem ? null : {
       ...log,
       id: nextId,
@@ -534,7 +542,8 @@ export function editRoutineLog(state, logId, draft) {
     };
     let payload = fields;
     if (doseItem) {
-      const amount = parseRoutineAmount(draft && draft.amount);
+      const rawAmount = draft && Object.prototype.hasOwnProperty.call(draft, "amount") ? draft.amount : log.amount;
+      const amount = parseRoutineAmount(rawAmount);
       if (amount == null || amount <= 0) return null;
       const unit = unitForEditedLog(log, compound);
       if (!unit) return null;
@@ -585,7 +594,7 @@ export function routineLogDraft(state, logId) {
     compoundId: log.compoundId || null,
     amount: typeof log.amount === "number" ? formatAmount(log.amount) : "",
     unit,
-    kind: item && item.kind === "check" ? "check" : "dose",
+    kind: logHasSavedDose(log) ? "dose" : "check",
     day: log.day,
     maxDay: routineClock().day,
     error: "",
