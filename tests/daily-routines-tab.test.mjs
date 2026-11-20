@@ -348,9 +348,9 @@ test("signed in with the flag on paints the shell and seeds the three default bl
     { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 7, deletedAt: null },
   );
   const counted = dailyRoutinesHTML();
-  assert.match(counted, /<b>2<\/b> logged today/);
+  assert.match(counted, /<b>1<\/b> logged today/);
   assert.doesNotMatch(counted, /0\.25|mcg|>9</);
-  assert.equal(loggedTodayCount(state.dailyRoutines.logs, "2026-11-19"), 2);
+  assert.equal(loggedTodayCount(state.dailyRoutines.logs, "2026-11-19"), 1);
 });
 
 test("a night clock names the night block and the morning that follows", () => {
@@ -430,7 +430,7 @@ test("flag off does not paint the shell or write a store", () => {
   assert.equal(ensureRoutineShell(state, 10), null);
 });
 
-test("settings and Discover sheets are placeholders", () => {
+test("settings includes focus mode and Discover stays a placeholder", () => {
   assert.match(routinesSettingsSheetHTML(), /Notifications stay off/);
   assert.match(routinesDiscoverSheetHTML(), /does not suggest a dose/);
   app.$ = (sel) => document.querySelector(sel);
@@ -439,7 +439,9 @@ test("settings and Discover sheets are placeholders", () => {
   app.renderSheet();
   assert.equal(sheet.hidden, false);
   assert.match(sheet.innerHTML, /aria-label="Routines settings"/);
-  assert.match(sheet.innerHTML, /Reminders, the FAQ, and focus mode/);
+  assert.match(sheet.innerHTML, /Focus mode/);
+  assert.match(sheet.innerHTML, /aria-checked="false"/);
+  assert.match(sheet.innerHTML, /Notifications stay off/);
   app.ui.sheet = "routines-discover";
   app.renderSheet();
   assert.match(sheet.innerHTML, /aria-label="Discover"/);
@@ -461,8 +463,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v57"/);
-  assert.match(sentry, /insight-shell-v57/);
+  assert.match(sw, /const CACHE = "insight-shell-v58"/);
+  assert.match(sentry, /insight-shell-v58/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);
