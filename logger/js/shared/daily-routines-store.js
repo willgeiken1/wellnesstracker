@@ -101,6 +101,7 @@ function normalizeCompound(raw) {
     unit: clip(raw.unit, 16),
     startDate: validDay(raw.startDate) ? raw.startDate : null,
     archivedAt: typeof raw.archivedAt === "number" && raw.archivedAt > 0 ? raw.archivedAt : null,
+    chartLine: raw.chartLine === true,
   };
 }
 

@@ -470,6 +470,10 @@
 .dr-calc-result p { margin: 0 0 8px; }
 .dr-calc-note { font-size: 14px; }
 .dr-log-error { min-height: 0; margin: 0 0 12px; color: var(--red, #b42318); font-weight: 700; }
+.chart .started { stroke: var(--text); stroke-width: 1; }
+.chart .started-label { fill: var(--text); font-size: 9px; font-family: var(--body); }
+.chart .started-mark { pointer-events: none; }
+.dr-chart-lines .dr-set-row .sub { font-weight: 500; }
 .dr-log-error:empty { display: none; }
 
 @media (prefers-reduced-motion: no-preference) {
