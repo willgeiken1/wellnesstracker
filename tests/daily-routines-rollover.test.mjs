@@ -254,12 +254,12 @@ describe("routine day rollover", { concurrency: false }, () => {
     const early = at(2026, 11, 20, 3, 59);
     pin(early);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, routineDayKey(early, 4)), 1);
-    assert.equal(doseCountdownText(view, item, early, routineDayKey(early, 4)), "Next dose in 25 hr 1 min");
+    assert.equal(doseCountdownText(view, item, early, routineDayKey(early, 4)), "Next dose in 1 hr 1 min");
     assert.equal(toggleRoutineReveal(app.state, blockId("Morning routine")), true);
     let html = dailyRoutinesHTML();
     assert.match(html, /data-streak="1"/);
     assert.match(html, /data-logged="1"/);
-    assert.match(html, /data-next-dose="1501"/);
+    assert.match(html, /data-next-dose="61"/);
 
     const onTime = at(2026, 11, 20, 4, 0);
     pin(onTime);
@@ -269,6 +269,11 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.match(html, /data-streak="1"/);
     assert.match(html, /data-logged="0"/);
     assert.match(html, /data-next-dose="60"/);
+    const openEarly = { ...view, logs: [] };
+    assert.equal(doseCountdownText(openEarly, item, early, "2026-11-19"), "Next dose in 1 hr 1 min");
+    const custom = at(2026, 11, 20, 5, 30);
+    const laterHour = { ...view, settings: { dayRolloverHour: 6 } };
+    assert.equal(doseCountdownText(laterHour, item, custom, "2026-11-19"), "Next dose in 23 hr 30 min");
 
     pin(at(2026, 11, 21, 4, 0));
     html = dailyRoutinesHTML();

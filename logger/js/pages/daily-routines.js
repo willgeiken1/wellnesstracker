@@ -386,16 +386,21 @@ function amountMarkup(text) {
   return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
 }
 
-export function doseCountdownText(projected, item, date, day) {
-  if (!projected || !item) return "";
-  const result = nextDoseCountdown({
+function countdownQuery(projected, item, date, day) {
+  return {
     item,
     blocks: projected.blocks,
     placements: projected.placements,
     logs: projected.logs,
     date,
     day,
-  });
+    hour: projected.settings && projected.settings.dayRolloverHour,
+  };
+}
+
+export function doseCountdownText(projected, item, date, day) {
+  if (!projected || !item) return "";
+  const result = nextDoseCountdown(countdownQuery(projected, item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const wait = formatRoutineWait(result.waitMin);
   if (!wait) return "";
@@ -404,14 +409,7 @@ export function doseCountdownText(projected, item, date, day) {
 
 function countdownMarkup(projected, row, date, day) {
   if (!row.item || row.item.kind !== "dose") return "";
-  const result = nextDoseCountdown({
-    item: row.item,
-    blocks: projected.blocks,
-    placements: projected.placements,
-    logs: projected.logs,
-    date,
-    day,
-  });
+  const result = nextDoseCountdown(countdownQuery(projected, row.item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const text = doseCountdownText(projected, row.item, date, day);
   if (!text) return "";
