@@ -253,7 +253,8 @@ export function migrateHomeLayout(state) {
 /* Appends Next up once, and only when the flag is on and this copy is a real
    edit that already has a catalog tile. A migration is left alone. An edit
    with no catalog tile gets a paint flag instead of an items change, so the
-   merge still accepts the layout. updatedAt is not moved: a seed must not
+   merge still accepts the layout. A Next up the user removed through the
+   routines pref counts as decided. updatedAt is not moved: a seed must not
    outrank a newer edit. */
 export function seedRoutineNextUp(state) {
   if (!state || typeof state !== "object" || app.ROUTINES_ENABLED !== true) return state;
@@ -267,6 +268,11 @@ export function seedRoutineNextUp(state) {
     return state;
   }
   if (home.routineNextSeeded === true) return state;
+  const prefs = state.dailyRoutines && state.dailyRoutines.prefs;
+  if (prefs && prefs.homeNextHidden === true) {
+    home.routineNextSeeded = true;
+    return state;
+  }
   const hasCatalog = home.items.some((id) => typeof id === "string" && HOME_WIDGETS[id]);
   home.routineNextSeeded = true;
   if (!hasCatalog) {

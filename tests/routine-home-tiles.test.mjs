@@ -402,3 +402,52 @@ test("stacks and the long-press preview are not wired, and the shell cache is un
   assert.match(sentry, /insight-shell-v59/);
   assert.match(sw, /js\/shared\/routine-home-tiles\.js/);
 });
+
+test("flag on, a Home heavy with routine tiles survives a save, a pull and a reload", () => {
+  app.ROUTINES_ENABLED = true;
+  const block = routineBlockTileId("block-m");
+  const item = routineItemTileId("item-b");
+  const state = { layout: { homeV2: { v: 2, items: ["today", block, item], hidden: [], updatedAt: 10, routineNextSeeded: true } } };
+  let draft = { items: ["today", block, item], hidden: [], sizes: {}, gates: {} };
+  draft = { ...draft, ...removeFromDraft(draft, "today") };
+  assert.deepEqual(draft.items, ["today", block, item]);
+  assert.deepEqual(addRoutineTile({ items: [], hidden: [], sizes: {} }, NEXT_UP_TILE_ID).items, []);
+  draft = { ...draft, ...removeFromDraft(draft, block) };
+  assert.deepEqual(draft.items, ["today", item]);
+  const saved = commitHomeEditor(state, draft);
+  assert.deepEqual(saved.items, ["today", item]);
+  const at = state.layout.homeV2.updatedAt;
+  assert.ok(at > 10);
+
+  const remote = { homeV2: { v: 2, items: ["today", "cardio"], hidden: [], updatedAt: 10 } };
+  const picked = pickHomeV2(state.layout, remote, at + 1);
+  assert.deepEqual(picked.items, ["today", item]);
+  assert.equal(picked.updatedAt, at);
+
+  const reloaded = structuredClone({ layout: { ...state.layout, homeV2: picked } });
+  applyHomeMigration(reloaded, at + 2);
+  assert.deepEqual(reloaded.layout.homeV2.items, ["today", item]);
+  assert.deepEqual(reloaded.layout.homeV2.hidden, [block]);
+  assert.equal(reloaded.layout.homeV2.updatedAt, at);
+
+  app.ROUTINES_ENABLED = false;
+  assert.deepEqual(removeFromDraft({ items: ["today", item], hidden: [], sizes: {} }, "today").items, []);
+});
+
+test("flag on, Next up removed through the routines pref is not seeded back", () => {
+  app.ROUTINES_ENABLED = true;
+  const state = { ...editState(), dailyRoutines: { ...sampleStore(), prefs: { lastBlockId: null, homeNextHidden: true, updatedAt: 20 } } };
+  applyHomeMigration(state, 5000);
+  assert.deepEqual(state.layout.homeV2.items, ["today", "cardio"]);
+  assert.equal(state.layout.homeV2.routineNextSeeded, true);
+  assert.equal(state.layout.homeV2.updatedAt, 50);
+  state.dailyRoutines.prefs.homeNextHidden = false;
+  applyHomeMigration(state, 6000);
+  assert.deepEqual(state.layout.homeV2.items, ["today", "cardio"]);
+
+  app.ROUTINES_ENABLED = false;
+  const off = { ...editState(), dailyRoutines: { ...sampleStore(), prefs: { homeNextHidden: true, updatedAt: 20 } } };
+  const before = JSON.stringify(off);
+  applyHomeMigration(off, 5000);
+  assert.equal(JSON.stringify(off), before);
+});

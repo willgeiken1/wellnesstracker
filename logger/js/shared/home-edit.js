@@ -68,10 +68,20 @@ export function reorderDraft(draft, id, to) {
   return next;
 }
 
+/* Flag on, the last catalog card stays while a routine tile is on Home. A
+   non-empty list with no catalog id is not a layout the merge or the server
+   accepts, so the edit would be lost on the next pull. */
+export function keepsLastCatalog(items, id) {
+  if (app.ROUTINES_ENABLED !== true || !HOME_WIDGETS[id] || !Array.isArray(items)) return false;
+  if (!items.some((x) => isRoutineTileId(x))) return false;
+  return items.filter((x) => HOME_WIDGETS[x]).length === 1 && items.includes(id);
+}
+
 /* Hide a card using the same shape the old editor's Remove button made. */
 export function removeFromDraft(draft, id) {
   const next = cleanDraft(draft);
   if (!known(id) || !next.items.includes(id)) return next;
+  if (keepsLastCatalog(next.items, id)) return next;
   next.items = next.items.filter((x) => x !== id);
   if (!next.hidden.includes(id)) next.hidden.push(id);
   return next;
