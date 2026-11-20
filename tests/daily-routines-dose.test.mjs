@@ -245,6 +245,60 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(saved.amount, 0.0004);
   });
 
+  test("a matching number in a different unit is not the planned dose", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = liveLog(item.id);
+    assert.equal(logged.unit, "mcg");
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id,
+      name: "Example Compound A",
+      kind: "dose",
+      amount: "500",
+      unit: "mg",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: "500", day: "2026-11-19" }), true);
+    const partial = app.state.dailyRoutines.logs.find((row) => row.id === logged.id);
+    assert.equal(partial.amount, 500);
+    assert.equal(partial.unit, "mcg");
+    assert.equal(partial.status, "partial");
+
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id,
+      name: "Example Compound A",
+      kind: "dose",
+      amount: "0.25",
+      unit: "mg",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: "250", day: "2026-11-19" }), true);
+    const matched = app.state.dailyRoutines.logs.find((row) => row.id === logged.id);
+    assert.equal(matched.amount, 250);
+    assert.equal(matched.unit, "mcg");
+    assert.equal(matched.status, "done");
+
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id,
+      name: "Example Compound A",
+      kind: "dose",
+      amount: "250",
+      unit: "IU",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: "500", day: "2026-11-19" }), true);
+    const different = app.state.dailyRoutines.logs.find((row) => row.id === logged.id);
+    assert.equal(different.amount, 500);
+    assert.equal(different.unit, "mcg");
+    assert.equal(different.status, "partial");
+  });
+
   test("editing a log follows the saved dose, not the item's current kind", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
