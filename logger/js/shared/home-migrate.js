@@ -40,7 +40,9 @@
    Duplicates keep the first id. A visible source wins over a hidden one.
 */
 
+import { app } from "../runtime.js";
 import { HOME_WIDGETS } from "./home-widgets.js";
+import { NEXT_UP_TILE_ID } from "./routine-home-tiles.js";
 
 const NATURAL = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
 const BRIEF_ORDER = ["pattern", "oura", "train", "food", "week", "weight"];
@@ -248,23 +250,50 @@ export function migrateHomeLayout(state) {
   return { v: 2, items, hidden, updatedAt: sourceStamp(state) };
 }
 
+/* Appends Next up once, and only when the flag is on and this copy is a real
+   edit that already has a catalog tile. A migration is left alone. An edit
+   with no catalog tile gets a paint flag instead of an items change, so the
+   merge still accepts the layout. updatedAt is not moved: a seed must not
+   outrank a newer edit. */
+export function seedRoutineNextUp(state) {
+  if (!state || typeof state !== "object" || app.ROUTINES_ENABLED !== true) return state;
+  const home = state.layout && state.layout.homeV2;
+  if (!home || typeof home !== "object" || Array.isArray(home) || home.v !== 2 || !Array.isArray(home.items)) return state;
+  if (home.migrated === true || (typeof home.migratedAt === "number" && home.migratedAt > 0)) return state;
+  const hidden = Array.isArray(home.hidden) ? home.hidden : [];
+  const present = home.items.includes(NEXT_UP_TILE_ID) || hidden.includes(NEXT_UP_TILE_ID);
+  if (present) {
+    if (home.routineNextSeeded !== true) home.routineNextSeeded = true;
+    return state;
+  }
+  if (home.routineNextSeeded === true) return state;
+  const hasCatalog = home.items.some((id) => typeof id === "string" && HOME_WIDGETS[id]);
+  home.routineNextSeeded = true;
+  if (!hasCatalog) {
+    home.routineNextAside = true;
+    return state;
+  }
+  home.items = home.items.concat(NEXT_UP_TILE_ID);
+  return state;
+}
+
 /* Writes homeV2. Pass { afterMerge: true } only after mergeRemote. */
 export function applyHomeMigration(state, now = Date.now(), opts) {
-  if (!state || typeof state !== "object") return state;
+  if (!state || typeof state !== "object") return seedRoutineNextUp(state);
   const afterMerge = !!(opts && opts.afterMerge);
   const existing = state.layout && state.layout.homeV2;
   const clean = asV2(existing, now);
 
-  if (clean && !homeV2Migrated(clean)) return state;
+  if (clean && !homeV2Migrated(clean)) return seedRoutineNextUp(state);
 
   const built = migrateHomeLayout(state);
   if (clean && homeV2Migrated(clean)) {
     const from = typeof clean.updatedAt === "number" ? clean.updatedAt : 0;
     const source = built ? built.updatedAt : 0;
     const keysChanged = typeof clean.migratedFrom === "string" && clean.migratedFrom !== sourceKey(state);
-    if (!(afterMerge && built && keysChanged && source > from)) return state;
+    if (!(afterMerge && built && keysChanged && source > from)) return seedRoutineNextUp(state);
   }
-  if (!built) return state;
+  if (!built) return seedRoutineNextUp(state);
   if (!state.layout || typeof state.layout !== "object" || Array.isArray(state.layout)) state.layout = {};
   const base = existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {};
   state.layout.homeV2 = {
@@ -277,7 +306,7 @@ export function applyHomeMigration(state, now = Date.now(), opts) {
     migrated: true,
     migratedFrom: sourceKey(state),
   };
-  return state;
+  return seedRoutineNextUp(state);
 }
 
 /* Same kind: newer updatedAt, then more distinct ids, then items, hidden, and sizes.

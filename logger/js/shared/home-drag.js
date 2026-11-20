@@ -159,7 +159,8 @@ function tick() {
   if (scrolled) schedule();
 }
 
-/* Move the dragged id to the target's place, then slide the others (FLIP). */
+/* Move the dragged id to the target's place, then slide the others (FLIP).
+   A drop changes order. It does not group cards, and a hold does not open a preview. */
 function reorder(d, targetId) {
   const to = d.order.indexOf(targetId);
   const from = d.order.indexOf(d.id);
