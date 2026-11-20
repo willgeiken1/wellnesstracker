@@ -210,6 +210,29 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(liveLogs(view(merged), item.id).length, 1);
   });
 
+  test("the log shown after a same-day merge still takes an amount edit", () => {
+    signIn("2026-11-19");
+    const item = addDose(blockId("Morning routine"));
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    pin("2026-11-20");
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-20", 9, 0);
+    const phoneA = onPhone(base, () => assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-20" }), true));
+    pin("2026-11-20", 9, 5);
+    const phoneB = onPhone(base, () => assert.equal(logRoutineItem(app.state, item.id), true));
+    const merged = converge(phoneA, phoneB);
+    assert.equal(liveLogs(merged, item.id, "2026-11-20").length, 2, "both rows stay in the store");
+    const shown = liveLogs(view(merged), item.id, "2026-11-20")[0];
+    pin("2026-11-20", 10, 0);
+    app.state = { dailyRoutines: structuredClone(merged) };
+    assert.equal(editRoutineLog(app.state, shown.id, { amount: "125", day: "2026-11-20" }), true);
+    const after = liveLogs(view(app.state.dailyRoutines), item.id, "2026-11-20");
+    assert.equal(after.length, 1);
+    assert.equal(after[0].id, shown.id);
+    assert.equal(after[0].amount, 125);
+  });
+
   test("a block deleted on one phone and renamed later on the other keeps its items", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");

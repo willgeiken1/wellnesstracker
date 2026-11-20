@@ -575,7 +575,7 @@ export function editRoutineLog(state, logId, draft) {
     if (!log || !isLive(log) || log.rest === true) return null;
     const day = draft && typeof draft.day === "string" ? draft.day : "";
     if (!validCalendarDay(day) || day > clock.day) return null;
-    if (log.itemId) {
+    if (log.itemId && day !== log.day) {
       const clash = (store.logs || []).some((row) => isLive(row) && row.id !== logId && row.itemId === log.itemId && row.day === day && row.rest !== true);
       if (clash) return null;
     }
