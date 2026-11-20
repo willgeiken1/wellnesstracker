@@ -277,6 +277,43 @@ function normalizePrefs(raw, now = Date.now()) {
   };
 }
 
+const QUIZ_TRACKS = new Set(["checks", "supplements", "both"]);
+const QUIZ_BLOCK_KEYS = ["morning", "stack", "night"];
+const QUIZ_CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function quizClock(value) {
+  return typeof value === "string" && QUIZ_CLOCK.test(value) ? value : null;
+}
+
+/* Wake and bed stay on the quiz until a block already has startTime.
+   PR 16 adds that field. This does not invent it. */
+function normalizeQuiz(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const updatedAt = num(raw.updatedAt);
+  if (raw.status === "skipped") {
+    return { status: "skipped", wake: null, bed: null, tracks: null, kept: null, updatedAt };
+  }
+  if (raw.status !== "done") return null;
+  const seen = new Set(Array.isArray(raw.kept) ? raw.kept : []);
+  const kept = [];
+  for (const key of QUIZ_BLOCK_KEYS) if (seen.has(key)) kept.push(key);
+  return {
+    status: "done",
+    wake: quizClock(raw.wake),
+    bed: quizClock(raw.bed),
+    tracks: QUIZ_TRACKS.has(raw.tracks) ? raw.tracks : null,
+    kept,
+    updatedAt,
+  };
+}
+
+function mergeQuiz(local, remote) {
+  if (!local) return remote || null;
+  if (!remote) return local;
+  if (num(local.updatedAt) >= num(remote.updatedAt)) return local;
+  return remote;
+}
+
 export function emptyDailyRoutines(now = 0) {
   return {
     updatedAt: num(now),
@@ -286,6 +323,7 @@ export function emptyDailyRoutines(now = 0) {
     compounds: [],
     logs: [],
     prefs: { lastBlockId: null, updatedAt: num(now) },
+    quiz: null,
   };
 }
 
@@ -300,11 +338,39 @@ export function normalizeDailyRoutines(raw, now = Date.now()) {
     compounds: normalizeList(raw.compounds, normalizeCompound, now),
     logs: normalizeList(raw.logs, normalizeLog, now),
     prefs,
+    quiz: normalizeQuiz(raw.quiz),
   });
 }
 
 export function isLive(entity) {
   return !!(entity && !(typeof entity.deletedAt === "number" && entity.deletedAt > 0));
+}
+
+const QUIZ_START_NAMES = new Map([
+  ["Morning routine", "wake"],
+  ["Night routine", "bed"],
+]);
+
+/* Writes wake onto Morning and bed onto Night only when that block already
+   has startTime. A block without the field is left untouched. */
+export function applyStoredQuizStartTimes(store) {
+  const normalized = normalizeDailyRoutines(store);
+  if (!normalized || !normalized.quiz || normalized.quiz.status !== "done") return { store: normalized, applied: false };
+  let applied = false;
+  const blocks = normalized.blocks.map((block) => {
+    if (!isLive(block) || !Object.prototype.hasOwnProperty.call(block, "startTime")) return block;
+    const field = QUIZ_START_NAMES.get(block.name);
+    const time = field ? normalized.quiz[field] : null;
+    if (!time || block.startTime === time) return block;
+    applied = true;
+    const at = Math.max(num(block.updatedAt), num(normalized.quiz.updatedAt));
+    return { ...block, startTime: time, updatedAt: at > num(block.updatedAt) ? at : num(block.updatedAt) + 1 };
+  });
+  if (!applied) return { store: normalized, applied: false };
+  return {
+    store: { ...normalized, blocks, updatedAt: Math.max(num(normalized.updatedAt), num(normalized.quiz.updatedAt)) },
+    applied: true,
+  };
 }
 
 export function liveOf(list) {
@@ -354,20 +420,41 @@ function mergePrefs(local, remote, now) {
   return stableStringify(left) >= stableStringify(right) ? left : right;
 }
 
+/* The quiz removes the blocks it does not keep at its own stamp and marks
+   each removed row with quizAt. When two phones answer differently, only the
+   winning answer's removals stand; the other answer's are undone here, so the
+   merge never removes a block the winning answer kept. A later real delete is
+   newer than quizAt and stays. The undone row keeps its stamp, so any real
+   edit after the quiz still wins. */
+function settleQuizRemovals(list, quiz) {
+  const winner = quiz ? num(quiz.updatedAt) : 0;
+  return list.map((row) => {
+    const at = num(row.quizAt);
+    if (isLive(row) || !at || at === winner || num(row.deletedAt) > at) return row;
+    const { quizAt, ...rest } = row;
+    void quizAt;
+    const revived = { ...rest, deletedAt: null };
+    if (typeof revived.removedWith === "string") revived.removedWith = null;
+    return revived;
+  });
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
   const left = normalizeDailyRoutines(local, now);
   const right = normalizeDailyRoutines(remote, now);
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
+  const quiz = mergeQuiz(left.quiz, right.quiz);
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
-    blocks: mergeEntityLists(left.blocks, right.blocks, now),
+    blocks: settleQuizRemovals(mergeEntityLists(left.blocks, right.blocks, now), quiz),
     items: mergeEntityLists(left.items, right.items, now),
-    placements: collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)),
+    placements: collapsePlacementPairs(settleQuizRemovals(mergeEntityLists(left.placements, right.placements, now), quiz)),
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
+    quiz,
   };
 }
 
@@ -584,3 +671,4 @@ app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;
 app.seedDefaultBlocks = seedDefaultBlocks;
 app.projectDailyRoutines = projectDailyRoutines;
+app.applyStoredQuizStartTimes = applyStoredQuizStartTimes;

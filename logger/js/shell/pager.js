@@ -150,8 +150,10 @@ function paint(tab) {
   const top = el.scrollTop;
   const saved = app.ui.tab;
   app.ui.tab = tab;
+  /* A neighbour pane is only pre-painted; page code must not open sheets for it. */
+  app.paintingNeighbour = true;
   try { el.innerHTML = htmlFor(tab); }
-  finally { app.ui.tab = saved; }
+  finally { app.ui.tab = saved; app.paintingNeighbour = false; }
   el.scrollTop = top;
 }
 

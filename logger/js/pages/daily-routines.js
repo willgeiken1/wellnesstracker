@@ -982,7 +982,7 @@ function writeCompound(store, item, name, dose, clock, at) {
   return wrote(next, "compounds", id, at) ? { store: next, compoundId: id } : null;
 }
 
-function placeInBlock(store, blockId, itemId, at) {
+function placeInBlock(store, blockId, itemId, at, newId) {
   const rows = (store.placements || []).filter((row) => row && row.blockId === blockId && row.itemId === itemId);
   if (rows.some((row) => isLive(row))) return store;
   const dead = rows.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
@@ -1008,7 +1008,7 @@ export function saveRoutineItem(state, draft) {
     if (!DAY.test(clock.day)) return null;
     const blockIds = selectedBlockIds(store, draft);
     if (!blockIds.length) return null;
-    const itemId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : routineId("item");
+    const itemId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : (draft && typeof draft.newItemId === "string" && draft.newItemId ? draft.newItemId : routineId("item"));
     const existing = (store.items || []).find((row) => row && row.id === itemId);
     if (draft && draft.itemId && (!existing || !isLive(existing))) return null;
     const at = stampAfter(clock.now, store.updatedAt);
@@ -1032,7 +1032,8 @@ export function saveRoutineItem(state, draft) {
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;
     const chosen = new Set(blockIds);
-    for (const blockId of blockIds) next = placeInBlock(next, blockId, itemId, at);
+    const fixedPlace = draft && typeof draft.newPlacementId === "string" && draft.newPlacementId ? draft.newPlacementId : null;
+    for (const blockId of blockIds) next = placeInBlock(next, blockId, itemId, at, fixedPlace && blockIds.length === 1 ? fixedPlace : null);
     for (const place of (store.placements || []).filter((row) => isLive(row) && row.itemId === itemId && !chosen.has(row.blockId))) {
       next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: place.id }, at);
     }
@@ -1426,6 +1427,7 @@ function shellHTML(date) {
   }
   const projected = ensureRoutineShell(app.state, date.getTime());
   const view = projected || { blocks: [], items: [], placements: [], logs: [], compounds: [], prefs: {} };
+  if (!app.paintingNeighbour && typeof app.maybeOfferRoutineQuiz === "function") app.maybeOfferRoutineQuiz();
   return paintShell(view, date);
 }
 

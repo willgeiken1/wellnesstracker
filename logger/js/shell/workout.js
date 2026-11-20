@@ -177,6 +177,8 @@ function renderSheet() {
     inner = typeof app.routineLogSheetHTML === "function" ? app.routineLogSheetHTML() : "";
   } else if (app.ui.sheet === "routines-calc") {
     inner = typeof app.reconstitutionSheetHTML === "function" ? app.reconstitutionSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-quiz") {
+    inner = typeof app.routineQuizSheetHTML === "function" ? app.routineQuizSheetHTML() : "";
   } else if (app.ui.sheet === "exercise") {
     const editing = app.ui.sd.idx >= 0;
     inner = `<h3>${editing ? "Edit exercise" : "Add exercise"}</h3>
@@ -200,6 +202,7 @@ function renderSheet() {
     : app.ui.sheet === "routines-history" ? "History"
     : app.ui.sheet === "routines-log" ? "Edit log"
     : app.ui.sheet === "routines-calc" ? "Reconstitution calculator"
+    : app.ui.sheet === "routines-quiz" ? "Setup quiz"
     : "Sheet";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>
