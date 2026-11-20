@@ -329,8 +329,9 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   assert.match(html, /Next · Supplement &amp; enhancer stack<span class="dr-wait">in 3 hr 30 min<\/span>/);
   assert.match(html, /<b>0<\/b> logged today/);
   assert.match(html, /aria-label="Routines settings"/);
-  assert.match(html, /data-action="routines-discover"/);
-  assert.match(html, /Add the first item/);
+  assert.match(html, /data-routines-discover="entry"/);
+  assert.match(html, /Coming soon/);
+  assert.match(html, /data-routines-discover="empty"/);
   assert.doesNotMatch(html, /check-in/i);
   assert.doesNotMatch(html, /Daily check-in/);
   const names = state.dailyRoutines.blocks.map((block) => block.name);
@@ -407,9 +408,11 @@ test("flag off does not paint the shell or write a store", () => {
   assert.equal(ensureRoutineShell(state, 10), null);
 });
 
-test("settings includes focus mode and Discover stays a placeholder", () => {
+test("settings includes focus mode and Discover stays coming soon", () => {
   assert.match(routinesSettingsSheetHTML(), /Notifications stay off/);
+  assert.match(routinesDiscoverSheetHTML(), /Coming soon/);
   assert.match(routinesDiscoverSheetHTML(), /does not suggest a dose/);
+  assert.doesNotMatch(routinesDiscoverSheetHTML(), /<li|<input|Peptide|SARM|recommend/i);
   app.$ = (sel) => document.querySelector(sel);
   app.stopBarcode = () => {};
   app.ui.sheet = "routines-settings";
@@ -422,7 +425,8 @@ test("settings includes focus mode and Discover stays a placeholder", () => {
   app.ui.sheet = "routines-discover";
   app.renderSheet();
   assert.match(sheet.innerHTML, /aria-label="Discover"/);
-  assert.match(sheet.innerHTML, /Study-backed entries are not in the app yet/);
+  assert.match(sheet.innerHTML, /Coming soon/);
+  assert.doesNotMatch(sheet.innerHTML, /<li|<input|Peptide|SARM|recommend/i);
 });
 
 test("static files keep the flag-off tab bar and cache the new shell", () => {

@@ -391,7 +391,9 @@ describe("routine check-off", { concurrency: false }, () => {
     const html = dailyRoutinesHTML();
     assert.match(html, /Example Compound B/);
     assert.match(html, /data-action="routines-add-item"/);
-    assert.doesNotMatch(html, /Add the first item/);
+    assert.doesNotMatch(html, /data-routines-discover="empty"/);
+    assert.match(html, /data-routines-discover="entry"/);
+    assert.match(html, /Coming soon/);
     assert.doesNotMatch(readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
     assert.doesNotMatch(readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
   });
