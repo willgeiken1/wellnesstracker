@@ -514,9 +514,14 @@ export function openRoutineTile(tileId) {
   if (revealRoutineJump(app.state, jump)) saveLive(app.state);
   if (typeof app.goTab === "function") app.goTab("daily-routines");
   else if (app.ui) app.ui.tab = "daily-routines";
-  if (typeof document === "undefined" || !jump) return true;
-  const selector = jump.itemId ? `[data-item-id="${jump.itemId.replace(/"/g, "")}"]` : jump.blockId ? `[data-block-id="${jump.blockId.replace(/"/g, "")}"]` : "";
-  const el = selector ? document.querySelector(selector) : null;
+  if (typeof document === "undefined" || !document.querySelector || !jump) return true;
+  const selector = jump.itemId
+    ? `.dr-row[data-item-id="${String(jump.itemId).replace(/"/g, "")}"]`
+    : jump.blockId
+      ? `.dr-tile[data-block-id="${String(jump.blockId).replace(/"/g, "")}"]`
+      : "";
+  const pane = document.querySelector("#pane-daily-routines") || document.querySelector("#view");
+  const el = pane && selector && pane.querySelector ? pane.querySelector(selector) : null;
   if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest", behavior: routineMotionOn() ? "smooth" : "auto" });
   return true;
 }
