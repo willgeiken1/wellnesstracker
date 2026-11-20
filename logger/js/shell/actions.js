@@ -1296,6 +1296,24 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineHistory !== "function") break;
       app.openRoutineHistory(b.dataset.compoundId, b.dataset.itemId);
       break;
+    case "routines-history-open":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineDayHistory !== "function") break;
+      app.openRoutineDayHistory();
+      break;
+    case "routines-history-tab":
+      if (app.ROUTINES_ENABLED !== true || typeof app.rememberRoutineGraphTab !== "function") break;
+      if (!app.rememberRoutineGraphTab(app.state, b.dataset.tab)) break;
+      if (typeof app.save === "function") app.save();
+      if (typeof app.render === "function") app.render();
+      break;
+    case "routines-history-day":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineHistoryCursor !== "function") break;
+      app.setRoutineHistoryCursor({ day: b.dataset.day });
+      break;
+    case "routines-history-month":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineHistoryCursor !== "function") break;
+      app.setRoutineHistoryCursor({ monthDelta: Number(b.dataset.delta) });
+      break;
     case "routines-log-edit":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineLogEditor !== "function") break;
       app.openRoutineLogEditor(b.dataset.logId);

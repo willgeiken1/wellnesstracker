@@ -889,6 +889,9 @@ export function saveRoutineItem(state, draft) {
       name,
       kind,
       compoundId: kind === "dose" ? compoundId : (existing && existing.compoundId ? existing.compoundId : null),
+      /* A new check has no compound start day. Keep the day it was added
+         so a later miss is still a miss. Edits do not move that day. */
+      ...(existing ? {} : { startDate: clock.day }),
       deletedAt: null,
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;
@@ -1266,6 +1269,7 @@ function paintShell(view, date) {
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
     <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
+    <button type="button" class="dr-history-open" data-action="routines-history-open">History <span class="dr-vh">calendar and graph</span></button>
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
