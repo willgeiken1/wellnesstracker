@@ -501,3 +501,58 @@ test("merge_user_data keeps dailyRoutines and merges rows the way the client doe
   assert.notEqual(bad.status, 0);
   assert.match(`${bad.stderr}`, /bad data/i);
 });
+
+test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
+  const stored = {
+    marker: "keep-shape",
+    logs: [{ id: "L1", day: "2026-01-02", status: "done", updatedAt: 5, deletedAt: 9 }],
+  };
+  for (const shape of [[], "x", 0, false]) {
+    const label = JSON.stringify(shape);
+    const kept = push(
+      { settingsAt: 1, dailyRoutines: stored },
+      { settingsAt: 2, dailyRoutines: shape },
+    );
+    assert.equal(kept.after, kept.before, `${label} keeps the stored object`);
+    assert.deepEqual(kept.full.dailyRoutines, stored, `${label} returns the stored object`);
+    assert.equal(kept.full.settingsAt, 2);
+
+    const none = push({ settingsAt: 1 }, { settingsAt: 2, dailyRoutines: shape });
+    assert.equal(none.after, "<missing>", `${label} with nothing stored leaves the key out`);
+    assert.equal(Object.hasOwn(none.full, "dailyRoutines"), false);
+  }
+});
+
+test("merging thousands of logs stays well inside the statement timeout", { timeout: 120_000 }, () => {
+  const day = "2026-01-02";
+  const side = (count, offset) => ({
+    updatedAt: 1,
+    logs: Array.from({ length: count }, (_, i) => ({
+      id: `log-${i}`,
+      day,
+      status: "done",
+      amount: i + offset,
+      unit: "mcg",
+      // A third of the ids tie on stamp, and some of those ties are tombstones.
+      updatedAt: i % 3 === 0 ? 1000 + i : 1000 + i + offset,
+      deletedAt: i % 9 === 0 ? 1000 + i : null,
+    })),
+  });
+  const count = 5000;
+  const stored = side(count, 1);
+  const incoming = side(count, 2);
+  const started = Date.now();
+  const got = query(`
+    set statement_timeout = '8s';
+    select public.daily_routines_merge(
+      $stored$${JSON.stringify(stored)}$stored$::jsonb,
+      $incoming$${JSON.stringify(incoming)}$incoming$::jsonb,
+      0
+    )::text;
+  `).trim();
+  const elapsed = Date.now() - started;
+  const merged = JSON.parse(got);
+  assert.equal(merged.logs.length, count);
+  assert.deepEqual(merged, mergeRoutines(stored, incoming, 0));
+  assert.ok(elapsed < 4000, `${count} logs per side took ${elapsed} ms`);
+});

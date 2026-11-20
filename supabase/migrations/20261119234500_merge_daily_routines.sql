@@ -1,4 +1,5 @@
--- merge_user_data keeps dailyRoutines when a push omits the key or sends JSON null.
+-- merge_user_data keeps dailyRoutines when a push omits the key, sends JSON null,
+-- or sends any other value that is not an object (array, string, number, boolean).
 -- An older client, a restore from before this key, or the no-RPC fallback would
 -- otherwise replace the account copy, tombstones included.
 -- When both sides are objects, blocks, items, placements, compounds, and logs
@@ -248,47 +249,62 @@ $$;
 
 create or replace function public.daily_routines_merge_list(p_stored jsonb, p_incoming jsonb, p_kind text, p_now numeric)
 returns jsonb
-language plpgsql
+language sql
 immutable
 set search_path = public
 as $$
-declare
-  list jsonb := '[]'::jsonb;
-  ids text[] := '{}';
-  acc jsonb := '{}'::jsonb;
-  item jsonb;
-  prepared jsonb;
-  id text;
-  out jsonb := '[]'::jsonb;
-begin
-  if jsonb_typeof(p_incoming) = 'array' then
-    list := p_incoming;
-  end if;
-  if jsonb_typeof(p_stored) = 'array' then
-    list := list || p_stored;
-  end if;
-  for item in select value from jsonb_array_elements(list)
-  loop
-    prepared := public.daily_routines_prepare(item, p_kind, p_now);
-    if prepared is null then
-      continue;
-    end if;
-    id := prepared->>'id';
-    if acc ? id then
-      if public.daily_routines_beats(item, acc->id, p_kind, p_now) then
-        acc := jsonb_set(acc, array[id], item, true);
-      end if;
-    else
-      ids := ids || id;
-      acc := jsonb_set(acc, array[id], item, true);
-    end if;
-  end loop;
-  foreach id in array ids
-  loop
-    out := out || jsonb_build_array(public.daily_routines_prepare(acc->id, p_kind, p_now));
-  end loop;
-  return out;
-end;
+  -- One pass over both lists, so the cost grows with n log n, not n squared.
+  -- Each row is prepared once. Its stamp and tombstone come from the prepared
+  -- row (updatedAt is already max(updatedAt, deletedAt), clamped), and the
+  -- stable JSON is built only for rows that tie on both. The winner per id is
+  -- the greater stamp, then the tombstone, then the greater stable JSON, the
+  -- same rule as daily_routines_beats. Rows come out in the order each id was
+  -- first seen, incoming first. list is materialized so prepare runs once per row.
+  with list as materialized (
+    select e.ord, public.daily_routines_prepare(e.value, p_kind, p_now) as prepared
+    from jsonb_array_elements(
+      case when jsonb_typeof(p_incoming) = 'array' then p_incoming else '[]'::jsonb end
+      || case when jsonb_typeof(p_stored) = 'array' then p_stored else '[]'::jsonb end
+    ) with ordinality as e(value, ord)
+  ),
+  stamped as (
+    select
+      ord,
+      prepared,
+      prepared->>'id' as id,
+      (prepared->>'updatedAt')::numeric as stamp,
+      jsonb_typeof(prepared->'deletedAt') = 'number' as tomb
+    from list
+    where prepared is not null
+  ),
+  ready as (
+    select
+      ord,
+      prepared,
+      id,
+      stamp,
+      tomb,
+      count(*) over (partition by id, stamp, tomb) as tied
+    from stamped
+  ),
+  firsts as (
+    select id, min(ord) as first_ord
+    from ready
+    group by id
+  ),
+  winners as (
+    select distinct on (id) id, prepared
+    from ready
+    order by
+      id,
+      stamp desc,
+      tomb desc,
+      case when tied > 1 then public.daily_routines_stable(prepared) end desc,
+      ord
+  )
+  select coalesce(jsonb_agg(w.prepared order by f.first_ord), '[]'::jsonb)
+  from winners w
+  join firsts f using (id);
 $$;
 
 create or replace function public.daily_routines_prefs(p_value jsonb, p_now numeric)
@@ -486,6 +502,11 @@ begin
       incoming_routines,
       now_ms
     ), true);
+  -- Any other value (array, string, number, boolean) keeps the stored object.
+  elsif jsonb_typeof(stored_routines) = 'object' then
+    result := jsonb_set(result, '{dailyRoutines}', stored_routines, true);
+  else
+    result := result - 'dailyRoutines';
   end if;
 
   update public.user_data
