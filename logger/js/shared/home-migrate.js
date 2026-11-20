@@ -23,8 +23,9 @@
    an items array; hidden, when present, must be an array. Ids are strings.
    Unknown strings stay in items and hidden so a newer client's cards are not
    dropped. An empty items array is a real layout that shows nothing and can
-   win. A non-empty items array that contains none of the HOME_WIDGETS ids is
-   malformed, and pickHomeV2 keeps the other copy.
+   win. A non-empty items array that contains neither a HOME_WIDGETS id nor a
+   routine tile id is malformed, and pickHomeV2 keeps the other copy. A Home
+   made only of routine tiles is a real layout.
 
    Old keys stay in place so a cached older client still has its order.
    Never-customized state returns null (missing layout, empty order, or only
@@ -42,7 +43,7 @@
 
 import { app } from "../runtime.js";
 import { HOME_WIDGETS } from "./home-widgets.js";
-import { NEXT_UP_TILE_ID } from "./routine-home-tiles.js";
+import { NEXT_UP_TILE_ID, isRoutineTileId } from "./routine-home-tiles.js";
 
 const NATURAL = ["brief", "readiness", "today", "week", "cardio", "map-adv", "map-basic"];
 const BRIEF_ORDER = ["pattern", "oura", "train", "food", "week", "weight"];
@@ -150,16 +151,20 @@ function clampAt(at, now) {
   return at > cap ? cap : at;
 }
 
+function acceptedTile(id) {
+  return !!(HOME_WIDGETS[id] || isRoutineTileId(id));
+}
+
 /* null when the record cannot be a layout. A clean record is returned as-is.
-   items: [] is valid. A non-empty list with no HOME_WIDGETS id is not.
-   Unknown string ids are kept. */
+   items: [] is valid. A non-empty list with no catalog id and no routine tile
+   id is not. Unknown string ids are kept. Routine-only lists are real layouts. */
 function asV2(home, now) {
   if (!home || typeof home !== "object" || Array.isArray(home)) return null;
   if (typeof home.v !== "number" || home.v !== 2) return null;
   if (!Array.isArray(home.items)) return null;
   if ("hidden" in home && home.hidden != null && !Array.isArray(home.hidden)) return null;
   const items = storedIds(home.items);
-  if (home.items.length > 0 && !items.some((id) => HOME_WIDGETS[id])) return null;
+  if (home.items.length > 0 && !items.some(acceptedTile)) return null;
   const hidden = storedIds(Array.isArray(home.hidden) ? home.hidden : []).filter((id) => !items.includes(id));
   const at = clampAt(home.updatedAt, now);
   const sameItems = items.length === home.items.length && items.every((id, i) => id === home.items[i]);
@@ -252,9 +257,9 @@ export function migrateHomeLayout(state) {
 
 /* Appends Next up once, and only when the flag is on and this copy is a real
    edit that already has a catalog tile. A migration is left alone. An edit
-   with no catalog tile gets a paint flag instead of an items change, so the
-   merge still accepts the layout. A Next up the user removed through the
-   routines pref counts as decided. updatedAt is not moved: a seed must not
+   with no catalog tile gets a paint flag instead of an items change.
+   A saved homeNextHidden preference is a decision: the seed marks itself
+   done and does not add the tile. updatedAt is not moved: a seed must not
    outrank a newer edit. */
 export function seedRoutineNextUp(state) {
   if (!state || typeof state !== "object" || app.ROUTINES_ENABLED !== true) return state;

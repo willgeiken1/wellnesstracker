@@ -1,7 +1,7 @@
 import { app } from "../runtime.js";
 import { hasOura, homeOuraReconnectHTML, homeOuraWaiting, ouraMembershipInactive, visibleHomeIds } from "../shared/oura-gate.js";
-import { addToDraft, galleryEntries, keepsLastCatalog, needsSizeChoice, removeFromDraft, reorderDraft, sizeChoices, sizeLabel } from "../shared/home-edit.js";
-import { NEXT_UP_TILE_ID, addRoutineTile, forgetRoutineTrayQuery, hideLegacyNextUp, isRoutineTileId, legacyNextUpHTML, renderRoutineTileHTML, routineHaptic, routineTileNeedsCatalog, routineTrayHTML } from "../shared/routine-home-tiles.js";
+import { addToDraft, galleryEntries, needsSizeChoice, removeFromDraft, reorderDraft, sizeChoices, sizeLabel } from "../shared/home-edit.js";
+import { NEXT_UP_TILE_ID, addRoutineTile, forgetRoutineTrayQuery, hideLegacyNextUp, isRoutineTileId, legacyNextUpHTML, renderRoutineTileHTML, routineHaptic, routineTrayHTML } from "../shared/routine-home-tiles.js";
 import "../shared/home-defaults.js";
 import "../shared/home-drag.js";
 
@@ -202,11 +202,6 @@ app.homeSetOrder = homeSetOrder;
 function homeRemoveItem(id) {
   const draft = app.ui.homeDraft;
   if (!draft) return;
-  if (keepsLastCatalog(draft.items, id)) {
-    app.ui.homeAnnounce = "Keep one widget on Home while routine tiles are there.";
-    app.render();
-    return;
-  }
   app.ui.homeDraft = { ...draft, ...removeFromDraft(draft, id) };
   app.ui.homeAnnounce = `${(app.HOME_WIDGETS[id] || {}).name || (isRoutineTileId(id) ? "Routine tile" : "Widget")} removed.`;
   if (isRoutineTileId(id)) routineHaptic();
@@ -228,11 +223,6 @@ function homeAddItem(id, size) {
 function homeAddRoutineTile(id, size, gate) {
   const draft = app.ui.homeDraft;
   if (!draft || app.ROUTINES_ENABLED !== true || !isRoutineTileId(id)) return;
-  if (routineTileNeedsCatalog(draft)) {
-    app.ui.homeAnnounce = "Add a widget to Home first, then routine tiles.";
-    app.render();
-    return;
-  }
   app.ui.homeDraft = addRoutineTile(draft, id, size, gate);
   app.ui.homeAnnounce = "Routine tile added.";
   routineHaptic();

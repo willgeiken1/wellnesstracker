@@ -306,6 +306,7 @@ function rpcCases() {
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261005000000_home_v2_brief_rank.sql", dir).pathname]), { encoding: "utf8" });
+  execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261120120000_home_v2_routine_tiles.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
   pgSql(`insert into auth.users (id) values ('${uid}') on conflict (id) do nothing`);
   pgSql(`delete from public.user_data where user_id = '${uid}'`);

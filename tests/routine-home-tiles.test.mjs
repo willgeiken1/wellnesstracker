@@ -340,6 +340,61 @@ test("removing a tile returns it to the tray and does not delete the routine", (
   assert.equal(addToDraft({ items: [], hidden: [], sizes: {} }, NEXT_UP_TILE_ID, "medium").items.length, 0);
 });
 
+test("a Home made only of routine tiles survives save, sync, and reload", () => {
+  app.ROUTINES_ENABLED = true;
+  const saved = { layout: { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 20 } } };
+  commitHomeEditor(saved, { items: ["routine-block:block-m", "routine-item:item-a"], hidden: [], sizes: {}, gates: {} });
+  assert.deepEqual(saved.layout.homeV2.items, ["routine-block:block-m", "routine-item:item-a"]);
+  assert.equal(saved.layout.homeV2.migrated, undefined);
+
+  const older = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 10 } };
+  const synced = pickHomeV2(saved.layout, older, 1000);
+  assert.deepEqual(synced.items, ["routine-block:block-m", "routine-item:item-a"]);
+  const unknownOnly = pickHomeV2(
+    { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 5 } },
+    { homeV2: { v: 2, items: ["future-widget"], hidden: [], updatedAt: 90 } },
+    1000,
+  );
+  assert.deepEqual(unknownOnly.items, ["today"]);
+
+  const reloaded = {
+    settingsAt: 500,
+    brief: { order: ["weight"], hidden: [], updatedAt: 400 },
+    layout: {
+      home: { order: ["today", "brief"], hidden: [], updatedAt: 400 },
+      homeV2: { v: 2, items: ["routine-block:block-m"], hidden: [], updatedAt: 80 },
+    },
+  };
+  applyHomeMigration(reloaded, 1000);
+  assert.deepEqual(reloaded.layout.homeV2.items, ["routine-block:block-m"]);
+  assert.equal(reloaded.layout.homeV2.updatedAt, 80);
+  assert.equal(reloaded.layout.homeV2.migrated, undefined);
+
+  app.ROUTINES_ENABLED = false;
+  const parked = {
+    layout: { homeV2: { v: 2, items: ["routine-next"], hidden: [], updatedAt: 70 } },
+  };
+  applyHomeMigration(parked, 1000);
+  assert.deepEqual(parked.layout.homeV2.items, ["routine-next"]);
+});
+
+test("a hidden Next up tile is not seeded onto a later Home edit", () => {
+  app.ROUTINES_ENABLED = true;
+  const state = {
+    dailyRoutines: { prefs: { homeNextHidden: true, updatedAt: 3 } },
+    layout: { homeV2: { v: 2, items: ["today", "cardio"], hidden: ["steps"], updatedAt: 50, sizes: { today: "small" } } },
+  };
+  applyHomeMigration(state, 5000);
+  assert.deepEqual(state.layout.homeV2.items, ["today", "cardio"]);
+  assert.deepEqual(state.layout.homeV2.hidden, ["steps"]);
+  assert.equal(state.layout.homeV2.updatedAt, 50);
+  assert.equal(state.layout.homeV2.sizes.today, "small");
+  assert.equal(state.layout.homeV2.routineNextSeeded, true);
+  assert.equal(state.layout.homeV2.routineNextAside, undefined);
+  seedRoutineNextUp(state);
+  assert.deepEqual(state.layout.homeV2.items, ["today", "cardio"]);
+});
+
 test("a tile jump opens a collapsed routine before the tab renders", () => {
   app.ROUTINES_ENABLED = true;
   app.session = { user: { id: "synthetic-user" } };
@@ -403,31 +458,30 @@ test("stacks and the long-press preview are not wired, and the shell cache is un
   assert.match(sw, /js\/shared\/routine-home-tiles\.js/);
 });
 
-test("flag on, a Home heavy with routine tiles survives a save, a pull and a reload", () => {
+test("flag on, removing the last catalog tile leaves a routine-only Home that survives a pull", () => {
   app.ROUTINES_ENABLED = true;
   const block = routineBlockTileId("block-m");
   const item = routineItemTileId("item-b");
   const state = { layout: { homeV2: { v: 2, items: ["today", block, item], hidden: [], updatedAt: 10, routineNextSeeded: true } } };
   let draft = { items: ["today", block, item], hidden: [], sizes: {}, gates: {} };
   draft = { ...draft, ...removeFromDraft(draft, "today") };
-  assert.deepEqual(draft.items, ["today", block, item]);
-  assert.deepEqual(addRoutineTile({ items: [], hidden: [], sizes: {} }, NEXT_UP_TILE_ID).items, []);
-  draft = { ...draft, ...removeFromDraft(draft, block) };
-  assert.deepEqual(draft.items, ["today", item]);
+  assert.deepEqual(draft.items, [block, item]);
+  assert.deepEqual(draft.hidden, ["today"]);
+  assert.deepEqual(addRoutineTile({ items: [], hidden: [], sizes: {} }, NEXT_UP_TILE_ID).items, [NEXT_UP_TILE_ID]);
   const saved = commitHomeEditor(state, draft);
-  assert.deepEqual(saved.items, ["today", item]);
+  assert.deepEqual(saved.items, [block, item]);
+  assert.ok(saved.hidden.includes("today"));
   const at = state.layout.homeV2.updatedAt;
   assert.ok(at > 10);
 
   const remote = { homeV2: { v: 2, items: ["today", "cardio"], hidden: [], updatedAt: 10 } };
   const picked = pickHomeV2(state.layout, remote, at + 1);
-  assert.deepEqual(picked.items, ["today", item]);
+  assert.deepEqual(picked.items, [block, item]);
   assert.equal(picked.updatedAt, at);
 
   const reloaded = structuredClone({ layout: { ...state.layout, homeV2: picked } });
   applyHomeMigration(reloaded, at + 2);
-  assert.deepEqual(reloaded.layout.homeV2.items, ["today", item]);
-  assert.deepEqual(reloaded.layout.homeV2.hidden, [block]);
+  assert.deepEqual(reloaded.layout.homeV2.items, [block, item]);
   assert.equal(reloaded.layout.homeV2.updatedAt, at);
 
   app.ROUTINES_ENABLED = false;
