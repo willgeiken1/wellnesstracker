@@ -422,8 +422,8 @@ describe("routine check-off", { concurrency: false }, () => {
   test("a completed row shows the logged amount, not the current compound amount", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
-    const item = app.state.dailyRoutines.items[0];
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
     assert.equal(logRoutineItem(app.state, item.id), true);
     const log = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id);
     log.status = "partial";
