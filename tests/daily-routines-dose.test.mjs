@@ -210,6 +210,41 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(merged.logs.some((row) => isLive(row) && row.day === "2026-11-19"), false);
   });
 
+  test("a date-only edit keeps the stored amount without rounding it", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = liveLog(item.id);
+    logged.amount = 1 / 3;
+    const draft = routineLogDraft(app.state, logged.id);
+    assert.equal(draft.amount, String(1 / 3));
+    assert.notEqual(draft.amount, "0.333");
+    assert.equal(openRoutineLogEditor(logged.id), true);
+    const sheet = routineLogSheetHTML();
+    assert.match(sheet, new RegExp(`value="${String(1 / 3)}"`));
+    app.$ = (sel) => {
+      if (sel === "#dr-log-amount") return { value: draft.amount };
+      if (sel === "#dr-log-day") return { value: "2026-11-18" };
+      return null;
+    };
+    assert.equal(commitRoutineLogSheet(), true);
+    const kept = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.day === "2026-11-18");
+    assert.equal(kept.amount, 1 / 3);
+
+    signIn("2026-11-19");
+    assert.equal(addDose(blockId("Morning routine")), true);
+    const tinyItem = doseItem();
+    assert.equal(logRoutineItem(app.state, tinyItem.id), true);
+    const tiny = liveLog(tinyItem.id);
+    tiny.amount = 0.0004;
+    assert.equal(routineLogDraft(app.state, tiny.id).amount, "0.0004");
+    assert.equal(editRoutineLog(app.state, tiny.id, { amount: "0.0004", day: "2026-11-18" }), true);
+    const saved = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.day === "2026-11-18");
+    assert.equal(saved.amount, 0.0004);
+  });
+
   test("editing a log follows the saved dose, not the item's current kind", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
