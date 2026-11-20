@@ -275,6 +275,19 @@ test("merge_user_data keeps dailyRoutines and merges rows the way the client doe
     const got = query(`select public.daily_routines_stable($sample$${json}$sample$::jsonb);`).trim();
     assert.equal(got, stableStringify(sample), `stable ${json}`);
   }
+  const numbers = [0, 1, -1, 1.5, 0.1, 10, 12500, 1e-6, 1e-7, -1e-7, 1.23e-7, 9.87e-10, 1e20, 1e21, -1e21, 1.23e21, Number.MAX_VALUE, Number.MIN_VALUE, 1.0000000000000002];
+  for (const n of numbers) {
+    const json = JSON.stringify({ n });
+    const got = query(`select public.daily_routines_stable($sample$${json}$sample$::jsonb);`).trim();
+    assert.equal(got, stableStringify({ n }), `stable number ${json}`);
+  }
+  const keyed = { "\u{1F600}": 1, "\uFF21": 2 };
+  const keyedJson = JSON.stringify(keyed);
+  assert.equal(
+    query(`select public.daily_routines_stable($sample$${keyedJson}$sample$::jsonb);`).trim(),
+    stableStringify(keyed),
+    "stable object keys follow UTF-16 code units",
+  );
 
   const storedHome = { v: 2, items: ["today", "this-week"], hidden: [], updatedAt: 5000 };
   const kept = {
@@ -524,6 +537,42 @@ test("normalized tie-breaks match mergeDailyRoutines", () => {
         assert.equal(merged.placements[0].order, 0);
       },
     },
+    {
+      name: "an equal stamp keeps the client's exponent form, so 1e-7 beats 0.1",
+      stored: {
+        updatedAt: 10,
+        logs: [{ id: "L", day, status: "done", amount: 1e-7, updatedAt: 10, deletedAt: null }],
+      },
+      incoming: {
+        updatedAt: 10,
+        logs: [{ id: "L", day, status: "done", amount: 0.1, updatedAt: 10, deletedAt: null }],
+      },
+      check(merged) {
+        assert.equal(merged.logs[0].amount, 1e-7);
+      },
+    },
+    {
+      name: "an equal stamp orders a supplementary character before a fullwidth letter",
+      stored: {
+        updatedAt: 10,
+        blocks: [{ id: "A", name: "\u{1F600}", updatedAt: 10, deletedAt: null }],
+      },
+      incoming: {
+        updatedAt: 10,
+        blocks: [{ id: "A", name: "\uFF21", updatedAt: 10, deletedAt: null }],
+      },
+      check(merged) {
+        assert.equal(merged.blocks[0].name, "\uFF21");
+      },
+    },
+    {
+      name: "a prefs tie uses the same UTF-16 order",
+      stored: { updatedAt: 10, prefs: { lastBlockId: "A", note: "\u{1F600}", updatedAt: 10 } },
+      incoming: { updatedAt: 10, prefs: { lastBlockId: "A", note: "\uFF21", updatedAt: 10 } },
+      check(merged) {
+        assert.equal(merged.prefs.note, "\uFF21");
+      },
+    },
   ];
   for (const sample of samples) {
     const forward = sqlMerge(sample.stored, sample.incoming, now);
@@ -651,5 +700,24 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     const expected = mergeRoutines(stored, incoming, 0);
     assert.equal(expected.prefs.note, "apple");
     assert.deepEqual(merge(stored, incoming).prefs, expected.prefs, "prefs tie");
+  }
+
+  const day = "2026-01-02";
+  const log = (amount) => ({ id: "L", day, status: "done", amount, updatedAt: 10 });
+  for (const [a, b] of [[1e-7, 0.1], [0.1, 1e-7]]) {
+    const stored = { logs: [log(a)] };
+    const incoming = { logs: [log(b)] };
+    const expected = mergeRoutines(stored, incoming, 0);
+    assert.equal(expected.logs[0].amount, 1e-7);
+    assert.equal(merge(stored, incoming).logs[0].amount, 1e-7, "exponent tie on ICU");
+  }
+  const wide = "\uFF21";
+  const grin = "\u{1F600}";
+  for (const [a, b] of [[grin, wide], [wide, grin]]) {
+    const stored = { blocks: [{ id: "A", name: a, updatedAt: 10 }] };
+    const incoming = { blocks: [{ id: "A", name: b, updatedAt: 10 }] };
+    const expected = mergeRoutines(stored, incoming, 0);
+    assert.equal(expected.blocks[0].name, wide);
+    assert.equal(merge(stored, incoming).blocks[0].name, wide, "UTF-16 tie on ICU");
   }
 });

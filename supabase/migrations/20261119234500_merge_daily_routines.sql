@@ -9,7 +9,9 @@
 -- compares rows. A row wins by max(updatedAt, deletedAt). A missing or
 -- malformed stamp is 0. A stamp more than a day ahead is pulled back to
 -- now + 1 day, the same window as homeV2. An equal stamp keeps the tombstone,
--- then the greater stable JSON of the normalized row.
+-- then the greater stable JSON of the normalized row. Numbers use
+-- JSON.stringify's form (1e-7, not 0.0000001). Object keys and that
+-- comparison use UTF-16 code units, on any database collation.
 -- A log tombstone keeps only id, day, status, updatedAt, and deletedAt.
 -- machineNotes and layout.homeV2 are unchanged. Every other key stays the
 -- caller's payload.
@@ -77,6 +79,108 @@ as $$
   select public.daily_routines_clamp_ms(public.daily_routines_ms(p_row, 'deletedAt'), p_now) > 0;
 $$;
 
+-- JSON.stringify(number). Postgres prints 1e-07 and 1e+20; the client prints
+-- 1e-7 and a 21-digit decimal. The tie-break compares those strings.
+create or replace function public.daily_routines_json_number_text(p_value numeric)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  d float8;
+  raw text;
+  sign text := '';
+  body text;
+  digits text;
+  exp int;
+  k int;
+  pos int;
+begin
+  if p_value is null then
+    return 'null';
+  end if;
+  begin
+    d := p_value::float8;
+  exception when others then
+    return trim_scale(p_value)::text;
+  end;
+  if d <> d then
+    return 'null';
+  end if;
+  if d = 0 then
+    return '0';
+  end if;
+  raw := replace(d::text, ',', '.');
+  if left(raw, 1) = '-' then
+    sign := '-';
+    raw := substr(raw, 2);
+  end if;
+  if raw ~ '^[0-9]+(\.[0-9]+)?e[+-][0-9]+$' then
+    body := split_part(raw, 'e', 1);
+    exp := split_part(raw, 'e', 2)::int;
+    digits := replace(body, '.', '');
+    k := char_length(digits);
+    if exp <= -7 or exp >= 21 then
+      if k = 1 then
+        return sign || digits || 'e' || case when exp >= 0 then '+' else '' end || exp::text;
+      end if;
+      return sign || left(digits, 1) || '.' || substr(digits, 2) || 'e' || case when exp >= 0 then '+' else '' end || exp::text;
+    end if;
+    if exp >= 0 then
+      if exp >= k - 1 then
+        return sign || digits || repeat('0', exp - (k - 1));
+      end if;
+      pos := exp + 1;
+      return sign || left(digits, pos) || '.' || substr(digits, pos + 1);
+    end if;
+    return sign || '0.' || repeat('0', (-exp) - 1) || digits;
+  end if;
+  return sign || raw;
+end;
+$$;
+
+-- JavaScript compares strings by UTF-16 code units. COLLATE "C" compares
+-- UTF-8 bytes, which puts a supplementary character after U+FFFF instead of
+-- at its surrogate pair.
+create or replace function public.daily_routines_utf16be(p_text text)
+returns bytea
+language plpgsql
+immutable
+strict
+set search_path = public
+as $$
+declare
+  i integer;
+  cp integer;
+  hi integer;
+  lo integer;
+  out bytea := ''::bytea;
+begin
+  if p_text = '' then
+    return out;
+  end if;
+  -- ASCII is one UTF-16 code unit per byte, with a zero high byte.
+  if octet_length(p_text) = char_length(p_text) then
+    return decode(regexp_replace(encode(convert_to(p_text, 'UTF8'), 'hex'), '(..)', '00\1', 'g'), 'hex');
+  end if;
+  for i in 1..char_length(p_text)
+  loop
+    cp := ascii(substr(p_text, i, 1));
+    if cp < 65536 then
+      out := out || set_byte(set_byte('\x0000'::bytea, 0, (cp >> 8) & 255), 1, cp & 255);
+    else
+      cp := cp - 65536;
+      hi := 55296 + (cp >> 10);
+      lo := 56320 + (cp & 1023);
+      out := out || set_byte(set_byte('\x0000'::bytea, 0, (hi >> 8) & 255), 1, hi & 255);
+      out := out || set_byte(set_byte('\x0000'::bytea, 0, (lo >> 8) & 255), 1, lo & 255);
+    end if;
+  end loop;
+  return out;
+end;
+$$;
+
 create or replace function public.daily_routines_stable(p_value jsonb)
 returns text
 language plpgsql
@@ -102,7 +206,7 @@ begin
   end if;
   if kind = 'object' then
     select coalesce((
-      select array_agg(obj_key order by obj_key collate "C")
+      select array_agg(obj_key order by public.daily_routines_utf16be(obj_key))
       from jsonb_object_keys(p_value) as obj_key
     ), '{}'::text[])
     into keys;
@@ -114,6 +218,9 @@ begin
       parts := parts || (to_json(key)::text || ':' || public.daily_routines_stable(p_value->key));
     end loop;
     return '{' || array_to_string(parts, ',') || '}';
+  end if;
+  if kind = 'number' then
+    return public.daily_routines_json_number_text((p_value #>> '{}')::numeric);
   end if;
   return p_value::text;
 end;
@@ -427,7 +534,8 @@ begin
   end if;
   prep_c := public.daily_routines_prepare(p_candidate, p_kind, p_now);
   prep_p := public.daily_routines_prepare(p_current, p_kind, p_now);
-  return public.daily_routines_stable(prep_c) collate "C" > public.daily_routines_stable(prep_p) collate "C";
+  return public.daily_routines_utf16be(public.daily_routines_stable(prep_c))
+       > public.daily_routines_utf16be(public.daily_routines_stable(prep_p));
 end;
 $$;
 
@@ -483,7 +591,7 @@ as $$
       id,
       stamp desc,
       tomb desc,
-      case when tied > 1 then public.daily_routines_stable(prepared) end collate "C" desc,
+      case when tied > 1 then public.daily_routines_utf16be(public.daily_routines_stable(prepared)) end desc,
       ord
   )
   select coalesce(jsonb_agg(w.prepared order by f.first_ord), '[]'::jsonb)
@@ -537,7 +645,8 @@ begin
   end if;
   left_s := public.daily_routines_stable(left_prefs);
   right_s := public.daily_routines_stable(right_prefs);
-  if left_s collate "C" > right_s collate "C" or left_s = right_s then
+  if public.daily_routines_utf16be(left_s) > public.daily_routines_utf16be(right_s)
+     or public.daily_routines_utf16be(left_s) = public.daily_routines_utf16be(right_s) then
     return left_prefs;
   end if;
   return right_prefs;
@@ -706,6 +815,8 @@ revoke all on function public.daily_routines_ms(jsonb, text) from public, anon, 
 revoke all on function public.daily_routines_clamp_ms(numeric, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_stamp(jsonb, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_tombstone(jsonb, numeric) from public, anon, authenticated;
+revoke all on function public.daily_routines_json_number_text(numeric) from public, anon, authenticated;
+revoke all on function public.daily_routines_utf16be(text) from public, anon, authenticated;
 revoke all on function public.daily_routines_stable(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_day(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_clip(jsonb, integer) from public, anon, authenticated;
