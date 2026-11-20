@@ -139,4 +139,71 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(isLive(loser), false);
     assert.equal(loser.amount, undefined);
   });
+
+  test("two phones moving one log to different days keep one live log", () => {
+    signIn("2026-11-19");
+    const item = addDose(blockId("Morning routine"));
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", 9, 0);
+    const phoneA = onPhone(base, () => assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-18" }), true));
+    pin("2026-11-19", 9, 5);
+    const phoneB = onPhone(base, () => assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-17" }), true));
+    const merged = converge(phoneA, phoneB);
+    const live = liveLogs(merged, item.id);
+    assert.equal(live.length, 1);
+    assert.equal(liveLogs(phoneA, item.id)[0].id, log.id);
+    assert.equal(liveLogs(phoneB, item.id)[0].id, log.id);
+    assert.equal(live[0].id, log.id);
+    assert.equal(live[0].day, "2026-11-17");
+  });
+
+  test("a check-off on the old day does not take the moved log's id", () => {
+    signIn("2026-11-19");
+    const item = addDose(blockId("Morning routine"));
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    assert.equal(log.id, routineLogId(item.id, "2026-11-19"));
+    pin("2026-11-19", 9, 0);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-18" }), true);
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", 9, 10);
+    const phoneA = onPhone(base, () => assert.equal(logRoutineItem(app.state, item.id), true));
+    pin("2026-11-19", 9, 20);
+    const phoneB = onPhone(base, () => assert.equal(skipRoutineItem(app.state, item.id), true));
+    const freshA = liveLogs(phoneA, item.id, "2026-11-19")[0];
+    const freshB = liveLogs(phoneB, item.id, "2026-11-19")[0];
+    assert.notEqual(freshA.id, log.id);
+    assert.equal(freshA.id, freshB.id);
+    assert.equal(phoneA.logs.find((row) => row.id === log.id).day, "2026-11-18");
+    const merged = converge(phoneA, phoneB);
+    assert.equal(liveLogs(merged, item.id, "2026-11-18").length, 1);
+    assert.equal(liveLogs(merged, item.id, "2026-11-19").length, 1);
+    assert.equal(liveLogs(merged, item.id, "2026-11-19")[0].status, "skipped");
+    app.state = { dailyRoutines: structuredClone(merged) };
+    pin("2026-11-19", 9, 30);
+    assert.equal(undoRoutineLog(app.state, log.id), true);
+    assert.equal(restoreRoutineLog(app.state, log.id), true);
+    const back = app.state.dailyRoutines.logs.find((row) => row.id === log.id);
+    assert.equal(isLive(back), true);
+    assert.equal(back.day, "2026-11-18");
+    assert.equal(liveLogs(app.state.dailyRoutines, item.id, "2026-11-19").length, 1);
+  });
+
+  test("a moved log and a fresh check-off on the same day merge to one live log", () => {
+    signIn("2026-11-19");
+    const item = addDose(blockId("Morning routine"));
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    pin("2026-11-20");
+    const base = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-20", 9, 0);
+    const phoneA = onPhone(base, () => assert.equal(editRoutineLog(app.state, log.id, { amount: "250", day: "2026-11-20" }), true));
+    pin("2026-11-20", 9, 5);
+    const phoneB = onPhone(base, () => assert.equal(logRoutineItem(app.state, item.id), true));
+    const merged = converge(phoneA, phoneB);
+    assert.equal(liveLogs(merged, item.id, "2026-11-20").length, 1);
+    assert.equal(liveLogs(merged, item.id).length, 1);
+  });
 });
