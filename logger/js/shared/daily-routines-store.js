@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { DEFAULT_DAY_ROLLOVER_HOUR, routineDayRolloverHour } from "./routine-dose.js";
 
 /* Daily routines live on the liftlog-v1 blob under `dailyRoutines`.
    `routines` is already the workout-template list. Do not reuse that key.
@@ -149,6 +150,18 @@ function normalizePrefs(raw) {
   };
 }
 
+/* PR 8 owns the rest of this object. The day-start hour lives here so that
+   sheet can read it. updatedAt 0 means the user has not chosen an hour, and
+   a later explicit choice wins the merge. */
+function normalizeSettings(raw) {
+  const fields = plainFields(raw);
+  return {
+    ...fields,
+    dayRolloverHour: routineDayRolloverHour(fields.dayRolloverHour),
+    updatedAt: num(fields.updatedAt),
+  };
+}
+
 export function emptyDailyRoutines(now = 0) {
   return {
     updatedAt: num(now),
@@ -158,12 +171,14 @@ export function emptyDailyRoutines(now = 0) {
     compounds: [],
     logs: [],
     prefs: { lastBlockId: null, updatedAt: num(now) },
+    settings: { dayRolloverHour: DEFAULT_DAY_ROLLOVER_HOUR, updatedAt: 0 },
   };
 }
 
 export function normalizeDailyRoutines(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const prefs = normalizePrefs(raw.prefs);
+  const settings = normalizeSettings(raw.settings);
   return {
     updatedAt: num(raw.updatedAt),
     blocks: normalizeList(raw.blocks, normalizeBlock),
@@ -172,6 +187,7 @@ export function normalizeDailyRoutines(raw) {
     compounds: normalizeList(raw.compounds, normalizeCompound),
     logs: normalizeList(raw.logs, normalizeLog),
     prefs,
+    settings,
   };
 }
 
@@ -218,6 +234,11 @@ function mergePrefs(local, remote) {
   return { ...normalizePrefs(remote) };
 }
 
+function mergeSettings(local, remote) {
+  if (num(local && local.updatedAt) >= num(remote && remote.updatedAt)) return { ...normalizeSettings(local) };
+  return { ...normalizeSettings(remote) };
+}
+
 export function mergeDailyRoutines(local, remote) {
   const left = normalizeDailyRoutines(local);
   const right = normalizeDailyRoutines(remote);
@@ -232,6 +253,7 @@ export function mergeDailyRoutines(local, remote) {
     compounds: mergeEntityLists(left.compounds, right.compounds),
     logs: mergeEntityLists(left.logs, right.logs),
     prefs: mergePrefs(left.prefs, right.prefs),
+    settings: mergeSettings(left.settings, right.settings),
   };
 }
 

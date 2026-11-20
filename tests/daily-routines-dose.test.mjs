@@ -66,7 +66,7 @@ const {
   routineLogSheetHTML,
 } = await import("../logger/js/pages/daily-routines-dose.js");
 const { formatCalcNumber, reconstitutionResult, reconstitutionResultHTML } = await import("../logger/js/pages/reconstitution.js");
-const { nextDoseCountdown, localCalendarDay } = await import("../logger/js/shared/routine-dose.js");
+const { nextDoseCountdown, localCalendarDay, routineDayKey } = await import("../logger/js/shared/routine-dose.js");
 const { putDailyRoutines, upsertEntity } = await import("../logger/js/shared/daily-routines-store.js");
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -118,9 +118,11 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(addDose(morning), true);
     const item = doseItem();
     pin("2026-11-19", "2026-11-20T04:30:00.000Z");
+    const clock = new Date("2026-11-20T04:30:00.000Z");
+    const routineToday = routineDayKey(clock, 4);
     assert.equal(logRoutineItem(app.state, item.id), true);
     const created = liveLog(item.id);
-    assert.equal(created.day, "2026-11-19");
+    assert.equal(created.day, routineToday);
     assert.equal(created.amount, 250);
     const compoundBefore = structuredClone(app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId));
     const saves = [];
@@ -150,7 +152,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.notEqual(today.day, new Date("2026-11-20T04:30:00.000Z").toISOString().slice(0, 10));
     assert.equal(today.amount, 0.25);
 
-    assert.equal(editRoutineLog(app.state, created.id, { amount: 250, day: "2026-11-20" }), false);
+    assert.equal(editRoutineLog(app.state, created.id, { amount: 250, day: "2026-11-21" }), false);
     assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === created.id).day, "2026-11-19");
     assert.equal(editRoutineLog(app.state, created.id, { amount: "", day: "2026-11-18" }), false);
     assert.equal(editRoutineLog(app.state, created.id, { amount: "-1", day: "2026-11-18" }), false);

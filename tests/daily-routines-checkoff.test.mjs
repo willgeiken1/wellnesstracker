@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
 /* Synthetic routines only. The flag stays false in source.
-   The day key is app.today(). The clock face is app.routineNow().
-   A UTC instant on the next calendar day must not move the local day. */
+   The clock face is app.routineNow(). The routine day follows that local
+   clock and the rollover hour. Boundary and time-zone cases live in
+   daily-routines-rollover.test.mjs. Do not read the day from toISOString(). */
 
 function el() {
   return {
@@ -155,11 +156,11 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(loggedTodayCount(logs, "2026-11-19"), 0);
   });
 
-  test("day rollover follows the pinned local day, not the UTC instant", () => {
+  test("a late local evening stays on that local day", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
     assert.equal(addDose(morning), true);
-    pin("2026-11-19", "2026-11-20T04:30:00.000Z");
+    app.routineNow = () => new Date(2026, 10, 19, 23, 30);
     assert.equal(logRoutineItem(app.state, app.state.dailyRoutines.items[0].id), true);
     const log = app.state.dailyRoutines.logs.find((row) => row.itemId === app.state.dailyRoutines.items[0].id);
     assert.equal(log.day, "2026-11-19");
@@ -173,13 +174,15 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.doesNotMatch(html, /<b>250<\/b>/);
     assert.match(html, /data-streak="1"/);
 
-    pin("2026-11-20", "2026-11-21T03:00:00.000Z");
+    app.today = () => "2026-11-20";
+    app.routineNow = () => new Date(2026, 10, 20, 12, 0);
     const nextDay = dailyRoutinesHTML();
     assert.match(nextDay, /data-logged="0"/);
     assert.match(nextDay, /data-streak="1"/);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, "2026-11-20"), 1);
 
-    pin("2026-11-21", "2026-11-21T18:00:00.000Z");
+    app.today = () => "2026-11-21";
+    app.routineNow = () => new Date(2026, 10, 21, 12, 0);
     const missed = dailyRoutinesHTML();
     assert.match(missed, /data-logged="0"/);
     assert.match(missed, /data-streak="0"/);
