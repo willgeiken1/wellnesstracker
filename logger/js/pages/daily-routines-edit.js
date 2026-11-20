@@ -158,17 +158,31 @@ export function paintRoutineBlock(blockId, color) {
   return true;
 }
 
+/* Copy the open item fields into the draft. A unit, quarter, or routine
+   tap rebuilds the sheet from the draft, so a typed count or mix date has
+   to be stored before that rebuild. A missing field is left as it was. */
+export function rememberRoutineItemFields() {
+  const sd = app.ui && app.ui.sd;
+  if (!sd || !app.ui || app.ui.sheet !== "routines-item" || typeof app.$ !== "function") return false;
+  const read = (id) => {
+    const el = app.$(`#${id}`);
+    return el && typeof el.value === "string" ? el.value : null;
+  };
+  const name = read("dr-item-name");
+  const amount = read("dr-item-amount");
+  const onHand = read("dr-item-on-hand");
+  const mixed = read("dr-item-mixed-on");
+  if (name != null) sd.name = name;
+  if (amount != null) sd.amount = amount;
+  if (onHand != null) sd.onHand = onHand;
+  if (mixed != null) sd.mixedOn = mixed;
+  return true;
+}
+
 export function commitRoutineItemSheet() {
   const sd = app.ui && app.ui.sd ? app.ui.sd : null;
   if (!sd) return false;
-  const nameEl = typeof app.$ === "function" ? app.$("#dr-item-name") : null;
-  const amountEl = typeof app.$ === "function" ? app.$("#dr-item-amount") : null;
-  const onHandEl = typeof app.$ === "function" ? app.$("#dr-item-on-hand") : null;
-  const mixedEl = typeof app.$ === "function" ? app.$("#dr-item-mixed-on") : null;
-  if (nameEl) sd.name = nameEl.value;
-  if (amountEl) sd.amount = amountEl.value;
-  if (onHandEl && typeof onHandEl.value === "string") sd.onHand = onHandEl.value;
-  if (mixedEl && typeof mixedEl.value === "string") sd.mixedOn = mixedEl.value;
+  rememberRoutineItemFields();
   const supplyProblem = supplyDraftError(sd, routineClock().day);
   if (supplyProblem) {
     if (typeof app.toast === "function") app.toast(supplyProblem);
@@ -539,5 +553,6 @@ app.removeRoutineBlock = removeRoutineBlock;
 app.removeRoutineItem = removeRoutineItem;
 app.copyRoutineBlock = copyRoutineBlock;
 app.paintRoutineBlock = paintRoutineBlock;
+app.rememberRoutineItemFields = rememberRoutineItemFields;
 app.commitRoutineItemSheet = commitRoutineItemSheet;
 app.routineItemSheetHTML = routineItemSheetHTML;

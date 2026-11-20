@@ -5,6 +5,8 @@ import { describe, test } from "node:test";
 /* Synthetic supply only. Counts and mix dates are fake. They stay on the
    item in the account blob and must not reach PostHog or Sentry. */
 
+const sheetListeners = { click: [], input: [], change: [] };
+
 function el() {
   return {
     addEventListener() {},
@@ -21,7 +23,9 @@ function el() {
   };
 }
 globalThis.document = {
-  addEventListener() {},
+  addEventListener(type, fn) {
+    if (sheetListeners[type]) sheetListeners[type].push(fn);
+  },
   removeEventListener() {},
   documentElement: { dataset: {}, classList: { add() {}, remove() {} } },
   body: el(),
@@ -50,6 +54,8 @@ const {
   routineItemDraft,
 } = await import("../logger/js/pages/daily-routines.js");
 const { commitRoutineItemSheet, routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
+app.$ = (sel) => document.querySelector(sel);
+await import("../logger/js/shell/actions.js");
 const { openRoutineDetails, routineDetailsSheetHTML } = await import("../logger/js/pages/daily-routines-details.js");
 const { isLive, normalizeDailyRoutines, putDailyRoutines } = await import("../logger/js/shared/daily-routines-store.js");
 const {
@@ -515,6 +521,62 @@ describe("routine supply and mixed-on date", { concurrency: false }, () => {
     const lowPage = dailyRoutinesHTML();
     assert.match(lowPage, /data-supply="low"/);
     assert.match(lowPage, /Low supply · 3 on hand · 6 days left · Mixed 9 days ago/);
+  });
+
+  test("a unit, quarter, or routine tap keeps a typed count and mix date", async () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    const night = blockId("Night routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = itemNamed("Example Compound A");
+    app.ui.sheet = "routines-item";
+    app.ui.sd = routineItemDraft(app.state, { blockId: morning, itemId: item.id });
+    app.eatClick = false;
+    const fields = {
+      "#dr-item-name": { value: "Example Compound A" },
+      "#dr-item-amount": { value: "250" },
+      "#dr-item-on-hand": { value: "9" },
+      "#dr-item-mixed-on": { value: "2026-11-10" },
+    };
+    app.$ = (sel) => fields[sel] || null;
+    let html = "";
+    app.renderSheet = () => { html = routineItemSheetHTML(); };
+    const button = {
+      dataset: { action: "routines-item-unit", unit: "mg" },
+      closest(sel) { return sel === "[data-action]" ? button : null; },
+    };
+    const ev = { target: button, preventDefault() {} };
+    for (const fn of sheetListeners.click) await fn(ev);
+    assert.match(html, /id="dr-item-on-hand"[^>]*value="9"/);
+    assert.match(html, /id="dr-item-mixed-on"[^>]*value="2026-11-10"/);
+    assert.match(html, /data-unit="mg"[^>]*aria-pressed="true"/);
+
+    button.dataset = { action: "routines-item-quarter", amount: "0.5" };
+    for (const fn of sheetListeners.click) await fn(ev);
+    assert.match(html, /id="dr-item-on-hand"[^>]*value="9"/);
+    assert.match(html, /id="dr-item-mixed-on"[^>]*value="2026-11-10"/);
+    assert.match(html, /value="0.5"/);
+
+    fields["#dr-item-on-hand"].value = "";
+    fields["#dr-item-mixed-on"].value = "";
+    button.dataset = { action: "routines-item-block", blockId: night };
+    for (const fn of sheetListeners.click) await fn(ev);
+    assert.match(html, /id="dr-item-on-hand"[^>]*value=""/);
+    assert.doesNotMatch(html, /value="2026-11-10"/);
+    assert.match(html, new RegExp(`data-block-id="${night}"[^>]*aria-pressed="true"`));
+
+    fields["#dr-item-on-hand"].value = "4";
+    fields["#dr-item-mixed-on"].value = "2026-11-12";
+    button.dataset = { action: "routines-item-kind", kind: "check" };
+    for (const fn of sheetListeners.click) await fn(ev);
+    assert.match(html, /id="dr-item-on-hand"[^>]*value="4"/);
+    assert.equal(html.includes("dr-item-mixed-on"), false);
+    assert.equal(app.ui.sd.mixedOn, "2026-11-12");
+    app.$ = (sel) => (sel === "#dr-item-mixed-on" ? null : fields[sel] || null);
+    button.dataset = { action: "routines-item-kind", kind: "dose" };
+    for (const fn of sheetListeners.click) await fn(ev);
+    assert.match(html, /id="dr-item-on-hand"[^>]*value="4"/);
+    assert.match(html, /id="dr-item-mixed-on"[^>]*value="2026-11-12"/);
   });
 
   test("the item sheet saves a count and a mix date, and a bad count does not write", () => {
