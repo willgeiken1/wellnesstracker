@@ -523,7 +523,7 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
     items,
     placements,
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
-    logs: mergeEntityLists(left.logs, right.logs, now),
+    logs: collapseLogPairs(mergeEntityLists(left.logs, right.logs, now)),
     prefs: mergePrefs(left.prefs, right.prefs, now),
   };
 }
@@ -698,6 +698,33 @@ function collapsePlacementPairs(list) {
     out.push(kept, ...tombs);
   }
   return out;
+}
+
+function checkOffKey(log) {
+  if (!isLive(log) || !validDay(log.day)) return "";
+  if (log.rest === true) return `rest\0${log.day}`;
+  return typeof log.itemId === "string" && log.itemId ? `item\0${log.itemId}\0${log.day}` : "";
+}
+
+/* One live log per item and day, and one rest per day. Older random-id rows,
+   or a moved log that lands on a day the other phone checked off, can hold
+   two. The winner follows the stamp rule. Each other one becomes a log
+   tombstone at its own stamp, which a tie keeps, so a stale live copy
+   cannot bring it back. */
+function collapseLogPairs(list) {
+  const winners = new Map();
+  for (const row of list) {
+    const key = checkOffKey(row);
+    if (!key) continue;
+    const current = winners.get(key);
+    if (!current || beats(row, current)) winners.set(key, row);
+  }
+  return list.map((row) => {
+    const key = checkOffKey(row);
+    if (!key || winners.get(key) === row) return row;
+    const stamp = Math.max(rowStamp(row), 1);
+    return reducedLogTombstone(row, stamp, stamp);
+  });
 }
 
 export function dedupePlacementPairs(list) {
