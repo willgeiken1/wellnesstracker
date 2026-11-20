@@ -58,7 +58,7 @@ const {
   toggleRoutineCollapsed,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
-const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
+const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, projectDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day = "2026-11-19") {
   app.today = () => day;
@@ -398,12 +398,11 @@ describe("routine editing", { concurrency: false }, () => {
       placements: [{ id: "place_phone_b", blockId: night, itemId: item.id, order: 1, updatedAt: 30, deletedAt: null }],
     };
     const collapsed = mergeDailyRoutines(phoneLeft, phoneRight);
-    const shown = collapsed.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id);
+    const shown = projectDailyRoutines(collapsed).placements.filter((row) => row.blockId === night && row.itemId === item.id);
     assert.equal(shown.length, 1);
     assert.equal(shown[0].id, "place_phone_b");
-    assert.equal(isLive(collapsed.placements.find((row) => row.id === "place_phone_a")), false);
     const again = mergeDailyRoutines(collapsed, phoneLeft);
-    assert.equal(again.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id).length, 1);
+    assert.equal(projectDailyRoutines(again).placements.filter((row) => row.blockId === night && row.itemId === item.id).length, 1);
   });
 
   test("converting a dose to a check stops new logs from keeping the old amount", () => {
