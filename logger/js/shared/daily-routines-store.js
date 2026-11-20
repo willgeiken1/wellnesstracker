@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { DEFAULT_DAY_ROLLOVER_HOUR, routineDayRolloverHour } from "./routine-dose.js";
 
 /* Daily routines live on the liftlog-v1 blob under `dailyRoutines`.
    `routines` is already the workout-template list. Do not reuse that key.
@@ -383,6 +384,18 @@ function normalizePrefs(raw, now = Date.now()) {
   };
 }
 
+/* PR 8 owns the rest of this object. The day-start hour lives here so that
+   sheet can read it. updatedAt 0 means the user has not chosen an hour, and
+   a later explicit choice wins the merge. */
+function normalizeSettings(raw, now = Date.now()) {
+  const fields = plainFields(raw);
+  return {
+    ...fields,
+    dayRolloverHour: routineDayRolloverHour(fields.dayRolloverHour),
+    updatedAt: clampStamp(fields.updatedAt, now),
+  };
+}
+
 export function emptyDailyRoutines(now = 0) {
   return {
     updatedAt: num(now),
@@ -392,12 +405,14 @@ export function emptyDailyRoutines(now = 0) {
     compounds: [],
     logs: [],
     prefs: { lastBlockId: null, updatedAt: num(now) },
+    settings: { dayRolloverHour: DEFAULT_DAY_ROLLOVER_HOUR, updatedAt: 0 },
   };
 }
 
 export function normalizeDailyRoutines(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const prefs = normalizePrefs(raw.prefs, now);
+  const settings = normalizeSettings(raw.settings, now);
   return wellFormedDeep({
     updatedAt: clampStamp(raw.updatedAt, now),
     blocks: normalizeList(raw.blocks, normalizeBlock, now),
@@ -406,6 +421,7 @@ export function normalizeDailyRoutines(raw, now = Date.now()) {
     compounds: normalizeList(raw.compounds, normalizeCompound, now),
     logs: normalizeList(raw.logs, normalizeLog, now),
     prefs,
+    settings,
   });
 }
 
@@ -474,6 +490,11 @@ function liveOrder(winner, other) {
   return winner;
 }
 
+function mergeSettings(local, remote) {
+  if (num(local && local.updatedAt) >= num(remote && remote.updatedAt)) return { ...normalizeSettings(local) };
+  return { ...normalizeSettings(remote) };
+}
+
 function mergePrefs(local, remote, now) {
   const left = normalizePrefs(local, now);
   const right = normalizePrefs(remote, now);
@@ -528,6 +549,7 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
+    settings: mergeSettings(left.settings, right.settings),
   };
 }
 
