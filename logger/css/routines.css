@@ -597,3 +597,10 @@
 }
 .dr-details-note { min-height: 72px; }
 .dr-details-history { font-size: 20px; margin-top: 18px; }
+.dr-supply { font-size: 13px; font-weight: 600; }
+.dr-supply[data-supply="low"] {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f6c56b;
+  color: #5c3b00;
+}

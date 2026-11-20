@@ -7,6 +7,7 @@ import {
   routineClock,
   routineLogDraft,
 } from "./daily-routines.js";
+import { routineSupplyView } from "../shared/routine-supply.js";
 
 /* Long-press details for one routine row. A tap still logs.
    The page stays open after the finger lifts. The X in the top right
@@ -187,6 +188,18 @@ export function setRoutineDetailsQuarter(amount) {
   return true;
 }
 
+function supplyDetailsHTML() {
+  const sd = app.ui && app.ui.sd;
+  if (!sd || typeof sd.itemId !== "string" || !sd.itemId) return "";
+  const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
+  const item = view && (view.items || []).find((row) => row.id === sd.itemId);
+  if (!item) return "";
+  const today = typeof sd.maxDay === "string" && sd.maxDay ? sd.maxDay : routineClock().day;
+  const supply = routineSupplyView({ item, logs: view.logs, today });
+  if (!supply.text) return "";
+  return `<p class="dr-supply" data-supply="${esc(supply.state)}">${esc(supply.text)}</p>`;
+}
+
 function historyHTML(compoundId) {
   const rows = compoundDoseHistory(app.state && app.state.dailyRoutines, compoundId);
   if (!rows.length) return `<p class="sub">Nothing logged for this item yet.</p>`;
@@ -239,6 +252,7 @@ export function routineDetailsSheetHTML() {
       : `<p class="sub">This is a check. A tap logs it.</p>`;
   return `<h3 data-motion="${motion}">Details</h3>
     <p class="sub">${esc(name)}. This page stays open until you tap the X.</p>
+    ${supplyDetailsHTML()}
     ${body}
     <h3 class="dr-details-history">History</h3>
     <p class="sub">Logged amounts. Changing the item amount does not change them.</p>
