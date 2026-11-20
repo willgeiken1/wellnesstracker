@@ -535,7 +535,7 @@ export function editRoutineLog(state, logId, draft) {
     const item = (view.items || []).find((row) => row.id === log.itemId) || null;
     const doseItem = item ? item.kind === "dose" : typeof log.amount === "number";
     const at = stampAfter(clock.now, log.updatedAt);
-    const nextId = log.itemId ? checkoffLogId(log.itemId, day) : log.id;
+    const nextId = log.itemId ? routineLogId(log.itemId, day) : log.id;
     if (nextId !== log.id && (store.logs || []).some((row) => isLive(row) && row.id === nextId)) return null;
     const fields = doseItem ? null : {
       ...log,
