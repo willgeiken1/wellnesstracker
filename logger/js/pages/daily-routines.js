@@ -7,6 +7,7 @@ import {
   putDailyRoutines,
   revisePlanEntity,
   routineId,
+  routineSiteId,
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
@@ -781,8 +782,11 @@ function unitForEditedLog(log, compound) {
    user picked. It is not today's key and not the UTC day of the clock.
    A time is applied only when that day is before today. A same-day edit
    leaves `at` alone. A note is stored only when the draft includes one.
-   The compound row is left alone, so later edits to the item do not
-   rewrite this log. A rest log is never edited. */
+   A site is stored only when the draft includes one. A blank site removes
+   it. A missing site key leaves the old site. An unknown site is refused.
+   A check item cannot store a site. The compound
+   row is left alone, so later edits to the item do not rewrite this log.
+   A rest log is never edited. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
@@ -827,6 +831,17 @@ export function editRoutineLog(state, logId, draft) {
       if (note) patch.note = note;
       else delete patch.note;
     }
+    if (item && item.kind !== "dose") {
+      delete patch.site;
+      if (draft && Object.prototype.hasOwnProperty.call(draft, "site") && draft.site != null && draft.site !== "") return null;
+    } else if (draft && Object.prototype.hasOwnProperty.call(draft, "site")) {
+      if (draft.site != null && typeof draft.site !== "string") return null;
+      const raw = typeof draft.site === "string" ? draft.site.trim() : "";
+      const site = routineSiteId(raw);
+      if (raw && !site) return null;
+      if (site) patch.site = site;
+      else delete patch.site;
+    }
     const at = stampAfter(clock.now, log.updatedAt);
     const next = upsertEntity(store, "logs", patch, at);
     return wrote(next, "logs", logId, at);
@@ -867,6 +882,7 @@ export function routineLogDraft(state, logId) {
     maxDay: routineClock().day,
     time: routineClockTime(log.at),
     note: typeof log.note === "string" ? log.note : "",
+    site: routineSiteId(log.site),
     error: "",
   };
 }
