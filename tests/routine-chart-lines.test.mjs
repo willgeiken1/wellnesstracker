@@ -178,6 +178,23 @@ describe("started lines on Insights charts", { concurrency: false }, () => {
     const midweek = chart(weeks, [{ date: "2026-11-11", label: "Started Example Compound A" }]);
     assert.match(midweek, /x1="224.1"/);
 
+    app.ROUTINES_ENABLED = true;
+    app.session = { user: { id: "synthetic-user" } };
+    app.sb = null;
+    const currentWeek = store([compound("compound-a", { chartLine: true, startDate: "2026-11-18" })]);
+    assert.deepEqual(startedChartMarkers(currentWeek, weeks), []);
+    const onLastWeek = startedChartMarkers(currentWeek, weeks, { bucketDays: 7 });
+    assert.deepEqual(onLastWeek, [{ date: "2026-11-16", label: "Started Example Compound A" }]);
+    assert.match(chart(weeks, onLastWeek), /x1="332.0"/);
+    const midBucket = startedChartMarkers(store([compound("compound-a", { chartLine: true, startDate: "2026-11-11" })]), weeks, { bucketDays: 7 });
+    assert.equal(midBucket[0].date, "2026-11-09");
+    assert.match(chart(weeks, midBucket), /x1="181.0"/);
+    const weekSunday = startedChartMarkers(store([compound("compound-a", { chartLine: true, startDate: "2026-11-22" })]), weeks, { bucketDays: 7 });
+    assert.equal(weekSunday[0].date, "2026-11-16");
+    assert.deepEqual(startedChartMarkers(store([compound("compound-a", { chartLine: true, startDate: "2026-11-23" })]), weeks, { bucketDays: 7 }), []);
+    app.ROUTINES_ENABLED = false;
+    app.session = null;
+
     const outside = chart(days, [{ date: "2026-10-01", label: "Started Example Compound A" }]);
     assert.equal(outside, chart(days));
     const after = chart(days, [{ date: "2026-12-01", label: "Started Example Compound A" }]);
@@ -522,7 +539,7 @@ describe("started lines on Insights charts", { concurrency: false }, () => {
     assert.match(slice(insights, "<h4>HRV</h4>", "<h4>Resting heart rate</h4>"), /startedMarkers\(range\)/);
     assert.doesNotMatch(slice(insights, "<h4>Resting heart rate</h4>", "function insightsWrapHTML"), /startedMarkers/);
     assert.doesNotMatch(slice(insights, "Sets per week", "Average HRV"), /startedMarkers/);
-    assert.match(insights, /startedMarkers\(weeks\)/);
+    assert.match(insights, /startedMarkers\(weeks, 7\)/);
     assert.match(readFileSync(new URL("../logger/js/shared/profile.js", import.meta.url), "utf8"), /startedChartMarkers\(/);
     assert.doesNotMatch(food, /startedChartMarkers|startedMarkers/);
     assert.doesNotMatch(settings, /startedChartMarkers|startedMarkers/);
