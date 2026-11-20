@@ -258,6 +258,14 @@
   margin: 8px 0 12px;
   font-weight: 700;
 }
+.dr-set-row select.text-in {
+  width: auto;
+  min-width: 7.5rem;
+  height: 44px;
+  margin: 0;
+  flex: 0 0 auto;
+  font-weight: 700;
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .dr-row {
