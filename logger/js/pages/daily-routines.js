@@ -1426,7 +1426,7 @@ function shellHTML(date) {
   }
   const projected = ensureRoutineShell(app.state, date.getTime());
   const view = projected || { blocks: [], items: [], placements: [], logs: [], compounds: [], prefs: {} };
-  if (typeof app.maybeOfferRoutineQuiz === "function") app.maybeOfferRoutineQuiz();
+  if (!app.paintingNeighbour && typeof app.maybeOfferRoutineQuiz === "function") app.maybeOfferRoutineQuiz();
   return paintShell(view, date);
 }
 

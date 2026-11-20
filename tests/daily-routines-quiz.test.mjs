@@ -324,6 +324,21 @@ describe("routine setup quiz", { concurrency: false }, () => {
     assert.equal(normalizeDailyRoutines({ ...base, quiz: { status: "later" } }).quiz, null);
   });
 
+  test("painting Routines as a neighbour pane does not open the quiz over another tab", () => {
+    signIn();
+    app.ui.tab = "home";
+    app.paintingNeighbour = true;
+    try { dailyRoutinesHTML(); } finally { app.paintingNeighbour = false; }
+    assert.equal(app.ui.sheet, null);
+    assert.equal(app.ui.routineQuiz, null);
+    const pager = readFileSync(new URL("../logger/js/shell/pager.js", import.meta.url), "utf8");
+    assert.match(pager, /app\.paintingNeighbour = true;[\s\S]*finally \{[^}]*app\.paintingNeighbour = false/);
+    app.ui.tab = "daily-routines";
+    dailyRoutinesHTML();
+    assert.equal(app.ui.sheet, "routines-quiz");
+    assert.equal(maybeOfferRoutineQuiz(), false);
+  });
+
   test("the quiz does not open when signed out, flag off, or still pulling", () => {
     signIn();
     app.session = null;
