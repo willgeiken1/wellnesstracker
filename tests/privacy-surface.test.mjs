@@ -192,7 +192,7 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(policy, /_Last updated: November 19, 2026_/);
   assert.doesNotMatch(policy, /_Last updated: October 16, 2026_/);
   assert.match(policy, /Blocks, the items in them, which block each item is placed in, and preferences/);
-  assert.match(policy, /planned amount and unit/);
+  assert.match(policy, /planned amount, a unit, and the day that amount started/);
   assert.match(policy, /the item, the day, the status \(done, partial, or skipped\), the amount and unit when you logged an amount, and the time it was logged/);
   assert.match(policy, /save the log on an earlier day/);
   assert.match(policy, /When you are signed in, the layout and the dose logs sync to your account/);
@@ -205,6 +205,9 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(policy, /does arithmetic on this device from the numbers you type/);
   assert.match(policy, /It is not saved, it is not synced, and it is not sent anywhere/);
   assert.match(policy, /It is not a recommendation/);
+  assert.match(page, /A dose item stores a planned amount, a unit, and the day that amount started/);
+  assert.match(page, /Crash reports and usage analytics do not include dose amounts or item names/);
+  assert.match(page, /No workouts, food, notes, photos, email, dose amounts, or item names/);
   assert.match(page, /A deleted dose log keeps only a small marker/);
   assert.match(page, /The amount, the unit, and the item are removed/);
   assert.doesNotMatch(page, /including the amount/);

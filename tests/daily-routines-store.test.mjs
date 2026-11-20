@@ -52,9 +52,11 @@ const {
   mergeDailyRoutines,
   normalizeDailyRoutines,
   projectDailyRoutines,
+  purgeDailyRoutineRange,
   revisePlanEntity,
   seedDefaultBlocks,
 } = await import("../logger/js/shared/daily-routines-store.js");
+const { undoRoutineLog } = await import("../logger/js/pages/daily-routines.js");
 const { applyPurges, buildExportFiles, stripRange } = await import("../logger/js/shared/purge.js");
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -509,6 +511,53 @@ test("a purged dose is absent locally, in the account blob, in the backup, and i
     assert.equal(csv.includes("item-a"), false);
   } finally {
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: previousShare });
+    signOut();
+  }
+});
+
+test("undo, a range delete, and the server strip keep exactly the tombstone keys", () => {
+  const keys = ["day", "deletedAt", "id", "status", "updatedAt"];
+  signIn();
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date(2026, 10, 19, 8, 30, 0);
+  try {
+    app.state.dailyRoutines = phoneStore([], [
+      log("log-undo", "2026-11-19", 250, 10, { note: "extra dose note" }),
+    ]);
+    assert.equal(undoRoutineLog(app.state, "log-undo"), true);
+    assert.deepEqual(Object.keys(app.state.dailyRoutines.logs[0]).sort(), keys);
+
+    const range = {
+      dailyRoutines: phoneStore([], [
+        log("log-range", "2026-11-01", 250, 10, { note: "extra dose note" }),
+      ]),
+    };
+    assert.equal(purgeDailyRoutineRange(range, "2026-11-01", "2026-11-01", null, 4000), true);
+    assert.deepEqual(Object.keys(range.dailyRoutines.logs[0]).sort(), keys);
+    assert.equal(range.dailyRoutines.logs[0].deletedAt, 4000);
+
+    const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+    const blob = {
+      sessions: [],
+      dailyRoutines: phoneStore([], [
+        log("log-server", "2026-11-01", 250, 10, { note: "extra dose note" }),
+      ]),
+    };
+    const script = `
+      import { stripRange } from ${JSON.stringify(stripUrl)};
+      const data = stripRange(${JSON.stringify(blob)}, "2026-11-01", "2026-11-01", 4000, 6000);
+      console.log(JSON.stringify(Object.keys(data.dailyRoutines.logs[0]).sort()));
+    `;
+    const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.deepEqual(JSON.parse(result.stdout.trim().split("\n").pop()), keys);
+  } finally {
     signOut();
   }
 });
