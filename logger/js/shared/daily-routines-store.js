@@ -558,7 +558,9 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   routines.logs = routines.logs.map((log) => {
     if (!log || typeof log !== "object" || !validDay(log.day) || log.day < from || log.day > to) return log;
     const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
-    if (!gone && !dropBefore(latestStamp(log), before, now)) return log;
+    /* A later undo is inside the dates but did not exist when this delete
+       was made. Leave it, amount and note included. */
+    if (!dropBefore(latestStamp(log), before, now)) return log;
     if (gone && isReducedLog(log)) return log;
     const deletedAt = gone ? clampStamp(log.deletedAt, now) : cutoff;
     const updatedAt = Math.max(rowStamp(log), deletedAt);
