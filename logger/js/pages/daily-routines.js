@@ -130,6 +130,71 @@ export function formatRoutineClock(date) {
   return `${hour}:${min} ${suffix}`;
 }
 
+/* The dose clock on a log is `at`, read in the phone's local zone. */
+export function routineClockTime(stamp) {
+  if (typeof stamp !== "number" || !Number.isFinite(stamp) || stamp <= 0) return "";
+  const date = new Date(stamp);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+const NOTE_MAX = 280;
+const TIME_RE = /^(\d{1,2}):([0-5]\d)$/;
+const FEELING_KEYS = ["mood", "energy", "stress", "feeling", "felt"];
+
+function clipNote(value) {
+  if (typeof value !== "string") return "";
+  const text = value.trim();
+  return text.length > NOTE_MAX ? text.slice(0, NOTE_MAX) : text;
+}
+
+export function parseRoutineTime(raw) {
+  if (typeof raw !== "string") return null;
+  const match = TIME_RE.exec(raw.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || hour > 23 || !Number.isInteger(minute)) return null;
+  return { hour, minute };
+}
+
+function stampOnDay(day, hour, minute) {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  const stamp = new Date(year, month - 1, date, hour, minute, 0, 0).getTime();
+  if (!Number.isFinite(stamp)) return null;
+  const back = new Date(stamp);
+  const local = `${back.getFullYear()}-${String(back.getMonth() + 1).padStart(2, "0")}-${String(back.getDate()).padStart(2, "0")}`;
+  if (local !== day || back.getHours() !== hour || back.getMinutes() !== minute) return null;
+  return stamp;
+}
+
+/* Time is written only when the chosen day is before today. A blank time
+   leaves the logged clock. A same-day edit never moves it. */
+function editedDoseAt(log, day, today, draft) {
+  const current = typeof log.at === "number" && Number.isFinite(log.at) ? log.at : 0;
+  if (!(day < today) || !draft || draft.time == null) return { ok: true, at: current };
+  if (typeof draft.time !== "string") return { ok: false, at: current };
+  const text = draft.time.trim();
+  if (!text) return { ok: true, at: current };
+  const parsed = parseRoutineTime(text);
+  const stamped = parsed && stampOnDay(day, parsed.hour, parsed.minute);
+  if (stamped == null) return { ok: false, at: current };
+  return { ok: true, at: stamped };
+}
+
+function withDetailsFields(payload, draft, doseAt) {
+  const next = { ...payload, at: doseAt };
+  for (const key of FEELING_KEYS) delete next[key];
+  if (!draft || !Object.prototype.hasOwnProperty.call(draft, "note")) return next;
+  if (draft.note != null && typeof draft.note !== "string") return null;
+  const note = clipNote(typeof draft.note === "string" ? draft.note : "");
+  if (note) next.note = note;
+  else delete next.note;
+  return next;
+}
+
 export function formatRoutineWait(waitMin) {
   if (typeof waitMin !== "number" || !Number.isFinite(waitMin) || waitMin < 0) return "";
   if (waitMin < 1) return "now";
@@ -544,8 +609,8 @@ function logHasSavedDose(log) {
 
 /* Changes the amount and the day on one log. The day is the string the
    user picked. It is not today's key and not the UTC day of the clock.
-   The compound row is left alone, so later edits to the item do not
-   rewrite this log. */
+   A time is applied only when that day is before today. A note is stored
+   only when the draft includes one. The compound row is left alone. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
@@ -563,6 +628,8 @@ export function editRoutineLog(state, logId, draft) {
     const doseItem = logHasSavedDose(log);
     const nextId = log.itemId ? routineLogId(log.itemId, day) : log.id;
     if (nextId !== log.id && (store.logs || []).some((row) => isLive(row) && row.id === nextId)) return null;
+    const clockEdit = editedDoseAt(log, day, clock.day, draft);
+    if (!clockEdit.ok) return null;
     const at = writeStamp(store, clock, nextId);
     const fields = doseItem ? null : {
       ...log,
@@ -590,6 +657,8 @@ export function editRoutineLog(state, logId, draft) {
         deletedAt: null,
       };
     }
+    payload = withDetailsFields(payload, draft, clockEdit.at);
+    if (!payload) return null;
     let next = upsertEntity(store, "logs", payload, at);
     if (!wrote(next, "logs", nextId, at)) return null;
     if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
@@ -630,6 +699,8 @@ export function routineLogDraft(state, logId) {
     kind: logHasSavedDose(log) ? "dose" : "check",
     day: log.day,
     maxDay: routineClock().day,
+    time: routineClockTime(log.at),
+    note: typeof log.note === "string" ? log.note : "",
     error: "",
   };
 }
@@ -1291,7 +1362,7 @@ function editLogButton(row) {
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
   const next = countdownMarkup(projected, row, date, day);
-  return `<li class="dr-row" ${rowAttrs(row)} data-state="open">
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
       <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}</span>
@@ -1323,7 +1394,7 @@ function doneRowHTML(row, projected, date, day) {
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
   const next = countdownMarkup(projected, row, date, day);
-  return `<li class="dr-row dr-row-done" data-item-id="${esc(row.item.id)}" data-state="${state}">
+  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
     <span class="dr-copy"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}${next}<span class="dr-state">${label}</span></span>
     <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
@@ -1535,6 +1606,8 @@ app.saveRoutineItem = saveRoutineItem;
 app.addRoutineItem = addRoutineItem;
 app.routineItemDraft = routineItemDraft;
 app.parseRoutineAmount = parseRoutineAmount;
+app.parseRoutineTime = parseRoutineTime;
+app.routineClockTime = routineClockTime;
 app.rememberRoutineBlock = rememberRoutineBlock;
 app.toggleRoutineCollapsed = toggleRoutineCollapsed;
 app.routineBlockRows = routineBlockRows;
