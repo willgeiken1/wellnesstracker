@@ -1,6 +1,9 @@
 const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
-const config = getDefaultConfig(__dirname);
+// Store builds get Sentry's debug IDs so uploaded source maps match crash reports. The phone-only build loads no Sentry code.
+const config = process.env.APP_VARIANT === 'freeiphone'
+  ? getDefaultConfig(__dirname)
+  : require('@sentry/react-native/metro').getSentryExpoConfig(__dirname, { enableSourceContextInDevelopment: false });
 // Shared, pure importer also runs in the Supabase edge function.
 config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, '../supabase/functions/_shared')];
 config.resolver.nodeModulesPaths = [path.resolve(__dirname, 'node_modules')];

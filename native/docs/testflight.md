@@ -28,6 +28,18 @@ Only Will does the steps that sign in to Apple or Expo. Agents never handle his 
    - **Reporting hold:** do not request, create, copy, or set a Sentry DSN or PostHog key for this build. If previous build settings might supply either, stop and have the authorized release owner verify the effective configuration privately. Do not paste configuration values into logs, tickets, or chat.
    - **Before building or uploading:** require the reviewed reporting-hold source and a verified build configuration. Do not treat missing keys, this documentation change, or a source test as proof that an installed build sends nothing. Inspect the exact built artifact before a separately approved upload. A TestFlight-only device check can follow a restricted internal install for that purpose: validate that same build with synthetic inputs, including upgrade and queued-report behavior, before broader distribution. Historical reports and older installed clients remain separate reviews.
 
+## Readable crash reports (only once reporting is approved)
+
+Store builds upload their source maps and debug symbols to Sentry, so crash reports show real file names and lines. The upload runs only in a build that has `SENTRY_AUTH_TOKEN`; without it the build skips the upload and still succeeds. The reporting hold above still applies: don't add this token for a build that is under the hold.
+
+1. In Sentry (US), create a React Native project named `insight-app` in the `insight-0j` organization. Its DSN is the `EXPO_PUBLIC_SENTRY_DSN` setting.
+2. In Sentry, open Settings, then Organization Tokens, and create a token. Organization tokens can only upload source maps and debug files.
+3. Store it as a secret in the Expo project's production environment, pasting the token in place of the placeholder and keeping the quotes:
+
+   ```sh
+   npx eas-cli@latest env:create --environment production --visibility secret --name SENTRY_AUTH_TOKEN --value "PASTE_SENTRY_TOKEN_HERE"
+   ```
+
 ## Build and upload (Will's Mac, after the PR merges)
 
 From `native/` on an up-to-date `main`:

@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import ts from 'typescript';
 jest.mock('expo/metro-config', () => ({ getDefaultConfig: () => ({ resolver: {} }) }));
+jest.mock('@sentry/react-native/metro', () => ({ getSentryExpoConfig: jest.fn(() => ({ resolver: {}, sentry: true })) }));
 const root = path.resolve(__dirname, '..');
 function load(variant?: string) {
   const before = process.env.APP_VARIANT;
@@ -11,8 +12,16 @@ function load(variant?: string) {
   finally { if (before === undefined) delete process.env.APP_VARIANT; else process.env.APP_VARIANT = before; }
   return result;
 }
-test('default Metro resolution remains unchanged', () => {
-  expect(load().resolver.resolveRequest).toBeUndefined();
+test('store builds use Sentry\'s Metro config with default resolution; the phone-only build never loads it', () => {
+  const { getSentryExpoConfig } = jest.requireMock('@sentry/react-native/metro');
+  getSentryExpoConfig.mockClear();
+  const config = load();
+  expect(config.sentry).toBe(true);
+  expect(config.resolver.resolveRequest).toBeUndefined();
+  expect(getSentryExpoConfig).toHaveBeenCalledWith(root, { enableSourceContextInDevelopment: false });
+  getSentryExpoConfig.mockClear();
+  expect(load('freeiphone').sentry).toBeUndefined();
+  expect(getSentryExpoConfig).not.toHaveBeenCalled();
 });
 test('freeiphone resolves the real repository runtime import graph, including pure flags', () => {
   const config = load('freeiphone');
