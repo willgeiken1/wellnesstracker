@@ -50,7 +50,7 @@ const {
   toggleRoutineReveal,
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
-const { isLive, mergeDailyRoutines, putDailyRoutines, upsertEntity } = await import("../logger/js/shared/daily-routines-store.js");
+const { isLive, mergeDailyRoutines, putDailyRoutines, routineLogId, upsertEntity } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day, utcIso) {
   app.today = () => day;
@@ -269,6 +269,71 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(loggedTodayCount(left.logs, "2026-11-19"), 1);
     assert.equal(loggedTodayCount(right.logs, "2026-11-19"), 1);
     assert.equal(left.logs.filter((row) => row.itemId === item.id).length, 1);
+  });
+
+  test("after a two-phone merge one Undo reopens the row, in either merge order", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    const phoneB = { dailyRoutines: structuredClone(app.state.dailyRoutines) };
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const phoneA = app.state;
+    app.state = phoneB;
+    app.routineNow = () => new Date("2026-11-19T08:31:00");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    assert.equal(phoneA.dailyRoutines.logs[0].id, routineLogId(item.id, "2026-11-19"));
+    for (const [left, right] of [[phoneA, phoneB], [phoneB, phoneA]]) {
+      const merged = mergeDailyRoutines(left.dailyRoutines, right.dailyRoutines);
+      assert.equal(merged.logs.filter((row) => isLive(row) && row.itemId === item.id).length, 1);
+      app.state = { dailyRoutines: merged };
+      assert.match(dailyRoutinesHTML(), /data-logged="1"/);
+      const live = merged.logs.find((row) => isLive(row) && row.itemId === item.id);
+      assert.equal(undoRoutineLog(app.state, live.id), true);
+      assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 0);
+      const html = dailyRoutinesHTML();
+      assert.match(html, /data-action="routines-log"/);
+      assert.match(html, /data-logged="0"/);
+    }
+  });
+
+  test("older random-id rows for one item count once, and one Undo removes both", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    app.state.dailyRoutines.logs.push(
+      logRow("2026-11-19", "done", { id: "log_old_phone_a", itemId: item.id, updatedAt: 5 }),
+      logRow("2026-11-19", "done", { id: "log_old_phone_b", itemId: item.id, updatedAt: 6 }),
+    );
+    assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 1);
+    assert.match(dailyRoutinesHTML(), /data-logged="1"/);
+    assert.equal(undoRoutineLog(app.state, "log_old_phone_b"), true);
+    const logs = app.state.dailyRoutines.logs;
+    assert.equal(isLive(logs.find((row) => row.id === "log_old_phone_a")), false);
+    assert.equal(isLive(logs.find((row) => row.id === "log_old_phone_b")), false);
+    assert.equal(loggedTodayCount(logs, "2026-11-19"), 0);
+    assert.match(dailyRoutinesHTML(), /data-action="routines-log"/);
+  });
+
+  test("a restored rest stays a rest and does not cover an item row", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    assert.equal(logRoutineRest(app.state), true);
+    const rest = app.state.dailyRoutines.logs.find((row) => row.rest === true);
+    assert.equal(rest.id, routineLogId(null, "2026-11-19"));
+    assert.equal(undoRoutineLog(app.state, rest.id), true);
+    assert.equal(restoreRoutineLog(app.state, rest.id), true);
+    const back = app.state.dailyRoutines.logs.find((row) => row.id === rest.id);
+    assert.equal(isLive(back), true);
+    assert.equal(back.rest, true);
+    assert.equal(back.itemId, null);
+    assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 0);
+    const html = dailyRoutinesHTML();
+    assert.match(html, /Rest logged/);
+    assert.match(html, /data-logged="0"/);
+    assert.match(html, /data-action="routines-log"/);
   });
 
   test("a skip collapses the row, does not count, and does not reset the streak", () => {
