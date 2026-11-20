@@ -47,6 +47,7 @@ const {
   logRoutineRest,
   parseRoutineTime,
   routineClockTime,
+  saveRoutineItem,
   toggleRoutineReveal,
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
@@ -318,6 +319,31 @@ describe("routine details", { concurrency: false }, () => {
     assert.match(sheet, new RegExp(SENTINEL));
     assert.doesNotMatch(sheet, /id="dr-details-time-wrap" hidden/);
     assert.match(sheet, /value="08:02"/);
+  });
+
+  test("a saved dose still opens its editor after the item becomes a check", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = itemNamed("Example Compound A");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const log = liveLog(item.id);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: 250, day: "2026-11-19", note: SENTINEL }), true);
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id,
+      name: "Example Compound A",
+      kind: "check",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(app.state.dailyRoutines.items.find((row) => row.id === item.id).kind, "check");
+    assert.equal(openRoutineDetails(item.id, log.id), true);
+    assert.equal(app.ui.sd.kind, "dose");
+    const sheet = routineDetailsSheetHTML();
+    assert.match(sheet, /id="dr-details-note"/);
+    assert.match(sheet, new RegExp(SENTINEL));
+    assert.match(sheet, /data-action="routines-details-save"/);
+    assert.doesNotMatch(sheet, /This is a check/);
   });
 
   test("how you felt opens the check-in and does not store a feeling on the dose", () => {
