@@ -188,6 +188,12 @@ export function setRoutineDetailsQuarter(amount) {
   return true;
 }
 
+function calcEntry(sd) {
+  if (!sd || sd.kind !== "dose" || typeof sd.itemId !== "string" || !sd.itemId) return "";
+  return `<button type="button" class="btn block dr-details-calc" data-action="routines-calc" data-item-id="${esc(sd.itemId)}">Reconstitution calculator</button>
+    <p class="sub">Opens the calculator for this item. It shows U-100 units for what you entered. It does not suggest an amount.</p>`;
+}
+
 function historyHTML(compoundId) {
   const rows = compoundDoseHistory(app.state && app.state.dailyRoutines, compoundId);
   if (!rows.length) return `<p class="sub">Nothing logged for this item yet.</p>`;
@@ -256,6 +262,7 @@ export function routineDetailsSheetHTML() {
   return `<h3 data-motion="${motion}">Details</h3>
     <p class="sub">${esc(name)}. This page stays open until you tap the X.</p>
     ${body}
+    ${calcEntry(sd)}
     <h3 class="dr-details-history">History</h3>
     <p class="sub">Logged amounts. Changing the item amount does not change them.</p>
     ${historyHTML(sd.compoundId)}

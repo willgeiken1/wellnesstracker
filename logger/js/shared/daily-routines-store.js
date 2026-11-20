@@ -203,13 +203,18 @@ function normalizeBlock(raw, now = Date.now()) {
 function normalizeItem(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base) return null;
-  return {
+  const next = {
     ...plainFields(raw),
     ...base,
     name: clip(raw.name, 80),
     kind: itemKind(raw.kind),
     compoundId: typeof raw.compoundId === "string" && raw.compoundId ? raw.compoundId : null,
   };
+  const note = clip(typeof raw.note === "string" ? raw.note : "", NOTE_MAX);
+  if (note) next.note = note;
+  else delete next.note;
+  for (const key of FEELING_KEYS) delete next[key];
+  return next;
 }
 
 function normalizePlacement(raw, now = Date.now()) {
