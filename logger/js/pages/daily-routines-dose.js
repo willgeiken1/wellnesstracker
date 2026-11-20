@@ -1,6 +1,6 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, projectDailyRoutines } from "../shared/daily-routines-store.js";
-import { reconstitutionResult, reconstitutionResultHTML } from "./reconstitution.js";
+import { reconstitutionNoteText, reconstitutionResult, reconstitutionResultHTML } from "./reconstitution.js";
 import {
   compoundDoseHistory,
   doseCountdownText,
@@ -9,6 +9,7 @@ import {
   parseRoutineAmount,
   routineClock,
   routineLogDraft,
+  saveRoutineItemNote,
 } from "./daily-routines.js";
 
 /* Log edits, per-compound history, and the reconstitution screen.
@@ -100,10 +101,16 @@ export function commitRoutineLogSheet() {
   return true;
 }
 
-export function openReconstitution() {
+export function openReconstitution(itemId) {
   if (!ready() || !app.ui) return false;
+  let linked = "";
+  if (typeof itemId === "string" && itemId) {
+    const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
+    const item = view && (view.items || []).find((row) => row.id === itemId);
+    if (item && item.kind === "dose") linked = item.id;
+  }
   app.ui.sheet = "routines-calc";
-  app.ui.sd = { vial: "", water: "", dose: "", vialUnit: "mg", doseUnit: "mcg" };
+  app.ui.sd = { vial: "", water: "", dose: "", vialUnit: "mg", doseUnit: "mcg", itemId: linked, error: "" };
   if (typeof app.renderSheet === "function") app.renderSheet();
   return true;
 }
@@ -173,12 +180,27 @@ function unitButtons(current, action) {
   return CALC_UNITS.map((unit) => `<button type="button" class="dr-unit" data-action="${action}" data-unit="${esc(unit)}" aria-pressed="${current === unit ? "true" : "false"}">${esc(unit)}</button>`).join("");
 }
 
+function readCalcFields(sd) {
+  if (typeof app.$ !== "function") return;
+  const vial = app.$("#dr-calc-vial");
+  const water = app.$("#dr-calc-water");
+  const dose = app.$("#dr-calc-dose");
+  if (vial && typeof vial.value === "string") sd.vial = vial.value;
+  if (water && typeof water.value === "string") sd.water = water.value;
+  if (dose && typeof dose.value === "string") sd.dose = dose.value;
+}
+
 export function reconstitutionSheetHTML() {
   const sd = app.ui && app.ui.sd ? app.ui.sd : {};
   const vialUnit = knownUnit(sd.vialUnit);
   const doseUnit = knownUnit(sd.doseUnit);
+  const error = sd.error ? `<p class="dr-log-error" id="dr-calc-error" role="alert">${esc(sd.error)}</p>` : "";
+  const save = sd.itemId
+    ? `<button type="button" class="btn primary block" data-action="routines-calc-save">Save as note on this item</button>
+    <p class="sub">Saves the volume and U-100 units on this item. It does not log a dose, and it does not suggest an amount.</p>`
+    : "";
   return `<h3 id="dr-calc-title">Reconstitution calculator</h3>
-    <p class="sub">Enter a vial amount, a water volume, and a desired amount. The lines below are the arithmetic of what you entered. What you type stays on this screen.</p>
+    <p class="sub">Enter a vial amount, a water volume, and a desired amount. The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen.</p>
     <label class="field-label" for="dr-calc-vial">Vial amount</label>
     <input class="text-in" id="dr-calc-vial" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(sd.vial || "")}">
     <span class="field-label" id="dr-calc-vial-unit">Vial unit</span>
@@ -190,7 +212,40 @@ export function reconstitutionSheetHTML() {
     <span class="field-label" id="dr-calc-dose-unit">Desired amount unit</span>
     <div class="dr-units" role="group" aria-labelledby="dr-calc-dose-unit">${unitButtons(doseUnit, "routines-calc-dose-unit")}</div>
     <div id="dr-calc-result">${reconstitutionLiveHTML()}</div>
+    ${error}
+    ${save}
     <button type="button" class="btn block" data-action="sheet-close">Close</button>`;
+}
+
+export function saveReconstitutionNote() {
+  const sd = app.ui && app.ui.sd;
+  if (!sd || !app.ui || app.ui.sheet !== "routines-calc" || !ready()) return false;
+  readCalcFields(sd);
+  const itemId = typeof sd.itemId === "string" ? sd.itemId : "";
+  if (!itemId) return false;
+  const result = reconstitutionResult({
+    vialAmount: parseRoutineAmount(sd.vial),
+    waterMl: parseRoutineAmount(sd.water),
+    doseAmount: parseRoutineAmount(sd.dose),
+    vialUnit: sd.vialUnit,
+    doseUnit: sd.doseUnit,
+  });
+  const note = reconstitutionNoteText(result);
+  if (!note) {
+    sd.error = "Enter a vial amount, a water volume, and a desired amount.";
+    if (typeof app.renderSheet === "function") app.renderSheet();
+    return false;
+  }
+  if (!saveRoutineItemNote(app.state, itemId, note)) {
+    sd.error = "The note was not saved.";
+    if (typeof app.renderSheet === "function") app.renderSheet();
+    return false;
+  }
+  app.ui.sheet = null;
+  if (typeof app.save === "function") app.save();
+  app.ui.routineAnnounce = "Note saved.";
+  if (typeof app.render === "function") app.render();
+  return true;
 }
 
 export function setRoutineLogQuarter(amount) {
@@ -206,6 +261,7 @@ export function setReconstitutionUnit(which, unit) {
   if (which === "vial") app.ui.sd.vialUnit = unit;
   else if (which === "dose") app.ui.sd.doseUnit = unit;
   else return false;
+  app.ui.sd.error = "";
   if (typeof app.renderSheet === "function") app.renderSheet();
   return true;
 }
@@ -215,6 +271,7 @@ export function noteReconstitutionField(id, value) {
   const key = id === "dr-calc-vial" ? "vial" : id === "dr-calc-water" ? "water" : id === "dr-calc-dose" ? "dose" : "";
   if (!key) return false;
   app.ui.sd[key] = typeof value === "string" ? value : "";
+  app.ui.sd.error = "";
   const slot = typeof app.$ === "function" ? app.$("#dr-calc-result") : null;
   if (slot) slot.innerHTML = reconstitutionLiveHTML();
   return true;
@@ -224,6 +281,7 @@ app.openRoutineHistory = openRoutineHistory;
 app.openRoutineLogEditor = openRoutineLogEditor;
 app.commitRoutineLogSheet = commitRoutineLogSheet;
 app.openReconstitution = openReconstitution;
+app.saveReconstitutionNote = saveReconstitutionNote;
 app.routineHistorySheetHTML = routineHistorySheetHTML;
 app.routineLogSheetHTML = routineLogSheetHTML;
 app.reconstitutionSheetHTML = reconstitutionSheetHTML;
