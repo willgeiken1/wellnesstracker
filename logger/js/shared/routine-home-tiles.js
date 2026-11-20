@@ -459,17 +459,10 @@ function copyDraft(draft) {
 
 /* Puts a routine tile on the draft. The tile stays in the tray list until then.
    Flag off changes nothing. There is no stack and no cap on how many sit on Home.
-   A draft with no catalog card takes no routine tile: a list of only routine
-   ids is not a layout the merge or the server accepts. */
-export function routineTileNeedsCatalog(draft) {
-  const items = Array.isArray(draft && draft.items) ? draft.items : [];
-  return !items.some((item) => typeof item === "string" && item && !isRoutineTileId(item));
-}
-
+   A draft can hold only routine tiles. That list is a real Home layout. */
 export function addRoutineTile(draft, id, size, gate) {
   const next = copyDraft(draft);
   if (app.ROUTINES_ENABLED !== true || !isRoutineTileId(id) || next.items.includes(id)) return next;
-  if (routineTileNeedsCatalog(next)) return next;
   const pick = size === "small" || size === "medium" ? size : routineDefaultSize(id);
   next.items.push(id);
   next.hidden = next.hidden.filter((item) => item !== id);
