@@ -267,6 +267,15 @@ function doseText(row) {
   return unit ? `${amount} ${unit}` : amount;
 }
 
+/* A completed row shows what was logged. The compound amount is only the
+   amount a new tap will write. */
+function loggedDoseText(log) {
+  if (!log || log.status === "skipped") return "";
+  const amount = formatAmount(log.amount);
+  if (!amount) return "";
+  return log.unit ? `${amount} ${log.unit}` : amount;
+}
+
 function rowState(log) {
   if (!log) return "open";
   if (log.status === "skipped") return "skipped";
@@ -657,7 +666,7 @@ function doneRowHTML(row) {
   const label = state === "skipped" ? "Skipped" : "Logged";
   const markClass = state === "skipped" ? "dr-mark dr-mark-skip" : "dr-mark dr-mark-on";
   const mark = state === "skipped" ? "–" : "✓";
-  const dose = doseText(row);
+  const dose = loggedDoseText(row.log);
   const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
   return `<li class="dr-row dr-row-done" data-item-id="${esc(row.item.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
