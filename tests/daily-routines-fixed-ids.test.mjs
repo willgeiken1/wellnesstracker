@@ -288,4 +288,19 @@ describe("routine fixed ids", { concurrency: false }, () => {
     assert.equal(moved.unit, "");
     assert.equal(draft.kind, "check");
   });
+
+  test("editing the day of a skipped dose keeps it skipped and needs no amount", () => {
+    signIn("2026-11-19");
+    const item = addDose(blockId("Morning routine"));
+    assert.equal(skipRoutineItem(app.state, item.id), true);
+    const log = liveLogs(app.state.dailyRoutines, item.id)[0];
+    app.ui.sd = routineLogDraft(app.state, log.id);
+    pin("2026-11-19", 9, 0);
+    assert.equal(editRoutineLog(app.state, log.id, { amount: "", day: "2026-11-18" }), true);
+    const moved = app.state.dailyRoutines.logs.find((row) => row.day === "2026-11-18" && row.itemId === item.id);
+    assert.equal(moved.status, "skipped");
+    assert.equal(moved.amount, null);
+    assert.equal(moved.unit, "");
+    assert.doesNotMatch(routineLogSheetHTML(), /id="dr-log-amount"/);
+  });
 });

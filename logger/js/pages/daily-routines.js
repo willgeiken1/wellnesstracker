@@ -546,7 +546,8 @@ export function editRoutineLog(state, logId, draft) {
     }
     const view = projectDailyRoutines(store);
     const compound = (view.compounds || []).find((row) => row.id === log.compoundId) || null;
-    const doseItem = logHasSavedDose(log);
+    const skipped = log.status === "skipped";
+    const doseItem = logHasSavedDose(log) && !skipped;
     const at = writeStamp(store, clock, logId);
     const fields = doseItem ? null : {
       ...log,
@@ -554,7 +555,7 @@ export function editRoutineLog(state, logId, draft) {
       day,
       amount: null,
       unit: "",
-      status: log.status === "skipped" ? "skipped" : (log.status || "done"),
+      status: skipped ? "skipped" : (log.status || "done"),
       deletedAt: null,
     };
     let payload = fields;
@@ -610,6 +611,7 @@ export function routineLogDraft(state, logId) {
     amount: typeof log.amount === "number" ? formatAmount(log.amount) : "",
     unit,
     kind: logHasSavedDose(log) ? "dose" : "check",
+    skipped: log.status === "skipped",
     day: log.day,
     maxDay: routineClock().day,
     error: "",
