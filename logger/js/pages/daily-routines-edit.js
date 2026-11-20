@@ -226,6 +226,9 @@ function onDown(ev) {
   const target = ev.target && ev.target.closest && ev.target.closest("[data-rename]");
   if (!target || !target.closest(".dr-page")) return;
   if (ev.target.closest(".dr-handle, .dr-minus, .dr-dup, .dr-skip, .dr-add, .dr-swatch, .dr-undo, .dr-rename")) return;
+  /* Item long-press outside edit mode opens the details page.
+     A block name still renames. Edit mode still renames the item. */
+  if (target.dataset.rename === "item" && !(app.ui && app.ui.dailyRoutineEdit === true)) return;
   cancelHold();
   hold = {
     id: ev.pointerId,
