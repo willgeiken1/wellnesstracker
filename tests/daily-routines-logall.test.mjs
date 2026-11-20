@@ -189,15 +189,15 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
     assert.equal(undoRoutineLogs(app.state, ids), false);
   });
 
-  test("skip and rest rows are not included in log all", () => {
+  test("skip rows are not included in log all, and a rest day is left alone", () => {
     signIn();
     const morning = blockId("Morning routine");
+    const night = blockId("Night routine");
     assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
     assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound B", kind: "dose", amount: 0.25, unit: "mg" }), true);
     assert.equal(addRoutineItem(app.state, morning, { name: "Example Check", kind: "check" }), true);
+    assert.equal(addRoutineItem(app.state, night, { name: "Example Compound C", kind: "dose", amount: 1, unit: "mg" }), true);
     assert.equal(skipRoutineItem(app.state, itemNamed("Example Compound B").id), true);
-    assert.equal(logRoutineRest(app.state), true);
-    const rest = liveLogs().find((log) => log.rest === true);
     const skipped = liveFor(itemNamed("Example Compound B").id)[0];
     assert.equal(skipped.status, "skipped");
     const ids = logAllRoutineBlock(app.state, morning);
@@ -205,17 +205,23 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
     const written = ids.map((id) => app.state.dailyRoutines.logs.find((log) => log.id === id));
     assert.deepEqual(written.map((log) => log.itemId).sort(), [itemNamed("Example Check").id, itemNamed("Example Compound A").id].sort());
     assert.ok(written.every((log) => log.rest !== true && log.status === "done"));
-    assert.ok(!ids.includes(rest.id));
     assert.ok(!ids.includes(skipped.id));
+    assert.equal(logRoutineRest(app.state), true);
+    const rest = liveLogs().find((log) => log.rest === true);
+    const before = app.state.dailyRoutines.logs.length;
+    assert.equal(logAllRoutineBlock(app.state, morning), false);
+    assert.equal(logAllRoutineBlock(app.state, night), false);
+    assert.equal(app.state.dailyRoutines.logs.length, before);
+    assert.equal(liveFor(itemNamed("Example Compound C").id).length, 0);
     const restAfter = app.state.dailyRoutines.logs.find((log) => log.id === rest.id);
     assert.equal(restAfter.deletedAt, null);
     assert.equal(restAfter.rest, true);
-    const skipAfter = liveFor(itemNamed("Example Compound B").id);
-    assert.equal(skipAfter.length, 1);
-    assert.equal(skipAfter[0].status, "skipped");
+    assert.equal(liveFor(itemNamed("Example Compound B").id).length, 1);
+    assert.equal(liveFor(itemNamed("Example Compound B").id)[0].status, "skipped");
+    assert.doesNotMatch(dailyRoutinesHTML(), /data-action="routines-log-all"/);
     assert.equal(logAllRoutineBlock(app.state, "missing-block"), false);
     app.session = null;
-    assert.equal(logAllRoutineBlock(app.state, morning), false);
+    assert.equal(logAllRoutineBlock(app.state, night), false);
   });
 
   test("edit mode does not log, and a collapsed block hides Log all", () => {

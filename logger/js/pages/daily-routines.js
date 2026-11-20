@@ -33,9 +33,10 @@ import { nextDoseCountdown } from "../shared/routine-dose.js";
    derive the day from the clock's UTC instant.
 
    Log all writes one done log per open item in that block. A skip already
-   covers its item, and a rest log is not an item row, so neither is written.
-   A log tap shows "Logged · Undo" for 3 seconds. This file does not listen
-   for the pointer, so a long press stays available for rename and details. */
+   covers its item. A whole-day rest covers the day, so Log all writes
+   nothing on a rest day and does not rewrite a rest row. A log tap shows
+   "Logged · Undo" for 3 seconds. This file does not listen for the pointer,
+   so a long press stays available for rename and details. */
 
 const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
@@ -416,33 +417,71 @@ export function shiftRoutineDay(day, delta) {
   return utc.toISOString().slice(0, 10);
 }
 
-function logTouchesDay(log) {
-  if (!isLive(log) || typeof log.day !== "string" || !DAY.test(log.day)) return false;
-  if (log.rest === true) return true;
+function countedLog(log) {
+  if (!isLive(log) || log.rest === true || typeof log.day !== "string" || !DAY.test(log.day)) return false;
   return log.status === "done" || log.status === "partial" || log.status === "skipped";
 }
 
-/* Consecutive days touched by a done, partial, skip, or rest log.
-   Today counts only once something is logged. A day with no log, after
-   the first touched day, is a full miss and stops the run. A skip touches
-   the day, so it does not stop the run. */
+/* The live rest for that day, if one exists. One rest covers the whole day.
+   A newer stamp wins. The same stamp keeps the smaller id. */
+export function routineRestLog(logs, day) {
+  if (typeof day !== "string" || !DAY.test(day)) return null;
+  let best = null;
+  for (const log of Array.isArray(logs) ? logs : []) {
+    if (!isLive(log) || log.rest !== true || log.day !== day) continue;
+    if (!best) {
+      best = log;
+      continue;
+    }
+    const at = log.updatedAt || 0;
+    const prev = best.updatedAt || 0;
+    if (at > prev || (at === prev && log.id < best.id)) best = log;
+  }
+  return best;
+}
+
+/* Done, partial, and skip days add one. A skip adds one, so it does not
+   stop the run. A rest day with no item log pauses: it does not add a day
+   and it does not stop the run. An item log on that same day still counts,
+   and the rest does not add a second day. Today adds one only when a
+   non-rest log is there. A day with no log, after the first counted or
+   paused day, is a full miss and stops the run. An open today does not
+   stop it. */
 export function routineStreak(logs, day) {
   if (typeof day !== "string" || !DAY.test(day)) return 0;
-  const touched = new Set();
+  const paused = new Set();
+  const counted = new Set();
   for (const log of Array.isArray(logs) ? logs : []) {
-    if (logTouchesDay(log)) touched.add(log.day);
+    if (!isLive(log) || typeof log.day !== "string" || !DAY.test(log.day)) continue;
+    if (log.rest === true) paused.add(log.day);
+    else if (countedLog(log)) counted.add(log.day);
   }
+  for (const key of counted) paused.delete(key);
   let earliest = "";
-  for (const key of touched) if (!earliest || key < earliest) earliest = key;
+  for (const key of paused) if (!earliest || key < earliest) earliest = key;
+  for (const key of counted) if (!earliest || key < earliest) earliest = key;
   if (!earliest) return 0;
-  let streak = touched.has(day) ? 1 : 0;
-  let cursor = shiftRoutineDay(day, -1);
+  let streak = 0;
+  let cursor = day;
   let guard = 0;
   while (cursor && cursor >= earliest && guard < 4000) {
-    if (!touched.has(cursor)) break;
-    streak += 1;
-    cursor = shiftRoutineDay(cursor, -1);
-    guard += 1;
+    if (paused.has(cursor)) {
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    if (counted.has(cursor)) {
+      streak += 1;
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    if (cursor === day) {
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    break;
   }
   return streak;
 }
@@ -776,8 +815,8 @@ export function restoreRoutineLog(state, logId) {
 }
 
 /* One done log per open item in the block. Skipped and already logged items
-   are not open. A rest log has no item row, so it is left alone. Edit mode
-   does not log. */
+   are not open. A rest day covers every block, so nothing is written. A rest
+   row is not an item row. Edit mode does not log. */
 export function logAllRoutineBlock(state, blockId) {
   if (layoutEditing()) return false;
   if (typeof blockId !== "string" || !blockId) return false;
@@ -788,6 +827,7 @@ export function logAllRoutineBlock(state, blockId) {
   if (!current) return false;
   const view = projectDailyRoutines(current);
   if (!view || !(view.blocks || []).some((block) => block.id === blockId)) return false;
+  if (routineRestLog(view.logs, clock.day)) return false;
   const seen = new Set();
   const rows = [];
   for (const row of routineBlockRows(view, blockId, clock.day)) {
@@ -1045,11 +1085,12 @@ export function routineLogDraft(state, logId) {
   };
 }
 
+/* One rest for the day. It is not a per-item log and it is not a skip. */
 export function logRoutineRest(state) {
   return withStore(state, (store, clock) => {
     if (!DAY.test(clock.day)) return null;
     const view = projectDailyRoutines(store);
-    if ((view.logs || []).some((log) => log.rest === true && log.day === clock.day)) return null;
+    if (routineRestLog(view.logs, clock.day)) return null;
     const id = routineLogId(null, clock.day);
     const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", carryFuture({
@@ -1641,9 +1682,9 @@ function focusSwitch(on) {
 
 function restHTML(log) {
   if (!log) {
-    return `<div class="dr-rest"><button type="button" class="dr-rest-btn" data-action="routines-rest">Log rest</button></div>`;
+    return `<div class="dr-rest" data-rest-day="false"><button type="button" class="dr-rest-btn" data-action="routines-rest">Log rest</button></div>`;
   }
-  return `<div class="dr-rest"><span>Rest logged</span><button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">rest</span></button></div>`;
+  return `<div class="dr-rest" data-rest-day="true"><span>Rest logged</span><button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">rest</span></button></div>`;
 }
 
 function nowFooter(projected, date) {
@@ -1651,7 +1692,7 @@ function nowFooter(projected, date) {
   const progress = routineDoseProgress(projected, day);
   const streak = routineStreak(projected.logs, day);
   const focusOn = !!(projected.prefs && projected.prefs.focusMode === true);
-  const rest = (projected.logs || []).find((log) => log.rest === true && log.day === day) || null;
+  const rest = routineRestLog(projected.logs, day);
   return `<div class="dr-pills">
       <p class="dr-count" data-logged="${progress.logged}" data-due="${progress.due}"><span class="dr-vh">Doses </span><b>${progress.logged}</b> of ${progress.due} today</p>
       ${streakHTML(streak)}
@@ -1804,7 +1845,8 @@ export function routineBlockTileHTML(block, projected, view) {
   const list = !collapsed && shown.length
     ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
     : "";
-  const logAll = !editing && !collapsed && open.length
+  const resting = !editing && routineRestLog(projected && projected.logs, day);
+  const logAll = !editing && !collapsed && !resting && open.length
     ? `<button type="button" class="dr-log-all" data-action="routines-log-all" data-block-id="${esc(block.id)}">Log all <span class="dr-vh">in ${esc(block.name)}</span></button>`
     : "";
   const reveal = !editing && !collapsed && done.length
@@ -2041,6 +2083,7 @@ app.routineDayComplete = routineDayComplete;
 app.routineNextItem = routineNextItem;
 app.lastDoseLabel = lastDoseLabel;
 app.routineStreak = routineStreak;
+app.routineRestLog = routineRestLog;
 app.shiftRoutineDay = shiftRoutineDay;
 app.logRoutineItem = logRoutineItem;
 app.logAllRoutineBlock = logAllRoutineBlock;
