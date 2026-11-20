@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createServer } from "node:net";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -63,111 +64,34 @@ function stableStringify(value) {
   return JSON.stringify(value) ?? "null";
 }
 
-function fieldMs(row, key) {
-  if (!row || typeof row !== "object" || Array.isArray(row)) return 0;
-  const value = row[key];
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return 0;
-  return value;
+/* Snapshot of logger/js/shared/daily-routines-store.js at this commit.
+   This branch does not contain that file; PR 209 does. Prefer the real
+   path when it is checked out so the comparison tracks the client. */
+const CLIENT_STORE_SHA = "5c6c0a345fc2d707b4cd922706d85fe1a2a3faf1";
+
+function clientStoreSource() {
+  const local = filePath("logger/js/shared/daily-routines-store.js");
+  if (existsSync(local)) return readFileSync(local, "utf8");
+  return readFileSync(filePath("tests/fixtures/client-daily-routines-store.js"), "utf8");
 }
 
-function clampMs(ms, now) {
-  if (!(ms > 0)) return 0;
-  const base = typeof now === "number" && Number.isFinite(now) ? now : 0;
-  const cap = base + DAY_MS;
-  return ms > cap ? cap : ms;
-}
-
-function stampOf(row, now) {
-  return Math.max(clampMs(fieldMs(row, "updatedAt"), now), clampMs(fieldMs(row, "deletedAt"), now));
-}
-
-function isTomb(row, now) {
-  return clampMs(fieldMs(row, "deletedAt"), now) > 0;
-}
-
-function validDay(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const time = Date.parse(`${value}T00:00:00Z`);
-  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
-}
-
-function prepare(raw, kind, now) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  if (typeof raw.id !== "string" || raw.id.length === 0 || raw.id.length > 80) return null;
-  const updated = clampMs(fieldMs(raw, "updatedAt"), now);
-  const deleted = clampMs(fieldMs(raw, "deletedAt"), now);
-  const updatedAt = deleted > 0 && updated < deleted ? deleted : updated;
-  const deletedAt = deleted > 0 ? deleted : null;
-  if (kind === "placements") {
-    if (typeof raw.blockId !== "string" || raw.blockId === "") return null;
-    if (typeof raw.itemId !== "string" || raw.itemId === "") return null;
-  }
-  if (kind === "logs") {
-    const day = validDay(raw.day) ? raw.day : null;
-    const status = typeof raw.status === "string" && raw.status.trim() ? raw.status.trim().slice(0, 24) : "";
-    if (!day || !status) return null;
-    if (deletedAt) return { id: raw.id, day, status, updatedAt, deletedAt };
-    return { ...raw, id: raw.id, day, status, updatedAt, deletedAt };
-  }
-  return { ...raw, id: raw.id, updatedAt, deletedAt };
-}
-
-function beats(candidate, current, kind, now) {
-  const left = stampOf(candidate, now);
-  const right = stampOf(current, now);
-  if (left !== right) return left > right;
-  if (isTomb(candidate, now) !== isTomb(current, now)) return isTomb(candidate, now);
-  return stableStringify(prepare(candidate, kind, now)) > stableStringify(prepare(current, kind, now));
-}
-
-function mergeList(stored, incoming, kind, now) {
-  const list = [];
-  if (Array.isArray(incoming)) list.push(...incoming);
-  if (Array.isArray(stored)) list.push(...stored);
-  const ids = [];
-  const acc = new Map();
-  for (const item of list) {
-    const ready = prepare(item, kind, now);
-    if (!ready) continue;
-    const current = acc.get(ready.id);
-    if (!current) {
-      ids.push(ready.id);
-      acc.set(ready.id, item);
-    } else if (beats(item, current, kind, now)) {
-      acc.set(ready.id, item);
-    }
-  }
-  return ids.map((id) => prepare(acc.get(id), kind, now));
-}
-
-function preparePrefs(raw, now) {
-  const prefs = raw && typeof raw === "object" && !Array.isArray(raw) ? { ...raw } : {};
-  const updatedAt = clampMs(fieldMs(prefs, "updatedAt"), now);
-  const lastBlockId = typeof prefs.lastBlockId === "string" && prefs.lastBlockId ? prefs.lastBlockId : null;
-  return { ...prefs, updatedAt, lastBlockId };
-}
-
-function mergePrefs(stored, incoming, now) {
-  const left = preparePrefs(stored, now);
-  const right = preparePrefs(incoming, now);
-  const leftAt = clampMs(fieldMs(left, "updatedAt"), now);
-  const rightAt = clampMs(fieldMs(right, "updatedAt"), now);
-  if (leftAt !== rightAt) return leftAt > rightAt ? left : right;
-  const leftS = stableStringify(left);
-  const rightS = stableStringify(right);
-  if (leftS > rightS || leftS === rightS) return left;
-  return right;
+async function loadClientMerge() {
+  const source = clientStoreSource();
+  assert.match(source, /export function mergeDailyRoutines/);
+  const dir = mkdtempSync(join(tmpdir(), "routines-client-"));
+  mkdirSync(join(dir, "js", "shared"), { recursive: true });
+  writeFileSync(join(dir, "js", "runtime.js"), "export const app = {};\n");
+  writeFileSync(join(dir, "js", "shared", "daily-routines-store.js"), source);
+  const loaded = await import(pathToFileURL(join(dir, "js", "shared", "daily-routines-store.js")).href);
+  ctx.clientDir = dir;
+  ctx.clientSha = CLIENT_STORE_SHA;
+  return loaded.mergeDailyRoutines;
 }
 
 function mergeRoutines(stored, incoming, now) {
-  const left = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
-  const right = incoming && typeof incoming === "object" && !Array.isArray(incoming) ? incoming : {};
-  const out = {
-    updatedAt: Math.max(clampMs(fieldMs(left, "updatedAt"), now), clampMs(fieldMs(right, "updatedAt"), now)),
-  };
-  for (const kind of KINDS) out[kind] = mergeList(left[kind], right[kind], kind, now);
-  out.prefs = mergePrefs(left.prefs, right.prefs, now);
-  return out;
+  const merged = ctx.mergeDailyRoutines(stored, incoming, now);
+  assert.ok(merged && typeof merged === "object", "mergeDailyRoutines returns a store");
+  return merged;
 }
 
 function indexRows(list) {
@@ -180,6 +104,29 @@ function project(store) {
   const out = { updatedAt: store.updatedAt, prefs: store.prefs };
   for (const kind of KINDS) out[kind] = indexRows(store[kind]);
   return out;
+}
+
+function sqlMerge(stored, incoming, now) {
+  const text = query(`
+    select public.daily_routines_merge(
+      $stored$${JSON.stringify(stored)}$stored$::jsonb,
+      $incoming$${JSON.stringify(incoming)}$incoming$::jsonb,
+      ${Number(now)}
+    )::text;
+  `).trim();
+  return JSON.parse(text);
+}
+
+function assertSameStore(actual, expected, label) {
+  assert.equal(actual.updatedAt, expected.updatedAt, `${label} updatedAt`);
+  assert.deepEqual(actual.prefs, expected.prefs, `${label} prefs`);
+  for (const kind of KINDS) {
+    assert.equal(actual[kind].length, expected[kind].length, `${label} ${kind} length`);
+    for (let i = 0; i < expected[kind].length; i += 1) {
+      const id = expected[kind][i] && expected[kind][i].id;
+      assert.deepEqual(actual[kind][i], expected[kind][i], `${label} ${kind}[${i}] ${id}`);
+    }
+  }
 }
 
 function query(text) {
@@ -244,6 +191,7 @@ function mergedRoutines(storedStore, incomingStore, now) {
 }
 
 test.before(async () => {
+  ctx.mergeDailyRoutines = await loadClientMerge();
   const sql = readSql(MIGRATION);
   const previous = readSql("supabase/migrations/20261004210000_merge_home_v2.sql");
   assert.match(sql, /create or replace function public\.merge_user_data\(p_data jsonb\)/);
@@ -309,6 +257,7 @@ test.after(() => {
     run(ctx.pgCtl, ["-D", ctx.dir, "-w", "-m", "immediate", "stop"]);
   }
   if (ctx.dir) rmSync(ctx.dir, { recursive: true, force: true });
+  if (ctx.clientDir) rmSync(ctx.clientDir, { recursive: true, force: true });
 });
 
 test("merge_user_data keeps dailyRoutines and merges rows the way the client does", { timeout: 120_000 }, () => {
@@ -502,6 +451,90 @@ test("merge_user_data keeps dailyRoutines and merges rows the way the client doe
   assert.match(`${bad.stderr}`, /bad data/i);
 });
 
+test("normalized tie-breaks match mergeDailyRoutines", () => {
+  const now = 1_700_000_000_000;
+  const day = "2026-01-02";
+  const samples = [
+    {
+      name: "a trimmed name changes which equal-stamp row wins",
+      stored: {
+        updatedAt: 10,
+        blocks: [{ id: "A", name: "m", note: "aaa", updatedAt: 10, deletedAt: null, constructor: "drop" }],
+      },
+      incoming: {
+        updatedAt: 10,
+        blocks: [{ id: "A", name: " m", note: "zzz", updatedAt: 10, deletedAt: null }],
+      },
+      check(merged) {
+        assert.equal(merged.blocks[0].note, "zzz");
+        assert.equal(merged.blocks[0].name, "m");
+        assert.equal(merged.blocks[0].color, "citrus");
+        assert.equal(merged.blocks[0].order, 0);
+        assert.equal(Object.hasOwn(merged.blocks[0], "constructor"), false);
+      },
+    },
+    {
+      name: "a missing order is 0 before the tie-break",
+      stored: {
+        updatedAt: 10,
+        blocks: [{ id: "A", name: "n", order: 0, tag: "b", updatedAt: 10 }],
+      },
+      incoming: {
+        updatedAt: 10,
+        blocks: [{ id: "A", name: "n", tag: "a", updatedAt: 10 }],
+      },
+      check(merged) {
+        assert.equal(merged.blocks[0].tag, "b");
+        assert.equal(merged.blocks[0].order, 0);
+        assert.equal(merged.blocks[0].color, "citrus");
+      },
+    },
+    {
+      name: "color, kind, unit, status, and amount normalize like the client",
+      stored: {
+        updatedAt: 30,
+        blocks: [{ id: "B", name: "  Night  ", color: "  ", order: "3", updatedAt: 10 }],
+        items: [{ id: "I", name: " Example Compound A ", kind: " dose ", compoundId: "", updatedAt: 10 }],
+        compounds: [{
+          id: "C",
+          name: "Example Compound A",
+          amount: "1.50",
+          unit: " mcg ",
+          startDate: "2026-02-31",
+          updatedAt: 10,
+        }],
+        logs: [{ id: "L", day, status: " done ", amount: "0.5", unit: " mcg ", at: "4", updatedAt: 10 }],
+      },
+      incoming: {
+        updatedAt: 5,
+        placements: [{ id: "P", blockId: "B", itemId: "I", updatedAt: 4 }],
+      },
+      check(merged) {
+        assert.equal(merged.blocks[0].name, "Night");
+        assert.equal(merged.blocks[0].color, "citrus");
+        assert.equal(merged.blocks[0].order, 0);
+        assert.equal(merged.items[0].kind, "dose");
+        assert.equal(merged.items[0].compoundId, null);
+        assert.equal(merged.compounds[0].amount, 1.5);
+        assert.equal(merged.compounds[0].unit, "mcg");
+        assert.equal(merged.compounds[0].startDate, null);
+        assert.equal(merged.logs[0].status, "done");
+        assert.equal(merged.logs[0].amount, 0.5);
+        assert.equal(merged.logs[0].at, 0);
+        assert.equal(merged.placements[0].order, 0);
+      },
+    },
+  ];
+  for (const sample of samples) {
+    const forward = sqlMerge(sample.stored, sample.incoming, now);
+    const backward = sqlMerge(sample.incoming, sample.stored, now);
+    assert.deepEqual(forward, mergeRoutines(sample.stored, sample.incoming, now), sample.name);
+    assert.deepEqual(backward, mergeRoutines(sample.incoming, sample.stored, now), `${sample.name} reversed`);
+    assert.deepEqual(project(forward), project(backward), `${sample.name} converges`);
+    sample.check(forward);
+  }
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -553,8 +586,9 @@ test("merging thousands of logs stays well inside the statement timeout", { time
   const elapsed = Date.now() - started;
   const merged = JSON.parse(got);
   assert.equal(merged.logs.length, count);
-  assert.deepEqual(merged, mergeRoutines(stored, incoming, 0));
-  assert.ok(elapsed < 4000, `${count} logs per side took ${elapsed} ms`);
+  assertSameStore(merged, mergeRoutines(stored, incoming, 0), `${count} logs`);
+  console.log(`daily routines merge ${count} logs per side: ${elapsed} ms`);
+  assert.ok(elapsed < 1000, `${count} logs per side took ${elapsed} ms; want < 1000 ms under statement_timeout 8s`);
 });
 
 test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { timeout: 120_000 }, () => {

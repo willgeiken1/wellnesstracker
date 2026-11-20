@@ -3,10 +3,13 @@
 -- An older client, a restore from before this key, or the no-RPC fallback would
 -- otherwise replace the account copy, tombstones included.
 -- When both sides are objects, blocks, items, placements, compounds, and logs
--- merge by id. A row wins by max(updatedAt, deletedAt). A missing or malformed
--- stamp is 0. A stamp more than a day ahead is pulled back to now + 1 day,
--- the same window as homeV2. An equal stamp keeps the tombstone, then the
--- greater stable JSON, matching the client rule (mergeEntityLists / mergePrefs).
+-- are normalized the way the client normalizes them, then merged by id.
+-- Normalization trims and clips names, fills the default color, and sets
+-- order, kind, unit, and status the way mergeDailyRoutines does before it
+-- compares rows. A row wins by max(updatedAt, deletedAt). A missing or
+-- malformed stamp is 0. A stamp more than a day ahead is pulled back to
+-- now + 1 day, the same window as homeV2. An equal stamp keeps the tombstone,
+-- then the greater stable JSON of the normalized row.
 -- A log tombstone keeps only id, day, status, updatedAt, and deletedAt.
 -- machineNotes and layout.homeV2 are unchanged. Every other key stays the
 -- caller's payload.
@@ -145,6 +148,135 @@ begin
 end;
 $$;
 
+create or replace function public.daily_routines_clip(p_value jsonb, p_max integer)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when jsonb_typeof(p_value) is distinct from 'string' then ''
+    else left(regexp_replace(p_value #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g'), greatest(p_max, 0))
+  end;
+$$;
+
+create or replace function public.daily_routines_num(p_value jsonb)
+returns numeric
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  n numeric;
+begin
+  if jsonb_typeof(p_value) is distinct from 'number' then
+    return 0;
+  end if;
+  begin
+    n := (p_value #>> '{}')::numeric;
+  exception when others then
+    return 0;
+  end;
+  if n is null then
+    return 0;
+  end if;
+  return n;
+end;
+$$;
+
+-- jsonb keeps a numeric's scale, so 1.50 would not match JSON.stringify(1.5).
+create or replace function public.daily_routines_json_number(p_value numeric)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select to_jsonb(trim_scale(p_value));
+$$;
+
+create or replace function public.daily_routines_amount(p_value jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  n numeric;
+  txt text;
+begin
+  if jsonb_typeof(p_value) = 'number' then
+    return public.daily_routines_json_number(public.daily_routines_num(p_value));
+  end if;
+  if jsonb_typeof(p_value) is distinct from 'string' then
+    return 'null'::jsonb;
+  end if;
+  txt := regexp_replace(p_value #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  if txt is null or txt = '' then
+    return 'null'::jsonb;
+  end if;
+  begin
+    n := txt::numeric;
+  exception when others then
+    return 'null'::jsonb;
+  end;
+  if n is null then
+    return 'null'::jsonb;
+  end if;
+  return public.daily_routines_json_number(n);
+end;
+$$;
+
+create or replace function public.daily_routines_ref(p_value jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when jsonb_typeof(p_value) = 'string' and coalesce(p_value #>> '{}', '') <> '' then to_jsonb(p_value #>> '{}')
+    else 'null'::jsonb
+  end;
+$$;
+
+create or replace function public.daily_routines_kind(p_value jsonb)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  txt text;
+begin
+  if jsonb_typeof(p_value) is distinct from 'string' then
+    return 'check';
+  end if;
+  txt := p_value #>> '{}';
+  if txt in ('check', 'dose') then
+    return txt;
+  end if;
+  txt := regexp_replace(txt, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  if txt is null or txt = '' then
+    return 'check';
+  end if;
+  return left(txt, 24);
+end;
+$$;
+
+-- Own keys only. constructor / prototype / __proto__ are not part of a row,
+-- matching plainFields in the client store.
+create or replace function public.daily_routines_plain(p_row jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select coalesce((
+    select jsonb_object_agg(entry.key, entry.value)
+    from jsonb_each(p_row) as entry(key, value)
+    where entry.key not in ('__proto__', 'constructor', 'prototype')
+  ), '{}'::jsonb);
+$$;
+
 create or replace function public.daily_routines_prepare(p_row jsonb, p_kind text, p_now numeric)
 returns jsonb
 language plpgsql
@@ -157,6 +289,9 @@ declare
   deleted_at numeric;
   day text;
   status text;
+  color text;
+  start_date text;
+  archived_at numeric;
   row jsonb;
 begin
   if p_row is null or jsonb_typeof(p_row) is distinct from 'object' then
@@ -187,12 +322,8 @@ begin
 
   if p_kind = 'logs' then
     day := public.daily_routines_day(p_row->'day');
-    if jsonb_typeof(p_row->'status') is distinct from 'string' then
-      status := '';
-    else
-      status := left(btrim(p_row->>'status'), 24);
-    end if;
-    if day is null or status is null or status = '' then
+    status := public.daily_routines_clip(p_row->'status', 24);
+    if day is null or status = '' then
       return null;
     end if;
     if deleted_at > 0 then
@@ -200,23 +331,76 @@ begin
         'id', id,
         'day', day,
         'status', status,
-        'updatedAt', updated_at,
-        'deletedAt', deleted_at
+        'updatedAt', public.daily_routines_json_number(updated_at),
+        'deletedAt', public.daily_routines_json_number(deleted_at)
       );
     end if;
-    row := jsonb_set(p_row, '{updatedAt}', to_jsonb(updated_at), true);
-    row := jsonb_set(row, '{deletedAt}', 'null'::jsonb, true);
-    row := jsonb_set(row, '{day}', to_jsonb(day), true);
-    row := jsonb_set(row, '{status}', to_jsonb(status), true);
-    return row;
   end if;
 
-  row := jsonb_set(p_row, '{updatedAt}', to_jsonb(updated_at), true);
-  if deleted_at > 0 then
-    row := jsonb_set(row, '{deletedAt}', to_jsonb(deleted_at), true);
-  else
-    row := jsonb_set(row, '{deletedAt}', 'null'::jsonb, true);
+  row := public.daily_routines_plain(p_row) || jsonb_build_object(
+    'id', id,
+    'updatedAt', public.daily_routines_json_number(updated_at),
+    'deletedAt', case
+      when deleted_at > 0 then public.daily_routines_json_number(deleted_at)
+      else 'null'::jsonb
+    end
+  );
+
+  if p_kind = 'blocks' then
+    color := public.daily_routines_clip(p_row->'color', 24);
+    if color = '' then
+      color := 'citrus';
+    end if;
+    return row || jsonb_build_object(
+      'name', public.daily_routines_clip(p_row->'name', 80),
+      'color', color,
+      'order', public.daily_routines_json_number(public.daily_routines_num(p_row->'order'))
+    );
   end if;
+
+  if p_kind = 'items' then
+    return row || jsonb_build_object(
+      'name', public.daily_routines_clip(p_row->'name', 80),
+      'kind', public.daily_routines_kind(p_row->'kind'),
+      'compoundId', public.daily_routines_ref(p_row->'compoundId')
+    );
+  end if;
+
+  if p_kind = 'placements' then
+    return row || jsonb_build_object(
+      'blockId', p_row->>'blockId',
+      'itemId', p_row->>'itemId',
+      'order', public.daily_routines_json_number(public.daily_routines_num(p_row->'order'))
+    );
+  end if;
+
+  if p_kind = 'compounds' then
+    start_date := public.daily_routines_day(p_row->'startDate');
+    archived_at := public.daily_routines_clamp_ms(public.daily_routines_ms(p_row, 'archivedAt'), p_now);
+    return row || jsonb_build_object(
+      'name', public.daily_routines_clip(p_row->'name', 80),
+      'amount', public.daily_routines_amount(p_row->'amount'),
+      'unit', public.daily_routines_clip(p_row->'unit', 16),
+      'startDate', case when start_date is null then 'null'::jsonb else to_jsonb(start_date) end,
+      'archivedAt', case
+        when archived_at > 0 then public.daily_routines_json_number(archived_at)
+        else 'null'::jsonb
+      end
+    );
+  end if;
+
+  if p_kind = 'logs' then
+    return row || jsonb_build_object(
+      'itemId', public.daily_routines_ref(p_row->'itemId'),
+      'compoundId', public.daily_routines_ref(p_row->'compoundId'),
+      'day', day,
+      'status', status,
+      'amount', public.daily_routines_amount(p_row->'amount'),
+      'unit', public.daily_routines_clip(p_row->'unit', 16),
+      'at', public.daily_routines_json_number(public.daily_routines_num(p_row->'at'))
+    );
+  end if;
+
   return row;
 end;
 $$;
@@ -524,6 +708,13 @@ revoke all on function public.daily_routines_stamp(jsonb, numeric) from public, 
 revoke all on function public.daily_routines_tombstone(jsonb, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_stable(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_day(jsonb) from public, anon, authenticated;
+revoke all on function public.daily_routines_clip(jsonb, integer) from public, anon, authenticated;
+revoke all on function public.daily_routines_num(jsonb) from public, anon, authenticated;
+revoke all on function public.daily_routines_json_number(numeric) from public, anon, authenticated;
+revoke all on function public.daily_routines_amount(jsonb) from public, anon, authenticated;
+revoke all on function public.daily_routines_ref(jsonb) from public, anon, authenticated;
+revoke all on function public.daily_routines_kind(jsonb) from public, anon, authenticated;
+revoke all on function public.daily_routines_plain(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_prepare(jsonb, text, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_beats(jsonb, jsonb, text, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_merge_list(jsonb, jsonb, text, numeric) from public, anon, authenticated;
