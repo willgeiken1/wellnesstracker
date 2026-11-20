@@ -360,11 +360,14 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
+  const blocks = mergeEntityLists(left.blocks, right.blocks, now);
+  const items = mergeEntityLists(left.items, right.items, now);
+  const placements = followParentEdits(mergeEntityLists(left.placements, right.placements, now), blocks, items);
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
-    blocks: mergeEntityLists(left.blocks, right.blocks, now),
-    items: mergeEntityLists(left.items, right.items, now),
-    placements: collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)),
+    blocks,
+    items,
+    placements: collapsePlacementPairs(placements),
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: collapseLogPairs(mergeEntityLists(left.logs, right.logs, now)),
     prefs: mergePrefs(left.prefs, right.prefs, now),
@@ -508,6 +511,22 @@ function collapsePlacementPairs(list) {
     }
   }
   return out;
+}
+
+/* A placement removed with its block or item (removedWith is that parent's
+   id) follows the parent. When the merged parent is live with a newer stamp
+   than the removal, another phone edited it after the delete, so the
+   placement is live again at the parent's stamp. */
+function followParentEdits(list, blocks, items) {
+  const parents = new Map();
+  for (const row of [...blocks, ...items]) if (row && typeof row.id === "string") parents.set(row.id, row);
+  return list.map((row) => {
+    if (!row || isLive(row) || typeof row.removedWith !== "string") return row;
+    if (row.removedWith !== row.blockId && row.removedWith !== row.itemId) return row;
+    const parent = parents.get(row.removedWith);
+    if (!parent || !isLive(parent) || rowStamp(parent) <= rowStamp(row)) return row;
+    return { ...row, deletedAt: null, removedWith: null, updatedAt: rowStamp(parent) };
+  });
 }
 
 function checkOffKey(log) {
