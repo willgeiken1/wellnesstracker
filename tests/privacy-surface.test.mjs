@@ -199,7 +199,8 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(policy, /included in the Settings backup and in the privacy export/);
   assert.match(policy, /A deleted dose log keeps only a small marker \(its id, the day, its status, and when it was deleted\) so an older device cannot bring it back\. The id links the marker to the routine item\. The amount, the unit, and the dose details are removed\./);
   assert.match(policy, /That is the copy on this device, in your account, in the Settings backup, and in the privacy export/);
-  assert.match(policy, /replaces the dose logs on those days with the same marker and leaves the layout/);
+  assert.match(policy, /Undoing a dose log keeps the log, with its amount, unit and note, marked as undone, so restoring it brings them back/);
+  assert.match(policy, /Deleting a date range that includes it replaces it with the marker and leaves the layout/);
   assert.doesNotMatch(policy, /including the amount/);
   assert.match(policy, /Crash reports and usage analytics do not include dose amounts or item names/);
   assert.match(policy, /does arithmetic on this device from the numbers you type/);
