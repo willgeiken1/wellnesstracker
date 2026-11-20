@@ -618,7 +618,16 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
-  assert.equal(exec(`select datlocprovider::text || '|' || daticulocale from pg_database where datname = 'icu_tie';`).trim(), "i|en-US");
+  const localeColumn = exec(`
+    select attname from pg_attribute
+    where attrelid = 'pg_catalog.pg_database'::regclass
+      and attname in ('daticulocale', 'datlocale')
+      and not attisdropped
+    order by attname
+    limit 1;
+  `).trim();
+  assert.ok(localeColumn === "daticulocale" || localeColumn === "datlocale", localeColumn);
+  assert.equal(exec(`select datlocprovider::text || '|' || ${localeColumn} from pg_database where datname = 'icu_tie';`).trim(), "i|en-US");
   assert.equal(exec(`select ('apple' < 'Zinc')::text;`).trim(), "true", "the database really sorts text with ICU rules");
 
   // "Zinc" < "apple" in code-unit order (the client), "apple" < "Zinc" under en-US rules.
