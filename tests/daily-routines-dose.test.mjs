@@ -732,9 +732,9 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     const main = readFileSync(new URL("../logger/js/main.js", import.meta.url), "utf8");
     const flag = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
-    assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v63"/);
-    assert.match(sentry, /insight-shell-v63/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
+    assert.match(sw, /const CACHE = "insight-shell-v64"/);
+    assert.match(sentry, /insight-shell-v64/);
     assert.match(sw, /js\/pages\/daily-routines-dose\.js/);
     assert.match(sw, /js\/pages\/reconstitution\.js/);
     assert.match(sw, /js\/shared\/routine-dose\.js/);

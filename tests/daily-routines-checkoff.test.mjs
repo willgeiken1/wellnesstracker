@@ -599,7 +599,7 @@ describe("routine check-off", { concurrency: false }, () => {
       assert.match(actions, new RegExp(`case "${name}"`));
     }
     assert.doesNotMatch(page, /routines-flag/);
-    assert.match(flag, /ROUTINES_ENABLED = false/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
     assert.match(css, /@media \(prefers-reduced-motion: no-preference\)/);
     assert.match(css, /@starting-style/);
     assert.match(css, /\.dr-row \{ display: flex; align-items: center; gap: 8px; opacity: 1; \}/);

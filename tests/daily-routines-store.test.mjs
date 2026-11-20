@@ -52,9 +52,12 @@ const {
   mergeDailyRoutines,
   normalizeDailyRoutines,
   projectDailyRoutines,
+  purgeDailyRoutineRange,
   revisePlanEntity,
   seedDefaultBlocks,
 } = await import("../logger/js/shared/daily-routines-store.js");
+const { logRoutineItem, undoRoutineLog } = await import("../logger/js/pages/daily-routines.js");
+const { readFileSync } = await import("node:fs");
 const { applyPurges, buildExportFiles, stripRange } = await import("../logger/js/shared/purge.js");
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -283,6 +286,51 @@ test("a date-range purge tombstones only that day's logs", () => {
   assert.equal(stripRange(data, "2026-11-01", "2026-11-01", { before: 4000, now: 6000 }), false);
 });
 
+test("an earlier range delete does not strip a later undone log", () => {
+  const undone = log("log-undo", "2026-11-01", 250, 1000, {
+    note: "extra dose note",
+    deletedAt: 5000,
+    updatedAt: 5000,
+    undone: true,
+  });
+  const data = { dailyRoutines: phoneStore([], [undone]) };
+  assert.equal(purgeDailyRoutineRange(data, "2026-11-01", "2026-11-01", 3000, 8000), false);
+  assert.equal(data.dailyRoutines.logs[0].amount, 250);
+  assert.equal(data.dailyRoutines.logs[0].unit, "mcg");
+  assert.equal(data.dailyRoutines.logs[0].note, "extra dose note");
+  assert.equal(data.dailyRoutines.logs[0].undone, true);
+
+  const earlier = log("log-early", "2026-11-01", 250, 1000, {
+    note: "extra dose note",
+    deletedAt: 2000,
+    updatedAt: 2000,
+    undone: true,
+  });
+  const old = { dailyRoutines: phoneStore([], [earlier]) };
+  assert.equal(purgeDailyRoutineRange(old, "2026-11-01", "2026-11-01", 3000, 8000), true);
+  assert.deepEqual(Object.keys(old.dailyRoutines.logs[0]).sort(), ["day", "deletedAt", "id", "status", "updatedAt"]);
+
+  const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+  const script = `
+    import { stripRange } from ${JSON.stringify(stripUrl)};
+    const kept = stripRange(${JSON.stringify({ sessions: [], dailyRoutines: phoneStore([], [undone]) })}, "2026-11-01", "2026-11-01", 3000, 8000);
+    const stripped = stripRange(${JSON.stringify({ sessions: [], dailyRoutines: phoneStore([], [earlier]) })}, "2026-11-01", "2026-11-01", 3000, 8000);
+    console.log(JSON.stringify({
+      kept: kept.dailyRoutines.logs[0],
+      stripped: Object.keys(stripped.dailyRoutines.logs[0]).sort(),
+    }));
+  `;
+  const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout.trim().split("\n").pop());
+  assert.equal(parsed.kept.amount, 250);
+  assert.equal(parsed.kept.note, "extra dose note");
+  assert.deepEqual(parsed.stripped, ["day", "deletedAt", "id", "status", "updatedAt"]);
+});
+
 test("a purged log is not restored by merging the other phone's older copy", () => {
   const data = {
     sessions: [],
@@ -503,12 +551,64 @@ test("a purged dose is absent locally, in the account blob, in the backup, and i
     await app.exportData();
     assertBareTombstone(captured.dailyRoutines.logs[0]);
     const csv = buildExportFiles(app.state).find((file) => file.name === "daily_routine_logs.csv").text;
-    assert.match(csv, /2026-11-01,done,,,1/);
+    assert.match(csv, /log-1,,,2026-11-01,done,,,,1970-01-01T00:00:04\.000Z/);
     assert.equal(csv.includes("250"), false);
     assert.equal(csv.includes("mcg"), false);
     assert.equal(csv.includes("item-a"), false);
   } finally {
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: previousShare });
+    signOut();
+  }
+});
+
+test("undo keeps the amount, unit, and note, while a range delete and the server strip keep the tombstone keys", () => {
+  const keys = ["day", "deletedAt", "id", "status", "updatedAt"];
+  signIn();
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date(2026, 10, 19, 8, 30, 0);
+  try {
+    app.state.dailyRoutines = phoneStore([], [
+      log("log-undo", "2026-11-19", 250, 10, { note: "extra dose note" }),
+    ]);
+    assert.equal(undoRoutineLog(app.state, "log-undo"), true);
+    const undone = app.state.dailyRoutines.logs[0];
+    assert.equal(undone.undone, true);
+    assert.equal(undone.amount, 250);
+    assert.equal(undone.unit, "mcg");
+    assert.equal(undone.note, "extra dose note");
+    assert.notDeepEqual(Object.keys(undone).sort(), keys);
+
+    const range = {
+      dailyRoutines: phoneStore([], [
+        log("log-range", "2026-11-01", 250, 10, { note: "extra dose note" }),
+      ]),
+    };
+    assert.equal(purgeDailyRoutineRange(range, "2026-11-01", "2026-11-01", null, 4000), true);
+    assert.deepEqual(Object.keys(range.dailyRoutines.logs[0]).sort(), keys);
+    assert.equal(range.dailyRoutines.logs[0].deletedAt, 4000);
+
+    const stripUrl = new URL("../supabase/functions/_shared/strip.ts", import.meta.url).href;
+    const blob = {
+      sessions: [],
+      dailyRoutines: phoneStore([], [
+        log("log-server", "2026-11-01", 250, 10, { note: "extra dose note" }),
+      ]),
+    };
+    const script = `
+      import { stripRange } from ${JSON.stringify(stripUrl)};
+      const data = stripRange(${JSON.stringify(blob)}, "2026-11-01", "2026-11-01", 4000, 6000);
+      console.log(JSON.stringify(Object.keys(data.dailyRoutines.logs[0]).sort()));
+    `;
+    const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.deepEqual(JSON.parse(result.stdout.trim().split("\n").pop()), keys);
+  } finally {
     signOut();
   }
 });
@@ -594,6 +694,56 @@ test("routine names, units and kinds with emoji at the limit stay well formed th
   }
 });
 
+test("the policy names exactly the keys a real deleted dose log keeps, and no more", () => {
+  signIn();
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date(2026, 10, 19, 8, 30, 0);
+  try {
+    app.state.dailyRoutines = phoneStore(
+      [item("item-a", "Example Compound A", 10)],
+      [log("log_item-a_2026-11-01", "2026-11-01", 250, 10, { note: "extra dose note" })],
+      [compound("compound-a", 250, 10)],
+    );
+    assert.equal(logRoutineItem(app.state, "item-a"), true);
+    const todayId = "log_item-a_2026-11-19";
+    app.state.dailyRoutines.logs.find((row) => row.id === todayId).note = "extra dose note";
+    assert.equal(undoRoutineLog(app.state, todayId), true);
+    assert.equal(purgeDailyRoutineRange(app.state, "2026-11-01", "2026-11-01", null, 4000), true);
+    const undone = app.state.dailyRoutines.logs.find((row) => row.id === todayId);
+    const marker = app.state.dailyRoutines.logs.find((row) => row.id === "log_item-a_2026-11-01");
+    assert.equal(undone.undone, true);
+    assert.equal(undone.amount, 250);
+    assert.equal(undone.unit, "mcg");
+    assert.equal(undone.note, "extra dose note");
+    assert.equal(marker.id.includes("item-a"), true, "the id still links to the item");
+
+    // The marker's list of kept fields: id, day, status, deleted time. updatedAt is the same stamp.
+    const POLICY_FIELDS = { id: /\bits id\b/, day: /\bthe day\b/, status: /\bits status\b/, deletedAt: /when it was deleted/, updatedAt: null };
+    assert.deepEqual(Object.keys(POLICY_FIELDS).sort(), TOMBSTONE_KEYS);
+    assert.deepEqual(Object.keys(marker).sort(), TOMBSTONE_KEYS);
+
+    const root = new URL("..", import.meta.url);
+    const aboutTxt = buildExportFiles(app.state).find((file) => file.name === "about.txt").text;
+    const texts = {
+      "privacy.md": readFileSync(new URL("privacy.md", root), "utf8"),
+      "privacy.js": readFileSync(new URL("logger/js/pages/privacy.js", root), "utf8"),
+      "about.txt": aboutTxt,
+    };
+    for (const [name, text] of Object.entries(texts)) {
+      assert.doesNotMatch(text, /the unit, and the item (are|is) (removed|not)/, name);
+      assert.doesNotMatch(text, /item (is|are) removed/, name);
+      assert.match(text, /the unit, and the dose details are (removed|not in that row)/, name);
+      assert.match(text, /links (it|the marker) to the (routine )?item/, name);
+      for (const [key, re] of Object.entries(POLICY_FIELDS)) if (re) assert.match(text, re, `${name} names ${key}`);
+    }
+  } finally {
+    signOut();
+  }
+});
+
 test("a whole emoji that fits is kept", () => {
   const name = `${"a".repeat(80 - FAMILY.length)}${FAMILY}`;
   const normalized = normalizeDailyRoutines(phoneStore([item("item-a", name, 10)]));
@@ -638,4 +788,11 @@ test("without Intl.Segmenter the clip still keeps whole code points", () => {
   const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout), [[79, true], [80, true], [79, true]]);
+});
+
+test("the export zip has unique file names", () => {
+  const data = { sessions: [], dailyRoutines: phoneStore([item("item-a", "Example Compound A", 10)], [log("log-1", "2026-11-01", 250, 10)]) };
+  const names = buildExportFiles(data).map((file) => file.name);
+  assert.deepEqual(names, [...new Set(names)]);
+  assert.equal(names.filter((name) => name === "daily_routine_logs.csv").length, 1);
 });

@@ -305,6 +305,8 @@ test("signed out with the flag on asks for sign-in and creates no store", () => 
   const html = dailyRoutinesHTML();
   assert.match(html, /data-routines-shell="signed-out"/);
   assert.match(html, /Sign in to use Routines/);
+  assert.match(html, /Sign in to see and change your routines/);
+  assert.doesNotMatch(html, /Nothing is saved on this phone/);
   assert.match(html, /data-action="auth-open"/);
   assert.doesNotMatch(html, /Morning routine/);
   assert.equal(state.dailyRoutines, null);
@@ -463,8 +465,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v63"/);
-  assert.match(sentry, /insight-shell-v63/);
+  assert.match(sw, /const CACHE = "insight-shell-v64"/);
+  assert.match(sentry, /insight-shell-v64/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);
