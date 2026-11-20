@@ -43,6 +43,8 @@ const {
   deleteRoutineItem,
   duplicateRoutineBlock,
   logRoutineItem,
+  restoreRoutineLog,
+  undoRoutineLog,
   parseRoutineAmount,
   renameRoutineBlock,
   renameRoutineItem,
@@ -56,7 +58,7 @@ const {
   toggleRoutineCollapsed,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
-const { isLive, mergeDailyRoutines, normalizeDailyRoutines, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
+const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day = "2026-11-19") {
   app.today = () => day;
@@ -360,6 +362,81 @@ describe("routine editing", { concurrency: false }, () => {
     assert.doesNotMatch(html, /data-block-id=/);
     app.ui.dailyRoutineEdit = true;
     assert.match(dailyRoutinesHTML(), /Restore Morning routine/);
+  });
+
+  test("two phones adding one item to the same block merge to one placement", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    const night = blockId("Night routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "check" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const before = structuredClone(app.state.dailyRoutines);
+    const draft = { itemId: item.id, name: item.name, kind: "check", blockId: night, blockIds: [morning, night] };
+    assert.equal(saveRoutineItem(app.state, draft), true);
+    const phoneA = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(before);
+    assert.equal(saveRoutineItem(app.state, draft), true);
+    const phoneB = structuredClone(app.state.dailyRoutines);
+    const placeA = phoneA.placements.find((row) => isLive(row) && row.blockId === night);
+    const placeB = phoneB.placements.find((row) => isLive(row) && row.blockId === night);
+    assert.equal(placeA.id, routinePlacementId(night, item.id));
+    assert.equal(placeA.id, placeB.id);
+    for (const merged of [mergeDailyRoutines(phoneA, phoneB), mergeDailyRoutines(phoneB, phoneA)]) {
+      assert.equal(merged.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id).length, 1);
+    }
+    const longBlock = `block_${"x".repeat(70)}`;
+    const longItem = `item_${"y".repeat(70)}`;
+    const hashed = routinePlacementId(longBlock, longItem);
+    assert.equal(hashed.length <= 80, true);
+    assert.equal(hashed, routinePlacementId(longBlock, longItem));
+    const phoneLeft = {
+      ...emptyDailyRoutines(5),
+      placements: [{ id: "place_phone_a", blockId: night, itemId: item.id, order: 0, updatedAt: 10, deletedAt: null }],
+    };
+    const phoneRight = {
+      ...emptyDailyRoutines(5),
+      placements: [{ id: "place_phone_b", blockId: night, itemId: item.id, order: 1, updatedAt: 30, deletedAt: null }],
+    };
+    const collapsed = mergeDailyRoutines(phoneLeft, phoneRight);
+    const shown = collapsed.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id);
+    assert.equal(shown.length, 1);
+    assert.equal(shown[0].id, "place_phone_b");
+    assert.equal(isLive(collapsed.placements.find((row) => row.id === "place_phone_a")), false);
+    const again = mergeDailyRoutines(collapsed, phoneLeft);
+    assert.equal(again.placements.filter((row) => isLive(row) && row.blockId === night && row.itemId === item.id).length, 1);
+  });
+
+  test("converting a dose to a check stops new logs from keeping the old amount", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const first = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id);
+    assert.equal(first.amount, 250);
+    assert.equal(first.unit, "mcg");
+    const kept = structuredClone(first);
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id, name: item.name, kind: "check", blockId: morning, blockIds: [morning],
+    }), true);
+    const converted = app.state.dailyRoutines.items.find((row) => row.id === item.id);
+    assert.equal(converted.kind, "check");
+    assert.equal(converted.compoundId, null);
+    const still = app.state.dailyRoutines.logs.find((row) => row.id === first.id);
+    assert.equal(still.amount, kept.amount);
+    assert.equal(still.unit, kept.unit);
+    pin("2026-11-20");
+    app.routineNow = () => new Date(2026, 10, 20, 8, 30);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const next = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.day === "2026-11-20");
+    assert.equal(next.amount, null);
+    assert.equal(next.unit, "");
+    assert.equal(undoRoutineLog(app.state, first.id), true);
+    assert.equal(restoreRoutineLog(app.state, first.id), true);
+    const restored = app.state.dailyRoutines.logs.find((row) => row.id === first.id);
+    assert.equal(isLive(restored), true);
+    assert.equal(restored.amount, null);
+    assert.equal(restored.unit, "");
   });
 
   test("the flag stays off in source and the new file is in the shell", () => {
