@@ -420,21 +420,41 @@ function mergePrefs(local, remote, now) {
   return stableStringify(left) >= stableStringify(right) ? left : right;
 }
 
+/* The quiz removes the blocks it does not keep at its own stamp and marks
+   each removed row with quizAt. When two phones answer differently, only the
+   winning answer's removals stand; the other answer's are undone here, so the
+   merge never removes a block the winning answer kept. A later real delete is
+   newer than quizAt and stays. The undone row keeps its stamp, so any real
+   edit after the quiz still wins. */
+function settleQuizRemovals(list, quiz) {
+  const winner = quiz ? num(quiz.updatedAt) : 0;
+  return list.map((row) => {
+    const at = num(row.quizAt);
+    if (isLive(row) || !at || at === winner || num(row.deletedAt) > at) return row;
+    const { quizAt, ...rest } = row;
+    void quizAt;
+    const revived = { ...rest, deletedAt: null };
+    if (typeof revived.removedWith === "string") revived.removedWith = null;
+    return revived;
+  });
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
   const left = normalizeDailyRoutines(local, now);
   const right = normalizeDailyRoutines(remote, now);
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
+  const quiz = mergeQuiz(left.quiz, right.quiz);
   return {
     updatedAt: Math.max(left.updatedAt, right.updatedAt),
-    blocks: mergeEntityLists(left.blocks, right.blocks, now),
+    blocks: settleQuizRemovals(mergeEntityLists(left.blocks, right.blocks, now), quiz),
     items: mergeEntityLists(left.items, right.items, now),
-    placements: collapsePlacementPairs(mergeEntityLists(left.placements, right.placements, now)),
+    placements: collapsePlacementPairs(settleQuizRemovals(mergeEntityLists(left.placements, right.placements, now), quiz)),
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
-    quiz: mergeQuiz(left.quiz, right.quiz),
+    quiz,
   };
 }
 

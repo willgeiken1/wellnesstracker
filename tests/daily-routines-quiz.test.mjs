@@ -35,7 +35,15 @@ globalThis.window = globalThis;
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 
 const { app } = await import("../logger/js/runtime.js");
-const { dailyRoutinesHTML, deleteRoutineItem, ensureRoutineShell, routinesSettingsSheetHTML } = await import("../logger/js/pages/daily-routines.js");
+const {
+  dailyRoutinesHTML,
+  deleteRoutineBlock,
+  deleteRoutineItem,
+  ensureRoutineShell,
+  renameRoutineItem,
+  restoreRoutineBlock,
+  routinesSettingsSheetHTML,
+} = await import("../logger/js/pages/daily-routines.js");
 const {
   chooseRoutineQuiz,
   finishRoutineQuiz,
@@ -437,4 +445,83 @@ describe("routine setup quiz", { concurrency: false }, () => {
       }
     });
   }
+
+  function finishKeeping(shared, key, minute) {
+    app.state = { dailyRoutines: JSON.parse(shared) };
+    app.ui = { sheet: null, routineQuiz: null };
+    app.routineNow = () => new Date(2026, 10, 19, 8, minute);
+    answer();
+    for (const other of ["morning", "stack", "night"]) if (other !== key) assert.equal(toggleRoutineQuizBlock(other), true);
+    assert.deepEqual(app.ui.routineQuiz.kept, [key]);
+    assert.equal(finishRoutineQuiz(app.state), true);
+    return app.state.dailyRoutines;
+  }
+
+  function liveBlockNames(store) {
+    return store.blocks.filter(isLive).map((block) => block.name).sort();
+  }
+
+  test("two phones that keep different blocks merge to the winning answer, never to no blocks", () => {
+    signIn();
+    ensureRoutineShell(app.state, new Date(2026, 10, 19, 8, 0).getTime());
+    const shared = JSON.stringify(app.state.dailyRoutines);
+    const phoneA = finishKeeping(shared, "morning", 30);
+    const phoneB = finishKeeping(shared, "night", 40);
+    for (const merged of [mergeDailyRoutines(phoneA, phoneB), mergeDailyRoutines(phoneB, phoneA)]) {
+      assert.deepEqual(merged.quiz.kept, ["night"]);
+      assert.deepEqual(liveBlockNames(merged), ["Night routine"]);
+      app.state = { dailyRoutines: merged };
+      assert.deepEqual(liveNames("Night routine"), starterNames(["night"]));
+      assert.equal(seedDefaultBlocks(merged, 50).blocks.filter(isLive).length, 1);
+      // Merging again, with either stale copy, changes nothing.
+      for (const stale of [phoneA, phoneB]) {
+        assert.deepEqual(liveBlockNames(mergeDailyRoutines(merged, stale)), ["Night routine"]);
+        assert.deepEqual(liveBlockNames(mergeDailyRoutines(stale, merged)), ["Night routine"]);
+      }
+    }
+
+    // A real delete after the quiz still stands, on the winner or the loser.
+    app.state = { dailyRoutines: mergeDailyRoutines(phoneA, phoneB) };
+    const night = app.state.dailyRoutines.blocks.find((block) => block.name === "Night routine");
+    app.routineNow = () => new Date(2026, 10, 19, 9, 30);
+    assert.equal(deleteRoutineBlock(app.state, night.id), true);
+    assert.deepEqual(liveBlockNames(mergeDailyRoutines(app.state.dailyRoutines, phoneA)), []);
+    app.state = { dailyRoutines: JSON.parse(JSON.stringify(phoneA)) };
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(restoreRoutineBlock(app.state, night.id), true);
+    app.routineNow = () => new Date(2026, 10, 19, 9, 5);
+    assert.equal(deleteRoutineBlock(app.state, night.id), true);
+    for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, phoneB), mergeDailyRoutines(phoneB, app.state.dailyRoutines)]) {
+      assert.equal(merged.blocks.filter(isLive).some((block) => block.id === night.id), false);
+    }
+  });
+
+  test("a phone that seeds the starter late cannot undo another phone's delete or rename", () => {
+    signIn();
+    ensureRoutineShell(app.state, new Date(2026, 10, 19, 8, 0).getTime());
+    const shared = JSON.stringify(app.state.dailyRoutines);
+    app.state = { dailyRoutines: JSON.parse(shared) };
+    assert.equal(skipRoutineQuiz(app.state), true);
+    const victim = app.state.dailyRoutines.items.find((item) => item.name === "Morning check");
+    const renamed = app.state.dailyRoutines.items.find((item) => item.name === "Night check");
+    app.routineNow = () => new Date(2026, 10, 19, 9, 0);
+    assert.equal(deleteRoutineItem(app.state, victim.id), true);
+    app.routineNow = () => new Date(2026, 10, 19, 9, 5);
+    assert.equal(renameRoutineItem(app.state, renamed.id, "Evening wind-down"), true);
+    const phoneA = app.state.dailyRoutines;
+
+    // Phone B never saw any of that and seeds from the old copy an hour later.
+    app.state = { dailyRoutines: JSON.parse(shared) };
+    app.ui = { sheet: null, routineQuiz: null };
+    app.routineNow = () => new Date(2026, 10, 19, 10, 0);
+    assert.equal(skipRoutineQuiz(app.state), true);
+    const phoneB = app.state.dailyRoutines;
+
+    for (const merged of [mergeDailyRoutines(phoneA, phoneB), mergeDailyRoutines(phoneB, phoneA)]) {
+      assert.equal(merged.items.filter(isLive).some((item) => item.id === victim.id), false);
+      assert.equal(merged.placements.filter((row) => isLive(row) && row.itemId === victim.id).length, 0);
+      assert.equal(merged.items.find((item) => item.id === renamed.id).name, "Evening wind-down");
+      assert.equal(merged.items.filter(isLive).length, GENERIC_STARTER_ITEMS.length - 1);
+    }
+  });
 });

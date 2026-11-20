@@ -2,16 +2,13 @@ import { app } from "../runtime.js";
 import {
   applyStoredQuizStartTimes,
   canMutateRoutines,
+  DEFAULT_BLOCK_STAMP,
   isLive,
   normalizeDailyRoutines,
   putDailyRoutines,
 } from "../shared/daily-routines-store.js";
 import { GENERIC_STARTER_ITEMS, STARTER_BLOCKS, STARTER_BLOCK_KEYS } from "../shared/routine-starter.js";
-import {
-  addRoutineItem,
-  deleteRoutineBlock,
-  ensureRoutineShell,
-} from "./daily-routines.js";
+import { ensureRoutineShell } from "./daily-routines.js";
 
 /* One-time setup. Four taps cover what you track, wake, bed, and the
    blocks to keep. A fifth tap is only for turning a block off. Skipping
@@ -109,50 +106,75 @@ function alreadyPlaced(store, blockId, name) {
   return (store.placements || []).some((row) => isLive(row) && row.blockId === blockId && items.get(row.itemId) && items.get(row.itemId).name === name);
 }
 
-function seedStarter(state, keys) {
+function nextPlacementOrder(store, blockId) {
+  return (store.placements || [])
+    .filter((row) => isLive(row) && row.blockId === blockId)
+    .reduce((max, row) => Math.max(max, row.order || 0), -1) + 1;
+}
+
+/* Starter rows carry the default-block stamp, not the seed time, so any real
+   edit or delete on another phone is newer and wins the merge. Fixed ids, so
+   two phones that both seed converge on one copy. A row that exists at all,
+   even deleted, is left alone so a removed starter stays removed. */
+function seedStarter(store, keys) {
   const wanted = new Set(keys);
   for (const [index, row] of GENERIC_STARTER_ITEMS.entries()) {
     if (!wanted.has(row.block)) continue;
-    const store = normalizeDailyRoutines(state.dailyRoutines);
-    if (!store) return false;
     const block = liveBlock(store, row.block);
     if (!block) continue;
     if (alreadyPlaced(store, block.id, row.name)) continue;
-    /* Fixed ids, so two phones that both seed the same store converge on one
-       copy at merge. A row that exists at all, even deleted, is left alone so
-       a removed starter stays removed. */
     const itemId = `item_starter_${block.id}_${index}`;
-    if ((store.items || []).some((item) => item && item.id === itemId)) continue;
-    const added = addRoutineItem(state, block.id, {
-      name: row.name,
-      kind: "check",
-      blockIds: [block.id],
-      newItemId: itemId,
-      newPlacementId: `place_starter_${block.id}_${index}`,
-    });
-    if (!added) return false;
+    const placeId = `place_starter_${block.id}_${index}`;
+    if (store.items.some((item) => item && item.id === itemId)) continue;
+    if (store.placements.some((place) => place && place.id === placeId)) continue;
+    const order = nextPlacementOrder(store, block.id);
+    store.items.push({ id: itemId, name: row.name, kind: "check", compoundId: null, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
+    store.placements.push({ id: placeId, blockId: block.id, itemId, order, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
   }
-  return true;
+  return store;
 }
 
-function dropUnkept(state, keys) {
+function blocksToDrop(store, keys) {
   const wanted = new Set(keys);
-  const store = normalizeDailyRoutines(state.dailyRoutines);
-  if (!store) return false;
+  const ids = new Set();
   for (const spec of STARTER_BLOCKS) {
     if (wanted.has(spec.key)) continue;
     const block = (store.blocks || []).find((row) => row && isLive(row) && row.name === spec.name);
-    if (!block) continue;
-    if (!deleteRoutineBlock(state, block.id)) return false;
+    if (block) ids.add(block.id);
   }
-  return true;
+  return ids;
 }
 
-function writeQuiz(state, quiz) {
+/* Blocks the quiz turns off are removed at the quiz's own stamp and marked
+   with it (quizAt). If two phones answer differently, the merge keeps only
+   the winning answer's removals (mergeDailyRoutines), so it never ends with
+   every block gone. */
+function dropUnkept(store, ids, at) {
+  store.blocks = store.blocks.map((block) => (ids.has(block.id) ? { ...block, updatedAt: at, deletedAt: at, quizAt: at } : block));
+  store.placements = store.placements.map((place) => (isLive(place) && ids.has(place.blockId)
+    ? { ...place, updatedAt: at, deletedAt: at, removedWith: place.blockId, quizAt: at }
+    : place));
+  if (store.prefs && ids.has(store.prefs.lastBlockId)) store.prefs = { ...store.prefs, lastBlockId: null, updatedAt: at };
+  return store;
+}
+
+function latestStamp(store, ids) {
+  let latest = typeof store.updatedAt === "number" ? store.updatedAt : 0;
+  for (const row of [...store.blocks, ...store.placements]) {
+    if (!ids.has(row.id) && !ids.has(row.blockId)) continue;
+    latest = Math.max(latest, row.updatedAt || 0, row.deletedAt || 0);
+  }
+  return latest;
+}
+
+/* One normalized copy, one put: a refused write leaves nothing half done. */
+function writeQuiz(state, quiz, keys) {
   const current = normalizeDailyRoutines(state.dailyRoutines);
   if (!current || routineQuizSettled(current)) return false;
-  const at = quizStamp(current.updatedAt);
-  let next = { ...current, updatedAt: at, quiz: { ...quiz, updatedAt: at } };
+  const drop = blocksToDrop(current, keys);
+  const at = quizStamp(latestStamp(current, drop));
+  let next = seedStarter(dropUnkept(current, drop, at), keys);
+  next = { ...next, updatedAt: at, quiz: { ...quiz, updatedAt: at } };
   const applied = applyStoredQuizStartTimes(next);
   if (applied && applied.applied && applied.store) next = applied.store;
   return putDailyRoutines(state, next);
@@ -161,10 +183,7 @@ function writeQuiz(state, quiz) {
 export function skipRoutineQuiz(state) {
   if (!writesOpen() || !state || typeof state !== "object") return false;
   ensureRoutineShell(state);
-  const current = normalizeDailyRoutines(state.dailyRoutines);
-  if (!current || routineQuizSettled(current)) return false;
-  if (!seedStarter(state, STARTER_BLOCK_KEYS)) return false;
-  return writeQuiz(state, { status: "skipped", wake: null, bed: null, tracks: null, kept: null });
+  return writeQuiz(state, { status: "skipped", wake: null, bed: null, tracks: null, kept: null }, STARTER_BLOCK_KEYS);
 }
 
 export function finishRoutineQuiz(state) {
@@ -173,11 +192,7 @@ export function finishRoutineQuiz(state) {
   const kept = STARTER_BLOCK_KEYS.filter((key) => draft.kept.includes(key));
   if (!TRACKS.has(draft.tracks) || !WAKE_TIMES.has(draft.wake) || !BED_TIMES.has(draft.bed) || !kept.length) return false;
   ensureRoutineShell(state);
-  const current = normalizeDailyRoutines(state.dailyRoutines);
-  if (!current || routineQuizSettled(current)) return false;
-  if (!dropUnkept(state, kept)) return false;
-  if (!seedStarter(state, kept)) return false;
-  return writeQuiz(state, { status: "done", wake: draft.wake, bed: draft.bed, tracks: draft.tracks, kept });
+  return writeQuiz(state, { status: "done", wake: draft.wake, bed: draft.bed, tracks: draft.tracks, kept }, kept);
 }
 
 export function chooseRoutineQuiz(step, value) {
