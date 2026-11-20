@@ -1185,20 +1185,33 @@ document.addEventListener("click", async (ev) => {
       app.renderSheet();
       break;
     case "routines-log":
+    case "routines-log-all":
     case "routines-skip":
     case "routines-undo":
     case "routines-reveal":
     case "routines-focus":
     case "routines-collapse":
-    case "routines-rest": {
+    case "routines-rest":
+    case "routines-toast-undo": {
       if (app.ROUTINES_ENABLED !== true) break;
-      const ran = a === "routines-log" ? app.logRoutineItem(app.state, b.dataset.itemId)
+      if (app.ui && app.ui.dailyRoutineEdit === true && (a === "routines-log" || a === "routines-log-all")) break;
+      const batch = a === "routines-log-all" && typeof app.logAllRoutineBlock === "function"
+        ? app.logAllRoutineBlock(app.state, b.dataset.blockId)
+        : null;
+      const ran = a === "routines-log-all" ? Array.isArray(batch) && batch.length > 0
+        : a === "routines-log" ? app.logRoutineItem(app.state, b.dataset.itemId)
         : a === "routines-skip" ? app.skipRoutineItem(app.state, b.dataset.itemId)
         : a === "routines-undo" ? app.undoRoutineLog(app.state, b.dataset.logId)
         : a === "routines-reveal" ? app.toggleRoutineReveal(app.state, b.dataset.blockId)
         : a === "routines-focus" ? app.toggleRoutineFocus(app.state)
         : a === "routines-collapse" ? app.toggleRoutineCollapsed(app.state, b.dataset.blockId)
+        : a === "routines-toast-undo" ? typeof app.undoRoutineLogToast === "function" && app.undoRoutineLogToast(app.state)
         : app.logRoutineRest(app.state);
+      if (ran && a === "routines-log" && typeof app.latestRoutineLogId === "function" && typeof app.showRoutineLogToast === "function") {
+        const id = app.latestRoutineLogId(app.state, b.dataset.itemId);
+        if (id) app.showRoutineLogToast([id]);
+      }
+      if (ran && a === "routines-log-all" && typeof app.showRoutineLogToast === "function") app.showRoutineLogToast(batch);
       if (ran && typeof app.save === "function") app.save();
       if (ran && typeof app.render === "function") app.render();
       break;
