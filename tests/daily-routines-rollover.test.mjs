@@ -116,17 +116,27 @@ function snapshot(logs) {
 }
 
 describe("routine day rollover", { concurrency: false }, () => {
-  test("the default hour is 4 and only a whole hour from 0 to 23 is kept", () => {
+  test("the default hour is 4, the setting stops at 6, and an older hour above 6 is clamped", () => {
     assert.equal(routineDayRolloverHour(undefined), 4);
     assert.equal(routineDayRolloverHour(4), 4);
     assert.equal(routineDayRolloverHour(0), 0);
-    assert.equal(routineDayRolloverHour(23), 23);
-    assert.equal(routineDayRolloverHour(24), 4);
+    assert.equal(routineDayRolloverHour(6), 6);
+    assert.equal(routineDayRolloverHour(7), 6);
+    assert.equal(routineDayRolloverHour(23), 6);
+    assert.equal(routineDayRolloverHour(24), 6);
+    assert.equal(routineDayRolloverHour(99), 6);
     assert.equal(routineDayRolloverHour(-1), 4);
     assert.equal(routineDayRolloverHour(4.5), 4);
     assert.equal(routineDayRolloverHour("4"), 4);
     assert.equal(routineDayKey(new Date(NaN), 4), "");
     assert.equal(routineDayKey(null, 4), "");
+    const stored = normalizeDailyRoutines({
+      logs: [{ id: "log-1", itemId: "item-a", day: "2026-11-19", status: "done", amount: 1, unit: "mg", updatedAt: 10, deletedAt: null }],
+      settings: { dayRolloverHour: 23, updatedAt: 8 },
+    });
+    assert.equal(stored.settings.dayRolloverHour, 6);
+    assert.equal(stored.settings.updatedAt, 8);
+    assert.equal(stored.logs[0].day, "2026-11-19");
   });
 
   test("3:59 stays on the previous local day and 4:00 starts the new day", () => {
@@ -145,8 +155,8 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.equal(routineDayKey(at(2026, 11, 20, 6, 0), 6), "2026-11-20");
     assert.equal(routineDayKey(at(2026, 11, 20, 0, 0), 0), "2026-11-20");
     assert.equal(routineDayKey(at(2026, 11, 19, 23, 59), 0), "2026-11-19");
-    assert.equal(routineDayKey(at(2026, 11, 20, 22, 59), 23), "2026-11-19");
-    assert.equal(routineDayKey(at(2026, 11, 20, 23, 0), 23), "2026-11-20");
+    assert.equal(routineDayKey(at(2026, 11, 20, 0, 59), 1), "2026-11-19");
+    assert.equal(routineDayKey(at(2026, 11, 20, 1, 0), 1), "2026-11-20");
   });
 
   test("a log at 1:00 AM is stored on the previous day and 4:00 AM starts the new day", () => {
@@ -210,6 +220,7 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.equal(liveLog(second.id).day, "2026-11-19");
     assert.equal(liveLog(first.id).day, "2026-11-20");
     assert.equal(liveLog(first.id).updatedAt, before[0].updatedAt);
+    assert.equal(setRoutineDayRollover(app.state, 7), false);
     assert.equal(setRoutineDayRollover(app.state, 24), false);
     assert.equal(setRoutineDayRollover(app.state, -1), false);
     assert.equal(setRoutineDayRollover(app.state, 6.5), false);
@@ -295,11 +306,57 @@ describe("routine day rollover", { concurrency: false }, () => {
     const days = data.dailyRoutines.logs.map((log) => log.day);
     assert.equal(purgeDailyRoutineRange(data, "2026-11-19", "2026-11-19", null, Date.parse("2026-11-20T06:30:00Z")), true);
     assert.deepEqual(data.dailyRoutines.logs.map((log) => log.day), days);
-    assert.equal(data.dailyRoutines.logs[0].deletedAt, null);
+    assert.ok(data.dailyRoutines.logs[0].deletedAt > 0);
     assert.ok(data.dailyRoutines.logs[1].deletedAt > 0);
     assert.equal(data.dailyRoutines.settings.dayRolloverHour, 6);
-    assert.equal(isLive(data.dailyRoutines.logs[0]), true);
-    assert.equal(isLive(data.dailyRoutines.logs[1]), false);
+  });
+
+  test("delete through a calendar day also removes the early-morning dose stored on the previous routine day", () => {
+    const morning = at(2026, 11, 20, 1, 30);
+    assert.equal(routineDayKey(morning, 4), "2026-11-19");
+    assert.equal(routineDayKey(at(2026, 11, 20, 0, 30), 1), "2026-11-19");
+    assert.equal(routineDayKey(at(2026, 11, 20, 1, 0), 1), "2026-11-20");
+    assert.equal(routineDayKey(at(2026, 11, 20, 5, 30), 6), "2026-11-19");
+    assert.equal(routineDayKey(at(2026, 11, 20, 6, 0), 6), "2026-11-20");
+    function dose(id, clock, hour) {
+      return {
+        id,
+        itemId: "item-a",
+        day: routineDayKey(clock, hour),
+        status: "done",
+        amount: 1,
+        unit: "mg",
+        updatedAt: 10,
+        deletedAt: null,
+        at: clock.getTime(),
+      };
+    }
+    for (const hour of [1, 4, 6]) {
+      const early = hour === 1 ? at(2026, 11, 20, 0, 30) : hour === 6 ? at(2026, 11, 20, 5, 30) : morning;
+      const onTime = hour === 1 ? at(2026, 11, 20, 1, 0) : hour === 6 ? at(2026, 11, 20, 6, 0) : at(2026, 11, 20, 10, 0);
+      const data = {
+        dailyRoutines: {
+          updatedAt: 10,
+          settings: { dayRolloverHour: hour, updatedAt: 1 },
+          logs: [
+            dose("early", early, hour),
+            dose("ontime", onTime, hour),
+            dose("before", at(2026, 11, 18, 12, 0), hour),
+            dose("after", at(2026, 11, 21, 12, 0), hour),
+          ],
+        },
+      };
+      assert.equal(data.dailyRoutines.logs[0].day, "2026-11-19", `hour ${hour}`);
+      assert.equal(data.dailyRoutines.logs[1].day, "2026-11-20", `hour ${hour}`);
+      assert.equal(purgeDailyRoutineRange(data, "2026-11-20", "2026-11-20", null, 5000), true);
+      const byId = Object.fromEntries(data.dailyRoutines.logs.map((log) => [log.id, log]));
+      assert.ok(byId.early.deletedAt > 0, `hour ${hour} early`);
+      assert.ok(byId.ontime.deletedAt > 0, `hour ${hour} on time`);
+      assert.equal(byId.before.deletedAt, null, `hour ${hour} two days earlier`);
+      assert.equal(byId.after.deletedAt, null, `hour ${hour} the next day`);
+      assert.equal(byId.early.day, "2026-11-19");
+      assert.equal(byId.ontime.day, "2026-11-20");
+    }
   });
 
   test("normalize and merge keep log days and take the newer hour", () => {
@@ -311,7 +368,7 @@ describe("routine day rollover", { concurrency: false }, () => {
       logs: [log],
       settings: { dayRolloverHour: 99, updatedAt: 5 },
     });
-    assert.equal(normalized.settings.dayRolloverHour, 4);
+    assert.equal(normalized.settings.dayRolloverHour, 6);
     assert.equal(normalized.settings.updatedAt, 5);
     assert.equal(normalized.logs[0].day, "2026-11-18");
     assert.equal(normalized.logs[0].amount, 1);
@@ -332,7 +389,7 @@ describe("routine day rollover", { concurrency: false }, () => {
       settings: { dayRolloverHour: 7, updatedAt: 30 },
     };
     const merged = mergeDailyRoutines(older, newer);
-    assert.equal(merged.settings.dayRolloverHour, 7);
+    assert.equal(merged.settings.dayRolloverHour, 6);
     assert.deepEqual(merged.logs.map((row) => row.day).sort(), ["2026-11-18", "2026-11-19"]);
     const tie = mergeDailyRoutines(
       { ...older, settings: { dayRolloverHour: 5, updatedAt: 20 } },
@@ -350,7 +407,8 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.match(sheet, /<option value="4" selected>4:00 AM<\/option>/);
     assert.match(sheet, /The default is 4:00 AM/);
     assert.match(sheet, /Notifications stay off/);
-    assert.equal(sheet.match(/<option /g).length, 24);
+    assert.equal(sheet.match(/<option /g).length, 7);
+    assert.doesNotMatch(sheet, /11:00 PM/);
     assert.doesNotMatch(sheet, /showNotification|requestPermission/);
     assert.equal(setRoutineDayRollover(app.state, 6), true);
     const next = routinesSettingsSheetHTML();
