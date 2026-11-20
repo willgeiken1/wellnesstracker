@@ -110,6 +110,24 @@
 .dr-empty p { margin: 6px 0 14px; font-size: 15px; line-height: 1.4; color: var(--muted); }
 .dr-empty .btn { margin-top: 2px; }
 
+.dr-discover {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+  box-shadow: var(--inset-hi), var(--inset-lo), var(--elev-1);
+}
+.dr-discover-name { font-size: 17px; }
+.dr-discover-soon { font-size: 13px; font-weight: 600; color: var(--muted); }
+
 .dr-signin { padding: 22px 20px 20px; }
 .dr-signin h2 { font-size: 28px; margin: 0 0 8px; }
 .dr-signin p { margin: 0 0 16px; font-size: 15px; line-height: 1.4; }
