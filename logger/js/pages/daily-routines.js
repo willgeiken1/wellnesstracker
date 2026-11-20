@@ -837,6 +837,7 @@ function writeCompound(store, item, name, dose, clock, at) {
     amount: dose.amount,
     unit: dose.unit,
     startDate: existing && existing.startDate ? existing.startDate : clock.day,
+    chartLine: !!(existing && existing.chartLine === true),
     archivedAt: null,
     deletedAt: null,
   }, at);

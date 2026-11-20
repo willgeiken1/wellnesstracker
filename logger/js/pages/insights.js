@@ -2,7 +2,12 @@ import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, UNFAVORABLE_MARK, foldedAlso, loggedDays, pickForToday, splitFindings } from "../shared/correlate.js";
 import { needsSleepRecovery, ouraMembershipInactive, sleepRecoveryCopy, sleepRecoveryLabel } from "../shared/oura-gate.js";
 import { readinessForAdvice } from "../shared/brief.js";
+import { chartLineOptInHTML, startedChartMarkers } from "../shared/routine-chart-lines.js";
 import "./insight-widgets.js";
+
+function startedMarkers(labels) {
+  return startedChartMarkers(app.state && app.state.dailyRoutines, labels);
+}
 
 /* Insights and Recovery markup. */
 /* ---------- Screens ---------- */
@@ -57,9 +62,9 @@ function recoveryHTML(embedded) {
     <!--w:charts--><div class="sec-h" style="margin-top:22px"><h3>Trends</h3><div class="range">${[14, 30].map((r) =>
       `<button data-action="range" data-r="${r}" aria-pressed="${(app.ui.range || 14) === r}">${r} days</button>`).join("")}</div></div>
     <div class="card"><h4>Readiness</h4>${app.chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].readiness), cls: "ln" }], yMin: 40, yMax: 100 })}</div>
-    <div class="card"><h4>Sleep</h4>${app.chartSVG({ labels: range, series: [{ type: "bar", data: range.map((k) => o[k].total != null ? o[k].total / 3600 : null) }], yMin: 0, yMax: 10, guide: 7.5, fmt: (v) => v.toFixed(0) + "h" })}
+    <div class="card"><h4>Sleep</h4>${app.chartSVG({ labels: range, series: [{ type: "bar", data: range.map((k) => o[k].total != null ? o[k].total / 3600 : null) }], yMin: 0, yMax: 10, guide: 7.5, fmt: (v) => v.toFixed(0) + "h", markers: startedMarkers(range) })}
       <p class="sub small">Dashed line: 7.5 hours</p></div>
-    <div class="card"><h4>HRV</h4>${app.chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].hrv), cls: "ln" }], guide: base })}
+    <div class="card"><h4>HRV</h4>${app.chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].hrv), cls: "ln" }], guide: base, markers: startedMarkers(range) })}
       <p class="sub small">Dashed line: your 30-day average (${app.dash(base, Math.round)} ms). Higher generally means better recovered.</p></div>
     <div class="card"><h4>Resting heart rate</h4>${app.chartSVG({ labels: range, series: [{ data: range.map((k) => o[k].rhr), cls: "ln alt" }] })}</div>`);
 }
@@ -70,7 +75,8 @@ function insightsWrapHTML() {
   const seg = `<div class="seg2" role="tablist" style="margin-bottom:16px">
     <button data-action="iseg" data-s="trends" aria-pressed="${app.ui.iseg !== "recovery"}">Trends</button>
     <button data-action="iseg" data-s="recovery" aria-pressed="${app.ui.iseg === "recovery"}">Recovery</button></div>`;
-  return app.pageHead("Insights", "", { left: app.addButtonHTML(app.ui.iseg === "recovery" ? "recovery" : "trends") }) + seg + (app.ui.iseg === "recovery" ? app.recoveryHTML(true) : app.insightsHTML(true));
+  const lines = chartLineOptInHTML(app.state && app.state.dailyRoutines, "insights");
+  return app.pageHead("Insights", "", { left: app.addButtonHTML(app.ui.iseg === "recovery" ? "recovery" : "trends") }) + seg + lines + (app.ui.iseg === "recovery" ? app.recoveryHTML(true) : app.insightsHTML(true));
 }
 app.insightsWrapHTML = insightsWrapHTML;
 
@@ -234,7 +240,7 @@ function insightsHTML(embedded) {
     <!--w:load--><div class="sec-h" style="margin-top:22px"><h3>${nights ? "Training load vs recovery" : "Weekly training volume"}</h3></div>
     <div class="card"><p class="sub">${loadMsg}</p>
       <div class="mini-l">Sets per week</div>${app.chartSVG({ labels: weeks, series: [{ type: "bar", data: wSets }], h: 100, yMin: 0 })}
-      ${nights ? `<div class="mini-l">Average HRV (ms)</div>${app.chartSVG({ labels: weeks, series: [{ data: wHrv, cls: "ln" }], h: 100, guide: hrvBase })}` : ""}</div>
+      ${nights ? `<div class="mini-l">Average HRV (ms)</div>${app.chartSVG({ labels: weeks, series: [{ data: wHrv, cls: "ln" }], h: 100, guide: hrvBase, markers: startedMarkers(weeks) })}` : ""}</div>
     <!--w:volume--><div class="sec-h" style="margin-top:22px"><h3>Weekly sets per muscle</h3><span class="sec-sub">4-week average</span></div>
     <div class="card"><p class="sub">The shaded zone is 10–20 sets a week, a range commonly recommended for muscle growth. Muscles an exercise works secondarily count as half a set.</p><div class="vol">${volHTML}</div></div>
     <!--w:balance--><div class="card"><h4>Push / pull balance</h4><p class="sub">${ppMsg}</p>
