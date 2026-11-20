@@ -125,7 +125,7 @@ export function routineHistorySheetHTML() {
         <span class="dr-history-day">${esc(formatHistoryDay(log.day))}</span>
         ${amountHTML}
         <span class="dr-state">${esc(historyStatus(log))}</span>
-        <button type="button" class="dr-edit-log" data-action="routines-log-edit" data-log-id="${esc(log.id)}">Edit <span class="dr-vh">${esc(formatHistoryDay(log.day))}</span></button>
+        <button type="button" class="dr-edit-log" data-action="routines-details-open" data-item-id="${esc(typeof log.itemId === "string" && log.itemId ? log.itemId : (sd.itemId || ""))}" data-log-id="${esc(log.id)}">Edit <span class="dr-vh">${esc(formatHistoryDay(log.day))}</span></button>
       </li>`;
     }).join("")}</ul>`
     : `<p class="sub">Nothing logged for this item yet.</p>`;
