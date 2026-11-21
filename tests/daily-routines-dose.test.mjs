@@ -196,19 +196,18 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     });
     const remote = structuredClone(app.state.dailyRoutines);
     assert.equal(editRoutineLog(app.state, source.id, { day: "2026-11-18" }), true);
-    const moved = app.state.dailyRoutines.logs.find((row) => row.id === source.id);
+    const moved = app.state.dailyRoutines.logs.find((row) => row.id === destId);
     assert.equal(isLive(moved), true);
     assert.equal(moved.day, "2026-11-18");
     assert.equal(moved.amount, 250);
     assert.equal(moved.unit, "mcg");
-    assert.ok(moved.updatedAt > source.updatedAt);
-    const dest = app.state.dailyRoutines.logs.find((row) => row.id === destId);
-    assert.equal(isLive(dest), false);
-    assert.equal(dest.deletedAt, ahead);
+    assert.ok(moved.updatedAt > ahead);
+    const sourceRow = app.state.dailyRoutines.logs.find((row) => row.id === source.id);
+    assert.equal(isLive(sourceRow), false);
+    assert.ok(sourceRow.updatedAt > source.updatedAt);
     const merged = mergeDailyRoutines(app.state.dailyRoutines, remote);
     const live = merged.logs.filter((row) => isLive(row) && row.day === "2026-11-18");
     assert.equal(live.length, 1);
-    assert.equal(live[0].id, source.id);
     assert.equal(live[0].amount, 250);
   });
 
@@ -257,7 +256,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
       const rows = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].day, "2026-11-18");
-      assert.equal(rows[0].id, source.id);
+      assert.equal(isLive(merged.logs.find((row) => row.id === source.id)), false);
       assert.equal(merged.logs.some((row) => isLive(row) && row.day === "2026-11-19"), false);
     }
   });
@@ -281,6 +280,28 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, remote), mergeDailyRoutines(remote, app.state.dailyRoutines)]) {
       const rows = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
       assert.deepEqual(rows.map((row) => row.day), ["2026-11-18"]);
+    }
+  });
+
+  test("a move and the other phone's fresh log of the old day both stay", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    const bare = structuredClone(app.state.dailyRoutines);
+    pin("2026-11-19", "2026-11-19T14:30:00.000Z");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = liveLog(item.id);
+    pin("2026-11-19", "2026-11-19T15:00:00.000Z");
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+    const phoneA = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(bare);
+    pin("2026-11-19", "2026-11-19T16:00:00.000Z");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const phoneB = structuredClone(app.state.dailyRoutines);
+    for (const merged of [mergeDailyRoutines(phoneA, phoneB), mergeDailyRoutines(phoneB, phoneA)]) {
+      const live = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
+      assert.deepEqual(live.map((row) => row.day).sort(), ["2026-11-18", "2026-11-19"]);
     }
   });
 
