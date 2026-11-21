@@ -523,6 +523,25 @@ describe("routine check-off", { concurrency: false }, () => {
     }
   });
 
+  test("an equal future step keeps the newer stored stamp", () => {
+    const id = "log_item_a_2026-11-19";
+    const shared = {
+      id,
+      itemId: "item_a",
+      day: "2026-11-19",
+      status: "done",
+      updatedAt: 4000,
+      sourceAt: 9_000_000_000_000,
+      sourceStep: 2,
+    };
+    const older = { ...shared, deletedAt: null };
+    const newer = { ...shared, updatedAt: 6000, deletedAt: null };
+    const merged = mergeDailyRoutines({ logs: [older] }, { logs: [newer] });
+    const kept = merged.logs.find((row) => row.id === id);
+    assert.equal(kept.updatedAt, 6000);
+    assert.equal(isLive(kept), true);
+  });
+
   test("a restore after a far-future undo stays live on the next merge", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
