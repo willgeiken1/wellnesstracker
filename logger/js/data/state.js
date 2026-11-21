@@ -509,11 +509,22 @@ function lastSets(name, excludeId) {
 }
 app.lastSets = lastSets;
 
-/* A new set starts blank. The last logged value is only a placeholder. */
+/* A new set starts blank. The last logged value is only a placeholder.
+   A shell-update reload keeps only fields the user typed, so a blank note
+   is missing. Log Set reads note with trim, and that throw left the button
+   dead until the next launch. */
 function draftFor(s, name) {
-  if (app.ui.drafts[name]) return app.ui.drafts[name];
-  app.ui.drafts[name] = { w: "", r: "", wR: "", rR: "", note: "", tag: null };
-  return app.ui.drafts[name];
+  const cur = app.ui.drafts[name];
+  if (!cur || typeof cur !== "object" || Array.isArray(cur)) {
+    app.ui.drafts[name] = { w: "", r: "", wR: "", rR: "", note: "", tag: null };
+    return app.ui.drafts[name];
+  }
+  if (cur.w == null) cur.w = "";
+  if (cur.r == null) cur.r = "";
+  if (cur.wR == null) cur.wR = "";
+  if (cur.rR == null) cur.rR = "";
+  if (typeof cur.note !== "string") cur.note = "";
+  return cur;
 }
 app.draftFor = draftFor;
 
