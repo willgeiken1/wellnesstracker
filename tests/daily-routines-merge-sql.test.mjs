@@ -714,6 +714,25 @@ test("merging thousands of logs finishes under the statement timeout", { timeout
   const merged = JSON.parse(got);
   assert.equal(merged.logs.length, count);
   assertSameStore(merged, mergeRoutines(stored, incoming, 0), `${count} logs`);
+
+  const withPurge = {
+    settingsAt: 2,
+    dailyRoutines: incoming,
+    purges: [{ id: "purge-1", from: "2026-01-01", to: "2026-01-03", at: 50 }],
+  };
+  const timed = query(`
+    set statement_timeout = '8s';
+    do $do$
+    begin
+      perform set_config('request.jwt.claim.sub', '${UID}', false);
+      delete from public.user_data where user_id = '${UID}';
+      insert into public.user_data (user_id, data)
+      values ('${UID}', $stored$${JSON.stringify({ settingsAt: 1, dailyRoutines: stored })}$stored$::jsonb);
+    end
+    $do$;
+    select jsonb_array_length(public.merge_user_data($incoming$${JSON.stringify(withPurge)}$incoming$::jsonb) -> 'dailyRoutines' -> 'logs');
+  `).trim();
+  assert.equal(Number(timed), count);
 });
 
 test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { timeout: 120_000 }, () => {
