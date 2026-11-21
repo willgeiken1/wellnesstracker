@@ -205,7 +205,8 @@ describe("routine details", { concurrency: false }, () => {
 
     assert.equal(editRoutineLog(app.state, log.id, { amount: "0.25", day: "2026-11-18", time: "15:05" }), true);
     const moved = liveLog(item.id, "2026-11-18");
-    assert.equal(moved.id, log.id);
+    assert.equal(moved.id, routineLogId(item.id, "2026-11-18"));
+    assert.ok(app.state.dailyRoutines.logs.find((row) => row.id === log.id).deletedAt > 0);
     assert.equal(moved.amount, 0.25);
     assert.equal(routineClockTime(moved.at), "15:05");
     assert.equal(parseRoutineTime("8:02").hour, 8);
@@ -330,7 +331,7 @@ describe("routine details", { concurrency: false }, () => {
     assert.equal(commitRoutineDetails(), true);
     const moved = liveLog(item.id, "2026-11-18");
     assert.equal(moved.status, "skipped");
-    assert.equal(moved.id, log.id);
+    assert.equal(moved.id, routineLogId(item.id, "2026-11-18"));
   });
 
   test("history opens the details page for a backdated log", () => {
