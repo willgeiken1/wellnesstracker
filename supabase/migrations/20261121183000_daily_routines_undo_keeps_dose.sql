@@ -335,6 +335,11 @@ declare
   purge jsonb;
   changed boolean := false;
   result jsonb;
+  range_from text[];
+  range_to text[];
+  range_before numeric[];
+  range_count integer := 0;
+  range_i integer;
 begin
   if p_routines is null or jsonb_typeof(p_routines) is distinct from 'object' then
     return p_routines;
@@ -345,28 +350,40 @@ begin
   if jsonb_typeof(p_purges) is distinct from 'array' or jsonb_array_length(p_purges) = 0 then
     return p_routines;
   end if;
+  -- Validate each purge once. The log loop then compares plain dates.
+  for purge in select value from jsonb_array_elements(p_purges)
+  loop
+    if jsonb_typeof(purge) is distinct from 'object' then
+      continue;
+    end if;
+    from_day := public.daily_routines_day(purge->'from');
+    to_day := public.daily_routines_day(purge->'to');
+    if from_day is null or to_day is null or from_day > to_day then
+      continue;
+    end if;
+    before := public.daily_routines_purge_before(purge, p_now);
+    range_count := range_count + 1;
+    range_from[range_count] := from_day;
+    range_to[range_count] := to_day;
+    range_before[range_count] := before;
+  end loop;
+  if range_count = 0 then
+    return p_routines;
+  end if;
   for log in select value from jsonb_array_elements(p_routines->'logs')
   loop
     kept := log;
     day := kept->>'day';
-    if day is not null and jsonb_typeof(p_purges) = 'array' then
-      for purge in select value from jsonb_array_elements(p_purges)
+    if day is not null then
+      select max(nullif(public.daily_routines_ms(kept, k), 0))
+        into stamp
+      from unnest(array['loggedAt', 'updatedAt', 'createdAt', 'at', 'mod']) as k;
+      for range_i in 1..range_count
       loop
-        if jsonb_typeof(purge) is distinct from 'object' then
+        if day < range_from[range_i] or day > range_to[range_i] then
           continue;
         end if;
-        from_day := public.daily_routines_day(purge->'from');
-        to_day := public.daily_routines_day(purge->'to');
-        if from_day is null or to_day is null or from_day > to_day then
-          continue;
-        end if;
-        if day < from_day or day > to_day then
-          continue;
-        end if;
-        before := public.daily_routines_purge_before(purge, p_now);
-        select max(nullif(public.daily_routines_ms(kept, k), 0))
-          into stamp
-        from unnest(array['loggedAt', 'updatedAt', 'createdAt', 'at', 'mod']) as k;
+        before := range_before[range_i];
         drop_it := before is null
           or stamp is null
           or stamp > coalesce(p_now, 0) + 60000

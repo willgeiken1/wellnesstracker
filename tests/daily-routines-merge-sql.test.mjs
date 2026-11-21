@@ -735,6 +735,45 @@ test("merging thousands of logs finishes under the statement timeout", { timeout
   assert.equal(Number(timed), count);
 });
 
+test("4000 logs and 200 purges finish under the statement timeout", { timeout: 120_000 }, () => {
+  const day = "2026-01-02";
+  const count = 4000;
+  const logs = Array.from({ length: count }, (_, i) => ({
+    id: `log-${i}`,
+    day,
+    status: "done",
+    amount: i + 1,
+    unit: "mcg",
+    updatedAt: 1000 + i,
+    deletedAt: null,
+  }));
+  const purges = Array.from({ length: 200 }, (_, i) => ({
+    id: `purge-${i}`,
+    from: "2026-01-01",
+    to: "2026-01-03",
+    at: 50,
+  }));
+  const stored = { updatedAt: 1, logs };
+  const incoming = {
+    settingsAt: 2,
+    dailyRoutines: { updatedAt: 2, logs },
+    purges,
+  };
+  const timed = query(`
+    set statement_timeout = '8s';
+    do $do$
+    begin
+      perform set_config('request.jwt.claim.sub', '${UID}', false);
+      delete from public.user_data where user_id = '${UID}';
+      insert into public.user_data (user_id, data)
+      values ('${UID}', $stored$${JSON.stringify({ settingsAt: 1, dailyRoutines: stored })}$stored$::jsonb);
+    end
+    $do$;
+    select jsonb_array_length(public.merge_user_data($incoming$${JSON.stringify(incoming)}$incoming$::jsonb) -> 'dailyRoutines' -> 'logs');
+  `).trim();
+  assert.equal(Number(timed), count);
+});
+
 test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { timeout: 120_000 }, () => {
   assert.equal(query(`create database icu_tie template template0 locale_provider icu icu_locale 'en-US' encoding 'UTF8';`), "");
   const base = ctx.base.map((arg, i, all) => (all[i - 1] === "-d" ? "icu_tie" : arg));
