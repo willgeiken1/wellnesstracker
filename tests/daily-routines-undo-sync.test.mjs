@@ -197,6 +197,12 @@ test("an undone dose inside an earlier deleted range survives SQL merge and rest
     assert.equal(lost.amount, undefined);
     assert.equal(lost.note, undefined);
 
+    const step = join(migrations, "20261121110000_daily_routines_source_step.sql");
+    if (existsSync(step)) {
+      const stepped = sqlFile(step);
+      assert.equal(stepped.status, 0, stepped.stderr);
+    }
+
     const forward = sqlFile(FIX);
     assert.equal(forward.status, 0, forward.stderr);
 

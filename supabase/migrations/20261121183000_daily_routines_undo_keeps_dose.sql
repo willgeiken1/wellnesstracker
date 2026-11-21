@@ -266,7 +266,7 @@ as $$
       r.id,
       r.order_stamp desc,
       r.stamp desc,
-      coalesce(r.prepared->>'undone' = 'true', false) desc,
+      coalesce((r.prepared->'undone') = 'true'::jsonb and r.tomb, false) desc,
       r.tomb desc,
       case
         when r.tied > 1 and coalesce(m.use_utf16, false)
@@ -319,10 +319,12 @@ immutable
 set search_path = public
 as $$
 declare
-  logs jsonb := '[]'::jsonb;
+  logs jsonb[] := array[]::jsonb[];
   log jsonb;
   kept jsonb;
   day text;
+  from_day text;
+  to_day text;
   before numeric;
   cutoff numeric;
   stamp numeric;
@@ -340,6 +342,9 @@ begin
   if jsonb_typeof(p_routines->'logs') is distinct from 'array' then
     return p_routines;
   end if;
+  if jsonb_typeof(p_purges) is distinct from 'array' or jsonb_array_length(p_purges) = 0 then
+    return p_routines;
+  end if;
   for log in select value from jsonb_array_elements(p_routines->'logs')
   loop
     kept := log;
@@ -350,10 +355,12 @@ begin
         if jsonb_typeof(purge) is distinct from 'object' then
           continue;
         end if;
-        if coalesce(purge->>'from', '') = '' or coalesce(purge->>'to', '') = '' then
+        from_day := public.daily_routines_day(purge->'from');
+        to_day := public.daily_routines_day(purge->'to');
+        if from_day is null or to_day is null or from_day > to_day then
           continue;
         end if;
-        if day < purge->>'from' or day > purge->>'to' then
+        if day < from_day or day > to_day then
           continue;
         end if;
         before := public.daily_routines_purge_before(purge, p_now);
@@ -396,9 +403,9 @@ begin
         changed := true;
       end loop;
     end if;
-    logs := logs || jsonb_build_array(kept);
+    logs := array_append(logs, kept);
   end loop;
-  result := jsonb_set(p_routines, '{logs}', logs, true);
+  result := jsonb_set(p_routines, '{logs}', coalesce(to_jsonb(logs), '[]'::jsonb), true);
   if changed then
     result := jsonb_set(
       result,
