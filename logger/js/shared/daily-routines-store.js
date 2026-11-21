@@ -331,13 +331,18 @@ function stableStringify(value) {
 /* Higher stamp wins. A remembered future stamp sorts at sourceAt plus the
    number of replacements that already beat it, so a later restore stays ahead
    of an undo even when the clamp stores both at the same millisecond. When
-   those match, the newer stored stamp wins. A remaining tie keeps the
-   tombstone, then the greater stable JSON. */
+   those match, the newer stored stamp wins. An undone log at that same stored
+   stamp beats a five-key marker: the marker is the lossy copy of the undo.
+   A remaining tie keeps the tombstone, then the greater stable JSON. */
 function orderStamp(entity) {
   const stored = rowStamp(entity);
   const src = typeof entity.sourceAt === "number" && entity.sourceAt > stored ? entity.sourceAt : stored;
   if (!(src > stored)) return stored;
   return src + futureStep(entity);
+}
+
+function keptUndo(entity) {
+  return !!(entity && entity.undone === true && typeof entity.deletedAt === "number" && entity.deletedAt > 0 && !isReducedLog(entity));
 }
 
 function beats(candidate, current) {
@@ -347,6 +352,9 @@ function beats(candidate, current) {
   const rowC = rowStamp(candidate);
   const rowP = rowStamp(current);
   if (rowC !== rowP) return rowC > rowP;
+  const undoC = keptUndo(candidate);
+  const undoP = keptUndo(current);
+  if (undoC !== undoP) return undoC;
   const tombC = typeof candidate.deletedAt === "number" && candidate.deletedAt > 0;
   const tombP = typeof current.deletedAt === "number" && current.deletedAt > 0;
   if (tombC !== tombP) return tombC;
