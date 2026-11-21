@@ -65,7 +65,7 @@ export function AuthForm({create=false,dob,progress,onCreated,embedded=false,bef
       value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={create?'new-password':'current-password'} textContentType={create?'newPassword':'password'} editable={!busy}/>
     {create&&<TextInput accessibilityLabel={t('confirmPassword')} placeholder={t('confirmPassword')} placeholderTextColor={colors['text-muted']} style={style}
       value={confirm} onChangeText={setConfirm} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" editable={!busy}/>}
-    {!create&&<PreferenceFields value={preferences.value} onChange={preferences.onChange}/>}
+    {!create&&<PreferenceFields value={preferences.value} disabled={!preferences.loaded} onChange={preferences.onChange}/>}
     {error&&<ThemedText accessibilityRole="alert">{t(error)}</ThemedText>}
     <Button testID={create?'onboarding-create-account':'auth-sign-in'} label={t(busy?'working':create?'createAccount':'signIn')} disabled={busy||!auth.configured} onPress={()=>{void submit();}}/>
     {!embedded&&<Button label={t('backWelcome')} variant="secondary" onPress={()=>router.replace('/auth')}/>}

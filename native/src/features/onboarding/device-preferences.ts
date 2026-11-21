@@ -34,7 +34,8 @@ export async function saveDevicePreferences(value:DevicePreferences,changed=true
 export function useDevicePreferences() {
   const [value,setValue]=useState<DevicePreferences>(()=>session?.value??{crashReports:true,analytics:false});
   // False until the saved switches are read, so a press can't save the defaults over them.
-  // A failed read with no switches from this launch stays false: the saved choice is unknown, so the switches stay locked.
+  // A failed read with no switches from this launch stays false: the saved choice is unknown, so the switches stay locked
+  // and a change is ignored on every screen, so save() can only keep what is stored.
   const [loaded,setLoaded]=useState(false);
   const changed=useRef(false);
   useEffect(()=>{
@@ -49,5 +50,5 @@ export function useDevicePreferences() {
     })();
     return ()=>{active=false;};
   },[]);
-  return {value,loaded,onChange:(next:DevicePreferences)=>{changed.current=true;setValue(next);},save:()=>saveDevicePreferences(value,changed.current)};
+  return {value,loaded,onChange:(next:DevicePreferences)=>{if(!loaded)return;changed.current=true;setValue(next);},save:()=>saveDevicePreferences(value,changed.current)};
 }
