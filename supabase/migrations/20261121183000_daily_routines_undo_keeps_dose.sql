@@ -33,6 +33,12 @@ declare
   start_date text;
   archived_at numeric;
   row jsonb;
+  raw_stamp numeric;
+  carried numeric;
+  cap numeric;
+  source_at numeric := 0;
+  source_step numeric := 0;
+  extras jsonb := '{}'::jsonb;
 begin
   if p_row is null or jsonb_typeof(p_row) is distinct from 'object' then
     return null;
@@ -49,6 +55,32 @@ begin
   deleted_at := public.daily_routines_clamp_ms(public.daily_routines_ms(p_row, 'deletedAt'), p_now);
   if deleted_at > 0 and updated_at < deleted_at then
     updated_at := deleted_at;
+  end if;
+
+  -- Keep the same future-stamp step 20261119234500 records. This function
+  -- replaces that prepare, and a later restore has to stay ahead of the undo
+  -- after both stamps clamp to the same millisecond.
+  raw_stamp := greatest(
+    public.daily_routines_ms(p_row, 'updatedAt'),
+    public.daily_routines_ms(p_row, 'deletedAt')
+  );
+  carried := public.daily_routines_ms(p_row, 'sourceAt');
+  cap := coalesce(p_now, 0) + 86400000;
+  if carried > cap then
+    source_at := carried;
+  elsif raw_stamp > cap then
+    source_at := raw_stamp;
+  end if;
+  if source_at > 0 then
+    if public.daily_routines_ms(p_row, 'sourceStep') > 0 then
+      source_step := floor(public.daily_routines_ms(p_row, 'sourceStep'));
+    elsif coalesce(p_row->>'supersedes', '') = 'true' then
+      source_step := 1;
+    end if;
+    extras := jsonb_build_object('sourceAt', public.daily_routines_json_number(source_at));
+    if source_step > 0 then
+      extras := extras || jsonb_build_object('sourceStep', public.daily_routines_json_number(source_step));
+    end if;
   end if;
 
   if p_kind = 'placements' then
@@ -76,7 +108,7 @@ begin
         'status', status,
         'updatedAt', public.daily_routines_json_number(updated_at),
         'deletedAt', public.daily_routines_json_number(deleted_at)
-      );
+      ) || extras;
     end if;
   end if;
 
@@ -87,7 +119,7 @@ begin
   else
     row := p_row;
   end if;
-  row := row || jsonb_build_object(
+  row := row || extras || jsonb_build_object(
     'id', id,
     'updatedAt', public.daily_routines_json_number(updated_at),
     'deletedAt', case
@@ -181,6 +213,7 @@ as $$
       prepared,
       prepared->>'id' as id,
       (prepared->>'updatedAt')::numeric as stamp,
+      public.daily_routines_order_stamp(prepared) as order_stamp,
       jsonb_typeof(prepared->'deletedAt') = 'number' as tomb
     from list
     where prepared is not null
@@ -191,8 +224,9 @@ as $$
       prepared,
       id,
       stamp,
+      order_stamp,
       tomb,
-      count(*) over (partition by id, stamp, tomb) as tied
+      count(*) over (partition by id, order_stamp, stamp, tomb) as tied
     from stamped
   ),
   ranked as (
@@ -201,6 +235,7 @@ as $$
       prepared,
       id,
       stamp,
+      order_stamp,
       tomb,
       tied,
       case when tied > 1 then public.daily_routines_stable(prepared) end as stable
@@ -209,12 +244,13 @@ as $$
   tie_mode as (
     select
       id,
+      order_stamp,
       stamp,
       tomb,
       bool_or(public.daily_routines_has_supplementary(stable)) as use_utf16
     from ranked
     where tied > 1
-    group by id, stamp, tomb
+    group by id, order_stamp, stamp, tomb
   ),
   firsts as (
     select id, min(ord) as first_ord
@@ -225,9 +261,10 @@ as $$
     select distinct on (r.id) r.id, r.prepared
     from ranked r
     left join tie_mode m
-      on m.id = r.id and m.stamp = r.stamp and m.tomb = r.tomb
+      on m.id = r.id and m.order_stamp = r.order_stamp and m.stamp = r.stamp and m.tomb = r.tomb
     order by
       r.id,
+      r.order_stamp desc,
       r.stamp desc,
       coalesce(r.prepared->>'undone' = 'true', false) desc,
       r.tomb desc,
