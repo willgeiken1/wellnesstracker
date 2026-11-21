@@ -23,9 +23,9 @@ import { nextDoseCountdown } from "../shared/routine-dose.js";
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
    and no dailyRoutines write.
 
-   Check-off writes one log per item and day (routineLogId). A log moved to
-   another day keeps its id, so a later check-off on the old day takes the
-   next free id for that item and day (checkOffId). Undo keeps the amount,
+   Check-off writes one log per item and day (routineLogId). A day change
+   writes the destination id (checkOffId) and tombstones the old id, so a
+   fresh check-off on the old day is a different row. Undo keeps the amount,
    unit, and note and marks that log undone, on every live log for that item
    (or rest) and day. Restore writes those fields back.
 
@@ -589,9 +589,9 @@ function logHasSavedDose(log) {
 
 /* Changes the amount and the day on one log. The day is the string the
    user picked. It is not today's key and not the UTC day of the clock.
-   The log keeps its id, so two phones that move it to different days
-   still hold one row. The compound row is left alone, so later edits to
-   the item do not rewrite this log. */
+   A day change writes the destination id and tombstones this one, so the
+   other phone's fresh check-off of the old day stays. The compound row is
+   left alone, so later edits to the item do not rewrite this log. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
   return withStore(state, (store, clock) => {
@@ -600,18 +600,21 @@ export function editRoutineLog(state, logId, draft) {
     if (!log || !isLive(log) || log.rest === true) return null;
     const day = draft && typeof draft.day === "string" ? draft.day : "";
     if (!validCalendarDay(day) || day > clock.day) return null;
+    const nextId = day !== log.day && log.itemId ? checkOffId(store, log.itemId, day) : logId;
+    if (!nextId) return null;
     if (log.itemId && day !== log.day) {
       const clash = (store.logs || []).some((row) => isLive(row) && row.id !== logId && row.itemId === log.itemId && row.day === day && row.rest !== true);
       if (clash) return null;
     }
+    if (nextId !== log.id && (store.logs || []).some((row) => isLive(row) && row.id === nextId)) return null;
     const view = projectDailyRoutines(store);
     const compound = (view.compounds || []).find((row) => row.id === log.compoundId) || null;
     const skipped = log.status === "skipped";
     const doseItem = logHasSavedDose(log) && !skipped;
-    const at = writeStamp(store, clock, logId);
+    const at = writeStamp(store, clock, nextId);
     const fields = doseItem ? null : {
       ...log,
-      id: logId,
+      id: nextId,
       day,
       amount: null,
       unit: "",
@@ -627,7 +630,7 @@ export function editRoutineLog(state, logId, draft) {
       if (!unit) return null;
       payload = {
         ...log,
-        id: logId,
+        id: nextId,
         day,
         amount,
         unit,
@@ -635,8 +638,10 @@ export function editRoutineLog(state, logId, draft) {
         deletedAt: null,
       };
     }
-    const next = upsertEntity(store, "logs", carryFuture(payload, store, logId), at);
-    return wrote(next, "logs", logId, at);
+    let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
+    if (!wrote(next, "logs", nextId, at)) return null;
+    if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+    return next;
   });
 }
 
