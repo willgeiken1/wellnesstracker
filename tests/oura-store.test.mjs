@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accessToken, connectionMark, DELETING, forgetRevoked, isRevokedGrant, NEWER_LOGIN, OuraUnauthorized, readWithAccess, recordSyncError, REFUSAL_GAP_MS, refused, REVOKED, saveDays, saveLogin } from "../supabase/functions/_shared/oura-store.js";
+import { accessToken, CHECK_FAILED, connectionMark, DELETING, disconnect as disconnectOura, finishRevoked, forgetRevoked, isRevokedGrant, NEWER_LOGIN, OuraUnauthorized, readWithAccess, RECONNECT, recordSyncError, REFUSAL_GAP_MS, refused, REVOKED, saveDays, saveLogin } from "../supabase/functions/_shared/oura-store.js";
 
 // A made-up in-memory database with just the query shapes oura-store uses. No real Oura data.
 // `or` understands only the one filter oura-store sends: rows with no `data.conn`, or one at or before a mark.
@@ -47,8 +47,56 @@ function fakeDb(state, hooks = {}) {
     };
     return chain;
   };
-  return { from: query };
+  // The three SQL functions in supabase/migrations/20261121120000_oura_atomic_login.sql, as one transaction each: a
+  // failure changes nothing. tests/oura-login-sql.test.mjs runs the real ones against Postgres.
+  const rpc = async (name, args) => {
+    await hooks.beforeRpc?.(name, args);
+    if (hooks.failRpc?.(name)) return { data: null, error: { message: "made-up failure" } };
+    const draft = structuredClone({ t: state.oura_tokens ?? [], c: state.oura_connections ?? [], i: state.oura_revoke_intents ?? [], d: state.oura_days ?? [] });
+    let data;
+    try { data = FUNCTIONS[name](draft, args, hooks); } catch { return { data: null, error: { message: "made-up failure" } }; }
+    Object.assign(state, { oura_tokens: draft.t, oura_connections: draft.c, oura_revoke_intents: draft.i, oura_days: draft.d });
+    if (hooks.loseAnswer?.(name)) return { data: null, error: { message: "made-up lost answer" } };
+    return { data, error: null };
+  };
+  return { from: query, rpc };
 }
+const mine = (u) => (r) => r.user_id === u;
+const FUNCTIONS = {
+  oura_save_login(db, a, hooks) {
+    if (hooks.failUpsert?.("oura_tokens") || hooks.failUpsert?.("oura_connections")) throw new Error("rolled back");
+    db.t = db.t.filter((r) => r.user_id !== a.p_user).concat({ user_id: a.p_user, access_token: a.p_access_token, refresh_token: a.p_refresh_token, expires_at: a.p_expires_at, updated_at: a.p_now });
+    db.c = db.c.filter((r) => r.user_id !== a.p_user).concat({ user_id: a.p_user, connected_at: a.p_now, last_sync: null, last_error: null });
+    db.i = db.i.filter((r) => r.user_id !== a.p_user);
+    return a.p_now;
+  },
+  oura_revoke_login(db, a) {
+    const cur = db.c.find(mine(a.p_user))?.connected_at ?? null;
+    const record = (conn, kind) => { db.i = db.i.filter((r) => r.user_id !== a.p_user).concat({ user_id: a.p_user, conn, kind }); };
+    if (a.p_refresh == null) { db.t = db.t.filter((r) => r.user_id !== a.p_user); if (cur) record(cur, "disconnect"); return "removed"; }
+    if (cur !== a.p_conn) return "not_connected";
+    const before = db.t.length;
+    db.t = db.t.filter((r) => !(r.user_id === a.p_user && r.refresh_token === a.p_refresh));
+    if (db.t.length < before) { record(a.p_conn, "revoked"); return "removed"; }
+    if (db.t.some(mine(a.p_user))) return "newer_login";
+    return db.i.some((r) => r.user_id === a.p_user && r.conn === a.p_conn) ? "removed" : "no_login";
+  },
+  oura_finish_revoke(db, a, hooks) {
+    const dropDays = (keep) => { if (hooks.failDelete?.("oura_days")) throw new Error("rolled back"); db.d = db.d.filter(keep); };
+    if (a.p_conn == null) {
+      db.t = db.t.filter((r) => r.user_id !== a.p_user); db.c = db.c.filter((r) => r.user_id !== a.p_user); db.i = db.i.filter((r) => r.user_id !== a.p_user);
+      dropDays((r) => r.user_id !== a.p_user);
+      return "disconnected";
+    }
+    if ((db.c.find(mine(a.p_user))?.connected_at ?? null) !== a.p_conn) return "not_connected";
+    if (db.t.some(mine(a.p_user))) return "connected";
+    const why = db.i.find((r) => r.user_id === a.p_user && r.conn === a.p_conn)?.kind;
+    if (!why) return "reconnect";
+    if (why === "disconnect") { db.c = db.c.filter((r) => r.user_id !== a.p_user); db.i = db.i.filter((r) => r.user_id !== a.p_user); }
+    dropDays((r) => !(r.user_id === a.p_user && (r.data?.conn == null || r.data.conn <= a.p_conn)));
+    return why === "disconnect" ? "disconnected" : "revoked";
+  },
+};
 const U = "user-a";
 const connected = () => ({ oura_tokens: [{ user_id: U }], oura_connections: [{ user_id: U, connected_at: "2026-11-16T10:00:00+00:00" }], oura_days: [] });
 const days = [{ user_id: U, day: "2026-11-14" }, { user_id: U, day: "2026-11-15" }];
@@ -230,8 +278,10 @@ test("Codex review, Nov 18: a failed delete of the days is finished by the next 
   assert.equal(state.oura_days.length, 2);
   assert.equal(state.oura_connections[0].last_error, DELETING);
   assert.match(DELETING, /login expired/i);
-  // Still failing: nothing changes and the next sync tries again.
-  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === DELETING);
+  // Still failing: nothing changes and the next sync tries again. It doesn't claim anything was deleted.
+  await assert.rejects(accessToken(admin, U, MARK, async () => revoked(), fast), (e) => e.message === CHECK_FAILED);
+  assert.equal(state.oura_days.length, 2);
+  assert.doesNotMatch(CHECK_FAILED, /deleted/);
   // Codex review, Nov 18: another sync's error handler writes over DELETING; the cleanup still finishes.
   state.oura_connections[0].last_error = "Oura login expired. Reconnect Oura in the app. (400)";
   failing = false;
@@ -426,15 +476,7 @@ test("a cleanup that finds a newer login than the refused one deletes no days an
   const state = linked(stored());
   // The winner of a refresh race saves its new login just before the refused login's delete.
   let once = true;
-  const admin = fakeDb(state);
-  const from = admin.from;
-  admin.from = (table) => {
-    const q = from(table);
-    if (table !== "oura_tokens" || !once) return q;
-    const del = q.delete;
-    q.delete = () => { once = false; state.oura_tokens = [login({ refresh_token: "made-up-winner-refresh" })]; return del(); };
-    return q;
-  };
+  const admin = fakeDb(state, { beforeRpc: (name) => { if (once && name === "oura_revoke_login") { once = false; state.oura_tokens = [login({ refresh_token: "made-up-winner-refresh" })]; } } });
   await assert.rejects(forgetRevoked(admin, U, MARK, "made-up-refresh"), (e) => e.message === NEWER_LOGIN);
   assert.equal(state.oura_tokens.length, 1);
   assert.equal(state.oura_days.length, 2);
@@ -454,21 +496,21 @@ test("a reconnect saves the new login and starts a new connection", async () => 
   assert.equal(state.oura_days.length, 2);
 });
 
-test("a reconnect whose connection save fails keeps the new login, and the next sync keeps the days", async () => {
-  const state = linked(stored());
-  state.oura_connections[0].last_error = DELETING;
-  const admin = fakeDb(state, { failUpsert: (table) => table === "oura_connections" });
-  assert.equal(await quiet(() => saveLogin(admin, U, fresh, NOW)), "error");
-  assert.equal(state.oura_tokens.length, 1);
-  assert.equal(state.oura_tokens[0].refresh_token, fresh.refresh_token);
-  assert.deepEqual(state.oura_connections, [{ user_id: U, connected_at: MARK, last_error: null }]);
-  // The next sync still finds the old connection, now with the new login: it uses it and deletes nothing.
-  const sync = fakeDb(state);
-  assert.equal(await accessToken(sync, U, await connectionMark(sync, U), async () => { throw new Error("no refresh needed"); }, { ...fast, now: Date.parse(NOW) }), fresh.access_token);
-  assert.equal(state.oura_days.length, 2);
+test("a reconnect whose save fails changes nothing: the old login, connection and days stay, and the next sync uses them", async () => {
+  for (const hooks of [{ failUpsert: (table) => table === "oura_connections" }, { failRpc: (name) => name === "oura_save_login" }]) {
+    const state = linked(stored());
+    const before = structuredClone(state);
+    assert.equal(await quiet(() => saveLogin(fakeDb(state, hooks), U, fresh, NOW)), "error");
+    assert.deepEqual(state.oura_tokens, before.oura_tokens);
+    assert.deepEqual(state.oura_connections, before.oura_connections);
+    assert.deepEqual(state.oura_days, before.oura_days);
+    const sync = fakeDb(state);
+    assert.equal(await accessToken(sync, U, await connectionMark(sync, U), async () => { throw new Error("no refresh needed"); }, { ...fast, now: Date.parse("2026-11-17T09:00:00Z") }), "made-up-access");
+    assert.equal(state.oura_days.length, 2);
+  }
 });
 
-test("a first connect whose connection save fails leaves no login behind", async () => {
+test("a first connect whose save fails leaves neither a login nor a connection", async () => {
   const state = { oura_tokens: [], oura_connections: [], oura_days: [] };
   const admin = fakeDb(state, { failUpsert: (table) => table === "oura_connections" });
   assert.equal(await quiet(() => saveLogin(admin, U, fresh, NOW)), "error");
@@ -476,11 +518,76 @@ test("a first connect whose connection save fails leaves no login behind", async
   assert.deepEqual(state.oura_connections, []);
 });
 
-test("a login whose connection can't be read, or whose token save fails, changes nothing", async () => {
-  for (const hooks of [{ failRead: (table) => table === "oura_connections" }, { failUpsert: (table) => table === "oura_tokens" }]) {
+test("an answer lost after the save committed says error but deletes nothing, on a first connect or a reconnect", async () => {
+  for (const start of [{ oura_tokens: [], oura_connections: [], oura_days: [] }, linked(stored())]) {
+    const calls = [];
+    const admin = fakeDb(start, { loseAnswer: (name) => name === "oura_save_login", beforeRpc: (name) => calls.push(name) });
+    const from = admin.from;
+    admin.from = (table) => { calls.push(table); return from(table); };
+    assert.equal(await quiet(() => saveLogin(admin, U, fresh, NOW)), "error");
+    // One database call, and no follow-up delete.
+    assert.deepEqual(calls, ["oura_save_login"]);
+    assert.deepEqual(start.oura_tokens, [{ user_id: U, ...fresh, updated_at: NOW }]);
+    assert.deepEqual(start.oura_connections, [{ user_id: U, connected_at: NOW, last_sync: null, last_error: null }]);
+  }
+});
+
+test("a reconnect clears a recorded removal, so the old connection's stale cleanup deletes nothing new", async () => {
+  const state = linked(stored());
+  state.oura_revoke_intents = [{ user_id: U, conn: MARK, kind: "revoked" }];
+  state.oura_tokens = [];
+  assert.equal(await saveLogin(fakeDb(state), U, fresh, NOW), "connected");
+  assert.deepEqual(state.oura_revoke_intents, []);
+  state.oura_days.push({ user_id: U, day: "2026-11-19", data: { conn: NOW }, updated_at: "z" });
+  const before = structuredClone(state);
+  await assert.rejects(finishRevoked(fakeDb(state), U, MARK), /^Error: Oura isn't connected$/);
+  await assert.rejects(forgetRevoked(fakeDb(state), U, MARK, "made-up-refresh"), /^Error: Oura isn't connected$/);
+  assert.deepEqual(state, before);
+});
+
+test("no login and no recorded removal: the sync asks for a reconnect and keeps every day", async () => {
+  // A connection left without a login by an older version (its message may even say DELETING): not proof of a revoke.
+  for (const message of [null, DELETING, REVOKED]) {
     const state = linked(stored());
-    const before = structuredClone(state);
-    assert.equal(await quiet(() => saveLogin(fakeDb(state, hooks), U, fresh, NOW)), "error");
-    assert.deepEqual(state, before);
+    state.oura_tokens = [];
+    state.oura_connections[0].last_error = message;
+    const before = structuredClone(state.oura_days);
+    for (let round = 0; round < 2; round++) {
+      await assert.rejects(accessToken(fakeDb(state), U, MARK, async () => { throw new Error("no login, so Oura is never asked"); }, fast), (e) => e.message === RECONNECT);
+    }
+    assert.deepEqual(state.oura_days, before);
+  }
+  assert.match(RECONNECT, /^Oura login expired/);
+  assert.doesNotMatch(RECONNECT, /deleted/);
+  // A removal recorded for another connection doesn't count either.
+  const other = linked(stored());
+  other.oura_tokens = [];
+  other.oura_revoke_intents = [{ user_id: U, conn: "2026-11-15T10:00:00+00:00", kind: "revoked" }];
+  await assert.rejects(finishRevoked(fakeDb(other), U, MARK), (e) => e.message === RECONNECT);
+  assert.equal(other.oura_days.length, 2);
+});
+
+test("Disconnect removes the login, days and connection; a failed second step is finished by a retry or by the next sync", async () => {
+  const other = { user_id: "user-b", day: "2026-11-15", data: { steps: 9 }, updated_at: "x" };
+  const done = linked([...stored(), other]);
+  await disconnectOura(fakeDb(done), U);
+  assert.deepEqual(done.oura_tokens, []);
+  assert.deepEqual(done.oura_connections, []);
+  assert.deepEqual(done.oura_days, [other]);
+  assert.deepEqual(done.oura_revoke_intents, []);
+
+  for (const finish of ["retry", "sync"]) {
+    const state = linked([...stored(), other]);
+    await assert.rejects(disconnectOura(fakeDb(state, { failDelete: (table) => table === "oura_days" }), U), /couldn't be removed/);
+    assert.deepEqual(state.oura_tokens, []);
+    assert.equal(state.oura_days.length, 3);
+    assert.deepEqual(state.oura_revoke_intents, [{ user_id: U, conn: MARK, kind: "disconnect" }]);
+    // Another sync's message written over the connection changes nothing: the record decides.
+    state.oura_connections[0].last_error = "made-up overwritten message";
+    if (finish === "retry") await disconnectOura(fakeDb(state), U);
+    else await assert.rejects(finishRevoked(fakeDb(state), U, MARK), /^Error: Oura isn't connected$/);
+    assert.deepEqual(state.oura_days, [other], finish);
+    assert.deepEqual(state.oura_connections, [], finish);
+    assert.deepEqual(state.oura_revoke_intents, [], finish);
   }
 });
