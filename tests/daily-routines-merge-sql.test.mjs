@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 
 const ROOT = new URL("..", import.meta.url);
 const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
+const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -200,6 +201,9 @@ test.before(async () => {
   assert.match(sql, /grant execute on function public\.merge_user_data\(jsonb\) to authenticated/);
   assert.doesNotMatch(sql, /\bdrop\s+table\b/i);
   assert.doesNotMatch(previous, /dailyRoutines/);
+  assert.doesNotMatch(sql, /daily_routines_order_stamp/);
+  assert.match(readSql(STEP), /daily_routines_order_stamp/);
+  assert.doesNotMatch(readSql(STEP), /function\s+public\.merge_user_data/i);
 
   const files = readdirSync(filePath("supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
   const definedIn = files.filter((name) => /function\s+public\.merge_user_data/i.test(readSql(`supabase/migrations/${name}`)));
@@ -246,7 +250,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -584,6 +588,36 @@ test("normalized tie-breaks match mergeDailyRoutines", () => {
   }
 });
 
+test("a future step and an undone dose match the client", () => {
+  const now = 8_000_000;
+  const base = {
+    id: "log_item_a_2026-11-19",
+    itemId: "item_a",
+    day: "2026-11-19",
+    status: "done",
+    amount: 400,
+    unit: "mcg",
+    note: "extra dose note",
+    at: 4000,
+    updatedAt: 5000,
+    sourceAt: 9_000_000_000_000,
+  };
+  const cases = [
+    ["restore step 3 beats undo step 2", { ...base, deletedAt: null, sourceStep: 3 }, { ...base, deletedAt: 5000, undone: true, sourceStep: 2 }],
+    ["legacy supersedes loses to step 2", { ...base, deletedAt: null, supersedes: true }, { ...base, deletedAt: null, sourceStep: 2 }],
+    ["undo step 3 beats restore step 2", { ...base, deletedAt: 5000, undone: true, sourceStep: 3 }, { ...base, deletedAt: null, sourceStep: 2 }],
+    ["equal steps keep the newer stored stamp", { ...base, updatedAt: 4000, deletedAt: null, sourceStep: 2 }, { ...base, updatedAt: 6000, deletedAt: null, sourceStep: 2 }],
+  ];
+  for (const [label, storedLog, incomingLog] of cases) {
+    const stored = { updatedAt: 1, logs: [storedLog], prefs: { lastBlockId: null, updatedAt: 1 } };
+    const incoming = { updatedAt: 1, logs: [incomingLog], prefs: { lastBlockId: null, updatedAt: 1 } };
+    const client = mergeRoutines(stored, incoming, now);
+    const sql = sqlMerge(stored, incoming, now);
+    const pick = (store) => (store.logs || []).find((row) => row && row.id === base.id);
+    assert.deepEqual(pick(sql), pick(client), label);
+  }
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -662,7 +696,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
