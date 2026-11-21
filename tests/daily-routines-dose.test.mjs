@@ -207,7 +207,56 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     const live = merged.logs.filter((row) => isLive(row) && row.day === "2026-11-18");
     assert.equal(live.length, 1);
     assert.equal(live[0].amount, 250);
-    assert.equal(merged.logs.some((row) => isLive(row) && row.day === "2026-11-19"), false);
+  });
+
+  test("a move onto a days-ahead tombstone keeps one live dose", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const source = liveLog(item.id);
+    const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    const destId = `log_${item.id}_2026-11-18`;
+    app.state.dailyRoutines.logs.push({
+      id: destId,
+      itemId: item.id,
+      day: "2026-11-18",
+      status: "done",
+      amount: 250,
+      unit: "mcg",
+      updatedAt: future,
+      deletedAt: future,
+    });
+    const remote = structuredClone(app.state.dailyRoutines);
+    assert.equal(editRoutineLog(app.state, source.id, { amount: 250, day: "2026-11-18" }), true);
+    for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, remote), mergeDailyRoutines(remote, app.state.dailyRoutines)]) {
+      const rows = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].day, "2026-11-18");
+      assert.equal(rows[0].amount, 250);
+    }
+  });
+
+  test("moving a days-ahead log does not bring the old day back", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const source = liveLog(item.id);
+    const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    source.updatedAt = future;
+    app.state.dailyRoutines.updatedAt = future;
+    const remote = structuredClone(app.state.dailyRoutines);
+    assert.equal(editRoutineLog(app.state, source.id, { amount: 250, day: "2026-11-18" }), true);
+    for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, remote), mergeDailyRoutines(remote, app.state.dailyRoutines)]) {
+      const rows = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].day, "2026-11-18");
+      assert.equal(isLive(merged.logs.find((row) => row.id === source.id)), false);
+      assert.equal(merged.logs.some((row) => isLive(row) && row.day === "2026-11-19"), false);
+    }
   });
 
   test("a date-only edit keeps the stored amount without rounding it", () => {
@@ -297,6 +346,57 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(different.amount, 500);
     assert.equal(different.unit, "mcg");
     assert.equal(different.status, "partial");
+  });
+
+  test("IU and mL match only in the same unit", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 2, unit: "IU" }), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = liveLog(item.id);
+    assert.equal(logged.unit, "IU");
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: "2", day: "2026-11-19" }), true);
+    const same = app.state.dailyRoutines.logs.find((row) => row.id === logged.id);
+    assert.equal(same.status, "done");
+    assert.equal(same.unit, "IU");
+
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id,
+      name: "Example Compound A",
+      kind: "dose",
+      amount: "500",
+      unit: "mL",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: "500", day: "2026-11-19" }), true);
+    const mixed = app.state.dailyRoutines.logs.find((row) => row.id === logged.id);
+    assert.equal(mixed.unit, "IU");
+    assert.equal(mixed.amount, 500);
+    assert.equal(mixed.status, "partial");
+
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound B", kind: "dose", amount: 2, unit: "mL" }), true);
+    const liquid = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound B");
+    assert.equal(logRoutineItem(app.state, liquid.id), true);
+    const poured = liveLog(liquid.id);
+    assert.equal(poured.unit, "mL");
+    assert.equal(editRoutineLog(app.state, poured.id, { amount: "2", day: "2026-11-19" }), true);
+    assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === poured.id).status, "done");
+
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: liquid.id,
+      name: "Example Compound B",
+      kind: "dose",
+      amount: "500",
+      unit: "mcg",
+      blockId: morning,
+      blockIds: [morning],
+    }), true);
+    assert.equal(editRoutineLog(app.state, poured.id, { amount: "500", day: "2026-11-19" }), true);
+    const crossed = app.state.dailyRoutines.logs.find((row) => row.id === poured.id);
+    assert.equal(crossed.unit, "mL");
+    assert.equal(crossed.status, "partial");
   });
 
   test("editing a log follows the saved dose, not the item's current kind", () => {

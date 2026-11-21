@@ -235,7 +235,14 @@ function normalizeCompound(raw, now = Date.now()) {
 function reducedLogTombstone(log, deletedAt, updatedAt) {
   const status = logStatus(log && log.status) || "done";
   const at = Math.max(num(updatedAt), num(deletedAt));
-  return { id: log.id, day: log.day, status, updatedAt: at, deletedAt: num(deletedAt) || at };
+  const row = { id: log.id, day: log.day, status, updatedAt: at, deletedAt: num(deletedAt) || at };
+  /* A day move of a days-ahead log has to stay ahead of the other phone's
+     copy of that same row. The five keys stay the marker when there is none. */
+  if (typeof log.sourceAt === "number" && log.sourceAt > at) {
+    row.sourceAt = log.sourceAt;
+    row.supersedes = true;
+  }
+  return row;
 }
 
 /* Undo hides the log without dropping the dose. A date-range delete still

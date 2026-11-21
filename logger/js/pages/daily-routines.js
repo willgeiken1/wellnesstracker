@@ -592,7 +592,7 @@ export function editRoutineLog(state, logId, draft) {
         deletedAt: null,
       };
     }
-    let next = upsertEntity(store, "logs", payload, at);
+    let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
     if (!wrote(next, "logs", nextId, at)) return null;
     if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
     return next;
