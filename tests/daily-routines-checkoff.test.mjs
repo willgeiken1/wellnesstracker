@@ -549,7 +549,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("a restore after a far-future undo stays live on the next merge", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    addDose(morning);
     const item = app.state.dailyRoutines.items[0];
     const id = routineLogId(item.id, "2026-11-19");
     const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
@@ -583,7 +583,7 @@ describe("routine check-off", { concurrency: false }, () => {
   test("an undo of a days-ahead check-off still wins the later merge", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
-    addExampleRoutineItem(app.state, morning);
+    addDose(morning);
     const item = app.state.dailyRoutines.items[0];
     const id = routineLogId(item.id, "2026-11-19");
     const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
