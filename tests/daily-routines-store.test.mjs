@@ -56,7 +56,7 @@ const {
   revisePlanEntity,
   seedDefaultBlocks,
 } = await import("../logger/js/shared/daily-routines-store.js");
-const { logRoutineItem, undoRoutineLog } = await import("../logger/js/pages/daily-routines.js");
+const { logRoutineItem, restoreRoutineLog, undoRoutineLog } = await import("../logger/js/pages/daily-routines.js");
 const { readFileSync } = await import("node:fs");
 const { applyPurges, buildExportFiles, stripRange } = await import("../logger/js/shared/purge.js");
 
@@ -329,6 +329,50 @@ test("an earlier range delete does not strip a later undone log", () => {
   assert.equal(parsed.kept.amount, 250);
   assert.equal(parsed.kept.note, "extra dose note");
   assert.deepEqual(parsed.stripped, ["day", "deletedAt", "id", "status", "updatedAt"]);
+});
+
+test("a same-stamp five-key marker does not erase a later undo, and restore keeps its dose", () => {
+  const id = "log_item-a_2026-11-01";
+  const undone = log(id, "2026-11-01", 250, 1500, {
+    note: "extra dose note",
+    deletedAt: 5000,
+    updatedAt: 5000,
+    undone: true,
+  });
+  const marker = { id, day: "2026-11-01", status: "done", updatedAt: 5000, deletedAt: 5000 };
+  const plan = compound("compound-a", 500, 1000, { unit: "mg" });
+  const local = phoneStore([item("item-a", "Example Compound A", 1000)], [undone], [plan]);
+  const remote = phoneStore([item("item-a", "Example Compound A", 1000)], [marker], [plan]);
+  const merged = mergeDailyRoutines(local, remote, 8_000_000);
+  const state = {
+    sessions: [],
+    purges: [{ from: "2026-11-01", to: "2026-11-01", at: 3000, deletedAt: 3000, synced: true }],
+    dailyRoutines: merged,
+  };
+  applyPurges(state, 8_000_000);
+  const kept = state.dailyRoutines.logs.find((row) => row.id === id);
+  assert.equal(kept.amount, 250);
+  assert.equal(kept.unit, "mcg");
+  assert.equal(kept.note, "extra dose note");
+  assert.equal(kept.undone, true);
+
+  signIn();
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-21";
+  app.routineNow = () => new Date(2026, 10, 21, 9, 0, 0);
+  try {
+    app.state = state;
+    assert.equal(restoreRoutineLog(app.state, id), true);
+    const restored = app.state.dailyRoutines.logs.find((row) => row.id === id);
+    assert.equal(isLive(restored), true);
+    assert.equal(restored.amount, 250);
+    assert.equal(restored.unit, "mcg");
+    assert.equal(restored.note, "extra dose note");
+  } finally {
+    signOut();
+  }
 });
 
 test("a purged log is not restored by merging the other phone's older copy", () => {
