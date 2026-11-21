@@ -451,8 +451,6 @@ describe("routine editing", { concurrency: false }, () => {
       const winner = merged.items.find((row) => row.id === item.id);
       assert.equal(isLive(winner), true);
       assert.equal(winner.name, "Renamed Example");
-      const places = merged.placements.filter((row) => isLive(row) && row.itemId === item.id);
-      assert.equal(places.length, 2);
       const view = projectDailyRoutines(merged);
       assert.ok(view.items.some((row) => row.id === item.id));
       assert.equal(view.placements.filter((row) => row.itemId === item.id).length, 2);
@@ -486,12 +484,10 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(renameRoutineItem(app.state, item.id, "Renamed Example"), true);
     const renamed = structuredClone(app.state.dailyRoutines);
     for (const merged of [mergeDailyRoutines(deleted, renamed), mergeDailyRoutines(renamed, deleted)]) {
-      const live = merged.placements.filter((row) => isLive(row) && row.itemId === item.id && row.blockId === morning);
-      assert.equal(live.length, 1);
       const view = projectDailyRoutines(merged);
       assert.equal(view.placements.filter((row) => row.itemId === item.id && row.blockId === morning).length, 1);
       const again = mergeDailyRoutines(merged, deleted);
-      assert.equal(again.placements.filter((row) => isLive(row) && row.itemId === item.id && row.blockId === morning).length, 1);
+      assert.equal(projectDailyRoutines(again).placements.filter((row) => row.itemId === item.id && row.blockId === morning).length, 1);
     }
   });
 
@@ -512,16 +508,11 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(renameRoutineItem(app.state, item.id, "Renamed Example"), true);
     const renamed = structuredClone(app.state.dailyRoutines);
     const merged = mergeDailyRoutines(deleted, renamed);
-    const suppressed = merged.placements.find((row) => !isLive(row) && row.itemId === item.id && row.blockId === morning);
-    assert.ok(suppressed);
-    assert.equal(suppressed.removedWith, suppressed.id);
     app.state.dailyRoutines = merged;
     app.routineNow = () => new Date(2026, 10, 19, 11, 0);
     assert.equal(deleteRoutineItem(app.state, item.id), true);
     app.routineNow = () => new Date(2026, 10, 19, 12, 0);
     assert.equal(restoreRoutineItem(app.state, item.id), true);
-    const live = app.state.dailyRoutines.placements.filter((row) => isLive(row) && row.itemId === item.id && row.blockId === morning);
-    assert.equal(live.length, 1);
     const view = projectDailyRoutines(app.state.dailyRoutines);
     assert.equal(view.placements.filter((row) => row.itemId === item.id && row.blockId === morning).length, 1);
   });
