@@ -8,6 +8,7 @@ import {
   routineId,
   routineLogId,
   markLogUndone,
+  futureCarry,
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
@@ -105,8 +106,9 @@ function writeStamp(store, clock, id) {
 function carryFuture(payload, store, id) {
   const log = (store.logs || []).find((row) => row && row.id === id);
   const stored = log ? maxStamp(log.updatedAt, log.deletedAt) : 0;
-  if (!log || typeof log.sourceAt !== "number" || !(log.sourceAt > stored)) return payload;
-  return { ...payload, sourceAt: log.sourceAt, supersedes: true };
+  const carried = futureCarry(log, stored);
+  if (!carried) return payload;
+  return { ...payload, ...carried };
 }
 
 function prefStamp(store, clock) {

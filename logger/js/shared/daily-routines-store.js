@@ -161,8 +161,26 @@ function entityBase(raw, now = Date.now()) {
   const carried = typeof raw.sourceAt === "number" && raw.sourceAt > cap ? raw.sourceAt : 0;
   if (carried) base.sourceAt = carried;
   else if (rawStamp > cap) base.sourceAt = rawStamp;
-  if (raw.supersedes === true && base.sourceAt) base.supersedes = true;
+  if (base.sourceAt) {
+    const step = futureStep(raw);
+    if (step > 0) base.sourceStep = step;
+  }
   return base;
+}
+
+/* How many replacements sit above a remembered future stamp. A boolean
+   supersedes from an older row counts as one step. */
+function futureStep(entity) {
+  if (typeof entity.sourceStep === "number" && entity.sourceStep > 0) return Math.floor(entity.sourceStep);
+  return entity.supersedes === true ? 1 : 0;
+}
+
+/* The next write of a row whose raw stamp is still ahead of the stored one.
+   The stored millisecond can clamp back onto the previous write, so the step
+   is what keeps a later restore ahead of the undo it replaces. */
+export function futureCarry(log, storedCeiling) {
+  if (!log || typeof log.sourceAt !== "number" || !(log.sourceAt > storedCeiling)) return null;
+  return { sourceAt: log.sourceAt, sourceStep: futureStep(log) + 1 };
 }
 
 function normalizeBlock(raw, now = Date.now()) {
@@ -229,12 +247,12 @@ function undoneLog(log, deletedAt, updatedAt) {
     undone: true,
   };
   if (log.rest === true) row.rest = true;
-  /* An undo of a row that already carries a days-ahead stamp has to sort one
-     step above that stamp, the same way a check-off that replaces it does.
-     Otherwise the older live row wins once a tie no longer prefers the tombstone. */
+  /* Copy the step. Incrementing here would add one on every normalize. The
+     writer bumps the step once, through futureCarry, before this runs. */
   if (typeof log.sourceAt === "number" && log.sourceAt > at) {
     row.sourceAt = log.sourceAt;
-    row.supersedes = true;
+    const step = futureStep(log);
+    if (step > 0) row.sourceStep = step;
   }
   return row;
 }
@@ -253,7 +271,7 @@ function normalizeLog(raw, now = Date.now()) {
     if (raw.undone === true) return undoneLog({ ...raw, status }, base.deletedAt, base.updatedAt);
     const reduced = reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
     if (base.sourceAt) reduced.sourceAt = base.sourceAt;
-    if (base.supersedes && reduced.sourceAt) reduced.supersedes = true;
+    if (base.sourceStep && reduced.sourceAt) reduced.sourceStep = base.sourceStep;
     return reduced;
   }
   return {
@@ -291,17 +309,16 @@ function stableStringify(value) {
   return JSON.stringify(value) ?? "null";
 }
 
-/* Higher stamp wins. When those match, the newer stored stamp wins, so a
-   restore is not erased by an older undo that ranks at the same future step.
-   A remaining tie keeps the tombstone, then the greater stable JSON.
-   A stamp past the cap is remembered on sourceAt so a later pull, which clamps
-   that same raw stamp to a higher ceiling, cannot pass a row that already
-   replaced it. supersedes sorts one step above the raw stamp it replaced. */
+/* Higher stamp wins. A remembered future stamp sorts at sourceAt plus the
+   number of replacements that already beat it, so a later restore stays ahead
+   of an undo even when the clamp stores both at the same millisecond. When
+   those match, the newer stored stamp wins. A remaining tie keeps the
+   tombstone, then the greater stable JSON. */
 function orderStamp(entity) {
   const stored = rowStamp(entity);
   const src = typeof entity.sourceAt === "number" && entity.sourceAt > stored ? entity.sourceAt : stored;
-  if (entity.supersedes === true && src > stored) return src + 1;
-  return src;
+  if (!(src > stored)) return stored;
+  return src + futureStep(entity);
 }
 
 function beats(candidate, current) {
@@ -323,6 +340,7 @@ function normalizeList(list, normalize, now) {
   for (const raw of list) {
     const entity = normalize(raw, now);
     if (!entity) continue;
+    if (Object.hasOwn(entity, "supersedes")) delete entity.supersedes;
     const prev = byId.get(entity.id);
     if (!prev || beats(entity, prev)) byId.set(entity.id, entity);
   }
@@ -508,7 +526,9 @@ export function markLogUndone(store, id, now = Date.now()) {
     if (!log || log.id !== id || !isLive(log)) return log;
     changed = true;
     const deletedAt = clampStamp(now, now) || now;
-    return undoneLog(log, deletedAt, Math.max(rowStamp(log), deletedAt));
+    const at = Math.max(rowStamp(log), deletedAt);
+    const carried = futureCarry(log, at);
+    return undoneLog(carried ? { ...log, ...carried } : log, deletedAt, at);
   });
   if (changed) normalized.updatedAt = Math.max(num(normalized.updatedAt), clampStamp(now, now));
   return normalized;

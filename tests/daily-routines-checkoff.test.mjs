@@ -501,6 +501,28 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(kept.amount, 250);
   });
 
+  test("a later restore outranks an undo that shares its stored stamp", () => {
+    const id = "log_item_a_2026-11-19";
+    const shared = {
+      id,
+      itemId: "item_a",
+      day: "2026-11-19",
+      status: "done",
+      amount: 250,
+      unit: "mcg",
+      updatedAt: 5000,
+      sourceAt: 9_000_000_000_000,
+    };
+    const undone = { ...shared, deletedAt: 5000, undone: true, sourceStep: 2 };
+    const restored = { ...shared, deletedAt: null, sourceStep: 3 };
+    for (const merged of [mergeDailyRoutines({ logs: [restored] }, { logs: [undone] }), mergeDailyRoutines({ logs: [undone] }, { logs: [restored] })]) {
+      const kept = merged.logs.find((row) => row.id === id);
+      assert.equal(isLive(kept), true);
+      assert.equal(kept.sourceStep, 3);
+      assert.equal(kept.amount, 250);
+    }
+  });
+
   test("a restore after a far-future undo stays live on the next merge", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
