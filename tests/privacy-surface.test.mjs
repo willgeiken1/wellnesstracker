@@ -201,6 +201,8 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(policy, /That is the copy on this device, in your account, in the Settings backup, and in the privacy export/);
   assert.match(policy, /Undoing a dose log keeps the log, with its amount, unit and note, marked as undone, so restoring it brings them back/);
   assert.match(policy, /Deleting a date range that includes it replaces it with the marker and leaves the layout/);
+  assert.match(policy, /A dose log added or changed after that delete stays/);
+  assert.match(policy, /The privacy export includes an undone dose log with its amount, unit, and note/);
   assert.doesNotMatch(policy, /including the amount/);
   assert.match(policy, /Crash reports and usage analytics do not include dose amounts or item names/);
   assert.match(policy, /does arithmetic on this device from the numbers you type/);
@@ -210,6 +212,7 @@ test("the web privacy policy describes what daily routines store and sync", () =
   assert.match(page, /Crash reports and usage analytics do not include dose amounts or item names/);
   assert.match(page, /No workouts, food, notes, photos, email, dose amounts, or item names/);
   assert.match(page, /A deleted dose log keeps only a small marker/);
+  assert.match(page, /Undoing a dose log keeps the log, with its amount, unit and note, marked as undone, so restoring it brings them back/);
   assert.match(page, /The id links the marker to the routine item\. The amount, the unit, and the dose details are removed/);
   assert.doesNotMatch(page, /including the amount/);
   assert.match(page, /It is not saved and it is not a recommendation/);
@@ -241,14 +244,31 @@ test("the settings backup and the privacy export include the routine layout and 
   const byName = Object.fromEntries(files.map((file) => [file.name, file.text]));
   assert.match(byName["about.txt"], /A deleted dose log in daily_routine_logs\.csv is only a marker: its id \(which links it to the routine item\), the day, its status, and when it was deleted/);
   assert.match(byName["about.txt"], /The amount, the unit, and the dose details are not in that row/);
+  assert.match(byName["about.txt"], /An undone dose log keeps the amount, the unit, the note, and the logged time, and the undone column says yes/);
   assert.match(byName["about.txt"], /reconstitution calculator is not stored/);
   assert.match(byName["daily_routine_blocks.csv"], /block-1,Morning routine,0,/);
   assert.match(byName["daily_routine_items.csv"], /item-1,Example Item,dose,1,mcg,/);
   assert.match(byName["daily_routine_placements.csv"], /block-1,item-1,Morning routine,Example Item,0,/);
   const logLines = byName["daily_routine_logs.csv"].trim().split("\r\n");
-  assert.equal(logLines[0], "id,item_id,item,day,status,amount,unit,time,deleted");
-  assert.equal(logLines.find((line) => line.startsWith("log-1,")), "log-1,,,2026-11-01,done,,,,1970-01-01T00:00:04.000Z");
-  assert.equal(logLines.find((line) => line.startsWith("log-2,")), "log-2,item-1,Example Item,2026-11-02,partial,0.25,mcg,1970-01-01T00:00:00.020Z,");
+  assert.equal(logLines[0], "id,item_id,item,day,status,amount,unit,time,deleted,undone,note");
+  assert.equal(logLines.find((line) => line.startsWith("log-1,")), "log-1,,,2026-11-01,done,,,,1970-01-01T00:00:04.000Z,,");
+  assert.equal(logLines.find((line) => line.startsWith("log-2,")), "log-2,item-1,Example Item,2026-11-02,partial,0.25,mcg,1970-01-01T00:00:00.020Z,,,");
+  data.dailyRoutines.logs.push({
+    id: "log-undo",
+    itemId: "item-1",
+    day: "2026-11-01",
+    status: "done",
+    amount: 250,
+    unit: "mcg",
+    note: "extra dose note",
+    at: 1500,
+    updatedAt: 5000,
+    deletedAt: 5000,
+    undone: true,
+  });
+  const undoneFiles = buildExportFiles(data);
+  const undoneCsv = Object.fromEntries(undoneFiles.map((file) => [file.name, file.text]))["daily_routine_logs.csv"];
+  assert.match(undoneCsv, /log-undo,item-1,Example Item,2026-11-01,done,250,mcg,1970-01-01T00:00:01\.500Z,1970-01-01T00:00:05\.000Z,yes,extra dose note/);
   assert.doesNotMatch(logLines.find((line) => line.startsWith("log-1,")), /Example Item|item-1|mcg|,1,/);
   assert.match(byName["daily_routine_preferences.csv"], /last_block,Morning routine/);
   assert.match(byName["daily_routine_preferences.csv"], /focus_mode,on/);
