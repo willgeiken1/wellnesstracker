@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 const ROOT = new URL("..", import.meta.url);
 const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
 const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
+const ORDER_AT = "supabase/migrations/20261121140000_daily_routines_order_at.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -204,6 +205,8 @@ test.before(async () => {
   assert.doesNotMatch(sql, /daily_routines_order_stamp/);
   assert.match(readSql(STEP), /daily_routines_order_stamp/);
   assert.doesNotMatch(readSql(STEP), /function\s+public\.merge_user_data/i);
+  assert.match(readSql(ORDER_AT), /daily_routines_apply_order_at/);
+  assert.doesNotMatch(readSql(ORDER_AT), /function\s+public\.merge_user_data/i);
 
   const files = readdirSync(filePath("supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
   const definedIn = files.filter((name) => /function\s+public\.merge_user_data/i.test(readSql(`supabase/migrations/${name}`)));
@@ -250,7 +253,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -618,6 +621,45 @@ test("a future step and an undone dose match the client", () => {
   }
 });
 
+test("a newer orderAt reaches the other phone on the server and the client", () => {
+  const now = 8_000_000;
+  const block = (id, order, orderAt, extra = {}) => ({
+    id,
+    name: id === "block-night" ? "Night routine" : "Morning routine",
+    color: "citrus",
+    order,
+    orderAt,
+    updatedAt: 100,
+    deletedAt: null,
+    ...extra,
+  });
+  const prefs = { lastBlockId: null, updatedAt: 1 };
+  const pairs = [
+    ["one block takes the newer orderAt", { updatedAt: 100, blocks: [block("block-morning", 0, 50)], prefs }, { updatedAt: 100, blocks: [block("block-morning", 1, 80)], prefs }],
+    ["a tombstone keeps its order over a later reorder", { updatedAt: 200, blocks: [block("block-morning", 0, 50, { updatedAt: 200, deletedAt: 200 })], prefs }, { updatedAt: 100, blocks: [block("block-morning", 1, 300)], prefs }],
+  ];
+  for (const [label, stored, incoming] of pairs) {
+    const client = mergeRoutines(stored, incoming, now);
+    const sql = sqlMerge(stored, incoming, now);
+    assert.deepEqual(sql.blocks, client.blocks, label);
+  }
+  const stored = {
+    updatedAt: 100,
+    blocks: [block("block-morning", 0, 10), block("block-night", 1, 10)],
+    prefs,
+  };
+  const incoming = {
+    updatedAt: 100,
+    blocks: [block("block-morning", 1, 90), block("block-night", 0, 90)],
+    prefs,
+  };
+  const client = mergeRoutines(stored, incoming, now);
+  const sql = sqlMerge(stored, incoming, now);
+  const orders = (store) => store.blocks.slice().sort((a, b) => a.id < b.id ? -1 : 1).map((row) => [row.id, row.order, row.orderAt]);
+  assert.deepEqual(orders(sql), orders(client), "a swap is the same on both sides");
+  assert.deepEqual(orders(sql), [["block-morning", 1, 90], ["block-night", 0, 90]]);
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -696,7 +738,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
