@@ -240,7 +240,8 @@ function reducedLogTombstone(log, deletedAt, updatedAt) {
      copy of that same row. The five keys stay the marker when there is none. */
   if (typeof log.sourceAt === "number" && log.sourceAt > at) {
     row.sourceAt = log.sourceAt;
-    row.supersedes = true;
+    const step = futureStep(log) + 1;
+    if (step > 0) row.sourceStep = step;
   }
   return row;
 }

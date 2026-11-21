@@ -47,6 +47,8 @@ const {
   editRoutineLog,
   logRoutineItem,
   loggedAmountText,
+  restoreRoutineLog,
+  undoRoutineLog,
   loggedTodayCount,
   parseRoutineAmount,
   renameRoutineBlock,
@@ -259,6 +261,28 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     }
   });
 
+  test("moving an undone-then-restored days-ahead log does not bring the old day back", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const source = liveLog(item.id);
+    const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    source.updatedAt = future;
+    app.state.dailyRoutines.updatedAt = future;
+    assert.equal(undoRoutineLog(app.state, source.id), true);
+    assert.equal(restoreRoutineLog(app.state, source.id), true);
+    const remote = structuredClone(app.state.dailyRoutines);
+    const restored = app.state.dailyRoutines.logs.find((row) => row.id === source.id);
+    assert.ok(restored.sourceStep > 1);
+    assert.equal(editRoutineLog(app.state, source.id, { amount: 250, day: "2026-11-18" }), true);
+    for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, remote), mergeDailyRoutines(remote, app.state.dailyRoutines)]) {
+      const rows = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
+      assert.deepEqual(rows.map((row) => row.day), ["2026-11-18"]);
+    }
+  });
+
   test("a date-only edit keeps the stored amount without rounding it", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
@@ -356,6 +380,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(logRoutineItem(app.state, item.id), true);
     const logged = liveLog(item.id);
     assert.equal(logged.unit, "IU");
+    logged.amount = 1;
+    logged.status = "partial";
     assert.equal(editRoutineLog(app.state, logged.id, { amount: "2", day: "2026-11-19" }), true);
     const same = app.state.dailyRoutines.logs.find((row) => row.id === logged.id);
     assert.equal(same.status, "done");
