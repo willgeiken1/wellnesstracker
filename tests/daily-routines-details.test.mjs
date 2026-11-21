@@ -258,7 +258,12 @@ describe("routine details", { concurrency: false }, () => {
     assert.doesNotMatch(dailyRoutinesHTML(), new RegExp(SENTINEL));
     assert.equal(openRoutineDetails(check.id), true);
     assert.match(routineDetailsSheetHTML(), /This is a check/);
+    assert.match(routineDetailsSheetHTML(), /A tap logs it/);
     assert.doesNotMatch(routineDetailsSheetHTML(), /dr-details-note|mood|energy|stress|feeling/);
+    assert.equal(logRoutineItem(app.state, check.id), true);
+    assert.equal(openRoutineDetails(check.id, liveLog(check.id).id), true);
+    assert.match(routineDetailsSheetHTML(), /This check is logged\. Edit changes its day/);
+    assert.doesNotMatch(routineDetailsSheetHTML(), /A tap logs it/);
   });
 
   test("saving from the details page writes the note and the backdated time", () => {
