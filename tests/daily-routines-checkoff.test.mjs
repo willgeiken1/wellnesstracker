@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
@@ -279,6 +280,48 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(loggedTodayCount(left.logs, "2026-11-19"), 1);
     assert.equal(loggedTodayCount(right.logs, "2026-11-19"), 1);
     assert.equal(left.logs.filter((row) => row.itemId === item.id).length, 1);
+  });
+
+  test("a 66-character item id still logs, skips, and stays within 80 characters", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    const fitting = "a".repeat(65);
+    const longId = "b".repeat(66);
+    const maxId = "c".repeat(80);
+    assert.equal(routineLogId(fitting, "2026-11-19"), `log_${fitting}_2026-11-19`);
+    assert.equal(routineLogId(fitting, "2026-11-19").length, 80);
+    for (const itemId of [longId, maxId]) {
+      const readable = `log_${itemId}_2026-11-19`;
+      const expected = `log_${createHash("sha256").update(readable).digest("hex")}_2026-11-19`;
+      assert.equal(routineLogId(itemId, "2026-11-19"), expected);
+      assert.ok(expected.length <= 80);
+      const at = 1000;
+      let store = upsertEntity(app.state.dailyRoutines, "items", {
+        id: itemId,
+        name: "Example Compound A",
+        kind: "check",
+        compoundId: null,
+        deletedAt: null,
+      }, at);
+      store = upsertEntity(store, "placements", {
+        id: `place_${itemId.slice(0, 8)}`,
+        blockId: morning,
+        itemId,
+        order: 0,
+        deletedAt: null,
+      }, at);
+      assert.equal(putDailyRoutines(app.state, store), true);
+      assert.equal(logRoutineItem(app.state, itemId), true);
+      const logged = app.state.dailyRoutines.logs.find((row) => row.itemId === itemId);
+      assert.equal(logged.id, expected);
+      assert.equal(isLive(logged), true);
+      assert.equal(undoRoutineLog(app.state, logged.id), true);
+      assert.equal(skipRoutineItem(app.state, itemId), true);
+      const skipped = app.state.dailyRoutines.logs.find((row) => row.id === expected);
+      assert.equal(skipped.status, "skipped");
+      assert.equal(isLive(skipped), true);
+    }
+    assert.notEqual(routineLogId(longId, "2026-11-19"), routineLogId(maxId, "2026-11-19"));
   });
 
   test("after a two-phone merge one Undo reopens the row, in either merge order", () => {
