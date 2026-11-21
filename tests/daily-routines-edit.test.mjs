@@ -58,7 +58,7 @@ const {
   toggleRoutineCollapsed,
 } = await import("../logger/js/pages/daily-routines.js");
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
-const { emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, projectDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
+const { dedupePlacementPairs, emptyDailyRoutines, isLive, mergeDailyRoutines, normalizeDailyRoutines, projectDailyRoutines, routinePlacementId, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
 
 function pin(day = "2026-11-19") {
   app.today = () => day;
@@ -651,5 +651,15 @@ describe("routine editing", { concurrency: false }, () => {
     app.ROUTINES_ENABLED = false;
     assert.equal(dailyRoutinesHTML(), "");
     assert.equal(saveRoutineItem(app.state, { name: "Example Compound A", kind: "check", blockId: morning, blockIds: [morning] }), false);
+  });
+
+  test("a dead duplicate cannot tie the live placement on a second pass", () => {
+    const live = { id: "place_canon", blockId: "block-1", itemId: "item-a", order: 0, updatedAt: 101, deletedAt: null, removedWith: null };
+    const dead = { id: "place_legacy", blockId: "block-1", itemId: "item-a", order: 0, updatedAt: 100, deletedAt: 100, removedWith: null };
+    const once = dedupePlacementPairs([live, dead]);
+    const twice = dedupePlacementPairs(once);
+    const liveIds = (rows) => rows.filter((row) => !(row.deletedAt > 0)).map((row) => row.id);
+    assert.deepEqual(liveIds(once), ["place_canon"]);
+    assert.deepEqual(liveIds(twice), ["place_canon"]);
   });
 });
