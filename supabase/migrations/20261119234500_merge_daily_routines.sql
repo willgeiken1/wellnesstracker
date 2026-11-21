@@ -6,10 +6,12 @@
 -- are normalized the way the client normalizes them, then merged by id.
 -- Normalization trims and clips names, fills the default color, and sets
 -- order, kind, unit, and status the way mergeDailyRoutines does before it
--- compares rows. A row wins by max(updatedAt, deletedAt). A missing or
--- malformed stamp is 0. A stamp more than a day ahead is pulled back to
--- now + 1 day, the same window as homeV2. An equal stamp keeps the tombstone,
--- then the greater stable JSON of the normalized row. Numbers use
+-- compares rows. A row wins by its order stamp, then its stored stamp, then
+-- the tombstone, then the greater stable JSON. A missing or malformed stamp
+-- is 0. A stamp more than a day ahead is pulled back to now + 1 day, the same
+-- window as homeV2, and the raw stamp is kept on sourceAt. Each replacement
+-- adds one to sourceStep so a later restore stays ahead of an undo that
+-- clamps to the same millisecond. Numbers use
 -- JSON.stringify's form (1e-7, not 0.0000001). Object keys and that
 -- comparison use UTF-16 code units, on any database collation.
 -- A log tombstone keeps only id, day, status, updatedAt, and deletedAt.
@@ -475,6 +477,12 @@ declare
   start_date text;
   archived_at numeric;
   row jsonb;
+  raw_stamp numeric;
+  carried numeric;
+  cap numeric;
+  source_at numeric := 0;
+  source_step numeric := 0;
+  extras jsonb := '{}'::jsonb;
 begin
   if p_row is null or jsonb_typeof(p_row) is distinct from 'object' then
     return null;
@@ -491,6 +499,29 @@ begin
   deleted_at := public.daily_routines_clamp_ms(public.daily_routines_ms(p_row, 'deletedAt'), p_now);
   if deleted_at > 0 and updated_at < deleted_at then
     updated_at := deleted_at;
+  end if;
+
+  raw_stamp := greatest(
+    public.daily_routines_ms(p_row, 'updatedAt'),
+    public.daily_routines_ms(p_row, 'deletedAt')
+  );
+  carried := public.daily_routines_ms(p_row, 'sourceAt');
+  cap := coalesce(p_now, 0) + 86400000;
+  if carried > cap then
+    source_at := carried;
+  elsif raw_stamp > cap then
+    source_at := raw_stamp;
+  end if;
+  if source_at > 0 then
+    if public.daily_routines_ms(p_row, 'sourceStep') > 0 then
+      source_step := floor(public.daily_routines_ms(p_row, 'sourceStep'));
+    elsif coalesce(p_row->>'supersedes', '') = 'true' then
+      source_step := 1;
+    end if;
+    extras := jsonb_build_object('sourceAt', public.daily_routines_json_number(source_at));
+    if source_step > 0 then
+      extras := extras || jsonb_build_object('sourceStep', public.daily_routines_json_number(source_step));
+    end if;
   end if;
 
   if p_kind = 'placements' then
@@ -515,7 +546,7 @@ begin
         'status', status,
         'updatedAt', public.daily_routines_json_number(updated_at),
         'deletedAt', public.daily_routines_json_number(deleted_at)
-      );
+      ) || extras;
     end if;
   end if;
 
@@ -526,7 +557,7 @@ begin
   else
     row := p_row;
   end if;
-  row := row || jsonb_build_object(
+  row := row || extras || jsonb_build_object(
     'id', id,
     'updatedAt', public.daily_routines_json_number(updated_at),
     'deletedAt', case
@@ -594,6 +625,25 @@ begin
 end;
 $$;
 
+create or replace function public.daily_routines_order_stamp(p_row jsonb)
+returns numeric
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when p_row is null or jsonb_typeof(p_row) is distinct from 'object' then 0
+    when jsonb_typeof(p_row->'sourceAt') = 'number'
+      and (p_row->>'sourceAt')::numeric > coalesce((p_row->>'updatedAt')::numeric, 0)
+    then (p_row->>'sourceAt')::numeric + case
+      when jsonb_typeof(p_row->'sourceStep') = 'number' and (p_row->>'sourceStep')::numeric > 0
+        then floor((p_row->>'sourceStep')::numeric)
+      else 0
+    end
+    else coalesce((p_row->>'updatedAt')::numeric, 0)
+  end;
+$$;
+
 create or replace function public.daily_routines_beats(p_candidate jsonb, p_current jsonb, p_kind text, p_now numeric)
 returns boolean
 language plpgsql
@@ -601,11 +651,16 @@ immutable
 set search_path = public
 as $$
 declare
-  stamp_c numeric := public.daily_routines_stamp(p_candidate, p_now);
-  stamp_p numeric := public.daily_routines_stamp(p_current, p_now);
-  prep_c jsonb;
-  prep_p jsonb;
+  prep_c jsonb := public.daily_routines_prepare(p_candidate, p_kind, p_now);
+  prep_p jsonb := public.daily_routines_prepare(p_current, p_kind, p_now);
+  order_c numeric := public.daily_routines_order_stamp(prep_c);
+  order_p numeric := public.daily_routines_order_stamp(prep_p);
+  stamp_c numeric := coalesce((prep_c->>'updatedAt')::numeric, 0);
+  stamp_p numeric := coalesce((prep_p->>'updatedAt')::numeric, 0);
 begin
+  if order_c <> order_p then
+    return order_c > order_p;
+  end if;
   if stamp_c <> stamp_p then
     return stamp_c > stamp_p;
   end if;
@@ -614,8 +669,6 @@ begin
      <> public.daily_routines_tombstone(p_current, p_now) then
     return public.daily_routines_tombstone(p_candidate, p_now);
   end if;
-  prep_c := public.daily_routines_prepare(p_candidate, p_kind, p_now);
-  prep_p := public.daily_routines_prepare(p_current, p_kind, p_now);
   return public.daily_routines_text_gt(
     public.daily_routines_stable(prep_c),
     public.daily_routines_stable(prep_p)
@@ -630,11 +683,11 @@ immutable
 set search_path = public
 as $$
   -- One pass over both lists, so the cost grows with n log n, not n squared.
-  -- Each row is prepared once. Its stamp and tombstone come from the prepared
-  -- row (updatedAt is already max(updatedAt, deletedAt), clamped), and the
-  -- stable JSON is built only for rows that tie on both. The winner per id is
-  -- the greater stamp, then the tombstone, then the greater stable JSON, the
-  -- same rule as daily_routines_beats. Rows come out in the order each id was
+  -- Each row is prepared once. Its order stamp, stored stamp, and tombstone
+  -- come from the prepared row, and the stable JSON is built only for rows
+  -- that tie on all three. The winner per id is the greater order stamp, then
+  -- the newer stored stamp, then the tombstone, then the greater stable JSON,
+  -- the same rule as daily_routines_beats. Rows come out in the order each id was
   -- first seen, incoming first. list is materialized so prepare runs once per row.
   with list as materialized (
     select e.ord, public.daily_routines_prepare(e.value, p_kind, p_now) as prepared
@@ -649,6 +702,7 @@ as $$
       prepared,
       prepared->>'id' as id,
       (prepared->>'updatedAt')::numeric as stamp,
+      public.daily_routines_order_stamp(prepared) as order_stamp,
       jsonb_typeof(prepared->'deletedAt') = 'number' as tomb
     from list
     where prepared is not null
@@ -659,8 +713,9 @@ as $$
       prepared,
       id,
       stamp,
+      order_stamp,
       tomb,
-      count(*) over (partition by id, stamp, tomb) as tied
+      count(*) over (partition by id, order_stamp, stamp, tomb) as tied
     from stamped
   ),
   ranked as (
@@ -669,6 +724,7 @@ as $$
       prepared,
       id,
       stamp,
+      order_stamp,
       tomb,
       tied,
       case when tied > 1 then public.daily_routines_stable(prepared) end as stable
@@ -677,12 +733,13 @@ as $$
   tie_mode as (
     select
       id,
+      order_stamp,
       stamp,
       tomb,
       bool_or(public.daily_routines_has_supplementary(stable)) as use_utf16
     from ranked
     where tied > 1
-    group by id, stamp, tomb
+    group by id, order_stamp, stamp, tomb
   ),
   firsts as (
     select id, min(ord) as first_ord
@@ -693,9 +750,10 @@ as $$
     select distinct on (r.id) r.id, r.prepared
     from ranked r
     left join tie_mode m
-      on m.id = r.id and m.stamp = r.stamp and m.tomb = r.tomb
+      on m.id = r.id and m.order_stamp = r.order_stamp and m.stamp = r.stamp and m.tomb = r.tomb
     order by
       r.id,
+      r.order_stamp desc,
       r.stamp desc,
       r.tomb desc,
       case
@@ -942,6 +1000,7 @@ revoke all on function public.daily_routines_ref(jsonb) from public, anon, authe
 revoke all on function public.daily_routines_kind(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_plain(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_prepare(jsonb, text, numeric) from public, anon, authenticated;
+revoke all on function public.daily_routines_order_stamp(jsonb) from public, anon, authenticated;
 revoke all on function public.daily_routines_beats(jsonb, jsonb, text, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_merge_list(jsonb, jsonb, text, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_prefs(jsonb, numeric) from public, anon, authenticated;
