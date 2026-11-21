@@ -231,12 +231,15 @@ export function routineDetailsSheetHTML() {
   const sd = app.ui && app.ui.sd ? app.ui.sd : {};
   const name = sd.itemName || "Item";
   const motion = sd.motion === "reduce" ? "reduce" : "full";
-  const logged = !!sd.logId && sd.kind === "dose";
-  const body = logged
+  const loggedDose = !!sd.logId && sd.kind === "dose";
+  const loggedCheck = !!sd.logId && sd.kind !== "dose";
+  const body = loggedDose
     ? editorHTML(sd)
-    : sd.kind === "dose"
-      ? `<p class="sub">Log this dose with a tap. Amount, day, time, and a note are edited here after it is logged.</p>`
-      : `<p class="sub">This is a check. A tap logs it.</p>`;
+    : loggedCheck
+      ? `<p class="sub">This check is logged. Edit changes its day.</p>`
+      : sd.kind === "dose"
+        ? `<p class="sub">Log this dose with a tap. Amount, day, time, and a note are edited here after it is logged.</p>`
+        : `<p class="sub">This is a check. A tap logs it.</p>`;
   return `<h3 data-motion="${motion}">Details</h3>
     <p class="sub">${esc(name)}. This page stays open until you tap the X.</p>
     ${body}
