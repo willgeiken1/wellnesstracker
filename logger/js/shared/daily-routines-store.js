@@ -727,22 +727,30 @@ function collapsePlacementPairs(list) {
     /* A tombstone at the winner's stamp would beat the winner, because a tie
        keeps the tombstone. Stamp the loser at its own time, and move the
        live winner one past that only when the stamps are equal. */
-    const kept = others.length && isLive(winner) && rowStamp(winner) <= loserStamp
+    let kept = others.length && isLive(winner) && rowStamp(winner) <= loserStamp
       ? { ...winner, updatedAt: loserStamp + 1, deletedAt: null }
       : winner;
-    out.push(kept);
+    const tombs = [];
+    let ceiling = rowStamp(kept);
     for (const row of others) {
       const stamp = Math.max(rowStamp(row), 1);
       /* removedWith is this placement's own id, not the item or block. A later
          restore of that item or block must not bring the duplicate back. */
       const tomb = { ...row, deletedAt: stamp, updatedAt: Math.max(row.updatedAt || 0, stamp), removedWith: row.id };
+      let written = tomb;
       if (row.removedWith !== row.id && beats(row, tomb)) {
         const bumped = Math.max(rowStamp(row), stamp) + 1;
-        out.push({ ...row, deletedAt: bumped, updatedAt: bumped, removedWith: row.id });
-        continue;
-      }
-      out.push(beats(row, tomb) ? row : tomb);
+        written = { ...row, deletedAt: bumped, updatedAt: bumped, removedWith: row.id };
+      } else if (beats(row, tomb)) written = row;
+      tombs.push(written);
+      ceiling = Math.max(ceiling, rowStamp(written));
     }
+    /* A bumped duplicate can land on the live row's stamp. A tie keeps the
+       tombstone, so the next pass would drop the live row. Keep it strictly newer. */
+    if (isLive(kept) && tombs.some((row) => !isLive(row)) && rowStamp(kept) <= ceiling) {
+      kept = { ...kept, updatedAt: ceiling + 1, deletedAt: null };
+    }
+    out.push(kept, ...tombs);
   }
   return out;
 }
