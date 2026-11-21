@@ -135,6 +135,7 @@ export function openRoutineDetails(itemId, logId) {
     maxDay: clock.day,
     time: draft ? draft.time : "",
     note: draft ? draft.note : "",
+    status: log ? log.status : "",
     error: "",
     motion: prefersReducedMotion() ? "reduce" : "full",
   };
@@ -202,19 +203,11 @@ function historyHTML(compoundId) {
   return `<ul class="dr-history-list">${list}</ul>`;
 }
 
-function editorHTML(sd) {
-  const amount = Number(sd.amount);
-  const quarters = QUARTERS.map((chip) => `<button type="button" class="dr-quarter" data-action="routines-details-quarter" data-amount="${chip.value}" aria-pressed="${amount === Number(chip.value) ? "true" : "false"}" aria-label="${chip.value}">${chip.label}</button>`).join("");
+function dayFieldsHTML(sd) {
   const invalid = sd.error ? "true" : "false";
   const error = sd.error ? `<p class="dr-log-error" id="dr-details-error" role="alert">${esc(sd.error)}</p>` : `<p class="dr-log-error" id="dr-details-error"></p>`;
-  const unit = sd.unit ? `<p class="sub">Unit: ${esc(sd.unit)}. This is the unit already on the log.</p>` : "";
   const timeOpen = showTime(sd.day, sd.maxDay);
-  return `<label class="field-label" for="dr-details-amount">Amount</label>
-    <input class="text-in" id="dr-details-amount" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-invalid="${invalid}" aria-describedby="dr-details-error" value="${esc(sd.amount || "")}">
-    <span class="field-label" id="dr-details-quarter-label">Quarter amounts</span>
-    <div class="dr-quarters" role="group" aria-labelledby="dr-details-quarter-label">${quarters}</div>
-    ${unit}
-    <label class="field-label" for="dr-details-day">Day</label>
+  return `<label class="field-label" for="dr-details-day">Day</label>
     <input class="text-in" id="dr-details-day" type="date" autocomplete="off" max="${esc(sd.maxDay || "")}" value="${esc(sd.day || "")}" aria-invalid="${invalid}" aria-describedby="dr-details-error">
     <div id="dr-details-time-wrap"${timeOpen ? "" : " hidden"}>
       <label class="field-label" for="dr-details-time">Time</label>
@@ -227,6 +220,26 @@ function editorHTML(sd) {
     <button type="button" class="btn primary block" data-action="routines-details-save">Save</button>`;
 }
 
+function loggedDayHTML(sd) {
+  const lead = sd.status === "skipped"
+    ? "This dose was skipped. Change the day here."
+    : "This check is logged. Change the day here.";
+  return `<p class="sub">${lead}</p>${dayFieldsHTML(sd)}`;
+}
+
+function editorHTML(sd) {
+  const amount = Number(sd.amount);
+  const quarters = QUARTERS.map((chip) => `<button type="button" class="dr-quarter" data-action="routines-details-quarter" data-amount="${chip.value}" aria-pressed="${amount === Number(chip.value) ? "true" : "false"}" aria-label="${chip.value}">${chip.label}</button>`).join("");
+  const invalid = sd.error ? "true" : "false";
+  const unit = sd.unit ? `<p class="sub">Unit: ${esc(sd.unit)}. This is the unit already on the log.</p>` : "";
+  return `<label class="field-label" for="dr-details-amount">Amount</label>
+    <input class="text-in" id="dr-details-amount" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-invalid="${invalid}" aria-describedby="dr-details-error" value="${esc(sd.amount || "")}">
+    <span class="field-label" id="dr-details-quarter-label">Quarter amounts</span>
+    <div class="dr-quarters" role="group" aria-labelledby="dr-details-quarter-label">${quarters}</div>
+    ${unit}
+    ${dayFieldsHTML(sd)}`;
+}
+
 export function routineDetailsSheetHTML() {
   const sd = app.ui && app.ui.sd ? app.ui.sd : {};
   const name = sd.itemName || "Item";
@@ -236,7 +249,7 @@ export function routineDetailsSheetHTML() {
   const body = loggedDose
     ? editorHTML(sd)
     : loggedCheck
-      ? `<p class="sub">This check is logged. Edit changes its day.</p>`
+      ? loggedDayHTML(sd)
       : sd.kind === "dose"
         ? `<p class="sub">Log this dose with a tap. Amount, day, time, and a note are edited here after it is logged.</p>`
         : `<p class="sub">This is a check. A tap logs it.</p>`;

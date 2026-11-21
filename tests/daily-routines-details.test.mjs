@@ -48,6 +48,7 @@ const {
   parseRoutineTime,
   routineClockTime,
   saveRoutineItem,
+  skipRoutineItem,
   toggleRoutineReveal,
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
@@ -204,15 +205,11 @@ describe("routine details", { concurrency: false }, () => {
 
     assert.equal(editRoutineLog(app.state, log.id, { amount: "0.25", day: "2026-11-18", time: "15:05" }), true);
     const moved = liveLog(item.id, "2026-11-18");
-    assert.equal(moved.id, routineLogId(item.id, "2026-11-18"));
+    assert.equal(moved.id, log.id);
     assert.equal(moved.amount, 0.25);
     assert.equal(routineClockTime(moved.at), "15:05");
     assert.equal(parseRoutineTime("8:02").hour, 8);
-    const marker = app.state.dailyRoutines.logs.find((row) => row.id === log.id);
-    assert.ok(marker.deletedAt > 0);
-    assert.equal(marker.amount, undefined);
-    assert.equal(marker.note, undefined);
-    assert.equal(marker.undone, undefined);
+    assert.equal(app.state.dailyRoutines.logs.filter((row) => row.itemId === item.id && !(row.deletedAt > 0)).length, 1);
 
     assert.equal(editRoutineLog(app.state, moved.id, { amount: 250, day: "2026-11-20", time: "08:00" }), false);
     assert.equal(editRoutineLog(app.state, moved.id, { amount: "0.25", day: "2026-11-17", time: "25:00" }), false);
@@ -262,8 +259,10 @@ describe("routine details", { concurrency: false }, () => {
     assert.doesNotMatch(routineDetailsSheetHTML(), /dr-details-note|mood|energy|stress|feeling/);
     assert.equal(logRoutineItem(app.state, check.id), true);
     assert.equal(openRoutineDetails(check.id, liveLog(check.id).id), true);
-    assert.match(routineDetailsSheetHTML(), /This check is logged\. Edit changes its day/);
+    assert.match(routineDetailsSheetHTML(), /This check is logged\. Change the day here/);
+    assert.match(routineDetailsSheetHTML(), /id="dr-details-day"/);
     assert.doesNotMatch(routineDetailsSheetHTML(), /A tap logs it/);
+    assert.doesNotMatch(routineDetailsSheetHTML(), /id="dr-details-amount"/);
   });
 
   test("saving from the details page writes the note and the backdated time", () => {
@@ -305,6 +304,33 @@ describe("routine details", { concurrency: false }, () => {
       globalThis.fetch = originalFetch;
     }
     assert.equal(fetches.length, 0);
+  });
+
+  test("a skipped dose opens with a day field", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = itemNamed("Example Compound A");
+    assert.equal(skipRoutineItem(app.state, item.id), true);
+    const log = liveLog(item.id);
+    assert.equal(log.status, "skipped");
+    assert.equal(openRoutineHistory(item.compoundId, item.id), true);
+    assert.match(routineHistorySheetHTML(), new RegExp(`data-action="routines-details-open" data-item-id="${item.id}" data-log-id="${log.id}"`));
+    assert.equal(openRoutineDetails(item.id, log.id), true);
+    const sheet = routineDetailsSheetHTML();
+    assert.match(sheet, /This dose was skipped\. Change the day here/);
+    assert.match(sheet, /id="dr-details-day"/);
+    assert.doesNotMatch(sheet, /id="dr-details-amount"/);
+    assert.doesNotMatch(sheet, /This check is logged/);
+    app.$ = (sel) => {
+      const id = String(sel).replace(/^#/, "");
+      const values = { "dr-details-day": "2026-11-18", "dr-details-time": "", "dr-details-note": "" };
+      return Object.prototype.hasOwnProperty.call(values, id) ? { value: values[id] } : null;
+    };
+    assert.equal(commitRoutineDetails(), true);
+    const moved = liveLog(item.id, "2026-11-18");
+    assert.equal(moved.status, "skipped");
+    assert.equal(moved.id, log.id);
   });
 
   test("history opens the details page for a backdated log", () => {
