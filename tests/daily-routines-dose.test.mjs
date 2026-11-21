@@ -257,7 +257,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
       const rows = merged.logs.filter((row) => isLive(row) && row.itemId === item.id);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].day, "2026-11-18");
-      assert.equal(isLive(merged.logs.find((row) => row.id === source.id)), false);
+      assert.equal(rows[0].id, source.id);
       assert.equal(merged.logs.some((row) => isLive(row) && row.day === "2026-11-19"), false);
     }
   });
