@@ -229,8 +229,13 @@ function undoneLog(log, deletedAt, updatedAt) {
     undone: true,
   };
   if (log.rest === true) row.rest = true;
-  if (typeof log.sourceAt === "number" && log.sourceAt > at) row.sourceAt = log.sourceAt;
-  if (log.supersedes === true && row.sourceAt) row.supersedes = true;
+  /* An undo of a row that already carries a days-ahead stamp has to sort one
+     step above that stamp, the same way a check-off that replaces it does.
+     Otherwise the older live row wins once a tie no longer prefers the tombstone. */
+  if (typeof log.sourceAt === "number" && log.sourceAt > at) {
+    row.sourceAt = log.sourceAt;
+    row.supersedes = true;
+  }
   return row;
 }
 
@@ -286,7 +291,9 @@ function stableStringify(value) {
   return JSON.stringify(value) ?? "null";
 }
 
-/* Higher stamp wins. A tie keeps the tombstone, then the greater stable JSON.
+/* Higher stamp wins. When those match, the newer stored stamp wins, so a
+   restore is not erased by an older undo that ranks at the same future step.
+   A remaining tie keeps the tombstone, then the greater stable JSON.
    A stamp past the cap is remembered on sourceAt so a later pull, which clamps
    that same raw stamp to a higher ceiling, cannot pass a row that already
    replaced it. supersedes sorts one step above the raw stamp it replaced. */
@@ -301,6 +308,9 @@ function beats(candidate, current) {
   const stampC = orderStamp(candidate);
   const stampP = orderStamp(current);
   if (stampC !== stampP) return stampC > stampP;
+  const rowC = rowStamp(candidate);
+  const rowP = rowStamp(current);
+  if (rowC !== rowP) return rowC > rowP;
   const tombC = typeof candidate.deletedAt === "number" && candidate.deletedAt > 0;
   const tombP = typeof current.deletedAt === "number" && current.deletedAt > 0;
   if (tombC !== tombP) return tombC;

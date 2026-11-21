@@ -501,6 +501,59 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(kept.amount, 250);
   });
 
+  test("a restore after a far-future undo stays live on the next merge", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    const id = routineLogId(item.id, "2026-11-19");
+    const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    app.state.dailyRoutines.logs.push({
+      id,
+      itemId: item.id,
+      day: "2026-11-19",
+      status: "done",
+      amount: 250,
+      unit: "mcg",
+      updatedAt: future,
+      deletedAt: future,
+    });
+    app.state.dailyRoutines.updatedAt = future;
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const checked = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(checked);
+    assert.equal(undoRoutineLog(app.state, id), true);
+    const undone = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = mergeDailyRoutines(checked, undone);
+    assert.equal(isLive(app.state.dailyRoutines.logs.find((row) => row.id === id)), false);
+    assert.equal(restoreRoutineLog(app.state, id), true);
+    assert.equal(isLive(app.state.dailyRoutines.logs.find((row) => row.id === id)), true);
+    for (const merged of [mergeDailyRoutines(app.state.dailyRoutines, undone), mergeDailyRoutines(undone, app.state.dailyRoutines)]) {
+      const kept = merged.logs.find((row) => row.id === id);
+      assert.equal(isLive(kept), true);
+      assert.equal(kept.amount, 250);
+    }
+  });
+
+  test("an undo of a days-ahead check-off still wins the later merge", () => {
+    signIn("2026-11-19");
+    const morning = blockId("Morning routine");
+    addExampleRoutineItem(app.state, morning);
+    const item = app.state.dailyRoutines.items[0];
+    const id = routineLogId(item.id, "2026-11-19");
+    const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    app.routineNow = () => new Date(future);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const checked = structuredClone(app.state.dailyRoutines);
+    app.routineNow = () => new Date();
+    app.state.dailyRoutines = structuredClone(checked);
+    assert.equal(undoRoutineLog(app.state, id), true);
+    const later = Date.now() + 2 * 24 * 60 * 60 * 1000;
+    for (const merged of [mergeDailyRoutines(checked, app.state.dailyRoutines, later), mergeDailyRoutines(app.state.dailyRoutines, checked, later)]) {
+      assert.equal(isLive(merged.logs.find((row) => row.id === id)), false);
+    }
+  });
+
   test("focus mode dims every block except the current one", () => {
     signIn("2026-11-19");
     app.routineNow = () => new Date(2026, 10, 19, 14, 30);
