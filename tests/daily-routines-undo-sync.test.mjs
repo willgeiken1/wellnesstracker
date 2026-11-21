@@ -170,11 +170,7 @@ test("an undone dose inside an earlier deleted range survives SQL merge and rest
     `);
     assert.equal(stub.status, 0, stub.stderr);
 
-    const packed = spawnSync("git", ["archive", "origin/main", "supabase/migrations"], { cwd: ROOT });
-    assert.equal(packed.status, 0, packed.stderr && packed.stderr.toString());
-    const extracted = spawnSync("tar", ["-x", "-C", dir], { input: packed.stdout });
-    assert.equal(extracted.status, 0, extracted.stderr && extracted.stderr.toString());
-    const migrations = join(dir, "supabase/migrations");
+    const migrations = join(ROOT, "supabase/migrations");
     const names = [
       "20261001000000_lift_log.sql",
       "20261001100000_progress_photos.sql",
