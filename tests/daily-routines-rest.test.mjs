@@ -440,9 +440,9 @@ describe("whole-day rest", { concurrency: false }, () => {
     const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
     assert.doesNotMatch(page, /routines-flag/);
-    assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.equal(flag.match(/ROUTINES_ENABLED = false/g).length, 1);
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
+    assert.equal(flag.match(/ROUTINES_ENABLED = true/g).length, 1);
+    assert.match(sw, /const CACHE = "insight-shell-v85"/);
+    assert.match(sentry, /insight-shell-v85/);
   });
 });
