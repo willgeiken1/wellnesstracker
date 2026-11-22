@@ -1868,8 +1868,14 @@ export function saveRoutineItem(state, draft) {
       ? (store.placements || []).filter((row) => isLive(row) && row.itemId === existingId && hiddenIds.has(row.blockId))
       : [];
     /* A typed item lives on its tab and needs no routine. An untyped one
-       has nowhere else to show, so it keeps at least one. */
-    if (!blockIds.length && !type && !keptHidden.length) return null;
+       has nowhere else to show, so it keeps at least one. A hidden routine
+       only counts for an item that was already untyped there: clearing the
+       type of an item no visible routine holds would leave it nowhere. */
+    if (!blockIds.length && !type) {
+      const before = existingId ? (store.items || []).find((row) => row && row.id === existingId && isLive(row)) : null;
+      const wasTyped = !!(before && routineItemType(before, store.prefs));
+      if (wasTyped || !keptHidden.length) return null;
+    }
     const timeMin = draft && typeof draft.time === "string" && draft.time.trim() ? timeToMin(draft.time) : null;
     if (draft && typeof draft.time === "string" && draft.time.trim() && timeMin == null) return null;
     const itemId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : routineId("item");
@@ -2475,6 +2481,16 @@ function peekList(key) {
   return app.ui && Array.isArray(app.ui[key]) ? app.ui[key].filter((id) => typeof id === "string") : [];
 }
 
+/* Leaving Routines ends the visit: routines tapped open or shut go back to
+   their own state, and a routine a Home tile opened stops showing in Focus
+   mode. */
+export function endRoutineVisit() {
+  if (!app.ui) return;
+  delete app.ui.routineOpenBlocks;
+  delete app.ui.routineShutBlocks;
+  delete app.ui.routineJumpBlockId;
+}
+
 /* Closed unless tapped open, or open because it starts soon unless tapped
    closed. The choice lives on this visit only. */
 function peekCollapsed(block, soonId) {
@@ -2872,6 +2888,7 @@ export function routinesDiscoverSheetHTML() {
 }
 
 app.ensureRoutineShell = ensureRoutineShell;
+app.endRoutineVisit = endRoutineVisit;
 app.routineNowNext = routineNowNext;
 app.routineClock = routineClock;
 app.loggedTodayCount = loggedTodayCount;

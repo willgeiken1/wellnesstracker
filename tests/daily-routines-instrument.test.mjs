@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { readFileSync } from "node:fs";
 
 /* Synthetic accounts only. Covers the routines restructure: item types and
    their tabs, routine windows and days, the sun path, New routine and Edit
@@ -485,6 +486,18 @@ describe("peptide details, hidden routines and the dose count", () => {
     assert.ok(shown.placements.some((row) => row.blockId === later.id && row.itemId === both.id));
   });
 
+  test("clearing the type of an item only a hidden routine holds is refused", () => {
+    signIn();
+    assert.ok(saveRoutineBlock(app.state, { name: "Example later", startMin: 13 * 60, endMin: 14 * 60 }));
+    const later = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example later");
+    assert.ok(addRoutineItem(app.state, later.id, { name: "Example typed", kind: "check", type: "supplement", blockIds: [later.id] }));
+    assert.ok(hideRoutineBlock(app.state, later.id));
+    const typed = item("Example typed");
+    assert.equal(routines.saveRoutineItem(app.state, { itemId: typed.id, name: "Example typed", kind: "check", type: "", blockIds: [] }), false);
+    assert.equal(item("Example typed").type, "supplement", "it stays on its tab");
+    assert.ok(routines.saveRoutineItem(app.state, { itemId: typed.id, name: "Example typed", kind: "check", type: "", blockIds: ["block_default_morning"] }), "a visible routine lets the type go");
+  });
+
   test("a dose logged after the count is typed comes off it", () => {
     signIn(8, 0);
     assert.ok(addRoutineItem(app.state, "", { name: "Example Compound E", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [], onHand: "10" }));
@@ -695,6 +708,24 @@ describe("Home tile jumps open a later routine", () => {
     const html = dailyRoutinesHTML();
     assert.match(html, new RegExp(`data-item-id="${night}"`));
     assert.match(html, /data-block-id="block_default_morning"/, "the focus routine stays");
+  });
+
+  test("leaving Routines ends the visit, so Focus and closed routines come back", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example morning check", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example night check", kind: "check" }));
+    app.state.dailyRoutines.prefs = { ...app.state.dailyRoutines.prefs, focusMode: true };
+    const night = item("Example night check").id;
+    app.goTab = () => {};
+    tiles.openRoutineTile(tiles.routineItemTileId(night));
+    assert.match(dailyRoutinesHTML(), new RegExp(`data-item-id="${night}"`));
+    app.endRoutineVisit();
+    assert.doesNotMatch(dailyRoutinesHTML(), new RegExp(`data-item-id="${night}"`), "Focus shows only Morning again");
+    app.state.dailyRoutines.prefs = { ...app.state.dailyRoutines.prefs, focusMode: false };
+    assert.match(dailyRoutinesHTML(), /data-block-id="block_default_night"[^>]*data-collapsed="true"/, "Night is closed again");
+    const pager = readFileSync(new URL("../logger/js/shell/pager.js", import.meta.url), "utf8");
+    assert.match(pager, /app\.ui\.tab === "daily-routines" && to !== "daily-routines" && typeof app\.endRoutineVisit === "function"\) app\.endRoutineVisit\(\)/, "switching tabs away from Routines ends the visit");
   });
 });
 
