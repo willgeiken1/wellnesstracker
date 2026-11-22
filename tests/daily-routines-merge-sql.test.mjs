@@ -787,6 +787,56 @@ test("merging thousands of logs finishes under the statement timeout", { timeout
   assert.equal(Number(timed), count);
 });
 
+test("3000 logs and one moved tombstone finish before the quadratic append would", { timeout: 60_000 }, () => {
+  const count = 3000;
+  const row = (i, stamp) => ({
+    id: `log-${i}`,
+    day: "2026-01-02",
+    status: "done",
+    amount: 1,
+    unit: "mcg",
+    at: 1000 + i,
+    updatedAt: stamp,
+    deletedAt: null,
+  });
+  const incoming = { updatedAt: 1, logs: Array.from({ length: count }, (_, i) => row(i, 1000)) };
+  incoming.logs[0].at = 200;
+  const stored = {
+    updatedAt: 1,
+    logs: [
+      {
+        id: "log-0",
+        day: "2026-11-19",
+        status: "done",
+        amount: 1,
+        unit: "mcg",
+        at: 100,
+        updatedAt: 5000,
+        deletedAt: 5000,
+        movedDay: "2026-11-18",
+        movedAt: 100,
+      },
+      ...Array.from({ length: count - 1 }, (_, i) => row(i + 1, 2000)),
+    ],
+  };
+  // A row-by-row append of this size took about 5.7s. The statement timeout
+  // is the check: the set-based pass finishes, and the append does not.
+  const got = query(`
+    set statement_timeout = '2s';
+    select public.daily_routines_merge(
+      $stored$${JSON.stringify(stored)}$stored$::jsonb,
+      $incoming$${JSON.stringify(incoming)}$incoming$::jsonb,
+      0
+    )::text;
+  `).trim();
+  const merged = JSON.parse(got);
+  const expected = query(`select public.daily_routines_fresh_move_id('log-0', 200);`).trim().replace(/^"|"$/g, "");
+  const ids = merged.logs.filter((log) => !(log.deletedAt > 0)).map((log) => log.id);
+  assert.equal(ids.length, count);
+  assert.equal(ids.includes("log-0"), false);
+  assert.ok(ids.includes(expected), expected);
+});
+
 test("4000 logs and 200 purges finish under the statement timeout", { timeout: 120_000 }, () => {
   const day = "2026-01-02";
   const count = 4000;
