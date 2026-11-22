@@ -351,8 +351,15 @@ function registryEdit(state) {
   return true;
 }
 
+function signedInWithRoutines(state) {
+  if (!app.session || !app.session.user) return false;
+  const items = state && state.dailyRoutines && state.dailyRoutines.items;
+  return Array.isArray(items) && items.some((item) => item && !(typeof item.deletedAt === "number" && item.deletedAt > 0));
+}
+
 export function legacyNextUpWanted(state) {
   if (app.ROUTINES_ENABLED !== true) return false;
+  if (!signedInWithRoutines(state)) return false;
   if (registryEdit(state)) return false;
   const home = state && state.layout && state.layout.homeV2;
   if (home && Array.isArray(home.hidden) && home.hidden.includes(NEXT_UP_TILE_ID)) return false;
@@ -374,6 +381,18 @@ function pullPending() {
   return !!(app.sb && app.cloudPullOk !== true);
 }
 
+function persistNextHidden(state) {
+  const home = state && state.layout && state.layout.homeV2;
+  if (!home || home.v !== 2 || !Array.isArray(home.items)) return false;
+  const hidden = Array.isArray(home.hidden) ? home.hidden.filter((id) => id !== NEXT_UP_TILE_ID) : [];
+  hidden.push(NEXT_UP_TILE_ID);
+  home.items = home.items.filter((id) => id !== NEXT_UP_TILE_ID);
+  home.hidden = hidden;
+  home.routineNextAside = false;
+  home.routineNextSeeded = true;
+  return true;
+}
+
 function writeHiddenPref(state, hidden) {
   if (!canMutateRoutines() || pullPending() || !state) return false;
   const current = normalizeDailyRoutines(state.dailyRoutines);
@@ -390,8 +409,10 @@ function saveLive(state) {
 export function hideLegacyNextUp(state) {
   if (app.ROUTINES_ENABLED !== true || !state) return false;
   if (app.ui) app.ui.homeNextHidden = true;
-  if (writeHiddenPref(state, true)) saveLive(state);
-  return true;
+  const laid = persistNextHidden(state);
+  const prefs = writeHiddenPref(state, true);
+  if (laid || prefs) saveLive(state);
+  return laid || prefs;
 }
 
 export function showLegacyNextUp(state) {

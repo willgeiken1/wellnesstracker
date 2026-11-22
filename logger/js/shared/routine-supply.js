@@ -84,12 +84,14 @@ export function supplyDraftError(draft, today) {
 }
 
 /* Keys the draft omits stay as they are. A check item cannot keep a mix date. */
-export function supplyFromDraft(draft, kind, today) {
+export function supplyFromDraft(draft, kind, today, existing) {
   const patch = {};
   if (draft && Object.prototype.hasOwnProperty.call(draft, "onHand")) {
     const read = readSupplyCount(draft.onHand);
     if (!read.ok) return null;
     patch.onHand = read.count;
+    if (read.count == null) patch.onHandDay = null;
+    else if (!existing || existing.onHand !== read.count || parseSupplyDay(existing.onHandDay) == null) patch.onHandDay = today;
   }
   if (kind !== "dose") patch.mixedOn = null;
   else if (draft && Object.prototype.hasOwnProperty.call(draft, "mixedOn")) {
@@ -105,6 +107,9 @@ export function attachSupply(item) {
   const count = parseSupplyCount(item.onHand);
   if (count == null) delete item.onHand;
   else item.onHand = count;
+  const counted = count == null ? null : parseSupplyDay(item.onHandDay);
+  if (counted == null) delete item.onHandDay;
+  else item.onHandDay = counted;
   const mixed = item.kind === "dose" ? parseSupplyDay(item.mixedOn) : null;
   if (mixed == null) delete item.mixedOn;
   else item.mixedOn = mixed;
@@ -150,12 +155,17 @@ function doseSpan(logs, itemId) {
 
 /* Null when supply is off. Otherwise the count times the average gap,
    rounded to the nearest day. Half a day rounds away from zero. */
-export function routineDaysLeft(onHand, logs, itemId) {
+export function routineDaysLeft(onHand, logs, itemId, today, onHandDay) {
   const count = parseSupplyCount(onHand);
   if (count == null) return null;
   const span = doseSpan(logs, itemId);
-  if (!span) return count;
-  return Math.round((count * span.span) / span.gaps);
+  const base = span ? Math.round((count * span.span) / span.gaps) : count;
+  const started = parseSupplyDay(onHandDay);
+  const now = parseSupplyDay(today);
+  if (!started || !now || now <= started) return base;
+  const gap = span ? span.span / span.gaps : 1;
+  const used = Math.floor((dayIndex(now) - dayIndex(started)) / gap);
+  return Math.max(0, base - used);
 }
 
 export function mixedAgoLabel(mixedOn, today) {
@@ -185,7 +195,7 @@ export function routineSupplyView(spec) {
   let state = "";
   const count = parseSupplyCount(item.onHand);
   if (count != null) {
-    const left = routineDaysLeft(count, logs, item.id);
+    const left = routineDaysLeft(count, logs, item.id, today, item.onHandDay);
     const low = left != null && left <= LOW_SUPPLY_DAYS;
     const line = `${handLabel(count)} · ${leftLabel(left)}`;
     parts.push(low ? `Low supply · ${line}` : line);

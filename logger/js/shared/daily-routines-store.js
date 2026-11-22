@@ -311,9 +311,11 @@ function undoneLog(log, deletedAt, updatedAt) {
   return row;
 }
 
+const TOMBSTONE_EXTRA_KEYS = new Set(["movedAt", "movedDay", "sourceAt", "sourceStep"]);
+
 function isReducedLog(log) {
   if (!log || typeof log !== "object") return false;
-  const keys = Object.keys(log);
+  const keys = Object.keys(log).filter((key) => !TOMBSTONE_EXTRA_KEYS.has(key));
   return keys.length === LOG_TOMBSTONE_KEYS.length && LOG_TOMBSTONE_KEYS.every((key) => keys.includes(key));
 }
 
@@ -326,6 +328,10 @@ function normalizeLog(raw, now = Date.now()) {
     const reduced = reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
     if (base.sourceAt) reduced.sourceAt = base.sourceAt;
     if (base.sourceStep && reduced.sourceAt) reduced.sourceStep = base.sourceStep;
+    if (validDay(raw.movedDay) && typeof raw.movedAt === "number" && Number.isFinite(raw.movedAt)) {
+      reduced.movedDay = raw.movedDay;
+      reduced.movedAt = raw.movedAt;
+    }
     return reduced;
   }
   const row = {
@@ -595,9 +601,57 @@ function reconcileBlockPlacementTombstones(blocks, placements) {
   });
 }
 
+function isMoveTombstone(log) {
+  return !!(log && typeof log.deletedAt === "number" && log.deletedAt > 0 && validDay(log.movedDay) && typeof log.movedAt === "number" && Number.isFinite(log.movedAt));
+}
+
+function freshLogSuffix(base, ids) {
+  for (let n = 2; n < 100; n += 1) {
+    const id = `${base}_${n}`;
+    if (!ids.has(id)) return id;
+  }
+  return null;
+}
+
+/* A move tombstone and a fresh log of the vacated day share an id until
+   they sync. Give the fresh log the next suffix when its dose time is not
+   the moved dose, so both rows survive either merge order. */
+export function retargetFreshMoveLogs(localLogs, remoteLogs) {
+  const local = (Array.isArray(localLogs) ? localLogs : []).map((log) => (log && typeof log === "object" ? { ...log } : log));
+  const remote = (Array.isArray(remoteLogs) ? remoteLogs : []).map((log) => (log && typeof log === "object" ? { ...log } : log));
+  const ids = new Set();
+  for (const log of [...local, ...remote]) {
+    if (log && typeof log.id === "string") ids.add(log.id);
+  }
+  const remoteBy = new Map();
+  for (const log of remote) {
+    if (log && typeof log.id === "string" && !remoteBy.has(log.id)) remoteBy.set(log.id, log);
+  }
+  const localBy = new Map();
+  for (const log of local) {
+    if (log && typeof log.id === "string" && !localBy.has(log.id)) localBy.set(log.id, log);
+  }
+  for (const id of localBy.keys()) {
+    const left = localBy.get(id);
+    const right = remoteBy.get(id);
+    if (!right) continue;
+    const tomb = isMoveTombstone(left) ? left : isMoveTombstone(right) ? right : null;
+    const live = tomb === left ? right : tomb === right ? left : null;
+    if (!tomb || !live || (typeof live.deletedAt === "number" && live.deletedAt > 0)) continue;
+    const at = typeof live.at === "number" && Number.isFinite(live.at) ? live.at : null;
+    if (at == null || at === tomb.movedAt) continue;
+    const next = freshLogSuffix(id, ids);
+    if (!next) continue;
+    live.id = next;
+    ids.add(next);
+  }
+  return [local, remote];
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
-  const left = normalizeDailyRoutines(local, now);
-  const right = normalizeDailyRoutines(remote, now);
+  const split = retargetFreshMoveLogs(local && local.logs, remote && remote.logs);
+  const left = normalizeDailyRoutines(local ? { ...local, logs: split[0] } : local, now);
+  const right = normalizeDailyRoutines(remote ? { ...remote, logs: split[1] } : remote, now);
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
@@ -644,26 +698,55 @@ function dayBefore(day) {
   return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
 }
 
-/* A 1:30 AM dose on the first selected calendar day is stored on the previous
-   routine day. The match starts one day before `from` so that dose is removed.
-   The day after `to` stays. The extra previous afternoon can go too; deleting
-   more is the privacy-safe direction. The edge strip uses the same window. */
-export function routineLogDayInPurge(day, from, to) {
+/* Local midnight of `from` through the rollover hour, as absolute times.
+   A new purge stores this window. An old purge has no window, so it keeps
+   the exact from..to days. */
+export function routineEarlyWindow(from, hour) {
+  if (!validDay(from)) return null;
+  const selected = Math.min(Math.max(Math.trunc(Number(hour)), 0), 6);
+  const hourOf = Number.isFinite(Number(hour)) ? selected : 4;
+  const year = Number(from.slice(0, 4));
+  const month = Number(from.slice(5, 7));
+  const date = Number(from.slice(8, 10));
+  return {
+    routineEarlyFrom: new Date(year, month - 1, date, 0, 0, 0, 0).getTime(),
+    routineEarlyTo: new Date(year, month - 1, date, hourOf, 0, 0, 0).getTime(),
+  };
+}
+
+/* The exact from..to days always match. The day before matches only when
+   the purge carries a window and the log's `at` falls inside it. */
+export function routineLogMatchesPurge(log, purge) {
+  const day = log && log.day;
+  const from = purge && purge.from;
+  const to = purge && purge.to;
   if (!validDay(day) || !validDay(from) || !validDay(to) || from > to) return false;
-  return day >= dayBefore(from) && day <= to;
+  if (day >= from && day <= to) return true;
+  if (day !== dayBefore(from)) return false;
+  const start = purge.routineEarlyFrom;
+  const end = purge.routineEarlyTo;
+  if (typeof start !== "number" || typeof end !== "number" || !(end > start)) return false;
+  const at = typeof log.at === "number" && Number.isFinite(log.at) ? log.at : null;
+  if (at == null) return false;
+  return at >= start && at < end;
+}
+
+export function routineLogDayInPurge(day, from, to, early = null) {
+  return routineLogMatchesPurge({ day, at: early && early.at }, { from, to, ...early });
 }
 
 /* Tombstones logs whose day is inside the widened range. Blocks, items,
    placements, and compounds stay. The tombstone is what stops the other
    phone's older live log from coming back on the next merge. */
-export function purgeDailyRoutineRange(data, from, to, before, now = Date.now()) {
+export function purgeDailyRoutineRange(data, from, to, before, now = Date.now(), early = null) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   const routines = data.dailyRoutines;
   if (!routines || typeof routines !== "object" || Array.isArray(routines) || !Array.isArray(routines.logs)) return false;
   const cutoff = tombstoneAt(before, now);
+  const purge = { from, to, ...(early || {}) };
   let changed = false;
   routines.logs = routines.logs.map((log) => {
-    if (!log || typeof log !== "object" || !routineLogDayInPurge(log.day, from, to)) return log;
+    if (!log || typeof log !== "object" || !routineLogMatchesPurge(log, purge)) return log;
     const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
     /* A later undo is inside the dates but did not exist when this delete
        was made. Leave it, amount and note included. */

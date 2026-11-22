@@ -55,7 +55,7 @@ const {
   toggleRoutineReveal,
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
-const { isLive, mergeDailyRoutines, normalizeDailyRoutines, purgeDailyRoutineRange } = await import("../logger/js/shared/daily-routines-store.js");
+const { isLive, mergeDailyRoutines, normalizeDailyRoutines, purgeDailyRoutineRange, routineEarlyWindow } = await import("../logger/js/shared/daily-routines-store.js");
 const { routineDayKey, routineDayRolloverHour } = await import("../logger/js/shared/routine-dose.js");
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -309,7 +309,7 @@ describe("routine day rollover", { concurrency: false }, () => {
     const days = data.dailyRoutines.logs.map((log) => log.day);
     assert.equal(purgeDailyRoutineRange(data, "2026-11-19", "2026-11-19", null, Date.parse("2026-11-20T06:30:00Z")), true);
     assert.deepEqual(data.dailyRoutines.logs.map((log) => log.day), days);
-    assert.ok(data.dailyRoutines.logs[0].deletedAt > 0);
+    assert.equal(data.dailyRoutines.logs[0].deletedAt, null);
     assert.ok(data.dailyRoutines.logs[1].deletedAt > 0);
     assert.equal(data.dailyRoutines.settings.dayRolloverHour, 6);
   });
@@ -351,7 +351,7 @@ describe("routine day rollover", { concurrency: false }, () => {
       };
       assert.equal(data.dailyRoutines.logs[0].day, "2026-11-19", `hour ${hour}`);
       assert.equal(data.dailyRoutines.logs[1].day, "2026-11-20", `hour ${hour}`);
-      assert.equal(purgeDailyRoutineRange(data, "2026-11-20", "2026-11-20", null, 5000), true);
+      assert.equal(purgeDailyRoutineRange(data, "2026-11-20", "2026-11-20", null, 5000, routineEarlyWindow("2026-11-20", hour)), true);
       const byId = Object.fromEntries(data.dailyRoutines.logs.map((log) => [log.id, log]));
       assert.ok(byId.early.deletedAt > 0, `hour ${hour} early`);
       assert.ok(byId.ontime.deletedAt > 0, `hour ${hour} on time`);

@@ -242,7 +242,13 @@ export function saveReconstitutionNote() {
     if (typeof app.renderSheet === "function") app.renderSheet();
     return false;
   }
-  if (!saveRoutineItemNote(app.state, itemId, note)) {
+  if (!saveRoutineItemNote(app.state, itemId, note, {
+    vialAmount: parseRoutineAmount(sd.vial),
+    waterMl: parseRoutineAmount(sd.water),
+    doseAmount: parseRoutineAmount(sd.dose),
+    vialUnit: sd.vialUnit,
+    doseUnit: sd.doseUnit,
+  })) {
     sd.error = "The note was not saved.";
     if (typeof app.renderSheet === "function") app.renderSheet();
     return false;

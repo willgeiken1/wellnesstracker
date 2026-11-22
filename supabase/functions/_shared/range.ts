@@ -116,7 +116,9 @@ export async function deleteRange(admin: Bag, userId: string, body: Bag, now = D
   const { data: again, error: againErr } = await admin.from("user_data").select("data").eq("user_id", userId).maybeSingle();
   if (againErr) return { status: 500, body: { error: "Couldn't update the account copy. Try again." } };
   const latest = (again && again.data) || {};
-  const data = addPurge(stripRange(latest, from, to, cutoff, now), from, to, cutoff, now);
+  const earlyFrom = typeof body.routineEarlyFrom === "number" && Number.isFinite(body.routineEarlyFrom) ? body.routineEarlyFrom : null;
+  const earlyTo = typeof body.routineEarlyTo === "number" && Number.isFinite(body.routineEarlyTo) ? body.routineEarlyTo : null;
+  const data = addPurge(stripRange(latest, from, to, cutoff, now, earlyFrom, earlyTo), from, to, cutoff, now, earlyFrom, earlyTo);
   const { error: writeErr } = await admin.from("user_data").upsert({
     user_id: userId,
     data,

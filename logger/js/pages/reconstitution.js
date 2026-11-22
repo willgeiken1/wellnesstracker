@@ -97,7 +97,7 @@ export function reconstitutionNoteText(result) {
   if (!result || result.ok !== true) return "";
   const volume = formatCalcNumber(result.volumeMl);
   const units = formatCalcNumber(result.syringeUnits);
-  if (!volume || units === "") return "";
+  if (!volume || volume === "0" || units === "" || units === "0") return "";
   return `${volume} mL · ${units} U-100 units. What you entered. Not a recommendation.`;
 }
 
