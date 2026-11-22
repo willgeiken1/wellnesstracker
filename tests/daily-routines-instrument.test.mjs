@@ -529,3 +529,29 @@ describe("rearranging from Edit routines", () => {
     assert.equal(app.ui.dailyRoutineEdit, true);
   });
 });
+
+describe("rollover hour and synced custom types", () => {
+  test("a peptide's next day follows the user's rollover hour", () => {
+    /* Rollover at midnight. A daily dose at 01:00, taken Monday, is next on Tuesday. */
+    const item = { id: "item_r", name: "Example Compound R", kind: "dose", timeMin: 60, deletedAt: null };
+    const projected = {
+      blocks: [], placements: [], compounds: [], items: [item],
+      logs: [{ id: "log_r", itemId: "item_r", day: "2026-11-23", status: "done", at: 1, deletedAt: null }],
+      settings: { dayRolloverHour: 0 },
+    };
+    assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 23, 12, 0, 0), "2026-11-23"), "Tue");
+  });
+
+  test("custom types past the limit after a sync all keep their tabs", () => {
+    const prefs = { customTypes: Array.from({ length: types.CUSTOM_TYPE_MAX + 1 }, (_, index) => ({ id: `type_example${index}`, name: `Example ${index}` })) };
+    const list = types.routineCustomTypes(prefs);
+    assert.equal(list.length, types.CUSTOM_TYPE_MAX + 1);
+    assert.equal(types.routineItemType({ type: `type_example${types.CUSTOM_TYPE_MAX}` }, prefs), `type_example${types.CUSTOM_TYPE_MAX}`);
+  });
+
+  test("making a type still stops at the limit", () => {
+    signIn();
+    for (let index = 0; index < types.CUSTOM_TYPE_MAX; index += 1) assert.ok(app.addRoutineCustomType(app.state, `Example kind ${index}`));
+    assert.equal(app.addRoutineCustomType(app.state, "Example one too many"), "");
+  });
+});

@@ -32,7 +32,9 @@ const NAMES = Object.freeze({
 
 export const CUSTOM_TYPE_MAX = 12;
 
-/* The types the user made, oldest first. Bad rows and repeats drop out. */
+/* The types the user made, oldest first. Bad rows and repeats drop out.
+   The limit is on making a type: two phones that each made some can sync
+   to more than the limit, and every one of them keeps its tab. */
 export function routineCustomTypes(prefs) {
   const raw = prefs && Array.isArray(prefs.customTypes) ? prefs.customTypes : [];
   const seen = new Set();
@@ -44,7 +46,7 @@ export function routineCustomTypes(prefs) {
     seen.add(row.id);
     out.push({ id: row.id, name });
   }
-  return out.slice(0, CUSTOM_TYPE_MAX);
+  return out;
 }
 
 export function routineTypeName(type, prefs, many = true) {

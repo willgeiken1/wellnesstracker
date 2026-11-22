@@ -20,6 +20,7 @@ import {
 } from "../shared/daily-routines-store.js";
 import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, routineBlockRunsOn, routineBlockStartMin, routineBlockWindow, routineDayKey, routineDayRolloverHour, routineMinuteOfDay } from "../shared/routine-dose.js";
 import {
+  CUSTOM_TYPE_MAX,
   migrateRoutineTypes,
   routineClock24,
   routineItemType,
@@ -379,6 +380,7 @@ function itemTiming(projected, item, date, day, logs = null) {
       logs: Array.isArray(logs) ? logs : [],
       date,
       day,
+      hour: projected && projected.settings && projected.settings.dayRolloverHour,
     });
     if (!result || typeof result.waitMin !== "number") return { waitMin: null, overdue: false };
     return { waitMin: result.waitMin, overdue: result.tomorrow === true };
@@ -1646,7 +1648,7 @@ export function addRoutineCustomType(state, name) {
   const current = store && Array.isArray(store.prefs && store.prefs.customTypes) ? store.prefs.customTypes.filter((row) => row && typeof row.id === "string") : [];
   const same = current.find((row) => typeof row.name === "string" && row.name.toLowerCase() === trimmed.toLowerCase());
   if (same) return same.id;
-  if (current.length >= 12) return "";
+  if (current.length >= CUSTOM_TYPE_MAX) return "";
   const id = `type_${routineId("t").replace(/[^A-Za-z0-9_-]/g, "").slice(-40)}`;
   const ok = withStore(state, (next, clock) => {
     const at = prefStamp(next, clock);
