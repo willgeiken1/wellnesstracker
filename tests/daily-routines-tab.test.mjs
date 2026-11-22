@@ -201,6 +201,8 @@ const {
   routineNowNext,
   routinesDiscoverSheetHTML,
   routinesSettingsSheetHTML,
+  stopRoutineNowRefresh,
+  syncRoutineNowRefresh,
 } = await import("../logger/js/pages/daily-routines.js");
 const { visibleTabOrder } = await import("../logger/js/shell/pager.js");
 await import("../logger/js/shell/workout.js");
@@ -465,8 +467,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v75"/);
-  assert.match(sentry, /insight-shell-v75/);
+  assert.match(sw, /const CACHE = "insight-shell-v76"/);
+  assert.match(sentry, /insight-shell-v76/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);
@@ -474,5 +476,91 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.doesNotMatch(page, /routines-flag/);
   assert.doesNotMatch(pager, /routines-flag/);
   assert.match(readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8"), /case "routines-settings"/);
+  assert.match(pager, /syncRoutineNowRefresh/);
+  assert.match(page, /msUntilNextMinute/);
+});
+
+test("the Now card refreshes when the minute crosses noon", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const events = {};
+  const previousListen = document.addEventListener;
+  document.addEventListener = (type, fn) => { events[type] = fn; };
+  const previousRender = app.render;
+  const previousUi = app.ui;
+  const previousNow = app.routineNow;
+  const previousToday = app.today;
+  const previousSession = app.session;
+  const previousState = app.state;
+  const previousHidden = document.hidden;
+  let now = new Date(2026, 10, 19, 11, 59, 30);
+  let paints = 0;
+  let html = "";
+  function paint() {
+    paints += 1;
+    html = dailyRoutinesHTML();
+    syncRoutineNowRefresh();
+  }
+  t.after(() => {
+    stopRoutineNowRefresh();
+    t.mock.timers.reset();
+    document.addEventListener = previousListen;
+    document.hidden = previousHidden;
+    app.render = previousRender;
+    app.ui = previousUi;
+    app.routineNow = previousNow;
+    app.today = previousToday;
+    app.session = previousSession;
+    app.state = previousState;
+  });
+
+  app.state = { dailyRoutines: null };
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => now;
+  app.ui = { tab: "daily-routines", edit: null, briefEdit: false, detail: null };
+  app.render = paint;
+
+  html = dailyRoutinesHTML();
+  assert.match(html, /Now · Morning · 11:59 AM/);
+  assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Morning routine<\/h2>/);
+  assert.match(html, /Next · Supplement &amp; enhancer stack<span class="dr-wait">in 1 min<\/span>/);
+  syncRoutineNowRefresh();
+  assert.equal(typeof events.visibilitychange, "function");
+
+  t.mock.timers.tick(29_999);
+  assert.equal(paints, 0);
+  now = new Date(2026, 10, 19, 12, 0, 0);
+  t.mock.timers.tick(1);
+  assert.equal(paints, 1);
+  assert.match(html, /Now · Afternoon · 12:00 PM/);
+  assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Supplement &amp; enhancer stack<\/h2>/);
+  assert.match(html, /Next · Night routine<span class="dr-wait">in 5 hr<\/span>/);
+
+  const atNoon = paints;
+  app.ui.tab = "home";
+  syncRoutineNowRefresh();
+  t.mock.timers.tick(120_000);
+  assert.equal(paints, atNoon);
+
+  app.ui.tab = "daily-routines";
+  document.hidden = true;
+  events.visibilitychange();
+  t.mock.timers.tick(120_000);
+  assert.equal(paints, atNoon);
+
+  document.hidden = false;
+  now = new Date(2026, 10, 19, 12, 1, 30);
+  events.visibilitychange();
+  t.mock.timers.tick(29_999);
+  assert.equal(paints, atNoon);
+  now = new Date(2026, 10, 19, 12, 2, 0);
+  t.mock.timers.tick(1);
+  assert.equal(paints, atNoon + 1);
+  assert.match(html, /Now · Afternoon · 12:02 PM/);
+  assert.match(html, /Supplement &amp; enhancer stack/);
 });
 });

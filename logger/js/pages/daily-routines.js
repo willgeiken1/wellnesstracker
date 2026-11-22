@@ -1604,6 +1604,48 @@ export function dailyRoutinesHTML() {
   return shellHTML(shellDate());
 }
 
+/* The Now card is painted from the clock at render time. While this tab is
+   the one on screen, paint again at the next minute so the clock, the
+   countdown, and the current block follow the wall clock. Another tab, a
+   hidden page, or the flag off clears that timer. */
+let nowRefreshTimer = 0;
+let nowVisibilityBound = false;
+
+function routineTabVisible() {
+  if (app.ROUTINES_ENABLED !== true) return false;
+  if (!app.ui || app.ui.tab !== "daily-routines") return false;
+  if (typeof document !== "undefined" && document.hidden) return false;
+  return true;
+}
+
+function msUntilNextMinute(date) {
+  const seconds = date.getSeconds();
+  const millis = date.getMilliseconds();
+  const wait = (60 - seconds) * 1000 - millis;
+  return wait > 0 ? wait : 60000;
+}
+
+export function stopRoutineNowRefresh() {
+  if (!nowRefreshTimer) return;
+  clearTimeout(nowRefreshTimer);
+  nowRefreshTimer = 0;
+}
+
+export function syncRoutineNowRefresh() {
+  if (!nowVisibilityBound && typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    nowVisibilityBound = true;
+    document.addEventListener("visibilitychange", () => syncRoutineNowRefresh());
+  }
+  stopRoutineNowRefresh();
+  if (!routineTabVisible()) return;
+  const date = shellDate();
+  nowRefreshTimer = setTimeout(() => {
+    nowRefreshTimer = 0;
+    if (!routineTabVisible()) return;
+    if (typeof app.render === "function") app.render();
+  }, msUntilNextMinute(date));
+}
+
 export function routinesSettingsSheetHTML() {
   const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
   const on = !!(prefs && prefs.focusMode === true);
@@ -1663,6 +1705,8 @@ app.rememberRoutineBlock = rememberRoutineBlock;
 app.toggleRoutineCollapsed = toggleRoutineCollapsed;
 app.routineBlockRows = routineBlockRows;
 app.dailyRoutinesHTML = dailyRoutinesHTML;
+app.syncRoutineNowRefresh = syncRoutineNowRefresh;
+app.stopRoutineNowRefresh = stopRoutineNowRefresh;
 app.routineNowHTML = routineNowHTML;
 app.routineBlockTileHTML = routineBlockTileHTML;
 app.routineBlockTilesHTML = routineBlockTilesHTML;
