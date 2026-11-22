@@ -161,6 +161,17 @@ describe("next times follow days and logs", () => {
 });
 
 describe("making and editing routines", () => {
+  test("a duplicated routine keeps its window and days", () => {
+    signIn();
+    assert.ok(saveRoutineBlock(app.state, { name: "Example MWF", startMin: 8 * 60, endMin: 9 * 60, days: [0, 2, 4] }));
+    const source = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example MWF");
+    assert.ok(routines.duplicateRoutineBlock(app.state, source.id));
+    const copy = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example MWF copy");
+    assert.equal(copy.startMin, 8 * 60);
+    assert.equal(copy.endMin, 9 * 60);
+    assert.deepEqual(copy.days, [0, 2, 4]);
+  });
+
   test("the routine sheet offers no library link that would drop the draft", async () => {
     const plan = await import("../logger/js/pages/daily-routines-plan.js");
     signIn();

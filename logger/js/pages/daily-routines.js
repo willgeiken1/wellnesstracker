@@ -1516,10 +1516,18 @@ export function duplicateRoutineBlock(state, blockId) {
     const order = liveBlocks(store).reduce((max, row) => Math.max(max, row.order || 0), -1) + 1;
     const suffix = " copy";
     const name = `${block.name.slice(0, 80 - suffix.length).trimEnd()}${suffix}`;
+    /* The copy keeps the routine's window and days, so its items stay due
+       on the same days and not every day. */
+    const schedule = {};
+    for (const key of ["startMin", "endMin"]) {
+      if (typeof block[key] === "number" && Number.isFinite(block[key])) schedule[key] = block[key];
+    }
+    if (Array.isArray(block.days)) schedule.days = block.days.slice();
     let next = upsertEntity(store, "blocks", {
       id,
       name,
       color: TILE_COLORS.has(block.color) ? block.color : "citrus",
+      ...schedule,
       order,
       deletedAt: null,
     }, at);
