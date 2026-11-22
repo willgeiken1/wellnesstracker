@@ -727,8 +727,17 @@ document.addEventListener("click", async (ev) => {
     }
     case "food-del": {
       const d = app.ui.foodDay || app.today(), f = app.food();
-      f.days[d] = app.dayEntries(d).filter((x) => x.id !== app.ui.sd.edit);
-      f.deleted.push(app.ui.sd.edit); app.foodTouch(); app.ui.sheet = null; app.render(); app.toast("Deleted."); break;
+      const list = app.dayEntries(d), at = list.findIndex((x) => x.id === app.ui.sd.edit), gone = at >= 0 ? list[at] : null;
+      f.days[d] = list.filter((x) => x.id !== app.ui.sd.edit);
+      f.deleted.push(app.ui.sd.edit); app.foodTouch(); app.ui.sheet = null; app.render();
+      /* Undo brings back a copy with a new id, because the old id's delete may already have synced. */
+      app.toast("Deleted.", gone ? () => {
+        const back = { ...JSON.parse(JSON.stringify(gone)), id: app.fid(), updatedAt: new Date().toISOString() };
+        const now = app.dayEntries(d).slice();
+        now.splice(Math.min(at, now.length), 0, back);
+        app.food().days[d] = now; app.foodTouch(); app.render();
+      } : undefined);
+      break;
     }
     case "food-pick-fav": case "food-pick-recent": {
       let src = null;

@@ -640,12 +640,18 @@ async function startBarcode() {
 }
 app.startBarcode = startBarcode;
 
+const BARCODE_TIMEOUT_MS = 12000;
+app.BARCODE_TIMEOUT_MS = BARCODE_TIMEOUT_MS;
+
 async function lookupBarcode(code) {
   code = String(code || "").replace(/\D/g, "");
   if (code.length < 6) { app.toast("Enter the full barcode number."); return; }
   app.bcStatus("Looking it up…");
+  /* A slow food database used to leave "Looking it up…" on screen for good. Give up after a while. */
+  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), BARCODE_TIMEOUT_MS) : null;
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,serving_size,serving_quantity,nutriments`);
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,serving_size,serving_quantity,nutriments`, ctrl ? { signal: ctrl.signal } : undefined);
     const j = await res.json();
     if (!j || j.status !== 1 || !j.product) { app.bcStatus("That product isn't in the database. Try a photo of the label or enter it manually."); return; }
     const p = j.product, n = p.nutriments || {};
@@ -659,7 +665,10 @@ async function lookupBarcode(code) {
     app.ui.sd.product = { code, name: p.product_name || "Packaged food", brand: (p.brands || "").split(",")[0], per100, serving, servingLabel: p.serving_size || "" };
     app.ui.sd.unit = serving ? "serving" : "g"; app.ui.sd.amt = serving ? "1" : "100";
     app.renderSheet();
-  } catch (e) { app.bcStatus("Couldn't reach the food database. Check your connection."); }
+  } catch (e) {
+    if (e && e.name === "AbortError") app.bcStatus("The food database is taking too long. Try again, or enter it manually.");
+    else app.bcStatus("Couldn't reach the food database. Check your connection.");
+  } finally { if (timer) clearTimeout(timer); }
 }
 app.lookupBarcode = lookupBarcode;
 
