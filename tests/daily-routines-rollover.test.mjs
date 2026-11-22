@@ -498,14 +498,14 @@ describe("routine day rollover", { concurrency: false }, () => {
     const dose = readFileSync(new URL("../logger/js/shared/routine-dose.js", import.meta.url), "utf8");
     const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-    assert.match(flag, /export const ROUTINES_ENABLED = false/);
+    assert.match(flag, /export const ROUTINES_ENABLED = true/);
     assert.equal(main.match(/routines-flag/g).length, 1);
     assert.doesNotMatch(page, /routines-flag/);
     assert.doesNotMatch(store, /routines-flag/);
     assert.doesNotMatch(dose, /routines-flag/);
     assert.match(page, /routineDayKey/);
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
+    assert.match(sw, /const CACHE = "insight-shell-v79"/);
+    assert.match(sentry, /insight-shell-v79/);
     assert.doesNotMatch(page, /showNotification|requestPermission/);
   });
 });
