@@ -599,6 +599,21 @@ describe("Focus mode around the rollover and overlapping windows", () => {
   });
 });
 
+describe("Home tile jumps open a later routine", () => {
+  test("opening a Night item from Home in the morning paints its row", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example night check", kind: "check" }));
+    const id = item("Example night check").id;
+    app.goTab = () => {};
+    assert.match(dailyRoutinesHTML(), /data-block-id="block_default_night"[^>]*data-collapsed="true"/, "Night starts closed in the morning");
+    assert.equal(tiles.openRoutineTile(tiles.routineItemTileId(id)), true);
+    const html = dailyRoutinesHTML();
+    assert.match(html, /data-block-id="block_default_night"[^>]*data-collapsed="false"/);
+    assert.match(html, new RegExp(`class="dr-row[^"]*"[^>]*data-item-id="${id}"`));
+  });
+});
+
 describe("Home tiles follow routine days", () => {
   test("Next up and a routine card leave out a routine that does not run today", async () => {
     const tiles = await import("../logger/js/shared/routine-home-tiles.js");

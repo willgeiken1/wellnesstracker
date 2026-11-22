@@ -589,6 +589,15 @@ export function openRoutineTile(tileId) {
   }
   if (!app.ui) app.ui = {};
   app.ui.routineJump = jump;
+  /* A later routine opens for this visit only, so Night tapped from Home in
+     the morning paints its rows and the jump has a row to reach. */
+  const peekId = jump && (jump.blockId || (jump.itemId ? blockIdForItem(view, jump.itemId) : ""));
+  if (peekId) {
+    const open = Array.isArray(app.ui.routineOpenBlocks) ? app.ui.routineOpenBlocks.filter((id) => typeof id === "string" && id !== peekId) : [];
+    const shut = Array.isArray(app.ui.routineShutBlocks) ? app.ui.routineShutBlocks.filter((id) => typeof id === "string" && id !== peekId) : [];
+    app.ui.routineOpenBlocks = open.concat(peekId);
+    app.ui.routineShutBlocks = shut;
+  }
   if (revealRoutineJump(app.state, jump)) saveLive(app.state);
   if (typeof app.goTab === "function") app.goTab("daily-routines");
   else if (app.ui) app.ui.tab = "daily-routines";
