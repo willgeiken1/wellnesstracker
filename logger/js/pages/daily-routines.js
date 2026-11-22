@@ -1065,7 +1065,8 @@ export function saveRoutineItemNote(state, itemId, note) {
     const logs = JSON.stringify(store.logs);
     const next = revisePlanEntity(store, "items", itemId, { note }, at);
     const row = (next.items || []).find((entry) => entry.id === itemId);
-    if (!row || (row.note || "") !== clipNote(note)) return null;
+    const expected = note.trim().slice(0, 500);
+    if (!row || (row.note || "") !== expected) return null;
     if (JSON.stringify(next.logs) !== logs) return null;
     return next;
   });

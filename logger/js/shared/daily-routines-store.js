@@ -19,6 +19,8 @@ import { app } from "../runtime.js";
    a store that is already on the phone. */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const NOTE_MAX = 500;
+const FEELING_KEYS = ["mood", "energy", "stress", "feeling", "felt"];
 const CLOCK_SKEW_MS = 60_000;
 const FUTURE_SLACK_MS = 24 * 60 * 60 * 1000;
 const LOG_TOMBSTONE_KEYS = ["id", "day", "status", "updatedAt", "deletedAt"];
