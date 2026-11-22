@@ -49,64 +49,66 @@ $id$;
 
 create or replace function public.daily_routines_retarget_fresh(p_stored jsonb, p_incoming jsonb, p_side text)
 returns jsonb
-language plpgsql
+language sql
 immutable
 set search_path = public
 as $fn$
-declare
-  stored jsonb := case when jsonb_typeof(p_stored) = 'array' then p_stored else '[]'::jsonb end;
-  incoming jsonb := case when jsonb_typeof(p_incoming) = 'array' then p_incoming else '[]'::jsonb end;
-  source jsonb := case when p_side = 'stored' then stored else incoming end;
-  other_side jsonb := case when p_side = 'stored' then incoming else stored end;
-  result jsonb := '[]'::jsonb;
-  row jsonb;
-  tombs jsonb := '{}'::jsonb;
-  other jsonb;
-  id text;
-  new_id text;
-  live_at numeric;
-  moved_at numeric;
-  live_stamp numeric;
-  tomb_stamp numeric;
-begin
-  if not exists (
-    select 1 from jsonb_array_elements(stored) element where element ? 'movedDay'
-    union all
-    select 1 from jsonb_array_elements(incoming) element where element ? 'movedDay'
-  ) then
-    return source;
-  end if;
-  select coalesce(jsonb_object_agg(value->>'id', value), '{}'::jsonb) into tombs
-  from jsonb_array_elements(other_side) value
-  where coalesce(value->>'id', '') <> ''
-    and coalesce(public.daily_routines_ms(value, 'deletedAt'), 0) > 0
-    and value ? 'movedDay';
-  for row in select value from jsonb_array_elements(source)
-  loop
-    id := row->>'id';
-    other := tombs->id;
-    live_at := public.daily_routines_ms(row, 'at');
-    moved_at := public.daily_routines_ms(other, 'movedAt');
-    live_stamp := public.daily_routines_ms(row, 'updatedAt');
-    tomb_stamp := public.daily_routines_ms(other, 'deletedAt');
-    if other is not null
-      and coalesce(public.daily_routines_ms(row, 'deletedAt'), 0) = 0
-      and tomb_stamp > 0
-      and public.daily_routines_day(other->'movedDay') is not null
-      and moved_at > 0
-      and live_at > 0
-      and live_at is distinct from moved_at
-      and live_stamp <= tomb_stamp
-    then
-      new_id := public.daily_routines_fresh_move_id(id, live_at);
-      if char_length(new_id) <= 80 then
-        row := jsonb_set(row, '{id}', to_jsonb(new_id));
-      end if;
-    end if;
-    result := result || jsonb_build_array(row);
-  end loop;
-  return result;
-end;
+  with sides as (
+    select
+      case when jsonb_typeof(p_stored) = 'array' then p_stored else '[]'::jsonb end as stored,
+      case when jsonb_typeof(p_incoming) = 'array' then p_incoming else '[]'::jsonb end as incoming
+  ),
+  chosen as (
+    select
+      stored,
+      incoming,
+      case when p_side = 'stored' then stored else incoming end as source,
+      case when p_side = 'stored' then incoming else stored end as other_side
+    from sides
+  ),
+  guard as (
+    select source, other_side,
+      exists (
+        select 1 from jsonb_array_elements(stored) element where element ? 'movedDay'
+        union all
+        select 1 from jsonb_array_elements(incoming) element where element ? 'movedDay'
+      ) as has_move
+    from chosen
+  ),
+  tombs as (
+    select coalesce(jsonb_object_agg(value->>'id', value), '{}'::jsonb) as map
+    from guard
+    cross join lateral jsonb_array_elements(guard.other_side) as value
+    where guard.has_move
+      and coalesce(value->>'id', '') <> ''
+      and coalesce(public.daily_routines_ms(value, 'deletedAt'), 0) > 0
+      and value ? 'movedDay'
+  ),
+  rewritten as (
+    select elem.ordinality as ord,
+      case
+        when guard.has_move
+          and (tombs.map ? (elem.value->>'id'))
+          and coalesce(public.daily_routines_ms(elem.value, 'deletedAt'), 0) = 0
+          and public.daily_routines_ms(tombs.map -> (elem.value->>'id'), 'deletedAt') > 0
+          and public.daily_routines_day((tombs.map -> (elem.value->>'id')) -> 'movedDay') is not null
+          and public.daily_routines_ms(tombs.map -> (elem.value->>'id'), 'movedAt') > 0
+          and public.daily_routines_ms(elem.value, 'at') > 0
+          and public.daily_routines_ms(elem.value, 'at') is distinct from public.daily_routines_ms(tombs.map -> (elem.value->>'id'), 'movedAt')
+          and public.daily_routines_ms(elem.value, 'updatedAt') <= public.daily_routines_ms(tombs.map -> (elem.value->>'id'), 'deletedAt')
+          and char_length(public.daily_routines_fresh_move_id(elem.value->>'id', public.daily_routines_ms(elem.value, 'at'))) <= 80
+        then jsonb_set(
+          elem.value,
+          '{id}',
+          to_jsonb(public.daily_routines_fresh_move_id(elem.value->>'id', public.daily_routines_ms(elem.value, 'at')))
+        )
+        else elem.value
+      end as value
+    from guard
+    cross join tombs
+    cross join lateral jsonb_array_elements(guard.source) with ordinality as elem(value, ordinality)
+  )
+  select coalesce((select jsonb_agg(value order by ord) from rewritten), '[]'::jsonb);
 $fn$;
 
 

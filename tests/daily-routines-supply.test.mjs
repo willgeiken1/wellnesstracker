@@ -662,9 +662,9 @@ describe("routine supply and mixed-on date", { concurrency: false }, () => {
     const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v88"/);
+    assert.match(sw, /const CACHE = "insight-shell-v90"/);
     assert.match(sw, /routine-supply\.js/);
-    assert.match(sentry, /insight-shell-v88/);
+    assert.match(sentry, /insight-shell-v90/);
     app.ROUTINES_ENABLED = false;
     assert.equal(dailyRoutinesHTML(), "");
   });
