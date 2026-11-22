@@ -91,18 +91,17 @@ export function nextDoseCountdown({ item, blocks, placements, logs, date, day, h
   }
   if (!starts.length) return null;
   const boundaryMin = routineDayRolloverHour(hour) * 60;
-  const nowMin = date.getHours() * 60 + date.getMinutes();
   const calendarDay = localCalendarDay(date);
   const logged = (Array.isArray(logs) ? logs : []).some((log) => coversDay(log, item.id, day));
   const due = [];
   const later = [];
   for (const start of starts) {
     for (let ahead = 0; ahead <= 2; ahead += 1) {
-      const minutes = start + ahead * 24 * 60;
-      if (minutes < nowMin) continue;
+      const target = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ahead, Math.floor(start / 60), start % 60, 0, 0);
+      if (target.getTime() < date.getTime()) continue;
       const instantDay = ahead === 0 ? calendarDay : shiftCalendarDay(calendarDay, ahead);
       const belongs = routineDayOfStart(instantDay, start, boundaryMin);
-      const candidate = { waitMin: minutes - nowMin, belongs };
+      const candidate = { waitMin: Math.round((target.getTime() - date.getTime()) / 60000), belongs };
       if (belongs === day) due.push(candidate);
       else if (belongs > day) later.push(candidate);
     }

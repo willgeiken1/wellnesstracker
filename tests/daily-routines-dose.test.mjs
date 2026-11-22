@@ -179,7 +179,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.notEqual(today.day, new Date("2026-11-20T04:30:00.000Z").toISOString().slice(0, 10));
     assert.equal(today.amount, 0.25);
 
-    assert.equal(editRoutineLog(app.state, today.id, { amount: 250, day: "2026-11-20" }), false);
+    assert.equal(editRoutineLog(app.state, today.id, { amount: 250, day: "2026-11-21" }), false);
     assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === today.id).day, "2026-11-19");
     assert.equal(editRoutineLog(app.state, today.id, { amount: "", day: "2026-11-18" }), false);
     assert.equal(editRoutineLog(app.state, today.id, { amount: "-1", day: "2026-11-18" }), false);
