@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { routineLogDayInPurge } from "../shared/daily-routines-store.js";
 import { applyPurges, buildExportFiles, coveredBy, localStamp, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
 
 /* Privacy center: export, date-range delete, account delete, and app lock. */
@@ -204,7 +205,7 @@ function rangeCounts(from, to) {
   const oura = Object.keys((app.state.oura && app.state.oura.days) || {}).filter((d) => d >= from && d <= to).length;
   const photos = (app.myPhotos ? app.myPhotos() : []).filter((p) => p.date >= from && p.date <= to).length;
   const plan = Object.keys(app.state.plan || {}).filter((d) => d >= from && d <= to).length;
-  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && log.day >= from && log.day <= to).length;
+  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && routineLogDayInPurge(log.day, from, to)).length;
   return { sessions, meals, cardio, meas, weighs, checks, oura, photos, plan, routineLogs };
 }
 app.rangeCounts = rangeCounts;

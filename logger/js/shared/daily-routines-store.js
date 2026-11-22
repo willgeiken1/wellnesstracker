@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { DEFAULT_DAY_ROLLOVER_HOUR, routineDayRolloverHour } from "./routine-dose.js";
 
 /* Daily routines live on the liftlog-v1 blob under `dailyRoutines`.
    `routines` is already the workout-template list. Do not reuse that key.
@@ -383,6 +384,18 @@ function normalizePrefs(raw, now = Date.now()) {
   };
 }
 
+/* PR 8 owns the rest of this object. The day-start hour lives here so that
+   sheet can read it. updatedAt 0 means the user has not chosen an hour, and
+   a later explicit choice wins the merge. */
+function normalizeSettings(raw, now = Date.now()) {
+  const fields = plainFields(raw);
+  return {
+    ...fields,
+    dayRolloverHour: routineDayRolloverHour(fields.dayRolloverHour),
+    updatedAt: clampStamp(fields.updatedAt, now),
+  };
+}
+
 export function emptyDailyRoutines(now = 0) {
   return {
     updatedAt: num(now),
@@ -392,12 +405,14 @@ export function emptyDailyRoutines(now = 0) {
     compounds: [],
     logs: [],
     prefs: { lastBlockId: null, updatedAt: num(now) },
+    settings: { dayRolloverHour: DEFAULT_DAY_ROLLOVER_HOUR, updatedAt: 0 },
   };
 }
 
 export function normalizeDailyRoutines(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const prefs = normalizePrefs(raw.prefs, now);
+  const settings = normalizeSettings(raw.settings, now);
   return wellFormedDeep({
     updatedAt: clampStamp(raw.updatedAt, now),
     blocks: normalizeList(raw.blocks, normalizeBlock, now),
@@ -406,6 +421,7 @@ export function normalizeDailyRoutines(raw, now = Date.now()) {
     compounds: normalizeList(raw.compounds, normalizeCompound, now),
     logs: normalizeList(raw.logs, normalizeLog, now),
     prefs,
+    settings,
   });
 }
 
@@ -474,6 +490,11 @@ function liveOrder(winner, other) {
   return winner;
 }
 
+function mergeSettings(local, remote) {
+  if (num(local && local.updatedAt) >= num(remote && remote.updatedAt)) return { ...normalizeSettings(local) };
+  return { ...normalizeSettings(remote) };
+}
+
 function mergePrefs(local, remote, now) {
   const left = normalizePrefs(local, now);
   const right = normalizePrefs(remote, now);
@@ -528,6 +549,7 @@ export function mergeDailyRoutines(local, remote, now = Date.now()) {
     compounds: mergeEntityLists(left.compounds, right.compounds, now),
     logs: mergeEntityLists(left.logs, right.logs, now),
     prefs: mergePrefs(left.prefs, right.prefs, now),
+    settings: mergeSettings(left.settings, right.settings),
   };
 }
 
@@ -554,9 +576,26 @@ function tombstoneAt(before, now) {
   return Date.now();
 }
 
-/* Tombstones logs whose day is inside the range. Blocks, items, placements,
-   and compounds stay. The tombstone is what stops the other phone's older
-   live log from coming back on the next merge. */
+/* Calendar step for a YYYY-MM-DD string. UTC is only the calculator. */
+function dayBefore(day) {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+}
+
+/* A 1:30 AM dose on the first selected calendar day is stored on the previous
+   routine day. The match starts one day before `from` so that dose is removed.
+   The day after `to` stays. The extra previous afternoon can go too; deleting
+   more is the privacy-safe direction. The edge strip uses the same window. */
+export function routineLogDayInPurge(day, from, to) {
+  if (!validDay(day) || !validDay(from) || !validDay(to) || from > to) return false;
+  return day >= dayBefore(from) && day <= to;
+}
+
+/* Tombstones logs whose day is inside the widened range. Blocks, items,
+   placements, and compounds stay. The tombstone is what stops the other
+   phone's older live log from coming back on the next merge. */
 export function purgeDailyRoutineRange(data, from, to, before, now = Date.now()) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   const routines = data.dailyRoutines;
@@ -564,7 +603,7 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   const cutoff = tombstoneAt(before, now);
   let changed = false;
   routines.logs = routines.logs.map((log) => {
-    if (!log || typeof log !== "object" || !validDay(log.day) || log.day < from || log.day > to) return log;
+    if (!log || typeof log !== "object" || !routineLogDayInPurge(log.day, from, to)) return log;
     const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
     /* A later undo is inside the dates but did not exist when this delete
        was made. Leave it, amount and note included. */
