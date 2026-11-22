@@ -359,6 +359,8 @@ function pickerSVG(sd) {
   return `<svg class="dr-sun dr-sun-pick" viewBox="0 0 260 132" aria-hidden="true" data-sp-picker="true">${parts.join("")}</svg>`;
 }
 
+/* No "From the library" chip yet: the library only says Coming soon, and
+   opening it would drop the routine being written. */
 function itemChipsHTML(sd) {
   const projected = view();
   const placed = new Set(sd.itemIds || []);
@@ -372,7 +374,6 @@ function itemChipsHTML(sd) {
   return `<div class="dr-chips" role="group" aria-labelledby="dr-block-items-label">
       ${chips}
       ${rest.length ? `<button type="button" class="dr-chip dr-chip-quiet" data-action="routines-block-more" aria-expanded="${sd.more === true ? "true" : "false"}">+ From your tabs</button>` : ""}
-      <button type="button" class="dr-chip dr-chip-quiet" data-action="routines-discover">+ From the library</button>
     </div>
     ${more}`;
 }

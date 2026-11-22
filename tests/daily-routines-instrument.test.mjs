@@ -161,6 +161,13 @@ describe("next times follow days and logs", () => {
 });
 
 describe("making and editing routines", () => {
+  test("the routine sheet offers no library link that would drop the draft", async () => {
+    const plan = await import("../logger/js/pages/daily-routines-plan.js");
+    signIn();
+    app.ui.sd = { name: "Example draft", itemIds: [] };
+    assert.doesNotMatch(plan.routineBlockSheetHTML(), /data-action="routines-discover"/);
+  });
+
   test("New routine saves a name, window, days, color and items", () => {
     signIn();
     assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example walk", kind: "check" }));
