@@ -529,3 +529,9 @@ textarea.text-in.checkin-note { height: auto; min-height: 88px; padding: 12px 14
 #workout .sets li.just-logged { animation: set-logged .6s ease-out; border-radius: 10px; }
 @keyframes set-logged { from { background: color-mix(in srgb, var(--green) 26%, transparent); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { #workout .sets li.just-logged { animation: none; } }
+
+/* Keyboard: --kb is the iPhone keyboard's height and --vvh the visible height, both set from
+   visualViewport, so an open sheet sits above the keyboard and never runs under it. */
+#sheet { bottom: var(--kb, 0px); transition: bottom .2s ease-out; }
+.sheet-card { max-height: min(88vh, calc(var(--vvh, 100vh) - 24px)); }
+@media (prefers-reduced-motion: reduce) { #sheet { transition: none; } }

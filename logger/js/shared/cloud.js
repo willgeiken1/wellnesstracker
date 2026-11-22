@@ -60,7 +60,34 @@ function mergeRpcMissing(error) {
   return code === "PGRST202" || code === "42883" || /could not find the function/i.test(msg) || /merge_user_data/i.test(msg) && /does not exist|schema cache/i.test(msg);
 }
 
+/* A failed backup used to pass in silence. Say so once in a while, and only when the phone
+   thinks it is online, since offline saves are expected and retried. */
+const CLOUD_FAIL_TOAST_MS = 30 * 60 * 1000;
+let lastCloudFailToast = 0;
+function noteCloudFail() {
+  app.cloudFailAt = Date.now();
+  const online = typeof navigator === "undefined" || navigator.onLine !== false;
+  if (!online || app.cloudFailAt - lastCloudFailToast < CLOUD_FAIL_TOAST_MS) return;
+  lastCloudFailToast = app.cloudFailAt;
+  if (typeof app.toast === "function") app.toast("Couldn't back up just now. Everything is still saved on this phone, and it will try again.");
+}
+app.noteCloudFail = noteCloudFail;
+app.resetCloudFailToast = () => { lastCloudFailToast = 0; };
+
+/* The Settings line: when the last try failed, say so, with the day if it isn't today. */
+export function cloudStatusText(lastCloud, failAt, now = Date.now()) {
+  const when = (t) => {
+    const d = new Date(t), today = new Date(now);
+    const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return d.toDateString() === today.toDateString() ? time : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
+  };
+  if (failAt && failAt > (lastCloud || 0)) return lastCloud ? "Couldn't back up · last saved " + when(lastCloud) : "Couldn't back up yet";
+  return lastCloud ? "On · saved " + when(lastCloud) : "On";
+}
+app.cloudStatusText = cloudStatusText;
+
 function rememberCloudPush() {
+  app.cloudFailAt = 0;
   app.state.lastCloud = Date.now();
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
 }
@@ -98,7 +125,8 @@ async function cloudPushFallback(blob) {
   try {
     const { error } = await app.sb.from("user_data").upsert({ user_id: app.session.user.id, data: blob, updated_at: new Date().toISOString() });
     if (!error) rememberCloudPush();
-  } catch (e) { /* offline: the next save or app open retries */ }
+    else noteCloudFail();
+  } catch (e) { /* offline: the next save or app open retries */ noteCloudFail(); }
 }
 
 async function cloudPush() {
@@ -122,8 +150,8 @@ async function cloudPush() {
       }
       return;
     }
-    if (!(error && mergeRpcMissing(error))) return;
-  } catch (e) { /* offline: the next save or app open retries */ return; }
+    if (!(error && mergeRpcMissing(error))) { if (error) noteCloudFail(); return; }
+  } catch (e) { /* offline: the next save or app open retries */ noteCloudFail(); return; }
   await cloudPushFallback(blob);
 }
 app.cloudPush = cloudPush;
