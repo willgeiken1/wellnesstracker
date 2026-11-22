@@ -27,6 +27,7 @@ import "./pages/daily-routines.js";
 import "./pages/daily-routines-edit.js";
 import "./pages/daily-routines-dose.js";
 import "./pages/daily-routines-details.js";
+import "./pages/daily-routines-setup.js";
 import "./pages/checkin.js";
 import "./pages/home.js";
 import "./shell/workout.js";

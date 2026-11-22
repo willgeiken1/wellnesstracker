@@ -502,3 +502,67 @@
 }
 .dr-details-note { min-height: 72px; }
 .dr-details-history { font-size: 20px; margin-top: 18px; }
+
+/* Setup sheet and the cards it leaves on the page. */
+.dr-setup-k { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.dr-setup-choices { display: grid; gap: 8px; margin: 12px 0 14px; }
+.dr-setup-choice {
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+}
+.dr-setup-choice[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.dr-setup-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.dr-setup-nav:empty { display: none; }
+.dr-setup-skip {
+  display: block;
+  min-height: 44px;
+  margin: 10px auto 0;
+  padding: 0 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.dr-add-head { margin: 16px 0 6px; font-size: 15px; }
+.dr-add-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.dr-add-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; }
+.dr-add-copy { display: grid; gap: 2px; min-width: 0; }
+.dr-add-name { font-weight: 700; }
+.dr-add-hint { font-size: 14px; color: var(--muted); }
+.dr-add-list button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--raised);
+}
+.dr-retake {
+  display: block;
+  min-height: 44px;
+  margin: 8px auto 0;
+  padding: 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: underline;
+}
+.dr-setup-later,
+.dr-tips {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 24px;
+  padding: 16px 16px 14px;
+  box-shadow: var(--inset-hi), var(--inset-lo), var(--elev-1);
+}
+.dr-setup-later h2,
+.dr-tips h2 { font-size: 20px; margin: 0; color: var(--text); }
+.dr-setup-later p { margin: 6px 0 12px; font-size: 15px; line-height: 1.4; color: var(--muted); }
+.dr-tips ul { margin: 8px 0 6px; padding-left: 20px; font-size: 15px; line-height: 1.45; }
+.dr-tips-hide { min-height: 44px; padding: 0 4px; font-weight: 700; color: var(--muted); }
+.dr-setup-error { margin: 8px 0 0; font-weight: 700; color: var(--text); }
+#dr-setup-title:focus { outline: none; }
+#dr-setup-title:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }

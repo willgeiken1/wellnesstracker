@@ -17,7 +17,8 @@ import {
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { nextDoseCountdown } from "../shared/routine-dose.js";
+import { nextDoseCountdown, ROUTINE_BLOCK_START_MIN } from "../shared/routine-dose.js";
+import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows, SETUP_BLOCK_IDS } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -36,11 +37,7 @@ const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
 export const ROUTINE_DOSE_UNITS = Object.freeze(["mcg", "mg", "IU", "mL", "units"]);
 const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
-const DEFAULT_START = new Map([
-  ["Morning routine", 5],
-  ["Supplement & enhancer stack", 12],
-  ["Night routine", 17],
-]);
+const DEFAULT_START = new Map(Object.entries(ROUTINE_BLOCK_START_MIN).map(([name, minutes]) => [name, minutes / 60]));
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 function esc(value) {
@@ -788,6 +785,66 @@ export function toggleRoutineFocus(state) {
   });
 }
 
+/* Saves a finished or skipped setup and shapes the page from it. touched
+   names the answers whose one-time effects run (Focus mode, collapsed
+   blocks); null runs all of them, as at the end of a full pass. */
+export function saveRoutineSetup(state, { status, answers, touched = null, addOnly = false } = {}) {
+  if (status !== "done" && status !== "skipped") return false;
+  return withStore(state, (store, clock) => {
+    const at = prefStamp(store, clock);
+    return applySetup(store, {
+      status,
+      answers,
+      at,
+      touched,
+      addOnly,
+      keepOpen: (next) => {
+        const moment = routineNowNext(next.blocks, clock.date);
+        return moment.nowBlock ? moment.nowBlock.id : null;
+      },
+    });
+  });
+}
+
+/* Adds a block or tool from Routines settings. A block the user deleted
+   comes back through the normal restore, with its items. */
+export function addRoutinePartToPage(state, key) {
+  if (typeof key !== "string" || !key) return false;
+  const id = SETUP_BLOCK_IDS[key];
+  const stored = id && state && state.dailyRoutines && (state.dailyRoutines.blocks || []).find((block) => block && block.id === id);
+  if (stored && !isLive(stored)) {
+    if (!restoreRoutineBlock(state, id)) return false;
+  }
+  return withStore(state, (store, clock) => addRoutinePart(store, key, prefStamp(store, clock)));
+}
+
+export function hideRoutineTips(state) {
+  return withStore(state, (store, clock) => {
+    if (store.prefs && store.prefs.tipsHidden === true) return null;
+    const at = prefStamp(store, clock);
+    store.prefs = { ...store.prefs, tipsHidden: true, updatedAt: at };
+    store.updatedAt = Math.max(store.updatedAt || 0, at);
+    return store;
+  });
+}
+
+/* A tool the store already uses stays on screen whatever the answers say,
+   so nobody loses something they rely on by answering the setup. */
+function routineInUse(feature, store) {
+  if (!store || typeof store !== "object") return false;
+  const doses = () => (store.items || []).some((item) => isLive(item) && item.kind === "dose");
+  if (feature === "calculator" || feature === "injection") return (store.compounds || []).some(isLive) || doses();
+  if (feature === "doses") return doses();
+  if (feature === "rest") return (store.logs || []).some((log) => isLive(log) && log.rest === true);
+  return false;
+}
+
+/* What the setup answers show. With no finished setup every part shows. */
+export function routineShows(feature, store) {
+  const source = store !== undefined ? store : app.state && app.state.dailyRoutines;
+  return routineSetupShows(source && source.prefs, feature) || routineInUse(feature, source);
+}
+
 export function toggleRoutineReveal(state, blockId) {
   if (typeof blockId !== "string" || !blockId) return false;
   return withStore(state, (store, clock) => {
@@ -1351,7 +1408,7 @@ function nowFooter(projected, date) {
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
-    ${restHTML(rest)}`;
+    ${rest || routineShows("rest", projected) ? restHTML(rest) : ""}`;
 }
 
 export function routineNowHTML(projected, date) {
@@ -1388,11 +1445,20 @@ export function routineNowHTML(projected, date) {
   </section>`;
 }
 
+const TILE_KICKERS = new Map([
+  ["Morning routine", "Morning"],
+  ["Wake-up routine", "Wake-up"],
+  ["Supplement & enhancer stack", "Stack"],
+  ["Supplements", "Supplements"],
+  ["Supplements & medications", "Supplements"],
+  ["Night routine", "Night"],
+  ["Wind-down routine", "Wind-down"],
+  ["Enhancers & peptides", "Enhancers"],
+  ["Medications", "Medications"],
+]);
+
 function tileKicker(block) {
-  if (block.name === "Night routine") return "Night";
-  if (block.name === "Supplement & enhancer stack") return "Stack";
-  if (block.name === "Morning routine") return "Morning";
-  return "Routine";
+  return TILE_KICKERS.get(block.name) || "Routine";
 }
 
 function tileMeta(open, logged, skipped) {
@@ -1585,6 +1651,29 @@ function deletedHTML() {
   </section>`;
 }
 
+function setupLaterHTML(view) {
+  if (readSetup(view.prefs) || !(app.ui && app.ui.routineSetupLater === true)) return "";
+  return `<section class="dr-setup-later" aria-labelledby="dr-setup-later-title">
+    <h2 id="dr-setup-later-title">Finish setting up Routines</h2>
+    <p>A few questions fit this page to what you track.</p>
+    <button type="button" class="btn primary block" data-action="routines-setup-open">Continue setup</button>
+  </section>`;
+}
+
+function tipsHTML(view) {
+  if (!routineShows("tips", view) || (view.prefs && view.prefs.tipsHidden === true)) return "";
+  return `<section class="dr-tips" aria-labelledby="dr-tips-title">
+    <h2 id="dr-tips-title">Getting started</h2>
+    <ul>
+      <li>Tap an item when you've done it or taken it.</li>
+      <li>Skip marks it skipped for today, so it stops waiting.</li>
+      <li>Edit at the top adds, renames and moves routines.</li>
+      <li>The gear opens settings, where you can change your setup answers.</li>
+    </ul>
+    <button type="button" class="dr-tips-hide" data-action="routines-tips-hide">Hide tips</button>
+  </section>`;
+}
+
 function paintShell(view, date) {
   const sub = typeof app.fmtDate === "function"
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
@@ -1595,10 +1684,12 @@ function paintShell(view, date) {
   return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
     ${pageHeader("Routines", sub, headerTools())}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
+    ${setupLaterHTML(view)}
+    ${tipsHTML(view)}
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
-    <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
+    ${routineShows("calculator", view) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
@@ -1684,18 +1775,45 @@ export function syncRoutineNowRefresh() {
   }, msUntilNextMinute(date));
 }
 
+/* Everything Routines can show that this page does not have yet, each with
+   Add. Adding never removes anything. */
+function addListHTML() {
+  const store = app.state && app.state.dailyRoutines;
+  const setup = readSetup(store && store.prefs);
+  const missing = routineParts(store, (feature) => routineShows(feature, store)).filter((part) => !part.present);
+  const rows = missing.map((part) => `<li><span class="dr-add-copy"><span class="dr-add-name">${esc(part.label)}</span><span class="dr-add-hint">${esc(part.hint)}</span></span><button type="button" data-action="routines-part-add" data-part="${esc(part.key)}" aria-label="Add ${esc(part.label)}">Add</button></li>`).join("");
+  const list = missing.length
+    ? `<h4 class="dr-add-head">Add to your page</h4><ul class="dr-add-list">${rows}</ul>`
+    : `<p class="sub">Everything Routines offers is already on your page.</p>`;
+  const start = setup ? "" : `<button type="button" class="btn block" data-action="routines-setup-open">Set up your page</button>`;
+  return `${list}${start}`;
+}
+
+/* The one place a finished setup can be taken again, kept quiet at the very
+   bottom of Routines settings. */
+function retakeHTML() {
+  const store = app.state && app.state.dailyRoutines;
+  if (!readSetup(store && store.prefs)) return "";
+  return `<button type="button" class="dr-retake" data-action="routines-setup-retake">Retake setup quiz</button>`;
+}
+
 export function routinesSettingsSheetHTML() {
   const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
   const on = !!(prefs && prefs.focusMode === true);
+  const calc = routineShows("calculator", app.state && app.state.dailyRoutines)
+    ? `<button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
+    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>`
+    : "";
   return `<h3>Routines settings</h3>
     <div class="dr-set-row">
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
     <p class="sub">Focus mode dims every block except the current one. Reminders and the FAQ come later. Notifications stay off.</p>
-    <button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
-    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>
-    <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
+    ${calc}
+    ${addListHTML()}
+    <button type="button" class="btn block" data-action="sheet-close">Done</button>
+    ${retakeHTML()}`;
 }
 
 export function routinesDiscoverSheetHTML() {
@@ -1721,6 +1839,10 @@ app.undoRoutineLog = undoRoutineLog;
 app.restoreRoutineLog = restoreRoutineLog;
 app.logRoutineRest = logRoutineRest;
 app.toggleRoutineFocus = toggleRoutineFocus;
+app.saveRoutineSetup = saveRoutineSetup;
+app.hideRoutineTips = hideRoutineTips;
+app.addRoutinePartToPage = addRoutinePartToPage;
+app.routineShows = routineShows;
 app.toggleRoutineReveal = toggleRoutineReveal;
 app.addRoutineBlock = addRoutineBlock;
 app.renameRoutineBlock = renameRoutineBlock;
