@@ -441,6 +441,7 @@ describe("routine editing", { concurrency: false }, () => {
       const id = raw.items.find((row) => row.name === "Example Compound A").id;
       raw.items = raw.items.map((row) => (row.id === id ? { ...row, updatedAt: ahead } : row));
       raw.compounds = (raw.compounds || []).map((row) => ({ ...row, updatedAt: ahead }));
+      raw.blocks = raw.blocks.map((row) => ({ ...row, updatedAt: ahead }));
       app.state.dailyRoutines = normalizeDailyRoutines(raw);
       assert.equal(app.state.dailyRoutines.items.find((row) => row.id === id).sourceAt, ahead);
       // The other phone still holds its own copy with the raw future stamp.
@@ -449,6 +450,15 @@ describe("routine editing", { concurrency: false }, () => {
       if (edit === "rename") assert.equal(renameRoutineItem(app.state, id, "Renamed Example"), true);
       else assert.equal(deleteRoutineItem(app.state, id), true);
       const edited = structuredClone(app.state.dailyRoutines);
+      // A reorder keeps the row's stamp, so it takes no step and a delete still beats it.
+      if (edit === "rename") {
+        const blockIds = projectDailyRoutines(edited).blocks.map((row) => row.id);
+        const steps = new Map(edited.blocks.map((row) => [row.id, row.sourceStep || 0]));
+        app.state.dailyRoutines = structuredClone(edited);
+        assert.equal(reorderRoutineBlocks(app.state, blockIds.slice().reverse(), blockIds[0]), true);
+        for (const row of app.state.dailyRoutines.blocks) assert.equal(row.sourceStep || 0, steps.get(row.id));
+        assert.ok(app.state.dailyRoutines.blocks.some((row) => typeof row.sourceAt === "number"));
+      }
       const later = Date.now() + 1000;
       for (const merged of [mergeDailyRoutines(original, edited, later), mergeDailyRoutines(edited, original, later)]) {
         const row = merged.items.find((entry) => entry.id === id);
