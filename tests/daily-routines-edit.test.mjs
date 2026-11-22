@@ -473,6 +473,27 @@ describe("routine editing", { concurrency: false }, () => {
     }
   });
 
+  test("reordering future-dated blocks back and forth does not outrank the other phone's delete", () => {
+    signIn();
+    const ahead = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    const raw = structuredClone(app.state.dailyRoutines);
+    raw.blocks = raw.blocks.map((row) => ({ ...row, updatedAt: ahead }));
+    app.state.dailyRoutines = normalizeDailyRoutines(raw);
+    const shared = structuredClone(app.state.dailyRoutines);
+    app.routineNow = () => new Date();
+    const ids = projectDailyRoutines(shared).blocks.map((row) => row.id);
+    assert.equal(reorderRoutineBlocks(app.state, ids.slice().reverse(), ids[0]), true);
+    assert.equal(reorderRoutineBlocks(app.state, ids, ids[0]), true);
+    const reordered = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(shared);
+    assert.equal(deleteRoutineBlock(app.state, ids[0]), true);
+    const deleted = structuredClone(app.state.dailyRoutines);
+    const later = Date.now() + 1000;
+    for (const merged of [mergeDailyRoutines(deleted, reordered, later), mergeDailyRoutines(reordered, deleted, later)]) {
+      assert.equal(isLive(merged.blocks.find((row) => row.id === ids[0])), false);
+    }
+  });
+
   test("a newer rename beats the other phone's item delete and keeps the placements", () => {
     signIn();
     const morning = blockId("Morning routine");
