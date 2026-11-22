@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { hasOura, homeOuraReconnectHTML, homeOuraWaiting, ouraMembershipInactive, visibleHomeIds } from "../shared/oura-gate.js";
 import { addToDraft, galleryEntries, needsSizeChoice, removeFromDraft, reorderDraft, sizeChoices, sizeLabel } from "../shared/home-edit.js";
+import { NEXT_UP_TILE_ID, addRoutineTile, forgetRoutineTrayQuery, hideLegacyNextUp, isRoutineTileId, legacyNextUpHTML, renderRoutineTileHTML, routineHaptic, routineTrayHTML } from "../shared/routine-home-tiles.js";
 import "../shared/home-defaults.js";
 import "../shared/home-drag.js";
 
@@ -119,6 +120,8 @@ function enterHomeEdit() {
   app.ui.sheet = null;
   app.ui.homeAnnounce = "";
   app.ui.homeDraft = app.homeEditorDraft(app.state);
+  forgetRoutineTrayQuery();
+  app.ui.routineTrayHeight = 220;
   app.render();
   return true;
 }
@@ -130,7 +133,12 @@ function liveSnapshot() {
 
 /* A card with nothing to paint still gets a body, so it can be moved or removed. */
 function widgetBody(id, data) {
+  if (app.ROUTINES_ENABLED === true && isRoutineTileId(id)) {
+    const html = renderRoutineTileHTML(id, { state: app.state, layout: { routineGates: app.ui && app.ui.homeDraft && app.ui.homeDraft.gates, sizes: app.ui && app.ui.homeDraft && app.ui.homeDraft.sizes }, size: app.widgetSize(id, app.ui && app.ui.homeDraft), editing: true });
+    if (String(html).trim()) return html;
+  }
   const entry = app.HOME_WIDGETS[id];
+  if (!entry) return `<article class="hw hw-size-s" data-hw="${app.esc(id)}"><p class="hw-k">Routine</p><p class="hw-sub">Nothing to show yet</p></article>`;
   let html = "";
   try { html = entry.render(data) || ""; } catch (e) { html = ""; }
   if (String(html).trim()) return html;
@@ -142,8 +150,8 @@ function widgetBody(id, data) {
 function homeEditCardsHTML(draft) {
   const data = liveSnapshot();
   const layout = { items: draft.items || [], hidden: [], sizes: draft.sizes || {} };
-  const cards = layout.items.filter((id) => app.HOME_WIDGETS[id]).map((id, index, all) => {
-    const widget = app.HOME_WIDGETS[id];
+  const cards = layout.items.filter((id) => app.HOME_WIDGETS[id] || (app.ROUTINES_ENABLED === true && isRoutineTileId(id))).map((id, index, all) => {
+    const widget = app.HOME_WIDGETS[id] || { name: id === "routine-next" ? "Next up" : "Routine" };
     const span = app.widgetSize(id, layout) === "medium" ? " span-m" : "";
     const name = app.esc(widget.name);
     return `<div class="hw-slot${span}" data-hw="${id}" data-id="${id}" tabindex="0" role="group" aria-label="${name}, ${index + 1} of ${all.length}. Arrow keys move it."><div class="hw-body" inert>${widgetBody(id, data)}</div><button type="button" class="hw-minus" data-action="home-remove" data-id="${id}" aria-label="Remove ${name}"><span aria-hidden="true">−</span></button></div>`;
@@ -162,6 +170,7 @@ function homeEditorHTML() {
     </div>
     <p class="hw-live" role="status" aria-live="polite">${app.esc(app.ui.homeAnnounce || "")}</p>
     ${homeEditCardsHTML(draft)}
+    ${routineTrayHTML(draft, app.state)}
   </div>`;
 }
 app.homeEditorHTML = homeEditorHTML;
@@ -174,7 +183,8 @@ function homeMoveItem(id, delta) {
   const to = from + delta;
   if (from < 0 || to < 0 || to >= draft.items.length) return;
   app.ui.homeDraft = { ...draft, ...reorderDraft(draft, id, to) };
-  app.ui.homeAnnounce = `${app.HOME_WIDGETS[id].name} moved to position ${to + 1} of ${draft.items.length}.`;
+  const movedName = (app.HOME_WIDGETS[id] && app.HOME_WIDGETS[id].name) || (id === "routine-next" ? "Next up" : "Routine");
+  app.ui.homeAnnounce = `${movedName} moved to position ${to + 1} of ${draft.items.length}.`;
   app.render();
   const again = document.querySelector(`.hw-slot[data-id="${id}"]`);
   if (again) again.focus();
@@ -193,7 +203,8 @@ function homeRemoveItem(id) {
   const draft = app.ui.homeDraft;
   if (!draft) return;
   app.ui.homeDraft = { ...draft, ...removeFromDraft(draft, id) };
-  app.ui.homeAnnounce = `${(app.HOME_WIDGETS[id] || {}).name || "Widget"} removed.`;
+  app.ui.homeAnnounce = `${(app.HOME_WIDGETS[id] || {}).name || (isRoutineTileId(id) ? "Routine tile" : "Widget")} removed.`;
+  if (isRoutineTileId(id)) routineHaptic();
   app.render();
 }
 app.homeRemoveItem = homeRemoveItem;
@@ -209,7 +220,37 @@ function homeAddItem(id, size) {
   const added = document.querySelector(`.hw-slot[data-id="${id}"]`);
   if (added && added.scrollIntoView) added.scrollIntoView({ block: "nearest" });
 }
+function homeAddRoutineTile(id, size, gate) {
+  const draft = app.ui.homeDraft;
+  if (!draft || app.ROUTINES_ENABLED !== true || !isRoutineTileId(id)) return;
+  app.ui.homeDraft = addRoutineTile(draft, id, size, gate);
+  app.ui.homeAnnounce = "Routine tile added.";
+  routineHaptic();
+  app.render();
+}
+function hideRoutineHomeTile() {
+  if (app.ROUTINES_ENABLED !== true || !app.state) return false;
+  const home = app.state.layout && app.state.layout.homeV2;
+  const realEdit = !!(home && home.v === 2 && Array.isArray(home.items) && home.migrated !== true && !(typeof home.migratedAt === "number" && home.migratedAt > 0));
+  if (realEdit && (home.routineNextAside === true || home.items.includes(NEXT_UP_TILE_ID))) {
+    const items = home.items.filter((id) => id !== NEXT_UP_TILE_ID);
+    const hidden = Array.isArray(home.hidden) && home.hidden.includes(NEXT_UP_TILE_ID) ? home.hidden.slice() : (Array.isArray(home.hidden) ? home.hidden : []).concat(NEXT_UP_TILE_ID);
+    app.setHomeLayout(app.state, { items, hidden, sizes: home.sizes, gates: home.routineGates });
+    app.state.layout.homeV2.routineNextAside = false;
+    app.state.layout.homeV2.routineNextSeeded = true;
+    if (typeof app.save === "function") app.save();
+    routineHaptic();
+    if (typeof app.render === "function") app.render();
+    return true;
+  }
+  const hid = hideLegacyNextUp(app.state);
+  if (hid) routineHaptic();
+  if (typeof app.render === "function") app.render();
+  return hid;
+}
 app.homeAddItem = homeAddItem;
+app.homeAddRoutineTile = homeAddRoutineTile;
+app.hideRoutineHomeTile = hideRoutineHomeTile;
 
 /* Preview of a card at one size, from the user's own data. A demo account's
    renderers label their own numbers sample. */
@@ -290,7 +331,8 @@ function homeHTML() {
   const live = { live: true };
   /* Default tiles sit above the slots, so hiding a slot never hides them. */
   const defaults = app.defaultHomeStripHTML(typeof app.snapshotFromApp === "function" ? app.snapshotFromApp() : live);
-  const stack = defaults + app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
+  const nextUp = legacyNextUpHTML(app.state);
+  const stack = nextUp + defaults + app.widgetize("home", `<!--w:brief-->${app.briefHTML()}${app.weighReminderHTML()}<!--w:readiness-->${app.readinessCardHTML()}<!--w:today-->${app.HOME_WIDGETS.today.render(live)}
     <!--w:week-->${app.HOME_WIDGETS["this-week"].render(live)}
     <!--w:cardio-->${app.HOME_WIDGETS.cardio.render(live)}
     <!--w:map-adv--><section class="sec">${app.muscleMapHTML("advanced")}</section>

@@ -62,6 +62,7 @@ function tick() {
     const sec = Math.floor((Date.now() - new Date(s.startedAt)) / 1000);
     el2.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")} elapsed · ${app.pl(app.setCount(s), "set")}`;
   }
+  if (typeof app.refreshHomeRoutineGates === "function") app.refreshHomeRoutineGates();
 }
 app.tick = tick;
 

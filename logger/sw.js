@@ -47,7 +47,7 @@ function shellPath(input) {
   try {
     path = new URL(raw, (self.location && self.location.origin) || "https://app.test").pathname;
   } catch (e) {
-    path = String(raw).split("?")[0];
+    path = String(raw).split("?")[0, "./js/shared/routine-home-tiles.js", "./manifest.json"]
   }
   if (!path || path === "/" || path === "/index.html") return "/";
   return path;
