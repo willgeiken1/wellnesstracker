@@ -834,6 +834,17 @@ export function putDailyRoutines(state, next) {
   return true;
 }
 
+/* An edit of a row that still carries a future stamp keeps that stamp, and
+   the clamp can store the edit at the same millisecond as the copy it
+   replaces. One more step keeps the edit ahead of that copy. A write that
+   already took the step (a log replacement) is left as it is. */
+function aheadOf(next, previous) {
+  if (!next || !previous || typeof previous.sourceAt !== "number" || next.sourceAt !== previous.sourceAt) return next;
+  const step = futureStep(previous) + 1;
+  if (futureStep(next) >= step) return next;
+  return { ...next, sourceStep: step };
+}
+
 /* Plan collections only. Logs are not a plan edit. */
 export function revisePlanEntity(store, collection, id, patch, now) {
   const normalized = normalizeDailyRoutines(store);
@@ -847,7 +858,7 @@ export function revisePlanEntity(store, collection, id, patch, now) {
   normalized[collection] = normalized[collection].map((entity) => {
     if (!entity || entity.id !== id) return entity;
     const next = normalize({ ...entity, ...patchFields, id, updatedAt: now, deletedAt: entity.deletedAt });
-    return next || entity;
+    return next ? aheadOf(next, entity) : entity;
   });
   normalized.updatedAt = num(now);
   return normalized;
@@ -881,7 +892,7 @@ export function upsertEntity(store, collection, entity, now) {
   const next = NORMALIZE[collection]({ ...plainFields(entity), updatedAt: now }, now);
   if (!next) return normalized;
   const index = normalized[collection].findIndex((row) => row.id === next.id);
-  if (index >= 0) normalized[collection][index] = next;
+  if (index >= 0) normalized[collection][index] = aheadOf(next, normalized[collection][index]);
   else normalized[collection].push(next);
   normalized.updatedAt = num(now);
   return normalized;

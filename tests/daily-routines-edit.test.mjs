@@ -431,6 +431,38 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(projectDailyRoutines(again).placements.filter((row) => row.blockId === night && row.itemId === item.id).length, 1);
   });
 
+  test("an edit to a row from a phone days ahead stays ahead of that row's original copy", () => {
+    for (const edit of ["rename", "delete"]) {
+      signIn();
+      const morning = blockId("Morning routine");
+      assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+      const raw = structuredClone(app.state.dailyRoutines);
+      const ahead = Date.now() + 3 * 24 * 60 * 60 * 1000;
+      const id = raw.items.find((row) => row.name === "Example Compound A").id;
+      raw.items = raw.items.map((row) => (row.id === id ? { ...row, updatedAt: ahead } : row));
+      raw.compounds = (raw.compounds || []).map((row) => ({ ...row, updatedAt: ahead }));
+      app.state.dailyRoutines = normalizeDailyRoutines(raw);
+      assert.equal(app.state.dailyRoutines.items.find((row) => row.id === id).sourceAt, ahead);
+      // The other phone still holds its own copy with the raw future stamp.
+      const original = structuredClone(raw);
+      app.routineNow = () => new Date();
+      if (edit === "rename") assert.equal(renameRoutineItem(app.state, id, "Renamed Example"), true);
+      else assert.equal(deleteRoutineItem(app.state, id), true);
+      const edited = structuredClone(app.state.dailyRoutines);
+      const later = Date.now() + 1000;
+      for (const merged of [mergeDailyRoutines(original, edited, later), mergeDailyRoutines(edited, original, later)]) {
+        const row = merged.items.find((entry) => entry.id === id);
+        if (edit === "rename") {
+          assert.equal(row.name, "Renamed Example");
+          const compound = merged.compounds.find((entry) => entry.id === row.compoundId);
+          assert.equal(compound.name, "Renamed Example");
+        } else {
+          assert.equal(isLive(row), false);
+        }
+      }
+    }
+  });
+
   test("a newer rename beats the other phone's item delete and keeps the placements", () => {
     signIn();
     const morning = blockId("Morning routine");
