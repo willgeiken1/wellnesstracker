@@ -1,6 +1,6 @@
 # Insight Privacy Policy
 
-_Last updated: October 16, 2026_
+_Last updated: November 19, 2026_
 
 Insight is a personal fitness app built and run by an individual developer as a hobby project, shared with a small group of friends and family. This page explains, in plain language, what information Insight handles, where it goes, and the choices you have.
 
@@ -10,11 +10,13 @@ Insight is a personal fitness app built and run by an individual developer as a 
 
 **Your profile.** The name, date of birth, sex, height, weight, weigh-ins, units, and daily activity level you enter. Insight uses these to calculate things like strength relative to bodyweight, calorie and protein targets, and how your heart rate variability compares with others your age.
 
-**Your training.** Workouts, sets, reps, weights, notes, routines, goals, cardio sessions, and app settings such as your color theme.
+**Your training.** Workouts, sets, reps, weights, notes, workout routines, goals, cardio sessions, and app settings such as your color theme.
 
 **Your food.** Meals you log, their calories and macros, your favorites, and your daily targets.
 
 **Check-ins.** Mood, energy, stress, and an optional note. They stay on your device. When you are signed in, they also sync to your account, and the note is included. They are not sent to Sentry, PostHog, or for a nutrition estimate.
+
+**Daily routines.** Blocks, the items in them, which block each item is placed in, and preferences: the last block you used, which blocks are collapsed, whether completed items are shown, and whether focus mode is on. An item can sit in more than one block. A dose item also stores a planned amount, a unit, and the day that amount started. A dose log stores the item, the day, the status (done, partial, or skipped), the amount and unit when you logged an amount, and the time it was logged. You can edit the amount, and you can save the log on an earlier day. That edit does not change the planned amount. This is separate from workout routines. When you are signed in, the layout and the dose logs sync to your account. They are included in the Settings backup and in the privacy export. Deleting a block or an item keeps that row and marks it deleted, so you can restore it, and an older copy on another device cannot bring it back. A deleted dose log keeps only a small marker (its id, the day, its status, and when it was deleted) so an older device cannot bring it back. The id links the marker to the routine item. The amount, the unit, and the dose details are removed. That is the copy on this device, in your account, in the Settings backup, and in the privacy export. Undoing a dose log keeps the log, with its amount, unit and note, marked as undone, so restoring it brings them back. Deleting a date range that includes it replaces it with the marker and leaves the layout. Logs on other days stay. A dose log added or changed after that delete stays, including one on a day inside the range. The privacy export includes an undone dose log with its amount, unit, and note. Crash reports and usage analytics do not include dose amounts or item names. The reconstitution calculator does arithmetic on this device from the numbers you type. It is not saved, it is not synced, and it is not sent anywhere. It is not a recommendation.
 
 **Progress photos.** Only if you add them. They are saved on your device and, when you are signed in, in a private storage area tied to your account.
 
@@ -28,8 +30,8 @@ Insight is a personal fitness app built and run by an individual developer as a 
 - **Anthropic** estimates nutrition. When you use "Snap your plate," a resized copy of the photo, and any note you type with it, is sent through Insight's server to Anthropic's Claude service. A written meal description you submit for an estimate is sent the same way. Insight does not keep the photo or the description after the estimate comes back. Anthropic handles that content under its own terms and privacy policy.
 - **Open Food Facts** looks up packaged foods. When you scan or type a barcode, only the barcode number is sent.
 - **Oura** supplies your ring data when you choose to connect it, using your permission.
-- **Sentry** receives error reports when something in the app crashes. A report can include the crash details, basic device and browser information, and the id of your Insight account if you are signed in, so crash reports are linked to your account id. It does not include workouts, food, notes, photos, health numbers, or your email. IP addresses are not stored. Sentry is hosted in the United States.
-- **PostHog** receives notes about which features get used, only if you turn on Share usage analytics. These notes are linked to your account id, so they are not anonymous. The list is short and fixed: which tab you opened; that a workout was saved; that a food log was saved and whether it came from a photo, a written description, or a manual entry; that the morning brief was changed; that the readiness plan was switched between normal and readiness; that a data export finished; that Insights was opened; or that a weekly report was opened. Those notes do not include health values, food text, notes, photos, or email. Location lookup from the IP address is turned off, and PostHog does not record your screen. PostHog is hosted in the United States.
+- **Sentry** receives error reports when something in the app crashes. A report can include the crash details, basic device and browser information, and the id of your Insight account if you are signed in, so crash reports are linked to your account id. It does not include workouts, food, notes, photos, health numbers, dose amounts, item names, or your email. IP addresses are not stored. Sentry is hosted in the United States.
+- **PostHog** receives notes about which features get used, only if you turn on Share usage analytics. These notes are linked to your account id, so they are not anonymous. The list is short and fixed: which tab you opened; that a workout was saved; that a food log was saved and whether it came from a photo, a written description, or a manual entry; that the morning brief was changed; that the readiness plan was switched between normal and readiness; that a data export finished; that Insights was opened; or that a weekly report was opened. Those notes do not include health values, food text, notes, photos, dose amounts, item names, or email. Location lookup from the IP address is turned off, and PostHog does not record your screen. PostHog is hosted in the United States.
 - **GitHub Pages** hosts the app's files. **Google Fonts** and public code libraries (jsDelivr, and unpkg when the barcode scanner loads) deliver fonts and code to your browser. Like any website, these services can see your IP address and basic browser information when your device downloads from them.
 
 Sentry and PostHog have separate switches in Settings → Privacy. **Send crash reports** controls Sentry. It is on by default, and you can turn it off. **Share usage analytics** controls PostHog. It is off until you turn it on. If you used an earlier version of Insight with its single sharing switch on, that choice carried over to this phone, and you can turn it off at any time. Both choices are kept on this device, not in your account.
@@ -43,23 +45,23 @@ Sentry and PostHog have separate switches in Settings → Privacy. **Send crash 
 
 ## Where your data lives
 
-A copy of your data is kept in your browser on your device so Insight works offline. If you sign in, it is also backed up to your account in Supabase, including check-ins and their notes. The person who runs Insight's database has technical access to stored data and will only use it to keep the app running or to fix problems.
+A copy of your data is kept in your browser on your device so Insight works offline. If you sign in, it is also backed up to your account in Supabase, including check-ins and their notes, and daily routines and dose logs. The person who runs Insight's database has technical access to stored data and will only use it to keep the app running or to fix problems.
 
 ## Your choices
 
 - **Send crash reports** in Settings → Privacy. On by default, and remembered on this device. Turn it off to stop crash reports to Sentry.
 - **Share usage analytics** in Settings → Privacy. Off until you turn it on, and remembered on this device. Turn it on to send the feature-usage notes above to PostHog; turn it off to stop them. Your workouts, food, and account are unchanged either way.
 - **Edit or delete your information** inside the app: profile, workouts, sets, food entries, goals, cardio sessions, and photos can all be changed or deleted.
-- **Delete a date range** in Settings → Privacy. This removes workouts, food logs, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and stored Oura days between the two dates you pick. Your account, routines, and saved meals stay. Oura's own copy of your ring data is not deleted. A later sync will not bring those days back into Insight.
-- **Export your data** in Settings → Privacy. Insight downloads a zip of CSV files (workouts, sets, food, measurements, weigh-ins, cardio, Oura days, goals, and a list of progress photos). The photo image files are not in the zip.
+- **Delete a date range** in Settings → Privacy. This removes workouts, food logs, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and stored Oura days between the two dates you pick. Dose logs on those days are replaced with a small marker. The marker keeps its id, which links it to the routine item. The amount, the unit, and the dose details are removed. The routine layout stays. Your account, workout routines, and saved meals stay. Oura's own copy of your ring data is not deleted. A later sync will not bring those days back into Insight.
+- **Export your data** in Settings → Privacy. Insight downloads a zip of CSV files (workouts, sets, food, measurements, weigh-ins, cardio, Oura days, goals, a list of progress photos, and daily routines: blocks, items, placements, preferences, and dose logs). The photo image files are not in the zip. The reconstitution calculator is not in the zip.
 - **App lock** in Settings → Privacy. Optional. When it is on, this phone asks for Face ID, Touch ID, or the device passcode before showing Insight. If the device can't do that, Insight asks for a 6-digit code instead. Insight never receives your face, fingerprint, or device passcode. If that unlock isn't available, sign in again with your email and password to open the app. That does not delete anything.
 - **Disconnect Oura** in Settings. This removes the Oura login tokens and the Oura data Insight stored. You can also remove Insight's access from your Oura account.
-- **Delete your account** in Settings → Privacy. You confirm by typing DELETE. This permanently removes your sign-in and everything stored with the account, including workouts, food, check-ins, cardio, measurements, Oura data, and photos, and it erases the copy on that phone. You can also email the address below.
+- **Delete your account** in Settings → Privacy. You confirm by typing DELETE. This permanently removes your sign-in and everything stored with the account, including workouts, food, check-ins, cardio, measurements, Oura data, photos, and daily routines and dose logs, and it erases the copy on that phone. You can also email the address below.
 - **Sign out** at any time in Settings. Signing out does not erase the copy kept in your browser; clear your browser's site data, or use Erase this phone in Privacy when you are signed out, to remove it.
 
 ## How long data is kept
 
-Until you delete it, delete the date range it falls in, or delete your account.
+Until you delete it, delete the date range it falls in, or delete your account. A deleted dose log is kept only as that marker.
 
 ## Children
 
@@ -67,7 +69,7 @@ Insight is not intended for anyone under 13, and it asks for a date of birth dur
 
 ## Not medical advice
 
-Insight's calorie, readiness, and training estimates are for general fitness use. They are not medical advice, and they are not a substitute for a doctor or other health professional.
+Insight's calorie, readiness, and training estimates are for general fitness use. They are not medical advice, and they are not a substitute for a doctor or other health professional. The reconstitution calculator repeats the arithmetic of numbers you enter. It is not medical advice.
 
 ## Changes to this policy
 
@@ -76,4 +78,4 @@ If Insight changes in a way that affects your information, this page will be upd
 ## Contact
 
 Questions, or a request to delete your account: insight.wellnessos@gmail.com
-<!-- pages-retrigger: 2026-10-05 -->
+<!-- pages-retrigger: 2026-11-19 -->

@@ -10,8 +10,9 @@ import { app } from "../runtime.js";
    malformed stamp is 0. A stamp more than a day ahead is pulled back to
    now + 1 day. The same stamp keeps the tombstone, then the greater stable
    JSON, so two phones pick the same row. `deletedAt` > 0 is a tombstone.
-   A log tombstone keeps only id, day, status, updatedAt, and deletedAt.
-   A newer live row is how a delete is undone.
+   A date-range delete keeps only id, day, status, updatedAt, and deletedAt.
+   Undo keeps the log, including its amount, unit, and note, and marks it
+   undone so a restore can bring those fields back.
 
    Creating or replacing the store requires the compile-time flag and a
    signed-in session. Reading, merging, purging, and backup still round-trip
@@ -27,11 +28,19 @@ const KINDS = new Set(["check", "dose"]);
 const STATUSES = new Set(["done", "skipped", "partial"]);
 const LOG_STAMPS = ["loggedAt", "updatedAt", "createdAt", "at", "mod"];
 
+/* Default sections have fixed ids, so two phones that seed an empty store at
+   the same time merge into one set. A default's tombstone keeps that id, so a
+   deleted default is never seeded again. */
 export const DEFAULT_ROUTINE_BLOCKS = Object.freeze([
-  Object.freeze({ name: "Morning routine", color: "citrus" }),
-  Object.freeze({ name: "Supplement & enhancer stack", color: "lavender" }),
-  Object.freeze({ name: "Night routine", color: "pink" }),
+  Object.freeze({ id: "block_default_morning", name: "Morning routine", color: "citrus" }),
+  Object.freeze({ id: "block_default_stack", name: "Supplement & enhancer stack", color: "lavender" }),
+  Object.freeze({ id: "block_default_night", name: "Night routine", color: "pink" }),
 ]);
+
+/* Seeded rows carry this stamp, not the seed time. Any real edit or delete of
+   a default is newer, so another phone's later seed cannot undo it in a merge.
+   Two seeds tie and are the same row. */
+export const DEFAULT_BLOCK_STAMP = 1;
 
 function num(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -141,16 +150,54 @@ function clampStamp(value, now) {
 function entityBase(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   if (typeof raw.id !== "string" || !raw.id || raw.id.length > 80) return null;
-  const deletedAt = typeof raw.deletedAt === "number" && raw.deletedAt > 0 ? clampStamp(raw.deletedAt, now) : null;
-  let updatedAt = clampStamp(raw.updatedAt, now);
+  const clock = typeof now === "number" && Number.isFinite(now) ? now : Date.now();
+  const cap = clock + FUTURE_SLACK_MS;
+  const rawDeleted = typeof raw.deletedAt === "number" && raw.deletedAt > 0 ? raw.deletedAt : 0;
+  const rawStamp = Math.max(num(raw.updatedAt), rawDeleted);
+  const deletedAt = rawDeleted ? clampStamp(raw.deletedAt, clock) : null;
+  let updatedAt = clampStamp(raw.updatedAt, clock);
   if (deletedAt && updatedAt < deletedAt) updatedAt = deletedAt;
-  return { id: raw.id, updatedAt, deletedAt };
+  const base = { id: raw.id, updatedAt, deletedAt };
+  const carried = typeof raw.sourceAt === "number" && raw.sourceAt > cap ? raw.sourceAt : 0;
+  if (carried) base.sourceAt = carried;
+  else if (rawStamp > cap) base.sourceAt = rawStamp;
+  if (base.sourceAt) {
+    const step = futureStep(raw);
+    if (step > 0) base.sourceStep = step;
+  }
+  return base;
+}
+
+/* How many replacements sit above a remembered future stamp. A boolean
+   supersedes from an older row counts as one step. */
+function futureStep(entity) {
+  if (typeof entity.sourceStep === "number" && entity.sourceStep > 0) return Math.floor(entity.sourceStep);
+  return entity.supersedes === true ? 1 : 0;
+}
+
+/* The next write of a row whose raw stamp is still ahead of the stored one.
+   The stored millisecond can clamp back onto the previous write, so the step
+   is what keeps a later restore ahead of the undo it replaces. */
+export function futureCarry(log, storedCeiling) {
+  if (!log || typeof log.sourceAt !== "number" || !(log.sourceAt > storedCeiling)) return null;
+  return { sourceAt: log.sourceAt, sourceStep: futureStep(log) + 1 };
+}
+
+function orderAtOf(raw, now) {
+  return typeof raw.orderAt === "number" && raw.orderAt > 0 ? clampStamp(raw.orderAt, now) : 0;
+}
+
+function withOrderAt(raw, row, now) {
+  const orderAt = orderAtOf(raw, now);
+  if (orderAt) row.orderAt = orderAt;
+  else delete row.orderAt;
+  return row;
 }
 
 function normalizeBlock(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base) return null;
-  return { ...plainFields(raw), ...base, name: clip(raw.name, 80), color: clip(raw.color, 24) || "citrus", order: num(raw.order) };
+  return withOrderAt(raw, { ...plainFields(raw), ...base, name: clip(raw.name, 80), color: clip(raw.color, 24) || "citrus", order: num(raw.order) }, now);
 }
 
 function normalizeItem(raw, now = Date.now()) {
@@ -168,7 +215,7 @@ function normalizeItem(raw, now = Date.now()) {
 function normalizePlacement(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base || typeof raw.blockId !== "string" || !raw.blockId || typeof raw.itemId !== "string" || !raw.itemId) return null;
-  return { ...plainFields(raw), ...base, blockId: raw.blockId, itemId: raw.itemId, order: num(raw.order) };
+  return withOrderAt(raw, { ...plainFields(raw), ...base, blockId: raw.blockId, itemId: raw.itemId, order: num(raw.order) }, now);
 }
 
 function normalizeCompound(raw, now = Date.now()) {
@@ -188,7 +235,45 @@ function normalizeCompound(raw, now = Date.now()) {
 function reducedLogTombstone(log, deletedAt, updatedAt) {
   const status = logStatus(log && log.status) || "done";
   const at = Math.max(num(updatedAt), num(deletedAt));
-  return { id: log.id, day: log.day, status, updatedAt: at, deletedAt: num(deletedAt) || at };
+  const row = { id: log.id, day: log.day, status, updatedAt: at, deletedAt: num(deletedAt) || at };
+  /* A day move of a days-ahead log has to stay ahead of the other phone's
+     copy of that same row. The five keys stay the marker when there is none. */
+  if (typeof log.sourceAt === "number" && log.sourceAt > at) {
+    row.sourceAt = log.sourceAt;
+    const step = futureStep(log) + 1;
+    if (step > 0) row.sourceStep = step;
+  }
+  return row;
+}
+
+/* Undo hides the log without dropping the dose. A date-range delete still
+   uses the five-key marker. undone is what tells those two apart. */
+function undoneLog(log, deletedAt, updatedAt) {
+  const status = logStatus(log && log.status) || "done";
+  const at = Math.max(num(updatedAt), num(deletedAt));
+  const row = {
+    id: log.id,
+    itemId: typeof log.itemId === "string" && log.itemId ? log.itemId : null,
+    compoundId: typeof log.compoundId === "string" && log.compoundId ? log.compoundId : null,
+    day: log.day,
+    status,
+    amount: amountOf(log.amount),
+    unit: clip(log.unit, 16),
+    note: typeof log.note === "string" ? clip(log.note, 280) : "",
+    at: num(log.at),
+    updatedAt: at,
+    deletedAt: num(deletedAt) || at,
+    undone: true,
+  };
+  if (log.rest === true) row.rest = true;
+  /* Copy the step. Incrementing here would add one on every normalize. The
+     writer bumps the step once, through futureCarry, before this runs. */
+  if (typeof log.sourceAt === "number" && log.sourceAt > at) {
+    row.sourceAt = log.sourceAt;
+    const step = futureStep(log);
+    if (step > 0) row.sourceStep = step;
+  }
+  return row;
 }
 
 function isReducedLog(log) {
@@ -201,7 +286,13 @@ function normalizeLog(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   const status = logStatus(raw && raw.status);
   if (!base || !validDay(raw.day) || !status) return null;
-  if (base.deletedAt) return reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
+  if (base.deletedAt) {
+    if (raw.undone === true) return undoneLog({ ...raw, status }, base.deletedAt, base.updatedAt);
+    const reduced = reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
+    if (base.sourceAt) reduced.sourceAt = base.sourceAt;
+    if (base.sourceStep && reduced.sourceAt) reduced.sourceStep = base.sourceStep;
+    return reduced;
+  }
   return {
     ...plainFields(raw),
     ...base,
@@ -237,11 +328,33 @@ function stableStringify(value) {
   return JSON.stringify(value) ?? "null";
 }
 
-/* Higher stamp wins. A tie keeps the tombstone, then the greater stable JSON. */
+/* Higher stamp wins. A remembered future stamp sorts at sourceAt plus the
+   number of replacements that already beat it, so a later restore stays ahead
+   of an undo even when the clamp stores both at the same millisecond. When
+   those match, the newer stored stamp wins. An undone log at that same stored
+   stamp beats a five-key marker: the marker is the lossy copy of the undo.
+   A remaining tie keeps the tombstone, then the greater stable JSON. */
+function orderStamp(entity) {
+  const stored = rowStamp(entity);
+  const src = typeof entity.sourceAt === "number" && entity.sourceAt > stored ? entity.sourceAt : stored;
+  if (!(src > stored)) return stored;
+  return src + futureStep(entity);
+}
+
+function keptUndo(entity) {
+  return !!(entity && entity.undone === true && typeof entity.deletedAt === "number" && entity.deletedAt > 0 && !isReducedLog(entity));
+}
+
 function beats(candidate, current) {
-  const stampC = rowStamp(candidate);
-  const stampP = rowStamp(current);
+  const stampC = orderStamp(candidate);
+  const stampP = orderStamp(current);
   if (stampC !== stampP) return stampC > stampP;
+  const rowC = rowStamp(candidate);
+  const rowP = rowStamp(current);
+  if (rowC !== rowP) return rowC > rowP;
+  const undoC = keptUndo(candidate);
+  const undoP = keptUndo(current);
+  if (undoC !== undoP) return undoC;
   const tombC = typeof candidate.deletedAt === "number" && candidate.deletedAt > 0;
   const tombP = typeof current.deletedAt === "number" && current.deletedAt > 0;
   if (tombC !== tombP) return tombC;
@@ -254,6 +367,7 @@ function normalizeList(list, normalize, now) {
   for (const raw of list) {
     const entity = normalize(raw, now);
     if (!entity) continue;
+    if (Object.hasOwn(entity, "supersedes")) delete entity.supersedes;
     const prev = byId.get(entity.id);
     if (!prev || beats(entity, prev)) byId.set(entity.id, entity);
   }
@@ -307,13 +421,14 @@ export function projectDailyRoutines(store) {
   const normalized = normalizeDailyRoutines(store);
   if (!normalized) return null;
   const blocks = liveOf(normalized.blocks).slice().sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const settled = followParentEdits(normalized);
   return {
     ...normalized,
     blocks,
     items: liveOf(normalized.items),
-    placements: liveOf(normalized.placements),
+    placements: oneLivePer(liveOf(settled.placements), placementKey),
     compounds: liveOf(normalized.compounds),
-    logs: liveOf(normalized.logs),
+    logs: oneLivePer(liveOf(normalized.logs), checkOffKey),
   };
 }
 
@@ -328,15 +443,35 @@ export function mergeEntityLists(local, remote, now = Date.now()) {
   for (const raw of incoming) {
     if (!raw || typeof raw.id !== "string" || !raw.id) continue;
     const entity = copyEntity(raw);
+    const rawDeleted = typeof entity.deletedAt === "number" && entity.deletedAt > 0 ? entity.deletedAt : 0;
+    const rawStamp = Math.max(num(entity.updatedAt), rawDeleted);
+    const cap = (typeof now === "number" && Number.isFinite(now) ? now : Date.now()) + FUTURE_SLACK_MS;
+    if (!(typeof entity.sourceAt === "number" && entity.sourceAt > cap) && rawStamp > cap) entity.sourceAt = rawStamp;
     entity.updatedAt = clampStamp(entity.updatedAt, now);
     if (typeof entity.deletedAt === "number" && entity.deletedAt > 0) {
       entity.deletedAt = clampStamp(entity.deletedAt, now);
       if (entity.updatedAt < entity.deletedAt) entity.updatedAt = entity.deletedAt;
     }
     const current = byId.get(entity.id);
-    if (!current || beats(entity, current)) byId.set(entity.id, entity);
+    if (!current) {
+      byId.set(entity.id, entity);
+      continue;
+    }
+    const winner = beats(entity, current) ? entity : current;
+    const other = winner === entity ? current : entity;
+    byId.set(entity.id, liveOrder(winner, other));
   }
   return [...byId.values()];
+}
+
+/* A reorder stamps orderAt and leaves updatedAt alone, so a delete's
+   tombstone still beats it. Two live reorders keep the newer order. */
+function liveOrder(winner, other) {
+  if (!isLive(winner) || !other) return winner;
+  const winAt = num(winner.orderAt);
+  const otherAt = num(other.orderAt);
+  if (otherAt > winAt && typeof other.order === "number") return { ...winner, order: other.order, orderAt: otherAt };
+  return winner;
 }
 
 function mergePrefs(local, remote, now) {
@@ -344,6 +479,39 @@ function mergePrefs(local, remote, now) {
   const right = normalizePrefs(remote, now);
   if (left.updatedAt !== right.updatedAt) return left.updatedAt > right.updatedAt ? left : right;
   return stableStringify(left) >= stableStringify(right) ? left : right;
+}
+
+/* An item delete also tombstones its placements, tagged removedWith the item
+   id. If the other phone's newer edit keeps the item, those placements come
+   back with it. A placement removed on its own, or by a block delete, stays
+   gone. The revive stamp is the item's stamp, so both phones agree. */
+function reconcileItemPlacementTombstones(items, placements) {
+  const liveItems = new Map();
+  for (const item of items || []) {
+    if (isLive(item)) liveItems.set(item.id, item);
+  }
+  return (placements || []).map((place) => {
+    if (!place || isLive(place) || place.removedWith !== place.itemId) return place;
+    const item = liveItems.get(place.itemId);
+    if (!item || rowStamp(item) <= rowStamp(place)) return place;
+    return { ...place, deletedAt: null, updatedAt: rowStamp(item) };
+  });
+}
+
+/* A block delete tombstones that block's placements with removedWith set to
+   the block id. A newer rename or recolor keeps the block, so those
+   placements come back. A placement removed on its own stays gone. */
+function reconcileBlockPlacementTombstones(blocks, placements) {
+  const liveBlocks = new Map();
+  for (const block of blocks || []) {
+    if (isLive(block)) liveBlocks.set(block.id, block);
+  }
+  return (placements || []).map((place) => {
+    if (!place || isLive(place) || place.removedWith !== place.blockId) return place;
+    const block = liveBlocks.get(place.blockId);
+    if (!block || rowStamp(block) <= rowStamp(place)) return place;
+    return { ...place, deletedAt: null, updatedAt: rowStamp(block) };
+  });
 }
 
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
@@ -398,7 +566,9 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   routines.logs = routines.logs.map((log) => {
     if (!log || typeof log !== "object" || !validDay(log.day) || log.day < from || log.day > to) return log;
     const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
-    if (!gone && !dropBefore(latestStamp(log), before, now)) return log;
+    /* A later undo is inside the dates but did not exist when this delete
+       was made. Leave it, amount and note included. */
+    if (!dropBefore(latestStamp(log), before, now)) return log;
     if (gone && isReducedLog(log)) return log;
     const deletedAt = gone ? clampStamp(log.deletedAt, now) : cutoff;
     const updatedAt = Math.max(rowStamp(log), deletedAt);
@@ -409,8 +579,8 @@ export function purgeDailyRoutineRange(data, from, to, before, now = Date.now())
   return changed;
 }
 
-/* Undo of a logged dose. The row stays so an older live copy cannot return,
-   and the dose fields do not. */
+/* Date-range delete and a day move. The row stays so an older live copy
+   cannot return, and the dose fields do not. */
 export function tombstoneLog(store, id, now = Date.now()) {
   const normalized = normalizeDailyRoutines(store, now);
   if (!normalized || typeof id !== "string") return normalized;
@@ -425,8 +595,233 @@ export function tombstoneLog(store, id, now = Date.now()) {
   return normalized;
 }
 
+/* Undo. The log stays, with its amount, unit, and note, and is marked undone.
+   A newer live row is still how the other phone wins. */
+export function markLogUndone(store, id, now = Date.now()) {
+  const normalized = normalizeDailyRoutines(store, now);
+  if (!normalized || typeof id !== "string") return normalized;
+  let changed = false;
+  normalized.logs = normalized.logs.map((log) => {
+    if (!log || log.id !== id || !isLive(log)) return log;
+    changed = true;
+    const deletedAt = clampStamp(now, now) || now;
+    const at = Math.max(rowStamp(log), deletedAt);
+    const carried = futureCarry(log, at);
+    return undoneLog(carried ? { ...log, ...carried } : log, deletedAt, at);
+  });
+  if (changed) normalized.updatedAt = Math.max(num(normalized.updatedAt), clampStamp(now, now));
+  return normalized;
+}
+
 export function routineId(prefix) {
   return `${prefix || "r"}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const LOG_ID_LIMIT = 80;
+const SHA256_K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+
+function rotr(value, bits) {
+  return (value >>> bits) | (value << (32 - bits));
+}
+
+/* Sync SHA-256. The browser has no sync digest, and this file runs there. */
+function sha256Hex(text) {
+  const data = new TextEncoder().encode(text);
+  const paddedLen = ((data.length + 9 + 63) >> 6) << 6;
+  const buf = new Uint8Array(paddedLen);
+  buf.set(data);
+  buf[data.length] = 0x80;
+  const view = new DataView(buf.buffer);
+  const bits = data.length * 8;
+  view.setUint32(paddedLen - 8, Math.floor(bits / 0x100000000), false);
+  view.setUint32(paddedLen - 4, bits >>> 0, false);
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+  for (let offset = 0; offset < paddedLen; offset += 64) {
+    for (let i = 0; i < 16; i += 1) w[i] = view.getUint32(offset + i * 4, false);
+    for (let i = 16; i < 64; i += 1) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let i = 0; i < 64; i += 1) {
+      const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + s1 + ch + SHA256_K[i] + w[i]) >>> 0;
+      const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (s0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+  }
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map((word) => word.toString(16).padStart(8, "0")).join("");
+}
+
+/* One check-off row per item and day, and one rest row per day. Two phones
+   that log the same item before a sync write the same id, so the merge keeps
+   one row. The readable form is log_<itemId>_<day>. An item id of 66–80
+   characters would push that past the 80-character id limit, and both the
+   client and the account merge would drop the log. The long form is
+   log_<sha256>_<day>, which still fits and is the same on every phone. */
+export function routineLogId(itemId, day) {
+  const dayText = typeof day === "string" ? day : "";
+  const readable = typeof itemId === "string" && itemId ? `log_${itemId}_${dayText}` : `rest_${dayText}`;
+  if (readable.length <= LOG_ID_LIMIT) return readable;
+  const digest = sha256Hex(readable);
+  const prefix = readable.startsWith("rest_") ? "rest_" : "log_";
+  const withDay = `${prefix}${digest}_${dayText}`;
+  if (withDay.length <= LOG_ID_LIMIT) return withDay;
+  return `${prefix}${digest}`.slice(0, LOG_ID_LIMIT);
+}
+
+function placementHash(text) {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x811c9dc5);
+  }
+  return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+}
+
+/* One placement per item and block. Two phones that add the same item to the
+   same routine write the same id, so the merge cannot render it twice. */
+export function routinePlacementId(blockId, itemId) {
+  const plain = `place_${blockId}_${itemId}`;
+  if (plain.length <= 80) return plain;
+  return `place_${placementHash(`${blockId}\0${itemId}`)}`;
+}
+
+/* Different ids for one item in one block become one row. The winner follows
+   the same stamp rule as every other merge. The rest are tombstones, so the
+   other phone's older live copy cannot bring the duplicate back. */
+function collapsePlacementPairs(list) {
+  const groups = new Map();
+  const order = [];
+  for (const row of list) {
+    if (!row || typeof row.blockId !== "string" || typeof row.itemId !== "string") {
+      order.push({ row });
+      continue;
+    }
+    const key = `${row.blockId}\0${row.itemId}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push({ key });
+    }
+    groups.get(key).push(row);
+  }
+  const out = [];
+  for (const slot of order) {
+    if (!slot.key) {
+      out.push(slot.row);
+      continue;
+    }
+    const group = groups.get(slot.key);
+    groups.delete(slot.key);
+    if (!group || !group.length) continue;
+    let winner = group[0];
+    for (let i = 1; i < group.length; i += 1) if (beats(group[i], winner)) winner = group[i];
+    const others = group.filter((row) => row.id !== winner.id);
+    const loserStamp = others.reduce((max, row) => Math.max(max, rowStamp(row)), 0);
+    /* A tombstone at the winner's stamp would beat the winner, because a tie
+       keeps the tombstone. Stamp the loser at its own time, and move the
+       live winner one past that only when the stamps are equal. */
+    let kept = others.length && isLive(winner) && rowStamp(winner) <= loserStamp
+      ? { ...winner, updatedAt: loserStamp + 1, deletedAt: null }
+      : winner;
+    const tombs = [];
+    let ceiling = rowStamp(kept);
+    for (const row of others) {
+      const stamp = Math.max(rowStamp(row), 1);
+      /* removedWith is this placement's own id, not the item or block. A later
+         restore of that item or block must not bring the duplicate back. */
+      const tomb = { ...row, deletedAt: stamp, updatedAt: Math.max(row.updatedAt || 0, stamp), removedWith: row.id };
+      let written = tomb;
+      if (row.removedWith !== row.id && beats(row, tomb)) {
+        const bumped = Math.max(rowStamp(row), stamp) + 1;
+        written = { ...row, deletedAt: bumped, updatedAt: bumped, removedWith: row.id };
+      } else if (beats(row, tomb)) written = row;
+      tombs.push(written);
+      ceiling = Math.max(ceiling, rowStamp(written));
+    }
+    /* A bumped duplicate can land on the live row's stamp. A tie keeps the
+       tombstone, so the next pass would drop the live row. Keep it strictly newer. */
+    if (isLive(kept) && tombs.some((row) => !isLive(row)) && rowStamp(kept) <= ceiling) {
+      kept = { ...kept, updatedAt: ceiling + 1, deletedAt: null };
+    }
+    out.push(kept, ...tombs);
+  }
+  return out;
+}
+
+/* A placement removed with its block or item (removedWith is that parent's
+   id) follows the parent. When the parent is live with a newer stamp than
+   the removal, another phone edited it after the delete, so the placement
+   is live again at the parent's stamp. The view and every write start from
+   this, so the merge itself can stay per-row last write wins. */
+export function followParentEdits(store) {
+  if (!store || !Array.isArray(store.placements)) return store;
+  const parents = new Map();
+  for (const row of [...(store.blocks || []), ...(store.items || [])]) if (row && typeof row.id === "string") parents.set(row.id, row);
+  return {
+    ...store,
+    placements: store.placements.map((row) => {
+      if (!row || isLive(row) || typeof row.removedWith !== "string") return row;
+      if (row.removedWith !== row.blockId && row.removedWith !== row.itemId) return row;
+      const parent = parents.get(row.removedWith);
+      if (!parent || !isLive(parent) || rowStamp(parent) <= rowStamp(row)) return row;
+      return { ...row, deletedAt: null, removedWith: null, updatedAt: rowStamp(parent) };
+    }),
+  };
+}
+
+function placementKey(row) {
+  if (!isLive(row) || typeof row.blockId !== "string" || typeof row.itemId !== "string") return "";
+  return `${row.blockId}\0${row.itemId}`;
+}
+
+function checkOffKey(log) {
+  if (!isLive(log) || !validDay(log.day)) return "";
+  if (log.rest === true) return `rest\0${log.day}`;
+  return typeof log.itemId === "string" && log.itemId ? `item\0${log.itemId}\0${log.day}` : "";
+}
+
+/* One live row per key in the view: one placement per block and item, one
+   log per item and day, one rest per day. The stamp winner shows. Older
+   random-id rows, or a moved log that lands on a day the other phone checked
+   off, can hold two. The other rows stay in the store as they are, so a log
+   shows again once the winner moves to another day, and any order of merges
+   ends in the same rows. */
+function oneLivePer(list, keyOf) {
+  const winners = new Map();
+  for (const row of list) {
+    const key = keyOf(row);
+    if (!key) continue;
+    const current = winners.get(key);
+    if (!current || beats(row, current)) winners.set(key, row);
+  }
+  return list.filter((row) => {
+    const key = keyOf(row);
+    return !key || winners.get(key) === row;
+  });
+}
+
+export function dedupePlacementPairs(list) {
+  return collapsePlacementPairs(Array.isArray(list) ? list : []);
 }
 
 export function canMutateRoutines() {
@@ -439,6 +834,18 @@ export function putDailyRoutines(state, next) {
   return true;
 }
 
+/* An edit of a row that still carries a future stamp keeps that stamp, and
+   the clamp can store the edit at the same millisecond as the copy it
+   replaces. One more step keeps the edit ahead of that copy. A write that
+   already took the step (a log replacement) is left as it is, and so is a
+   reorder, which keeps the row's stamp so a delete still beats it. */
+function aheadOf(next, previous) {
+  if (!next || !previous || typeof previous.sourceAt !== "number" || next.sourceAt !== previous.sourceAt) return next;
+  const step = futureStep(previous) + 1;
+  if (futureStep(next) >= step) return next;
+  return { ...next, sourceStep: step };
+}
+
 /* Plan collections only. Logs are not a plan edit. */
 export function revisePlanEntity(store, collection, id, patch, now) {
   const normalized = normalizeDailyRoutines(store);
@@ -449,47 +856,54 @@ export function revisePlanEntity(store, collection, id, patch, now) {
   delete patchFields.updatedAt;
   delete patchFields.deletedAt;
   for (const key of COLLECTIONS) delete patchFields[key];
+  const orderOnly = Object.keys(patchFields).every((key) => key === "order" || key === "orderAt");
   normalized[collection] = normalized[collection].map((entity) => {
     if (!entity || entity.id !== id) return entity;
     const next = normalize({ ...entity, ...patchFields, id, updatedAt: now, deletedAt: entity.deletedAt });
-    return next || entity;
+    if (!next) return entity;
+    return orderOnly ? next : aheadOf(next, entity);
   });
   normalized.updatedAt = num(now);
   return normalized;
 }
 
-export function seedDefaultBlocks(store, now, newId = () => routineId("block")) {
+/* A deleted default stays a row. Seeding only adds a default id that is
+   missing, so a tombstone is not replaced and a later phone cannot duplicate it. */
+export function seedDefaultBlocks(store, now) {
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
   if (liveOf(normalized.blocks).length) return normalized;
-  const at = num(now);
   const known = new Set(normalized.blocks.map((block) => block.id));
-  const fresh = [];
-  for (const [index, block] of DEFAULT_ROUTINE_BLOCKS.entries()) {
-    const id = newId(block.name, index);
-    if (typeof id !== "string" || !id || known.has(id)) continue;
-    known.add(id);
-    fresh.push({
-      id,
+  const missing = DEFAULT_ROUTINE_BLOCKS.map((block, index) => ({ block, index })).filter(({ block }) => !known.has(block.id));
+  if (!missing.length) return normalized;
+  for (const { block, index } of missing) {
+    normalized.blocks.push({
+      id: block.id,
       name: block.name,
       color: block.color,
       order: index,
-      updatedAt: at,
+      updatedAt: DEFAULT_BLOCK_STAMP,
       deletedAt: null,
     });
   }
-  if (!fresh.length) return normalized;
-  normalized.blocks = [...normalized.blocks, ...fresh];
-  normalized.updatedAt = at;
+  normalized.updatedAt = num(now);
   return normalized;
 }
 
 export function upsertEntity(store, collection, entity, now) {
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
   if (!COLLECTIONS.has(collection)) return normalized;
-  const next = NORMALIZE[collection]({ ...plainFields(entity), updatedAt: now }, now);
+  const fields = { ...plainFields(entity), updatedAt: now };
+  const previous = normalized[collection].find((row) => row && row.id === fields.id);
+  /* A write that rebuilds a row from its fields still replaces that row's
+     future-dated copy, so it keeps the row's future stamp and steps above it. */
+  if (previous && typeof previous.sourceAt === "number" && typeof fields.sourceAt !== "number") {
+    fields.sourceAt = previous.sourceAt;
+    if (typeof previous.sourceStep === "number") fields.sourceStep = previous.sourceStep;
+  }
+  const next = NORMALIZE[collection](fields, now);
   if (!next) return normalized;
   const index = normalized[collection].findIndex((row) => row.id === next.id);
-  if (index >= 0) normalized[collection][index] = next;
+  if (index >= 0) normalized[collection][index] = aheadOf(next, normalized[collection][index]);
   else normalized[collection].push(next);
   normalized.updatedAt = num(now);
   return normalized;
@@ -499,8 +913,13 @@ app.normalizeDailyRoutines = normalizeDailyRoutines;
 app.mergeDailyRoutines = mergeDailyRoutines;
 app.purgeDailyRoutineRange = purgeDailyRoutineRange;
 app.tombstoneLog = tombstoneLog;
+app.markLogUndone = markLogUndone;
+app.routineLogId = routineLogId;
+app.routinePlacementId = routinePlacementId;
+app.dedupePlacementPairs = dedupePlacementPairs;
 app.canMutateRoutines = canMutateRoutines;
 app.putDailyRoutines = putDailyRoutines;
 app.revisePlanEntity = revisePlanEntity;
 app.seedDefaultBlocks = seedDefaultBlocks;
 app.projectDailyRoutines = projectDailyRoutines;
+app.followParentEdits = followParentEdits;

@@ -165,6 +165,20 @@ function renderSheet() {
     inner = app.liveAddSheetHTML();
   } else if (app.ui.sheet === "picker") {
     inner = app.pickerSheetHTML();
+  } else if (app.ui.sheet === "routines-settings") {
+    inner = typeof app.routinesSettingsSheetHTML === "function" ? app.routinesSettingsSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-discover") {
+    inner = typeof app.routinesDiscoverSheetHTML === "function" ? app.routinesDiscoverSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-item") {
+    inner = typeof app.routineItemSheetHTML === "function" ? app.routineItemSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-history") {
+    inner = typeof app.routineHistorySheetHTML === "function" ? app.routineHistorySheetHTML() : "";
+  } else if (app.ui.sheet === "routines-log") {
+    inner = typeof app.routineLogSheetHTML === "function" ? app.routineLogSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-details") {
+    inner = typeof app.routineDetailsSheetHTML === "function" ? app.routineDetailsSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-calc") {
+    inner = typeof app.reconstitutionSheetHTML === "function" ? app.reconstitutionSheetHTML() : "";
   } else if (app.ui.sheet === "exercise") {
     const editing = app.ui.sd.idx >= 0;
     inner = `<h3>${editing ? "Edit exercise" : "Add exercise"}</h3>
@@ -179,9 +193,29 @@ function renderSheet() {
         <button class="btn primary" data-action="ex-save">${editing ? "Save" : "Add exercise"}</button></div>`;
   }
   const bankSheet = app.ui.sheet === "picker" || app.ui.sheet === "live-add" || app.ui.sheet === "swap";
-  const cardClass = app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : bankSheet ? "sheet-card bank" : "sheet-card";
+  const detailSheet = app.ui.sheet === "routines-details";
+  const cardClass = (app.ui.sheet === "home-gallery" ? "sheet-card home-gallery" : bankSheet ? "sheet-card bank" : "sheet-card") + (detailSheet ? " dr-details" : "");
+  if (el.dataset) {
+    if (detailSheet) {
+      el.dataset.routinesDetails = "open";
+      el.dataset.motion = app.ui.sd && app.ui.sd.motion === "reduce" ? "reduce" : "full";
+    } else {
+      delete el.dataset.routinesDetails;
+      delete el.dataset.motion;
+    }
+  }
+  const sheetName = app.ui.sheet === "home-gallery" ? "Widget gallery"
+    : app.ui.sheet === "checkin" ? "Check-in"
+    : app.ui.sheet === "routines-settings" ? "Routines settings"
+    : app.ui.sheet === "routines-discover" ? "Discover"
+    : app.ui.sheet === "routines-item" ? "Item"
+    : app.ui.sheet === "routines-history" ? "History"
+    : app.ui.sheet === "routines-log" ? "Edit log"
+    : app.ui.sheet === "routines-details" ? "Details"
+    : app.ui.sheet === "routines-calc" ? "Reconstitution calculator"
+    : "Sheet";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
-    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${app.ui.sheet === "home-gallery" ? "Widget gallery" : app.ui.sheet === "checkin" ? "Check-in" : "Sheet"}"><div class="grabber"></div>
+    <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>
     ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;
 }
 app.renderSheet = renderSheet;

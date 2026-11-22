@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 
 const ROOT = new URL("..", import.meta.url);
 const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
+const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
+const ORDER_AT = "supabase/migrations/20261121140000_daily_routines_order_at.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -200,6 +202,11 @@ test.before(async () => {
   assert.match(sql, /grant execute on function public\.merge_user_data\(jsonb\) to authenticated/);
   assert.doesNotMatch(sql, /\bdrop\s+table\b/i);
   assert.doesNotMatch(previous, /dailyRoutines/);
+  assert.doesNotMatch(sql, /daily_routines_order_stamp/);
+  assert.match(readSql(STEP), /daily_routines_order_stamp/);
+  assert.doesNotMatch(readSql(STEP), /function\s+public\.merge_user_data/i);
+  assert.match(readSql(ORDER_AT), /daily_routines_apply_order_at/);
+  assert.doesNotMatch(readSql(ORDER_AT), /function\s+public\.merge_user_data/i);
 
   const files = readdirSync(filePath("supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
   const definedIn = files.filter((name) => /function\s+public\.merge_user_data/i.test(readSql(`supabase/migrations/${name}`)));
@@ -207,6 +214,7 @@ test.before(async () => {
     "20261004180000_merge_user_data.sql",
     "20261004210000_merge_home_v2.sql",
     MIGRATION.slice("supabase/migrations/".length),
+    "20261121183000_daily_routines_undo_keeps_dose.sql",
   ]);
 
   const initdb = pgBin("initdb");
@@ -246,7 +254,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql"]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -584,6 +592,75 @@ test("normalized tie-breaks match mergeDailyRoutines", () => {
   }
 });
 
+test("a future step and an undone dose match the client", () => {
+  const now = 8_000_000;
+  const base = {
+    id: "log_item_a_2026-11-19",
+    itemId: "item_a",
+    day: "2026-11-19",
+    status: "done",
+    amount: 400,
+    unit: "mcg",
+    note: "extra dose note",
+    at: 4000,
+    updatedAt: 5000,
+    sourceAt: 9_000_000_000_000,
+  };
+  const cases = [
+    ["restore step 3 beats undo step 2", { ...base, deletedAt: null, sourceStep: 3 }, { ...base, deletedAt: 5000, undone: true, sourceStep: 2 }],
+    ["legacy supersedes loses to step 2", { ...base, deletedAt: null, supersedes: true }, { ...base, deletedAt: null, sourceStep: 2 }],
+    ["undo step 3 beats restore step 2", { ...base, deletedAt: 5000, undone: true, sourceStep: 3 }, { ...base, deletedAt: null, sourceStep: 2 }],
+    ["equal steps keep the newer stored stamp", { ...base, updatedAt: 4000, deletedAt: null, sourceStep: 2 }, { ...base, updatedAt: 6000, deletedAt: null, sourceStep: 2 }],
+  ];
+  for (const [label, storedLog, incomingLog] of cases) {
+    const stored = { updatedAt: 1, logs: [storedLog], prefs: { lastBlockId: null, updatedAt: 1 } };
+    const incoming = { updatedAt: 1, logs: [incomingLog], prefs: { lastBlockId: null, updatedAt: 1 } };
+    const client = mergeRoutines(stored, incoming, now);
+    const sql = sqlMerge(stored, incoming, now);
+    const pick = (store) => (store.logs || []).find((row) => row && row.id === base.id);
+    assert.deepEqual(pick(sql), pick(client), label);
+  }
+});
+
+test("a newer orderAt reaches the other phone on the server and the client", () => {
+  const now = 8_000_000;
+  const block = (id, order, orderAt, extra = {}) => ({
+    id,
+    name: id === "block-night" ? "Night routine" : "Morning routine",
+    color: "citrus",
+    order,
+    orderAt,
+    updatedAt: 100,
+    deletedAt: null,
+    ...extra,
+  });
+  const prefs = { lastBlockId: null, updatedAt: 1 };
+  const pairs = [
+    ["one block takes the newer orderAt", { updatedAt: 100, blocks: [block("block-morning", 0, 50)], prefs }, { updatedAt: 100, blocks: [block("block-morning", 1, 80)], prefs }],
+    ["a tombstone keeps its order over a later reorder", { updatedAt: 200, blocks: [block("block-morning", 0, 50, { updatedAt: 200, deletedAt: 200 })], prefs }, { updatedAt: 100, blocks: [block("block-morning", 1, 300)], prefs }],
+  ];
+  for (const [label, stored, incoming] of pairs) {
+    const client = mergeRoutines(stored, incoming, now);
+    const sql = sqlMerge(stored, incoming, now);
+    assert.deepEqual(sql.blocks, client.blocks, label);
+  }
+  const stored = {
+    updatedAt: 100,
+    blocks: [block("block-morning", 0, 10), block("block-night", 1, 10)],
+    prefs,
+  };
+  const incoming = {
+    updatedAt: 100,
+    blocks: [block("block-morning", 1, 90), block("block-night", 0, 90)],
+    prefs,
+  };
+  const client = mergeRoutines(stored, incoming, now);
+  const sql = sqlMerge(stored, incoming, now);
+  const orders = (store) => store.blocks.slice().sort((a, b) => a.id < b.id ? -1 : 1).map((row) => [row.id, row.order, row.orderAt]);
+  assert.deepEqual(orders(sql), orders(client), "a swap is the same on both sides");
+  assert.deepEqual(orders(sql), [["block-morning", 1, 90], ["block-night", 0, 90]]);
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -637,6 +714,64 @@ test("merging thousands of logs finishes under the statement timeout", { timeout
   const merged = JSON.parse(got);
   assert.equal(merged.logs.length, count);
   assertSameStore(merged, mergeRoutines(stored, incoming, 0), `${count} logs`);
+
+  const withPurge = {
+    settingsAt: 2,
+    dailyRoutines: incoming,
+    purges: [{ id: "purge-1", from: "2026-01-01", to: "2026-01-03", at: 50 }],
+  };
+  const timed = query(`
+    set statement_timeout = '8s';
+    do $do$
+    begin
+      perform set_config('request.jwt.claim.sub', '${UID}', false);
+      delete from public.user_data where user_id = '${UID}';
+      insert into public.user_data (user_id, data)
+      values ('${UID}', $stored$${JSON.stringify({ settingsAt: 1, dailyRoutines: stored })}$stored$::jsonb);
+    end
+    $do$;
+    select jsonb_array_length(public.merge_user_data($incoming$${JSON.stringify(withPurge)}$incoming$::jsonb) -> 'dailyRoutines' -> 'logs');
+  `).trim();
+  assert.equal(Number(timed), count);
+});
+
+test("4000 logs and 200 purges finish under the statement timeout", { timeout: 120_000 }, () => {
+  const day = "2026-01-02";
+  const count = 4000;
+  const logs = Array.from({ length: count }, (_, i) => ({
+    id: `log-${i}`,
+    day,
+    status: "done",
+    amount: i + 1,
+    unit: "mcg",
+    updatedAt: 1000 + i,
+    deletedAt: null,
+  }));
+  const purges = Array.from({ length: 200 }, (_, i) => ({
+    id: `purge-${i}`,
+    from: "2026-01-01",
+    to: "2026-01-03",
+    at: 50,
+  }));
+  const stored = { updatedAt: 1, logs };
+  const incoming = {
+    settingsAt: 2,
+    dailyRoutines: { updatedAt: 2, logs },
+    purges,
+  };
+  const timed = query(`
+    set statement_timeout = '8s';
+    do $do$
+    begin
+      perform set_config('request.jwt.claim.sub', '${UID}', false);
+      delete from public.user_data where user_id = '${UID}';
+      insert into public.user_data (user_id, data)
+      values ('${UID}', $stored$${JSON.stringify({ settingsAt: 1, dailyRoutines: stored })}$stored$::jsonb);
+    end
+    $do$;
+    select jsonb_array_length(public.merge_user_data($incoming$${JSON.stringify(incoming)}$incoming$::jsonb) -> 'dailyRoutines' -> 'logs');
+  `).trim();
+  assert.equal(Number(timed), count);
 });
 
 test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { timeout: 120_000 }, () => {
@@ -662,7 +797,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql"]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }

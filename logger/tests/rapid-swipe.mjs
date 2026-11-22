@@ -10,7 +10,6 @@ const pw = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const { chromium } = pw;
 
 const BASE = process.env.BASE || "http://127.0.0.1:8765";
-const ORDER = ["home", "workouts", "food", "progress", "insights"];
 const fails = [];
 
 function check(name, cond, extra) {
@@ -56,7 +55,6 @@ async function cdpSwipe(page, x1, x2, steps) {
 
 async function state(page) {
   return page.evaluate(() => {
-    const ORDER = ["home", "workouts", "food", "progress", "insights"];
     const stage = document.getElementById("stage");
     const w = stage.clientWidth;
     const panes = [...document.querySelectorAll("#stage .pane")].map((el, i) => {
@@ -77,6 +75,7 @@ async function state(page) {
     const activeCx = r.x + r.width / 2;
     return {
       tab: app.ui.tab,
+      order: app.TAB_ORDER.slice(),
       index: app.motion.index,
       dragging: app.motion.dragging,
       animating: app.motion.animating,
@@ -92,7 +91,8 @@ async function state(page) {
 }
 
 function problems(s, expectTab) {
-  const idx = ORDER.indexOf(expectTab);
+  const order = s.order && s.order.length ? s.order : ["home", "workouts", "food", "progress", "insights"];
+  const idx = order.indexOf(expectTab);
   const out = [];
   if (s.tab !== expectTab) out.push("tab " + s.tab);
   if (s.index !== idx) out.push("index " + s.index);
@@ -191,9 +191,10 @@ async function main() {
         const finger = (prevX - x) / w;
         const got = v - prev;
         // Ignore the locking sample, and samples that rubber-band past the first or last tab.
+        const last = app.TAB_ORDER.length - 1;
         const tab = app.TAB_ORDER.indexOf(app.ui.tab);
-        const inward = (finger > 0 && tab < 4) || (finger < 0 && tab > 0);
-        if (i > 1 && inward && tab > 0 && tab < 4) maxStepError = Math.max(maxStepError, Math.abs(got - finger));
+        const inward = (finger > 0 && tab < last) || (finger < 0 && tab > 0);
+        if (i > 1 && inward && tab > 0 && tab < last) maxStepError = Math.max(maxStepError, Math.abs(got - finger));
         jumps.push(Math.abs(got));
         prev = v;
         prevX = x;
@@ -229,16 +230,17 @@ async function main() {
   // Real CDP flings back to back, the next one starting while the slide is still running.
   await page.evaluate(() => app.goTab("home"));
   await page.waitForTimeout(500);
-  for (let i = 0; i < 4; i++) {
+  const span = await page.evaluate(() => app.TAB_ORDER.length - 1);
+  for (let i = 0; i < span; i++) {
     await cdpSwipe(page, 330, 20, 3);
     await page.waitForTimeout(35);
   }
-  await settled(page, "insights", "four overlapping forward flings reach insights");
-  for (let i = 0; i < 4; i++) {
+  await settled(page, "insights", span + " overlapping forward flings reach insights");
+  for (let i = 0; i < span; i++) {
     await cdpSwipe(page, 20, 330, 3);
     await page.waitForTimeout(30);
   }
-  await settled(page, "home", "four overlapping reverse flings return home");
+  await settled(page, "home", span + " overlapping reverse flings return home");
 
   await page.click('#tabs .tab[data-tab="food"]');
   await settled(page, "food", "tap still lands on food");
