@@ -2377,7 +2377,7 @@ export function routinesSettingsSheetHTML() {
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
-    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Reminders and the FAQ come later. Notifications stay off.</p>
+    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Countdowns stay on the row. Routines does not send reminders.</p>
     ${routineDayRolloverControlHTML(hour)}
     ${calc}
     ${routinesFaqHTML()}
