@@ -1483,10 +1483,11 @@ function editLogButton(row) {
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
   const next = countdownMarkup(projected, row, date, day);
+  const supply = supplyMarkup(projected, row, day);
   return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}</span>
+      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}${supply}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     ${historyButton(row)}
