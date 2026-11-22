@@ -317,9 +317,9 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
     const reduce = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     assert.match(reduce, /\.dr-log-toast[\s\S]*animation: none/);
     assert.match(appearance, /data-accent="sea"[\s\S]*--green:/);
-    assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
-    assert.equal(flag.match(/ROUTINES_ENABLED = false/g).length, 1);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
+    assert.match(sw, /const CACHE = "insight-shell-v83"/);
+    assert.match(sentry, /insight-shell-v83/);
+    assert.equal(flag.match(/ROUTINES_ENABLED = true/g).length, 1);
   });
 });
