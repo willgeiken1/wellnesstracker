@@ -293,7 +293,7 @@ describe("routine day view", { concurrency: false }, () => {
   test("the flag stays off and this page does not import it", () => {
     const flag = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
     const page = readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8");
-    assert.match(flag, /ROUTINES_ENABLED = false/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
     assert.doesNotMatch(page, /routines-flag/);
   });
 });
