@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { DEFAULT_DAY_ROLLOVER_HOUR, routineDayRolloverHour } from "./routine-dose.js";
+import { DEFAULT_DAY_ROLLOVER_HOUR, routineDayRolloverHour, routineMinuteOfDay } from "./routine-dose.js";
 import { attachSupply } from "./routine-supply.js";
 
 /* Daily routines live on the liftlog-v1 blob under `dailyRoutines`.
@@ -60,11 +60,27 @@ export function routineSiteLabel(id) {
   return site ? site.label : "";
 }
 
+/* Only real routines are seeded. Supplements, peptides and medications are
+   item types with their own tabs, not blocks. */
 export const DEFAULT_ROUTINE_BLOCKS = Object.freeze([
   Object.freeze({ id: "block_default_morning", name: "Morning routine", color: "citrus" }),
-  Object.freeze({ id: "block_default_stack", name: "Supplement & enhancer stack", color: "lavender" }),
   Object.freeze({ id: "block_default_night", name: "Night routine", color: "pink" }),
 ]);
+
+/* One type per item. A custom type is an id from prefs.customTypes. */
+export const ROUTINE_ITEM_TYPES = Object.freeze(["supplement", "medication", "peptide", "enhancer", "other"]);
+const ITEM_TYPE_SET = new Set(ROUTINE_ITEM_TYPES);
+const CUSTOM_TYPE = /^type_[A-Za-z0-9_-]{1,60}$/;
+
+export function routineItemTypeId(value) {
+  if (typeof value !== "string") return "";
+  if (ITEM_TYPE_SET.has(value) || CUSTOM_TYPE.test(value)) return value;
+  return "";
+}
+
+export function isCustomRoutineType(value) {
+  return typeof value === "string" && CUSTOM_TYPE.test(value);
+}
 
 /* Seeded rows carry this stamp, not the seed time. Any real edit or delete of
    a default is newer, so another phone's later seed cannot undo it in a merge.
@@ -223,10 +239,33 @@ function withOrderAt(raw, row, now) {
   return row;
 }
 
+/* A window the user picked, the weekdays it runs (Monday 0 to Sunday 6),
+   and hidden. A hidden block keeps its placements and logs and can be
+   restored; it is not a tombstone. */
+function blockSchedule(row) {
+  const start = routineMinuteOfDay(row.startMin);
+  if (start == null) {
+    delete row.startMin;
+    delete row.endMin;
+  } else {
+    row.startMin = start;
+    const end = typeof row.endMin === "number" && Number.isInteger(row.endMin) && row.endMin > start && row.endMin <= start + 24 * 60 ? row.endMin : start + 60;
+    row.endMin = end;
+  }
+  if (Array.isArray(row.days)) {
+    const days = [...new Set(row.days.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b);
+    if (days.length && days.length < 7) row.days = days;
+    else delete row.days;
+  } else delete row.days;
+  if (row.hidden === true) row.hidden = true;
+  else delete row.hidden;
+  return row;
+}
+
 function normalizeBlock(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base) return null;
-  return withOrderAt(raw, { ...plainFields(raw), ...base, name: clip(raw.name, 80), color: clip(raw.color, 24) || "citrus", order: num(raw.order) }, now);
+  return withOrderAt(raw, blockSchedule({ ...plainFields(raw), ...base, name: clip(raw.name, 80), color: clip(raw.color, 24) || "citrus", order: num(raw.order) }), now);
 }
 
 function normalizeItem(raw, now = Date.now()) {
@@ -242,8 +281,18 @@ function normalizeItem(raw, now = Date.now()) {
   const note = clip(typeof raw.note === "string" ? raw.note : "", NOTE_MAX);
   if (note) next.note = note;
   else delete next.note;
+  const type = routineItemTypeId(raw.type);
+  if (type) next.type = type;
+  else delete next.type;
+  const timeMin = routineMinuteOfDay(raw.timeMin);
+  if (timeMin != null) next.timeMin = timeMin;
+  else delete next.timeMin;
   for (const key of FEELING_KEYS) delete next[key];
-  return attachSupply(next);
+  const supplied = attachSupply(next);
+  /* The time the count was typed only means something beside its day. */
+  if (!supplied.onHandDay || !(typeof raw.onHandAt === "number" && Number.isFinite(raw.onHandAt) && raw.onHandAt > 0)) delete supplied.onHandAt;
+  else supplied.onHandAt = raw.onHandAt;
+  return supplied;
 }
 
 function normalizePlacement(raw, now = Date.now()) {
@@ -481,11 +530,13 @@ export function liveOf(list) {
 export function projectDailyRoutines(store) {
   const normalized = normalizeDailyRoutines(store);
   if (!normalized) return null;
-  const blocks = liveOf(normalized.blocks).slice().sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const ordered = liveOf(normalized.blocks).slice().sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const blocks = ordered.filter((block) => block.hidden !== true);
   const settled = followParentEdits(normalized);
   return {
     ...normalized,
     blocks,
+    hiddenBlocks: ordered.filter((block) => block.hidden === true),
     items: liveOf(normalized.items),
     placements: oneLivePer(liveOf(settled.placements), placementKey),
     compounds: liveOf(normalized.compounds),
@@ -572,20 +623,33 @@ function setupStamp(setup, now) {
    from Routines settings are kept apart from that: a phone that saves a
    prefs change from a copy pulled before the other phone's setup must not
    drop the setup, or the quiz shows again. The newer setup wins by its own
-   stamp, and added parts only ever grow. The server merge
+   stamp, and added parts, type tabs and custom types only ever grow. The server merge
    (daily_routines_merge_prefs) does the same. */
 function keepSetupParts(winner, other, now) {
   let out = winner;
   if (setupStamp(other.setup, now) > setupStamp(winner.setup, now)) out = { ...out, setup: other.setup };
-  if (Array.isArray(other.added)) {
-    const base = Array.isArray(out.added) ? out.added : [];
-    const extras = [];
-    for (const key of other.added) {
-      if (typeof key === "string" && !base.includes(key) && !extras.includes(key)) extras.push(key);
-    }
-    if (extras.length) out = { ...out, added: [...base, ...extras] };
-  }
+  out = growList(out, other, "added", (key) => typeof key === "string", (a, b) => a === b);
+  out = growList(out, other, "typeTabs", (key) => typeof key === "string", (a, b) => a === b);
+  out = growList(out, other, "customTypes", (row) => !!row && typeof row === "object" && !Array.isArray(row) && typeof row.id === "string" && row.id !== "",
+    (a, b) => !!a && typeof a === "object" && a.id === b.id);
+  /* The type move's marker only goes up, so a newer prefs save from a phone
+     that has not moved yet never runs the move again over restored blocks. */
+  const typesOf = (prefs) => (typeof prefs.typesV === "number" && Number.isFinite(prefs.typesV) ? prefs.typesV : 0);
+  if (typesOf(other) > typesOf(out)) out = { ...out, typesV: other.typesV };
   return out;
+}
+
+/* A list that only grows: the winner's entries first, then the other
+   side's new ones in their order. Custom types match by id, so a type made
+   on one phone survives a newer prefs save from the other. */
+function growList(out, other, key, accept, same) {
+  if (!Array.isArray(other[key])) return out;
+  const base = Array.isArray(out[key]) ? out[key] : [];
+  const extras = [];
+  for (const entry of other[key]) {
+    if (accept(entry) && !base.some((row) => same(row, entry)) && !extras.some((row) => same(row, entry))) extras.push(entry);
+  }
+  return extras.length ? { ...out, [key]: [...base, ...extras] } : out;
 }
 
 function mergePrefs(local, remote, now) {

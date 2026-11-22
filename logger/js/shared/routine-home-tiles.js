@@ -1,5 +1,7 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, isLive, normalizeDailyRoutines, projectDailyRoutines, putDailyRoutines } from "./daily-routines-store.js";
+import { routineBlockRunsOn } from "./routine-dose.js";
+import { routineItemType } from "./routine-types.js";
 
 /* Home tiles for Routines. The flag stays off in source. These ids are not
    catalog widgets. With the flag off they stay unknown strings: a saved
@@ -197,11 +199,25 @@ function paintDate(date) {
   return new Date();
 }
 
-function itemsInOrder(view) {
+/* With a day, only routines that run that weekday, as Routines shows them. */
+function runsOn(block, day) {
+  return !day || routineBlockRunsOn(block, day);
+}
+
+/* An item in routines is due on a day one of them runs. One in no routine
+   lives on its type tab and is due every day. */
+function itemDue(view, itemId, day) {
+  const blocks = (view.placements || []).filter((row) => row && row.itemId === itemId)
+    .map((row) => (view.blocks || []).find((block) => block && block.id === row.blockId))
+    .filter(Boolean);
+  return !blocks.length || blocks.some((block) => runsOn(block, day));
+}
+
+function itemsInOrder(view, day = "") {
   const byId = new Map((view.items || []).map((item) => [item.id, item]));
   const out = [];
   const seen = new Set();
-  (view.blocks || []).forEach((block) => {
+  (view.blocks || []).filter((block) => runsOn(block, day)).forEach((block) => {
     const rows = (view.placements || [])
       .filter((row) => row && row.blockId === block.id && byId.has(row.itemId))
       .slice()
@@ -212,6 +228,14 @@ function itemsInOrder(view) {
       out.push({ block, item: byId.get(row.itemId) });
     });
   });
+  /* A typed item no shown routine holds lives on its tab and is due every
+     day, so Next up and the tile picker list it after the routines. */
+  const shown = new Set((view.blocks || []).map((block) => block && block.id));
+  const held = new Set((view.placements || []).filter((row) => row && shown.has(row.blockId)).map((row) => row.itemId));
+  const loose = (view.items || [])
+    .filter((item) => item && !held.has(item.id) && !seen.has(item.id) && routineItemType(item, view.prefs))
+    .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  loose.forEach((item) => out.push({ block: null, item }));
   return out;
 }
 
@@ -236,7 +260,7 @@ function rowLabel(view, item) {
 }
 
 function openEntries(view, day) {
-  return itemsInOrder(view).filter((entry) => !coveringLog(view.logs, entry.item.id, day));
+  return itemsInOrder(view, day).filter((entry) => !coveringLog(view.logs, entry.item.id, day));
 }
 
 function nextEntry(view, day) {
@@ -245,6 +269,8 @@ function nextEntry(view, day) {
 }
 
 function blockEntries(view, blockId, day) {
+  const block = (view.blocks || []).find((row) => row && row.id === blockId);
+  if (block && !runsOn(block, day)) return [];
   const byId = new Map((view.items || []).map((item) => [item.id, item]));
   return (view.placements || [])
     .filter((row) => row && row.blockId === blockId && byId.has(row.itemId))
@@ -313,7 +339,7 @@ export function renderRoutineTileHTML(id, options) {
   if (target.kind === "item") {
     const item = (view.items || []).find((row) => row.id === target.itemId);
     if (!item) return bigCard(id, "Routine", [`<p class="hw-sub">Nothing to show yet</p>`], layout);
-    const open = !coveringLog(view.logs, item.id, day);
+    const open = !coveringLog(view.logs, item.id, day) && itemDue(view, item.id, day);
     const lines = [`<p class="hw-line">${esc(rowLabel(view, item))}</p>`];
     if (open) lines.push(checkButton(item, rowLabel(view, item), id));
     return bigCard(id, "Routine", lines, layout);
@@ -572,12 +598,28 @@ export function openRoutineTile(tileId) {
   }
   if (!app.ui) app.ui = {};
   app.ui.routineJump = jump;
+  /* A later routine opens for this visit only, so Night tapped from Home in
+     the morning paints its rows and the jump has a row to reach. */
+  const peekId = jump && (jump.blockId || (jump.itemId ? blockIdForItem(view, jump.itemId) : ""));
+  if (peekId) {
+    const open = Array.isArray(app.ui.routineOpenBlocks) ? app.ui.routineOpenBlocks.filter((id) => typeof id === "string" && id !== peekId) : [];
+    const shut = Array.isArray(app.ui.routineShutBlocks) ? app.ui.routineShutBlocks.filter((id) => typeof id === "string" && id !== peekId) : [];
+    app.ui.routineOpenBlocks = open.concat(peekId);
+    app.ui.routineShutBlocks = shut;
+  }
+  /* Focus mode shows one routine. The one a Home tile asked for shows too. */
+  app.ui.routineJumpBlockId = peekId || "";
+  /* Show the view that holds the target: Routines for a routine, or the
+     item's type tab when it sits in no routine. */
+  const looseItem = !peekId && jump && jump.itemId ? (view.items || []).find((row) => row && row.id === jump.itemId) : null;
+  const looseType = looseItem ? routineItemType(looseItem, view.prefs) : "";
+  app.ui.routineView = looseType || "routines";
   if (revealRoutineJump(app.state, jump)) saveLive(app.state);
   if (typeof app.goTab === "function") app.goTab("daily-routines");
   else if (app.ui) app.ui.tab = "daily-routines";
   if (typeof document === "undefined" || !document.querySelector || !jump) return true;
   const selector = jump.itemId
-    ? `.dr-row[data-item-id="${String(jump.itemId).replace(/"/g, "")}"]`
+    ? `.dr-row[data-item-id="${String(jump.itemId).replace(/"/g, "")}"], .dr-pep[data-item-id="${String(jump.itemId).replace(/"/g, "")}"]`
     : jump.blockId
       ? `.dr-tile[data-block-id="${String(jump.blockId).replace(/"/g, "")}"]`
       : "";

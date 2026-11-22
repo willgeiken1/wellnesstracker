@@ -317,7 +317,7 @@ test("signed out with the flag on asks for sign-in and creates no store", () => 
   assert.equal(state.dailyRoutines, null);
 });
 
-test("signed in with the flag on paints the shell and seeds the three default blocks", () => {
+test("signed in with the flag on paints the shell and seeds the two default routines", () => {
   const state = { dailyRoutines: null };
   app.state = state;
   app.ROUTINES_ENABLED = true;
@@ -334,12 +334,16 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   assert.match(html, /<b>0<\/b> of 0 today/);
   assert.match(html, /data-due="0"/);
   assert.match(html, /aria-label="Routines settings"/);
-  assert.match(html, /data-action="routines-discover"/);
+  assert.match(html, /Add your first item/);
+  assert.match(html, /data-action="routines-add-item"/);
+  assert.doesNotMatch(html, /data-action="routines-discover"/);
   assert.match(html, /No items yet/);
+  assert.match(html, /class="dr-sun"/);
+  assert.match(html, /NOTHING PLANNED/);
   assert.doesNotMatch(html, /check-in/i);
   assert.doesNotMatch(html, /Daily check-in/);
   const names = state.dailyRoutines.blocks.map((block) => block.name);
-  assert.deepEqual(names, ["Morning routine", "Supplement & enhancer stack", "Night routine"]);
+  assert.deepEqual(names, ["Morning routine", "Night routine"]);
   assert.equal(saves, 1);
   const ids = state.dailyRoutines.blocks.map((block) => block.id);
   app.save = () => { throw new Error("seeded store should not save again"); };
@@ -389,14 +393,14 @@ test("a signed-in pull in flight does not seed or save", () => {
   app.save = () => { saves += 1; };
   const ready = dailyRoutinesHTML();
   assert.match(ready, /data-routines-shell="signed-in"/);
-  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.length, 2);
   assert.equal(saves, 1);
   app.cloudPullOk = false;
   app.save = () => { throw new Error("an existing store must not save during pull"); };
   const held = dailyRoutinesHTML();
   assert.match(held, /data-routines-shell="signed-in"/);
   assert.match(held, /Morning routine/);
-  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.length, 2);
   app.sb = null;
   app.cloudPullOk = false;
 });
@@ -420,7 +424,7 @@ test("deleted default blocks are not seeded again and a paint does not save", ()
   const html = dailyRoutinesHTML();
   assert.match(html, /data-routines-shell="signed-in"/);
   assert.doesNotMatch(html, /Morning routine/);
-  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.length, 2);
   assert.equal(state.dailyRoutines.blocks.every((block) => block.deletedAt === 2_000), true);
 });
 
@@ -469,8 +473,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v89"/);
-  assert.match(sentry, /insight-shell-v89/);
+  assert.match(sw, /const CACHE = "insight-shell-v90"/);
+  assert.match(sentry, /insight-shell-v90/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);
@@ -539,7 +543,8 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   t.mock.timers.tick(1);
   assert.equal(paints, 1);
   assert.match(html, /Now · Afternoon · 12:00 PM/);
-  assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Supplement &amp; enhancer stack<\/h2>/);
+  /* Morning stays the routine for now until Night starts. */
+  assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Morning routine<\/h2>/);
   assert.match(html, /Nothing to log yet/);
 
   const atNoon = paints;
@@ -563,7 +568,7 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   t.mock.timers.tick(1);
   assert.equal(paints, atNoon + 1);
   assert.match(html, /Now · Afternoon · 12:02 PM/);
-  assert.match(html, /Supplement &amp; enhancer stack/);
+  assert.match(html, />12:02</);
 });
 
 test("the minute refresh waits for an open sheet, a focused field, edit mode, and a session", (t) => {

@@ -679,6 +679,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     signIn("2026-11-19");
     addDose(blockId("Night routine"), "Example Compound B");
     app.routineNow = () => new Date(2026, 10, 19, 8, 30, 0);
+    /* Night is later today, so it starts closed; open it to see its row. */
+    assert.equal(toggleRoutineCollapsed(app.state, blockId("Night routine")), true);
     html = dailyRoutinesHTML();
     assert.match(html, /data-next-dose="510"/);
     assert.match(html, /Next dose in 8 hr 30 min/);
@@ -913,8 +915,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     const flag = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v89"/);
-    assert.match(sentry, /insight-shell-v89/);
+    assert.match(sw, /const CACHE = "insight-shell-v90"/);
+    assert.match(sentry, /insight-shell-v90/);
     assert.match(sw, /js\/pages\/daily-routines-dose\.js/);
     assert.match(sw, /js\/pages\/reconstitution\.js/);
     assert.match(sw, /js\/shared\/routine-dose\.js/);
