@@ -366,6 +366,22 @@ async function initCloud() {
 }
 app.initCloud = initCloud;
 
+/* Plain words for the sign-in errors people actually hit. Anything else gets a general line
+   rather than the server's own wording. */
+export function authErrorText(err, mode) {
+  const msg = String((err && (err.message || err.error_description)) || "").toLowerCase();
+  const status = err && err.status;
+  if (/invalid login credentials|invalid_credentials/.test(msg)) return "That email and password don't match. Check them and try again.";
+  if (/email not confirmed/.test(msg)) return "Confirm your email first. The link is in your inbox.";
+  if (/already registered|already exists|user_already_exists/.test(msg)) return "There's already an account with that email. Sign in instead.";
+  if (/rate limit|too many|over_email_send_rate/.test(msg) || status === 429) return "Too many tries. Wait a minute, then try again.";
+  if (/password/.test(msg) && /weak|short|at least|characters/.test(msg)) return "Choose a longer password, at least 6 characters.";
+  if (/invalid.*email|email.*invalid|unable to validate email/.test(msg)) return "That email address doesn't look right.";
+  if (/fetch|network|load failed|timed? ?out|offline/.test(msg) || status === 0) return "Can't reach the server. Check your connection and try again.";
+  return mode === "signup" ? "Couldn't create your account just now. Try again in a moment." : "Couldn't sign you in just now. Try again in a moment.";
+}
+app.authErrorText = authErrorText;
+
 async function signIn(mode) {
   if (!app.sb) { app.toast("Can't reach the server. Check your connection."); return; }
   const email = (app.$("#authEmail") || {}).value?.trim();
@@ -373,11 +389,17 @@ async function signIn(mode) {
   if (!email || !email.includes("@")) { app.toast("Enter your email address."); return; }
   if (password.length < 6) { app.toast("Passwords need at least 6 characters."); return; }
   const btn = app.$('[data-action="auth-go"]');
+  const restore = () => { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = mode === "signup" ? "Create account" : "Sign in"; } };
   if (btn) { btn.disabled = true; btn.textContent = "One moment…"; }
-  const res = mode === "signup" ? await app.sb.auth.signUp({ email, password }) : await app.sb.auth.signInWithPassword({ email, password });
-  if (res.error) {
-    if (btn) { btn.disabled = false; btn.textContent = mode === "signup" ? "Create account" : "Sign in"; }
-    app.toast(res.error.message);
+  let res;
+  try {
+    res = mode === "signup" ? await app.sb.auth.signUp({ email, password }) : await app.sb.auth.signInWithPassword({ email, password });
+  } catch (e) {
+    res = { error: e || new Error("network") };
+  }
+  if (!res || res.error) {
+    restore();
+    app.toast(authErrorText(res && res.error, mode));
     return;
   }
   if (!res.data.session) { app.toast("Check your email to confirm your account, then sign in."); app.ui.sheet = null; app.render(); return; }
