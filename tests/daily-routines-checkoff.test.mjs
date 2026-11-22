@@ -47,6 +47,7 @@ const {
   routineStreak,
   shiftRoutineDay,
   skipRoutineItem,
+  toggleRoutineCollapsed,
   toggleRoutineFocus,
   toggleRoutineReveal,
   undoRoutineLog,
@@ -171,7 +172,8 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-20"), 0);
     const html = dailyRoutinesHTML();
     assert.match(html, /data-logged="1"/);
-    assert.match(html, /<b>1<\/b> logged today/);
+    assert.match(html, /data-due="1"/);
+    assert.match(html, /<b>1<\/b> of 1 today/);
     assert.doesNotMatch(html, /<b>250<\/b>/);
     assert.match(html, /data-streak="1"/);
 
@@ -186,7 +188,7 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.match(missed, /data-logged="0"/);
     assert.match(missed, /data-streak="0"/);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, "2026-11-21"), 0);
-    assert.doesNotMatch(missed, /yesterday|missed|overdue/i);
+    assert.doesNotMatch(missed, /yesterday|missed/i);
   });
 
   test("tap to log collapses the row, reveal shows undo, and undo drops the dose", () => {
@@ -209,14 +211,19 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(live.deletedAt, null);
     html = dailyRoutinesHTML();
     assert.match(html, /data-logged="1"/);
+    assert.match(html, /data-due="1"/);
+    assert.match(html, /<b>1<\/b> of 1 today/);
     assert.match(html, /data-streak="1"/);
     assert.match(html, /dr-streak-mark/);
-    assert.match(html, /All done/);
-    assert.match(html, /Show 1 completed/);
+    assert.match(html, /All done today ✓/);
+    assert.match(html, /data-all-done="true"/);
+    assert.match(html, /data-collapsed="true"/);
+    assert.doesNotMatch(html, /Show 1 completed/);
     assert.doesNotMatch(html, /data-action="routines-log"/);
     assert.doesNotMatch(html, /data-action="routines-undo"/);
     assert.doesNotMatch(html, /yesterday|missed|overdue/i);
 
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     assert.equal(toggleRoutineReveal(app.state, morning), true);
     html = dailyRoutinesHTML();
     assert.match(html, /aria-expanded="true"/);
@@ -409,8 +416,8 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(routineStreak(app.state.dailyRoutines.logs, "2026-11-19"), 3);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
-    assert.match(html, /All skipped/);
-    assert.doesNotMatch(html, /All done/);
+    assert.doesNotMatch(html, /data-all-done/);
+    assert.match(html, /Nothing left to log/);
     assert.match(html, /data-state="skipped"/);
     assert.match(html, /Skipped/);
     assert.match(html, /data-streak="3"/);
@@ -431,6 +438,7 @@ describe("routine check-off", { concurrency: false }, () => {
     log.unit = "mcg";
     const compound = app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId);
     compound.amount = 250;
+    toggleRoutineCollapsed(app.state, morning);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
     assert.match(html, /data-state="partial"/);
@@ -458,6 +466,7 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(log.amount, 0.25);
     assert.equal(typeof log.amount, "number");
     assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 1);
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
     assert.match(html, /0\.25 mcg/);
@@ -477,8 +486,13 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(putDailyRoutines(app.state, next), true);
     assert.equal(logRoutineItem(app.state, item.id), true);
     const html = dailyRoutinesHTML();
-    assert.equal(html.match(/Show 1 completed/g).length, 2);
+    assert.match(html, /data-all-done="true"/);
     assert.doesNotMatch(html, /data-action="routines-log"/);
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
+    assert.equal(toggleRoutineCollapsed(app.state, night), true);
+    const opened = dailyRoutinesHTML();
+    assert.equal(opened.match(/Show 1 completed/g).length, 2);
+    assert.doesNotMatch(opened, /data-action="routines-log"/);
   });
 
   test("a preference toggle keeps a newer store stamp, and the next check-off beats the tombstone", () => {

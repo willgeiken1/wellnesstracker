@@ -265,6 +265,129 @@ function parseRoutineLogId(id) {
   return match ? { itemId: match[1], day: match[2] } : null;
 }
 
+/* One row per placed item. Two blocks that share an item are still one dose. */
+function placedItems(projected) {
+  const blocks = new Set((projected && projected.blocks ? projected.blocks : []).filter((block) => isLive(block)).map((block) => block.id));
+  const items = new Map((projected && projected.items ? projected.items : []).filter((item) => isLive(item)).map((item) => [item.id, item]));
+  const seen = new Set();
+  const out = [];
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (!isLive(place) || !blocks.has(place.blockId) || !items.has(place.itemId) || seen.has(place.itemId)) continue;
+    seen.add(place.itemId);
+    out.push(items.get(place.itemId));
+  }
+  return out;
+}
+
+/* Logged doses out of doses due today. A skip is due and not logged.
+   The numbers are counts. They are never a sum of amounts. */
+export function routineDoseProgress(projected, day) {
+  const doses = placedItems(projected).filter((item) => item.kind === "dose");
+  let logged = 0;
+  for (const item of doses) {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    if (log && log.status !== "skipped") logged += 1;
+  }
+  return { logged, due: doses.length };
+}
+
+/* The day is done when every placed item is logged. A skip is handled and
+   still not logged, so it does not finish the day. No items is not done. */
+export function routineDayComplete(projected, day) {
+  const items = placedItems(projected);
+  if (!items.length || typeof day !== "string") return false;
+  return items.every((item) => {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    return !!(log && log.status !== "skipped");
+  });
+}
+
+function blockStartsFor(projected, item) {
+  const placed = new Set();
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (isLive(place) && place.itemId === item.id && typeof place.blockId === "string") placed.add(place.blockId);
+  }
+  const starts = [];
+  for (const block of projected && projected.blocks ? projected.blocks : []) {
+    if (!isLive(block) || !placed.has(block.id)) continue;
+    const hour = DEFAULT_START.get(block.name);
+    if (typeof hour === "number") starts.push(hour * 60);
+  }
+  starts.sort((a, b) => a - b);
+  return starts;
+}
+
+/* Overdue means every start named on this item has passed today.
+   A later block the same day is still upcoming, so the row is not overdue.
+   A renamed block has no start, so it is not overdue and has no countdown. */
+function itemTiming(projected, item, date, day) {
+  if (!item || !(date instanceof Date) || Number.isNaN(date.getTime())) return { waitMin: null, overdue: false };
+  if (item.kind === "dose") {
+    const result = nextDoseCountdown({
+      item,
+      blocks: projected && projected.blocks,
+      placements: projected && projected.placements,
+      logs: [],
+      date,
+      day,
+    });
+    if (!result || typeof result.waitMin !== "number") return { waitMin: null, overdue: false };
+    return { waitMin: result.waitMin, overdue: result.tomorrow === true };
+  }
+  const starts = blockStartsFor(projected, item);
+  if (!starts.length) return { waitMin: null, overdue: false };
+  const nowMin = date.getHours() * 60 + date.getMinutes();
+  let target = null;
+  for (const start of starts) {
+    if (start >= nowMin) {
+      target = start;
+      break;
+    }
+  }
+  const overdue = target == null;
+  if (target == null) target = starts[0] + 24 * 60;
+  return { waitMin: target - nowMin, overdue };
+}
+
+function placementOrder(projected, itemId) {
+  let best = Number.POSITIVE_INFINITY;
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (isLive(place) && place.itemId === itemId && typeof place.order === "number" && place.order < best) best = place.order;
+  }
+  return best;
+}
+
+/* The next line names an item, not a block. Upcoming items come before
+   overdue ones. The wait is the same block clock the row countdown uses. */
+export function routineNextItem(projected, date, day) {
+  if (!projected || !(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const open = placedItems(projected).filter((item) => !coveringLog(projected.logs, item.id, day));
+  if (!open.length) return null;
+  const ranked = open.map((item) => ({ item, ...itemTiming(projected, item, date, day), order: placementOrder(projected, item.id) }));
+  ranked.sort((a, b) => {
+    const group = (row) => (row.overdue ? 1 : row.waitMin == null ? 2 : 0);
+    const ag = group(a);
+    const bg = group(b);
+    if (ag !== bg) return ag - bg;
+    const aw = a.waitMin == null ? Number.POSITIVE_INFINITY : a.waitMin;
+    const bw = b.waitMin == null ? Number.POSITIVE_INFINITY : b.waitMin;
+    if (aw !== bw) return aw - bw;
+    if (a.order !== b.order) return a.order - b.order;
+    if (a.item.id === b.item.id) return 0;
+    return a.item.id < b.item.id ? -1 : 1;
+  });
+  return ranked[0];
+}
+
+export function lastDoseLabel(log) {
+  if (!log || log.rest === true || log.status === "skipped") return "";
+  if (log.status !== "done" && log.status !== "partial") return "";
+  if (typeof log.at !== "number" || !Number.isFinite(log.at) || log.at <= 0) return "";
+  const date = new Date(log.at);
+  if (Number.isNaN(date.getTime())) return "";
+  return `last: ${formatRoutineClock(date)}`;
+}
+
 /* Calendar steps stay on the year-month-day fields. The UTC date is only
    the calculator, so a US evening that is already the next UTC day does
    not skip a local day. */
@@ -412,6 +535,44 @@ function countdownMarkup(projected, row, date, day) {
   const text = doseCountdownText(projected, row.item, date, day);
   if (!text) return "";
   return `<span class="dr-next-dose" data-next-dose="${result.waitMin}">${esc(text)}</span>`;
+}
+
+const OVERDUE_ICON = `<svg class="dr-overdue-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16.2h.01"/></svg>`;
+const DONE_MARK = `<svg class="dr-all-done-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.2 16.7 19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function overdueMarkup() {
+  return `<span class="dr-overdue">${OVERDUE_ICON}<span class="dr-overdue-text">overdue</span></span>`;
+}
+
+function latestTakenLog(logs, itemId) {
+  const rows = (Array.isArray(logs) ? logs : []).filter((log) => {
+    if (!isLive(log) || log.itemId !== itemId || log.rest === true) return false;
+    if (log.status !== "done" && log.status !== "partial") return false;
+    return typeof log.at === "number" && log.at > 0;
+  });
+  rows.sort((a, b) => {
+    if (a.day !== b.day) return a.day < b.day ? 1 : -1;
+    if (a.at !== b.at) return b.at - a.at;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  return rows[0] || null;
+}
+
+/* An open row that is still upcoming shows the countdown. A taken row shows
+   the clock time stored on that log. Overdue replaces the countdown and
+   keeps a previous clock time when one exists. */
+function rowDetailMarkup(projected, row, date, day) {
+  const open = !!row.open;
+  const timing = open && row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const state = open ? "open" : rowState(row.log);
+  const overdue = open && timing.overdue;
+  const countdown = !overdue && state !== "done" && state !== "partial" ? countdownMarkup(projected, row, date, day) : "";
+  const taken = state === "done" || state === "partial" ? row.log : (!countdown && row.item ? latestTakenLog(projected && projected.logs, row.item.id) : null);
+  const last = !countdown ? lastDoseLabel(taken) : "";
+  const lastHTML = last ? `<span class="dr-last">${esc(last)}</span>` : "";
+  const tag = overdue ? overdueMarkup() : "";
+  if (!tag && !countdown && !lastHTML) return "";
+  return `<span class="dr-meta">${tag}${countdown}${lastHTML}</span>`;
 }
 
 function rowState(log) {
@@ -933,6 +1094,15 @@ function collapsedIds(prefs) {
 /* A reorder records orderAt and does not move updatedAt. A tombstone from
    the other phone still beats the reorder. Rows whose order did not change
    are left alone. */
+/* Open blocks on an all-done day. A different day does not reuse the list,
+   so expanding today does not leave the block collapsed tomorrow. */
+function allDoneOpenIds(prefs, day) {
+  const raw = prefs && prefs.allDoneOpen;
+  if (!raw || typeof raw !== "object" || raw.day !== day || !Array.isArray(raw.ids)) return [];
+  return raw.ids.filter((id) => typeof id === "string" && id);
+}
+
+/* Plan edits change order, names, and placements. They never assign logs. */
 function applyOrders(store, collection, ids, at) {
   return ids.reduce((next, id, index) => {
     const row = (next[collection] || []).find((entity) => entity && entity.id === id);
@@ -1325,9 +1495,17 @@ export function toggleRoutineCollapsed(state, blockId) {
   if (typeof blockId !== "string" || !blockId) return false;
   return withStore(state, (store, clock) => {
     if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
+    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    const view = projectDailyRoutines(store);
+    if (view && routineDayComplete(view, clock.day) && !layoutEditing()) {
+      const current = allDoneOpenIds(store.prefs, clock.day);
+      const ids = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
+      store.prefs = { ...store.prefs, allDoneOpen: { day: clock.day, ids }, updatedAt: at };
+      store.updatedAt = Math.max(store.updatedAt || 0, at);
+      return rememberBlock(store, blockId, at);
+    }
     const current = collapsedIds(store.prefs);
     const collapsedBlocks = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
-    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
     store.prefs = { ...store.prefs, collapsedBlocks, updatedAt: at };
     store.updatedAt = Math.max(store.updatedAt || 0, at);
     return rememberBlock(store, blockId, at);
@@ -1399,24 +1577,41 @@ function restHTML(log) {
 
 function nowFooter(projected, date) {
   const day = todayKey(date);
-  const count = loggedTodayCount(projected.logs, day);
+  const progress = routineDoseProgress(projected, day);
   const streak = routineStreak(projected.logs, day);
   const focusOn = !!(projected.prefs && projected.prefs.focusMode === true);
   const rest = (projected.logs || []).find((log) => log.rest === true && log.day === day) || null;
   return `<div class="dr-pills">
-      <p class="dr-count" data-logged="${count}"><b>${count}</b> logged today</p>
+      <p class="dr-count" data-logged="${progress.logged}" data-due="${progress.due}"><span class="dr-vh">Doses </span><b>${progress.logged}</b> of ${progress.due} today</p>
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
     ${rest || routineShows("rest", projected) ? restHTML(rest) : ""}`;
 }
 
+function nextItemHTML(projected, date, day) {
+  const next = routineNextItem(projected, date, day);
+  if (!next) {
+    const waiting = placedItems(projected).length > 0 ? "Nothing left to log" : "Nothing to log yet";
+    return `<p class="dr-next">${waiting}</p>`;
+  }
+  const wait = next.overdue ? "overdue" : formatRoutineWait(next.waitMin);
+  const tail = wait ? `<span class="dr-wait">${esc(wait)}</span>` : "";
+  return `<p class="dr-next">Next: ${esc(next.item.name)}${tail}</p>`;
+}
+
 export function routineNowHTML(projected, date) {
+  const day = todayKey(date);
+  const footer = nowFooter(projected, date);
+  if (routineDayComplete(projected, day)) {
+    return `<section class="dr-all-done" data-all-done="true" aria-labelledby="dr-now-title">
+      <h2 class="dr-now-title" id="dr-now-title">${DONE_MARK}All done today ✓</h2>
+      ${footer}
+    </section>`;
+  }
   const moment = routineNowNext(projected.blocks, date);
   const clock = formatRoutineClock(date);
   const slot = SLOT_LABEL[moment.slot] || "Today";
-  const day = todayKey(date);
-  const footer = nowFooter(projected, date);
   if (!moment.nowBlock) {
     return `<section class="dr-now" data-color="lavender" aria-labelledby="dr-now-title">
       <p class="dr-k">Now · ${esc(clock)}</p>
@@ -1425,22 +1620,11 @@ export function routineNowHTML(projected, date) {
       ${footer}
     </section>`;
   }
-  const wait = formatRoutineWait(moment.waitMin);
-  const next = moment.nextBlock
-    ? `Next · ${esc(moment.nextBlock.name)}${wait ? `<span class="dr-wait">${esc(wait)}</span>` : ""}`
-    : "Nothing else today";
-  const rows = routineBlockRows(projected, moment.nowBlock.id, day);
-  const open = rows.filter((row) => row.open).length;
-  const logged = rows.filter((row) => !row.open && rowState(row.log) !== "skipped").length;
-  const skipped = rows.filter((row) => !row.open && rowState(row.log) === "skipped").length;
-  const statusText = rows.length && !open ? tileMeta(open, logged, skipped) : "";
-  const status = statusText ? `<p class="dr-status">${esc(statusText)}</p>` : "";
   const color = tileColor(moment.nowBlock.color);
   return `<section class="dr-now" data-color="${color}" aria-labelledby="dr-now-title">
     <p class="dr-k">Now · ${esc(slot)} · ${esc(clock)}</p>
     <h2 class="dr-now-title" id="dr-now-title">${esc(moment.nowBlock.name)}</h2>
-    <p class="dr-next">${next}</p>
-    ${status}
+    ${nextItemHTML(projected, date, day)}
     ${footer}
   </section>`;
 }
@@ -1495,11 +1679,13 @@ function editLogButton(row) {
 
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
-  const next = countdownMarkup(projected, row, date, day);
-  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open">
+  const timing = row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const detail = rowDetailMarkup(projected, row, date, day);
+  const overdue = timing.overdue ? ` data-overdue="true"` : "";
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue}>
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     ${historyButton(row)}
@@ -1515,7 +1701,7 @@ function editRowHTML(row) {
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
-      <span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}
+      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
   </li>`;
@@ -1527,10 +1713,10 @@ function doneRowHTML(row, projected, date, day) {
   const markClass = state === "skipped" ? "dr-mark dr-mark-skip" : "dr-mark dr-mark-on";
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
-  const next = countdownMarkup(projected, row, date, day);
+  const detail = rowDetailMarkup(projected, row, date, day);
   return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}${next}<span class="dr-state">${label}</span></span>
+    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}<span class="dr-state">${label}</span></span>
     <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
   </li>`;
 }
@@ -1591,7 +1777,9 @@ export function routineBlockTilesHTML(projected, date) {
   const moment = routineNowNext(projected.blocks, clock);
   const focus = !!(projected.prefs && projected.prefs.focusMode === true);
   const revealed = new Set(Array.isArray(projected.prefs && projected.prefs.revealBlocks) ? projected.prefs.revealBlocks.filter((id) => typeof id === "string") : []);
-  const collapsed = new Set(collapsedIds(projected.prefs));
+  const collapsedSet = new Set(collapsedIds(projected.prefs));
+  const complete = !layoutEditing() && routineDayComplete(projected, day);
+  const opened = new Set(complete ? allDoneOpenIds(projected.prefs, day) : []);
   const lastId = projected.prefs && typeof projected.prefs.lastBlockId === "string" ? projected.prefs.lastBlockId : "";
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
   const hiding = focus && !layoutEditing();
@@ -1602,7 +1790,7 @@ export function routineBlockTilesHTML(projected, date) {
     date: clock,
     current: block.id === currentId,
     revealed: revealed.has(block.id),
-    collapsed: collapsed.has(block.id),
+    collapsed: complete ? !opened.has(block.id) : collapsedSet.has(block.id),
     last: block.id === lastId,
   })).join("");
   const rest = hiding && !focusId
@@ -1848,6 +2036,10 @@ app.ensureRoutineShell = ensureRoutineShell;
 app.routineNowNext = routineNowNext;
 app.routineClock = routineClock;
 app.loggedTodayCount = loggedTodayCount;
+app.routineDoseProgress = routineDoseProgress;
+app.routineDayComplete = routineDayComplete;
+app.routineNextItem = routineNextItem;
+app.lastDoseLabel = lastDoseLabel;
 app.routineStreak = routineStreak;
 app.shiftRoutineDay = shiftRoutineDay;
 app.logRoutineItem = logRoutineItem;
