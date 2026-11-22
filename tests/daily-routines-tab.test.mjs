@@ -435,7 +435,9 @@ test("flag off does not paint the shell or write a store", () => {
 });
 
 test("settings includes focus mode and Discover stays a placeholder", () => {
-  assert.match(routinesSettingsSheetHTML(), /Notifications stay off/);
+  assert.match(routinesSettingsSheetHTML(), /id="dr-faq-title"/);
+  assert.match(routinesSettingsSheetHTML(), /does not send reminders/);
+  assert.doesNotMatch(routinesSettingsSheetHTML(), /Notification/);
   assert.match(routinesDiscoverSheetHTML(), /does not suggest a dose/);
   app.$ = (sel) => document.querySelector(sel);
   app.stopBarcode = () => {};
@@ -445,7 +447,8 @@ test("settings includes focus mode and Discover stays a placeholder", () => {
   assert.match(sheet.innerHTML, /aria-label="Routines settings"/);
   assert.match(sheet.innerHTML, /Focus mode/);
   assert.match(sheet.innerHTML, /aria-checked="false"/);
-  assert.match(sheet.innerHTML, /Notifications stay off/);
+  assert.match(sheet.innerHTML, /FAQ/);
+  assert.doesNotMatch(sheet.innerHTML, /Notification/);
   app.ui.sheet = "routines-discover";
   app.renderSheet();
   assert.match(sheet.innerHTML, /aria-label="Discover"/);
@@ -467,8 +470,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v76"/);
-  assert.match(sentry, /insight-shell-v76/);
+  assert.match(sw, /const CACHE = "insight-shell-v77"/);
+  assert.match(sentry, /insight-shell-v77/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);
