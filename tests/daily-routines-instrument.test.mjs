@@ -40,7 +40,7 @@ const routines = await import("../logger/js/pages/daily-routines.js");
 await import("../logger/js/pages/daily-routines-edit.js");
 await import("../logger/js/pages/daily-routines-details.js");
 const plan = await import("../logger/js/pages/daily-routines-plan.js");
-const { liveOf, projectDailyRoutines, seedDefaultBlocks, DEFAULT_BLOCK_STAMP } = await import("../logger/js/shared/daily-routines-store.js");
+const { liveOf, mergeDailyRoutines, projectDailyRoutines, seedDefaultBlocks, DEFAULT_BLOCK_STAMP } = await import("../logger/js/shared/daily-routines-store.js");
 const types = await import("../logger/js/shared/routine-types.js");
 const { nextDoseCountdown, routineBlockDays, routineBlockRunsOn, routineBlockWindow } = await import("../logger/js/shared/routine-dose.js");
 
@@ -395,6 +395,58 @@ describe("moving old blocks onto type tabs", () => {
     const next = types.migrateRoutineTypes(legacyStore(), 1000);
     const stack = next.blocks.find((row) => row.id === "block_default_stack");
     assert.equal(types.routineHiddenNote(next, stack), "Its 2 items now live on their tabs");
+  });
+
+  test("an item synced into a hidden or removed old block later still gets a type", () => {
+    const once = types.migrateRoutineTypes(legacyStore(), 1000);
+    once.items.push(
+      { id: "item_c", name: "Example mineral", kind: "check", updatedAt: 30, deletedAt: null },
+      { id: "item_d", name: "Example tablet", kind: "check", updatedAt: 30, deletedAt: null },
+    );
+    once.placements.push(
+      { id: "place_c", blockId: "block_default_stack", itemId: "item_c", order: 2, updatedAt: 30, deletedAt: null },
+      { id: "place_d", blockId: "block_setup_meds", itemId: "item_d", order: 0, updatedAt: 30, deletedAt: null },
+    );
+    const again = types.migrateRoutineTypes(once, 2000);
+    const byId = new Map(again.items.map((row) => [row.id, row]));
+    assert.equal(byId.get("item_c").type, "supplement");
+    assert.equal(byId.get("item_c").timeMin, 12 * 60, "it keeps the old block's start like the rest");
+    assert.equal(byId.get("item_d").type, "medication");
+    assert.equal(again.blocks.find((row) => row.id === "block_default_stack").hidden, true);
+    assert.equal(types.migrateRoutineTypes(again, 3000), null, "nothing left to type");
+  });
+
+  test("a restored old block is left as the user set it", () => {
+    const once = types.migrateRoutineTypes(legacyStore(), 1000);
+    once.blocks = once.blocks.map((row) => (row.id === "block_default_stack" ? { ...row, hidden: false, updatedAt: 1500 } : row));
+    once.items.push({ id: "item_c", name: "Example mineral", kind: "check", updatedAt: 1600, deletedAt: null });
+    once.placements.push({ id: "place_c", blockId: "block_default_stack", itemId: "item_c", order: 2, updatedAt: 1600, deletedAt: null });
+    assert.equal(types.migrateRoutineTypes(once, 2000), null);
+  });
+
+  test("a newer delete or edit from a phone that has not moved yet still wins", () => {
+    const other = legacyStore();
+    other.items = other.items.map((row) => (row.id === "item_a" ? { ...row, updatedAt: 40, deletedAt: 40 } : { ...row, name: "Example Compound B2", updatedAt: 40 }));
+    other.placements = other.placements.map((row) => (row.itemId === "item_a" ? { ...row, updatedAt: 40, deletedAt: 40, removedWith: "item_a" } : row));
+    const moved = types.migrateRoutineTypes(legacyStore(), 5000);
+    for (const merged of [mergeDailyRoutines(moved, other, 6000), mergeDailyRoutines(other, moved, 6000)]) {
+      const itemA = merged.items.find((row) => row.id === "item_a");
+      assert.ok(itemA.deletedAt > 0, "the delete stays");
+      assert.ok(merged.placements.find((row) => row.id === "place_a").deletedAt > 0, "its placement stays gone");
+      assert.equal(merged.items.find((row) => row.id === "item_b").name, "Example Compound B2", "the rename stays");
+      assert.ok(types.routineTypesMigrated(merged.prefs), "the move's marker survives the merge");
+      const settled = types.migrateRoutineTypes(merged, 7000);
+      assert.equal(settled.items.find((row) => row.id === "item_b").type, "enhancer", "the renamed copy gets its type again");
+    }
+  });
+
+  test("a newer prefs save without the marker keeps it", () => {
+    const moved = types.migrateRoutineTypes(legacyStore(), 1000);
+    const other = legacyStore();
+    other.prefs = { ...other.prefs, lastBlockId: "block_default_stack", updatedAt: 9000 };
+    const merged = mergeDailyRoutines(other, moved, 9500);
+    assert.equal(merged.prefs.lastBlockId, "block_default_stack");
+    assert.ok(types.routineTypesMigrated(merged.prefs));
   });
 });
 

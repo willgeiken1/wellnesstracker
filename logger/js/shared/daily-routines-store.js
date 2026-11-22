@@ -632,6 +632,10 @@ function keepSetupParts(winner, other, now) {
   out = growList(out, other, "typeTabs", (key) => typeof key === "string", (a, b) => a === b);
   out = growList(out, other, "customTypes", (row) => !!row && typeof row === "object" && !Array.isArray(row) && typeof row.id === "string" && row.id !== "",
     (a, b) => !!a && typeof a === "object" && a.id === b.id);
+  /* The type move's marker only goes up, so a newer prefs save from a phone
+     that has not moved yet never runs the move again over restored blocks. */
+  const typesOf = (prefs) => (typeof prefs.typesV === "number" && Number.isFinite(prefs.typesV) ? prefs.typesV : 0);
+  if (typesOf(other) > typesOf(out)) out = { ...out, typesV: other.typesV };
   return out;
 }
 

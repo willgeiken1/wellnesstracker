@@ -6,7 +6,10 @@
 -- 20261122041000. Then prefs.typeTabs keeps every string either side has,
 -- and prefs.customTypes keeps every object with a string id either side has,
 -- matched by id: the winner's list first, then the other side's new entries
--- in its order. Matches keepSetupParts in
+-- in its order. prefs.typesV, the marker that old blocks moved onto type
+-- tabs, keeps the higher number either side has, so a newer save from a
+-- phone that has not moved yet never runs the move again. Matches
+-- keepSetupParts in
 -- logger/js/shared/daily-routines-store.js.
 -- No-ops until 20261122041000_daily_routines_keep_setup.sql has created
 -- daily_routines_keep_setup. Safe to run more than once.
@@ -106,6 +109,11 @@ begin
   kept := public.daily_routines_grow_strings(kept, p_other, 'added');
   kept := public.daily_routines_grow_strings(kept, p_other, 'typeTabs');
   kept := public.daily_routines_grow_by_id(kept, p_other, 'customTypes');
+  if jsonb_typeof(p_other->'typesV') = 'number'
+     and (p_other->>'typesV')::numeric > coalesce(
+       case when jsonb_typeof(kept->'typesV') = 'number' then (kept->>'typesV')::numeric end, 0) then
+    kept := jsonb_set(kept, '{typesV}', p_other->'typesV', true);
+  end if;
   return kept;
 end;
 $$;

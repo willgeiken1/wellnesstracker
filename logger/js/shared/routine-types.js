@@ -231,20 +231,27 @@ export function routineTypesMigrated(prefs) {
   return !!(prefs && typeof prefs.typesV === "number" && prefs.typesV >= ROUTINE_TYPES_VERSION);
 }
 
-/* Runs once per store. Items in an old block get a type and, when no other
-   routine times them, that block's start as their own time, so countdowns
-   stay where they were. The block is hidden, never deleted, so Restore in
-   Edit routines brings it back with its items. An old default nobody used
-   is removed. Returns the new store, or null when there is nothing to do, so a store
-   with no old blocks is left untouched. */
+/* The first run per store types the items in each old block and, when no
+   other routine times them, gives them that block's start as their own
+   time, so countdowns stay where they were. The block is hidden, never
+   deleted, so Restore in Edit routines brings it back with its items. An
+   old default nobody used is removed. Later runs only type items that sync
+   in afterwards inside an old block that is hidden or removed, so they never
+   vanish; a block the user restored is left alone.
+   Every changed row moves just one past its own stamp, never to now, so a
+   newer edit or delete from another phone still wins the merge and the next
+   run types that copy again. Returns the new store, or null when there is
+   nothing to do, so a paint with nothing old never saves. */
 export function migrateRoutineTypes(rawStore, at) {
   const store = normalizeDailyRoutines(rawStore);
-  if (!store || routineTypesMigrated(store.prefs)) return null;
-  const stamp = typeof at === "number" && at > DEFAULT_BLOCK_STAMP ? at : Date.now();
+  if (!store) return null;
+  const first = !routineTypesMigrated(store.prefs);
   const placements = liveOf(store.placements);
   const items = new Map(liveOf(store.items).map((item) => [item.id, item]));
-  const legacy = liveOf(store.blocks).filter((block) => block.hidden !== true && Object.prototype.hasOwnProperty.call(LEGACY, block.id));
-  /* Nothing old on the page: write nothing, so a paint never saves. */
+  const isLegacy = (block) => Object.prototype.hasOwnProperty.call(LEGACY, block.id);
+  const legacy = first
+    ? liveOf(store.blocks).filter((block) => block.hidden !== true && isLegacy(block))
+    : store.blocks.filter((block) => isLegacy(block) && (!isLive(block) || block.hidden === true));
   if (!legacy.length) return null;
   const legacyIds = new Set(legacy.map((block) => block.id));
   const otherTimed = (itemId) => placements.some((place) => place.itemId === itemId && !legacyIds.has(place.blockId)
@@ -254,6 +261,17 @@ export function migrateRoutineTypes(rawStore, at) {
   const drop = new Set();
   for (const block of legacy) {
     const inside = placements.filter((place) => place.blockId === block.id && items.has(place.itemId));
+    if (!first) {
+      inside.filter((place) => !routineItemTypeId(items.get(place.itemId).type)).forEach((place) => {
+        const item = items.get(place.itemId);
+        if (typed.has(item.id)) return;
+        const patch = { type: LEGACY[block.id](block, item) };
+        const start = routineBlockStartMin(block);
+        if (routineMinuteOfDay(item.timeMin) == null && start != null && !otherTimed(item.id)) patch.timeMin = start;
+        typed.set(item.id, patch);
+      });
+      continue;
+    }
     if (!inside.length) {
       const stampOf = Math.max(block.updatedAt || 0, block.deletedAt || 0);
       if (stampOf === DEFAULT_BLOCK_STAMP) drop.add(block.id);
@@ -271,19 +289,34 @@ export function migrateRoutineTypes(rawStore, at) {
       typed.set(item.id, patch);
     }
   }
+  const nextStamp = (row) => Math.max(row.updatedAt || 0, row.deletedAt || 0) + 1;
+  let changed = false;
   store.items = store.items.map((item) => {
     const patch = typed.get(item.id);
-    return patch && Object.keys(patch).length ? { ...item, ...patch, updatedAt: Math.max(stamp, (item.updatedAt || 0) + 1) } : item;
+    if (!patch || !Object.keys(patch).length) return item;
+    changed = true;
+    return { ...item, ...patch, updatedAt: nextStamp(item) };
   });
   store.blocks = store.blocks.map((block) => {
-    if (drop.has(block.id)) return { ...block, updatedAt: stamp, deletedAt: stamp };
-    if (hide.has(block.id)) return { ...block, hidden: true, updatedAt: Math.max(stamp, (block.updatedAt || 0) + 1) };
+    if (drop.has(block.id)) {
+      changed = true;
+      const gone = nextStamp(block);
+      return { ...block, updatedAt: gone, deletedAt: gone };
+    }
+    if (hide.has(block.id)) {
+      changed = true;
+      return { ...block, hidden: true, updatedAt: nextStamp(block) };
+    }
     return block;
   });
-  const prefs = { ...store.prefs, typesV: ROUTINE_TYPES_VERSION };
-  prefs.updatedAt = Math.max(stamp, typeof prefs.updatedAt === "number" ? prefs.updatedAt + 1 : 0);
-  store.prefs = prefs;
-  store.updatedAt = Math.max(typeof store.updatedAt === "number" ? store.updatedAt : 0, prefs.updatedAt);
+  if (first) {
+    const prefs = { ...store.prefs, typesV: ROUTINE_TYPES_VERSION };
+    prefs.updatedAt = (typeof prefs.updatedAt === "number" ? prefs.updatedAt : 0) + 1;
+    store.prefs = prefs;
+    changed = true;
+  } else if (!changed) return null;
+  const stamp = typeof at === "number" && at > 0 ? at : 0;
+  store.updatedAt = Math.max(typeof store.updatedAt === "number" ? store.updatedAt : 0, stamp, store.prefs.updatedAt || 0);
   return store;
 }
 

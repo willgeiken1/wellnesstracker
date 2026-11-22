@@ -28,7 +28,6 @@ import {
   routineTypeName,
   routineTypeTabs,
   routineTypedItems,
-  routineTypesMigrated,
   routineWindowLabel,
 } from "../shared/routine-types.js";
 import { routineSupplyView, supplyFromDraft } from "../shared/routine-supply.js";
@@ -2015,9 +2014,10 @@ export function ensureRoutineShell(state, now = Date.now()) {
     }
   }
   /* Older stores kept supplements, enhancers and medications in blocks.
-     Their items move to type tabs once, and the old blocks are hidden. */
+     Their items move to type tabs once, and the old blocks are hidden.
+     Items another phone adds to a hidden old block later get a type too. */
   const current = normalizeDailyRoutines(state.dailyRoutines);
-  if (current && !routineTypesMigrated(current.prefs)) {
+  if (current) {
     const migrated = migrateRoutineTypes(current, stampAfter(now, current.updatedAt));
     if (migrated && putDailyRoutines(state, migrated) && typeof app.save === "function") app.save();
   }
