@@ -494,6 +494,31 @@ describe("routine editing", { concurrency: false }, () => {
     }
   });
 
+  test("a dose edit of a future-dated compound and item stays ahead of the original copy", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const ahead = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    const raw = structuredClone(app.state.dailyRoutines);
+    raw.items = raw.items.map((row) => ({ ...row, updatedAt: ahead }));
+    raw.compounds = raw.compounds.map((row) => ({ ...row, updatedAt: ahead }));
+    app.state.dailyRoutines = normalizeDailyRoutines(raw);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    app.routineNow = () => new Date();
+    assert.equal(saveRoutineItem(app.state, {
+      itemId: item.id, name: "Example Compound B", kind: "dose", amount: 500, unit: "mcg", blockId: morning, blockIds: [morning],
+    }), true);
+    const edited = structuredClone(app.state.dailyRoutines);
+    const later = Date.now() + 1000;
+    for (const merged of [mergeDailyRoutines(raw, edited, later), mergeDailyRoutines(edited, raw, later)]) {
+      const row = merged.items.find((entry) => entry.id === item.id);
+      assert.equal(row.name, "Example Compound B");
+      const compound = merged.compounds.find((entry) => entry.id === row.compoundId);
+      assert.equal(compound.amount, 500);
+      assert.equal(compound.name, "Example Compound B");
+    }
+  });
+
   test("a newer rename beats the other phone's item delete and keeps the placements", () => {
     signIn();
     const morning = blockId("Morning routine");

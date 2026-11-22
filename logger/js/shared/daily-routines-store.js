@@ -839,9 +839,8 @@ export function putDailyRoutines(state, next) {
    replaces. One more step keeps the edit ahead of that copy. A write that
    already took the step (a log replacement) is left as it is, and so is a
    reorder, which keeps the row's stamp so a delete still beats it. */
-function aheadOf(next, previous, now) {
+function aheadOf(next, previous) {
   if (!next || !previous || typeof previous.sourceAt !== "number" || next.sourceAt !== previous.sourceAt) return next;
-  if (!(num(now) > rowStamp(previous))) return next;
   const step = futureStep(previous) + 1;
   if (futureStep(next) >= step) return next;
   return { ...next, sourceStep: step };
@@ -857,10 +856,12 @@ export function revisePlanEntity(store, collection, id, patch, now) {
   delete patchFields.updatedAt;
   delete patchFields.deletedAt;
   for (const key of COLLECTIONS) delete patchFields[key];
+  const orderOnly = Object.keys(patchFields).every((key) => key === "order" || key === "orderAt");
   normalized[collection] = normalized[collection].map((entity) => {
     if (!entity || entity.id !== id) return entity;
     const next = normalize({ ...entity, ...patchFields, id, updatedAt: now, deletedAt: entity.deletedAt });
-    return next ? aheadOf(next, entity, now) : entity;
+    if (!next) return entity;
+    return orderOnly ? next : aheadOf(next, entity);
   });
   normalized.updatedAt = num(now);
   return normalized;
@@ -891,10 +892,18 @@ export function seedDefaultBlocks(store, now) {
 export function upsertEntity(store, collection, entity, now) {
   const normalized = normalizeDailyRoutines(store) || emptyDailyRoutines(now);
   if (!COLLECTIONS.has(collection)) return normalized;
-  const next = NORMALIZE[collection]({ ...plainFields(entity), updatedAt: now }, now);
+  const fields = { ...plainFields(entity), updatedAt: now };
+  const previous = normalized[collection].find((row) => row && row.id === fields.id);
+  /* A write that rebuilds a row from its fields still replaces that row's
+     future-dated copy, so it keeps the row's future stamp and steps above it. */
+  if (previous && typeof previous.sourceAt === "number" && typeof fields.sourceAt !== "number") {
+    fields.sourceAt = previous.sourceAt;
+    if (typeof previous.sourceStep === "number") fields.sourceStep = previous.sourceStep;
+  }
+  const next = NORMALIZE[collection](fields, now);
   if (!next) return normalized;
   const index = normalized[collection].findIndex((row) => row.id === next.id);
-  if (index >= 0) normalized[collection][index] = aheadOf(next, normalized[collection][index], now);
+  if (index >= 0) normalized[collection][index] = aheadOf(next, normalized[collection][index]);
   else normalized[collection].push(next);
   normalized.updatedAt = num(now);
   return normalized;
