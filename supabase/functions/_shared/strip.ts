@@ -31,6 +31,18 @@ function inRange(day: unknown, from: string, to: string) {
   return typeof day === "string" && validDay(day) && day >= from && day <= to;
 }
 
+function dayBefore(day: string): string {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const date = Number(day.slice(8, 10));
+  return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+}
+
+/* Same window as routineLogDayInPurge: one routine day before `from`, through `to`. */
+function routineLogInRange(day: unknown, from: string, to: string) {
+  return typeof day === "string" && validDay(day) && day >= dayBefore(from) && day <= to;
+}
+
 type Bag = Record<string, any>;
 
 function timeMs(v: unknown): number | null {
@@ -373,7 +385,7 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
     const keep = ["id", "day", "status", "updatedAt", "deletedAt"];
     let routinesChanged = false;
     routines.logs = routines.logs.map((log: Bag) => {
-      if (!log || typeof log !== "object" || !inRange(log.day, from, to)) return log;
+      if (!log || typeof log !== "object" || !routineLogInRange(log.day, from, to)) return log;
       const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
       if (!dropBefore(latestTime(log, ITEM_KEYS), before, now)) return log;
       const keys = Object.keys(log);

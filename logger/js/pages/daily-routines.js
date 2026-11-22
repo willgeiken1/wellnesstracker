@@ -17,7 +17,7 @@ import {
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { nextDoseCountdown } from "../shared/routine-dose.js";
+import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -29,8 +29,10 @@ import { nextDoseCountdown } from "../shared/routine-dose.js";
    unit, and note and marks that log undone, on every live log for that item
    (or rest) and day. Restore writes those fields back.
 
-   The day key is app.today(). The clock face is app.routineNow(). Do not
-   derive the day from the clock's UTC instant.
+   The day key is the local clock plus the rollover hour (4 AM unless the
+   user picked another hour). The clock face is app.routineNow(). Do not
+   derive the day from the clock's UTC instant, and do not use app.today(),
+   which rolls at midnight.
 
    Log all writes one done log per open item in that block. A skip already
    covers its item. A whole-day rest covers the day, so Log all writes
@@ -65,15 +67,14 @@ function shellDate() {
   return new Date();
 }
 
+function rolloverHour(store) {
+  return routineDayRolloverHour(store && store.settings && store.settings.dayRolloverHour);
+}
+
 function todayKey(date) {
-  if (typeof app.today === "function") {
-    const day = app.today();
-    if (typeof day === "string" && day) return day;
-  }
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : shellDate();
+  const store = app.state && app.state.dailyRoutines;
+  return routineDayKey(clock, rolloverHour(store));
 }
 
 export function routineClock() {
@@ -560,16 +561,21 @@ function amountMarkup(text) {
   return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
 }
 
-export function doseCountdownText(projected, item, date, day) {
-  if (!projected || !item) return "";
-  const result = nextDoseCountdown({
+function countdownQuery(projected, item, date, day) {
+  return {
     item,
     blocks: projected.blocks,
     placements: projected.placements,
     logs: projected.logs,
     date,
     day,
-  });
+    hour: projected.settings && projected.settings.dayRolloverHour,
+  };
+}
+
+export function doseCountdownText(projected, item, date, day) {
+  if (!projected || !item) return "";
+  const result = nextDoseCountdown(countdownQuery(projected, item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const wait = formatRoutineWait(result.waitMin);
   if (!wait) return "";
@@ -578,14 +584,7 @@ export function doseCountdownText(projected, item, date, day) {
 
 function countdownMarkup(projected, row, date, day) {
   if (!row.item || row.item.kind !== "dose") return "";
-  const result = nextDoseCountdown({
-    item: row.item,
-    blocks: projected.blocks,
-    placements: projected.placements,
-    logs: projected.logs,
-    date,
-    day,
-  });
+  const result = nextDoseCountdown(countdownQuery(projected, row.item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const text = doseCountdownText(projected, row.item, date, day);
   if (!text) return "";
@@ -1106,6 +1105,18 @@ export function logRoutineRest(state) {
       deletedAt: null,
     }, store, id), at);
     return wrote(next, "logs", id, at);
+  });
+}
+
+/* Changes which local clock hour starts the routine day. Logs keep the
+   day they were stored with. */
+export function setRoutineDayRollover(state, hour) {
+  if (typeof hour !== "number" || !Number.isInteger(hour) || hour < 0 || hour > MAX_DAY_ROLLOVER_HOUR) return false;
+  return withStore(state, (store, clock) => {
+    const at = stampAfter(clock.now, store.settings && store.settings.updatedAt);
+    store.settings = { ...store.settings, dayRolloverHour: hour, updatedAt: at };
+    store.updatedAt = at;
+    return store;
   });
 }
 
@@ -2088,15 +2099,39 @@ export function routinesFaqHTML() {
   return `<section class="dr-faq" aria-labelledby="dr-faq-title"><h4 class="dr-faq-title" id="dr-faq-title">FAQ</h4><dl>${rows}</dl></section>`;
 }
 
+function rolloverHourLabel(hour) {
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const face = hour % 12 || 12;
+  return `${face}:00 ${suffix}`;
+}
+
+/* PR 8 owns the settings sheet. Keep this control in that sheet. The hour
+   is dailyRoutines.settings.dayRolloverHour, read through the store. */
+export function routineDayRolloverControlHTML(hour) {
+  const selected = routineDayRolloverHour(hour);
+  const options = [];
+  for (let value = 0; value <= MAX_DAY_ROLLOVER_HOUR; value += 1) {
+    options.push(`<option value="${value}"${value === selected ? " selected" : ""}>${rolloverHourLabel(value)}</option>`);
+  }
+  return `<div class="dr-set-row">
+      <label id="dr-rollover-label" for="dr-rollover-hour">New day starts</label>
+      <select id="dr-rollover-hour" class="text-in" aria-labelledby="dr-rollover-label">${options.join("")}</select>
+    </div>
+    <p class="sub">A log before this hour counts for the previous day. The default is 4:00 AM.</p>`;
+}
+
 export function routinesSettingsSheetHTML() {
-  const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
+  const store = app.state && app.state.dailyRoutines;
+  const prefs = store && store.prefs;
   const on = !!(prefs && prefs.focusMode === true);
+  const hour = store && store.settings ? store.settings.dayRolloverHour : undefined;
   return `<h3>Routines settings</h3>
     <div class="dr-set-row">
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
     <p class="sub">Focus mode dims every block except the current one. Countdowns stay on the row. Routines does not send reminders.</p>
+    ${routineDayRolloverControlHTML(hour)}
     <button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
     <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>
     ${routinesFaqHTML()}
@@ -2137,6 +2172,8 @@ app.skipRoutineItem = skipRoutineItem;
 app.undoRoutineLog = undoRoutineLog;
 app.restoreRoutineLog = restoreRoutineLog;
 app.logRoutineRest = logRoutineRest;
+app.setRoutineDayRollover = setRoutineDayRollover;
+app.routineDayRolloverControlHTML = routineDayRolloverControlHTML;
 app.toggleRoutineFocus = toggleRoutineFocus;
 app.toggleRoutineReveal = toggleRoutineReveal;
 app.addRoutineBlock = addRoutineBlock;
@@ -2293,4 +2330,12 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
   document.addEventListener("touchmove", onRoutinePullMove, { passive: false });
   document.addEventListener("touchend", onRoutinePullEnd, { passive: true });
   document.addEventListener("touchcancel", onRoutinePullCancel, { passive: true });
+  document.addEventListener("change", (ev) => {
+    const el = ev.target;
+    if (!el || el.id !== "dr-rollover-hour" || app.ROUTINES_ENABLED !== true) return;
+    const hour = Number(el.value);
+    if (!setRoutineDayRollover(app.state, hour)) return;
+    if (typeof app.save === "function") app.save();
+    if (typeof app.render === "function") app.render();
+  });
 }
