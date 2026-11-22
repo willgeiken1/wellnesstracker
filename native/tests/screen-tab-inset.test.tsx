@@ -29,3 +29,11 @@ test('a pushed screen is unchanged, because its safe area already clears the bot
   await show(34, false);
   expect(endPadding()).toBe(tokens.spacing[3]);
 });
+
+test('a screen keeps fields above the keyboard and lets a tap through while it is up', async () => {
+  await show(34, false);
+  const scroll = screen.getByTestId('screen-scroll').props;
+  expect(scroll.keyboardShouldPersistTaps).toBe('handled');
+  expect(scroll.keyboardDismissMode).toBe('interactive');
+  expect(scroll.automaticallyAdjustKeyboardInsets).toBe(true);
+});
