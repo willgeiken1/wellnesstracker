@@ -43,3 +43,23 @@ test('the Health store opens in the Caches folder, never the backed-up default, 
  // Rows moved into memory would be gone at the next launch, so they stay where they are.
  expect(moveHealthRows).not.toHaveBeenCalled();
 });
+
+test('a failed Health clean-up still opens the app, is tried once, and is warned about without any reading', async () => {
+ jest.resetModules();
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const sqlite = require('expo-sqlite') as typeof import('expo-sqlite');
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const { moveHealthRows } = require('../src/data/health-store') as typeof import('../src/data/health-store');
+ // eslint-disable-next-line @typescript-eslint/no-require-imports
+ const { openLocalDatabase: open, HEALTH_MOVE_WARNING } = require('../src/data/database') as typeof import('../src/data/database');
+ const handle = { execSync: jest.fn(), closeSync: jest.fn() };
+ jest.mocked(sqlite.openDatabaseSync).mockReset().mockReturnValue(handle as never);
+ jest.mocked(moveHealthRows).mockReset().mockImplementation(() => { throw new Error('synthetic 81.25 kg failure'); });
+ const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+ try {
+  await expect(open()).resolves.toHaveProperty('forOwner');
+  expect(moveHealthRows).toHaveBeenCalledTimes(1);
+  expect(warn.mock.calls).toEqual([[HEALTH_MOVE_WARNING]]);
+  expect(HEALTH_MOVE_WARNING).not.toMatch(/\d/);
+ } finally { warn.mockRestore(); }
+});
