@@ -1,16 +1,9 @@
-// Fulfills the app's Supabase traffic from a pinned supabase-js build and an
-// in-memory synthetic account. Registered after guardNetwork so these URLs are
+// Fulfills the app's Supabase traffic from an in-memory synthetic account. The
+// supabase-js client itself is the app's own copy at logger/js/vendor. Registered after guardNetwork so these URLs are
 // served locally. Edge functions are aborted on the guard state. food-describe
 // is the exception, and only when the test called permitFoodDescribe.
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import { takeFoodDescribe } from "./network-guard.mjs";
 import { E2E_EMAIL, E2E_PASSWORD, syntheticBlob, syntheticSession, syntheticUser, utcDay } from "./seed.mjs";
-
-const require = createRequire(import.meta.url);
-const pkgJson = require.resolve("@supabase/supabase-js/package.json");
-const SUPABASE_JS = readFileSync(join(dirname(pkgJson), "dist/umd/supabase.js"));
 
 const SB_HOST = "pvodxxmfgflvgvbdotlv.supabase.co";
 const FONT_CSS = "/* stubbed locally so the page renders with system fonts */\n";
@@ -135,23 +128,6 @@ async function handleSupabase(route, state) {
 }
 
 export async function installSupabaseStub(context, state) {
-  // The app loads https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2 (floating
-  // 2.x). This stub serves the pinned devDependency instead. If the pin falls
-  // behind latest 2.x, PR smoke can pass against an older client than production.
-  // CI warns when `npm view @supabase/supabase-js version` differs. Do not change
-  // the script tag in index.html from this suite.
-  await context.route(/https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, async (route) => {
-    if (route.request().method() === "OPTIONS") {
-      await send(route, 204, "");
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      headers: { ...cors(route), "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" },
-      body: SUPABASE_JS,
-    });
-  });
-
   await context.route(/https:\/\/fonts\.googleapis\.com\//, async (route) => {
     await route.fulfill({
       status: 200,
