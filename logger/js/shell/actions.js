@@ -395,7 +395,15 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "ph-file") app.onPhotoFile(ev.target.files[0]);
   if (ev.target.id === "food-file" && ev.target.files[0]) { if (!app.ui.sd || !app.ui.sd.meal) app.ui.sd = { meal: app.autoMeal() }; app.ui.sd.image = null; app.ui.sd.hint = app.ui.sheet === "food-photo" ? app.ui.sd.hint : ""; app.analyzeFoodPhoto(ev.target.files[0]); }
   if (ev.target.id === "food-fav") app.ui.sd.fav = ev.target.checked;
-  if ((ev.target.id === "dr-item-on-hand" || ev.target.id === "dr-item-mixed-on") && app.ui && app.ui.sheet === "routines-item" && typeof app.rememberRoutineItemFields === "function") {
+  if ((ev.target.id === "dr-block-start" || ev.target.id === "dr-block-end") && app.ui && app.ui.sheet === "routines-block" && typeof app.rememberRoutineBlockFields === "function") {
+    /* A finished time redraws the sun path, then focus goes back to it. */
+    app.rememberRoutineBlockFields();
+    const id = ev.target.id;
+    app.renderSheet();
+    const again = app.$(`#${id}`);
+    if (again && typeof again.focus === "function") again.focus();
+  }
+  if ((ev.target.id === "dr-item-on-hand" || ev.target.id === "dr-item-mixed-on" || ev.target.id === "dr-item-time") && app.ui && app.ui.sheet === "routines-item" && typeof app.rememberRoutineItemFields === "function") {
     app.rememberRoutineItemFields();
   }
 });
@@ -423,8 +431,12 @@ document.addEventListener("input", (ev) => {
   if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
-  if ((el.id === "dr-item-name" || el.id === "dr-item-amount" || el.id === "dr-item-on-hand" || el.id === "dr-item-mixed-on") && app.ui && app.ui.sheet === "routines-item") {
+  if ((el.id === "dr-item-name" || el.id === "dr-item-amount" || el.id === "dr-item-on-hand" || el.id === "dr-item-mixed-on" || el.id === "dr-item-time") && app.ui && app.ui.sheet === "routines-item") {
     if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+    return;
+  }
+  if ((el.id === "dr-block-name" || el.id === "dr-block-start" || el.id === "dr-block-end") && app.ui && app.ui.sheet === "routines-block") {
+    if (typeof app.rememberRoutineBlockFields === "function") app.rememberRoutineBlockFields();
     return;
   }
   if (el.id === "dr-log-amount" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.amount = el.value; app.ui.sd.error = ""; return; }
@@ -1374,8 +1386,8 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
       const id = b.dataset.blockId;
       const ids = Array.isArray(app.ui.sd.blockIds) ? app.ui.sd.blockIds.slice() : [];
-      if (ids.includes(id) && ids.length === 1) {
-        if (typeof app.toast === "function") app.toast("An item stays in at least one routine.");
+      if (ids.includes(id) && ids.length === 1 && !app.ui.sd.type) {
+        if (typeof app.toast === "function") app.toast("Give it a type, or keep it in one routine.");
         break;
       }
       if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
@@ -1383,6 +1395,98 @@ document.addEventListener("click", async (ev) => {
       app.renderSheet();
       break;
     }
+    case "routines-item-type": {
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+      const type = b.dataset.type || "";
+      const placed = Array.isArray(app.ui.sd.blockIds) && app.ui.sd.blockIds.length > 0;
+      if (app.ui.sd.type === type && !placed) {
+        if (typeof app.toast === "function") app.toast("Keep a type, or put it in a routine first.");
+        break;
+      }
+      app.ui.sd.type = app.ui.sd.type === type ? "" : type;
+      if (type === "peptide" && !app.ui.sd.itemId) app.ui.sd.kind = "dose";
+      app.renderSheet();
+      break;
+    }
+    case "routines-item-type-new": {
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd || typeof app.ask !== "function" || typeof app.addRoutineCustomType !== "function") break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+      const draft = app.ui.sd;
+      const name = await app.ask({ title: "New type", body: "Name it, like Skin care.", ok: "Add", cancel: "Cancel", input: "" });
+      if (typeof name !== "string") { app.renderSheet(); break; }
+      const id = app.addRoutineCustomType(app.state, name);
+      if (!id) {
+        if (typeof app.toast === "function") app.toast("Add a name that isn't used yet.");
+        app.renderSheet();
+        break;
+      }
+      if (typeof app.save === "function") app.save();
+      app.ui.sheet = "routines-item";
+      app.ui.sd = { ...draft, type: id };
+      app.renderSheet();
+      break;
+    }
+    case "routines-view":
+      if (app.ROUTINES_ENABLED !== true || !app.ui) break;
+      app.ui.routineView = typeof b.dataset.view === "string" && b.dataset.view ? b.dataset.view : "routines";
+      app.render();
+      break;
+    case "routines-add-typed":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineItemEditor !== "function") break;
+      app.openRoutineItemEditor("", "", { type: b.dataset.type, kind: b.dataset.type === "peptide" ? "dose" : "check" });
+      break;
+    case "routines-sites":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineSites !== "function") break;
+      app.openRoutineSites();
+      break;
+    case "routines-blocks":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineBlocks !== "function") break;
+      app.ui.routineBlocksOpen = true;
+      app.openRoutineBlocks();
+      break;
+    case "routines-block-new":
+    case "routines-block-edit":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineBlockEditor !== "function") break;
+      if (app.ui && app.ui.sheet !== "routines-blocks") app.ui.routineBlocksOpen = false;
+      app.openRoutineBlockEditor(a === "routines-block-edit" ? b.dataset.blockId : "");
+      break;
+    case "routines-block-day":
+      if (app.ROUTINES_ENABLED !== true || typeof app.toggleRoutineBlockDay !== "function") break;
+      if (app.toggleRoutineBlockDay(Number(b.dataset.day))) app.renderSheet();
+      break;
+    case "routines-block-color":
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd || app.ui.sheet !== "routines-block") break;
+      if (typeof app.rememberRoutineBlockFields === "function") app.rememberRoutineBlockFields();
+      app.ui.sd.color = b.dataset.color;
+      app.renderSheet();
+      break;
+    case "routines-block-item":
+      if (app.ROUTINES_ENABLED !== true || typeof app.toggleRoutineBlockItem !== "function") break;
+      if (app.toggleRoutineBlockItem(b.dataset.itemId)) app.renderSheet();
+      break;
+    case "routines-block-more":
+      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd || app.ui.sheet !== "routines-block") break;
+      if (typeof app.rememberRoutineBlockFields === "function") app.rememberRoutineBlockFields();
+      app.ui.sd.more = app.ui.sd.more !== true;
+      app.renderSheet();
+      break;
+    case "routines-block-save":
+      if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineBlockSheet !== "function") break;
+      app.commitRoutineBlockSheet();
+      break;
+    case "routines-block-hide":
+      if (app.ROUTINES_ENABLED !== true || typeof app.hideRoutineFromSheet !== "function") break;
+      app.hideRoutineFromSheet(b.dataset.blockId);
+      break;
+    case "routines-block-show":
+      if (app.ROUTINES_ENABLED !== true || typeof app.showRoutineFromSheet !== "function") break;
+      app.showRoutineFromSheet(b.dataset.blockId);
+      break;
+    case "routines-block-move":
+      if (app.ROUTINES_ENABLED !== true || typeof app.moveRoutineFromSheet !== "function") break;
+      app.moveRoutineFromSheet(b.dataset.blockId, Number(b.dataset.dir));
+      break;
     case "routines-item-save":
       if (app.ROUTINES_ENABLED !== true || typeof app.commitRoutineItemSheet !== "function") break;
       app.commitRoutineItemSheet();

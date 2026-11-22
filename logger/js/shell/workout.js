@@ -183,6 +183,12 @@ function renderSheet() {
     inner = typeof app.reconstitutionSheetHTML === "function" ? app.reconstitutionSheetHTML() : "";
   } else if (app.ui.sheet === "routines-days") {
     inner = typeof app.routineDayHistorySheetHTML === "function" ? app.routineDayHistorySheetHTML() : "";
+  } else if (app.ui.sheet === "routines-block") {
+    inner = typeof app.routineBlockSheetHTML === "function" ? app.routineBlockSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-blocks") {
+    inner = typeof app.routineBlocksSheetHTML === "function" ? app.routineBlocksSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-sites") {
+    inner = typeof app.routineSitesSheetHTML === "function" ? app.routineSitesSheetHTML() : "";
   } else if (app.ui.sheet === "exercise") {
     const editing = app.ui.sd.idx >= 0;
     inner = `<h3>${editing ? "Edit exercise" : "Add exercise"}</h3>
@@ -219,6 +225,9 @@ function renderSheet() {
     : app.ui.sheet === "routines-details" ? "Details"
     : app.ui.sheet === "routines-calc" ? "Reconstitution calculator"
     : app.ui.sheet === "routines-days" ? "History"
+    : app.ui.sheet === "routines-block" ? (app.ui.sd && app.ui.sd.blockId ? "Edit routine" : "New routine")
+    : app.ui.sheet === "routines-blocks" ? "Edit routines"
+    : app.ui.sheet === "routines-sites" ? "Injection sites"
     : "Sheet";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>

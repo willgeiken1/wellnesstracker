@@ -138,6 +138,8 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
       id: "place-night-a", blockId: night, itemId: shared.id, order: 1, deletedAt: null,
     }, 80);
     assert.equal(putDailyRoutines(app.state, placed), true);
+    /* Night is later today, so it starts closed; open it to see its rows. */
+    assert.equal(toggleRoutineCollapsed(app.state, night), true);
     const openHTML = dailyRoutinesHTML();
     assert.match(openHTML, new RegExp(`data-action="routines-log-all" data-block-id="${morning}"`));
     assert.match(openHTML, new RegExp(`data-action="routines-log-all" data-block-id="${night}"`));
@@ -329,8 +331,8 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
     assert.match(reduce, /\.dr-log-toast[\s\S]*animation: none/);
     assert.match(appearance, /data-accent="sea"[\s\S]*--green:/);
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v87"/);
-    assert.match(sentry, /insight-shell-v87/);
+    assert.match(sw, /const CACHE = "insight-shell-v88"/);
+    assert.match(sentry, /insight-shell-v88/);
     assert.equal(flag.match(/ROUTINES_ENABLED = true/g).length, 1);
   });
 });

@@ -458,16 +458,15 @@ test("backup and restore round-trip dailyRoutines and still leave check-ins out"
   }
 });
 
-test("default blocks are the three routine sections and are not seeded by migrate", () => {
+test("default blocks are the two routines and are not seeded by migrate", () => {
   assert.deepEqual(DEFAULT_ROUTINE_BLOCKS.map((block) => block.name), [
     "Morning routine",
-    "Supplement & enhancer stack",
     "Night routine",
   ]);
   assert.equal(DEFAULT_ROUTINE_BLOCKS.some((block) => /check-?in/i.test(block.name)), false);
   const seeded = seedDefaultBlocks(emptyDailyRoutines(5), 5);
   assert.deepEqual(seeded.blocks.map((block) => block.name), DEFAULT_ROUTINE_BLOCKS.map((block) => block.name));
-  assert.equal(seedDefaultBlocks(seeded, 9).blocks.length, 3);
+  assert.equal(seedDefaultBlocks(seeded, 9).blocks.length, 2);
   assert.equal(app.migrate({ version: 2, sessions: [] }).dailyRoutines, null);
 });
 
@@ -479,7 +478,7 @@ test("reseeding after a non-default block is deleted keeps that tombstone", () =
   deleted.updatedAt = 20;
   const seeded = seedDefaultBlocks(deleted, 30);
   assert.equal(seeded.blocks.find((row) => row.id === "block-old").deletedAt, 20);
-  assert.equal(liveOf(seeded.blocks).length, 3);
+  assert.equal(liveOf(seeded.blocks).length, 2);
   const stale = emptyDailyRoutines(10);
   stale.blocks = [{
     id: "block-old", name: "Morning routine", color: "citrus", order: 0, updatedAt: 10, deletedAt: null,
@@ -488,7 +487,7 @@ test("reseeding after a non-default block is deleted keeps that tombstone", () =
   const old = merged.blocks.find((row) => row.id === "block-old");
   assert.equal(isLive(old), false);
   assert.equal(old.deletedAt, 20);
-  assert.equal(liveOf(merged.blocks).length, 3);
+  assert.equal(liveOf(merged.blocks).length, 2);
 });
 
 test("two empty phones that seed at different times merge into one set of default blocks", () => {
@@ -499,7 +498,7 @@ test("two empty phones that seed at different times merge into one set of defaul
   assert.deepEqual(phoneB.blocks.map((block) => block.id), ids);
   for (const merged of [mergeDailyRoutines(phoneA, phoneB), mergeDailyRoutines(phoneB, phoneA)]) {
     const live = projectDailyRoutines(merged).blocks;
-    assert.equal(live.length, 3);
+    assert.equal(live.length, 2);
     assert.deepEqual(live.map((block) => block.id), ids);
     assert.deepEqual(live.map((block) => block.name), DEFAULT_ROUTINE_BLOCKS.map((block) => block.name));
   }
@@ -507,7 +506,7 @@ test("two empty phones that seed at different times merge into one set of defaul
 
 test("a deleted or renamed default block is not undone by another phone's later seed", () => {
   const phoneA = seedDefaultBlocks(emptyDailyRoutines(0), 1_000);
-  const night = DEFAULT_ROUTINE_BLOCKS[2].id;
+  const night = DEFAULT_ROUTINE_BLOCKS[1].id;
   const morning = DEFAULT_ROUTINE_BLOCKS[0].id;
   const blockA = phoneA.blocks.find((block) => block.id === night);
   blockA.deletedAt = 2_000;
@@ -518,7 +517,7 @@ test("a deleted or renamed default block is not undone by another phone's later 
     const live = projectDailyRoutines(merged).blocks;
     assert.equal(live.some((block) => block.id === night), false);
     assert.equal(live.find((block) => block.id === morning).name, "Wake up");
-    assert.equal(live.length, 2);
+    assert.equal(live.length, 1);
   }
 });
 
@@ -530,7 +529,7 @@ test("seeding never brings back a default block that was deleted", () => {
   }
   const again = seedDefaultBlocks(store, 9_000);
   assert.equal(liveOf(again.blocks).length, 0);
-  assert.equal(again.blocks.length, 3);
+  assert.equal(again.blocks.length, 2);
   assert.equal(again.updatedAt, store.updatedAt);
   const custom = { id: "block-custom", name: "Example block", color: "citrus", order: 0, updatedAt: 4_000, deletedAt: null };
   const withCustom = seedDefaultBlocks({ ...emptyDailyRoutines(0), blocks: [custom] }, 9_000);

@@ -79,41 +79,37 @@ function liveBlock(name) {
 }
 
 describe("Discover coming soon", { concurrency: false }, () => {
-  test("the top button and the empty state both show coming soon", () => {
+  test("the page has no Discover entry and the empty state is one plain step", () => {
     signIn();
     const html = dailyRoutinesHTML();
-    const entry = html.indexOf('data-routines-discover="entry"');
-    const now = html.indexOf('class="dr-now"');
+    assert.doesNotMatch(html, /data-routines-discover=/);
+    assert.doesNotMatch(html, /data-action="routines-discover"/);
+    const now = html.indexOf('class="dr-now dr-instrument"');
     const tiles = html.indexOf('class="dr-tiles"');
-    const empty = html.indexOf('data-routines-discover="empty"');
-    assert.ok(entry >= 0 && entry < now && now < tiles && tiles < empty);
-    assert.match(html.slice(entry, now), /Discover/);
-    assert.match(html.slice(entry, now), /Coming soon/);
-    assert.match(html.slice(empty), /<h2>Coming soon<\/h2>/);
-    assert.match(html.slice(empty), /data-action="routines-discover"/);
-    assert.equal(html.match(/data-action="routines-discover"/g).length, 2);
+    const empty = html.indexOf('data-routines-empty="true"');
+    assert.ok(empty >= 0 && empty < now && now < tiles);
+    assert.match(html.slice(empty), /<h2>Add your first item<\/h2>/);
+    assert.match(html.slice(empty), /data-action="routines-add-item"/);
     const tileHtml = html.slice(tiles, html.indexOf("dr-add-block"));
     assert.doesNotMatch(tileHtml, /discover|recommend|Coming soon/i);
     for (const name of CATEGORIES) assert.equal(html.includes(name), false, name);
     assert.doesNotMatch(html, /<input|search|compare|Evidence|Studies/i);
   });
 
-  test("an item hides the empty state and leaves the top button", () => {
+  test("an item hides the empty state and deleting it brings the step back", () => {
     signIn();
     dailyRoutinesHTML();
     const morning = liveBlock("Morning routine");
     assert.equal(addRoutineItem(app.state, morning, { name: "Sample check", kind: "check" }), true);
     const html = dailyRoutinesHTML();
-    assert.match(html, /data-routines-discover="entry"/);
-    assert.match(html, /Coming soon/);
-    assert.doesNotMatch(html, /data-routines-discover="empty"/);
+    assert.doesNotMatch(html, /data-routines-empty="true"/);
     assert.match(html, /Sample check/);
     assert.doesNotMatch(html, /recommend/i);
     const item = app.state.dailyRoutines.items.find((row) => row.name === "Sample check");
     assert.equal(deleteRoutineItem(app.state, item.id), true);
     const again = dailyRoutinesHTML();
-    assert.match(again, /data-routines-discover="empty"/);
-    assert.match(again, /data-routines-discover="entry"/);
+    assert.match(again, /data-routines-empty="true"/);
+    assert.doesNotMatch(again, /data-routines-discover=/);
   });
 
   test("the sheet is coming soon and does not open a catalog", () => {
@@ -141,7 +137,6 @@ describe("Discover coming soon", { concurrency: false }, () => {
     const store = app.state.dailyRoutines;
     assert.deepEqual(store.blocks.filter(isLive).map((block) => block.name), [
       "Morning routine",
-      "Supplement & enhancer stack",
       "Night routine",
     ]);
     assert.deepEqual(store.items, []);
@@ -213,7 +208,7 @@ describe("Discover coming soon", { concurrency: false }, () => {
 
     const sw = read("../logger/sw.js");
     const sentry = read("../logger/js/sentry.js");
-    assert.match(sw, /const CACHE = "insight-shell-v87"/);
-    assert.match(sentry, /insight-shell-v87/);
+    assert.match(sw, /const CACHE = "insight-shell-v88"/);
+    assert.match(sentry, /insight-shell-v88/);
   });
 });
