@@ -451,9 +451,9 @@ describe("reconstitution calculator upgrades", { concurrency: false }, () => {
     const main = readFileSync(new URL("../logger/js/main.js", import.meta.url), "utf8");
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
     const page = readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8");
-    assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
+    assert.match(sw, /const CACHE = "insight-shell-v86"/);
+    assert.match(sentry, /insight-shell-v86/);
     assert.equal(main.match(/routines-flag/g).length, 1);
     assert.doesNotMatch(page, /routines-flag/);
     assert.doesNotMatch(page, /\bfetch\s*\(/);
