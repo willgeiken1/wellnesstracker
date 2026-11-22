@@ -19,6 +19,8 @@ import { app } from "../runtime.js";
    a store that is already on the phone. */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const NOTE_MAX = 500;
+const FEELING_KEYS = ["mood", "energy", "stress", "feeling", "felt"];
 const CLOCK_SKEW_MS = 60_000;
 const FUTURE_SLACK_MS = 24 * 60 * 60 * 1000;
 const LOG_TOMBSTONE_KEYS = ["id", "day", "status", "updatedAt", "deletedAt"];
@@ -203,13 +205,18 @@ function normalizeBlock(raw, now = Date.now()) {
 function normalizeItem(raw, now = Date.now()) {
   const base = entityBase(raw, now);
   if (!base) return null;
-  return {
+  const next = {
     ...plainFields(raw),
     ...base,
     name: clip(raw.name, 80),
     kind: itemKind(raw.kind),
     compoundId: typeof raw.compoundId === "string" && raw.compoundId ? raw.compoundId : null,
   };
+  const note = clip(typeof raw.note === "string" ? raw.note : "", NOTE_MAX);
+  if (note) next.note = note;
+  else delete next.note;
+  for (const key of FEELING_KEYS) delete next[key];
+  return next;
 }
 
 function normalizePlacement(raw, now = Date.now()) {
