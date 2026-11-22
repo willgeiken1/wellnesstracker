@@ -214,9 +214,8 @@ describe("applying a setup", () => {
     const store = app.state.dailyRoutines;
     assert.equal(readSetup(store.prefs).status, "done");
     assert.equal(store.prefs.focusMode, false);
-    const starters = liveOf(store.items).map((item) => item.name).sort();
-    assert.deepEqual(starters, ["On waking", "With meals"]);
-    assert.ok(liveOf(store.placements).every((place) => place.blockId === "block_default_stack"));
+    assert.deepEqual(liveOf(store.items), [], "no checks like waking up or going to bed are added");
+    assert.deepEqual(liveOf(store.placements), []);
     assert.equal(app.ui.routineAnnounce, "Your Routines page is set up.");
     assert.ok(!setupUi.maybeOfferRoutineSetup(), "a settled setup is not offered again");
   });
@@ -364,12 +363,13 @@ describe("the setup sheet", () => {
     signIn();
     setupUi.maybeOfferRoutineSetup();
     answer(SUPPLEMENTS_ONLY);
+    assert.ok(addRoutineItem(app.state, "block_default_stack", { name: "Example vitamin", kind: "check" }));
     assert.ok(app.addRoutinePartToPage(app.state, "enhancers"));
     assert.deepEqual(liveNames(), ["Supplements", "Enhancers & peptides"]);
     assert.match(dailyRoutinesHTML(), /data-action="routines-calc"/);
     assert.ok(app.addRoutinePartToPage(app.state, "morning"));
     assert.ok(liveNames().includes("Morning routine"));
-    assert.equal(liveOf(app.state.dailyRoutines.items).length, 2, "starter checks are still there");
+    assert.equal(liveOf(app.state.dailyRoutines.items).length, 1, "the item already there stays");
   });
 
   test("adding a block the user deleted brings it back with its items", () => {
