@@ -427,8 +427,8 @@ describe("routine injection site", { concurrency: false }, () => {
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v88"/);
-    assert.match(sentry, /insight-shell-v88/);
+    assert.match(sw, /const CACHE = "insight-shell-v89"/);
+    assert.match(sentry, /insight-shell-v89/);
     assert.match(actions, /case "routines-details-site"/);
     assert.match(actions, /case "routines-details-site-dismiss"/);
     assert.match(css, /\.dr-sites \{/);

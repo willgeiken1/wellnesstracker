@@ -66,6 +66,7 @@ const CLOUD_FAIL_TOAST_MS = 30 * 60 * 1000;
 let lastCloudFailToast = 0;
 function noteCloudFail() {
   app.cloudFailAt = Date.now();
+  refreshCloudStatus();
   const online = typeof navigator === "undefined" || navigator.onLine !== false;
   if (!online || app.cloudFailAt - lastCloudFailToast < CLOUD_FAIL_TOAST_MS) return;
   // A live Undo (like a deleted food) keeps its toast; the Settings line still shows the failure.
@@ -88,10 +89,19 @@ export function cloudStatusText(lastCloud, failAt, now = Date.now()) {
 }
 app.cloudStatusText = cloudStatusText;
 
+/* Settings may be open when a backup finishes or fails, so update its line in place. */
+function refreshCloudStatus() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return;
+  const el = document.querySelector("[data-cloud-status]");
+  if (el) el.textContent = cloudStatusText(app.state.lastCloud, app.cloudFailAt);
+}
+app.refreshCloudStatus = refreshCloudStatus;
+
 function rememberCloudPush() {
   app.cloudFailAt = 0;
   app.state.lastCloud = Date.now();
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
+  refreshCloudStatus();
 }
 
 function layoutObject(layout) {

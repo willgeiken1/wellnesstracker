@@ -108,8 +108,17 @@ function syncKeyboard() {
 }
 app.syncKeyboard = syncKeyboard;
 
+/* A slow keyboard can finish opening after the focus scroll, so check again once it has resized. */
+function keepFocusedFieldInView() {
+  const t = document.activeElement;
+  if (!t || typeof t.closest !== "function" || !t.closest(".sheet-card")) return;
+  if (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable) return;
+  if (typeof t.scrollIntoView === "function") t.scrollIntoView({ block: "nearest" });
+}
+app.keepFocusedFieldInView = keepFocusedFieldInView;
+
 if (typeof window !== "undefined" && window.visualViewport && typeof window.visualViewport.addEventListener === "function") {
-  window.visualViewport.addEventListener("resize", syncKeyboard);
+  window.visualViewport.addEventListener("resize", () => { syncKeyboard(); keepFocusedFieldInView(); });
   window.visualViewport.addEventListener("scroll", syncKeyboard);
 }
 

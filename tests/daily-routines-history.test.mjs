@@ -313,8 +313,8 @@ describe("routine history, calendar, and graph", { concurrency: false }, () => {
     const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
     const main = readFileSync(new URL("../logger/js/main.js", import.meta.url), "utf8");
-    assert.match(sw, /const CACHE = "insight-shell-v88"/);
-    assert.match(sentry, /insight-shell-v88/);
+    assert.match(sw, /const CACHE = "insight-shell-v89"/);
+    assert.match(sentry, /insight-shell-v89/);
     assert.match(sw, /js\/pages\/daily-routines-history\.js/);
     assert.match(sw, /js\/shared\/routine-history\.js/);
     assert.match(main, /import "\.\/pages\/daily-routines-history\.js";/);
