@@ -12,8 +12,7 @@ import {
    on screen for an account that has neither finished nor skipped setup.
    One question shows at a time. Closing the sheet leaves setup unsettled and
    puts a "Finish setting up" card on the page; only Finish or Skip setup
-   saves anything. The settings sheet reopens it to change one answer or to
-   take it again. */
+   saves anything. Routines settings can retake it; a retake only adds. */
 
 const EXCLUSIVE = Object.freeze({ goals: "looking", track: "habits", watch: "none" });
 
@@ -54,15 +53,12 @@ export function pruneSetupAnswers(raw) {
   return out;
 }
 
-export function openRoutineSetup(mode = "quiz", questionId = null) {
+export function openRoutineSetup(mode = "quiz") {
   if (!writesOpen() || !app.ui) return false;
   const setup = readSetup(prefsNow());
   const saved = setup && setup.status === "done" ? setup.answers : {};
   const prior = draft();
-  if (mode === "edit") {
-    if (!setup || setup.status !== "done" || !setupQuestion(questionId)) return false;
-    app.ui.routineSetupDraft = { mode: "edit", step: questionId, answers: { ...saved } };
-  } else if (mode === "retake") {
+  if (mode === "retake") {
     app.ui.routineSetupDraft = { mode: "retake", step: "goals", answers: { ...saved } };
   } else if (!prior || prior.mode !== "quiz") {
     app.ui.routineSetupDraft = { mode: "quiz", step: "goals", answers: {} };
@@ -93,7 +89,6 @@ function steps(answers) {
    left alone. */
 function touchedBy(current, answers) {
   if (!current || current.mode === "quiz") return null;
-  if (current.mode === "edit") return [current.step];
   const setup = readSetup(prefsNow());
   const before = setup && setup.status === "done" ? setup.answers : {};
   const ids = new Set([...Object.keys(before), ...Object.keys(answers)]);
@@ -104,7 +99,8 @@ function finish(status) {
   const current = draft();
   const answers = status === "done" && current ? pruneSetupAnswers(current.answers) : {};
   const touched = touchedBy(current, answers);
-  const ok = typeof app.saveRoutineSetup === "function" && app.saveRoutineSetup(app.state, { status, answers, touched });
+  const addOnly = !!current && current.mode === "retake";
+  const ok = typeof app.saveRoutineSetup === "function" && app.saveRoutineSetup(app.state, { status, answers, touched, addOnly });
   if (!ok) {
     /* Nothing was saved. Say so, and step out of the sheet if writes have
        closed (signed out, or the account is syncing again). */
@@ -118,12 +114,12 @@ function finish(status) {
     return true;
   }
   app.ui.routineSetupError = false;
-  const back = current && current.mode === "edit";
+  const back = !!current && current.mode === "retake";
   app.ui.routineSetupDraft = null;
   app.ui.routineSetupLater = false;
   app.ui.sheet = back ? "routines-settings" : null;
   app.ui.sd = {};
-  app.ui.routineAnnounce = back ? "Setup answer saved."
+  app.ui.routineAnnounce = back ? "Setup saved. Nothing was removed."
     : status === "done" ? "Your Routines page is set up."
       : "Setup skipped. You can set up your page from Routines settings.";
   if (typeof app.save === "function") app.save();
@@ -133,7 +129,6 @@ function finish(status) {
 function advance() {
   const current = draft();
   if (!current) return false;
-  if (current.mode === "edit") return finish("done");
   const list = steps(current.answers);
   const index = list.indexOf(current.step);
   const next = index >= 0 ? list[index + 1] : list[0];
@@ -183,7 +178,7 @@ export function skipRoutineSetupQuestion() {
 
 export function backRoutineSetup() {
   const current = draft();
-  if (!current || current.mode === "edit") return false;
+  if (!current) return false;
   const list = steps(current.answers);
   const index = list.indexOf(current.step);
   if (index <= 0) return false;
@@ -198,11 +193,11 @@ export function skipRoutineSetup() {
 /* × or a tap outside: nothing is saved and setup stays open for later. */
 export function closeRoutineSetup() {
   const current = draft();
-  const edit = current && current.mode === "edit";
-  app.ui.sheet = edit ? "routines-settings" : null;
+  const retake = !!current && current.mode === "retake";
+  app.ui.sheet = retake ? "routines-settings" : null;
   app.ui.sd = {};
-  if (current && current.mode !== "quiz") app.ui.routineSetupDraft = null;
-  if (!edit && !readSetup(prefsNow())) app.ui.routineSetupLater = true;
+  if (retake) app.ui.routineSetupDraft = null;
+  if (!retake && !readSetup(prefsNow())) app.ui.routineSetupLater = true;
   return true;
 }
 
@@ -216,19 +211,18 @@ export function routineSetupSheetHTML() {
   const value = answers[question.id];
   const pressed = (key) => (Array.isArray(value) ? value.includes(key) : value === key);
   const choices = setupChoices(question.id, answers).map((choice) => `<button type="button" class="dr-setup-choice" data-action="routines-setup-pick" data-q="${esc(question.id)}" data-value="${esc(choice.value)}" aria-pressed="${pressed(choice.value) ? "true" : "false"}">${esc(choice.label)}</button>`).join("");
-  const edit = current.mode === "edit";
-  const kicker = edit ? "Change answer" : `Question ${index + 1} of ${list.length}`;
+  const kicker = `Question ${index + 1} of ${list.length}`;
   const picked = Array.isArray(value) && value.length > 0;
   const next = question.multi
-    ? `<button type="button" class="btn primary block" data-action="routines-setup-next"${picked ? "" : " disabled"}>${edit ? "Save" : "Next"}</button>`
+    ? `<button type="button" class="btn primary block" data-action="routines-setup-next"${picked ? "" : " disabled"}>Next</button>`
     : "";
-  const back = !edit && index > 0 ? `<button type="button" class="btn" data-action="routines-setup-back">Back</button>` : "";
-  const skipQ = edit ? "" : `<button type="button" class="btn" data-action="routines-setup-skip-q">Skip this question</button>`;
+  const back = index > 0 ? `<button type="button" class="btn" data-action="routines-setup-back">Back</button>` : "";
+  const skipQ = `<button type="button" class="btn" data-action="routines-setup-skip-q">Skip this question</button>`;
   const skipAll = current.mode === "quiz" && index === 0
     ? `<button type="button" class="dr-setup-skip" data-action="routines-setup-skip">Skip setup</button>`
     : "";
   const intro = current.mode === "quiz" && index === 0
-    ? `<p class="sub">Your answers decide what this page shows. Nothing is hidden for good, and you can change any answer in Routines settings.</p>`
+    ? `<p class="sub">Your answers decide what this page starts with. You can add anything else later in Routines settings.</p>`
     : "";
   const error = app.ui && app.ui.routineSetupError === true
     ? `<p class="dr-setup-error" role="alert">Your setup couldn't be saved right now. Try again in a moment.</p>`

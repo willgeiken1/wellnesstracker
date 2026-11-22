@@ -318,11 +318,99 @@ export function setupShape(prefs) {
   return shape;
 }
 
+/* A part the person added from Routines settings. Adding only ever turns a
+   part on; nothing in setup turns one back off. */
+export const ADDED_FEATURES = Object.freeze(["doses", "calculator", "injection", "supply", "rest", "tips"]);
+
+export function addedFeatures(prefs) {
+  const list = prefs && Array.isArray(prefs.added) ? prefs.added : [];
+  return ADDED_FEATURES.filter((key) => list.includes(key));
+}
+
 /* One check the page and later features call: "calculator", "doses",
    "injection", "supply", "rest", "tips" or "upFront". */
 export function routineSetupShows(prefs, feature) {
   const shape = setupShape(prefs);
-  return shape[feature] === true;
+  return shape[feature] === true || addedFeatures(prefs).includes(feature);
+}
+
+/* What Routines settings can add. A block's name follows the setup answers,
+   so a night-shift setup adds Wake-up and Wind-down. Each block brings the
+   tools it needs. */
+export const ADDABLE_PARTS = Object.freeze([
+  Object.freeze({ key: "morning", kind: "block", tools: [] }),
+  Object.freeze({ key: "supplements", kind: "block", tools: ["doses"] }),
+  Object.freeze({ key: "night", kind: "block", tools: [] }),
+  Object.freeze({ key: "enhancers", kind: "block", tools: ["doses", "calculator", "injection", "supply"] }),
+  Object.freeze({ key: "meds", kind: "block", tools: ["doses"] }),
+  Object.freeze({ key: "doses", kind: "tool", label: "Dose amounts", hint: "Log an amount and unit on an item.", tools: ["doses"] }),
+  Object.freeze({ key: "calculator", kind: "tool", label: "Reconstitution calculator", hint: "Works out the arithmetic for a vial you mix.", tools: ["calculator", "injection"] }),
+  Object.freeze({ key: "rest", kind: "tool", label: "Rest day button", hint: "Log a rest day on the Now card.", tools: ["rest"] }),
+  Object.freeze({ key: "tips", kind: "tool", label: "Getting started tips", hint: "A short card on how the page works.", tools: ["tips"] }),
+]);
+
+const BLOCK_HINTS = Object.freeze({
+  morning: "Habits and checks for the start of the day.",
+  supplements: "Vitamins, minerals, skin care and other supplements.",
+  night: "Habits and checks for the end of the day.",
+  enhancers: "Enhancers and peptides, with dose amounts, countdown, calculator and supply.",
+  meds: "Medications, with dose amounts and countdown.",
+});
+
+export function addableBlockName(key, prefs) {
+  const setup = readSetup(prefs);
+  const night = !!(setup && setup.status === "done" && nightShift(setup.answers));
+  const names = {
+    morning: night ? "Wake-up routine" : "Morning routine",
+    supplements: "Supplements",
+    night: night ? "Wind-down routine" : "Night routine",
+    enhancers: "Enhancers & peptides",
+    meds: "Medications",
+  };
+  return names[key] || "";
+}
+
+/* Each part with its label, and whether it is already on the page. shows
+   answers whether a tool is visible now (the page passes its own check, which
+   also counts tools the account already uses). */
+export function routineParts(rawStore, shows) {
+  const store = normalizeDailyRoutines(rawStore) || { blocks: [], prefs: {} };
+  const byId = new Map(store.blocks.map((block) => [block.id, block]));
+  return ADDABLE_PARTS.map((part) => {
+    if (part.kind === "block") {
+      const row = byId.get(SETUP_BLOCK_IDS[part.key]);
+      return { key: part.key, kind: "block", label: addableBlockName(part.key, store.prefs), hint: BLOCK_HINTS[part.key], present: !!(row && isLive(row)) };
+    }
+    const on = part.key === "tips"
+      ? shows("tips") && !(store.prefs && store.prefs.tipsHidden === true)
+      : shows(part.key);
+    return { key: part.key, kind: "tool", label: part.label, hint: part.hint, present: !!on };
+  });
+}
+
+/* Adds one part and the tools it brings. A new block takes its fixed id at
+   the seed stamp. A block the user deleted is brought back by the page's own
+   restore first, so its items come with it. */
+export function addRoutinePart(rawStore, key, at) {
+  const part = ADDABLE_PARTS.find((entry) => entry.key === key);
+  const store = normalizeDailyRoutines(rawStore);
+  if (!part || !store) return null;
+  const stamp = typeof at === "number" && at > DEFAULT_BLOCK_STAMP ? at : Date.now();
+  if (part.kind === "block") {
+    const id = SETUP_BLOCK_IDS[key];
+    /* A row already there (live, or just restored) only gets its tools. */
+    if (!store.blocks.some((block) => block.id === id)) {
+      const order = Math.max(nextOrder(store), SETUP_ORDER[key] || 0);
+      store.blocks.push({ id, name: addableBlockName(key, store.prefs), color: COLORS[(SETUP_ORDER[key] || 0) % COLORS.length], order, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
+    }
+  }
+  const prefs = { ...store.prefs };
+  prefs.added = [...new Set([...addedFeatures(prefs), ...part.tools])];
+  if (key === "tips") prefs.tipsHidden = false;
+  prefs.updatedAt = Math.max(stamp, typeof prefs.updatedAt === "number" ? prefs.updatedAt + 1 : 0);
+  store.prefs = prefs;
+  store.updatedAt = Math.max(typeof store.updatedAt === "number" ? store.updatedAt : 0, prefs.updatedAt);
+  return store;
 }
 
 function rowStamp(row) {
@@ -351,8 +439,9 @@ function nextOrder(store) {
 /* Writes a finished or skipped setup onto the store and returns the new copy.
    touched lists the questions whose one-time effects (Focus mode, collapsed
    blocks) should run; null means all of them, as on a full pass. keepOpen
-   returns the id of the block that is current now, which stays open. */
-export function applySetup(rawStore, { status, answers: rawAnswers, at, touched = null, keepOpen = null }) {
+   returns the id of the block that is current now, which stays open.
+   addOnly (a retake) adds what the answers ask for and removes nothing. */
+export function applySetup(rawStore, { status, answers: rawAnswers, at, touched = null, keepOpen = null, addOnly = false }) {
   const store = normalizeDailyRoutines(rawStore);
   if (!store || (status !== "done" && status !== "skipped")) return null;
   const answers = status === "done" ? normalizeSetupAnswers(rawAnswers) : {};
@@ -382,7 +471,7 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
   }
 
   const keep = new Set(resolved.values());
-  for (const id of status === "done" ? SETUP_OWNED : []) {
+  for (const id of status === "done" && !addOnly ? SETUP_OWNED : []) {
     if (keep.has(id)) continue;
     const row = byId.get(id);
     if (!pristine(store, row)) continue;

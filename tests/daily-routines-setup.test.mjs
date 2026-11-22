@@ -333,21 +333,58 @@ describe("the setup sheet", () => {
     });
   });
 
-  test("settings list each answer and changing one keeps the rest", () => {
+  test("settings list what is not on the page with Add, and retake sits quietly at the bottom", () => {
     signIn();
     setupUi.maybeOfferRoutineSetup();
     answer(SUPPLEMENTS_ONLY);
     const settings = routinesSettingsSheetHTML();
-    assert.match(settings, /Your setup/);
-    assert.match(settings, /data-action="routines-setup-change" data-q="feel"/);
-    assert.doesNotMatch(settings, /Reconstitution calculator/);
-    assert.ok(setupUi.openRoutineSetup("edit", "feel"));
-    assert.ok(setupUi.pickRoutineSetup("feel", "next"));
+    assert.match(settings, /Add to your page/);
+    for (const key of ["morning", "night", "enhancers", "meds", "calculator", "tips"]) assert.match(settings, new RegExp(`data-part="${key}"`), key);
+    assert.doesNotMatch(settings, /data-part="supplements"/, "a block already on the page is not offered");
+    assert.doesNotMatch(settings, /routines-setup-change/);
+    assert.ok(settings.trim().endsWith('<button type="button" class="dr-retake" data-action="routines-setup-retake">Retake setup quiz</button>'));
+    assert.doesNotMatch(dailyRoutinesHTML(), /routines-setup-retake/, "retake is only in Routines settings");
+  });
+
+  test("adding a block brings its tools and removes nothing", () => {
+    signIn();
+    setupUi.maybeOfferRoutineSetup();
+    answer(SUPPLEMENTS_ONLY);
+    assert.ok(app.addRoutinePartToPage(app.state, "enhancers"));
+    assert.deepEqual(liveNames(), ["Supplements", "Enhancers & peptides"]);
+    assert.match(dailyRoutinesHTML(), /data-action="routines-calc"/);
+    assert.ok(app.addRoutinePartToPage(app.state, "morning"));
+    assert.ok(liveNames().includes("Morning routine"));
+    assert.equal(liveOf(app.state.dailyRoutines.items).length, 2, "starter checks are still there");
+  });
+
+  test("adding a block the user deleted brings it back with its items", () => {
+    signIn();
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example check", kind: "check" }));
+    assert.ok(deleteRoutineBlock(app.state, "block_default_night"));
+    assert.ok(app.addRoutinePartToPage(app.state, "night"));
+    const block = app.state.dailyRoutines.blocks.find((row) => row.id === "block_default_night");
+    assert.equal(isLive(block), true);
+    assert.ok(liveOf(app.state.dailyRoutines.placements).some((place) => place.blockId === "block_default_night"));
+  });
+
+  test("a retake only adds, so a block added from settings stays", () => {
+    signIn();
+    setupUi.maybeOfferRoutineSetup();
+    answer(SUPPLEMENTS_ONLY);
+    assert.ok(app.addRoutinePartToPage(app.state, "meds"));
+    assert.ok(setupUi.openRoutineSetup("retake"));
+    for (const [id, value] of SUPPLEMENTS_ONLY) {
+      assert.ok(Array.isArray(value) ? setupUi.nextRoutineSetup() : setupUi.pickRoutineSetup(id, value));
+    }
     assert.equal(app.ui.sheet, "routines-settings");
-    const prefs = app.state.dailyRoutines.prefs;
-    assert.equal(prefs.focusMode, true);
-    assert.equal(readSetup(prefs).answers.train, "3-4");
-    assert.deepEqual(liveNames(), ["Supplements"]);
+    assert.ok(liveNames().includes("Medications"));
+  });
+
+  test("Settings has a Routines row that opens Routines settings", () => {
+    const src = readFileSync(new URL("../logger/js/pages/settings.js", import.meta.url), "utf8");
+    assert.match(src, /<div class="group-label">Routines<\/div>/);
+    assert.match(src, /data-action="routines-settings"/);
   });
 });
 

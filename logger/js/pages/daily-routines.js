@@ -18,7 +18,7 @@ import {
   upsertEntity,
 } from "../shared/daily-routines-store.js";
 import { nextDoseCountdown, ROUTINE_BLOCK_START_MIN } from "../shared/routine-dose.js";
-import { applySetup, askedQuestions, readSetup, routineSetupShows, setupAnswerText, setupQuestion } from "../shared/routine-setup.js";
+import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows, SETUP_BLOCK_IDS } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -788,7 +788,7 @@ export function toggleRoutineFocus(state) {
 /* Saves a finished or skipped setup and shapes the page from it. touched
    names the answers whose one-time effects run (Focus mode, collapsed
    blocks); null runs all of them, as at the end of a full pass. */
-export function saveRoutineSetup(state, { status, answers, touched = null } = {}) {
+export function saveRoutineSetup(state, { status, answers, touched = null, addOnly = false } = {}) {
   if (status !== "done" && status !== "skipped") return false;
   return withStore(state, (store, clock) => {
     const at = prefStamp(store, clock);
@@ -797,12 +797,25 @@ export function saveRoutineSetup(state, { status, answers, touched = null } = {}
       answers,
       at,
       touched,
+      addOnly,
       keepOpen: (next) => {
         const moment = routineNowNext(next.blocks, clock.date);
         return moment.nowBlock ? moment.nowBlock.id : null;
       },
     });
   });
+}
+
+/* Adds a block or tool from Routines settings. A block the user deleted
+   comes back through the normal restore, with its items. */
+export function addRoutinePartToPage(state, key) {
+  if (typeof key !== "string" || !key) return false;
+  const id = SETUP_BLOCK_IDS[key];
+  const stored = id && state && state.dailyRoutines && (state.dailyRoutines.blocks || []).find((block) => block && block.id === id);
+  if (stored && !isLive(stored)) {
+    if (!restoreRoutineBlock(state, id)) return false;
+  }
+  return withStore(state, (store, clock) => addRoutinePart(store, key, prefStamp(store, clock)));
 }
 
 export function hideRoutineTips(state) {
@@ -1762,20 +1775,26 @@ export function syncRoutineNowRefresh() {
   }, msUntilNextMinute(date));
 }
 
-function setupListHTML(prefs) {
-  const setup = readSetup(prefs);
-  if (!setup || setup.status !== "done") {
-    return `<button type="button" class="btn block" data-action="routines-setup-open">Set up your page</button>
-    <p class="sub">A few questions fit Routines to what you track.</p>`;
-  }
-  const rows = askedQuestions(setup.answers).map((id) => {
-    const question = setupQuestion(id);
-    return `<li><span class="dr-setup-q">${esc(question.title)}</span><span class="dr-setup-a">${esc(setupAnswerText(id, setup.answers))}</span><button type="button" data-action="routines-setup-change" data-q="${esc(id)}" aria-label="Change ${esc(question.title)}">Change</button></li>`;
-  }).join("");
-  return `<h4 class="dr-setup-head">Your setup</h4>
-    <ul class="dr-setup-list">${rows}</ul>
-    <button type="button" class="btn block" data-action="routines-setup-retake">Retake setup</button>
-    <p class="sub">Changing an answer adds what it needs. Nothing you added is removed.</p>`;
+/* Everything Routines can show that this page does not have yet, each with
+   Add. Adding never removes anything. */
+function addListHTML() {
+  const store = app.state && app.state.dailyRoutines;
+  const setup = readSetup(store && store.prefs);
+  const missing = routineParts(store, (feature) => routineShows(feature, store)).filter((part) => !part.present);
+  const rows = missing.map((part) => `<li><span class="dr-add-copy"><span class="dr-add-name">${esc(part.label)}</span><span class="dr-add-hint">${esc(part.hint)}</span></span><button type="button" data-action="routines-part-add" data-part="${esc(part.key)}" aria-label="Add ${esc(part.label)}">Add</button></li>`).join("");
+  const list = missing.length
+    ? `<h4 class="dr-add-head">Add to your page</h4><ul class="dr-add-list">${rows}</ul>`
+    : `<p class="sub">Everything Routines offers is already on your page.</p>`;
+  const start = setup ? "" : `<button type="button" class="btn block" data-action="routines-setup-open">Set up your page</button>`;
+  return `${list}${start}`;
+}
+
+/* The one place a finished setup can be taken again, kept quiet at the very
+   bottom of Routines settings. */
+function retakeHTML() {
+  const store = app.state && app.state.dailyRoutines;
+  if (!readSetup(store && store.prefs)) return "";
+  return `<button type="button" class="dr-retake" data-action="routines-setup-retake">Retake setup quiz</button>`;
 }
 
 export function routinesSettingsSheetHTML() {
@@ -1791,9 +1810,10 @@ export function routinesSettingsSheetHTML() {
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
     <p class="sub">Focus mode dims every block except the current one. Reminders and the FAQ come later. Notifications stay off.</p>
-    ${setupListHTML(prefs)}
     ${calc}
-    <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
+    ${addListHTML()}
+    <button type="button" class="btn block" data-action="sheet-close">Done</button>
+    ${retakeHTML()}`;
 }
 
 export function routinesDiscoverSheetHTML() {
@@ -1821,6 +1841,7 @@ app.logRoutineRest = logRoutineRest;
 app.toggleRoutineFocus = toggleRoutineFocus;
 app.saveRoutineSetup = saveRoutineSetup;
 app.hideRoutineTips = hideRoutineTips;
+app.addRoutinePartToPage = addRoutinePartToPage;
 app.routineShows = routineShows;
 app.toggleRoutineReveal = toggleRoutineReveal;
 app.addRoutineBlock = addRoutineBlock;

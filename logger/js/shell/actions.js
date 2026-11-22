@@ -1216,9 +1216,16 @@ document.addEventListener("click", async (ev) => {
     }
     case "routines-setup-open":
     case "routines-setup-retake":
-    case "routines-setup-change":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineSetup !== "function") break;
-      if (app.openRoutineSetup(a === "routines-setup-change" ? "edit" : a === "routines-setup-retake" ? "retake" : "quiz", b.dataset.q)) app.render();
+      if (app.openRoutineSetup(a === "routines-setup-retake" ? "retake" : "quiz")) app.render();
+      break;
+    case "routines-part-add":
+      if (app.ROUTINES_ENABLED !== true || typeof app.addRoutinePartToPage !== "function") break;
+      if (app.addRoutinePartToPage(app.state, b.dataset.part)) {
+        app.ui.routineAnnounce = "Added to your Routines page.";
+        app.save();
+        app.render();
+      }
       break;
     case "routines-setup-pick":
     case "routines-setup-next":

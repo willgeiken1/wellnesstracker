@@ -177,6 +177,8 @@ function settingsHTML() {
     ${app.appearanceHTML()}
     <div class="group-label">Workout</div>
     <div class="group">${app.progressionSettingHTML()}</div>
+    ${app.ROUTINES_ENABLED === true && app.session ? `<div class="group-label">Routines</div>
+    <div class="group"><button class="set-row" data-action="routines-settings"><span>Routines settings</span>${app.I.chevR}</button></div>` : ""}
     <div class="group-label">Rest timer</div>
     <div class="group"><div class="seg">${[60, 90, 120, 180].map((s) =>
       `<button data-action="rest" data-s="${s}" aria-pressed="${app.state.restSeconds === s}">${app.fmtTime(s)}</button>`).join("")}</div></div>
