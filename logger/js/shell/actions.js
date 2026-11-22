@@ -1373,6 +1373,14 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineDetailsQuarter !== "function") break;
       app.setRoutineDetailsQuarter(b.dataset.amount);
       break;
+    case "routines-details-site":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineDetailsSite !== "function") break;
+      app.setRoutineDetailsSite(b.dataset.site || "");
+      break;
+    case "routines-details-site-dismiss":
+      if (app.ROUTINES_ENABLED !== true || typeof app.dismissRoutineSiteWarning !== "function") break;
+      app.dismissRoutineSiteWarning();
+      break;
     case "routines-checkin":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineCheckin !== "function") break;
       app.openRoutineCheckin();

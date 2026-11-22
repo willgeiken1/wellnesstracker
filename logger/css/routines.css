@@ -640,7 +640,6 @@
 }
 .dr-details-note { min-height: 72px; }
 .dr-details-history { font-size: 20px; margin-top: 18px; }
-
 .dr-pull {
   margin: 0;
   padding: 2px 0 0;
@@ -669,7 +668,6 @@
   .dr-pull,
   .dr-faq { animation: none; transition: none; }
 }
-=======
 /* History sheet: month calendar, day cards, and a count graph.
    Marks are a shape (empty ring, dash, moon), not a color alone. */
 .dr-graph-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
@@ -712,3 +710,29 @@
 .dr-day-items { list-style: none; margin: 4px 0 0; padding: 0; }
 .dr-day-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; min-height: 36px; }
 .dr-day-item .dr-dose { font-weight: 600; }
+.dr-sites { display: flex; flex-wrap: wrap; gap: 8px; }
+.dr-site {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--raised);
+  font-weight: 700;
+}
+.dr-site[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.dr-site-last { font-weight: 700; }
+.dr-site-warn {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--raised);
+  font-weight: 700;
+}
+.dr-site-warn button {
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+}
