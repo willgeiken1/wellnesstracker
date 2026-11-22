@@ -414,6 +414,7 @@ document.addEventListener("input", (ev) => {
   }
   if (el.id === "ms-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#ms-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "home-q" && app.ui.sheet === "home-gallery") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#home-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  if (el.id === "rt-q" && app.ui && app.ui.homeEdit) { app.ui.routineTrayQuery = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#rt-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   // Replacing the sheet refocuses the field. On an iPhone home-screen app that scrolls the viewport and the list blinks.
   if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
@@ -1039,6 +1040,7 @@ document.addEventListener("click", async (ev) => {
       app.ui.homeEdit = false;
       app.ui.homeDraft = null;
       app.ui.sheet = null;
+      if (typeof app.forgetRoutineTrayQuery === "function") app.forgetRoutineTrayQuery();
       if (!same) {
         app.save();
         app.toast("Home saved.");
@@ -1061,6 +1063,27 @@ document.addEventListener("click", async (ev) => {
     case "home-gal-back": app.ui.sd = { q: (app.ui.sd && app.ui.sd.q) || "" }; app.renderSheet(); break;
     case "home-add": app.homeAddItem(b.dataset.id, b.dataset.size); break;
     case "home-remove": app.homeRemoveItem(b.dataset.id); break;
+    case "routine-tray-add": {
+      if (app.ROUTINES_ENABLED !== true || typeof app.homeAddRoutineTile !== "function") break;
+      const row = b.closest ? b.closest("[data-tray-id]") : null;
+      const startEl = row ? row.querySelector("[data-gate='start']") : null;
+      const endEl = row ? row.querySelector("[data-gate='end']") : null;
+      app.homeAddRoutineTile(b.dataset.tileId, b.dataset.size, { start: startEl ? startEl.value : "", end: endEl ? endEl.value : "" });
+      break;
+    }
+    case "routine-tray-compact":
+      if (app.ROUTINES_ENABLED !== true || !app.ui) break;
+      app.ui.routineTrayCompact = app.ui.routineTrayCompact === false;
+      app.render();
+      break;
+    case "routine-tile-open":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineTile !== "function") break;
+      app.openRoutineTile(b.dataset.tileId);
+      break;
+    case "routine-tile-hide":
+      if (app.ROUTINES_ENABLED !== true || typeof app.hideRoutineHomeTile !== "function") break;
+      app.hideRoutineHomeTile();
+      break;
     case "w-add-one": app.showWidget(app.ui.edit, b.dataset.w); app.ui.sheet = null; app.render(); app.toast(`${app.WIDGETS[app.ui.edit][b.dataset.w]} added.`); break;
     case "ms-list": app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; app.renderSheet(); break;
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }

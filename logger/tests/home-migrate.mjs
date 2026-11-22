@@ -306,6 +306,7 @@ function rpcCases() {
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004180000_merge_user_data.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261004210000_merge_home_v2.sql", dir).pathname]), { encoding: "utf8" });
   execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261005000000_home_v2_brief_rank.sql", dir).pathname]), { encoding: "utf8" });
+  execFileSync("sudo", pgArgs(["-f", new URL("supabase/migrations/20261122140000_home_v2_routine_tiles.sql", dir).pathname]), { encoding: "utf8" });
   const uid = "11111111-1111-1111-1111-111111111111";
   pgSql(`insert into auth.users (id) values ('${uid}') on conflict (id) do nothing`);
   pgSql(`delete from public.user_data where user_id = '${uid}'`);
@@ -513,9 +514,10 @@ async function browserCases() {
     window.app.mergeRemote(remote);
     window.app.applyHomeMigration(window.app.state, 4242);
     const home = window.app.state.layout.homeV2;
-    return { items: home.items.slice(), hidden: home.hidden.slice(), updatedAt: home.updatedAt, migratedAt: home.migratedAt };
+    return { items: home.items.slice(), hidden: home.hidden.slice(), updatedAt: home.updatedAt, migratedAt: home.migratedAt, enabled: window.app.ROUTINES_ENABLED === true };
   }, blob);
-  check("device B keeps its newer homeV2", eq(clobber.items, ["pattern", "today"]) && eq(clobber.hidden, ["steps"]) && clobber.updatedAt === 9000 && clobber.migratedAt !== 4242, clobber);
+  const kept = clobber.enabled ? ["pattern", "today", "routine-next"] : ["pattern", "today"];
+  check("device B keeps its newer homeV2", eq(clobber.items, kept) && clobber.items[0] === "pattern" && clobber.items[1] === "today" && eq(clobber.hidden, ["steps"]) && clobber.updatedAt === 9000 && clobber.migratedAt !== 4242, clobber);
 
   const pulled = await b.page.evaluate((remote) => {
     delete window.app.state.layout.homeV2;

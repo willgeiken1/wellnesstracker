@@ -1,5 +1,7 @@
+import { app } from "../runtime.js";
 import { HOME_WIDGETS } from "./home-widgets.js";
 import { hasOura, ouraMembershipInactive } from "./oura-gate.js";
+import { isRoutineTileId } from "./routine-home-tiles.js";
 
 /* Pure logic for Home edit mode: reorder, remove, add from the gallery.
    A draft is { items, hidden, sizes }, the same shape homeEditorDraft returns and
@@ -37,7 +39,7 @@ export function sizeLabel(size) {
 }
 
 function known(id) {
-  return typeof id === "string" && !!HOME_WIDGETS[id];
+  return typeof id === "string" && (!!HOME_WIDGETS[id] || (app.ROUTINES_ENABLED === true && isRoutineTileId(id)));
 }
 
 function cleanDraft(draft) {
