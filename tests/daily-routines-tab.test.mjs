@@ -563,4 +563,78 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   assert.match(html, /Now · Afternoon · 12:02 PM/);
   assert.match(html, /Supplement &amp; enhancer stack/);
 });
+
+test("the minute refresh waits for an open sheet, a focused field, edit mode, and a session", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const saved = {
+    listen: document.addEventListener, render: app.render, ui: app.ui, now: app.routineNow,
+    today: app.today, session: app.session, state: app.state, active: document.activeElement,
+  };
+  document.addEventListener = () => {};
+  let now = new Date(2026, 10, 19, 9, 0, 30);
+  let paints = 0;
+  function paint() {
+    paints += 1;
+    dailyRoutinesHTML();
+    syncRoutineNowRefresh();
+  }
+  t.after(() => {
+    stopRoutineNowRefresh();
+    t.mock.timers.reset();
+    document.addEventListener = saved.listen;
+    document.activeElement = saved.active;
+    app.render = saved.render;
+    app.ui = saved.ui;
+    app.routineNow = saved.now;
+    app.today = saved.today;
+    app.session = saved.session;
+    app.state = saved.state;
+  });
+  app.state = { dailyRoutines: null };
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => now;
+  app.ui = { tab: "daily-routines", edit: null, briefEdit: false, detail: null, sheet: "auth" };
+  app.render = paint;
+  dailyRoutinesHTML();
+
+  function minute() {
+    now = new Date(now.getTime() + 60_000);
+    t.mock.timers.tick(60_000);
+  }
+
+  syncRoutineNowRefresh();
+  minute();
+  assert.equal(paints, 0, "an open sheet is not rebuilt");
+  app.ui.sheet = null;
+  minute();
+  assert.equal(paints, 1, "the next minute paints once the sheet closes");
+
+  document.activeElement = { tagName: "input" };
+  minute();
+  assert.equal(paints, 1, "a focused field keeps its keyboard");
+  document.activeElement = null;
+  minute();
+  assert.equal(paints, 2);
+
+  app.ui.dailyRoutineEdit = true;
+  minute();
+  assert.equal(paints, 2, "a layout edit is not repainted under the finger");
+  app.ui.dailyRoutineEdit = false;
+  minute();
+  assert.equal(paints, 3);
+
+  app.session = null;
+  minute();
+  minute();
+  assert.equal(paints, 3, "signed out stops the timer");
+  app.session = { user: { id: "synthetic-user" } };
+  syncRoutineNowRefresh();
+  minute();
+  assert.equal(paints, 4);
+});
 });

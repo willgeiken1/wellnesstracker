@@ -1607,7 +1607,7 @@ export function dailyRoutinesHTML() {
 /* The Now card is painted from the clock at render time. While this tab is
    the one on screen, paint again at the next minute so the clock, the
    countdown, and the current block follow the wall clock. Another tab, a
-   hidden page, or the flag off clears that timer. */
+   hidden page, signing out, or the flag off clears that timer. */
 let nowRefreshTimer = 0;
 let nowVisibilityBound = false;
 
@@ -1615,7 +1615,19 @@ function routineTabVisible() {
   if (app.ROUTINES_ENABLED !== true) return false;
   if (!app.ui || app.ui.tab !== "daily-routines") return false;
   if (typeof document !== "undefined" && document.hidden) return false;
+  if (!canMutateRoutines()) return false;
   return true;
+}
+
+/* A full paint rebuilds an open sheet and the page under the finger, so a
+   minute that lands while a sheet is open, a field has focus, or the layout
+   is being edited waits for the next minute instead. */
+function routineRefreshWouldInterrupt() {
+  if (app.ui && app.ui.sheet) return true;
+  if (layoutEditing()) return true;
+  const active = typeof document !== "undefined" ? document.activeElement : null;
+  const tag = active && typeof active.tagName === "string" ? active.tagName.toUpperCase() : "";
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 function msUntilNextMinute(date) {
@@ -1642,6 +1654,7 @@ export function syncRoutineNowRefresh() {
   nowRefreshTimer = setTimeout(() => {
     nowRefreshTimer = 0;
     if (!routineTabVisible()) return;
+    if (routineRefreshWouldInterrupt()) { syncRoutineNowRefresh(); return; }
     if (typeof app.render === "function") app.render();
   }, msUntilNextMinute(date));
 }
