@@ -43,7 +43,7 @@ await import("../logger/js/pages/daily-routines-details.js");
 const plan = await import("../logger/js/pages/daily-routines-plan.js");
 const { liveOf, mergeDailyRoutines, projectDailyRoutines, seedDefaultBlocks, DEFAULT_BLOCK_STAMP } = await import("../logger/js/shared/daily-routines-store.js");
 const types = await import("../logger/js/shared/routine-types.js");
-const { nextDoseCountdown, routineBlockDays, routineBlockRunsOn, routineBlockWindow } = await import("../logger/js/shared/routine-dose.js");
+const { nextDoseCountdown, nextItemCountdown, routineBlockDays, routineBlockRunsOn, routineBlockWindow } = await import("../logger/js/shared/routine-dose.js");
 
 const { addRoutineItem, dailyRoutinesHTML, hideRoutineBlock, moveRoutineBlock, routineDraftWindow, routineSunAxis, saveRoutineBlock, showRoutineBlock } = routines;
 
@@ -563,6 +563,8 @@ describe("peptide details, hidden routines and the dose count", () => {
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22", onHandAt: 50 }, logs).left, 9);
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22" }, logs).left, 10, "an older count with no time keeps the day's doses in it");
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-21" }, logs).left, 9);
+    assert.deepEqual(types.routineDosesLeft({ id: "i1", onHand: 0, onHandDay: "2026-11-21" }, logs), { left: 0, total: 0 }, "a typed 0 means out, not unset");
+    assert.equal(types.routineDosesLeft({ id: "i1" }, logs), null);
   });
 });
 
@@ -685,6 +687,21 @@ describe("rollover hour and synced custom types", () => {
     };
     assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 24, 12, 0, 0), "2026-11-24"), "Mon", "Tuesday is an off day");
     assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 23, 12, 0, 0), "2026-11-23"), "Now", "Monday's 08:00 was missed");
+  });
+
+  test("an item's own time runs on the days of an untimed routine it is in too", () => {
+    /* 2026-11-22 is a Sunday (6). One routine has no time and runs daily, the other is Mon/Wed/Fri. */
+    const item = { id: "item_u", name: "Example Compound U", kind: "dose", timeMin: 600, deletedAt: null };
+    const blocks = [
+      { id: "block_daily", name: "Example renamed", days: [0, 1, 2, 3, 4, 5, 6], deletedAt: null },
+      { id: "block_mwf", name: "Example MWF", startMin: 480, endMin: 600, days: [0, 2, 4], deletedAt: null },
+    ];
+    const placements = [
+      { id: "place_u1", itemId: "item_u", blockId: "block_daily", deletedAt: null },
+      { id: "place_u2", itemId: "item_u", blockId: "block_mwf", deletedAt: null },
+    ];
+    const result = nextItemCountdown({ item, blocks, placements, logs: [], date: new Date(2026, 10, 22, 8, 0, 0), day: "2026-11-22" });
+    assert.equal(result.waitMin, 120, "due today at 10:00, not Monday");
   });
 
   test("a check timed after midnight counts in the same routine day", () => {

@@ -149,22 +149,25 @@ export function nextItemCountdown({ item, blocks, placements, logs, date, day, h
   for (const place of Array.isArray(placements) ? placements : []) {
     if (live(place) && place.itemId === item.id && typeof place.blockId === "string") placed.add(place.blockId);
   }
-  /* Each start keeps the weekdays its routine runs on. */
+  /* Each start keeps the weekdays its routine runs on. Every shown routine
+     the item is in counts toward its run days, even one with no start time,
+     so an item's own time runs on the same days its routines do. */
   const starts = [];
   const runDays = new Set();
+  let memberships = 0;
   for (const block of Array.isArray(blocks) ? blocks : []) {
     if (!live(block) || block.hidden === true || !placed.has(block.id)) continue;
-    const start = routineBlockStartMin(block);
-    if (typeof start !== "number") continue;
     const days = routineBlockDays(block);
-    starts.push({ start, days });
+    memberships += 1;
     for (const weekday of days) runDays.add(weekday);
+    const start = routineBlockStartMin(block);
+    if (typeof start === "number") starts.push({ start, days });
   }
   /* A time the user set on the item ("When do you take it?") wins over the
      routine's start, on the days its routines run, and works with no
      routine at all. */
   const own = routineMinuteOfDay(item.timeMin);
-  if (own != null) starts.splice(0, starts.length, { start: own, days: starts.length ? [...runDays] : [0, 1, 2, 3, 4, 5, 6] });
+  if (own != null) starts.splice(0, starts.length, { start: own, days: memberships ? [...runDays].sort((a, b) => a - b) : [0, 1, 2, 3, 4, 5, 6] });
   if (!starts.length) return null;
   const boundaryMin = routineDayRolloverHour(hour) * 60;
   const calendarDay = localCalendarDay(date);
