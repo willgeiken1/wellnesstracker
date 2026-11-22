@@ -114,6 +114,31 @@ function doseItem() {
 }
 
 describe("routine doses and reconstitution", { concurrency: false }, () => {
+  test("a dose turned into a check and back keeps its earlier doses in its history", () => {
+    signIn();
+    const morning = blockId("Morning routine");
+    assert.equal(addDose(morning), true);
+    const item = doseItem();
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const first = item.compoundId;
+    assert.equal(compoundDoseHistory(app.state.dailyRoutines, first).length, 1);
+
+    assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: "Example Compound A", kind: "check", blockId: morning, blockIds: [morning] }), true);
+    const asCheck = app.state.dailyRoutines.items.find((row) => row.id === item.id);
+    assert.equal(asCheck.kind, "check");
+    assert.equal(asCheck.compoundId, null);
+
+    assert.equal(saveRoutineItem(app.state, { itemId: item.id, name: "Example Compound A", kind: "dose", amount: "300", unit: "mcg", blockId: morning, blockIds: [morning] }), true);
+    const back = app.state.dailyRoutines.items.find((row) => row.id === item.id);
+    assert.equal(back.kind, "dose");
+    assert.equal(back.compoundId, first);
+    assert.equal(app.state.dailyRoutines.compounds.filter((row) => isLive(row)).length, 1);
+    assert.equal(app.state.dailyRoutines.compounds.find((row) => row.id === first).amount, 300);
+    const history = compoundDoseHistory(app.state.dailyRoutines, back.compoundId);
+    assert.equal(history.length, 1);
+    assert.equal(history[0].amount, 250);
+  });
+
   test("a backdated log stays on the chosen day across a UTC-next-day clock", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");

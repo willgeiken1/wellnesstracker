@@ -1129,8 +1129,25 @@ function doseDraft(kind, draft) {
   }
 }
 
+/* An item turned from a dose into a check drops its compoundId. Its logs
+   keep theirs, so turning it back into a dose reuses the newest live
+   compound those logs name, and the dose history stays whole. */
+function loggedCompoundId(store, itemId) {
+  if (typeof itemId !== "string" || !itemId) return "";
+  const logs = (store.logs || [])
+    .filter((log) => log && log.itemId === itemId && typeof log.compoundId === "string" && log.compoundId)
+    .sort((a, b) => ((b.at || 0) - (a.at || 0)) || ((b.updatedAt || 0) - (a.updatedAt || 0)));
+  for (const log of logs) {
+    const compound = (store.compounds || []).find((row) => row && row.id === log.compoundId);
+    if (compound && isLive(compound)) return compound.id;
+  }
+  return "";
+}
+
 function writeCompound(store, item, name, dose, clock, at) {
-  const previousId = item && typeof item.compoundId === "string" ? item.compoundId : "";
+  const previousId = item && typeof item.compoundId === "string" && item.compoundId
+    ? item.compoundId
+    : loggedCompoundId(store, item && item.id);
   const existing = previousId ? (store.compounds || []).find((row) => row && row.id === previousId) : null;
   const id = existing ? existing.id : routineId("compound");
   const next = upsertEntity(store, "compounds", {
