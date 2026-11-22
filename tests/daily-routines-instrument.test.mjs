@@ -577,3 +577,23 @@ describe("Focus mode around the rollover and overlapping windows", () => {
     assert.equal(routines.routineFocusBlockId(projected, at), ten.id);
   });
 });
+
+describe("Home tiles follow routine days", () => {
+  test("Next up and a routine card leave out a routine that does not run today", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    signIn();
+    /* Mon, Wed and Fri only. 2026-11-22 is a Sunday. */
+    assert.ok(saveRoutineBlock(app.state, { name: "Example weekdays", startMin: 8 * 60, endMin: 9 * 60, days: [0, 2, 4] }));
+    const weekdays = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example weekdays");
+    assert.ok(addRoutineItem(app.state, weekdays.id, { name: "Example weekday dose", kind: "check" }));
+    const id = item("Example weekday dose").id;
+    const sunday = tiles.renderRoutineTileHTML(tiles.NEXT_UP_TILE_ID, { state: app.state, size: "medium", day: "2026-11-22" });
+    assert.doesNotMatch(sunday, new RegExp(`data-item-id="${id}"`));
+    const card = tiles.renderRoutineTileHTML(tiles.routineBlockTileId(weekdays.id), { state: app.state, size: "medium", day: "2026-11-22" });
+    assert.doesNotMatch(card, new RegExp(`data-item-id="${id}"`));
+    const one = tiles.renderRoutineTileHTML(tiles.routineItemTileId(id), { state: app.state, size: "medium", day: "2026-11-22" });
+    assert.doesNotMatch(one, /data-action="routines-log"/);
+    const monday = tiles.renderRoutineTileHTML(tiles.NEXT_UP_TILE_ID, { state: app.state, size: "medium", day: "2026-11-23" });
+    assert.match(monday, new RegExp(`data-item-id="${id}"`));
+  });
+});

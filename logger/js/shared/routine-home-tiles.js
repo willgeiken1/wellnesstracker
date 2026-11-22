@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, isLive, normalizeDailyRoutines, projectDailyRoutines, putDailyRoutines } from "./daily-routines-store.js";
+import { routineBlockRunsOn } from "./routine-dose.js";
 
 /* Home tiles for Routines. The flag stays off in source. These ids are not
    catalog widgets. With the flag off they stay unknown strings: a saved
@@ -197,11 +198,25 @@ function paintDate(date) {
   return new Date();
 }
 
-function itemsInOrder(view) {
+/* With a day, only routines that run that weekday, as Routines shows them. */
+function runsOn(block, day) {
+  return !day || routineBlockRunsOn(block, day);
+}
+
+/* An item in routines is due on a day one of them runs. One in no routine
+   lives on its type tab and is due every day. */
+function itemDue(view, itemId, day) {
+  const blocks = (view.placements || []).filter((row) => row && row.itemId === itemId)
+    .map((row) => (view.blocks || []).find((block) => block && block.id === row.blockId))
+    .filter(Boolean);
+  return !blocks.length || blocks.some((block) => runsOn(block, day));
+}
+
+function itemsInOrder(view, day = "") {
   const byId = new Map((view.items || []).map((item) => [item.id, item]));
   const out = [];
   const seen = new Set();
-  (view.blocks || []).forEach((block) => {
+  (view.blocks || []).filter((block) => runsOn(block, day)).forEach((block) => {
     const rows = (view.placements || [])
       .filter((row) => row && row.blockId === block.id && byId.has(row.itemId))
       .slice()
@@ -236,7 +251,7 @@ function rowLabel(view, item) {
 }
 
 function openEntries(view, day) {
-  return itemsInOrder(view).filter((entry) => !coveringLog(view.logs, entry.item.id, day));
+  return itemsInOrder(view, day).filter((entry) => !coveringLog(view.logs, entry.item.id, day));
 }
 
 function nextEntry(view, day) {
@@ -245,6 +260,8 @@ function nextEntry(view, day) {
 }
 
 function blockEntries(view, blockId, day) {
+  const block = (view.blocks || []).find((row) => row && row.id === blockId);
+  if (block && !runsOn(block, day)) return [];
   const byId = new Map((view.items || []).map((item) => [item.id, item]));
   return (view.placements || [])
     .filter((row) => row && row.blockId === blockId && byId.has(row.itemId))
@@ -313,7 +330,7 @@ export function renderRoutineTileHTML(id, options) {
   if (target.kind === "item") {
     const item = (view.items || []).find((row) => row.id === target.itemId);
     if (!item) return bigCard(id, "Routine", [`<p class="hw-sub">Nothing to show yet</p>`], layout);
-    const open = !coveringLog(view.logs, item.id, day);
+    const open = !coveringLog(view.logs, item.id, day) && itemDue(view, item.id, day);
     const lines = [`<p class="hw-line">${esc(rowLabel(view, item))}</p>`];
     if (open) lines.push(checkButton(item, rowLabel(view, item), id));
     return bigCard(id, "Routine", lines, layout);
