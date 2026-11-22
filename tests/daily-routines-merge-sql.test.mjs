@@ -855,3 +855,39 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     assert.equal(merge(stored, incoming).blocks[0].name, wide, "UTF-16 tie on ICU");
   }
 });
+
+test("a moved dose and the other phone's log of the old day both stay on the server", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.state = { dailyRoutines: null };
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+  dailyRoutinesHTML();
+  const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+  assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+  const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+  const bare = structuredClone(app.state.dailyRoutines);
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const logged = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id);
+  app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+  assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+  const phoneA = structuredClone(app.state.dailyRoutines);
+  app.state.dailyRoutines = structuredClone(bare);
+  app.routineNow = () => new Date("2026-11-19T16:00:00.000Z");
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const phoneB = structuredClone(app.state.dailyRoutines);
+  const days = (store) => (store.logs || [])
+    .filter((row) => isLive(row) && row.itemId === item.id)
+    .map((row) => row.day)
+    .sort();
+  for (const [stored, incoming] of [[phoneA, phoneB], [phoneB, phoneA]]) {
+    const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T16:00:00.000Z"));
+    assert.deepEqual(days(merged), ["2026-11-18", "2026-11-19"]);
+  }
+});
