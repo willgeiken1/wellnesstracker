@@ -68,6 +68,8 @@ function noteCloudFail() {
   app.cloudFailAt = Date.now();
   const online = typeof navigator === "undefined" || navigator.onLine !== false;
   if (!online || app.cloudFailAt - lastCloudFailToast < CLOUD_FAIL_TOAST_MS) return;
+  // A live Undo (like a deleted food) keeps its toast; the Settings line still shows the failure.
+  if (app.toastUndo) return;
   lastCloudFailToast = app.cloudFailAt;
   if (typeof app.toast === "function") app.toast("Couldn't back up just now. Everything is still saved on this phone, and it will try again.");
 }
@@ -454,6 +456,7 @@ async function signOut(opts) {
   if (!skipPush) { try { await app.cloudPush(); } catch (e) {} }   // make sure the latest is backed up first
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
+  app.cloudFailAt = 0; lastCloudFailToast = 0;   // the next account starts with a clean backup status
   if (app.clearAIConsent) { app.clearAIConsent(id); app.clearAIConsent("local"); }
   app.cloudPullOk = false;
   if (app.syncSentryUser) app.syncSentryUser(null);

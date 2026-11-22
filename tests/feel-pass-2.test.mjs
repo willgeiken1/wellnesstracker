@@ -99,3 +99,53 @@ test("an open sheet sits above the keyboard and fits the visible height", () => 
   assert.match(timer, /visualViewport\.addEventListener\("resize", syncKeyboard\)/);
   assert.match(timer, /scrollIntoView\(\{ block: "nearest" \}\)/);
 });
+
+test("the fallback upsert counts its failures too", async () => {
+  toasts.length = 0; app.resetCloudFailToast(); app.cloudFailAt = 0;
+  app.session = { user: { id: "11111111-1111-4111-8111-111111111111" } };
+  app.sb = {
+    rpc: async () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function" } }),
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      upsert: async () => ({ error: { code: "500", message: "server error" } }),
+    }),
+  };
+  await app.cloudPush();
+  assert.ok(app.cloudFailAt > 0);
+  assert.equal(toasts.length, 1);
+});
+
+test("a failed backup leaves a live Undo toast alone, and the next failure can still say so", async () => {
+  toasts.length = 0; app.resetCloudFailToast(); app.cloudFailAt = 0;
+  failingServer({ code: "500", message: "server error" });
+  app.toastUndo = () => {};
+  try {
+    await app.cloudPush();
+    assert.equal(toasts.length, 0);
+    assert.ok(app.cloudFailAt > 0);
+  } finally { app.toastUndo = null; }
+  await app.cloudPush();
+  assert.equal(toasts.length, 1);
+});
+
+test("signing out clears the backup failure, so the next account starts clean", async () => {
+  toasts.length = 0; app.resetCloudFailToast();
+  failingServer({ code: "500", message: "server error" });
+  await app.cloudPush();
+  assert.ok(app.cloudFailAt > 0);
+  const keep = { renderOnboard: app.renderOnboard, render: app.render, save: app.save };
+  app.renderOnboard = () => {}; app.render = () => {}; app.save = () => {};
+  app.ui = app.ui || {};
+  try { await app.signOut({ skipPush: true, quiet: true }); } finally { Object.assign(app, keep); }
+  assert.equal(app.cloudFailAt, 0);
+  failingServer({ code: "500", message: "server error" });
+  await app.cloudPush();
+  assert.equal(toasts.length, 2);
+});
+
+test("Settings shows the backup status line, and the keyboard lift follows panning as well as resizing", () => {
+  const settings = readFileSync(new URL("../logger/js/pages/settings.js", import.meta.url), "utf8");
+  assert.match(settings, /Cloud backup<\/span><span class="sub">\$\{app\.esc\(app\.cloudStatusText \? app\.cloudStatusText\(app\.state\.lastCloud, app\.cloudFailAt\)/);
+  const timer = readFileSync(new URL("../logger/js/shell/timer.js", import.meta.url), "utf8");
+  assert.match(timer, /visualViewport\.addEventListener\("scroll", syncKeyboard\)/);
+});

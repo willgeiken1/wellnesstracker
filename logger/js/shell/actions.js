@@ -10,7 +10,7 @@ function toast(msg, undo) {
   app.toastUndo = undo || null;
   t.innerHTML = `<span>${app.esc(msg)}</span>${undo ? `<button data-action="toast-undo">Undo</button>` : ""}`;
   t.hidden = false;
-  clearTimeout(app.toast.h); app.toast.h = setTimeout(() => { t.hidden = true; app.toastUndo = null; }, undo ? 5000 : 2600);
+  clearTimeout(app.toast.h); app.toast.h = setTimeout(() => { t.hidden = true; app.toastUndo = null; }, undo ? 7000 : 2600);
 }
 app.toast = toast;
 
