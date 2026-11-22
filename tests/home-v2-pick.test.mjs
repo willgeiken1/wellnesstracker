@@ -13,7 +13,7 @@ const MIGRATIONS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
   "supabase/migrations/20261005000000_home_v2_brief_rank.sql",
-  "supabase/migrations/20261120120000_home_v2_routine_tiles.sql",
+  "supabase/migrations/20261122140000_home_v2_routine_tiles.sql",
 ];
 const IDS = Object.keys(HOME_WIDGETS);
 const UID = "11111111-1111-1111-1111-111111111111";

@@ -518,8 +518,8 @@ test("gated Home tiles recheck a pinned clock while Home stays open", () => {
   assert.match(timer, /refreshHomeRoutineGates/);
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /const CACHE = "insight-shell-v65"/);
-  assert.match(sentry, /insight-shell-v65/);
+  assert.match(sw, /const CACHE = "insight-shell-v76"/);
+  assert.match(sentry, /insight-shell-v76/);
   app.routineNow = undefined;
   app.routineGateShown = undefined;
   app.render = undefined;
@@ -544,8 +544,8 @@ test("stacks and the long-press preview are not wired, and the shell cache is un
   assert.match(actions, /case "routine-tile-hide"/);
   const sw = read("sw.js");
   const sentry = read("js/sentry.js");
-  assert.match(sw, /const CACHE = "insight-shell-v59"/);
-  assert.match(sentry, /insight-shell-v59/);
+  assert.match(sw, /const CACHE = "insight-shell-v76"/);
+  assert.match(sentry, /insight-shell-v76/);
   assert.match(sw, /js\/shared\/routine-home-tiles\.js/);
 });
 
