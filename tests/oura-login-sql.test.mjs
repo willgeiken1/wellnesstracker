@@ -200,6 +200,23 @@ test("only the server role can run the new functions or read the removal records
   assert.match(sql(`set role service_role; select public.oura_save_login('${B}', 'made-up-a', 'made-up-r', '2026-11-20T00:00:00Z', '${NOW}')`), /^2026-11-19/);
   const mig = readFileSync(new URL(`../${MIGRATION}`, import.meta.url), "utf8");
   assert.doesNotMatch(mig, /grant[^;]*to\s+(anon|authenticated)/i);
+  // Every SECURITY DEFINER function pins an empty search_path.
+  for (const fn of ["oura_lock_user(uuid)", "oura_save_login(uuid, text, text, timestamptz, timestamptz)",
+    "oura_revoke_login(uuid, timestamptz, text)", "oura_finish_revoke(uuid, timestamptz)"]) {
+    assert.equal(sql(`select prosecdef and proconfig @> array['search_path=""'] from pg_proc where oid = 'public.${fn}'::regprocedure`), "t", fn);
+  }
+});
+
+test("a login missing a token is refused before any row is written, and the error carries no token", () => {
+  seed();
+  const before = snapshot(A);
+  for (const [access, refresh] of [["'made-up-secret-access'", "null"], ["null", "'made-up-secret-refresh'"], ["''", "'made-up-secret-refresh'"]]) {
+    assert.throws(
+      () => sql(`set role service_role; select public.oura_save_login('${A}', ${access}, ${refresh}, '2026-11-20T00:00:00Z', '${NOW}')`),
+      (e) => /missing token/.test(e.message) && !/made-up-secret/.test(e.message),
+    );
+  }
+  assert.deepEqual(snapshot(A), before);
 });
 
 test("acceptance 1: a reconnect whose connection half fails leaves the old login, connection and days unchanged", async () => {

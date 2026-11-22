@@ -77,6 +77,11 @@ begin
   if p_user is null then
     raise exception 'missing user';
   end if;
+  -- Checked here so a missing token never reaches the NOT NULL check, whose
+  -- error detail would copy the other token into the server log.
+  if coalesce(p_access_token, '') = '' or coalesce(p_refresh_token, '') = '' then
+    raise exception 'missing token';
+  end if;
   perform public.oura_lock_user(p_user);
   select c.connected_at into prior from public.oura_connections c where c.user_id = p_user for update;
   -- Always later than the connection it replaces, so its days sort after the old ones.
