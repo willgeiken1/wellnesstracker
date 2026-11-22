@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRESSED_ROW_OPACITY } from '@/components/tappable';
 import { Pressable, ScrollView, View } from 'react-native';
 import { touchTarget } from '../../components/button';
 import { Card } from '../../components/card';
@@ -62,7 +63,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
   return <View style={{ gap: tokens.spacing[3] }} testID="food-log">
     <Card style={[foodCard, { gap: tokens.spacing[1] }]} testID="food-log-where">
       <Pressable accessibilityRole="button" accessibilityLabel={t('foodLogDayPick')} accessibilityValue={{ text: foodDayLabel(day, now) }} accessibilityState={{ expanded: calendar }} onPress={() => setCalendar(!calendar)}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, opacity: pressed ? 0.6 : 1 })}>
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
         <ThemedText muted variant="caption" style={[semibold, { flex: 1 }]}>{t('foodLogDay')}</ThemedText>
         <ThemedText testID="food-log-day" style={semibold}>{foodDayLabel(day, now)}</ThemedText>
         <View style={{ transform: [{ rotate: calendar ? '-90deg' : '90deg' }] }}><Glyph name="chevron" size={16} color={colors['text-muted']} width={2} /></View>

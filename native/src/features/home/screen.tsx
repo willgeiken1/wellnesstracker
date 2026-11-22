@@ -1,4 +1,5 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -123,7 +124,7 @@ function SmallButton({ label, accessibilityLabel, onPress, ghost }: { label: str
   const { colors } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} onPress={onPress} hitSlop={{ top: 4, bottom: 4 }}
     style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: tokens.radii.card,
-      backgroundColor: ghost ? colors['surface-2'] : colors.accent, opacity: pressed ? 0.8 : 1 })}>
+      backgroundColor: ghost ? colors['surface-2'] : colors.accent, opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <ThemedText style={[semibold, { fontSize: 14, color: ghost ? colors.text : colors['on-accent'] }]}>{label}</ThemedText>
   </Pressable>;
 }
@@ -194,7 +195,7 @@ export function Home() {
           <Greeting text={greeting(now.getHours())} />
         </View>
         {store && <Pressable testID="home-edit" accessibilityRole="button" accessibilityLabel={t('homeEdit')} onPress={() => setEditing(true)} hitSlop={4}
-          style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
+          style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.surface, opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
           <ThemedText style={[semibold, { fontSize: 14 }]}>{t('edit')}</ThemedText>
         </Pressable>}
         {score && <HeaderScore score={score} />}
@@ -209,7 +210,7 @@ export function Home() {
         <SmallButton label={t('homeStartWorkout')} onPress={() => { setAdding(false); router.push('/workout'); }} />
       </>}
       {!floating && <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={toggleAdd}
-        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
+        style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? PRESSED_FILL_OPACITY : 1 }, tokens.elevation.ios]}>
         <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
           <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
         </Svg>
@@ -434,7 +435,7 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
 function NumberTile({ tile, wide }: { tile: TileData; wide: boolean }) {
   return <Pressable testID={`home-tile-${tile.id}`} accessibilityRole="button"
     accessibilityLabel={`${tile.label}, ${tile.value} ${tile.unit}`} onPress={() => router.navigate(tile.to)}
-    style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? 0.85 : 1 })}>
+    style={({ pressed }) => ({ width: wide ? '100%' : '48.5%', opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <Card style={[card, { minHeight: 108, gap: 2 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         {tile.kind ? <Shape kind={tile.kind} color={tile.color} /> : <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: tile.color }} />}

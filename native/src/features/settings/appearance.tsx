@@ -15,7 +15,7 @@ import { t } from '@/i18n/en';
 function ThemeTile({ id, selected, onPress }: { id: Palette; selected: boolean; onPress: () => void }) {
   const { mode, colors } = useTheme();
   const palette = tokens.palettes[id], c = palette[mode], locked = paletteLocked(id);
-  return <Pressable testID={`theme-${id}`} accessibilityRole="button"
+  return <Pressable dim="fill" testID={`theme-${id}`} accessibilityRole="button"
     accessibilityLabel={locked ? `${palette.name}, ${t('themeLocked')}` : palette.name}
     accessibilityState={{ selected, disabled: locked }} disabled={locked} onPress={onPress}
     style={{ flexGrow: 1, flexBasis: '45%', minHeight: 112, padding: tokens.spacing[2], gap: tokens.spacing[1],
@@ -42,7 +42,7 @@ const RING_NAME = { contour: 'ringContour', liquid: 'ringLiquid', glass: 'ringGl
 /** One ring look, shown as a small ring at 70 percent in the accent colour. */
 function RingTile({ look, selected, onPress }: { look: RingLook; selected: boolean; onPress: () => void }) {
   const { colors, mode, ringMotion, intensity } = useTheme();
-  return <Pressable testID={`ring-look-${look}`} accessibilityRole="button" accessibilityLabel={t(RING_NAME[look])}
+  return <Pressable dim="fill" testID={`ring-look-${look}`} accessibilityRole="button" accessibilityLabel={t(RING_NAME[look])}
     accessibilityState={{ selected }} onPress={onPress}
     style={{ flexGrow: 1, flexBasis: '28%', minHeight: 112, alignItems: 'center', justifyContent: 'center', padding: tokens.spacing[1],
       gap: tokens.spacing[1], borderRadius: tokens.radii.card, backgroundColor: colors.bg,
@@ -60,7 +60,7 @@ const PRESET_NAME = { basic: ['presetBasic', 'presetBasicSub'], calm: ['presetCa
 function PresetTile({ id, selected, onPress }: { id: Preset; selected: boolean; onPress: () => void }) {
   const { colors, mode, intensity } = useTheme();
   const [name, sub] = PRESET_NAME[id];
-  return <Pressable testID={`preset-${id}`} accessibilityRole="button" accessibilityLabel={`${t(name)}. ${t(sub)}`}
+  return <Pressable dim="fill" testID={`preset-${id}`} accessibilityRole="button" accessibilityLabel={`${t(name)}. ${t(sub)}`}
     accessibilityState={{ selected }} onPress={onPress}
     style={{ flexGrow: 1, flexBasis: '45%', minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: tokens.spacing[1],
       gap: tokens.spacing[1], borderRadius: tokens.radii.card, backgroundColor: colors.bg,

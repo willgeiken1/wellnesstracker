@@ -1,8 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import { AppState } from 'react-native';
 import type { Repository } from '@/data/repository';
+import { selectionTick } from '@/components/selection-haptic';
+/** The same light tick as every selector in the app, so one switch in Settings governs both. */
 export function tick(repo: Repository) {
-  if (repo.localGet<boolean>('haptics') !== false && AppState.currentState === 'active') void Haptics.selectionAsync().catch(() => {});
+  selectionTick(repo);
 }
 export function restBuzz(repo: Repository) {
   if (repo.localGet<boolean>('haptics') !== false && AppState.currentState === 'active') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});

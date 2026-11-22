@@ -1,24 +1,41 @@
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 import { StyleSheet, Text } from 'react-native';
-import { Tappable, PRESSED_OPACITY, tappableStyle } from '../src/components/tappable';
+import { Tappable, PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY, tappableStyle } from '../src/components/tappable';
 
 const at = (pressed: boolean) => ({ pressed, hovered: false });
 
 test('a control dims while it is held and comes back when it is let go', () => {
-  expect(StyleSheet.flatten(tappableStyle({ padding: 4 }, at(true)))).toEqual({ padding: 4, opacity: PRESSED_OPACITY });
+  expect(StyleSheet.flatten(tappableStyle({ padding: 4 }, at(true)))).toEqual({ padding: 4, opacity: PRESSED_ROW_OPACITY });
   expect(StyleSheet.flatten(tappableStyle({ padding: 4 }, at(false)))).toEqual({ padding: 4 });
 });
 
 test('it keeps a style function of its own and adds the dim on top', () => {
   const own = ({ pressed }: { pressed: boolean }) => ({ backgroundColor: pressed ? 'red' : 'blue' });
-  expect(StyleSheet.flatten(tappableStyle(own, at(true)))).toEqual({ backgroundColor: 'red', opacity: PRESSED_OPACITY });
+  expect(StyleSheet.flatten(tappableStyle(own, at(true)))).toEqual({ backgroundColor: 'red', opacity: PRESSED_ROW_OPACITY });
   expect(StyleSheet.flatten(tappableStyle(own, at(false)))).toEqual({ backgroundColor: 'blue' });
 });
 
 test('a disabled control never dims', () => {
   expect(StyleSheet.flatten(tappableStyle({ padding: 2 }, at(true), true))?.opacity).toBeUndefined();
+});
+
+test('rows dim further than filled buttons and keys, and a control can opt out', () => {
+  expect(PRESSED_ROW_OPACITY).toBe(0.6);
+  expect(PRESSED_FILL_OPACITY).toBe(0.75);
+  expect(StyleSheet.flatten(tappableStyle({ padding: 2 }, at(true), false, 'fill'))?.opacity).toBe(PRESSED_FILL_OPACITY);
+  expect(StyleSheet.flatten(tappableStyle({ padding: 2 }, at(true), false, 'row'))?.opacity).toBe(PRESSED_ROW_OPACITY);
+  expect(StyleSheet.flatten(tappableStyle({ padding: 2 }, at(true), false, 'none'))?.opacity).toBeUndefined();
+});
+
+test('no control sets a press dim of its own', () => {
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((name: string) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? walk(path) : /\.tsx?$/.test(name) ? [path] : [];
+  });
+  const stray = walk(join(__dirname, '..', 'src')).filter(path => /pressed\s*\?\s*0\.\d/.test(readFileSync(path, 'utf8')));
+  expect(stray).toEqual([]);
 });
 
 test('it still presses and draws with its own style at rest', async () => {

@@ -499,6 +499,7 @@ function ImportBody() {
                     );
                     return (
                       <Pressable
+                        dim="fill"
                         key={value}
                         testID={`import-mode-${value}`}
                         accessibilityRole="radio"

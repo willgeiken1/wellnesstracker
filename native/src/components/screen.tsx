@@ -5,6 +5,7 @@ import type { PropsWithChildren } from 'react';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
+import { PRESSED_ROW_OPACITY } from './tappable';
 import { ThemedText } from './themed-text';
 import { Icon } from './icon';
 import { touchTarget } from './button';
@@ -32,4 +33,4 @@ export function Screen({ children, title, tabHeader = false, topInset = false }:
 const styles = StyleSheet.create({ content: { padding: tokens.spacing[3], gap: tokens.spacing[3], flexGrow: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] },
   avatar: { minWidth: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' },
-  pressed: { opacity: 0.6 } });
+  pressed: { opacity: PRESSED_ROW_OPACITY } });

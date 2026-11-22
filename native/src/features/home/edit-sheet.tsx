@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +26,7 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
   const fill = tone === 'accent' ? colors.accent : colors['surface-2'];
   const ink = tone === 'accent' ? colors['on-accent'] : tone === 'danger' ? colors.danger : colors.text;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fill, opacity: disabled ? 0.35 : pressed ? 0.8 : 1 })}>
+    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fill, opacity: disabled ? 0.35 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}><Path d={GLYPH[glyph]} fill="none" stroke={ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
   </Pressable>;
 }

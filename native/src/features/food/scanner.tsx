@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { AppState, Linking, Pressable, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Picker } from '@react-native-picker/picker';
@@ -56,7 +57,7 @@ export function FoodScanner({repo,onChoose,onManual,onClose,onSearch}:{repo:Repo
         onBarcodeScanned={({data,type})=>{if(!cameraOpen.current)return;cameraOpen.current=false;try {const normalized=normalizeBarcode(data,type);setCode(normalized);void lookup(normalized);}catch{setCamera(false);setMessage(t('barcodeFailure'));}}}/>
         <FrameGuide color={colors.accent}/>
         <Pressable accessibilityRole="button" accessibilityLabel={t(torch?'barcodeTorchOff':'barcodeTorchOn')} accessibilityState={{selected:torch}} onPress={()=>setTorch(!torch)}
-          style={({pressed})=>({position:'absolute',right:10,bottom:10,minHeight:44,paddingHorizontal:14,borderRadius:22,flexDirection:'row',alignItems:'center',gap:6,backgroundColor:torch?colors.accent:colors.surface,opacity:pressed?0.75:1})}>
+          style={({pressed})=>({position:'absolute',right:10,bottom:10,minHeight:44,paddingHorizontal:14,borderRadius:22,flexDirection:'row',alignItems:'center',gap:6,backgroundColor:torch?colors.accent:colors.surface,opacity:pressed?PRESSED_FILL_OPACITY:1})}>
           <Glyph name="torch" size={18} color={torch?colors['on-accent']:colors.text}/>
           <ThemedText style={[semibold,{fontSize:14,color:torch?colors['on-accent']:colors.text}]}>{t(torch?'barcodeTorchLabelOn':'barcodeTorchLabel')}</ThemedText>
         </Pressable>

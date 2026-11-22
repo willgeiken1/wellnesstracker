@@ -1,4 +1,5 @@
 import { ActivityIndicator, Platform, Pressable, StyleSheet } from 'react-native';
+import { PRESSED_FILL_OPACITY } from './tappable';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { ThemedText } from './themed-text';
@@ -11,7 +12,7 @@ export function Button({ label, onPress, variant = 'primary', selected, disabled
   const color = variant === 'primary' ? colors['on-accent'] : variant === 'destructive' ? colors['on-danger'] : colors.text;
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
     accessibilityState={{ disabled, busy, ...(selected === undefined ? {} : { selected }) }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => [styles.button, { backgroundColor, opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}>
+    style={({ pressed }) => [styles.button, { backgroundColor, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 }]}>
     {busy && <ActivityIndicator accessibilityRole="progressbar" color={color}/> }
     <ThemedText style={{ color, textAlign: 'center' }}>{label}</ThemedText>
   </Pressable>;

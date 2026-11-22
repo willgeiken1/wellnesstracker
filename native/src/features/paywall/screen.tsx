@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { touchTarget } from '../../components/button';
@@ -80,7 +81,7 @@ export function PaywallScreen({ products, onPurchase, onRestore, onClose, termsU
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
     <View style={styles.bar}>
       <Pressable testID="paywall-close" accessibilityRole="button" accessibilityLabel={paywallCopy.close} onPress={onClose}
-        style={({ pressed }) => [styles.close, { backgroundColor: colors['surface-2'], opacity: pressed ? 0.7 : 1 }]}>
+        style={({ pressed }) => [styles.close, { backgroundColor: colors['surface-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 }]}>
         <Line name="close" size={18} color={colors.text} />
       </Pressable>
     </View>
@@ -123,7 +124,7 @@ export function PaywallScreen({ products, onPurchase, onRestore, onClose, termsU
           {selected && <Pressable testID="paywall-subscribe" accessibilityRole="button"
             accessibilityLabel={`Subscribe to ${selected.title}`} accessibilityHint={hint}
             accessibilityState={{ disabled: blocked, busy }} disabled={blocked} onPress={() => onPurchase(selected.id)}
-            style={({ pressed }) => [styles.primary, { backgroundColor: colors.accent, opacity: blocked ? 0.5 : pressed ? 0.75 : 1 }]}>
+            style={({ pressed }) => [styles.primary, { backgroundColor: colors.accent, opacity: blocked ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 }]}>
             {busy && <ActivityIndicator color={colors['on-accent']} />}
             <ThemedText style={[semibold, { color: colors['on-accent'], textAlign: 'center' }]}>
               {selected.trialDays && selected.trialDays > 0 ? 'Start free trial' : 'Subscribe'}

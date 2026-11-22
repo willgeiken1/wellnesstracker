@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { PRESSED_ROW_OPACITY } from '@/components/tappable';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/screen';
@@ -64,7 +65,7 @@ export function Workouts() {
             params: {
               id: s.id
             }
-          })} style={({ pressed }) => ({ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[1], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'], opacity: pressed ? 0.7 : 1 })}>
+          })} style={({ pressed }) => ({ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], paddingVertical: tokens.spacing[1], borderTopWidth: index ? 1 : 0, borderTopColor: colors['surface-2'], opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
             <View style={{ width: 44, height: 44, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], padding: 4 }}>
               <Thumb store={store} id={s.id} />
             </View>
