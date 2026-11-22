@@ -89,45 +89,58 @@ export function isRevokedGrant(status, body) {
 /** Shown while a revoked connection's days are still being deleted. */
 export const DELETING = "Oura login expired: Oura no longer allows Insight access, and the Oura days Insight stored are still being deleted. Reconnect Oura in the app to sync again.";
 
+/** A connection with no login and no recorded removal: a save that failed, an older version's cleanup, or anything
+ * else unclear. Nothing is deleted. */
+export const RECONNECT = "Oura login expired: Insight has no Oura login for this connection. Reconnect Oura in the app to sync again. Your stored Oura days were kept.";
+
+/** The no-login check itself failed. Nothing was deleted by it, and the next sync checks again. */
+export const CHECK_FAILED = "Oura login expired. Reconnect Oura in the app. Insight couldn't finish checking the Oura connection and will try again on the next sync.";
+
 /** Deletes what Oura no longer allows Insight to keep: the revoked login and the days this connection (or an
- * older one) stored. A reconnect that already saved a new login and new days keeps them: only the exact revoked
- * refresh token is deleted, and only days whose `data.conn` is this connection's mark or older (or unmarked).
- * The order is Disconnect's: the login goes first, so a sync still writing days sees it gone and takes its rows
- * back (`saveDays`), and only then are the days deleted. If the days delete fails, a later sync finishes it: it finds
- * the connection with no login (see `finishRevoked`), whatever message has since been written over DELETING. */
+ * older one) stored. Two database steps, each one transaction under the same per-user lock as a reconnect
+ * (`oura_revoke_login`, then `oura_finish_revoke`, in supabase/migrations/20261122020000_oura_atomic_login.sql).
+ * The first deletes only the exact refused refresh token, and only while `mark` is still the connection, and in the
+ * same transaction records that this connection's login was removed. A newer login (a parallel refresh that Oura
+ * accepted, or a reconnect) stops it. The login goes first, so a sync still writing days sees it gone and takes its
+ * rows back (`saveDays`). The second deletes days whose `data.conn` is this connection's mark or older (or unmarked),
+ * only while that removal is recorded and there is still no login. If it fails, a later sync finishes it from the
+ * record (see `finishRevoked`), whatever message has since been written over DELETING. */
 export async function forgetRevoked(admin, userId, mark, refreshToken) {
-  const pending = await admin.from("oura_connections").update({ last_error: DELETING }).eq("user_id", userId).eq("connected_at", mark);
-  if (pending.error) throw new Error("Oura access was removed, and its login couldn't be deleted yet. It will be tried again on the next sync.");
-  const token = await admin.from("oura_tokens").delete().eq("user_id", userId).eq("refresh_token", refreshToken);
-  if (token.error) throw new Error(DELETING);
-  // A login still there now is a newer one, saved by a parallel refresh that Oura accepted: access was not revoked.
-  const left = await admin.from("oura_tokens").select("user_id").eq("user_id", userId).maybeSingle();
-  if (left.error) throw new Error(DELETING);
-  if (left.data) {
+  const { data: step, error } = await admin.rpc("oura_revoke_login", { p_user: userId, p_conn: mark, p_refresh: refreshToken });
+  if (error) throw new Error("Oura access was removed, and its login couldn't be deleted yet. It will be tried again on the next sync.");
+  if (step === "not_connected") throw new Error("Oura isn't connected");
+  if (step === "newer_login") {
     await admin.from("oura_connections").update({ last_error: null }).eq("user_id", userId).eq("connected_at", mark);
     throw new Error(NEWER_LOGIN);
   }
-  return deleteRevokedDays(admin, userId, mark);
+  if (step !== "removed") throw new Error(RECONNECT);
+  await admin.from("oura_connections").update({ last_error: DELETING }).eq("user_id", userId).eq("connected_at", mark);
+  return finishRemoval(admin, userId, mark, DELETING);
 }
 
 /** A cleanup that found a newer login than the one Oura refused. Nothing was deleted from that login or its days. */
 export const NEWER_LOGIN = "A newer Oura login was saved while an old one was being removed, so the Oura days were kept. The next sync uses the new login.";
 
-async function deleteRevokedDays(admin, userId, mark) {
-  const days = await admin.from("oura_days").delete().eq("user_id", userId).or(`data->>conn.is.null,data->>conn.lte.${JSON.stringify(mark)}`);
-  if (days.error) throw new Error(DELETING);
-  await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
+/** Runs the recorded removal for `mark`. Returns only when the days were deleted; otherwise throws what the app
+ * should show. `failed` is the message when the database step itself fails. */
+async function finishRemoval(admin, userId, mark, failed) {
+  const { data: step, error } = await admin.rpc("oura_finish_revoke", { p_user: userId, p_conn: mark });
+  if (error) throw new Error(failed);
+  if (step === "revoked") {
+    await admin.from("oura_connections").update({ last_error: REVOKED }).eq("user_id", userId).eq("connected_at", mark);
+    return;
+  }
+  if (step === "reconnect") throw new Error(RECONNECT);
+  if (step === "connected") throw new Error(NEWER_LOGIN);
+  throw new Error("Oura isn't connected");
 }
 
-/** A sync that found the connection it started from, but no Oura login. A connection is only ever saved after its
- * login, so this connection has lost its login: a revoke cleanup cut short, a Disconnect under way, or a reconnect
- * whose save failed. Its days may not stay without a login, so they are deleted now (only this connection's or older
- * ones). It does not rely on `last_error`, which any sync's error handler can overwrite. Always throws. */
+/** A sync that found the connection it started from, but no Oura login. Days are deleted only when the database has
+ * a recorded removal for this exact connection (a confirmed refusal or a Disconnect whose day delete was cut short).
+ * Without one, nothing is deleted and the app is told to reconnect: a missing login alone is not proof that Oura took
+ * access back, and `last_error` (which any sync can overwrite) is never read as proof. Always throws. */
 export async function finishRevoked(admin, userId, mark) {
-  const { data: conn, error } = await admin.from("oura_connections").select("connected_at").eq("user_id", userId).maybeSingle();
-  if (error) throw new Error("Couldn't read the Oura connection.");
-  if (!conn || String(conn.connected_at) !== mark) throw new Error("Oura isn't connected");
-  await deleteRevokedDays(admin, userId, mark);
+  await finishRemoval(admin, userId, mark, CHECK_FAILED);
   throw new Error(REVOKED);
 }
 
@@ -141,28 +154,27 @@ export async function recordSyncError(admin, userId, mark, message) {
   await write;
 }
 
-/** Saves a new login from Oura's callback, then starts its connection. `login` holds `access_token`,
- * `refresh_token` and `expires_at`. The login is saved first, because a sync that finds a connection with no login
- * deletes that connection's days (`finishRevoked`). On a reconnect the new login replaces the old one, so if the new
- * connection then can't be saved, the new login stays on the existing connection: deleting it would leave that
- * connection with no login, and the next sync would delete its days after one failed save. Its old message is cleared,
- * because a login Oura has just issued means access was not revoked. Only a first connect, with no connection to
- * keep, takes its login back. A connection that can't be read changes nothing. Returns "connected" or "error". */
+/** Saves a new login from Oura's callback. `login` holds `access_token`, `refresh_token` and `expires_at`. One
+ * database transaction (`oura_save_login`) saves the login and its connection together, gives the connection a new,
+ * later `connected_at`, empties `last_sync` and `last_error`, and clears any recorded removal. If it fails, neither is
+ * changed. Nothing is ever deleted here: an answer lost after the save committed must not undo it. Returns
+ * "connected" only when the database answered that the save committed, otherwise "error". */
 export async function saveLogin(admin, userId, login, now = new Date().toISOString()) {
-  const prior = await admin.from("oura_connections").select("connected_at").eq("user_id", userId).maybeSingle();
-  if (prior.error) { console.error("Oura connection read failed"); return "error"; }
-  const token = await admin.from("oura_tokens").upsert({ user_id: userId, ...login, updated_at: now });
-  if (token.error) { console.error("Oura token save failed"); return "error"; }
-  // last_sync stays empty so the app runs a full first sync the next time it opens.
-  const conn = await admin.from("oura_connections").upsert({ user_id: userId, connected_at: now, last_sync: null, last_error: null });
-  if (!conn.error) return "connected";
-  console.error("Oura connection save failed");
-  if (prior.data) {
-    await admin.from("oura_connections").update({ last_error: null }).eq("user_id", userId).eq("connected_at", prior.data.connected_at);
-  } else {
-    await admin.from("oura_tokens").delete().eq("user_id", userId);
-  }
-  return "error";
+  const { error } = await admin.rpc("oura_save_login", {
+    p_user: userId, p_access_token: login.access_token, p_refresh_token: login.refresh_token, p_expires_at: login.expires_at, p_now: now,
+  });
+  if (error) { console.error("Oura login save failed"); return "error"; }
+  return "connected";
+}
+
+/** Disconnect: removes the login first (recording the removal in the same transaction), then the days and the
+ * connection. If the second step fails, pressing Disconnect again repeats both, and a sync in between finishes it
+ * from the record. Throws when either step fails. */
+export async function disconnect(admin, userId) {
+  const first = await admin.rpc("oura_revoke_login", { p_user: userId, p_conn: null, p_refresh: null });
+  if (first.error) throw new Error("Couldn't disconnect Oura. Try again.");
+  const second = await admin.rpc("oura_finish_revoke", { p_user: userId, p_conn: null });
+  if (second.error) throw new Error("Oura was disconnected, but its days couldn't be removed yet. Try disconnecting again.");
 }
 
 /** A short, one-way tag for a refresh token, so two refusals can be matched without storing the token. */
@@ -232,10 +244,13 @@ export async function accessToken(admin, userId, mark, exchange, { force = false
     throw new Error(`Oura login expired. Reconnect Oura in the app. (${res.status})`);
   }
   const n = await res.json();
+  // An answer without a new access token is refused before anything is written, so the old login is never kept with
+  // a fresh expiry and a NOT NULL error never copies the refresh token into the server log.
+  if (typeof n?.access_token !== "string" || n.access_token === "") throw new Error("Oura sent back an incomplete login. Try again later.");
   // Oura has already used up the old refresh token, so the new one must be kept: try the save twice.
   const fresh = {
     access_token: n.access_token,
-    refresh_token: n.refresh_token ?? t.refresh_token,
+    refresh_token: typeof n.refresh_token === "string" && n.refresh_token !== "" ? n.refresh_token : t.refresh_token,
     expires_at: new Date(now + (n.expires_in ?? 86400) * 1000).toISOString(),
     updated_at: new Date(now).toISOString(),
   };

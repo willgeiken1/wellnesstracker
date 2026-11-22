@@ -17,16 +17,21 @@ const COLUMNS = ['owner_id', 'id', 'updated_at', 'deleted_at', 'device_id', 'day
 /** True for a weigh-in that came from a health service rather than being typed into Insight. */
 export const isHealthSource = (source: unknown) => source !== null && source !== undefined && source !== 'app';
 
+/** Marks, in the main database's device metadata, that the clean-up below finished. Kept apart from the rows
+ * themselves: an interrupted run can delete the rows yet leave their values in freed pages or the log. */
+const CLEANED = sql`SELECT 1 FROM sync_state WHERE owner_id = 'device' AND key = 'health_moved'`;
+
 /** Moves Health weigh-ins an earlier version kept in the main database into the Health store, then rewrites
- * the main file so their values are not left behind in freed pages or the write-ahead log. Safe to run on every
- * launch: a copy left by an interrupted delete never replaces a newer row already in the Health store, so a
- * reading removed since stays removed. Records how far back the moved readings go, so a cleared Health store
- * is read back that far. Returns how many it found. */
+ * the main file so their values are not left behind in freed pages or the write-ahead log. Runs on each launch
+ * until a run gets all the way through, then never again; a run that throws or is cut off part way is simply
+ * redone next launch. Safe to redo: a copy left by an interrupted delete never replaces a newer row already in
+ * the Health store, so a reading removed since stays removed. Records how far back the moved readings go, so a
+ * cleared Health store is read back that far. Returns how many it found. */
 export function moveHealthRows(main: ExpoSQLiteDatabase, health: ExpoSQLiteDatabase): number {
+  if (main.get(CLEANED)) return 0;
   const rows = main.all<Record<string, string | number | null>>(sql`SELECT * FROM weigh_ins WHERE source IS NOT NULL AND source <> 'app'`);
-  if (!rows.length) return 0;
   const fields = sql.join(COLUMNS.map(c => sql.identifier(c)), sql`, `);
-  health.transaction(() => {
+  if (rows.length) health.transaction(() => {
     for (const row of rows) health.run(sql`INSERT INTO weigh_ins (${fields}) VALUES (${sql.join(COLUMNS.map(c => sql`${row[c] ?? null}`), sql`, `)})
       ON CONFLICT(owner_id, id) DO UPDATE SET ${sql.join(COLUMNS.filter(c => c !== 'owner_id' && c !== 'id').map(c => sql`${sql.identifier(c)} = excluded.${sql.identifier(c)}`), sql`, `)}
       WHERE excluded.updated_at > weigh_ins.updated_at`);
@@ -45,5 +50,7 @@ export function moveHealthRows(main: ExpoSQLiteDatabase, health: ExpoSQLiteDatab
   main.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
   main.run(sql`VACUUM`);
   main.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
+  // Only now: until here a failure leaves the run to be redone. The mark itself holds no reading.
+  main.run(sql`INSERT INTO sync_state (owner_id, key, value) VALUES ('device', 'health_moved', '1') ON CONFLICT(owner_id, key) DO NOTHING`);
   return rows.length;
 }

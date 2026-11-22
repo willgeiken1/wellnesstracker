@@ -283,7 +283,7 @@ function homeGalleryHTML() {
   const none = q.trim() ? "No widgets match that search." : "Every widget is already on Home.";
   const search = `<label class="hw-gal-find"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="text-in hw-gal-search" id="home-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search Widgets" aria-label="Search widgets" value="${app.esc(q)}"></label>`;
   return `<div class="hw-gal-top">${galleryBar("<b>Add Widget</b>", "")}${search}</div>
-    <div class="hw-gal-scroll">${items ? `<div class="hw-gal-grid">${items}</div>` : `<p class="sub hw-gal-none">${none}</p>`}</div>`;
+    <div class="hw-gal-scroll" id="home-q-list">${items ? `<div class="hw-gal-grid">${items}</div>` : `<p class="sub hw-gal-none">${none}</p>`}</div>`;
 }
 app.homeGalleryHTML = homeGalleryHTML;
 app.galleryNeedsSize = needsSizeChoice;

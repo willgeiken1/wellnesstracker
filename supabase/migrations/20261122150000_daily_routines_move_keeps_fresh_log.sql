@@ -10,6 +10,43 @@ begin
   end if;
   execute $migration$
 
+create or replace function public.daily_routines_fnv32(p_text text)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $fnv$
+declare
+  hash bigint := 2166136261;
+  i integer;
+  code integer;
+begin
+  for i in 1..char_length(p_text) loop
+    code := ascii(substr(p_text, i, 1));
+    hash := (hash # code) & 4294967295;
+    hash := (hash * 16777619) & 4294967295;
+  end loop;
+  return lpad(to_hex(hash), 8, '0');
+end;
+$fnv$;
+
+create or replace function public.daily_routines_fresh_move_id(p_base text, p_at numeric)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $id$
+declare
+  mark text := trunc(p_at)::text;
+  readable text := p_base || '_' || mark;
+begin
+  if char_length(readable) <= 80 then
+    return readable;
+  end if;
+  return 'mv_' || public.daily_routines_fnv32(p_base || '|' || mark) || '_' || mark;
+end;
+$id$;
+
 create or replace function public.daily_routines_retarget_fresh(p_stored jsonb, p_incoming jsonb, p_side text)
 returns jsonb
 language plpgsql
@@ -21,16 +58,16 @@ declare
   incoming jsonb := case when jsonb_typeof(p_incoming) = 'array' then p_incoming else '[]'::jsonb end;
   source jsonb := case when p_side = 'stored' then stored else incoming end;
   other_side jsonb := case when p_side = 'stored' then incoming else stored end;
-  ids text[] := array[]::text[];
   result jsonb := '[]'::jsonb;
   row jsonb;
+  tombs jsonb := '{}'::jsonb;
   other jsonb;
   id text;
   new_id text;
-  n integer;
   live_at numeric;
   moved_at numeric;
-  moved jsonb := '{}'::jsonb;
+  live_stamp numeric;
+  tomb_stamp numeric;
 begin
   if not exists (
     select 1 from jsonb_array_elements(stored) element where element ? 'movedDay'
@@ -39,35 +76,30 @@ begin
   ) then
     return source;
   end if;
-  select coalesce(array_agg(value->>'id'), array[]::text[]) into ids
-  from (
-    select value from jsonb_array_elements(stored)
-    union all
-    select value from jsonb_array_elements(incoming)
-  ) rows
-  where coalesce(value->>'id', '') <> '';
+  select coalesce(jsonb_object_agg(value->>'id', value), '{}'::jsonb) into tombs
+  from jsonb_array_elements(other_side) value
+  where coalesce(value->>'id', '') <> ''
+    and coalesce(public.daily_routines_ms(value, 'deletedAt'), 0) > 0
+    and value ? 'movedDay';
   for row in select value from jsonb_array_elements(source)
   loop
     id := row->>'id';
-    select value into other from jsonb_array_elements(other_side) where value->>'id' = id limit 1;
+    other := tombs->id;
     live_at := public.daily_routines_ms(row, 'at');
     moved_at := public.daily_routines_ms(other, 'movedAt');
+    live_stamp := public.daily_routines_ms(row, 'updatedAt');
+    tomb_stamp := public.daily_routines_ms(other, 'deletedAt');
     if other is not null
       and coalesce(public.daily_routines_ms(row, 'deletedAt'), 0) = 0
-      and coalesce(public.daily_routines_ms(other, 'deletedAt'), 0) > 0
+      and tomb_stamp > 0
       and public.daily_routines_day(other->'movedDay') is not null
       and moved_at > 0
       and live_at > 0
       and live_at is distinct from moved_at
+      and live_stamp <= tomb_stamp
     then
-      n := 2;
-      new_id := id || '_' || n;
-      while new_id = any(ids) and n < 99 loop
-        n := n + 1;
-        new_id := id || '_' || n;
-      end loop;
-      if n < 99 then
-        ids := array_append(ids, new_id);
+      new_id := public.daily_routines_fresh_move_id(id, live_at);
+      if char_length(new_id) <= 80 then
         row := jsonb_set(row, '{id}', to_jsonb(new_id));
       end if;
     end if;
@@ -300,6 +332,8 @@ end;
 $fn$;
 
 
+revoke all on function public.daily_routines_fnv32(text) from public, anon, authenticated;
+revoke all on function public.daily_routines_fresh_move_id(text, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_retarget_fresh(jsonb, jsonb, text) from public, anon, authenticated;
 revoke all on function public.daily_routines_prepare(jsonb, text, numeric) from public, anon, authenticated;
 revoke all on function public.daily_routines_merge(jsonb, jsonb, numeric) from public, anon, authenticated;

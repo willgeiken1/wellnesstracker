@@ -316,6 +316,7 @@ function purgePayload(from, to) {
   return body;
 }
 app.rememberPurge = rememberPurge;
+app.routinePurgePayload = purgePayload;
 
 function photoOlderThan(photo, before) {
   if (before == null) return true;

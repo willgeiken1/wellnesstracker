@@ -695,27 +695,42 @@ function reconcileBlockPlacementTombstones(blocks, placements) {
 }
 
 function isMoveTombstone(log) {
-  return !!(log && typeof log.deletedAt === "number" && log.deletedAt > 0 && validDay(log.movedDay) && typeof log.movedAt === "number" && Number.isFinite(log.movedAt));
+  return !!(log && typeof log.deletedAt === "number" && log.deletedAt > 0 && validDay(log.movedDay) && typeof log.movedAt === "number" && Number.isFinite(log.movedAt) && log.movedAt > 0);
 }
 
-function freshLogSuffix(base, ids) {
-  for (let n = 2; n < 100; n += 1) {
-    const id = `${base}_${n}`;
-    if (!ids.has(id)) return id;
+/* FNV-1a, 32 bits. The server function daily_routines_fnv32 uses the same
+   steps, so a fresh log that does not fit in 80 characters gets one id. */
+function fnv32Hex(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  return null;
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/* The same dose time always names the same row, on the phone and the server.
+   A readable id is base_at. A long item id is folded so the result stays
+   within the 80-character cap. */
+export function freshMoveLogId(baseId, at) {
+  const mark = String(Math.trunc(at));
+  const readable = `${baseId}_${mark}`;
+  if (readable.length <= LOG_ID_LIMIT) return readable;
+  return `mv_${fnv32Hex(`${baseId}|${mark}`)}_${mark}`;
+}
+
+function liveLosesToMove(live, tomb) {
+  const liveAt = typeof live.updatedAt === "number" && Number.isFinite(live.updatedAt) && live.updatedAt > 0 ? live.updatedAt : 0;
+  const tombAt = typeof tomb.deletedAt === "number" && Number.isFinite(tomb.deletedAt) && tomb.deletedAt > 0 ? tomb.deletedAt : 0;
+  return liveAt <= tombAt;
 }
 
 /* A move tombstone and a fresh log of the vacated day share an id until
-   they sync. Give the fresh log the next suffix when its dose time is not
-   the moved dose, so both rows survive either merge order. */
+   they sync. Rename the fresh log only when the tombstone would win, and
+   name it from the dose time so a later pull does not mint a second copy. */
 export function retargetFreshMoveLogs(localLogs, remoteLogs) {
   const local = (Array.isArray(localLogs) ? localLogs : []).map((log) => (log && typeof log === "object" ? { ...log } : log));
   const remote = (Array.isArray(remoteLogs) ? remoteLogs : []).map((log) => (log && typeof log === "object" ? { ...log } : log));
-  const ids = new Set();
-  for (const log of [...local, ...remote]) {
-    if (log && typeof log.id === "string") ids.add(log.id);
-  }
   const remoteBy = new Map();
   for (const log of remote) {
     if (log && typeof log.id === "string" && !remoteBy.has(log.id)) remoteBy.set(log.id, log);
@@ -732,11 +747,10 @@ export function retargetFreshMoveLogs(localLogs, remoteLogs) {
     const live = tomb === left ? right : tomb === right ? left : null;
     if (!tomb || !live || (typeof live.deletedAt === "number" && live.deletedAt > 0)) continue;
     const at = typeof live.at === "number" && Number.isFinite(live.at) ? live.at : null;
-    if (at == null || at === tomb.movedAt) continue;
-    const next = freshLogSuffix(id, ids);
-    if (!next) continue;
+    if (at == null || at <= 0 || at === tomb.movedAt || !liveLosesToMove(live, tomb)) continue;
+    const next = freshMoveLogId(id, at);
+    if (!next || next.length > LOG_ID_LIMIT) continue;
     live.id = next;
-    ids.add(next);
   }
   return [local, remote];
 }

@@ -108,8 +108,7 @@ function Logger({
   const params = useLocalSearchParams<{ fixtureState?: string }>();
   const selectedFixture = fixtureState ?? params.fixtureState;
   const focused = useIsFocused();
-  const [now, setNow] = useState(() => Date.now()),
-    [cursor, setCursor] = useState<Cursor | null>(() => {
+  const [cursor, setCursor] = useState<Cursor | null>(() => {
       const fixture =
         __DEV__ && store.repo.owner === "demo"
           ? store.repo.localGet<{ benchId: string; sessionId: string }>(
@@ -132,13 +131,6 @@ function Logger({
     [finish, setFinish] = useState(false),
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState<string[]>([]);
-  useEffect(() => {
-    if (past) return;
-    const timer = setInterval(() => {
-      if (AppState.currentState === "active") setNow(Date.now());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [past]);
   const entries = store.entries(session.id),
     drafts = entries.filter(e => !store.skipped(e.id)).flatMap((e) => store.drafts(e.id)),
     done = drafts.filter((d) => d.setId).length,
@@ -397,9 +389,13 @@ function Logger({
             <ThemedText variant="title" numberOfLines={1} style={{ fontWeight: "600", flexShrink: 1 }}>
               {String(session.data.name ?? t("workoutName"))}
             </ThemedText>
-            <ThemedText muted numeric style={{ fontSize: 15 }}>
-              {past ? String(session.data.day) : clock((now - Number(session.data.started_at)) / 1000)}
-            </ThemedText>
+            {past ? (
+              <ThemedText muted numeric style={{ fontSize: 15 }}>
+                {String(session.data.day)}
+              </ThemedText>
+            ) : (
+              <ElapsedClock startedAt={Number(session.data.started_at)} />
+            )}
           </View>
           <Pill
             compact
@@ -829,5 +825,22 @@ function JumpCard({ store, entry }: { store: WorkoutStore; entry: Row }) {
         </ThemedText>
       </View>
     </Pressable>
+  );
+}
+
+/* The elapsed clock ticks on its own, so the rest of the logger (every exercise and set row)
+   doesn't re-render once a second while you log. */
+function ElapsedClock({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <ThemedText muted numeric style={{ fontSize: 15 }}>
+      {clock((now - startedAt) / 1000)}
+    </ThemedText>
   );
 }

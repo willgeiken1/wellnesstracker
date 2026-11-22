@@ -163,9 +163,7 @@ export function routineDaysLeft(onHand, logs, itemId, today, onHandDay) {
   const started = parseSupplyDay(onHandDay);
   const now = parseSupplyDay(today);
   if (!started || !now || now <= started) return base;
-  const gap = span ? span.span / span.gaps : 1;
-  const used = Math.floor((dayIndex(now) - dayIndex(started)) / gap);
-  return Math.max(0, base - used);
+  return Math.max(0, base - (dayIndex(now) - dayIndex(started)));
 }
 
 export function mixedAgoLabel(mixedOn, today) {

@@ -884,7 +884,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql", KEEP_TYPES]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql", KEEP_TYPES]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -977,6 +977,40 @@ test("a moved dose and the other phone's log of the old day both stay on the ser
     const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T16:00:00.000Z"));
     assert.deepEqual(days(merged), ["2026-11-18", "2026-11-19"]);
   }
+});
+
+test("a plain repeat of the moved dose stays a tombstone", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { freshMoveLogId, isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.state = { dailyRoutines: null };
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+  dailyRoutinesHTML();
+  const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+  assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+  const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const logged = structuredClone(app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id));
+  app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+  assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+  const moved = structuredClone(app.state.dailyRoutines);
+  const repeat = structuredClone(moved);
+  repeat.logs = repeat.logs.map((row) => (row.id === logged.id ? logged : row));
+  const days = (store) => (store.logs || []).filter((row) => isLive(row) && row.itemId === item.id).map((row) => row.day).sort();
+  for (const [stored, incoming] of [[moved, repeat], [repeat, moved]]) {
+    const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T15:00:00.000Z"));
+    assert.deepEqual(days(merged), ["2026-11-18"]);
+  }
+  const longBase = `log_${"a".repeat(70)}_2026-11-19`;
+  const at = 1760000000000;
+  assert.equal(query(`select public.daily_routines_fresh_move_id('${longBase}', ${at});`).trim(), freshMoveLogId(longBase, at));
+  assert.ok(freshMoveLogId(longBase, at).length <= 80);
 });
 
 test("a fresh log at or before the move stamp stays beside the moved dose", async () => {

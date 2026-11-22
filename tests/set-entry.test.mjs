@@ -207,3 +207,38 @@ test("unilateral placeholders use each side, and a first-ever set stays blank", 
   assert.match(fresh, /placeholder="0"/);
   assert.match(fresh, /value=""/);
 });
+
+test("a double tap on Log Set logs one set, and a later tap logs the next", () => {
+  const cur = benchSession({ id: "double-tap", date: "2026-10-07", finishedAt: null, entries: [] });
+  arm([cur]);
+  const prev = {
+    toast: app.toast, prsFor: app.prsFor, logsStartRest: app.logsStartRest,
+    renderWorkout: app.renderWorkout, tick: app.tick, celebrate: app.celebrate, save: app.save,
+  };
+  const toasts = [];
+  app.toast = (m) => toasts.push(m);
+  app.prsFor = () => [];
+  app.logsStartRest = () => false;
+  app.renderWorkout = () => {};
+  app.tick = () => {};
+  app.celebrate = () => {};
+  app.save = () => {};
+  const realNow = Date.now;
+  let now = realNow();
+  Date.now = () => now;
+  try {
+    app.ui.drafts["Bench Press"] = { w: "100", r: "8" };
+    app.logSet(0);
+    app.ui.drafts["Bench Press"] = { w: "100", r: "8" };
+    now += 200;
+    app.logSet(0);
+    assert.equal(cur.entries[0].sets.length, 1, "the second tap is the same tap");
+    assert.deepEqual(toasts, [], "no error toast after a successful log");
+    now += 1000;
+    app.logSet(0);
+    assert.equal(cur.entries[0].sets.length, 2, "a deliberate next tap logs the next set");
+  } finally {
+    Date.now = realNow;
+    Object.assign(app, prev);
+  }
+});
