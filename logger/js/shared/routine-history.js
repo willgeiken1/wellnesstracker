@@ -1,5 +1,6 @@
 import { isLive } from "./daily-routines-store.js";
 import { routineBlockRunsOn } from "./routine-dose.js";
+import { routineItemType } from "./routine-types.js";
 
 /* History for one month: a calendar, small day cards, and one graph.
    The graph counts logs. It never adds amounts, so 250 mcg and 5 mg
@@ -113,6 +114,14 @@ function placedItems(view) {
       seen.set(place.itemId, row);
       rows.push(row);
     }
+  }
+  /* An item made on a type tab can sit in no routine. It is due every day
+     from its start, the same as on its tab. */
+  const loose = [...items.values()]
+    .filter((item) => !seen.has(item.id) && routineItemType(item, view.prefs))
+    .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const item of loose) {
+    rows.push({ item, compound: item.compoundId ? compounds.get(item.compoundId) || null : null, blocks: [] });
   }
   return rows;
 }
@@ -317,9 +326,9 @@ export function routineHistoryView(view, options) {
     const rows = [];
     for (const entry of items) {
       const log = coveringLog(dayLogs, entry.item.id);
-      /* An item is due on a day one of its routines runs. A log on any
-         other day still shows. */
-      const due = entry.blocks.some((block) => routineBlockRunsOn(block, day));
+      /* An item is due on a day one of its routines runs, or every day when
+         it sits in none. A log on any other day still shows. */
+      const due = !entry.blocks.length || entry.blocks.some((block) => routineBlockRunsOn(block, day));
       const mark = log || due ? itemMark(log, day, today, rest, entry.start) : "none";
       if (mark === "none") continue;
       rows.push({

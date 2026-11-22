@@ -481,6 +481,27 @@ describe("Focus order and history follow the routine's days and times", () => {
     assert.deepEqual(marks("2026-11-21"), ["logged"], "a log on an off day still shows");
     assert.deepEqual(marks("2026-11-22"), [], "nothing is open on Sunday");
   });
+
+  test("History marks a typed item in no routine missed on each day since its start", async () => {
+    const { routineHistoryView } = await import("../logger/js/shared/routine-history.js");
+    const view = {
+      blocks: [],
+      items: [
+        { id: "i1", name: "Example peptide", kind: "dose", type: "peptide", startDate: "2026-11-20", deletedAt: null },
+        { id: "i2", name: "Example untyped", kind: "check", startDate: "2026-11-20", deletedAt: null },
+      ],
+      placements: [],
+      compounds: [],
+      logs: [{ id: "l1", itemId: "i1", day: "2026-11-20", status: "done", at: 1, deletedAt: null }],
+      prefs: {},
+    };
+    const history = routineHistoryView(view, { month: "2026-11", day: "2026-11-22", today: "2026-11-22", tab: "logged" });
+    const marks = (day) => (history.days.find((row) => row.day === day) || { items: [] }).items.map((row) => `${row.itemId}:${row.mark}`);
+    assert.deepEqual(marks("2026-11-19"), [], "nothing before its start");
+    assert.deepEqual(marks("2026-11-20"), ["i1:logged"]);
+    assert.deepEqual(marks("2026-11-21"), ["i1:missed"], "a gap shows as missed");
+    assert.deepEqual(marks("2026-11-22"), ["i1:open"]);
+  });
 });
 
 describe("type rows, early mornings and items taken out of routines", () => {
