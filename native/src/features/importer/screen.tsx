@@ -12,11 +12,11 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
-  Pressable,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import { Tappable as Pressable } from "@/components/tappable";
 import { getSharedPayloads, clearSharedPayloads } from "expo-sharing";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../auth/provider";

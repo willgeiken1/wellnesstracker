@@ -1,4 +1,5 @@
-import { View, Pressable, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Tappable as Pressable } from "@/components/tappable";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useState } from "react";
 import { equipmentLabel, pluralize, t } from "@/i18n/en";

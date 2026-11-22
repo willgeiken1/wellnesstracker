@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { Tappable as Pressable } from '@/components/tappable';
 import Svg from 'react-native-svg';
 import { RingArc } from '@/components/ring-arc';
 import { BAR_LOOKS, INTENSITIES, KEYPAD_LOOKS, MOTIONS, PRESET_IDS, PRESETS, RING_LOOKS, SELECTOR_LOOKS, type Intensity, type Motion, type Preset, type RingLook } from '@/design/looks';

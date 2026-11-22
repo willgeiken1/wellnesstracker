@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import { Tappable as Pressable } from '@/components/tappable';
 import { router } from 'expo-router';
 import { Button, touchTarget } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
