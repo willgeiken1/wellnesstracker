@@ -506,6 +506,7 @@
 .dr-add-block { margin-top: 2px; }
 .dr-history,
 .dr-edit-log,
+.dr-edit-item,
 .dr-calc-open,
 .dr-history-open {
   min-height: 44px;

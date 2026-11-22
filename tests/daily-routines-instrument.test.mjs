@@ -482,3 +482,35 @@ describe("Focus order and history follow the routine's days and times", () => {
     assert.deepEqual(marks("2026-11-22"), [], "nothing is open on Sunday");
   });
 });
+
+describe("type rows, early mornings and items taken out of routines", () => {
+  test("a row on a type tab opens the item editor, open or done", () => {
+    signIn();
+    assert.ok(addRoutineItem(app.state, "", { name: "Example magnesium", kind: "check", type: "supplement", blockIds: [] }));
+    const id = item("Example magnesium").id;
+    app.ui.routineView = "supplement";
+    const edit = new RegExp(`class="dr-edit-item" data-action="routines-edit-item" data-item-id="${id}"`);
+    assert.match(dailyRoutinesHTML(), edit, "open row");
+    assert.ok(app.logRoutineItem(app.state, id, "done"));
+    assert.match(dailyRoutinesHTML(), edit, "done row");
+  });
+
+  test("Focus mode looks at Morning after the day rolls over but before it starts", () => {
+    signIn(4, 30);
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example early", kind: "check" }));
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    assert.equal(routines.routineFocusBlockId(projected, new Date(2026, 10, 22, 4, 30, 0)), "block_default_morning");
+  });
+
+  test("an untyped item taken out of its last routine moves to the Other tab", () => {
+    signIn();
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example stretch", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example twice", kind: "check", blockIds: ["block_default_morning", "block_default_night"] }));
+    const morning = block("block_default_morning");
+    const window = routineBlockWindow(morning);
+    assert.ok(saveRoutineBlock(app.state, { blockId: morning.id, name: morning.name, startMin: window.startMin, endMin: window.endMin, itemIds: [] }));
+    assert.equal(item("Example stretch").type, "other");
+    assert.equal(item("Example twice").type, undefined, "it still has Night");
+    assert.match(dailyRoutinesHTML(), /data-view="other"/);
+  });
+});

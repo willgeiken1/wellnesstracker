@@ -30,7 +30,7 @@ import { routineSupplyView } from "../shared/routine-supply.js";
 export const ROUTINE_DETAILS_HOLD_MS = 500;
 export const ROUTINE_DETAILS_MOTION_MS = 220;
 const HOLD_SLOP = 10;
-const PRESS_SKIP = ".dr-skip, .dr-undo, .dr-history, .dr-rename, .dr-minus, .dr-handle, .dr-log-all, .dr-edit-log, .dr-swatch, .dr-add, .dr-dup, .dr-rest-btn, .dr-reveal, .dr-block-toggle, .dr-pep-log, .dr-pep-name, .dr-pep-details";
+const PRESS_SKIP = ".dr-skip, .dr-undo, .dr-history, .dr-rename, .dr-minus, .dr-handle, .dr-log-all, .dr-edit-log, .dr-swatch, .dr-add, .dr-dup, .dr-rest-btn, .dr-reveal, .dr-block-toggle, .dr-pep-log, .dr-pep-name, .dr-pep-details, .dr-edit-item";
 const QUARTERS = Object.freeze([
   Object.freeze({ value: "0.25", label: "¼" }),
   Object.freeze({ value: "0.5", label: "½" }),

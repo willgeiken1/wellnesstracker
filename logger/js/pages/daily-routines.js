@@ -1583,6 +1583,13 @@ export function saveRoutineBlock(state, draft) {
       for (const itemId of wanted) next = placeInBlock(next, id, itemId, at);
       const keep = new Set(wanted);
       for (const place of (next.placements || []).filter((row) => isLive(row) && row.blockId === id && !keep.has(row.itemId))) {
+        /* An untyped item shows only in its routines. Taken out of its last
+           one, it moves to the Other tab rather than out of sight. */
+        const item = (next.items || []).find((row) => isLive(row) && row.id === place.itemId);
+        const elsewhere = (next.placements || []).some((row) => isLive(row) && row.itemId === place.itemId && row.blockId !== id && (next.blocks || []).some((block) => isLive(block) && block.id === row.blockId));
+        if (item && !elsewhere && !routineItemType(item, next.prefs)) {
+          next = revisePlanEntity(next, "items", item.id, { type: "other" }, at);
+        }
         next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: place.id }, at);
       }
     }
@@ -2308,6 +2315,13 @@ function editLogButton(row) {
   return `<button type="button" class="dr-edit-log" data-action="routines-log-edit" data-log-id="${esc(row.log.id)}">Edit <span class="dr-vh">${esc(row.item.name)}</span></button>`;
 }
 
+/* On a type tab an item may sit in no routine, so its row opens the item
+   editor itself. */
+function editItemButton(row) {
+  if (!row.typed || !row.item) return "";
+  return `<button type="button" class="dr-edit-item" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="">Edit <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+}
+
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
   const time = rowTimeHTML(row, row.block, row.nextId);
@@ -2324,7 +2338,7 @@ function openRowHTML(row, projected, date, day) {
       <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}${supply}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
-    ${historyButton(row)}
+    ${historyButton(row)}${editItemButton(row)}
     <button type="button" class="dr-skip" data-action="routines-skip" data-item-id="${esc(row.item.id)}">Skip <span class="dr-vh">${esc(row.item.name)}</span></button>
   </li>`;
 }
@@ -2355,7 +2369,7 @@ function doneRowHTML(row, projected, date, day) {
   return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
     <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}<span class="dr-state">${label}</span></span>
-    <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
+    <span class="dr-done-actions">${historyButton(row)}${editItemButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
   </li>`;
 }
 
@@ -2425,7 +2439,7 @@ export function routineTypedRowsHTML(projected, items, date, day) {
   return (Array.isArray(items) ? items : []).map((item) => {
     const log = coveringLog(projected && projected.logs, item.id, day);
     const blocks = (projected.placements || []).filter((place) => place.itemId === item.id).map((place) => (projected.blocks || []).find((block) => block.id === place.blockId)).filter(Boolean);
-    const row = { item, compound: compoundFor(projected, item), log, open: !log, placement: null, block: blocks[0] || null, nextId };
+    const row = { item, compound: compoundFor(projected, item), log, open: !log, placement: null, block: blocks[0] || null, nextId, typed: true };
     return row.open ? openRowHTML(row, projected, date, day) : doneRowHTML(row, projected, date, day);
   }).join("");
 }
@@ -2525,7 +2539,11 @@ export function routineFocusBlockId(projected, date) {
     return window ? axis.place(window.startMin) : Infinity;
   };
   const sorted = live.slice().sort((a, b) => at(a) - at(b) || (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const start = sorted.findIndex((block) => block.id === moment.nowBlock.id);
+  /* After the day rolls over but before its first routine starts, the
+     routine for now is still last night's, so look from the start of today. */
+  const nowAt = axis.place(clock.getHours() * 60 + clock.getMinutes());
+  const found = sorted.findIndex((block) => block.id === moment.nowBlock.id);
+  const start = found >= 0 && nowAt < at(sorted[found]) ? 0 : found;
   for (const block of sorted.slice(Math.max(0, start))) {
     if (routineBlockRows(projected, block.id, day).some((row) => row.open)) return block.id;
   }
