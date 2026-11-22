@@ -760,4 +760,14 @@ describe("Home tiles follow routine days", () => {
     const monday = tiles.renderRoutineTileHTML(tiles.NEXT_UP_TILE_ID, { state: app.state, size: "medium", day: "2026-11-23" });
     assert.match(monday, new RegExp(`data-item-id="${id}"`));
   });
+
+  test("Next up and the tile picker include a typed item in no routine", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    signIn();
+    assert.ok(routines.saveRoutineItem(app.state, { name: "Example Compound H", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [] }));
+    const id = item("Example Compound H").id;
+    const next = tiles.renderRoutineTileHTML(tiles.NEXT_UP_TILE_ID, { state: app.state, size: "medium", day: "2026-11-22" });
+    assert.match(next, new RegExp(`data-item-id="${id}"`), "the peptide is next, not All done");
+    assert.ok(tiles.routineTrayEntries(app.state, [], "").some((row) => row.id === tiles.routineItemTileId(id)));
+  });
 });

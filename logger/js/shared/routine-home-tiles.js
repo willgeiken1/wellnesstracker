@@ -228,6 +228,14 @@ function itemsInOrder(view, day = "") {
       out.push({ block, item: byId.get(row.itemId) });
     });
   });
+  /* A typed item no shown routine holds lives on its tab and is due every
+     day, so Next up and the tile picker list it after the routines. */
+  const shown = new Set((view.blocks || []).map((block) => block && block.id));
+  const held = new Set((view.placements || []).filter((row) => row && shown.has(row.blockId)).map((row) => row.itemId));
+  const loose = (view.items || [])
+    .filter((item) => item && !held.has(item.id) && !seen.has(item.id) && routineItemType(item, view.prefs))
+    .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  loose.forEach((item) => out.push({ block: null, item }));
   return out;
 }
 
