@@ -675,6 +675,26 @@ describe("rollover hour and synced custom types", () => {
     assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 23, 12, 0, 0), "2026-11-23"), "Tue");
   });
 
+  test("a dose on a day its routine doesn't run is not shown as due now", () => {
+    /* 2026-11-23 is a Monday (0). The routine runs Mondays only. */
+    const item = { id: "item_m", name: "Example Compound M", kind: "dose", deletedAt: null };
+    const projected = {
+      blocks: [{ id: "block_m", name: "Example Monday", startMin: 480, endMin: 600, days: [0], deletedAt: null }],
+      placements: [{ id: "place_m", itemId: "item_m", blockId: "block_m", deletedAt: null }],
+      compounds: [], items: [item], logs: [], settings: {},
+    };
+    assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 24, 12, 0, 0), "2026-11-24"), "Mon", "Tuesday is an off day");
+    assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 23, 12, 0, 0), "2026-11-23"), "Now", "Monday's 08:00 was missed");
+  });
+
+  test("a check timed after midnight counts in the same routine day", () => {
+    /* Default rollover at 04:00, so 01:00 tonight is still Monday's routine day. */
+    const item = { id: "item_c", name: "Example late check", kind: "check", timeMin: 60, deletedAt: null };
+    const projected = { blocks: [], placements: [], compounds: [], items: [item], logs: [], settings: {} };
+    assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 23, 20, 0, 0), "2026-11-23"), "01:00");
+    assert.equal(routines.routineNextText(projected, item, new Date(2026, 10, 24, 2, 0, 0), "2026-11-23"), "Now", "past 01:00, before rollover");
+  });
+
   test("custom types past the limit after a sync all keep their tabs", () => {
     const prefs = { customTypes: Array.from({ length: types.CUSTOM_TYPE_MAX + 1 }, (_, index) => ({ id: `type_example${index}`, name: `Example ${index}` })) };
     const list = types.routineCustomTypes(prefs);

@@ -18,7 +18,7 @@ import {
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, routineBlockRunsOn, routineBlockStartMin, routineBlockWindow, routineDayKey, routineDayRolloverHour, routineMinuteOfDay } from "../shared/routine-dose.js";
+import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, nextItemCountdown, routineBlockRunsOn, routineBlockStartMin, routineBlockWindow, routineDayKey, routineDayRolloverHour, routineMinuteOfDay } from "../shared/routine-dose.js";
 import {
   CUSTOM_TYPE_MAX,
   migrateRoutineTypes,
@@ -361,58 +361,28 @@ export function routineDayComplete(projected, day) {
   });
 }
 
-function blockStartsFor(projected, item) {
-  const own = routineMinuteOfDay(item && item.timeMin);
-  if (own != null) return [own];
-  const placed = new Set();
-  for (const place of projected && projected.placements ? projected.placements : []) {
-    if (isLive(place) && place.itemId === item.id && typeof place.blockId === "string") placed.add(place.blockId);
-  }
-  const starts = [];
-  for (const block of projected && projected.blocks ? projected.blocks : []) {
-    if (!isLive(block) || block.hidden === true || !placed.has(block.id)) continue;
-    const start = routineBlockStartMin(block);
-    if (typeof start === "number") starts.push(start);
-  }
-  starts.sort((a, b) => a - b);
-  return starts;
-}
-
-/* Overdue means every start named on this item has passed today.
-   A later block the same day is still upcoming, so the row is not overdue.
-   A renamed block has no start, so it is not overdue and has no countdown. */
+/* Overdue means every time today's routine day had for this item has
+   passed unlogged. A later block the same day is still upcoming, and a
+   day none of its routines runs is not overdue. A renamed block has no
+   start, so it is not overdue and has no countdown. */
 /* Ranking passes no logs, so every item still counts from its own time.
    A label for an item already handled today passes the real logs, so it
    moves on to the next time. */
 function itemTiming(projected, item, date, day, logs = null) {
   if (!item || !(date instanceof Date) || Number.isNaN(date.getTime())) return { waitMin: null, overdue: false };
-  if (item.kind === "dose") {
-    const result = nextDoseCountdown({
-      item,
-      blocks: projected && projected.blocks,
-      placements: projected && projected.placements,
-      logs: Array.isArray(logs) ? logs : [],
-      date,
-      day,
-      hour: projected && projected.settings && projected.settings.dayRolloverHour,
-    });
-    if (!result || typeof result.waitMin !== "number") return { waitMin: null, overdue: false };
-    return { waitMin: result.waitMin, overdue: result.tomorrow === true };
-  }
-  const starts = blockStartsFor(projected, item);
-  if (!starts.length) return { waitMin: null, overdue: false };
-  const nowMin = date.getHours() * 60 + date.getMinutes();
-  if (Array.isArray(logs) && coveringLog(logs, item.id, day)) return { waitMin: starts[0] + 24 * 60 - nowMin, overdue: false };
-  let target = null;
-  for (const start of starts) {
-    if (start >= nowMin) {
-      target = start;
-      break;
-    }
-  }
-  const overdue = target == null;
-  if (target == null) target = starts[0] + 24 * 60;
-  return { waitMin: target - nowMin, overdue };
+  /* Doses and checks share one clock: the rollover hour decides which
+     routine day a time belongs to, and an off day is not overdue. */
+  const result = nextItemCountdown({
+    item,
+    blocks: projected && projected.blocks,
+    placements: projected && projected.placements,
+    logs: Array.isArray(logs) ? logs : [],
+    date,
+    day,
+    hour: projected && projected.settings && projected.settings.dayRolloverHour,
+  });
+  if (!result || typeof result.waitMin !== "number") return { waitMin: null, overdue: false };
+  return { waitMin: result.waitMin, overdue: result.missed === true, today: result.tomorrow !== true };
 }
 
 function placementOrder(projected, itemId) {
@@ -2508,7 +2478,9 @@ export function routineNextText(projected, item, date, day) {
   if (timing.waitMin < 1) return "Now";
   const at = new Date(date.getTime() + timing.waitMin * 60000);
   const sameDay = at.getFullYear() === date.getFullYear() && at.getMonth() === date.getMonth() && at.getDate() === date.getDate();
-  if (sameDay) return routineClock24(at.getHours() * 60 + at.getMinutes());
+  /* A time after midnight but before the rollover hour is still today's
+     routine day, so it shows as a time, not tomorrow's weekday. */
+  if (sameDay || timing.today === true) return routineClock24(at.getHours() * 60 + at.getMinutes());
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][at.getDay()];
 }
 

@@ -133,8 +133,16 @@ function routineDayOfStart(calendarDay, startMin, boundaryMin) {
    next routine day's start. That start can be later this calendar morning
    when the clock is still before the rollover hour. Hours come from the
    Date's local clock, not its UTC fields. */
-export function nextDoseCountdown({ item, blocks, placements, logs, date, day, hour }) {
-  if (!item || item.kind !== "dose" || typeof item.id !== "string" || !item.id) return null;
+export function nextDoseCountdown(query) {
+  if (!query || !query.item || query.item.kind !== "dose") return null;
+  return nextItemCountdown(query);
+}
+
+/* The same clock for any item, dose or check. missed is true only when
+   today's routine day had a time for it that has passed unlogged; an
+   off day, when no routine of it runs, is never missed. */
+export function nextItemCountdown({ item, blocks, placements, logs, date, day, hour }) {
+  if (!item || typeof item.id !== "string" || !item.id) return null;
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
   if (typeof day !== "string" || !DAY.test(day)) return null;
   const placed = new Set();
@@ -179,5 +187,6 @@ export function nextDoseCountdown({ item, blocks, placements, logs, date, day, h
   const pool = !logged && due.length ? due : later;
   if (!pool.length) return null;
   pool.sort((a, b) => a.waitMin - b.waitMin);
-  return { waitMin: pool[0].waitMin, tomorrow: pool[0].belongs !== day };
+  const runsToday = starts.some(({ days }) => days.includes(routineWeekday(day)));
+  return { waitMin: pool[0].waitMin, tomorrow: pool[0].belongs !== day, missed: !logged && !due.length && runsToday };
 }
