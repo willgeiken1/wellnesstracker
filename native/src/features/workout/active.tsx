@@ -36,6 +36,7 @@ import { RestTimer } from "./timer";
 import { restOpens } from "./rest-pref";
 import { FinishSheet } from "./finish";
 import { tick } from "./haptics";
+import { useLayoutMotion } from "@/components/layout-motion";
 import type { SyncStatus } from "@/data/sync/engine";
 export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) {
   const { store, auth } = useWorkout(),
@@ -106,6 +107,7 @@ function Logger({
   useKeepAwake("workout");
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const glide = useLayoutMotion();
   const params = useLocalSearchParams<{ fixtureState?: string }>();
   const selectedFixture = fixtureState ?? params.fixtureState;
   const focused = useIsFocused();
@@ -143,6 +145,11 @@ function Logger({
     } catch {
       setError(t("workoutSaveError"));
     }
+  }
+  /** For changes that add, remove, move or fold rows: the list glides to its new shape. */
+  function move(action: () => void) {
+    glide();
+    run(action);
   }
   function weightHint(entry: Row, index: number) {
     const fixture =
@@ -336,7 +343,7 @@ function Logger({
   const confirmRemoveSet = (entryId: string, index: number) =>
     Alert.alert(t('removeSet'), undefined, [
       {text:t('cancel'), style:'cancel'},
-      {text:t('remove'), style:'destructive', onPress:() => run(() => store.removeSet(entryId,index))},
+      {text:t('remove'), style:'destructive', onPress:() => move(() => store.removeSet(entryId,index))},
     ]);
   const current = cursor
     ? entries.find((e) => e.id === cursor.entryId)
@@ -472,7 +479,7 @@ function Logger({
             name={String(upcomingEntry.data.exercise)}
             detail={upcomingDetail(upcomingEntry, upcoming.index)}
             onPress={() => edit(upcomingEntry.id, upcoming.index, "weight")}
-            onSkip={store.sets(upcomingEntry.id).length > 0 ? undefined : () => run(() => store.skipExercise(upcomingEntry.id))}
+            onSkip={store.sets(upcomingEntry.id).length > 0 ? undefined : () => move(() => store.skipExercise(upcomingEntry.id))}
             onSwap={() => swap(upcomingEntry.id, "swap")}
           />
         )}
@@ -524,13 +531,14 @@ function Logger({
                       ? t(collapsed ? "expandExercise" : "collapseExercise")
                       : undefined
                   }
-                  onPress={() =>
+                  onPress={() => {
+                    glide();
                     setOpen((ids) =>
                       ids.includes(e.id)
                         ? ids.filter((id) => id !== e.id)
                         : [...ids, e.id],
-                    )
-                  }
+                    );
+                  }}
                   style={{ flex: 1, minHeight: compact ? 44 : undefined, justifyContent: "center" }}
                 >
                   <ThemedText
@@ -559,13 +567,14 @@ function Logger({
                   <IconButton
                     name="down"
                     label={t(collapsed ? "expandExercise" : "collapseExercise")}
-                    onPress={() =>
+                    onPress={() => {
+                      glide();
                       setOpen((ids) =>
                         ids.includes(e.id)
                           ? ids.filter((id) => id !== e.id)
                           : [...ids, e.id],
-                      )
-                    }
+                      );
+                    }}
                   />
                 )}
 
@@ -573,7 +582,7 @@ function Logger({
                   accessibilityRole="button"
                   accessibilityLabel={`${e.data.exercise}, ${t("exerciseOptions")}`}
                   accessibilityState={{ expanded: options === e.id }}
-                  onPress={() => setOptions(options === e.id ? null : e.id)}
+                  onPress={() => { glide(); setOptions(options === e.id ? null : e.id); }}
                   style={layout.cell}
                 >
                   <View style={{ width: 34, height: 34, borderRadius: 99, alignItems: "center", justifyContent: "center", backgroundColor: colors["surface-2"] }}>
@@ -583,16 +592,16 @@ function Logger({
               </View>
                 {store.skipped(e.id) && <ThemedText>{t('skippedExercise')}</ThemedText>}
               {options === e.id && <View style={layout.stack}>
-                <Button label={t('cancel')} variant="secondary" onPress={() => setOptions(null)} />
-                <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} disabled={!store.skipped(e.id) && store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
+                <Button label={t('cancel')} variant="secondary" onPress={() => { glide(); setOptions(null); }} />
+                <Button label={t(store.skipped(e.id) ? 'resumeExercise' : 'skipExercise')} disabled={!store.skipped(e.id) && store.sets(e.id).length > 0} variant="secondary" onPress={() => move(() => store.skipExercise(e.id, !store.skipped(e.id)))} />
                 {(['swap','replace'] as const).map(mode => <Button key={mode} label={t(mode === 'swap' ? 'swapExercise' : 'replaceExercise')} variant="secondary" onPress={() => swap(e.id, mode)} />)}
                 <Button label={t(store.isUnilateral(e.id) ? 'bilateral' : 'unilateral')} disabled={store.sets(e.id).length > 0} variant="secondary" onPress={() => run(() => store.setUnilateral(e.id, !store.isUnilateral(e.id)))} />
                 <SupersetControls currentId={e.id} items={entries.filter(entry => !store.skipped(entry.id)).map(entry => ({id:entry.id,name:String(entry.data.exercise),group:store.supersetGroup(entry)}))} onLink={ids => run(() => store.linkSuperset(ids))} onUnlink={() => run(() => store.unlinkSuperset(e.id))} />
                 {!past && <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />}
-                <Button label={t('addSet')} variant="secondary" onPress={() => run(() => store.addSet(e.id))} />
-                <Button label={t('moveUp')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, -1))} />
-                <Button label={t('moveDown')} variant="secondary" onPress={() => run(() => store.moveEntry(e.id, 1))} />
-                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),style:'destructive',onPress:() => run(() => store.removeExercise(e.id))}])} />
+                <Button label={t('addSet')} variant="secondary" onPress={() => move(() => store.addSet(e.id))} />
+                <Button label={t('moveUp')} variant="secondary" onPress={() => move(() => store.moveEntry(e.id, -1))} />
+                <Button label={t('moveDown')} variant="secondary" onPress={() => move(() => store.moveEntry(e.id, 1))} />
+                <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),style:'destructive',onPress:() => move(() => store.removeExercise(e.id))}])} />
               </View>}
               {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
               {!collapsed && !store.skipped(e.id) && (
@@ -669,7 +678,7 @@ function Logger({
                       testID={`add-set-${exerciseIndex}`}
                       label={`+ ${t("addSet")}`}
                       accessibilityLabel={`${name}, ${t("addSet")}`}
-                      onPress={() => run(() => store.addSet(e.id))}
+                      onPress={() => move(() => store.addSet(e.id))}
                     />
                     <MachineSetup compact store={store} name={name} equipment={equipment} />
                   </View>

@@ -1,6 +1,7 @@
 // These tests cover the AI features, which stay in the code for a later update; the launch build hides them.
 jest.mock('../src/features/ai-launch', () => ({ AI_FEATURES_ENABLED: true }));
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { LayoutAnimation } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { foodTargets } from '../src/features/food/model';
 import { FoodScreen } from '../src/features/food/screen';
@@ -22,7 +23,10 @@ test('four meals, manual entry names day, blank nutrients, edit portions, delete
  await openRow('Synthetic oats');await fireEvent.press(screen.getByRole('button',{name:'Edit Synthetic oats'}));
  await fireEvent.changeText(screen.getByLabelText('Portion multiplier'),'2');await fireEvent.press(screen.getByRole('button',{name:'Save to today'}));
  expect(repo.list('food_entries')[0].data.energy_kj).toBeCloseTo(836.8);
+ // Deleting a row glides the list closed instead of jumping.
+ const glide=jest.spyOn(LayoutAnimation,'configureNext').mockImplementation(()=>{});
  await openRow('Synthetic oats');await fireEvent.press(screen.getByRole('button',{name:'Delete Synthetic oats'}));expect(repo.list('food_entries')).toHaveLength(0);
+ expect(glide).toHaveBeenCalled();glide.mockRestore();
  await fireEvent.press(screen.getByRole('button',{name:'Undo delete'}));expect(repo.list('food_entries')).toHaveLength(1);
 });
 test('past day selected explicitly, future blocked, missing stats inline target entry',async()=>{

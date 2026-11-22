@@ -7,6 +7,7 @@ import { AppState, Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '../../components/card';
 import { useTheme } from '../../design/theme-provider';
+import { useLayoutMotion } from '../../components/layout-motion';
 import { tokens } from '../../design/tokens';
 import type { Repository } from '../../data/repository';
 import { Button, touchTarget } from '../../components/button';
@@ -90,6 +91,9 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const early=attributedDay()!==today();
  const chooseDay=(value:string)=>{setAiMode(null);setScanning(false);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
  const run=(action:()=>void)=>{try{action();setStatus(null);}catch{setStatus(t('foodFailure'));}};
+ const glide=useLayoutMotion();
+ // Changes that add or remove rows glide to the new list instead of jumping.
+ const move=(action:()=>void)=>{glide();run(action);};
  const {colors}=useTheme(),foodColor=colors.food;
  const [openEntry,setOpenEntry]=useState<string|null>(null),[mealMenu,setMealMenu]=useState<string|null>(null);
  const choose=(method:Method)=>{setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else{setLibrary(!library);setEntry(null);}};
@@ -127,7 +131,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
   </View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
-  {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>run(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
+  {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>move(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
   {scanning&&<Card style={card}><FoodScanner repo={repo} onChoose={food=>{setEntry({meal:selectedMeal,initial:food});setScanning(false);}} onManual={()=>{setEntry({meal:selectedMeal});setScanning(false);}} onClose={()=>setScanning(false)}/></Card>}
   {AI_FEATURES_ENABLED&&aiMode&&<Card style={card}><FoodAiEntry key={aiMode+day+selectedMeal} repo={repo} fallbackId={fallbackId} mode={aiMode} day={day} meal={selectedMeal} onClose={()=>setAiMode(null)} onManual={()=>{setAiMode(null);setEntry({meal:selectedMeal});}}/></Card>}
   {entry&&<Card style={card}><FoodEntry key={entry.id??'new'} initial={entry.initial} editing={entry.id!==undefined} day={day} onClose={()=>setEntry(null)} onSave={(food,multiple)=>{const row=saveFood(repo,day,entry.meal,food,multiple,entry.id);if(fallbackId!==undefined){attachFallback(repo,row.id,fallbackId);setFallbackId(undefined);}if(entry.id&&aiState(repo).entries[entry.id])confirmEstimate(repo,entry.id);setEntry(null);}}/></Card>}
@@ -156,16 +160,16 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
     </View>
     {menu&&<View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6}}>
      <Act text={t('foodActRename')} label={t('foodRename').replace('{name}',meal.name)} onPress={()=>setRename({id:meal.id,name:meal.name})}/>
-     <Act text={t('foodActCopy')} label={t('foodCopy').replace('{name}',meal.name)} onPress={()=>run(()=>copyYesterday(repo,day,meal.id))}/>
+     <Act text={t('foodActCopy')} label={t('foodCopy').replace('{name}',meal.name)} onPress={()=>move(()=>copyYesterday(repo,day,meal.id))}/>
      <Act text={t('foodActCombo')} label={t('foodSaveCombo').replace('{name}',meal.name)} disabled={!items.length} onPress={()=>setCombo({meal:meal.id,name:meal.name})}/>
     </View>}
-    {!!quick.length&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{quick.map((food,i)=><Button key={i} label={t('foodLogSaved').replace('{name}',String(food.name))} variant="secondary" onPress={()=>run(()=>{saveFood(repo,day,meal.id,food);})}/>)}</View>}
+    {!!quick.length&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{quick.map((food,i)=><Button key={i} label={t('foodLogSaved').replace('{name}',String(food.name))} variant="secondary" onPress={()=>move(()=>{saveFood(repo,day,meal.id,food);})}/>)}</View>}
     {items.map((row,index)=>{
      const name=String(row.data.name),energy=t('foodEnergy').replace('{value}',kcal(row.data.energy_kj)===null?'—':String(kcal(row.data.energy_kj)));
      const pending=aiState(repo).entries[row.id]?.confirmed===false,open=openEntry===row.id;
      const known=[row.data.protein_g,row.data.carbs_g,row.data.fat_g].some(v=>v!=null);
      return <View key={row.id} style={{borderTopWidth:index?1:0,borderTopColor:colors['surface-2'],gap:6}}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('foodEntryActions').replace('{name}',name).replace('{energy}',energy)} accessibilityState={{expanded:open}} onPress={()=>setOpenEntry(open?null:row.id)}
+      <Pressable accessibilityRole="button" accessibilityLabel={t('foodEntryActions').replace('{name}',name).replace('{energy}',energy)} accessibilityState={{expanded:open}} onPress={()=>{glide();setOpenEntry(open?null:row.id);}}
        style={{flexDirection:'row',alignItems:'center',gap:10,minHeight:52}}>
        <LocalMealThumbnail data={aiState(repo).entries[row.id]?.thumbnail}/>
        <View style={{flex:1}}>
@@ -179,7 +183,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
        <Act text={t('edit')} label={t('foodEdit').replace('{name}',name)} onPress={()=>{setAiMode(null);setScanning(false);setSelectedMeal(meal.id);setEntry({id:row.id,initial:row.data,meal:meal.id});}}/>
        <Act text={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodActUnfavorite':'foodActFavorite')} label={t(allFavorites(repo,meal.id).some(f=>f.name===row.data.name)?'foodUnfavorite':'foodFavorite').replace('{name}',name)} onPress={()=>run(()=>toggleFavorite(repo,meal.id,row.data))}/>
        <Act text={t('foodActKeep')} label={t('foodKeep').replace('{name}',name)} onPress={()=>run(()=>{saveReusable(repo,row.data);})}/>
-       <Act danger text={t('delete')} label={t('foodDelete').replace('{name}',name)} onPress={()=>run(()=>{setOpenEntry(null);setUndo(deleteFood(repo,row.id));})}/>
+       <Act danger text={t('delete')} label={t('foodDelete').replace('{name}',name)} onPress={()=>move(()=>{setOpenEntry(null);setUndo(deleteFood(repo,row.id));})}/>
       </View>}
      </View>;
     })}
