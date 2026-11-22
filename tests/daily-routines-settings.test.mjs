@@ -24,7 +24,14 @@ SpyNote.requestPermission = () => {
 };
 SpyNote.permission = "default";
 
-const sheet = { id: "sheet", hidden: true, innerHTML: "" };
+const sheet = {
+  id: "sheet",
+  hidden: true,
+  innerHTML: "",
+  dataset: {},
+  classList: { add() {}, remove() {} },
+  querySelector() { return null; },
+};
 globalThis.Notification = SpyNote;
 Object.defineProperty(globalThis.navigator, "serviceWorker", {
   configurable: true,

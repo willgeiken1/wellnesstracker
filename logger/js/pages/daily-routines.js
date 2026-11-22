@@ -565,22 +565,23 @@ function amountMarkup(text) {
    amount change does not leave the old U-100 units on the row. */
 function freshCalculatorNote(item, compound) {
   if (!item || typeof item.calcVial !== "number" || typeof item.calcWater !== "number") return "";
-  const doseAmount = compound && typeof compound.amount === "number" ? compound.amount : item.calcDose;
-  const doseUnit = compound && typeof compound.unit === "string" && compound.unit ? compound.unit : item.calcDoseUnit;
+  if (!compound || typeof compound.amount !== "number" || typeof compound.unit !== "string" || !compound.unit) return "";
   return reconstitutionNoteText(reconstitutionResult({
     vialAmount: item.calcVial,
     waterMl: item.calcWater,
-    doseAmount,
+    doseAmount: compound.amount,
     vialUnit: item.calcVialUnit,
-    doseUnit,
+    doseUnit: compound.unit,
   }));
 }
 
-/* Calculator note on the item. A per-dose log note stays off this row. */
+/* Calculator note on the item. A per-dose log note stays off this row.
+   Once the calculator inputs are saved, a failed redraw shows nothing
+   rather than the previous units. */
 function itemNoteMarkup(item, compound) {
   if (!item || item.kind !== "dose") return "";
-  const fresh = freshCalculatorNote(item, compound);
-  const note = fresh || (typeof item.note === "string" ? item.note.trim() : "");
+  const hasCalc = typeof item.calcVial === "number" && typeof item.calcWater === "number";
+  const note = hasCalc ? freshCalculatorNote(item, compound) : (typeof item.note === "string" ? item.note.trim() : "");
   if (!note) return "";
   return `<span class="dr-item-note">${esc(note)}</span>`;
 }
