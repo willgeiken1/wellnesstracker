@@ -218,23 +218,72 @@
 .dr-rows,
 .dr-done { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .dr-row { display: flex; align-items: center; gap: 8px; opacity: 1; }
-.dr-row { flex-wrap: wrap; }
-.dr-row > .dr-log { flex: 1 1 100%; }
-.dr-row-done > .dr-copy { flex: 1 1 auto; }
-.dr-done-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+/* One surface per item: the log target, its details, and an action rail with
+   Skip (or Undo) all sit inside the same rounded row. */
+.dr-row {
+  position: relative;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  min-height: 56px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .74);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(0, 0, 0, .06);
+  overflow: hidden;
+}
+.dr-row[data-overdue="true"] { box-shadow: inset 4px 0 0 #e9a23b, inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(0, 0, 0, .06); }
+.dr-row > .dr-log { flex: 1 1 auto; }
+.dr-row-done { align-items: center; padding-left: 12px; background: rgba(255, 255, 255, .46); box-shadow: none; }
+.dr-row-done > .dr-copy { flex: 1 1 auto; padding: 8px 10px; }
+.dr-row-done > .dr-mark { margin-left: 0; }
+.dr-row-done[data-state="skipped"] { background: rgba(255, 255, 255, .3); outline: 1.5px dashed rgba(20, 20, 20, .28); outline-offset: -1.5px; }
+.dr-row-done[data-state="skipped"] .dr-name { color: var(--on-pastel); }
+.dr-rail {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  align-self: stretch;
+  padding: 4px;
+  gap: 2px;
+  border-left: 1px solid rgba(20, 20, 20, .1);
+}
+.dr-rail-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 6px;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.dr-rail-labeled { min-width: 52px; }
+.dr-rail-icon { width: 20px; height: 20px; flex: 0 0 auto; }
+.dr-rail-btn:hover { background: rgba(20, 20, 20, .07); }
+.dr-rail-btn:active { background: rgba(20, 20, 20, .14); }
+.dr-rail-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.dr-rail .dr-skip { background: rgba(20, 20, 20, .06); }
 .dr-log {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 8px 10px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, .72);
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 18px 0 0 18px;
+  background: transparent;
   color: var(--ink);
   text-align: left;
 }
+.dr-log:active { background: rgba(20, 20, 20, .06); }
+.dr-log:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .dr-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; min-width: 0; flex: 1 1 auto; }
 .dr-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; min-width: 0; width: 100%; }
 .dr-name {
@@ -258,9 +307,9 @@
 }
 .dr-row-done .dr-copy { flex: 1; flex-direction: column; align-items: flex-start; gap: 1px; }
 .dr-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
   border: 2px solid var(--ink);
   flex: 0 0 auto;
   display: grid;
@@ -269,14 +318,22 @@
   font-weight: 700;
   line-height: 1;
 }
-.dr-mark-on { background: var(--ink); color: #fff; border-color: var(--ink); }
-.dr-mark-skip { background: transparent; }
-.dr-skip {
-  padding: 0 12px;
-  border-radius: 14px;
-  background: rgba(20, 20, 20, .1);
-  font-size: 14px;
+.dr-log .dr-mark::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 9.5 17 19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 9.5 17 19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+.dr-log:hover .dr-mark,
+.dr-log:focus-visible .dr-mark { color: rgba(20, 20, 20, .38); }
+.dr-log .dr-mark { color: transparent; }
+.dr-mark-on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.dr-mark-skip { background: transparent; border-style: dashed; }
+.dr-state { margin-top: 2px; padding: 1px 8px; border-radius: 999px; background: rgba(20, 20, 20, .08); font-size: 12px; line-height: 1.4; }
+.dr-state[data-state="done"],
+.dr-state[data-state="partial"] { background: var(--ink); color: #fff; }
 .dr-reveal,
 .dr-add,
 .dr-log-all {
@@ -504,8 +561,6 @@
 .dr-block-pick[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .dr-evidence { margin: 8px 0 12px; font-size: 14px; color: var(--muted); }
 .dr-add-block { margin-top: 2px; }
-.dr-history,
-.dr-edit-log,
 .dr-calc-open,
 .dr-history-open {
   min-height: 44px;
@@ -524,8 +579,34 @@
   width: 100%;
   margin-top: 8px;
 }
+/* Detail chips under the name: countdown, last dose, overdue, supply. */
+.dr-next-dose,
+.dr-last,
+.dr-supply {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, .07);
+  line-height: 1.3;
+}
+.dr-next-dose::before,
+.dr-last::before,
+.dr-supply::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: var(--dr-chip-icon) center / contain no-repeat;
+  mask: var(--dr-chip-icon) center / contain no-repeat;
+}
+.dr-next-dose { --dr-chip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='13' r='8'/%3E%3Cpath d='M12 9v4l2.5 2M9 2.5h6'/%3E%3C/svg%3E"); }
+.dr-last { --dr-chip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 9.5 17 19 7.5'/%3E%3C/svg%3E"); }
+.dr-supply { --dr-chip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M4 8l8-4 8 4v8l-8 4-8-4z'/%3E%3Cpath d='M4 8l8 4 8-4M12 12v8'/%3E%3C/svg%3E"); }
 .dr-next-dose { font-size: 13px; font-weight: 600; }
-.dr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.dr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; width: 100%; min-width: 0; margin-top: 4px; }
 .dr-last { font-size: 13px; font-weight: 600; }
 .dr-overdue {
   display: inline-flex;

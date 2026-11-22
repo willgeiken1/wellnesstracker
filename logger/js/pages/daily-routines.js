@@ -1846,32 +1846,57 @@ function rowAttrs(row) {
   return `data-item-id="${esc(row.item.id)}" data-placement-id="${esc(id)}" data-id="${esc(id)}"`;
 }
 
+/* Row action icons. Each sits inside the row's action rail, so Skip, History,
+   Edit, and Undo read as part of the row and not as a second row of buttons. */
+const SKIP_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6.5v11l8.5-5.5z" fill="currentColor"/><path d="M18 6v12"/></svg>`;
+const HISTORY_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5V8h3.5"/><path d="M12 8.5V13l3 2"/></svg>`;
+const EDIT_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19h3.5L18.5 9 15 5.5 5 15.5z"/><path d="M13 7.5 16.5 11"/></svg>`;
+const UNDO_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/></svg>`;
+
 function historyButton(row) {
   if (!row.item || row.item.kind !== "dose" || !row.compound) return "";
-  return `<button type="button" class="dr-history" data-action="routines-history" data-compound-id="${esc(row.compound.id)}" data-item-id="${esc(row.item.id)}">History <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+  return `<button type="button" class="dr-history dr-rail-btn" data-action="routines-history" data-compound-id="${esc(row.compound.id)}" data-item-id="${esc(row.item.id)}">${HISTORY_ICON}<span class="dr-vh">History for ${esc(row.item.name)}</span></button>`;
 }
 
 function editLogButton(row) {
   if (!row.log || row.log.rest === true) return "";
-  return `<button type="button" class="dr-edit-log" data-action="routines-log-edit" data-log-id="${esc(row.log.id)}">Edit <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+  return `<button type="button" class="dr-edit-log dr-rail-btn" data-action="routines-log-edit" data-log-id="${esc(row.log.id)}">${EDIT_ICON}<span class="dr-vh">Edit ${esc(row.item.name)}</span></button>`;
+}
+
+function skipButton(row) {
+  return `<button type="button" class="dr-skip dr-rail-btn dr-rail-labeled" data-action="routines-skip" data-item-id="${esc(row.item.id)}">${SKIP_ICON}<span class="dr-rail-label">Skip</span><span class="dr-vh"> ${esc(row.item.name)}</span></button>`;
+}
+
+function undoButton(row) {
+  return `<button type="button" class="dr-undo dr-rail-btn dr-rail-labeled" data-action="routines-undo" data-log-id="${esc(row.log.id)}">${UNDO_ICON}<span class="dr-rail-label">Undo</span><span class="dr-vh"> ${esc(row.item.name)}</span></button>`;
+}
+
+function railHTML(buttons) {
+  const inner = buttons.filter(Boolean).join("");
+  /* The row itself logs on tap. The rail's own action has no handler, so a tap
+     in the gap between Skip and History does nothing instead of logging. */
+  return inner ? `<span class="dr-rail" data-action="routines-rail">${inner}</span>` : "";
+}
+
+function rowKind(row) {
+  return row.item && row.item.kind === "dose" ? "dose" : "check";
 }
 
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
   const timing = row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
   const detail = rowDetailMarkup(projected, row, date, day);
-  const supply = supplyMarkup(projected, row, day);
   const overdue = timing.overdue ? ` data-overdue="true"` : "";
   /* Skip, history, and rename keep their own actions. The log button is the
-     one the click handler uses, so a long press still reaches the details page. */
-  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue} data-action="routines-log">
+     one the click handler uses, so a long press still reaches the details page.
+     Supply comes from the meta line, so it shows once. */
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open" data-kind="${rowKind(row)}"${overdue} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}${supply}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
-    ${historyButton(row)}
-    <button type="button" class="dr-skip" data-action="routines-skip" data-item-id="${esc(row.item.id)}">Skip <span class="dr-vh">${esc(row.item.name)}</span></button>
+    ${railHTML([historyButton(row), skipButton(row)])}
   </li>`;
 }
 
@@ -1898,10 +1923,10 @@ function doneRowHTML(row, projected, date, day) {
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
   const detail = rowDetailMarkup(projected, row, date, day);
-  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
+  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}" data-kind="${rowKind(row)}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}<span class="dr-state">${label}</span></span>
-    <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
+    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}<span class="dr-state" data-state="${state}">${label}</span></span>
+    ${railHTML([historyButton(row), editLogButton(row), undoButton(row)])}
   </li>`;
 }
 
