@@ -2501,7 +2501,8 @@ export function routineBlockTilesHTML(projected, date) {
   const focusId = hiding ? routineFocusBlockId(projected, clock) : "";
   const editing = layoutEditing();
   const runs = (projected.blocks || []).filter((block) => editing || routineBlockRunsOn(block, day));
-  const shown = hiding ? runs.filter((block) => block.id === focusId) : runs;
+  const jumpId = app.ui && typeof app.ui.routineJumpBlockId === "string" ? app.ui.routineJumpBlockId : "";
+  const shown = hiding ? runs.filter((block) => block.id === focusId || block.id === jumpId) : runs;
   const next = routineNextItem(projected, clock, day);
   const nextId = next && !next.overdue && typeof next.waitMin === "number" && next.waitMin <= 30 ? next.item.id : "";
   /* The routine for now is open, and so is the next one when it starts
@@ -2519,7 +2520,7 @@ export function routineBlockTilesHTML(projected, date) {
       : peekCollapsed(block, soonId),
     last: block.id === lastId,
   })).join("");
-  const rest = hiding && !focusId
+  const rest = hiding && !focusId && !shown.length
     ? `<p class="dr-focus-done">Everything is done for now. Turn off Focus mode to see every routine.</p>`
     : "";
   return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>${rest}`;

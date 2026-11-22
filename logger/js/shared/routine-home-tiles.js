@@ -599,6 +599,8 @@ export function openRoutineTile(tileId) {
     app.ui.routineOpenBlocks = open.concat(peekId);
     app.ui.routineShutBlocks = shut;
   }
+  /* Focus mode shows one routine. The one a Home tile asked for shows too. */
+  app.ui.routineJumpBlockId = peekId || "";
   /* Show the view that holds the target: Routines for a routine, or the
      item's type tab when it sits in no routine. */
   const looseItem = !peekId && jump && jump.itemId ? (view.items || []).find((row) => row && row.id === jump.itemId) : null;

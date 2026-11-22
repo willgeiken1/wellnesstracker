@@ -629,6 +629,21 @@ describe("Home tile jumps open a later routine", () => {
     assert.equal(app.ui.routineView, "peptide");
     assert.match(dailyRoutinesHTML(), new RegExp(`data-item-id="${loose}"`));
   });
+
+  test("Focus mode still shows the routine a Home tile opened", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example morning check", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example night check", kind: "check" }));
+    app.state.dailyRoutines.prefs = { ...app.state.dailyRoutines.prefs, focusMode: true };
+    const night = item("Example night check").id;
+    app.goTab = () => {};
+    assert.doesNotMatch(dailyRoutinesHTML(), new RegExp(`data-item-id="${night}"`), "Focus shows only Morning");
+    tiles.openRoutineTile(tiles.routineItemTileId(night));
+    const html = dailyRoutinesHTML();
+    assert.match(html, new RegExp(`data-item-id="${night}"`));
+    assert.match(html, /data-block-id="block_default_morning"/, "the focus routine stays");
+  });
 });
 
 describe("Home tiles follow routine days", () => {
