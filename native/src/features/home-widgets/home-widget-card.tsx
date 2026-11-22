@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Tappable as Pressable } from '@/components/tappable';
 import type { HomeItem } from './model';
 
 /** Home slot for one placed widget. A locked one stays in place, grayed, with its service message and Reconnect (§2.5, FP73). */

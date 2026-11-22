@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native';
+import { Tappable as Pressable } from './tappable';
 import { ThemedText } from './themed-text';
 import { Icon } from './icon';
 import { touchTarget } from './button';

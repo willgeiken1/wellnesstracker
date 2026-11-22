@@ -3,7 +3,7 @@ import { memoryRepository } from './workout-repository';
 import { createLoggerFixture } from '../src/features/workout/devFixture';
 import { useWorkout } from '../src/features/workout/use-workout';
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react-native';
-import { AppState, AccessibilityInfo, Text, DeviceEventEmitter, Alert, FlatList } from 'react-native';
+import { AppState, AccessibilityInfo, Text, DeviceEventEmitter, Alert, FlatList, LayoutAnimation } from 'react-native';
 import { restBuzz, signatureBuzz } from '../src/features/workout/haptics';
 import { useState, useMemo } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
@@ -614,8 +614,12 @@ test('exercise options can cancel and reopen, then add a set', async () => {
   await open();
   await fireEvent.press(screen.getByRole('button', {name:'Cancel'}));
   await open();
+  // Adding a set glides the list to its new shape rather than jumping.
+  const glide = jest.spyOn(LayoutAnimation, 'configureNext').mockImplementation(() => {});
   await fireEvent.press(screen.getByRole('button', {name:'Add set'}));
   expect(store.drafts(entry.id)).toHaveLength(4);
+  expect(glide).toHaveBeenCalled();
+  glide.mockRestore();
   alert.mockRestore();
 });
 

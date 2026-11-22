@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/button";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Tappable as Pressable } from "@/components/tappable";
 import { SwipeStops } from "./swipe-stops";
 import { ThemedText } from "@/components/themed-text";
 import { useTheme } from "@/design/theme-provider";
