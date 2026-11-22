@@ -1598,10 +1598,53 @@ function shellHTML(date) {
   return paintShell(view, date);
 }
 
+/* The Now card follows the clock. While the Routines tab is showing, one
+   timeout waits for the next minute boundary, then repaints the card. A slot
+   or day change repaints the whole tab, since the tiles follow the current
+   block. The timeout stops when the tab, the page, the flag or the session
+   goes away. The next paint of the tab starts it again. */
+let nowTick = 0;
+let nowTickKey = "";
+
+function nowTickWanted() {
+  if (app.ROUTINES_ENABLED !== true || !canMutateRoutines()) return false;
+  if (!app.ui || app.ui.tab !== "daily-routines") return false;
+  return !(typeof document !== "undefined" && document.hidden);
+}
+
+function nowTickKeyFor(date) {
+  return `${todayKey(date)}|${routineSlotIndex(date)}`;
+}
+
+function scheduleNowTick(date) {
+  if (nowTick || !nowTickWanted()) return;
+  const wait = 60000 - ((date.getSeconds() * 1000 + date.getMilliseconds()) % 60000) + 50;
+  nowTick = setTimeout(runNowTick, wait);
+  if (nowTick && typeof nowTick.unref === "function") nowTick.unref();
+}
+
+function runNowTick() {
+  nowTick = 0;
+  if (!nowTickWanted()) return;
+  const date = shellDate();
+  const key = nowTickKeyFor(date);
+  const card = document.querySelector(".dr-now");
+  const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
+  if (key !== nowTickKey || !card || !view || accountPullPending()) {
+    if (typeof app.render === "function") app.render();
+  } else {
+    card.outerHTML = routineNowHTML(view, date);
+  }
+  scheduleNowTick(date);
+}
+
 export function dailyRoutinesHTML() {
   if (app.ROUTINES_ENABLED !== true) return "";
   if (!canMutateRoutines()) return signInHTML();
-  return shellHTML(shellDate());
+  const date = shellDate();
+  nowTickKey = nowTickKeyFor(date);
+  scheduleNowTick(date);
+  return shellHTML(date);
 }
 
 export function routinesSettingsSheetHTML() {
