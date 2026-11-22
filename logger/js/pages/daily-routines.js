@@ -1578,10 +1578,11 @@ export function saveRoutineBlock(state, draft) {
       for (const itemId of wanted) next = placeInBlock(next, id, itemId, at);
       const keep = new Set(wanted);
       for (const place of (next.placements || []).filter((row) => isLive(row) && row.blockId === id && !keep.has(row.itemId))) {
-        /* An untyped item shows only in its routines. Taken out of its last
-           one, it moves to the Other tab rather than out of sight. */
+        /* An untyped item shows only in its shown routines. Taken out of its
+           last one, it moves to the Other tab rather than out of sight; a
+           hidden routine does not count as somewhere to show. */
         const item = (next.items || []).find((row) => isLive(row) && row.id === place.itemId);
-        const elsewhere = (next.placements || []).some((row) => isLive(row) && row.itemId === place.itemId && row.blockId !== id && (next.blocks || []).some((block) => isLive(block) && block.id === row.blockId));
+        const elsewhere = (next.placements || []).some((row) => isLive(row) && row.itemId === place.itemId && row.blockId !== id && (next.blocks || []).some((block) => isLive(block) && block.hidden !== true && block.id === row.blockId));
         if (item && !elsewhere && !routineItemType(item, next.prefs)) {
           next = revisePlanEntity(next, "items", item.id, { type: "other" }, at);
         }
