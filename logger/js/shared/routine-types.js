@@ -172,9 +172,10 @@ function taken(log, itemId) {
 /* Doses left in the vial or bottle: the count typed on the item minus the
    doses logged since it was typed. On the day it was typed, a dose counts
    when it was logged after the count. Without that time, the day's doses
-   are taken to be in the count. Null when no count is set. */
+   are taken to be in the count. Null when no count is set. A count of 0
+   is kept: it means the user ran out, not that no count was typed. */
 export function routineDosesLeft(item, logs) {
-  if (!item || !Number.isInteger(item.onHand) || item.onHand < 1) return null;
+  if (!item || !Number.isInteger(item.onHand) || item.onHand < 0) return null;
   const since = typeof item.onHandDay === "string" ? item.onHandDay : "";
   const countedAt = since && typeof item.onHandAt === "number" && Number.isFinite(item.onHandAt) && item.onHandAt > 0 ? item.onHandAt : 0;
   const used = new Set();

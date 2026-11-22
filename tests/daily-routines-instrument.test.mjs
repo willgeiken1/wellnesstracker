@@ -563,6 +563,8 @@ describe("peptide details, hidden routines and the dose count", () => {
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22", onHandAt: 50 }, logs).left, 9);
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22" }, logs).left, 10, "an older count with no time keeps the day's doses in it");
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-21" }, logs).left, 9);
+    assert.deepEqual(types.routineDosesLeft({ id: "i1", onHand: 0, onHandDay: "2026-11-21" }, logs), { left: 0, total: 0 }, "a typed 0 means out, not unset");
+    assert.equal(types.routineDosesLeft({ id: "i1" }, logs), null);
   });
 });
 
