@@ -496,3 +496,41 @@ textarea.text-in.checkin-note { height: auto; min-height: 88px; padding: 12px 14
   font-weight: 700;
   text-decoration: none;
 }
+
+/* ---------- Feel: sheet entrance, pressed states, hit areas ---------- */
+/* Only a newly opened sheet slides up (renderSheet adds .sheet-in on open, not on re-renders). */
+#sheet.sheet-in .sheet-card { animation: sheet-up .32s cubic-bezier(.32, .72, 0, 1); }
+#sheet.sheet-in .sheet-back { animation: sheet-fade .22s ease-out; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* No double-tap zoom delay on controls, and every control answers a press.
+   :where() keeps this at zero specificity, so a control's own :active rule still wins. */
+:where(button, [role="button"], .set-row, a.btn) { touch-action: manipulation; }
+:where(button, [role="button"], .set-row, a.btn) { transition: opacity .12s ease-out; }
+:where(button:not(:disabled), [role="button"], .set-row, a.btn):active { opacity: .66; transition-duration: 0s; }
+
+/* Small controls keep their look but get a hit area of about 44px. */
+.set-x, .mchip, .seg2 button, .brief-tools button, .brief-done, .fi-mult button, #workout .rpe button,
+.link-inline, .mc-add, .goal-pill, .dir-seg button, .ca-log { position: relative; }
+.sheet-x::after, .set-x::after, .switch::after, .mc-add::after, .wdg-x::after, .link-inline::after {
+  content: ""; position: absolute; inset: -6px;
+}
+.mchip::after, .seg2 button::after, .brief-tools button::after, .brief-done::after, .fi-mult button::after,
+#workout .rpe button::after, .goal-pill::after, .dir-seg button::after, .ca-log::after {
+  content: ""; position: absolute; inset: -5px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sheet.sheet-in .sheet-card, #sheet.sheet-in .sheet-back { animation: none; }
+}
+
+/* A logged set flashes once so the tap clearly landed. */
+#workout .sets li.just-logged { animation: set-logged .6s ease-out; border-radius: 10px; }
+@keyframes set-logged { from { background: color-mix(in srgb, var(--green) 26%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { #workout .sets li.just-logged { animation: none; } }
+
+/* Keyboard: --kb is the iPhone keyboard's height and --vvh the visible height, both set from
+   visualViewport, so an open sheet sits above the keyboard and never runs under it. */
+#sheet { bottom: var(--kb, 0px); }
+.sheet-card { max-height: min(88vh, calc(var(--vvh, 100vh) - 24px)); }

@@ -175,3 +175,69 @@ test('readings moved from an earlier version are read back after iOS clears the 
     fresh.sqlite.close();
   } finally { main.sqlite.close(); health.sqlite.close(); }
 });
+
+/* Cole's #199 review: the clean-up's finish is recorded apart from whether Health rows remain, so a run cut off
+   after the delete is still finished next launch. `flaky` is the main or Health database with chosen statements failing. */
+const flaky = (sqlite: DatabaseSync, fails: (query: string) => boolean) => {
+  const client = sqliteClient(sqlite);
+  return drizzle({ prepareSync: (query: string) => { if (fails(query)) throw new Error('synthetic failure'); return client.prepareSync(query); } } as unknown as Parameters<typeof drizzle>[0]);
+};
+const cleaned = (sqlite: DatabaseSync) => sqlite.prepare("SELECT value FROM sync_state WHERE owner_id = 'device' AND key = 'health_moved'").get();
+const holds = (path: string, text: string) => [path, `${path}-wal`].some(file => existsSync(file) && readFileSync(file).includes(text));
+
+test('a clean-up cut off after the delete finishes rewriting the main file on the next launch', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'insight-health-'));
+  try {
+    const mainPath = join(dir, 'insight.db');
+    const main = await localDatabase(mainPath), health = healthStore(join(dir, 'insight-health.db'));
+    const old = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags);
+    importWeights(old, [{ id: SAMPLE, at: new Date(2026, 10, 15, 7), kg: 81.25 }], NOW);
+    // The app is stopped right after the delete, before the log is folded in and the file rebuilt.
+    expect(() => moveHealthRows(flaky(main.sqlite, q => q.includes('wal_checkpoint')), health.db)).toThrow();
+    expect(mainWeighIns(main.sqlite)).toEqual([]);
+    expect(cleaned(main.sqlite)).toBeUndefined();
+    expect(holds(mainPath, SAMPLE)).toBe(true);
+    // Next launch: no Health rows are left, but the clean-up has not finished, so it runs to the end.
+    expect(moveHealthRows(main.db, health.db)).toBe(0);
+    expect(cleaned(main.sqlite)).toBeDefined();
+    expect(healthWeighIns(health.sqlite)).toEqual([{ id: SAMPLE, source: 'healthkit', owner_id: OWNER_A }]);
+    main.sqlite.close();
+    expect(holds(mainPath, SAMPLE)).toBe(false);
+    health.sqlite.close();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a finished clean-up is not run again on later launches', async () => {
+  const main = await localDatabase(), health = healthStore();
+  try {
+    const old = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags);
+    importWeights(old, [{ id: SAMPLE, at: new Date(2026, 10, 15, 7), kg: 81.25 }], NOW);
+    expect(moveHealthRows(main.db, health.db)).toBe(1);
+    const statements: string[] = [];
+    const watched = flaky(main.sqlite, q => { statements.push(q); return false; });
+    expect(moveHealthRows(watched, health.db)).toBe(0);
+    expect(moveHealthRows(watched, health.db)).toBe(0);
+    // Only the check for the finished mark: no copy, delete or file rebuild.
+    expect(statements).toHaveLength(2);
+    expect(statements.some(q => /VACUUM|DELETE|INSERT/i.test(q))).toBe(false);
+  } finally { main.sqlite.close(); health.sqlite.close(); }
+});
+
+test('a clean-up that keeps failing is left for the next launch and never loses or repeats a reading', async () => {
+  const main = await localDatabase(), health = healthStore();
+  try {
+    const old = new Repository(main.db, OWNER_A, main.repo.device, randomUUID, main.repo.syncFlags);
+    importWeights(old, [{ id: SAMPLE, at: new Date(2026, 10, 15, 7), kg: 81.25 }], NOW);
+    const typed = saveWeighIn(old, 80, 'kg', '2026-11-16');
+    // The Health store can't be written: the main database must keep the reading rather than delete it.
+    const stuck = flaky(health.sqlite, q => /^\s*INSERT/i.test(q));
+    for (let launch = 0; launch < 3; launch++) expect(() => moveHealthRows(main.db, stuck)).toThrow();
+    expect(mainWeighIns(main.sqlite).map(r => r.id).sort()).toEqual([typed.id, SAMPLE].sort());
+    expect(healthWeighIns(health.sqlite)).toEqual([]);
+    expect(cleaned(main.sqlite)).toBeUndefined();
+    // Once the Health store works again, the reading moves once and the typed weight stays.
+    expect(moveHealthRows(main.db, health.db)).toBe(1);
+    expect(mainWeighIns(main.sqlite)).toEqual([{ id: typed.id, source: 'app' }]);
+    expect(healthWeighIns(health.sqlite)).toEqual([{ id: SAMPLE, source: 'healthkit', owner_id: OWNER_A }]);
+  } finally { main.sqlite.close(); health.sqlite.close(); }
+});

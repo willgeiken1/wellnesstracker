@@ -293,7 +293,7 @@
   color: var(--green-ink);
 }
 .dr-add { border: 1.5px dashed rgba(20, 20, 20, .35); }
-.dr-tiles[data-focus="on"] .dr-tile.dr-dim { opacity: .38; }
+.dr-focus-done { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
 .dr-set-row {
   display: flex;
   align-items: center;

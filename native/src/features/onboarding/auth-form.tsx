@@ -55,7 +55,7 @@ export function AuthForm({ create = false, dob, onCreated, embedded = false, bef
   const notice = error && <Notice testID="auth-error" text={t(error === 'authUnavailable' ? 'accountsUnavailable' : error)} onRetry={TYPED.includes(error) || !auth.configured ? undefined : () => passwordInput.current?.focus()} />;
   const action = <PrimaryButton testID={create ? 'onboarding-create-account' : 'auth-sign-in'} label={t(busy ? 'working' : create ? 'createAccount' : 'signIn')}
     busy={busy} disabled={busy || !auth.configured} onPress={() => { void submit(); }} />;
-  const prefs = !create && <PreferenceFields value={preferences.value} onChange={preferences.onChange} />;
+  const prefs = !create && <PreferenceFields value={preferences.value} disabled={!preferences.loaded} onChange={preferences.onChange} />;
   if (embedded) return <>{fields}{prefs}{notice}{action}</>;
   return <Shell onBack={() => router.replace('/auth')}>
     <Heading title={t(create ? 'createAccount' : 'signIn')} body={create ? undefined : t('signInBody')} />

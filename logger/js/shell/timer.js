@@ -71,8 +71,54 @@ setInterval(app.tick, 500);
 let lastWake = 0;
 app.lastWake = lastWake;
 
+/* Coming back to the app refreshes the page, but never under the user's hands: an open sheet,
+   a focused field, or the live workout or cardio screen stays as it is, and only the clocks tick. */
+function busyOnReturn() {
+  if (app.ui && (app.ui.sheet || app.ui.workoutOpen || app.ui.cardioOpen)) return true;
+  const a = document.activeElement;
+  if (a && a !== document.body && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return true;
+  const dlg = document.getElementById("dialog");
+  return !!(dlg && !dlg.hidden);
+}
+app.busyOnReturn = busyOnReturn;
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
-  app.render();
+  if (busyOnReturn()) app.tick();
+  else app.render();
   if (Date.now() - app.lastWake > 60_000) { app.lastWake = Date.now(); try { app.cloudPull().then(() => app.ouraRefresh(false)).then(() => app.syncPhotos()); } catch (e) {} }
+});
+
+/* The iPhone keyboard covers the page without shrinking it, so a sheet's fields sat behind it.
+   Track the visible area and lift the sheet by the keyboard's height. Small changes (the
+   address bar) are ignored. */
+const KEYBOARD_MIN_PX = 80;
+export function keyboardInset(innerHeight, vvHeight, vvOffsetTop) {
+  const kb = Math.round(innerHeight - vvHeight - (vvOffsetTop || 0));
+  return kb > KEYBOARD_MIN_PX ? kb : 0;
+}
+app.keyboardInset = keyboardInset;
+
+function syncKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv || !document.documentElement || !document.documentElement.style) return;
+  const style = document.documentElement.style;
+  style.setProperty("--kb", keyboardInset(window.innerHeight, vv.height, vv.offsetTop) + "px");
+  style.setProperty("--vvh", Math.round(vv.height) + "px");
+}
+app.syncKeyboard = syncKeyboard;
+
+if (typeof window !== "undefined" && window.visualViewport && typeof window.visualViewport.addEventListener === "function") {
+  window.visualViewport.addEventListener("resize", syncKeyboard);
+  window.visualViewport.addEventListener("scroll", syncKeyboard);
+}
+
+/* Once the keyboard is up, bring the focused field into view inside its sheet. */
+document.addEventListener("focusin", (ev) => {
+  const t = ev.target;
+  if (!t || typeof t.closest !== "function" || !t.closest(".sheet-card")) return;
+  if (!/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable) return;
+  setTimeout(() => {
+    if (document.activeElement === t && typeof t.scrollIntoView === "function") t.scrollIntoView({ block: "nearest" });
+  }, 320);
 });

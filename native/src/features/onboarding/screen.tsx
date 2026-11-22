@@ -74,7 +74,7 @@ function Start({profile,onFinish}:{profile:ProfileInput;onFinish:()=>void}) {
       </View>
       {error==='invalidTargets'&&<Notice testID="onboarding-targets-error" text={t(error)}/>}
     </Group>:<Group testID="onboarding-targets-unset" title={t('onboardingTargets')}><ThemedText muted>{t('targetsUnset')}</ThemedText></Group>}
-    <PreferenceFields value={preferences.value} onChange={preferences.onChange}/>
+    <PreferenceFields value={preferences.value} disabled={!preferences.loaded} onChange={preferences.onChange}/>
     {auth.session&&!ready&&<ThemedText testID="onboarding-preparing" muted variant="caption" accessibilityLiveRegion="polite">{t('onboardingPreparing')}</ThemedText>}
     {error==='workoutSaveError'&&<Notice testID="onboarding-save-error" text={t(error)} onRetry={()=>{void finish();}}/>}
     <PrimaryButton testID="onboarding-finish" label={t(busy?'working':'finishOnboarding')} busy={busy} disabled={busy||!ready} onPress={()=>{void finish();}}/>

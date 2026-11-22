@@ -27,7 +27,7 @@ function machineListSheetHTML() {
   }).join("")).join("");
   return `<h3>Machine settings</h3><p class="sub" style="margin:-6px 0 12px">Save how you set up each machine (seat height, pads, pin positions). It shows on that exercise during your workout.</p>
     <input class="text-in" id="ms-q" type="search" autocomplete="off" placeholder="Search your exercises" value="${app.esc(app.ui.sd.q || "")}">
-    ${rows || `<p class="sub">No exercises match.</p>`}`;
+    <div id="ms-q-list">${rows || `<p class="sub">No exercises match.</p>`}</div>`;
 }
 app.machineListSheetHTML = machineListSheetHTML;
 
@@ -185,7 +185,7 @@ function settingsHTML() {
     <div class="group-label">Account</div>
     <div class="group">${app.session
       ? `<div class="set-row"><span>Signed in</span><span class="sub">${app.esc(app.session.user.email || "")}</span></div>
-         <div class="set-row"><span>Cloud backup</span><span class="sub">${app.state.lastCloud ? "On · saved " + new Date(app.state.lastCloud).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "On"}</span></div>
+         <div class="set-row"><span>Cloud backup</span><span class="sub">${app.esc(app.cloudStatusText ? app.cloudStatusText(app.state.lastCloud, app.cloudFailAt) : "On")}</span></div>
          <button class="set-row" data-action="sign-out"><span>Sign out</span></button>`
       : `<button class="set-row" data-action="auth-open"><span>Sign in or create an account</span>${app.I.chevR}</button>`}</div>
     ${app.session ? "" : `<p class="hint">An account backs up your workouts to the cloud and lets you connect Oura.</p>`}

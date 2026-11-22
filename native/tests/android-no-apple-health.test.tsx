@@ -74,3 +74,10 @@ test('the privacy policy covers Android and agrees with the deletion page', () =
   expect(policy).toContain('(insight-wellness-delete-account)');
   expect(policy).toMatch(/sent to Sentry and usage events already sent to PostHog aren't removed when you delete your account/);
 });
+
+test('the privacy policy keeps its effective date, retention periods and contact line', () => {
+  const policy = readFileSync(join(__dirname, '../../insight-daily-privacy.md'), 'utf8');
+  expect(policy).toMatch(/^_Effective November 18, 2026_$/m);
+  expect(policy).toContain('Sentry keeps crash reports for 30 days and PostHog keeps usage events for one year.');
+  expect(policy).toMatch(/## Contact\n\ninsight\.wellnessos@gmail\.com\n?$/);
+});
