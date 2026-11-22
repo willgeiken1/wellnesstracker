@@ -3,7 +3,6 @@ import {
   isLive,
   liveOf,
   normalizeDailyRoutines,
-  routinePlacementId,
 } from "./daily-routines-store.js";
 
 /* Routines setup. Every account answers it once, the first time Routines
@@ -13,9 +12,9 @@ import {
 
    The page reads the answers through routineSetupShows(). Hiding a part of
    the page never deletes a row. Without a finished setup every part shows, as
-   before. Applying answers only adds blocks and starter checks, renames or
-   removes a default block nobody has touched yet, and never removes a row the
-   user made. */
+   before. Applying answers only adds blocks, renames or removes a default
+   block nobody has touched yet, and never removes a row the user made. It
+   adds no checks: nobody needs to tick off waking up or going to bed. */
 
 export const SETUP_VERSION = 1;
 
@@ -260,31 +259,6 @@ export function setupBlocks(rawAnswers, status = "done") {
   return out.map((block, index) => ({ ...block, id: SETUP_BLOCK_IDS[block.key], color: COLORS[index % COLORS.length] }));
 }
 
-const STARTERS = Object.freeze({
-  waking: { id: "item_setup_waking", name: "On waking", prefer: ["morning"] },
-  meals: { id: "item_setup_meals", name: "With meals", prefer: ["supplements", "meds"] },
-  bed: { id: "item_setup_bed", name: "Before bed", prefer: ["night"] },
-  workouts: { id: "item_setup_workouts", name: "Around workouts", prefer: ["supplements", "enhancers", "meds"] },
-});
-
-/* One check per timing picked, placed in the block that fits it, or the first
-   block for what they take when that block is not on the page. */
-export function setupStarters(rawAnswers, blocks) {
-  const answers = normalizeSetupAnswers(rawAnswers);
-  if (!takesAnything(answers) || !Array.isArray(answers.timing)) return [];
-  const keys = new Set(blocks.map((block) => block.key));
-  const takeKey = ["supplements", "meds", "enhancers"].find((key) => keys.has(key)) || (blocks[0] && blocks[0].key);
-  const out = [];
-  for (const pick of answers.timing) {
-    const starter = STARTERS[pick];
-    if (!starter) continue;
-    if (pick === "workouts" && answers.train === "none") continue;
-    const key = starter.prefer.find((name) => keys.has(name)) || takeKey;
-    if (key) out.push({ id: starter.id, name: starter.name, block: key });
-  }
-  return out;
-}
-
 /* What each part of the page does with these answers. true shows it. */
 export function setupShape(prefs) {
   const setup = readSetup(prefs);
@@ -462,8 +436,8 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
     }
     /* A block the user deleted stays deleted, and nothing stands in for it. */
     if (row) continue;
-    /* A new setup block takes the seed stamp, like the defaults and the
-       starter checks, so two phones write the same row and any edit beats it. */
+    /* A new setup block takes the seed stamp, like the defaults,
+       so two phones write the same row and any edit beats it. */
     const block = { id: spec.id, name: spec.name, color: spec.color, order: Math.max(nextOrder(store), SETUP_ORDER[spec.key] || 0), updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null };
     store.blocks.push(block);
     byId.set(spec.id, block);
@@ -480,16 +454,6 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
 
   const liveIds = new Set(liveOf(store.blocks).map((block) => block.id));
   const placed = wanted.filter((spec) => resolved.has(spec.key) && liveIds.has(resolved.get(spec.key)));
-  for (const starter of setupStarters(answers, placed)) {
-    const blockId = resolved.get(starter.block);
-    if (!blockId || !liveIds.has(blockId)) continue;
-    const placementId = routinePlacementId(blockId, starter.id);
-    if (store.items.some((item) => item.id === starter.id) || store.placements.some((place) => place.id === placementId)) continue;
-    const order = liveOf(store.placements).filter((place) => place.blockId === blockId).reduce((max, place) => Math.max(max, place.order || 0), -1) + 1;
-    store.items.push({ id: starter.id, name: starter.name, kind: "check", compoundId: null, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
-    store.placements.push({ id: placementId, blockId, itemId: starter.id, order, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
-  }
-
   const runs = (id) => touched === null || (Array.isArray(touched) && touched.includes(id));
   const prefs = { ...store.prefs };
   if (status === "done" && runs("feel") && answers.feel) prefs.focusMode = answers.feel === "next";
