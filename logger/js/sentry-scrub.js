@@ -63,7 +63,7 @@ export function scrubData(value, depth = 0) {
   return out;
 }
 
-const HEALTH_WORD = "\\b(?:hrv|readiness|sleep(?:[\\s_-]*score)?|weigh(?:[\\s-]*in)?|weights?(?:[\\s_-]*kg)?|kcals?|calories?|proteins?|meals?|notes?|doses?|mcg|compounds?|syringes?|reconstitut\\w*|vials?|concentrations?|doseamounts?|doseunits?|syringeunits?|vialmg|bacwaterml|dailyroutines?|start[\\s_-]*dates?|chart[\\s_-]*lines?|sites?|siteids?|lastsites?|injectionsites?|injectionsiteids?)\\b|\\b(?:moods?|energy|stress)";
+const HEALTH_WORD = "\\b(?:hrv|readiness|sleep(?:[\\s_-]*score)?|weigh(?:[\\s-]*in)?|weights?(?:[\\s_-]*kg)?|kcals?|calories?|proteins?|meals?|notes?|doses?|mcg|compounds?|syringes?|reconstitut\\w*|vials?|concentrations?|doseamounts?|doseunits?|syringeunits?|vialmg|bacwaterml|dailyroutines?|start[\\s_-]*dates?|chart[\\s_-]*lines?|sites?|siteids?|lastsites?|injectionsites?|injectionsiteids?|onhands?|mixedon|daysleft|lowsupply)\\b|\\b(?:moods?|energy|stress|on[\\s_-]+hands?|mixed[\\s_-]+on|days[\\s_-]+left)";
 
 function hasHealthWord(value) {
   return new RegExp(HEALTH_WORD, "i").test(value);

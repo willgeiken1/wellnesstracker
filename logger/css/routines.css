@@ -736,3 +736,10 @@
   color: #fff;
   font-weight: 700;
 }
+.dr-supply { font-size: 13px; font-weight: 600; }
+.dr-supply[data-supply="low"] {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f6c56b;
+  color: #5c3b00;
+}

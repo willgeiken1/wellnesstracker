@@ -395,6 +395,9 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "ph-file") app.onPhotoFile(ev.target.files[0]);
   if (ev.target.id === "food-file" && ev.target.files[0]) { if (!app.ui.sd || !app.ui.sd.meal) app.ui.sd = { meal: app.autoMeal() }; app.ui.sd.image = null; app.ui.sd.hint = app.ui.sheet === "food-photo" ? app.ui.sd.hint : ""; app.analyzeFoodPhoto(ev.target.files[0]); }
   if (ev.target.id === "food-fav") app.ui.sd.fav = ev.target.checked;
+  if ((ev.target.id === "dr-item-on-hand" || ev.target.id === "dr-item-mixed-on") && app.ui && app.ui.sheet === "routines-item" && typeof app.rememberRoutineItemFields === "function") {
+    app.rememberRoutineItemFields();
+  }
 });
 
 document.addEventListener("beforeinput", (ev) => { app.guardSetFieldBeforeInput(ev); });
@@ -420,8 +423,10 @@ document.addEventListener("input", (ev) => {
   if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
-  if (el.id === "dr-item-name" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.name = el.value; return; }
-  if (el.id === "dr-item-amount" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.amount = el.value; return; }
+  if ((el.id === "dr-item-name" || el.id === "dr-item-amount" || el.id === "dr-item-on-hand" || el.id === "dr-item-mixed-on") && app.ui && app.ui.sheet === "routines-item") {
+    if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+    return;
+  }
   if (el.id === "dr-log-amount" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.amount = el.value; app.ui.sd.error = ""; return; }
   if (el.id === "dr-log-day" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.day = el.value; app.ui.sd.error = ""; return; }
   if ((el.id === "dr-calc-vial" || el.id === "dr-calc-water" || el.id === "dr-calc-dose") && app.ui && app.ui.sheet === "routines-calc" && typeof app.noteReconstitutionField === "function") {
@@ -1305,16 +1310,19 @@ document.addEventListener("click", async (ev) => {
       break;
     case "routines-item-kind":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.kind = b.dataset.kind === "dose" ? "dose" : "check";
       app.renderSheet();
       break;
     case "routines-item-unit":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.unit = b.dataset.unit;
       app.renderSheet();
       break;
     case "routines-item-quarter":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.kind = "dose";
       app.ui.sd.amount = b.dataset.amount;
       app.renderSheet();
@@ -1327,6 +1335,7 @@ document.addEventListener("click", async (ev) => {
         if (typeof app.toast === "function") app.toast("An item stays in at least one routine.");
         break;
       }
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.blockIds = ids.includes(id) ? ids.filter((row) => row !== id) : ids.concat(id);
       app.renderSheet();
       break;

@@ -53,7 +53,7 @@ function shellPath(input) {
   return path;
 }
 
-const SHELL_KEYS = [...new Set(SHELL.map((url) => shellPath(url)))];
+const SHELL_KEYS = [...new Set(SHELL.map((url) => shellPath(url))), "./js/shared/routine-supply.js", "./manifest.json"]
 
 function rememberChoice(id, choice) {
   if (!id) return;

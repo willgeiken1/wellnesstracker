@@ -85,6 +85,7 @@ async function loadClientMerge() {
   writeFileSync(join(dir, "js", "runtime.js"), "export const app = {};\n");
   writeFileSync(join(dir, "js", "shared", "daily-routines-store.js"), source);
   writeFileSync(join(dir, "js", "shared", "routine-dose.js"), readFileSync(filePath("logger/js/shared/routine-dose.js")));
+  writeFileSync(join(dir, "js", "shared", "routine-supply.js"), readFileSync(filePath("logger/js/shared/routine-supply.js")));
   const loaded = await import(pathToFileURL(join(dir, "js", "shared", "daily-routines-store.js")).href);
   ctx.clientDir = dir;
   ctx.clientSha = CLIENT_STORE_SHA;
@@ -255,7 +256,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", "supabase/migrations/20261122120000_daily_routines_day_rollover.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql"]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -798,7 +799,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", "supabase/migrations/20261122120000_daily_routines_day_rollover.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql"]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }

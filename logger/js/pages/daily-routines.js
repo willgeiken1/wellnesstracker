@@ -19,6 +19,7 @@ import {
   upsertEntity,
 } from "../shared/daily-routines-store.js";
 import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
+import { routineSupplyView, supplyFromDraft } from "../shared/routine-supply.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -634,8 +635,16 @@ function rowDetailMarkup(projected, row, date, day) {
   const last = !countdown ? lastDoseLabel(taken) : "";
   const lastHTML = last ? `<span class="dr-last">${esc(last)}</span>` : "";
   const tag = overdue ? overdueMarkup() : "";
-  if (!tag && !countdown && !lastHTML) return "";
-  return `<span class="dr-meta">${tag}${countdown}${lastHTML}</span>`;
+  const supply = supplyMarkup(projected, row, day);
+  if (!tag && !countdown && !lastHTML && !supply) return "";
+  return `<span class="dr-meta">${tag}${countdown}${lastHTML}${supply}</span>`;
+}
+
+function supplyMarkup(projected, row, day) {
+  if (!row || !row.item) return "";
+  const supply = routineSupplyView({ item: row.item, logs: projected && projected.logs, today: day });
+  if (!supply.text) return "";
+  return `<span class="dr-supply" data-supply="${esc(supply.state)}">${esc(supply.text)}</span>`;
 }
 
 function rowState(log) {
@@ -1577,7 +1586,8 @@ function placeInBlock(store, blockId, itemId, at) {
 }
 
 /* Custom items only. Evidence from the draft is ignored. A dose stores the
-   amount and unit on its compound. Logs are not rewritten. */
+   amount and unit on its compound. Optional on-hand count and mixed-on date
+   live on the item. A blank value clears that field. Logs are not rewritten. */
 export function saveRoutineItem(state, draft) {
   const name = cleanName(draft && draft.name);
   const kind = draft && (draft.kind === "dose" || draft.kind === "check") ? draft.kind : "";
@@ -1601,8 +1611,11 @@ export function saveRoutineItem(state, draft) {
     }
     const kept = { ...(existing || {}) };
     delete kept.evidence;
+    const supply = supplyFromDraft(draft, kind, clock.day);
+    if (!supply) return null;
     next = upsertEntity(next, "items", {
       ...kept,
+      ...supply,
       id: itemId,
       name,
       kind,
@@ -1647,6 +1660,8 @@ export function routineItemDraft(state, source) {
     kind,
     amount: kind === "dose" && compound && typeof compound.amount === "number" ? String(compound.amount) : "",
     unit: compound && DOSE_UNIT_SET.has(compound.unit) ? compound.unit : "mcg",
+    onHand: item && Number.isInteger(item.onHand) ? String(item.onHand) : "",
+    mixedOn: item && typeof item.mixedOn === "string" ? item.mixedOn : "",
     blockIds,
   };
 }
@@ -1845,13 +1860,14 @@ function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
   const timing = row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
   const detail = rowDetailMarkup(projected, row, date, day);
+  const supply = supplyMarkup(projected, row, day);
   const overdue = timing.overdue ? ` data-overdue="true"` : "";
   /* Skip, history, and rename keep their own actions. The log button is the
      one the click handler uses, so a long press still reaches the details page. */
   return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}${supply}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     ${historyButton(row)}
@@ -1859,15 +1875,17 @@ function openRowHTML(row, projected, date, day) {
   </li>`;
 }
 
-function editRowHTML(row) {
+function editRowHTML(row, projected, day) {
   const dose = doseText(row);
   const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+  const supply = supplyMarkup(projected, row, day);
   const id = placementId(row);
   const state = row.open ? "open" : rowState(row.log);
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
       <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item)}
+      ${supply}
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
   </li>`;
@@ -1904,7 +1922,7 @@ export function routineBlockTileHTML(block, projected, view) {
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
-    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
+    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row, projected, day) : openRowHTML(row, projected, date, day)).join("")}</ul>`
     : "";
   const resting = !editing && routineRestLog(projected && projected.logs, day);
   const logAll = !editing && !collapsed && !resting && open.length

@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { DEFAULT_DAY_ROLLOVER_HOUR, routineDayRolloverHour } from "./routine-dose.js";
+import { attachSupply } from "./routine-supply.js";
 
 /* Daily routines live on the liftlog-v1 blob under `dailyRoutines`.
    `routines` is already the workout-template list. Do not reuse that key.
@@ -242,7 +243,7 @@ function normalizeItem(raw, now = Date.now()) {
   if (note) next.note = note;
   else delete next.note;
   for (const key of FEELING_KEYS) delete next[key];
-  return next;
+  return attachSupply(next);
 }
 
 function normalizePlacement(raw, now = Date.now()) {
