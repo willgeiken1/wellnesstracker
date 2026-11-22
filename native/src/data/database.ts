@@ -20,6 +20,7 @@ function openHealthStore() {
   }
   throw new Error('Health store unavailable.');
 }
+export const HEALTH_MOVE_WARNING = 'Earlier Health weigh-ins could not be cleared from the main database; trying again next launch.';
 let database: Promise<{forOwner: (owner: string) => Repository; wipeAll(): void; countAllUnsynced?():number}> | undefined;
 export function openLocalDatabase(flags: SyncFlags = DEFAULT_SYNC_FLAGS) {
   return database ??= (async () => {
@@ -37,7 +38,8 @@ export function openLocalDatabase(flags: SyncFlags = DEFAULT_SYNC_FLAGS) {
       const { health, onDisk } = openHealthStore();
       // Health weigh-ins an earlier version kept here move out; if that fails they stay unread and Apple Health fills the store again.
       // Never into the memory fallback, which is gone at the next launch: they wait here until the file opens.
-      if (onDisk) try { moveHealthRows(db, health); } catch { /* Retried next launch. */ }
+      // Until one run finishes it is tried once per launch and warned about, in fixed words that carry no reading.
+      if (onDisk) try { moveHealthRows(db, health); } catch { console.warn(HEALTH_MOVE_WARNING); }
       return {countAllUnsynced:()=>db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE table_name IN (${sql.join(syncTables(syncFlags).filter(table=>table!=='purges').map(table=>sql`${table}`),sql`, `)})`)?.count??0,wipeAll:()=>wipeAllOwners(db,health),forOwner: (owner: string) => new Repository(db,owner,device,randomUUID,syncFlags,health)};
     } catch {
       try { sqlite?.closeSync(); } catch { /* Keep the original failure category. */ }

@@ -642,27 +642,45 @@ describe("routine check-off", { concurrency: false }, () => {
     }
   });
 
-  test("focus mode dims every block except the current one", () => {
+  test("focus mode hides every block except the one for this time of day", () => {
     signIn("2026-11-19");
+    app.ui = { ...(app.ui || {}), dailyRoutineEdit: false };
     app.routineNow = () => new Date(2026, 10, 19, 14, 30);
+    const morning = blockId("Morning routine");
+    const afternoon = blockId("Supplement & enhancer stack");
+    const night = blockId("Night routine");
+    for (const [block, name] of [[morning, "Example morning"], [afternoon, "Example afternoon"], [night, "Example night"]]) {
+      assert.equal(addRoutineItem(app.state, block, { name, kind: "check" }), true);
+    }
+    const itemOf = (name) => app.state.dailyRoutines.items.find((row) => row.name === name).id;
+    const tilesOf = (html) => [...html.matchAll(/<article class="dr-tile" data-color="[^"]+" data-block-id="([^"]+)"/g)].map((m) => m[1]);
     let html = dailyRoutinesHTML();
     assert.match(html, /data-focus="off"/);
     assert.match(html, /aria-checked="false"/);
     assert.match(html, /Now · Afternoon/);
+    assert.deepEqual(tilesOf(html).sort(), [morning, afternoon, night].sort(), "Focus off shows everything");
     assert.doesNotMatch(html, /dr-dim/);
     assert.equal(toggleRoutineFocus(app.state), true);
     assert.equal(app.state.dailyRoutines.prefs.focusMode, true);
     html = dailyRoutinesHTML();
     assert.match(html, /data-focus="on"/);
     assert.match(html, /aria-checked="true"/);
-    assert.match(html, /data-block-id="[^"]+" data-current="true"/);
-    assert.match(html, /class="dr-tile dr-dim"/);
-    const current = html.match(/class="dr-tile" data-color="[^"]+" data-block-id="[^"]+" data-current="true"/);
-    assert.ok(current);
-    assert.match(current[0], /lavender|citrus|pink/);
-    const afternoon = app.state.dailyRoutines.blocks.find((row) => row.name === "Supplement & enhancer stack");
-    assert.match(html, new RegExp(`data-block-id="${afternoon.id}" data-current="true"`));
-    assert.doesNotMatch(html, new RegExp(`data-block-id="${afternoon.id}"[^>]*dr-dim|dr-dim[^>]*data-block-id="${afternoon.id}"`));
+    assert.deepEqual(tilesOf(html), [afternoon], "the morning, whose time has passed, and the night are hidden");
+    assert.match(html, new RegExp(`data-block-id="${afternoon}" data-current="true"`));
+    assert.doesNotMatch(html, /dr-dim/);
+    assert.equal(skipRoutineItem(app.state, itemOf("Example afternoon")), true);
+    assert.deepEqual(tilesOf(dailyRoutinesHTML()), [night], "once the afternoon is done the next block shows");
+    assert.equal(logRoutineItem(app.state, itemOf("Example night")), true);
+    html = dailyRoutinesHTML();
+    assert.deepEqual(tilesOf(html), [], "the missed morning does not come back");
+    assert.match(html, /Everything is done for now/);
+    app.ui.dailyRoutineEdit = true;
+    assert.deepEqual(tilesOf(dailyRoutinesHTML()).sort(), [morning, afternoon, night].sort(), "editing shows every block");
+    app.ui.dailyRoutineEdit = false;
+    assert.equal(toggleRoutineFocus(app.state), true);
+    html = dailyRoutinesHTML();
+    assert.deepEqual(tilesOf(html).sort(), [morning, afternoon, night].sort());
+    assert.doesNotMatch(html, /Everything is done for now/);
   });
 
   test("logging a rest is allowed and stays quiet", () => {
@@ -740,6 +758,6 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.match(css, /@media \(prefers-reduced-motion: no-preference\)/);
     assert.match(css, /@starting-style/);
     assert.match(css, /\.dr-row \{ display: flex; align-items: center; gap: 8px; opacity: 1; \}/);
-    assert.match(css, /\.dr-tiles\[data-focus="on"\] \.dr-tile\.dr-dim \{ opacity: \.38; \}/);
+    assert.doesNotMatch(css, /dr-dim/);
   });
 });

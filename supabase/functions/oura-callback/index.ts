@@ -51,11 +51,12 @@ Deno.serve(async (req) => {
       }),
     });
     if (!res.ok) {
-      console.error("Oura token exchange failed", res.status, await res.text());
+      // Status only: Oura's answer body is never logged.
+      console.error("Oura token exchange failed", res.status);
       return back("error");
     }
     const t = await res.json();
-    // Only say "connected" when both saves worked; otherwise the app would show Oura on with nothing to sync.
+    // Only say "connected" when the login and its connection were saved together (one transaction).
     return back(await saveLogin(admin, st.user_id, {
       access_token: t.access_token,
       refresh_token: t.refresh_token,
