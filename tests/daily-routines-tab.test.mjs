@@ -335,7 +335,7 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   assert.match(html, /data-due="0"/);
   assert.match(html, /aria-label="Routines settings"/);
   assert.match(html, /data-action="routines-discover"/);
-  assert.match(html, /Add the first item/);
+  assert.match(html, /No items yet/);
   assert.doesNotMatch(html, /check-in/i);
   assert.doesNotMatch(html, /Daily check-in/);
   const names = state.dailyRoutines.blocks.map((block) => block.name);
@@ -436,7 +436,7 @@ test("flag off does not paint the shell or write a store", () => {
 });
 
 test("settings includes focus mode and Discover stays a placeholder", () => {
-  assert.match(routinesSettingsSheetHTML(), /Notifications stay off/);
+  assert.match(routinesSettingsSheetHTML(), /Routines does not send reminders/);
   assert.match(routinesDiscoverSheetHTML(), /does not suggest a dose/);
   app.$ = (sel) => document.querySelector(sel);
   app.stopBarcode = () => {};
@@ -446,11 +446,12 @@ test("settings includes focus mode and Discover stays a placeholder", () => {
   assert.match(sheet.innerHTML, /aria-label="Routines settings"/);
   assert.match(sheet.innerHTML, /Focus mode/);
   assert.match(sheet.innerHTML, /aria-checked="false"/);
-  assert.match(sheet.innerHTML, /Notifications stay off/);
+  assert.match(sheet.innerHTML, /Routines does not send reminders/);
   app.ui.sheet = "routines-discover";
   app.renderSheet();
   assert.match(sheet.innerHTML, /aria-label="Discover"/);
-  assert.match(sheet.innerHTML, /Study-backed entries are not in the app yet/);
+  assert.match(sheet.innerHTML, /Discover is not open yet/);
+  assert.match(sheet.innerHTML, /does not suggest a dose/);
 });
 
 test("static files keep the flag-off tab bar and cache the new shell", () => {
@@ -468,8 +469,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v85"/);
-  assert.match(sentry, /insight-shell-v85/);
+  assert.match(sw, /const CACHE = "insight-shell-v87"/);
+  assert.match(sentry, /insight-shell-v87/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);

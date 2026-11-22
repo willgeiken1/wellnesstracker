@@ -524,8 +524,8 @@ describe("started lines on Insights charts", { concurrency: false }, () => {
     const food = readFileSync(new URL("../logger/js/pages/food.js", import.meta.url), "utf8");
     const settings = readFileSync(new URL("../logger/js/pages/settings.js", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v81"/);
-    assert.match(sentry, /insight-shell-v81/);
+    assert.match(sw, /const CACHE = "insight-shell-v87"/);
+    assert.match(sentry, /insight-shell-v87/);
     assert.match(sw, /js\/shared\/routine-chart-lines\.js/);
     assert.equal(main.match(/routines-flag/g).length, 1);
     const slice = (src, start, end) => {

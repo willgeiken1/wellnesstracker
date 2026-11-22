@@ -48,7 +48,8 @@ const { routineHistoryView, routineMarkIcon } = await import("../logger/js/share
 
 function pin(day) {
   app.today = () => day;
-  app.routineNow = () => new Date(2026, 10, 20, 3, 30, 0);
+  const [year, month, date] = day.split("-").map(Number);
+  app.routineNow = () => new Date(year, month - 1, date, 12, 0, 0);
 }
 
 function signIn(day = "2026-11-19") {
@@ -312,8 +313,8 @@ describe("routine history, calendar, and graph", { concurrency: false }, () => {
     const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
     const main = readFileSync(new URL("../logger/js/main.js", import.meta.url), "utf8");
-    assert.match(sw, /const CACHE = "insight-shell-v84"/);
-    assert.match(sentry, /insight-shell-v84/);
+    assert.match(sw, /const CACHE = "insight-shell-v87"/);
+    assert.match(sentry, /insight-shell-v87/);
     assert.match(sw, /js\/pages\/daily-routines-history\.js/);
     assert.match(sw, /js\/shared\/routine-history\.js/);
     assert.match(main, /import "\.\/pages\/daily-routines-history\.js";/);

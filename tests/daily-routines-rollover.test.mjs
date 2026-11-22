@@ -51,6 +51,7 @@ const {
   routinesSettingsSheetHTML,
   setRoutineDayRollover,
   skipRoutineItem,
+  toggleRoutineCollapsed,
   toggleRoutineReveal,
   undoRoutineLog,
 } = await import("../logger/js/pages/daily-routines.js");
@@ -164,8 +165,8 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.equal(app.today(), "2026-11-20");
     assert.equal(app.state.dailyRoutines.settings.dayRolloverHour, 4);
     assert.equal(app.state.dailyRoutines.settings.updatedAt, 0);
-    assert.equal(addCheck("Example check"), true);
-    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example check");
+    assert.equal(addDose(), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
     assert.equal(logRoutineItem(app.state, item.id), true);
     const log = liveLog(item.id);
     assert.equal(log.day, "2026-11-19");
@@ -266,11 +267,13 @@ describe("routine day rollover", { concurrency: false }, () => {
     pin(early);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, routineDayKey(early, 4)), 1);
     assert.equal(doseCountdownText(view, item, early, routineDayKey(early, 4)), "Next dose in 1 hr 1 min");
+    assert.equal(toggleRoutineCollapsed(app.state, blockId("Morning routine")), true);
     assert.equal(toggleRoutineReveal(app.state, blockId("Morning routine")), true);
     let html = dailyRoutinesHTML();
     assert.match(html, /data-streak="1"/);
     assert.match(html, /data-logged="1"/);
-    assert.match(html, /data-next-dose="61"/);
+    assert.match(html, /Example Compound A/);
+    assert.doesNotMatch(html, /data-next-dose=/);
 
     const onTime = at(2026, 11, 20, 4, 0);
     pin(onTime);
@@ -406,7 +409,7 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.match(sheet, /New day starts/);
     assert.match(sheet, /<option value="4" selected>4:00 AM<\/option>/);
     assert.match(sheet, /The default is 4:00 AM/);
-    assert.match(sheet, /Notifications stay off/);
+    assert.match(sheet, /Routines does not send reminders/);
     assert.equal(sheet.match(/<option /g).length, 7);
     assert.doesNotMatch(sheet, /11:00 PM/);
     assert.doesNotMatch(sheet, /showNotification|requestPermission/);
@@ -504,8 +507,8 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.doesNotMatch(store, /routines-flag/);
     assert.doesNotMatch(dose, /routines-flag/);
     assert.match(page, /routineDayKey/);
-    assert.match(sw, /const CACHE = "insight-shell-v79"/);
-    assert.match(sentry, /insight-shell-v79/);
+    assert.match(sw, /const CACHE = "insight-shell-v87"/);
+    assert.match(sentry, /insight-shell-v87/);
     assert.doesNotMatch(page, /showNotification|requestPermission/);
   });
 });

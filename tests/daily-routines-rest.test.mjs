@@ -442,7 +442,7 @@ describe("whole-day rest", { concurrency: false }, () => {
     assert.doesNotMatch(page, /routines-flag/);
     assert.match(flag, /ROUTINES_ENABLED = true/);
     assert.equal(flag.match(/ROUTINES_ENABLED = true/g).length, 1);
-    assert.match(sw, /const CACHE = "insight-shell-v85"/);
-    assert.match(sentry, /insight-shell-v85/);
+    assert.match(sw, /const CACHE = "insight-shell-v87"/);
+    assert.match(sentry, /insight-shell-v87/);
   });
 });

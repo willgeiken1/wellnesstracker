@@ -307,7 +307,12 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
     assert.match(page, /data-rename="item"/);
     assert.doesNotMatch(page, /addEventListener\(\s*["']pointer/);
-    assert.doesNotMatch(page, /preventDefault\(/);
+    const pullAt = page.indexOf("export function onRoutinePullMove");
+    const pullEnd = page.indexOf("async function finishRoutinePull");
+    assert.ok(pullAt > 0 && pullEnd > pullAt);
+    assert.doesNotMatch(page.slice(0, pullAt), /preventDefault\(/);
+    assert.doesNotMatch(page.slice(pullEnd), /preventDefault\(/);
+    assert.match(page.slice(pullAt, pullEnd), /preventDefault\(/);
     assert.doesNotMatch(page, /stopPropagation\(/);
     assert.doesNotMatch(page, /routines-flag/);
     assert.match(edit, /closest\("\[data-rename\]"\)/);
@@ -324,8 +329,8 @@ describe("routine log all and undo toast", { concurrency: false }, () => {
     assert.match(reduce, /\.dr-log-toast[\s\S]*animation: none/);
     assert.match(appearance, /data-accent="sea"[\s\S]*--green:/);
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v85"/);
-    assert.match(sentry, /insight-shell-v85/);
+    assert.match(sw, /const CACHE = "insight-shell-v87"/);
+    assert.match(sentry, /insight-shell-v87/);
     assert.equal(flag.match(/ROUTINES_ENABLED = true/g).length, 1);
   });
 });
