@@ -84,6 +84,7 @@ async function loadClientMerge() {
   mkdirSync(join(dir, "js", "shared"), { recursive: true });
   writeFileSync(join(dir, "js", "runtime.js"), "export const app = {};\n");
   writeFileSync(join(dir, "js", "shared", "daily-routines-store.js"), source);
+  writeFileSync(join(dir, "js", "shared", "routine-supply.js"), readFileSync(filePath("logger/js/shared/routine-supply.js")));
   const loaded = await import(pathToFileURL(join(dir, "js", "shared", "daily-routines-store.js")).href);
   ctx.clientDir = dir;
   ctx.clientSha = CLIENT_STORE_SHA;
