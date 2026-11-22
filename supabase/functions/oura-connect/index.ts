@@ -1,6 +1,7 @@
 // oura-connect: starts the Oura login for the signed-in user, or disconnects Oura.
 // Deploy with JWT verification OFF; this function checks the user's sign-in itself.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { disconnect } from "../_shared/oura-store.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -33,9 +34,12 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     if (body.action === "disconnect") {
-      await admin.from("oura_tokens").delete().eq("user_id", user.id);
-      await admin.from("oura_days").delete().eq("user_id", user.id);
-      await admin.from("oura_connections").delete().eq("user_id", user.id);
+      // The login goes first and its removal is recorded, then the days and the connection (see oura-store).
+      try {
+        await disconnect(admin, user.id);
+      } catch (e) {
+        return json({ error: e instanceof Error ? e.message : "Couldn't disconnect Oura. Try again." }, 500);
+      }
       return json({ ok: true });
     }
 
