@@ -52,6 +52,11 @@ for (const [field, sentinel] of Object.entries({
   bacWaterMl: "aa11bb22cc33dd4c",
   reconstitution: "aa11bb22cc33dd4d",
   dailyRoutines: "aa11bb22cc33dd4e",
+  site: "aa11bb22cc33dd4f",
+  lastSite: "aa11bb22cc33dd50",
+  injectionSite: "aa11bb22cc33dd51",
+  siteId: "aa11bb22cc33dd52",
+  injection_site: "aa11bb22cc33dd53",
 })) {
   test(`Sentry removes dose field ${field} even when its value resembles SDK metadata`, () => {
     const record = { [field]: sentinel };
