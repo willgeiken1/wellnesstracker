@@ -631,10 +631,10 @@ describe("routine check-off", { concurrency: false }, () => {
     const morning = blockId("Morning routine");
     addDose(morning);
     const item = app.state.dailyRoutines.items[0];
-    const id = routineLogId(item.id, "2026-11-19");
     const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
     app.routineNow = () => new Date(future);
     assert.equal(logRoutineItem(app.state, item.id), true);
+    const id = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id).id;
     const checked = structuredClone(app.state.dailyRoutines);
     app.routineNow = () => new Date();
     app.state.dailyRoutines = structuredClone(checked);
