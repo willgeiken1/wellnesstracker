@@ -561,11 +561,40 @@ function mergeSettings(local, remote) {
   return { ...normalizeSettings(remote) };
 }
 
+/* Stamp of a saved Routines setup, or -1 when there is none. */
+function setupStamp(setup, now) {
+  if (!setup || typeof setup !== "object" || Array.isArray(setup)) return -1;
+  if (setup.status !== "done" && setup.status !== "skipped") return -1;
+  return clampStamp(setup.updatedAt, now);
+}
+
+/* prefs merge whole, newest first. The setup answers and the parts added
+   from Routines settings are kept apart from that: a phone that saves a
+   prefs change from a copy pulled before the other phone's setup must not
+   drop the setup, or the quiz shows again. The newer setup wins by its own
+   stamp, and added parts only ever grow. The server merge
+   (daily_routines_merge_prefs) does the same. */
+function keepSetupParts(winner, other, now) {
+  let out = winner;
+  if (setupStamp(other.setup, now) > setupStamp(winner.setup, now)) out = { ...out, setup: other.setup };
+  if (Array.isArray(other.added)) {
+    const base = Array.isArray(out.added) ? out.added : [];
+    const extras = [];
+    for (const key of other.added) {
+      if (typeof key === "string" && !base.includes(key) && !extras.includes(key)) extras.push(key);
+    }
+    if (extras.length) out = { ...out, added: [...base, ...extras] };
+  }
+  return out;
+}
+
 function mergePrefs(local, remote, now) {
   const left = normalizePrefs(local, now);
   const right = normalizePrefs(remote, now);
-  if (left.updatedAt !== right.updatedAt) return left.updatedAt > right.updatedAt ? left : right;
-  return stableStringify(left) >= stableStringify(right) ? left : right;
+  let leftWins;
+  if (left.updatedAt !== right.updatedAt) leftWins = left.updatedAt > right.updatedAt;
+  else leftWins = stableStringify(left) >= stableStringify(right);
+  return leftWins ? keepSetupParts(left, right, now) : keepSetupParts(right, left, now);
 }
 
 /* An item delete also tombstones its placements, tagged removedWith the item

@@ -2027,7 +2027,6 @@ export function routineBlockTileHTML(block, projected, view) {
   const collapsed = !!(view && view.collapsed);
   const last = !!(view && view.last);
   const editing = layoutEditing();
-  const dim = !!(view && view.focus && !current);
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
@@ -2054,7 +2053,7 @@ export function routineBlockTileHTML(block, projected, view) {
         <button type="button" class="dr-minus" data-action="routines-delete-block" data-block-id="${esc(block.id)}" aria-label="Delete ${esc(block.name)}"><span aria-hidden="true">−</span></button>
       </div>`
     : `<button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-block" data-block-id="${esc(block.id)}" aria-label="Rename ${esc(block.name)}">Rename</button>`;
-  return `<article class="dr-tile${dim ? " dr-dim" : ""}" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}" data-collapsed="${collapsed ? "true" : "false"}" data-last="${last ? "true" : "false"}" data-id="${esc(block.id)}">
+  return `<article class="dr-tile" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}" data-collapsed="${collapsed ? "true" : "false"}" data-last="${last ? "true" : "false"}" data-id="${esc(block.id)}">
     ${tools}
     <button type="button" class="dr-block-toggle" data-action="routines-collapse" data-block-id="${esc(block.id)}" data-rename="block" aria-expanded="${collapsed ? "false" : "true"}">
       <span class="dr-k">${esc(tileKicker(block))}</span>
@@ -2081,16 +2080,39 @@ export function routineBlockTilesHTML(projected, date) {
   const opened = new Set(complete ? allDoneOpenIds(projected.prefs, day) : []);
   const lastId = projected.prefs && typeof projected.prefs.lastBlockId === "string" ? projected.prefs.lastBlockId : "";
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
-  const tiles = (projected.blocks || []).map((block) => routineBlockTileHTML(block, projected, {
+  const hiding = focus && !layoutEditing();
+  const focusId = hiding ? routineFocusBlockId(projected, clock) : "";
+  const shown = hiding ? (projected.blocks || []).filter((block) => block.id === focusId) : (projected.blocks || []);
+  const tiles = shown.map((block) => routineBlockTileHTML(block, projected, {
     day,
     date: clock,
     current: block.id === currentId,
-    focus,
     revealed: revealed.has(block.id),
     collapsed: complete ? !opened.has(block.id) : collapsedSet.has(block.id),
     last: block.id === lastId,
   })).join("");
-  return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>`;
+  const rest = hiding && !focusId
+    ? `<p class="dr-focus-done">Everything is done for now. Turn off Focus mode to see every routine.</p>`
+    : "";
+  return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>${rest}`;
+}
+
+/* The block Focus mode shows: the current block by time of day, or once
+   everything in it is logged or skipped, the next block after it that still
+   has something open. Blocks whose time has passed stay hidden. Empty when
+   nothing is left today. */
+export function routineFocusBlockId(projected, date) {
+  const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : routineClock().date;
+  const day = todayKey(clock);
+  const moment = routineNowNext(projected && projected.blocks, clock);
+  if (!moment.nowBlock) return "";
+  const live = (projected.blocks || []).filter((block) => isLive(block));
+  const sorted = live.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const start = sorted.findIndex((block) => block.id === moment.nowBlock.id);
+  for (const block of sorted.slice(Math.max(0, start))) {
+    if (routineBlockRows(projected, block.id, day).some((row) => row.open)) return block.id;
+  }
+  return "";
 }
 
 /* Discover stays closed. The top button and the empty state both open the
@@ -2355,7 +2377,7 @@ export function routinesSettingsSheetHTML() {
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
-    <p class="sub">Focus mode dims every block except the current one. Countdowns stay on the row. Routines does not send reminders.</p>
+    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Reminders and the FAQ come later. Notifications stay off.</p>
     ${routineDayRolloverControlHTML(hour)}
     ${calc}
     ${routinesFaqHTML()}
