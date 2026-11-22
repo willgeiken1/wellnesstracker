@@ -523,7 +523,7 @@ describe("routine supply and mixed-on date", { concurrency: false }, () => {
     assert.match(lowPage, /Low supply · 3 on hand · 6 days left · Mixed 9 days ago/);
   });
 
-  test("a unit, quarter, or routine tap keeps a typed count and mix date", async () => {
+  test("a unit, step, or routine tap keeps a typed count and mix date", async () => {
     signIn();
     const morning = blockId("Morning routine");
     const night = blockId("Night routine");
@@ -551,11 +551,12 @@ describe("routine supply and mixed-on date", { concurrency: false }, () => {
     assert.match(html, /id="dr-item-mixed-on"[^>]*value="2026-11-10"/);
     assert.match(html, /data-unit="mg"[^>]*aria-pressed="true"/);
 
-    button.dataset = { action: "routines-item-quarter", amount: "0.5" };
+    button.dataset = { action: "routines-item-step", delta: "50" };
     for (const fn of sheetListeners.click) await fn(ev);
     assert.match(html, /id="dr-item-on-hand"[^>]*value="9"/);
     assert.match(html, /id="dr-item-mixed-on"[^>]*value="2026-11-10"/);
-    assert.match(html, /value="0.5"/);
+    assert.match(html, /id="dr-item-amount"[^>]*value="300"/);
+    assert.equal(app.ui.sd.amount, "300");
 
     fields["#dr-item-on-hand"].value = "";
     fields["#dr-item-mixed-on"].value = "";

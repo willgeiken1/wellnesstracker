@@ -303,7 +303,10 @@ describe("reconstitution calculator upgrades", { concurrency: false }, () => {
     assert.match(linked, /does not suggest an amount/);
     assert.match(linked, /data-calc="empty"/);
     assert.doesNotMatch(linked, /<form[\s>]/i);
-    assert.doesNotMatch(linked, /Volume to draw/);
+    assert.doesNotMatch(linked, /Volume to draw:/);
+    assert.match(linked, /<span>Volume to draw<\/span><b data-live="volume">–<\/b>/);
+    assert.match(linked, /<span>U-100 units<\/span><b data-live="units">–<\/b>/);
+    assert.doesNotMatch(linked, /<small>mL<\/small>/);
     assert.doesNotMatch(reconstitutionLiveHTML(), ADVICE);
 
     assert.equal(openRoutineDetails(check.id), true);

@@ -1,13 +1,14 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, projectDailyRoutines } from "../shared/daily-routines-store.js";
 import { routineSetupShows } from "../shared/routine-setup.js";
-import { routineTypeChoices } from "../shared/routine-types.js";
+import { routineBlockWindow } from "../shared/routine-dose.js";
+import { CUSTOM_TYPE_MAX, ROUTINE_TYPE_ORDER, routineShortName, routineTypeChoices } from "../shared/routine-types.js";
 import {
+  ROUTINE_BLOCK_COLORS,
   ROUTINE_DOSE_UNITS,
   deleteRoutineBlock,
   deleteRoutineItem,
   duplicateRoutineBlock,
-  parseRoutineAmount,
   rememberRoutineBlock,
   renameRoutineBlock,
   renameRoutineItem,
@@ -21,6 +22,28 @@ import {
   setRoutineBlockColor,
 } from "./daily-routines.js";
 import { supplyDraftError } from "../shared/routine-supply.js";
+import {
+  ARC,
+  amountDraftText,
+  amountEditText,
+  amountFieldText,
+  amountMeterHTML,
+  arcHolds,
+  arcMinutesAt,
+  arcPoint,
+  arcReadout,
+  arcSegmentPath,
+  arcSegments,
+  clockMinutes,
+  doseReadback,
+  parseSheetAmount,
+  patchLive,
+  plainAmount,
+  stepAllowed,
+  stepAmount,
+  stepButtonsHTML,
+  unitButtonsHTML,
+} from "./daily-routines-sheet-parts.js";
 
 /* Block and item editing. Logging stays a tap on the row.
    Drag follows home-drag.js: a handle starts the drag, the card uses
@@ -36,16 +59,8 @@ const EDGE_BOTTOM = 150;
 const MAX_SCROLL = 18;
 const LIFT_MS = 120;
 const SLIDE_MS = 180;
-const QUARTERS = Object.freeze([
-  Object.freeze({ value: 0.25, label: "¼" }),
-  Object.freeze({ value: 0.5, label: "½" }),
-  Object.freeze({ value: 0.75, label: "¾" }),
-  Object.freeze({ value: 1, label: "1" }),
-  Object.freeze({ value: 1.25, label: "1¼" }),
-  Object.freeze({ value: 1.5, label: "1½" }),
-  Object.freeze({ value: 1.75, label: "1¾" }),
-  Object.freeze({ value: 2, label: "2" }),
-]);
+const ARC_TAP_SLOP = 8;
+const BUMP_MS = 220;
 
 let hold = null;
 let pend = null;
@@ -144,7 +159,11 @@ export function openRoutineItemEditor(blockId, itemId, preset) {
   if (app.ROUTINES_ENABLED !== true || !canMutateRoutines() || !app.ui) return false;
   app.ui.sheet = "routines-item";
   const extra = preset && typeof preset === "object" ? preset : {};
-  app.ui.sd = routineItemDraft(app.state, { blockId, itemId, type: extra.type, kind: extra.kind });
+  const draft = routineItemDraft(app.state, { blockId, itemId, type: extra.type, kind: extra.kind });
+  /* Only a saved dose has a unit. Anything else starts with none picked, so
+     the unit is always one the user chose. */
+  if (!draft.itemId || draft.kind !== "dose") draft.unit = "";
+  app.ui.sd = draft;
   if (typeof blockId === "string" && blockId && rememberRoutineBlock(app.state, blockId) && typeof app.save === "function") app.save();
   if (typeof app.renderSheet === "function") app.renderSheet();
   return true;
@@ -177,9 +196,10 @@ export function paintRoutineBlock(blockId, color) {
   return true;
 }
 
-/* Copy the open item fields into the draft. A unit, quarter, or routine
-   tap rebuilds the sheet from the draft, so a typed count or mix date has
-   to be stored before that rebuild. A missing field is left as it was. */
+/* Copy the open item fields into the draft. A unit, step, or routine tap
+   redraws the sheet from the draft, so a typed count or mix date has to be
+   stored before that. A missing field is left as it was. The amount is
+   kept as plain digits, so ½ and 0,5 both save as 0.5. */
 export function rememberRoutineItemFields() {
   const sd = app.ui && app.ui.sd;
   if (!sd || !app.ui || app.ui.sheet !== "routines-item" || typeof app.$ !== "function") return false;
@@ -194,7 +214,7 @@ export function rememberRoutineItemFields() {
   const time = read("dr-item-time");
   if (name != null) sd.name = name;
   if (time != null) sd.time = time;
-  if (amount != null) sd.amount = amount;
+  if (amount != null) sd.amount = amountDraftText(amount);
   if (onHand != null) sd.onHand = onHand;
   if (mixed != null) sd.mixedOn = mixed;
   return true;
@@ -220,64 +240,431 @@ export function commitRoutineItemSheet() {
   return persist(true, sd.itemId ? "Item saved." : "Item added.");
 }
 
-function kindPressed(kind, current) {
-  return kind === current ? "true" : "false";
+/* ---------- The Add item and Edit item sheet ---------- */
+
+const ICON = Object.freeze({
+  supplement: `<rect x="4" y="8.5" width="16" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.7 8.8l4.6 6.4"/>`,
+  peptide: `<rect x="8.5" y="3.5" width="7" height="17" rx="3"/><path d="M7 3.5h10M8.5 13h7"/>`,
+  medication: `<circle cx="12" cy="12" r="7.5"/><path d="M7 12h10"/>`,
+  enhancer: `<path d="M13 3L6 13.5h5.5L10.5 21 18 10.5h-5.5z"/>`,
+  other: `<circle cx="6.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="17.5" cy="12" r="1.2"/>`,
+  custom: `<path d="M4 12.6V5.5A1.5 1.5 0 0 1 5.5 4h7.1l7.4 7.4-8.6 8.6z"/><circle cx="8.6" cy="8.6" r="1.2"/>`,
+  add: `<path d="M12 6v12M6 12h12"/>`,
+  check: `<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.2l2.5 2.5 4.9-5"/>`,
+  calc: `<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8.5 7.5h7M8.5 12h1M12 12h1M15.5 12h0M8.5 16h1M12 16h1M15.5 16h0"/>`,
+});
+
+function icon(name) {
+  return `<svg class="dr-ic" viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ICON.custom}</svg>`;
+}
+
+function clip(text, max) {
+  const value = String(text == null ? "" : text);
+  return value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
+}
+
+function n1(value) {
+  return String(Math.round(value * 10) / 10);
+}
+
+function blockTone(color) {
+  return ROUTINE_BLOCK_COLORS.includes(color) ? color : "citrus";
+}
+
+/* Built-in types in tab order, then the user's own. */
+function sheetTypeChoices(prefs) {
+  const rank = (choice) => {
+    const at = ROUTINE_TYPE_ORDER.indexOf(choice.id);
+    return at < 0 ? ROUTINE_TYPE_ORDER.length : at;
+  };
+  return routineTypeChoices(prefs)
+    .map((choice, index) => ({ choice, index }))
+    .sort((a, b) => (a.choice.custom ? 1 : 0) - (b.choice.custom ? 1 : 0) || rank(a.choice) - rank(b.choice) || a.index - b.index)
+    .map((row) => row.choice);
+}
+
+/* The routines the sheet offers, in page order. A hidden routine is not
+   offered. One with no window has no stroke on the path, only a legend row. */
+function sheetRoutines(view) {
+  return (view.blocks || [])
+    .filter((block) => block && block.hidden !== true)
+    .map((block) => ({
+      id: block.id,
+      full: block.name,
+      name: clip(routineShortName(block) || block.name, 22),
+      color: blockTone(block.color),
+      window: routineBlockWindow(block),
+    }));
+}
+
+function dosesOffered(sd, view, kind) {
+  /* A setup with nothing to take hides the Dose type for new items. An item
+     that is already a dose keeps it, so switching to Check can be undone. */
+  const storedDose = !!sd.itemId && (view.items || []).some((item) => item.id === sd.itemId && item.kind === "dose");
+  if (kind === "dose" || storedDose) return true;
+  return typeof app.routineShows === "function"
+    ? app.routineShows("doses")
+    : routineSetupShows(app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs, "doses");
+}
+
+function sunPathHTML(sd, routines, selected) {
+  const timeMin = clockMinutes(sd.time);
+  const picked = routines.filter((routine) => selected.has(routine.id));
+  const readout = arcReadout({ timeMin, routines, picked });
+  const strokes = [];
+  routines.forEach((routine, index) => {
+    arcSegments(routine.window).forEach(([from, to], part) => {
+      strokes.push(`<path class="dr-is-seg" data-live="seg-${index}-${part}" data-live-mode="attrs" data-color="${routine.color}" data-on="${selected.has(routine.id) ? "true" : "false"}" d="${arcSegmentPath(from, to)}"/>`);
+    });
+  });
+  let pin = "";
+  if (arcHolds(timeMin)) {
+    const [x, y] = arcPoint(timeMin);
+    pin = `<line x1="${n1(x)}" y1="${ARC.hy}" x2="${n1(x)}" y2="${n1(y)}" class="dr-is-pin"/><circle cx="${n1(x)}" cy="${n1(y)}" r="8" class="dr-is-pinh"/>`;
+  }
+  const labels = [5, 11, 14, 17, 23].map((hour) => `<text x="${n1(arcPoint(hour * 60)[0])}" y="116" class="dr-is-arc-lbl" text-anchor="middle">${String(hour).padStart(2, "0")}</text>`).join("");
+  const now = timeMin == null ? ARC.startMin : Math.max(ARC.startMin, Math.min(ARC.endMin, timeMin));
+  return `<svg class="dr-is-arc" id="dr-item-arc" data-live="arc" data-live-mode="attrs" data-arc="true" viewBox="0 0 ${ARC.width} ${ARC.height}" role="slider" tabindex="0" aria-label="Sun path. Tap or drag it to set a time. The Time field below does the same." aria-orientation="horizontal" aria-valuemin="${ARC.startMin}" aria-valuemax="${ARC.endMin}" aria-valuenow="${now}" aria-valuetext="${timeMin == null ? "No time set" : esc(sd.time)}">
+        <path d="${arcSegmentPath(ARC.startMin, ARC.endMin)}" class="dr-is-arc-dash"/>
+        <g>${strokes.join("")}</g>
+        <g data-live="pin">${pin}</g>
+        <line x1="10" y1="${ARC.hy}" x2="290" y2="${ARC.hy}" class="dr-is-arc-hz"/>
+        ${labels}
+        <text x="${ARC.cx}" y="66" class="dr-is-arc-big" text-anchor="middle" data-live="arc-big">${esc(clip(readout.big, 20))}</text>
+        <text x="${ARC.cx}" y="84" class="dr-is-arc-sub" text-anchor="middle" data-live="arc-sub">${esc(readout.sub)}</text>
+      </svg>`;
 }
 
 export function routineItemSheetHTML() {
   const sd = app.ui && app.ui.sd ? app.ui.sd : {};
   const kind = sd.kind === "dose" ? "dose" : "check";
+  const dose = kind === "dose";
   const view = projectDailyRoutines(app.state && app.state.dailyRoutines) || { blocks: [] };
   const selected = new Set(Array.isArray(sd.blockIds) ? sd.blockIds : []);
-  /* A setup with nothing to take hides the Dose type for new items. An item
-     that is already a dose keeps it, so switching to Check can be undone. */
-  const storedDose = !!sd.itemId && (view.items || []).some((item) => item.id === sd.itemId && item.kind === "dose");
-  const amount = parseRoutineAmount(sd.amount);
-  const units = ROUTINE_DOSE_UNITS.map((unit) => `<button type="button" class="dr-unit" data-action="routines-item-unit" data-unit="${esc(unit)}" aria-pressed="${sd.unit === unit ? "true" : "false"}">${esc(unit)}</button>`).join("");
-  const quarters = QUARTERS.map((chip) => `<button type="button" class="dr-quarter" data-action="routines-item-quarter" data-amount="${chip.value}" aria-pressed="${amount === chip.value ? "true" : "false"}" aria-label="${chip.value}">${chip.label}</button>`).join("");
-  const blocks = (view.blocks || []).map((block) => `<button type="button" class="dr-block-pick" data-action="routines-item-block" data-block-id="${esc(block.id)}" aria-pressed="${selected.has(block.id) ? "true" : "false"}">${esc(block.name)}</button>`).join("");
-  const typeChoices = routineTypeChoices(view.prefs);
-  const types = typeChoices.map((choice) => `<button type="button" class="dr-type-pick" data-action="routines-item-type" data-type="${esc(choice.id)}" aria-pressed="${sd.type === choice.id ? "true" : "false"}">${esc(choice.name)}</button>`).join("")
-    + (typeChoices.filter((choice) => choice.custom).length < 12 ? `<button type="button" class="dr-type-pick dr-type-new" data-action="routines-item-type-new">+ New type</button>` : "");
+  const editing = !!sd.itemId;
+  const offered = dosesOffered(sd, view, kind);
+  const amount = parseSheetAmount(sd.amount);
+  const unit = ROUTINE_DOSE_UNITS.includes(sd.unit) ? sd.unit : "";
   const today = routineClock().day;
-  const dose = kind === "dose" ? `<label class="field-label" for="dr-item-amount">Amount</label>
-    <input class="text-in" id="dr-item-amount" inputmode="decimal" autocomplete="off" enterkeyhint="done" value="${esc(sd.amount || "")}">
-    <span class="field-label" id="dr-quarter-label">Quarter amounts</span>
-    <div class="dr-quarters" role="group" aria-labelledby="dr-quarter-label">${quarters}</div>
-    <span class="field-label" id="dr-unit-label">Unit</span>
-    <div class="dr-units" role="group" aria-labelledby="dr-unit-label">${units}</div>
-    <p class="sub">The amount and unit are what you type. Nothing here suggests a dose.</p>` : "";
-  const mixed = kind === "dose" ? `<label class="field-label" for="dr-item-mixed-on">Mixed on, optional</label>
-    <input class="text-in" id="dr-item-mixed-on" type="date" autocomplete="off" max="${esc(today)}" value="${esc(sd.mixedOn || "")}">
-    <p class="sub">Leave this blank unless a vial was mixed. It shows how many days ago.</p>` : "";
-  const supply = `<label class="field-label" for="dr-item-on-hand">On hand, optional</label>
-    <input class="text-in" id="dr-item-on-hand" inputmode="numeric" autocomplete="off" enterkeyhint="done" value="${esc(sd.onHand || "")}">
-    <p class="sub">Leave this blank to hide it. Days left uses this count and the days you logged.</p>
-    ${mixed}`;
-  const remove = sd.itemId
-    ? `<button type="button" class="btn block" data-action="routines-delete-item" data-item-id="${esc(sd.itemId)}">Remove from all routines</button>`
+  const closed = !dose;
+  const tab = closed ? ` tabindex="-1"` : "";
+
+  const typeChoices = sheetTypeChoices(view.prefs);
+  const types = typeChoices.map((choice, index) => `<button type="button" class="dr-is-type${choice.custom ? " dr-is-type-own" : ""}" data-live="type-${index}" data-live-mode="attrs" data-action="routines-item-type" data-type="${esc(choice.id)}" aria-pressed="${sd.type === choice.id ? "true" : "false"}"><i>${icon(choice.custom ? "custom" : choice.id)}</i><span>${esc(choice.name)}</span></button>`).join("")
+    + (typeChoices.filter((choice) => choice.custom).length < CUSTOM_TYPE_MAX ? `<button type="button" class="dr-is-type dr-is-type-new" data-action="routines-item-type-new"><i>${icon("add")}</i><span>New type</span></button>` : "");
+
+  const kindCard = (value, name, title, line) => `<button type="button" class="dr-is-kind" role="radio" data-live="kind-${value}" data-live-mode="attrs" data-action="routines-item-kind" data-kind="${value}" aria-checked="${kind === value ? "true" : "false"}" tabindex="${kind === value ? "0" : "-1"}">${icon(name)}<b>${title}</b><span>${line}</span></button>`;
+  const kinds = kindCard("check", "check", "Check", "Tick it once when it's done.")
+    + (offered ? kindCard("dose", "peptide", "Dose", "Log the amount and unit you type.") : "");
+
+  const doseCard = offered ? `<div class="dr-is-reveal" id="dr-item-dose" data-live="dose" data-live-mode="attrs" data-open="${dose ? "true" : "false"}" aria-hidden="${dose ? "false" : "true"}"${closed ? " inert" : ""}><div><div class="dr-is-reveal-in">
+      <div class="dr-is-dcard">
+        <div class="dr-is-k"><label for="dr-item-amount">Amount</label><button type="button" class="dr-clr" data-live="amount-clear" data-live-mode="attrs" data-action="routines-item-amount-clear"${amount == null && !sd.amount ? " disabled" : ""}${tab}>Clear</button></div>
+        <div class="dr-readout" id="dr-item-readout"><input class="dr-amt-in" id="dr-item-amount" data-live="amount" data-live-mode="value" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="0" aria-describedby="dr-item-sum"${tab} value="${esc(amountFieldText(sd.amount))}"><em class="dr-unit-out${unit ? "" : " dr-unit-none"}" data-live="unit-out">${unit ? esc(unit) : "unit"}</em></div>
+        <div class="dr-useg" role="group" aria-label="Unit">${unitButtonsHTML(ROUTINE_DOSE_UNITS, unit, "routines-item-unit", { closed })}</div>
+        <div class="dr-steps-cap" aria-hidden="true"><span>Take away</span><span>Add</span></div>
+        <div class="dr-steps" role="group" aria-label="Change the amount" data-live="steps">${stepButtonsHTML(amount, "routines-item-step", { closed })}</div>
+        <svg class="dr-gauge" data-live="gauge" viewBox="0 0 300 34" aria-hidden="true"${amountMeterHTML(amount) ? "" : " hidden"}>${amountMeterHTML(amount)}</svg>
+        <p class="dr-is-sum${amount != null && unit ? "" : " dr-is-sum-wait"}" id="dr-item-sum" data-live="sum" aria-live="polite">${esc(doseReadback(amount, unit))}</p>
+      </div>
+      <p class="dr-is-help">The amount and unit are what you type. Nothing here suggests a dose.</p>
+      <button type="button" class="dr-is-calc" data-live="calc" data-live-mode="attrs" data-action="routines-item-calc"${dose && sd.type === "peptide" ? "" : " hidden"}${tab}>${icon("calc")}<span class="dr-is-calc-t"><b>Reconstitution calculator</b><small>Works out mL from your vial and water</small></span><span class="dr-is-chev" aria-hidden="true">›</span></button>
+    </div></div></div>` : "";
+
+  const routines = sheetRoutines(view);
+  const legend = routines.length
+    ? `<div class="dr-is-legend" role="group" aria-label="Routines">${routines.map((routine, index) => `<button type="button" data-live="block-${index}" data-live-mode="attrs" data-action="routines-item-block" data-block-id="${esc(routine.id)}" data-color="${routine.color}" aria-pressed="${selected.has(routine.id) ? "true" : "false"}"><span class="dr-is-ck" aria-hidden="true"><span></span></span>${esc(routine.full)}</button>`).join("")}</div>`
     : "";
-  return `<h3>${sd.itemId ? "Edit item" : "Add item"}</h3>
-    <label class="field-label" for="dr-item-name">Name</label>
-    <input class="text-in" id="dr-item-name" autocomplete="off" maxlength="80" enterkeyhint="done" value="${esc(sd.name || "")}">
-    <span class="field-label" id="dr-type-label">Type</span>
-    <div class="dr-type-picks" role="group" aria-labelledby="dr-type-label">${types}</div>
-    <label class="field-label" for="dr-item-time">When do you take it?</label>
-    <input class="text-in" id="dr-item-time" type="time" step="300" autocomplete="off" value="${esc(sd.time || "")}">
-    <p class="sub">Optional. Leave it blank to go by the routine's start.</p>
-    <span class="field-label" id="dr-kind-label">Log as</span>
-    <div class="dr-kind" role="group" aria-labelledby="dr-kind-label">
-      <button type="button" data-action="routines-item-kind" data-kind="check" aria-pressed="${kindPressed("check", kind)}">Check</button>
-      ${kind === "dose" || storedDose || (typeof app.routineShows === "function" ? app.routineShows("doses") : routineSetupShows(app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs, "doses")) ? `<button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>` : ""}
+  const hasTime = typeof sd.time === "string" && sd.time.trim() !== "";
+
+  const mixed = dose ? `<label class="dr-is-mini" for="dr-item-mixed-on"><span>Mixed on, optional</span><input id="dr-item-mixed-on" type="date" autocomplete="off" max="${esc(today)}" value="${esc(sd.mixedOn || "")}" aria-describedby="dr-item-mixed-help"></label>` : "";
+  const remove = editing
+    ? `<button type="button" class="btn block dr-is-remove" data-action="routines-delete-item" data-item-id="${esc(sd.itemId)}">Remove from all routines</button>`
+    : "";
+
+  return `<div class="dr-is" id="dr-item-sheet">
+    <h3>${editing ? "Edit item" : "Add item"}</h3>
+    <div class="dr-is-blk">
+      <label class="dr-is-cap" for="dr-item-name">Name</label>
+      <input class="dr-is-name" id="dr-item-name" autocomplete="off" maxlength="80" enterkeyhint="done" placeholder="What is it?" value="${esc(sd.name || "")}">
     </div>
-    ${dose}
-    ${supply}
-    <span class="field-label" id="dr-blocks-label">Routines</span>
-    <div class="dr-block-picks" role="group" aria-labelledby="dr-blocks-label">${blocks}</div>
-    <p class="sub">${sd.type ? "Optional with a type. It shows on its tab either way." : "The same item can sit in more than one routine. Logging it once covers all of them."}</p>
-    <p class="dr-evidence">Custom item. No evidence is attached.</p>
-    <button type="button" class="btn primary block" data-action="routines-item-save">${sd.itemId ? "Save" : "Add item"}</button>
-    ${remove}`;
+    <div class="dr-is-blk">
+      <span class="dr-is-cap" id="dr-type-label">Type <em>Optional</em></span>
+      <div class="dr-is-types" role="group" aria-labelledby="dr-type-label">${types}</div>
+    </div>
+    <div class="dr-is-blk">
+      <span class="dr-is-cap" id="dr-kind-label">Log as</span>
+      <div class="dr-is-kinds" role="radiogroup" aria-labelledby="dr-kind-label" data-count="${offered ? "2" : "1"}">${kinds}</div>
+    </div>
+    ${doseCard}
+    <div class="dr-is-blk">
+      <span class="dr-is-cap" id="dr-arc-label">Routines and time</span>
+      <div class="dr-is-arcwrap">
+        ${sunPathHTML(sd, routines, selected)}
+        ${legend}
+        <div class="dr-is-trow" data-live="time-row" data-live-mode="attrs" data-empty="${hasTime ? "false" : "true"}">
+          <label for="dr-item-time">Time</label>
+          <span class="dr-is-tval"><input id="dr-item-time" data-live="time" data-live-mode="value" type="time" step="300" autocomplete="off" value="${esc(sd.time || "")}"><span class="dr-is-tph" aria-hidden="true">Routine start</span></span>
+          <button type="button" class="dr-is-tclear" data-live="time-clear" data-live-mode="attrs" data-action="routines-item-time-clear"${hasTime ? "" : " hidden"}>Clear</button>
+        </div>
+      </div>
+      <p class="dr-is-help" data-live="routine-help">${sd.type ? "Optional with a type. It shows on its tab either way." : "The same item can sit in more than one routine. Logging it once covers all of them."}</p>
+    </div>
+    <div class="dr-is-blk" data-live="supply">
+      <div class="dr-is-twof" data-count="${dose ? "2" : "1"}">
+        <label class="dr-is-mini" for="dr-item-on-hand"><span>On hand, optional</span><input id="dr-item-on-hand" inputmode="numeric" autocomplete="off" enterkeyhint="done" placeholder="Hidden" value="${esc(sd.onHand || "")}" aria-describedby="dr-item-on-hand-help"></label>
+        ${mixed}
+      </div>
+      <p class="dr-is-help" id="dr-item-on-hand-help">Leave this blank to hide it. Days left uses this count and the days you logged.</p>
+      ${dose ? `<p class="dr-is-help" id="dr-item-mixed-help">Leave this blank unless a vial was mixed. It shows how many days ago.</p>` : ""}
+    </div>
+    <p class="dr-is-evi"><i aria-hidden="true">i</i><span class="dr-evidence">Custom item. No evidence is attached.</span></p>
+    <button type="button" class="btn primary block dr-is-cta" data-action="routines-item-save">${editing ? "Save" : "Add item"}</button>
+    ${remove}
+  </div>`;
+}
+
+/* Redraw the open item sheet from its draft. In the app the parts that
+   changed are updated in place. When that cannot be done the whole sheet
+   is drawn again, unless the user is typing, where a redraw would drop the
+   keyboard. */
+export function refreshRoutineItemSheet(options) {
+  if (!app.ui || app.ui.sheet !== "routines-item") return false;
+  const root = typeof app.$ === "function" ? app.$("#dr-item-sheet") : null;
+  let patched = false;
+  try { patched = patchLive(root, routineItemSheetHTML()); } catch (e) { patched = false; }
+  if (!patched && !(options && options.typing) && typeof app.renderSheet === "function") app.renderSheet();
+  return patched;
+}
+
+/* A short scale on the number after a step. Reduce Motion skips it. */
+function bumpReadout(selector) {
+  if (!motionMs() || typeof app.$ !== "function") return;
+  const el = app.$(selector);
+  if (!el || !el.classList || typeof el.classList.add !== "function") return;
+  el.classList.remove("dr-bump");
+  void el.offsetWidth;
+  el.classList.add("dr-bump");
+  setTimeout(() => { if (el.classList) el.classList.remove("dr-bump"); }, BUMP_MS + 40);
+}
+
+function itemDraft() {
+  return app.ui && app.ui.sheet === "routines-item" && app.ui.sd ? app.ui.sd : null;
+}
+
+/* After a tap changed the draft, put the new text in the field. A field
+   that still has focus (a phone keeps the keyboard up through a tap) shows
+   plain digits. A button that just went away hands focus to the field. */
+function settleField(selector, text, editText) {
+  const field = typeof app.$ === "function" ? app.$(selector) : null;
+  if (!field || typeof field.value !== "string") return;
+  const active = typeof document !== "undefined" ? document.activeElement : null;
+  const value = active === field && editText != null ? editText : text;
+  if (field.value !== value) field.value = value;
+  const lost = active && active !== field && (active.disabled === true || active.hidden === true) && typeof field.closest === "function" && field.closest(".sheet-card") && field.closest(".sheet-card").contains(active);
+  if (lost && typeof field.focus === "function") field.focus({ preventScroll: true });
+}
+
+function settleAmount() {
+  const sd = itemDraft();
+  if (sd) settleField("#dr-item-amount", amountFieldText(sd.amount), amountEditText(sd.amount));
+}
+
+/* Add to or take away from the typed amount. The step has to be one the
+   amount on screen offers, and a result of zero or less clears the field. */
+export function stepRoutineItemAmount(delta) {
+  const sd = itemDraft();
+  if (!sd || sd.kind !== "dose") return false;
+  rememberRoutineItemFields();
+  const amount = parseSheetAmount(sd.amount);
+  if (!stepAllowed(amount, delta)) return false;
+  const next = stepAmount(amount, delta);
+  sd.amount = next == null ? "" : plainAmount(next);
+  refreshRoutineItemSheet();
+  settleAmount();
+  bumpReadout("#dr-item-readout");
+  return true;
+}
+
+export function clearRoutineItemAmount() {
+  const sd = itemDraft();
+  if (!sd) return false;
+  rememberRoutineItemFields();
+  sd.amount = "";
+  refreshRoutineItemSheet();
+  settleAmount();
+  bumpReadout("#dr-item-readout");
+  return true;
+}
+
+export function clearRoutineItemTime() {
+  const sd = itemDraft();
+  if (!sd) return false;
+  rememberRoutineItemFields();
+  sd.time = "";
+  refreshRoutineItemSheet();
+  settleField("#dr-item-time", "", "");
+  return true;
+}
+
+/* A typed character in the sheet. The amount and the time redraw what
+   depends on them. The count takes digits only. */
+export function noteRoutineItemField(el) {
+  const sd = itemDraft();
+  if (!sd || !el) return false;
+  if (el.id === "dr-item-on-hand" && typeof el.value === "string") {
+    const digits = el.value.replace(/\D/g, "");
+    if (digits !== el.value) el.value = digits;
+  }
+  rememberRoutineItemFields();
+  if (el.id === "dr-item-amount" || el.id === "dr-item-time") refreshRoutineItemSheet({ typing: true });
+  return true;
+}
+
+/* ---------- Setting the time on the sun path ---------- */
+
+let arcDrag = null;
+
+function arcOf(target) {
+  if (!itemDraft() || !target || typeof target.closest !== "function") return null;
+  return target.closest("[data-arc]");
+}
+
+function setArcMinutes(minutes) {
+  const sd = itemDraft();
+  if (!sd || minutes == null) return false;
+  const [hours, mins] = [Math.floor(minutes / 60), minutes % 60];
+  const text = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+  if (sd.time === text) return true;
+  sd.time = text;
+  refreshRoutineItemSheet();
+  settleField("#dr-item-time", text, text);
+  return true;
+}
+
+function setArcFromPointer(clientX) {
+  const svg = typeof app.$ === "function" ? app.$("#dr-item-arc") : null;
+  if (!svg || typeof svg.getBoundingClientRect !== "function") return false;
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width) return false;
+  return setArcMinutes(arcMinutesAt(((clientX - rect.left) / rect.width) * ARC.width));
+}
+
+function captureArc(svg, pointerId) {
+  if (svg && typeof svg.setPointerCapture === "function" && pointerId != null) {
+    try { svg.setPointerCapture(pointerId); } catch (e) { /* the document listeners still follow the pointer */ }
+  }
+}
+
+/* A mouse sets the time on press and follows the drag. A finger sets it on
+   a tap or a sideways drag, so a scroll that starts on the path stays a scroll. */
+function onArcDown(ev) {
+  if (!ev || ev.button > 0 || ev.isPrimary === false) return;
+  const svg = arcOf(ev.target);
+  if (!svg) return;
+  rememberRoutineItemFields();
+  arcDrag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, live: ev.pointerType === "mouse" };
+  if (arcDrag.live) {
+    captureArc(svg, ev.pointerId);
+    setArcFromPointer(ev.clientX);
+  }
+}
+
+function onArcMove(ev) {
+  if (!arcDrag || ev.pointerId !== arcDrag.id) return;
+  if (!itemDraft()) { arcDrag = null; return; }
+  if (!arcDrag.live) {
+    const dx = Math.abs(ev.clientX - arcDrag.x);
+    const dy = Math.abs(ev.clientY - arcDrag.y);
+    if (dx < ARC_TAP_SLOP || dx <= dy) return;
+    arcDrag.live = true;
+    captureArc(typeof app.$ === "function" ? app.$("#dr-item-arc") : null, ev.pointerId);
+  }
+  setArcFromPointer(ev.clientX);
+  if (ev.cancelable) ev.preventDefault();
+}
+
+function onArcUp(ev) {
+  if (!arcDrag || ev.pointerId !== arcDrag.id) return;
+  const tap = !arcDrag.live && Math.abs(ev.clientX - arcDrag.x) < ARC_TAP_SLOP && Math.abs(ev.clientY - arcDrag.y) < ARC_TAP_SLOP;
+  arcDrag = null;
+  if (tap && itemDraft()) setArcFromPointer(ev.clientX);
+}
+
+function onArcCancel(ev) {
+  if (arcDrag && ev.pointerId === arcDrag.id) arcDrag = null;
+}
+
+/* Arrow keys move the time by 5 minutes, Page keys by an hour. With no
+   time yet, the first key starts from the routine's start, or noon. */
+function onArcKey(ev) {
+  const svg = arcOf(ev.target);
+  if (!svg || ev.target !== svg) return false;
+  const step = ev.key === "ArrowLeft" || ev.key === "ArrowDown" ? -5
+    : ev.key === "ArrowRight" || ev.key === "ArrowUp" ? 5
+      : ev.key === "PageDown" ? -60 : ev.key === "PageUp" ? 60 : 0;
+  if (!step && ev.key !== "Home" && ev.key !== "End") return false;
+  ev.preventDefault();
+  const sd = itemDraft();
+  rememberRoutineItemFields();
+  const clamp = (minutes) => Math.max(ARC.startMin, Math.min(ARC.endMin, minutes));
+  const current = clockMinutes(sd.time);
+  let next;
+  if (ev.key === "Home") next = ARC.startMin;
+  else if (ev.key === "End") next = ARC.endMin;
+  else if (current != null) next = clamp(Math.round((current + step) / 5) * 5);
+  else {
+    const view = projectDailyRoutines(app.state && app.state.dailyRoutines) || { blocks: [] };
+    const picked = new Set(Array.isArray(sd.blockIds) ? sd.blockIds : []);
+    const first = sheetRoutines(view).find((routine) => picked.has(routine.id) && routine.window);
+    next = clamp(first ? first.window.startMin : 12 * 60);
+  }
+  setArcMinutes(next);
+  const again = typeof app.$ === "function" ? app.$("#dr-item-arc") : null;
+  if (again && again !== svg && typeof again.focus === "function") again.focus({ preventScroll: true });
+  return true;
+}
+
+/* Log as is a radio group: the arrow keys move between Check and Dose. */
+function onKindKey(ev) {
+  const radio = ev.target && typeof ev.target.closest === "function" ? ev.target.closest('[role="radio"][data-action="routines-item-kind"]') : null;
+  if (!radio || !itemDraft()) return false;
+  const step = ev.key === "ArrowRight" || ev.key === "ArrowDown" ? 1 : ev.key === "ArrowLeft" || ev.key === "ArrowUp" ? -1 : 0;
+  if (!step) return false;
+  const group = radio.closest('[role="radiogroup"]');
+  const radios = group ? Array.from(group.querySelectorAll('[role="radio"]')) : [];
+  if (radios.length < 2) return false;
+  ev.preventDefault();
+  const next = radios[(radios.indexOf(radio) + step + radios.length) % radios.length];
+  const kind = next.dataset.kind === "dose" ? "dose" : "check";
+  rememberRoutineItemFields();
+  app.ui.sd.kind = kind;
+  refreshRoutineItemSheet();
+  const again = typeof app.$ === "function" ? app.$(`[role="radio"][data-kind="${kind}"]`) : null;
+  if (again && typeof again.focus === "function") again.focus({ preventScroll: true });
+  return true;
+}
+
+function onSheetKey(ev) {
+  if (!ev || !itemDraft()) return;
+  if (onArcKey(ev)) return;
+  onKindKey(ev);
+}
+
+/* The amount shows ¼ ½ ¾ at rest and plain digits while it is edited. */
+function onAmountFocus(ev) {
+  const el = ev && ev.target;
+  if (!el || el.id !== "dr-item-amount" || !itemDraft()) return;
+  const text = amountEditText(app.ui.sd.amount);
+  if (typeof el.value === "string" && el.value !== text) el.value = text;
+}
+
+function onAmountBlur(ev) {
+  const el = ev && ev.target;
+  if (!el || el.id !== "dr-item-amount" || !itemDraft()) return;
+  rememberRoutineItemFields();
+  el.value = amountFieldText(app.ui.sd.amount);
+  refreshRoutineItemSheet({ typing: true });
 }
 
 function cancelHold() {
@@ -573,6 +960,13 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
   document.addEventListener("pointercancel", onUp);
   document.addEventListener("touchmove", (ev) => { if (drag && ev.cancelable) ev.preventDefault(); }, { passive: false });
   document.addEventListener("keydown", onKey);
+  document.addEventListener("keydown", onSheetKey);
+  document.addEventListener("pointerdown", onArcDown);
+  document.addEventListener("pointermove", onArcMove, { passive: false });
+  document.addEventListener("pointerup", onArcUp);
+  document.addEventListener("pointercancel", onArcCancel);
+  document.addEventListener("focusin", onAmountFocus);
+  document.addEventListener("focusout", onAmountBlur);
   document.addEventListener("contextmenu", onContextMenu);
   document.addEventListener("selectstart", (ev) => {
     if (!hold && (typeof performance !== "undefined" ? performance.now() : Date.now()) - holdFiredAt >= 1200) return;
@@ -592,3 +986,8 @@ app.paintRoutineBlock = paintRoutineBlock;
 app.rememberRoutineItemFields = rememberRoutineItemFields;
 app.commitRoutineItemSheet = commitRoutineItemSheet;
 app.routineItemSheetHTML = routineItemSheetHTML;
+app.refreshRoutineItemSheet = refreshRoutineItemSheet;
+app.stepRoutineItemAmount = stepRoutineItemAmount;
+app.clearRoutineItemAmount = clearRoutineItemAmount;
+app.clearRoutineItemTime = clearRoutineItemTime;
+app.noteRoutineItemField = noteRoutineItemField;

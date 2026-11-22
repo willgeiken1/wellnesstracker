@@ -1,6 +1,6 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, projectDailyRoutines } from "../shared/daily-routines-store.js";
-import { reconstitutionNoteText, reconstitutionResult, reconstitutionResultHTML } from "./reconstitution.js";
+import { formatCalcNumber, reconstitutionNoteText, reconstitutionResult, reconstitutionResultHTML } from "./reconstitution.js";
 import {
   compoundDoseHistory,
   doseCountdownText,
@@ -11,6 +11,19 @@ import {
   routineLogDraft,
   saveRoutineItemNote,
 } from "./daily-routines.js";
+import {
+  amountDraftText,
+  amountEditText,
+  amountFieldText,
+  parseSheetAmount,
+  patchLive,
+  plainAmount,
+  stepAllowed,
+  stepAmount,
+  stepButtonsHTML,
+  syringeHTML,
+  unitButtonsHTML,
+} from "./daily-routines-sheet-parts.js";
 
 /* Log edits, per-compound history, and the reconstitution screen.
    Logging stays a tap. This screen changes one log's amount and day.
@@ -101,17 +114,64 @@ export function commitRoutineLogSheet() {
   return true;
 }
 
+function savedDoseItemId(itemId) {
+  if (typeof itemId !== "string" || !itemId) return "";
+  const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
+  const item = view && (view.items || []).find((row) => row.id === itemId);
+  return item && item.kind === "dose" ? item.id : "";
+}
+
 export function openReconstitution(itemId) {
   if (!ready() || !app.ui) return false;
-  let linked = "";
-  if (typeof itemId === "string" && itemId) {
-    const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
-    const item = view && (view.items || []).find((row) => row.id === itemId);
-    if (item && item.kind === "dose") linked = item.id;
-  }
   app.ui.sheet = "routines-calc";
-  app.ui.sd = { vial: "", water: "", dose: "", vialUnit: "mg", doseUnit: "mcg", itemId: linked, error: "" };
+  app.ui.sd = { vial: "", water: "", dose: "", vialUnit: "mg", doseUnit: "mcg", itemId: savedDoseItemId(itemId), error: "" };
   if (typeof app.renderSheet === "function") app.renderSheet();
+  return true;
+}
+
+/* From the dose card of the open item sheet. The amount and unit typed
+   there carry into Desired amount when the unit is one the calculator
+   takes. Every other field starts empty. The item draft is kept whole and
+   comes back on Back and on Close. Save shows only for an item that is
+   already saved as a dose. */
+export function openReconstitutionFromItem() {
+  if (!ready() || !app.ui || app.ui.sheet !== "routines-item" || !app.ui.sd) return false;
+  if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+  const draft = app.ui.sd;
+  const amount = parseSheetAmount(draft.amount);
+  const carry = amount != null && CALC_UNITS.includes(draft.unit);
+  const card = typeof app.$ === "function" ? app.$("#sheet .sheet-card") : null;
+  app.ui.sheet = "routines-calc";
+  app.ui.sd = {
+    vial: "",
+    water: "",
+    dose: carry ? plainAmount(amount) : "",
+    vialUnit: "mg",
+    doseUnit: carry ? draft.unit : "mcg",
+    itemId: savedDoseItemId(draft.itemId),
+    error: "",
+    from: draft,
+    fromTop: card && typeof card.scrollTop === "number" ? card.scrollTop : 0,
+  };
+  if (typeof app.renderSheet === "function") app.renderSheet();
+  return true;
+}
+
+/* Back to the item sheet the calculator was opened from, with every typed
+   field as it was. Returns false when there is no item sheet to go back to. */
+export function closeReconstitution() {
+  const sd = app.ui && app.ui.sheet === "routines-calc" ? app.ui.sd : null;
+  if (!sd || !sd.from || typeof sd.from !== "object") return false;
+  const top = typeof sd.fromTop === "number" ? sd.fromTop : 0;
+  app.ui.sheet = "routines-item";
+  app.ui.sd = sd.from;
+  if (typeof app.renderSheet === "function") app.renderSheet();
+  if (typeof app.$ === "function") {
+    const card = app.$("#sheet .sheet-card");
+    if (card && typeof card.scrollTop === "number" && top) card.scrollTop = top;
+    const link = app.$('[data-action="routines-item-calc"]');
+    if (link && link.hidden !== true && typeof link.focus === "function") link.focus({ preventScroll: true });
+  }
   return true;
 }
 
@@ -171,56 +231,158 @@ export function routineLogSheetHTML() {
     <button type="button" class="btn block" data-action="sheet-close">Cancel</button>`;
 }
 
-export function reconstitutionLiveHTML() {
-  const sd = app.ui && app.ui.sd ? app.ui.sd : {};
-  return reconstitutionResultHTML(reconstitutionResult({
-    vialAmount: parseRoutineAmount(sd.vial),
-    waterMl: parseRoutineAmount(sd.water),
-    doseAmount: parseRoutineAmount(sd.dose),
+function calcResult(sd) {
+  return reconstitutionResult({
+    vialAmount: parseSheetAmount(sd.vial),
+    waterMl: parseSheetAmount(sd.water),
+    doseAmount: parseSheetAmount(sd.dose),
     vialUnit: sd.vialUnit,
     doseUnit: sd.doseUnit,
-  }));
+  });
 }
 
-function unitButtons(current, action) {
-  return CALC_UNITS.map((unit) => `<button type="button" class="dr-unit" data-action="${action}" data-unit="${esc(unit)}" aria-pressed="${current === unit ? "true" : "false"}">${esc(unit)}</button>`).join("");
+export function reconstitutionLiveHTML() {
+  const sd = app.ui && app.ui.sd ? app.ui.sd : {};
+  return reconstitutionResultHTML(calcResult(sd));
+}
+
+const CALC_FIELDS = Object.freeze([
+  Object.freeze({ key: "vial", id: "dr-calc-vial", label: "Vial amount", tone: "lavender", unitKey: "vialUnit", unitAction: "routines-calc-vial-unit", unitLabel: "Vial unit", stepLabel: "Change the vial amount", enter: "next" }),
+  Object.freeze({ key: "water", id: "dr-calc-water", label: "Water volume", tone: "pink", unitKey: "", unitAction: "", unitLabel: "", stepLabel: "Change the water volume", enter: "next" }),
+  Object.freeze({ key: "dose", id: "dr-calc-dose", label: "Desired amount", tone: "citrus", unitKey: "doseUnit", unitAction: "routines-calc-dose-unit", unitLabel: "Desired amount unit", stepLabel: "Change the desired amount", enter: "done" }),
+]);
+
+function calcField(key) {
+  return CALC_FIELDS.find((field) => field.key === key) || null;
 }
 
 function readCalcFields(sd) {
   if (typeof app.$ !== "function") return;
-  const vial = app.$("#dr-calc-vial");
-  const water = app.$("#dr-calc-water");
-  const dose = app.$("#dr-calc-dose");
-  if (vial && typeof vial.value === "string") sd.vial = vial.value;
-  if (water && typeof water.value === "string") sd.water = water.value;
-  if (dose && typeof dose.value === "string") sd.dose = dose.value;
+  for (const field of CALC_FIELDS) {
+    const el = app.$(`#${field.id}`);
+    if (el && typeof el.value === "string") sd[field.key] = amountDraftText(el.value);
+  }
+}
+
+/* One input: a big typed number, its unit, Clear, and the step buttons. */
+function calcCardHTML(field, sd) {
+  const raw = typeof sd[field.key] === "string" ? sd[field.key] : "";
+  const amount = parseSheetAmount(raw);
+  const unit = field.unitKey ? knownUnit(sd[field.unitKey]) : "mL";
+  const units = field.unitKey
+    ? `<div class="dr-useg" role="group" aria-label="${field.unitLabel}">${unitButtonsHTML(CALC_UNITS, unit, field.unitAction, { live: `${field.key}-unit` })}</div>`
+    : "";
+  return `<div class="dr-rc-card" data-color="${field.tone}">
+      <div class="dr-is-k"><label for="${field.id}">${field.label}</label><button type="button" class="dr-clr" data-live="${field.key}-clear" data-live-mode="attrs" data-action="routines-calc-clear" data-field="${field.key}"${raw ? "" : " disabled"}>Clear</button></div>
+      <div class="dr-readout" id="${field.id}-readout"><input class="dr-amt-in" id="${field.id}" data-live="${field.key}" data-live-mode="value" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="${field.enter}" placeholder="0" value="${esc(amountFieldText(raw))}"><em class="dr-unit-out" data-live="${field.key}-unit-out">${esc(unit)}</em></div>
+      ${units}
+      <div class="dr-steps" role="group" aria-label="${field.stepLabel}" data-live="${field.key}-steps">${stepButtonsHTML(amount, "routines-calc-step", { field: field.key })}</div>
+    </div>`;
+}
+
+/* The answer, large, over the U-100 syringe and the app's own lines. */
+function calcAnswerHTML(sd) {
+  const result = calcResult(sd);
+  const ok = result.ok === true;
+  const volume = ok ? `${esc(formatCalcNumber(result.volumeMl))}<small>mL</small>` : "–";
+  const units = ok ? esc(formatCalcNumber(result.syringeUnits)) : "–";
+  return `<div class="dr-rc-res" data-live="answer" data-live-mode="attrs" data-calc="${ok ? "ready" : "empty"}" aria-live="polite">
+      <div class="dr-rc-two">
+        <div><span>Volume to draw</span><b data-live="volume">${volume}</b></div>
+        <div><span>U-100 units</span><b data-live="units">${units}</b></div>
+      </div>
+      ${syringeHTML(ok ? result.syringeUnits : null)}
+      <div id="dr-calc-result" data-live="math">${reconstitutionLiveHTML()}</div>
+    </div>`;
 }
 
 export function reconstitutionSheetHTML() {
   const sd = app.ui && app.ui.sd ? app.ui.sd : {};
-  const vialUnit = knownUnit(sd.vialUnit);
-  const doseUnit = knownUnit(sd.doseUnit);
   const error = sd.error ? `<p class="dr-log-error" id="dr-calc-error" role="alert">${esc(sd.error)}</p>` : "";
   const save = sd.itemId
-    ? `<button type="button" class="btn primary block" data-action="routines-calc-save">Save as note on this item</button>
-    <p class="sub">Saves the volume and U-100 units on this item. It does not log a dose, and it does not suggest an amount.</p>`
+    ? `<button type="button" class="btn primary block dr-is-cta" data-action="routines-calc-save">Save as note on this item</button>
+    <p class="dr-is-help dr-rc-save-note">Saves the volume and U-100 units on this item. It does not log a dose, and it does not suggest an amount.</p>`
     : "";
-  return `<h3 id="dr-calc-title">Reconstitution calculator</h3>
-    <p class="sub">Enter a vial amount, a water volume, and a desired amount. The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen.</p>
-    <label class="field-label" for="dr-calc-vial">Vial amount</label>
-    <input class="text-in" id="dr-calc-vial" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(sd.vial || "")}">
-    <span class="field-label" id="dr-calc-vial-unit">Vial unit</span>
-    <div class="dr-units" role="group" aria-labelledby="dr-calc-vial-unit">${unitButtons(vialUnit, "routines-calc-vial-unit")}</div>
-    <label class="field-label" for="dr-calc-water">Water volume (mL)</label>
-    <input class="text-in" id="dr-calc-water" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(sd.water || "")}">
-    <label class="field-label" for="dr-calc-dose">Desired amount</label>
-    <input class="text-in" id="dr-calc-dose" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${esc(sd.dose || "")}">
-    <span class="field-label" id="dr-calc-dose-unit">Desired amount unit</span>
-    <div class="dr-units" role="group" aria-labelledby="dr-calc-dose-unit">${unitButtons(doseUnit, "routines-calc-dose-unit")}</div>
-    <div id="dr-calc-result">${reconstitutionLiveHTML()}</div>
-    ${error}
+  const from = sd.from && typeof sd.from === "object" ? sd.from : null;
+  const back = from
+    ? `<button type="button" class="dr-rc-back" data-action="routines-calc-back"><span aria-hidden="true">‹</span> ${from.itemId ? "Edit item" : "Add item"}</button>`
+    : "";
+  return `<div class="dr-is dr-rc" id="dr-calc-sheet">
+    ${back}
+    <h3 id="dr-calc-title">Reconstitution calculator</h3>
+    <p class="dr-is-help">Enter a vial amount, a water volume, and a desired amount. The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen.</p>
+    ${CALC_FIELDS.map((field) => calcCardHTML(field, sd)).join("")}
+    ${calcAnswerHTML(sd)}
+    <div data-live="error">${error}</div>
     ${save}
-    <button type="button" class="btn block" data-action="sheet-close">Close</button>`;
+    <button type="button" class="btn block dr-rc-close" data-action="sheet-close">Close</button>
+  </div>`;
+}
+
+/* Redraw the open calculator from its draft, in place when it can be. */
+function refreshCalc(options) {
+  if (!app.ui || app.ui.sheet !== "routines-calc") return false;
+  const root = typeof app.$ === "function" ? app.$("#dr-calc-sheet") : null;
+  let patched = false;
+  try { patched = patchLive(root, reconstitutionSheetHTML()); } catch (e) { patched = false; }
+  if (!patched && !(options && options.typing) && typeof app.renderSheet === "function") app.renderSheet();
+  return patched;
+}
+
+function calcMotion() {
+  try {
+    return !(typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  } catch (e) {
+    return true;
+  }
+}
+
+/* After a tap changed a number: the field shows it, as plain digits while
+   it still has focus, and the number gets a short scale. A Clear button
+   that just went dim hands focus to its field. */
+function settleCalcField(field, bump) {
+  if (typeof app.$ !== "function" || !app.ui || !app.ui.sd) return;
+  const el = app.$(`#${field.id}`);
+  if (el && typeof el.value === "string") {
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    const text = active === el ? amountEditText(app.ui.sd[field.key]) : amountFieldText(app.ui.sd[field.key]);
+    if (el.value !== text) el.value = text;
+    if (active && active !== el && active.disabled === true && typeof el.focus === "function") el.focus({ preventScroll: true });
+  }
+  const readout = bump && calcMotion() ? app.$(`#${field.id}-readout`) : null;
+  if (!readout || !readout.classList || typeof readout.classList.add !== "function") return;
+  readout.classList.remove("dr-bump");
+  void readout.offsetWidth;
+  readout.classList.add("dr-bump");
+  setTimeout(() => { if (readout.classList) readout.classList.remove("dr-bump"); }, 260);
+}
+
+/* Add to or take away from one of the three numbers. */
+export function stepReconstitutionField(key, delta) {
+  const field = calcField(key);
+  const sd = app.ui && app.ui.sheet === "routines-calc" ? app.ui.sd : null;
+  if (!field || !sd) return false;
+  readCalcFields(sd);
+  const amount = parseSheetAmount(sd[field.key]);
+  if (!stepAllowed(amount, delta)) return false;
+  const next = stepAmount(amount, delta);
+  sd[field.key] = next == null ? "" : plainAmount(next);
+  sd.error = "";
+  refreshCalc();
+  settleCalcField(field, true);
+  return true;
+}
+
+export function clearReconstitutionField(key) {
+  const field = calcField(key);
+  const sd = app.ui && app.ui.sheet === "routines-calc" ? app.ui.sd : null;
+  if (!field || !sd) return false;
+  readCalcFields(sd);
+  sd[field.key] = "";
+  sd.error = "";
+  refreshCalc();
+  settleCalcField(field, true);
+  return true;
 }
 
 export function saveReconstitutionNote() {
@@ -229,34 +391,31 @@ export function saveReconstitutionNote() {
   readCalcFields(sd);
   const itemId = typeof sd.itemId === "string" ? sd.itemId : "";
   if (!itemId) return false;
-  const result = reconstitutionResult({
-    vialAmount: parseRoutineAmount(sd.vial),
-    waterMl: parseRoutineAmount(sd.water),
-    doseAmount: parseRoutineAmount(sd.dose),
-    vialUnit: sd.vialUnit,
-    doseUnit: sd.doseUnit,
-  });
-  const note = reconstitutionNoteText(result);
+  const note = reconstitutionNoteText(calcResult(sd));
   if (!note) {
     sd.error = "Enter a vial amount, a water volume, and a desired amount.";
-    if (typeof app.renderSheet === "function") app.renderSheet();
+    refreshCalc();
     return false;
   }
   if (!saveRoutineItemNote(app.state, itemId, note, {
-    vialAmount: parseRoutineAmount(sd.vial),
-    waterMl: parseRoutineAmount(sd.water),
-    doseAmount: parseRoutineAmount(sd.dose),
+    vialAmount: parseSheetAmount(sd.vial),
+    waterMl: parseSheetAmount(sd.water),
+    doseAmount: parseSheetAmount(sd.dose),
     vialUnit: sd.vialUnit,
     doseUnit: sd.doseUnit,
   })) {
     sd.error = "The note was not saved.";
-    if (typeof app.renderSheet === "function") app.renderSheet();
+    refreshCalc();
     return false;
   }
-  app.ui.sheet = null;
+  /* Opened from the item sheet: go back to it, so the fields typed there
+     are not lost with the calculator. */
+  const from = sd.from && typeof sd.from === "object" ? sd.from : null;
+  if (!from || !closeReconstitution()) app.ui.sheet = null;
   if (typeof app.save === "function") app.save();
   app.ui.routineAnnounce = "Note saved.";
   if (typeof app.render === "function") app.render();
+  if (from && typeof app.toast === "function") app.toast("Note saved.");
   return true;
 }
 
@@ -270,29 +429,56 @@ export function setRoutineLogQuarter(amount) {
 
 export function setReconstitutionUnit(which, unit) {
   if (!app.ui || !app.ui.sd || app.ui.sheet !== "routines-calc" || !CALC_UNITS.includes(unit)) return false;
+  if (which !== "vial" && which !== "dose") return false;
+  readCalcFields(app.ui.sd);
   if (which === "vial") app.ui.sd.vialUnit = unit;
-  else if (which === "dose") app.ui.sd.doseUnit = unit;
-  else return false;
+  else app.ui.sd.doseUnit = unit;
   app.ui.sd.error = "";
-  if (typeof app.renderSheet === "function") app.renderSheet();
+  refreshCalc();
   return true;
 }
 
 export function noteReconstitutionField(id, value) {
   if (!app.ui || !app.ui.sd || app.ui.sheet !== "routines-calc") return false;
-  const key = id === "dr-calc-vial" ? "vial" : id === "dr-calc-water" ? "water" : id === "dr-calc-dose" ? "dose" : "";
-  if (!key) return false;
-  app.ui.sd[key] = typeof value === "string" ? value : "";
+  const field = CALC_FIELDS.find((row) => row.id === id);
+  if (!field) return false;
+  app.ui.sd[field.key] = amountDraftText(typeof value === "string" ? value : "");
   app.ui.sd.error = "";
+  if (refreshCalc({ typing: true })) return true;
   const slot = typeof app.$ === "function" ? app.$("#dr-calc-result") : null;
   if (slot) slot.innerHTML = reconstitutionLiveHTML();
   return true;
+}
+
+/* A number shows ¼ ½ ¾ at rest and plain digits while it is edited. */
+function onCalcFocus(ev) {
+  const el = ev && ev.target;
+  const field = el && CALC_FIELDS.find((row) => row.id === el.id);
+  if (!field || !app.ui || app.ui.sheet !== "routines-calc" || !app.ui.sd) return;
+  const text = amountEditText(app.ui.sd[field.key]);
+  if (typeof el.value === "string" && el.value !== text) el.value = text;
+}
+
+function onCalcBlur(ev) {
+  const el = ev && ev.target;
+  const field = el && CALC_FIELDS.find((row) => row.id === el.id);
+  if (!field || !app.ui || app.ui.sheet !== "routines-calc" || !app.ui.sd) return;
+  if (typeof el.value === "string") el.value = amountFieldText(app.ui.sd[field.key]);
+}
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("focusin", onCalcFocus);
+  document.addEventListener("focusout", onCalcBlur);
 }
 
 app.openRoutineHistory = openRoutineHistory;
 app.openRoutineLogEditor = openRoutineLogEditor;
 app.commitRoutineLogSheet = commitRoutineLogSheet;
 app.openReconstitution = openReconstitution;
+app.openReconstitutionFromItem = openReconstitutionFromItem;
+app.closeReconstitution = closeReconstitution;
+app.stepReconstitutionField = stepReconstitutionField;
+app.clearReconstitutionField = clearReconstitutionField;
 app.saveReconstitutionNote = saveReconstitutionNote;
 app.routineHistorySheetHTML = routineHistorySheetHTML;
 app.routineLogSheetHTML = routineLogSheetHTML;

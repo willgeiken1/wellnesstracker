@@ -802,7 +802,10 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.match(sheet, /Reconstitution calculator/);
     assert.match(sheet, /what you entered/i);
     assert.match(sheet, /data-calc="empty"/);
-    assert.doesNotMatch(sheet, /Volume to draw/);
+    assert.doesNotMatch(sheet, /Volume to draw:/);
+    assert.match(sheet, /<span>Volume to draw<\/span><b data-live="volume">–<\/b>/);
+    assert.match(sheet, /<span>U-100 units<\/span><b data-live="units">–<\/b>/);
+    assert.doesNotMatch(sheet, /<small>mL<\/small>/);
     assert.doesNotMatch(sheet, /<form[\s>]/i);
     const page = dailyRoutinesHTML();
     assert.match(page, /data-action="routines-calc"/);
