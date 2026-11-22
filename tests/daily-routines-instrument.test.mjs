@@ -39,9 +39,9 @@ const { app } = await import("../logger/js/runtime.js");
 const routines = await import("../logger/js/pages/daily-routines.js");
 await import("../logger/js/pages/daily-routines-edit.js");
 const plan = await import("../logger/js/pages/daily-routines-plan.js");
-const { liveOf, seedDefaultBlocks, DEFAULT_BLOCK_STAMP } = await import("../logger/js/shared/daily-routines-store.js");
+const { liveOf, projectDailyRoutines, seedDefaultBlocks, DEFAULT_BLOCK_STAMP } = await import("../logger/js/shared/daily-routines-store.js");
 const types = await import("../logger/js/shared/routine-types.js");
-const { routineBlockDays, routineBlockRunsOn, routineBlockWindow } = await import("../logger/js/shared/routine-dose.js");
+const { nextDoseCountdown, routineBlockDays, routineBlockRunsOn, routineBlockWindow } = await import("../logger/js/shared/routine-dose.js");
 
 const { addRoutineItem, dailyRoutinesHTML, hideRoutineBlock, moveRoutineBlock, routineDraftWindow, routineSunAxis, saveRoutineBlock, showRoutineBlock } = routines;
 
@@ -108,6 +108,53 @@ describe("routine windows and days", () => {
     assert.equal(late.end, 26 * 60);
     assert.equal(late.place(60), 25 * 60, "1 AM after a late window sits past midnight");
     assert.ok(routineSunAxis([{ startMin: 0, endMin: 1440 }, { startMin: 600, endMin: 2000 }]).end - 0 <= 1440);
+  });
+});
+
+describe("next times follow days and logs", () => {
+  const dose = { id: "item_d", kind: "dose", deletedAt: null };
+  const place = { id: "p1", itemId: "item_d", blockId: "b1", deletedAt: null };
+
+  test("a dose in a weekday routine counts down to its next weekday, not Sunday", () => {
+    /* 2026-11-22 is a Sunday. The routine runs Monday, Wednesday and Friday at 8. */
+    const blocks = [{ id: "b1", name: "Example", startMin: 8 * 60, endMin: 9 * 60, days: [0, 2, 4], deletedAt: null }];
+    const date = new Date(2026, 10, 22, 7, 0, 0);
+    const result = nextDoseCountdown({ item: dose, blocks, placements: [place], logs: [], date, day: "2026-11-22" });
+    assert.equal(result.waitMin, 25 * 60, "Monday at 8 is 25 hours away");
+    assert.equal(result.tomorrow, true);
+  });
+
+  test("a dose's own time keeps its routine's days, and runs daily with no routine", () => {
+    const blocks = [{ id: "b1", name: "Example", startMin: 8 * 60, endMin: 9 * 60, days: [5], deletedAt: null }];
+    const date = new Date(2026, 10, 22, 7, 0, 0);
+    const timed = { ...dose, timeMin: 10 * 60 };
+    assert.equal(nextDoseCountdown({ item: timed, blocks, placements: [place], logs: [], date, day: "2026-11-22" }).waitMin, 6 * 24 * 60 + 3 * 60, "next Saturday at 10");
+    assert.equal(nextDoseCountdown({ item: timed, blocks: [], placements: [], logs: [], date, day: "2026-11-22" }).waitMin, 3 * 60, "today at 10");
+  });
+
+  test("a peptide logged early shows its next day, not later today", () => {
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "", { name: "Example Compound C", kind: "dose", amount: 1, unit: "mg", type: "peptide", time: "10:00", blockIds: [] }));
+    const id = item("Example Compound C").id;
+    app.ui.routineView = "peptide";
+    assert.match(dailyRoutinesHTML(), /Next <b>10:00<\/b>/, "before the dose, it is due at 10:00");
+    assert.ok(app.logRoutineItem(app.state, id, "done"));
+    const after = dailyRoutinesHTML();
+    assert.doesNotMatch(after, /Next <b>10:00<\/b>/, "a logged dose does not ask again later today");
+    assert.match(after, /Next <b>Mon<\/b>/, "it moves on to tomorrow");
+  });
+
+  test("Focus mode skips a routine that does not run today", () => {
+    signIn(6, 0);
+    assert.ok(saveRoutineBlock(app.state, { name: "Example weekdays", startMin: 9 * 60, endMin: 10 * 60, days: [0, 1, 2, 3, 4] }));
+    const weekdays = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example weekdays");
+    assert.ok(addRoutineItem(app.state, weekdays.id, { name: "Example one", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example two", kind: "check" }));
+    assert.ok(moveRoutineBlock(app.state, weekdays.id, -1));
+    assert.deepEqual(liveOrder(), ["Morning routine", "Example weekdays", "Night routine"]);
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    /* Sunday: Morning is empty and the weekday routine is off, so Night is next. */
+    assert.equal(routines.routineFocusBlockId(projected, new Date(2026, 10, 22, 6, 0, 0)), "block_default_night");
   });
 });
 

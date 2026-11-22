@@ -366,14 +366,17 @@ function blockStartsFor(projected, item) {
 /* Overdue means every start named on this item has passed today.
    A later block the same day is still upcoming, so the row is not overdue.
    A renamed block has no start, so it is not overdue and has no countdown. */
-function itemTiming(projected, item, date, day) {
+/* Ranking passes no logs, so every item still counts from its own time.
+   A label for an item already handled today passes the real logs, so it
+   moves on to the next time. */
+function itemTiming(projected, item, date, day, logs = null) {
   if (!item || !(date instanceof Date) || Number.isNaN(date.getTime())) return { waitMin: null, overdue: false };
   if (item.kind === "dose") {
     const result = nextDoseCountdown({
       item,
       blocks: projected && projected.blocks,
       placements: projected && projected.placements,
-      logs: [],
+      logs: Array.isArray(logs) ? logs : [],
       date,
       day,
     });
@@ -383,6 +386,7 @@ function itemTiming(projected, item, date, day) {
   const starts = blockStartsFor(projected, item);
   if (!starts.length) return { waitMin: null, overdue: false };
   const nowMin = date.getHours() * 60 + date.getMinutes();
+  if (Array.isArray(logs) && coveringLog(logs, item.id, day)) return { waitMin: starts[0] + 24 * 60 - nowMin, overdue: false };
   let target = null;
   for (const start of starts) {
     if (start >= nowMin) {
@@ -2419,9 +2423,10 @@ export function routineTypedRowsHTML(projected, items, date, day) {
    the weekday. Empty when nothing times it. */
 export function routineNextText(projected, item, date, day) {
   if (!projected || !item) return "";
-  const timing = itemTiming(projected, item, date, day);
+  const handled = coveringLog(projected.logs, item.id, day);
+  const timing = itemTiming(projected, item, date, day, handled ? projected.logs : null);
   if (typeof timing.waitMin !== "number") return "";
-  if (timing.overdue && !coveringLog(projected.logs, item.id, day)) return "Now";
+  if (timing.overdue && !handled) return "Now";
   if (timing.waitMin < 1) return "Now";
   const at = new Date(date.getTime() + timing.waitMin * 60000);
   const sameDay = at.getFullYear() === date.getFullYear() && at.getMonth() === date.getMonth() && at.getDate() === date.getDate();
@@ -2498,7 +2503,8 @@ export function routineFocusBlockId(projected, date) {
   const day = todayKey(clock);
   const moment = routineNowNext(projected && projected.blocks, clock, day);
   if (!moment.nowBlock) return "";
-  const live = (projected.blocks || []).filter((block) => isLive(block));
+  /* Only routines that run today, as the tiles show them. */
+  const live = todayBlocks(projected, day);
   const sorted = live.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const start = sorted.findIndex((block) => block.id === moment.nowBlock.id);
   for (const block of sorted.slice(Math.max(0, start))) {

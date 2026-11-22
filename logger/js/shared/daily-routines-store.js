@@ -619,20 +619,29 @@ function setupStamp(setup, now) {
    from Routines settings are kept apart from that: a phone that saves a
    prefs change from a copy pulled before the other phone's setup must not
    drop the setup, or the quiz shows again. The newer setup wins by its own
-   stamp, and added parts only ever grow. The server merge
+   stamp, and added parts, type tabs and custom types only ever grow. The server merge
    (daily_routines_merge_prefs) does the same. */
 function keepSetupParts(winner, other, now) {
   let out = winner;
   if (setupStamp(other.setup, now) > setupStamp(winner.setup, now)) out = { ...out, setup: other.setup };
-  if (Array.isArray(other.added)) {
-    const base = Array.isArray(out.added) ? out.added : [];
-    const extras = [];
-    for (const key of other.added) {
-      if (typeof key === "string" && !base.includes(key) && !extras.includes(key)) extras.push(key);
-    }
-    if (extras.length) out = { ...out, added: [...base, ...extras] };
-  }
+  out = growList(out, other, "added", (key) => typeof key === "string", (a, b) => a === b);
+  out = growList(out, other, "typeTabs", (key) => typeof key === "string", (a, b) => a === b);
+  out = growList(out, other, "customTypes", (row) => !!row && typeof row === "object" && !Array.isArray(row) && typeof row.id === "string" && row.id !== "",
+    (a, b) => !!a && typeof a === "object" && a.id === b.id);
   return out;
+}
+
+/* A list that only grows: the winner's entries first, then the other
+   side's new ones in their order. Custom types match by id, so a type made
+   on one phone survives a newer prefs save from the other. */
+function growList(out, other, key, accept, same) {
+  if (!Array.isArray(other[key])) return out;
+  const base = Array.isArray(out[key]) ? out[key] : [];
+  const extras = [];
+  for (const entry of other[key]) {
+    if (accept(entry) && !base.some((row) => same(row, entry)) && !extras.some((row) => same(row, entry))) extras.push(entry);
+  }
+  return extras.length ? { ...out, [key]: [...base, ...extras] } : out;
 }
 
 function mergePrefs(local, remote, now) {

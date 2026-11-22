@@ -12,6 +12,7 @@ const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
 const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
 const ORDER_AT = "supabase/migrations/20261121140000_daily_routines_order_at.sql";
 const KEEP_SETUP = "supabase/migrations/20261122041000_daily_routines_keep_setup.sql";
+const KEEP_TYPES = "supabase/migrations/20261122160000_daily_routines_keep_types.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -257,7 +258,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql", KEEP_TYPES, KEEP_TYPES]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -713,6 +714,40 @@ test("setup answers and added parts survive an older prefs save on the server an
   assert.deepEqual(pushed.full.dailyRoutines.prefs.setup, cases[0][1].setup, "merge_user_data keeps the stored setup");
 });
 
+test("type tabs and custom types survive an older prefs save on the server and the client", () => {
+  const now = 8_000_000;
+  const store = (prefs) => ({ updatedAt: 100, prefs });
+  const cases = [
+    ["a stale phone's newer prefs keep the other phone's custom type",
+      { lastBlockId: null, updatedAt: 500, customTypes: [{ id: "type_a", name: "Example care" }], typeTabs: ["supplement"] },
+      { lastBlockId: null, focusMode: true, updatedAt: 900 }],
+    ["custom types join by id, the winner's copy first, objects with a string id only",
+      { lastBlockId: null, updatedAt: 900, customTypes: [{ id: "type_a", name: "Renamed" }, { id: "type_b", name: "Example B" }] },
+      { lastBlockId: null, updatedAt: 300, customTypes: [{ id: "type_a", name: "Old" }, "type_c", { id: 7 }, { id: "" }, { id: "type_d", name: "Example D" }, { id: "type_d", name: "Twice" }] }],
+    ["type tabs join in order, strings only, no repeats",
+      { lastBlockId: null, updatedAt: 900, typeTabs: ["peptide"] },
+      { lastBlockId: null, updatedAt: 300, typeTabs: ["medication", 3, "peptide", "medication"] }],
+    ["a winner whose custom types are not a list takes the other side's",
+      { lastBlockId: null, updatedAt: 900, customTypes: "type_a" },
+      { lastBlockId: null, updatedAt: 300, customTypes: [{ id: "type_a", name: "Example A" }] }],
+  ];
+  for (const [label, a, b] of cases) {
+    for (const [stored, incoming, order] of [[a, b, "a then b"], [b, a, "b then a"]]) {
+      const client = mergeRoutines(store(stored), store(incoming), now);
+      const sql = sqlMerge(store(stored), store(incoming), now);
+      assert.deepEqual(sql.prefs, client.prefs, `${label} (${order})`);
+    }
+  }
+  const first = mergeRoutines(store(cases[0][1]), store(cases[0][2]), now).prefs;
+  assert.equal(first.focusMode, true, "the newer prefs still win");
+  assert.deepEqual(first.customTypes, [{ id: "type_a", name: "Example care" }]);
+  assert.deepEqual(first.typeTabs, ["supplement"]);
+  assert.deepEqual(mergeRoutines(store(cases[1][1]), store(cases[1][2]), now).prefs.customTypes,
+    [{ id: "type_a", name: "Renamed" }, { id: "type_b", name: "Example B" }, { id: "type_d", name: "Example D" }]);
+  assert.deepEqual(mergeRoutines(store(cases[2][1]), store(cases[2][2]), now).prefs.typeTabs, ["peptide", "medication"]);
+  assert.deepEqual(mergeRoutines(store(cases[3][1]), store(cases[3][2]), now).prefs.customTypes, [{ id: "type_a", name: "Example A" }]);
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -849,7 +884,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql", KEEP_TYPES]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }

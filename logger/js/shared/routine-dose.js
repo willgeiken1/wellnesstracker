@@ -141,28 +141,36 @@ export function nextDoseCountdown({ item, blocks, placements, logs, date, day, h
   for (const place of Array.isArray(placements) ? placements : []) {
     if (live(place) && place.itemId === item.id && typeof place.blockId === "string") placed.add(place.blockId);
   }
+  /* Each start keeps the weekdays its routine runs on. */
   const starts = [];
+  const runDays = new Set();
   for (const block of Array.isArray(blocks) ? blocks : []) {
     if (!live(block) || block.hidden === true || !placed.has(block.id)) continue;
     const start = routineBlockStartMin(block);
-    if (typeof start === "number") starts.push(start);
+    if (typeof start !== "number") continue;
+    const days = routineBlockDays(block);
+    starts.push({ start, days });
+    for (const weekday of days) runDays.add(weekday);
   }
   /* A time the user set on the item ("When do you take it?") wins over the
-     routine's start, and works with no routine at all. */
+     routine's start, on the days its routines run, and works with no
+     routine at all. */
   const own = routineMinuteOfDay(item.timeMin);
-  if (own != null) starts.splice(0, starts.length, own);
+  if (own != null) starts.splice(0, starts.length, { start: own, days: starts.length ? [...runDays] : [0, 1, 2, 3, 4, 5, 6] });
   if (!starts.length) return null;
   const boundaryMin = routineDayRolloverHour(hour) * 60;
   const calendarDay = localCalendarDay(date);
   const logged = (Array.isArray(logs) ? logs : []).some((log) => coversDay(log, item.id, day));
   const due = [];
   const later = [];
-  for (const start of starts) {
-    for (let ahead = 0; ahead <= 2; ahead += 1) {
+  /* Eight days ahead reaches the next run of a once-a-week routine. */
+  for (const { start, days } of starts) {
+    for (let ahead = 0; ahead <= 8; ahead += 1) {
       const target = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ahead, Math.floor(start / 60), start % 60, 0, 0);
       if (target.getTime() < date.getTime()) continue;
       const instantDay = ahead === 0 ? calendarDay : shiftCalendarDay(calendarDay, ahead);
       const belongs = routineDayOfStart(instantDay, start, boundaryMin);
+      if (!days.includes(routineWeekday(belongs))) continue;
       const candidate = { waitMin: Math.round((target.getTime() - date.getTime()) / 60000), belongs };
       if (belongs === day) due.push(candidate);
       else if (belongs > day) later.push(candidate);
