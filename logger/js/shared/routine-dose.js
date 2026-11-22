@@ -2,8 +2,8 @@
    The routine day rolls at a user-set hour, 4 by default. A time before that
    hour still belongs to the previous local calendar day. The fields are the
    clock's local year, month, day, and hour. toISOString() is the UTC day, so
-   a US evening would already be tomorrow. Block times belong to the three
-   default names. A renamed block has no time, matching the now/next line. */
+   a US evening would already be tomorrow. Block times belong to the default
+   and setup names. A renamed block has no time, matching the now/next line. */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -34,6 +34,8 @@ export function routineDayKey(date, hour = DEFAULT_DAY_ROLLOVER_HOUR) {
 export const ROUTINE_BLOCK_START_MIN = Object.freeze({
   "Morning routine": 5 * 60,
   "Supplement & enhancer stack": 12 * 60,
+  "Supplements": 12 * 60,
+  "Supplements & medications": 12 * 60,
   "Night routine": 17 * 60,
 });
 

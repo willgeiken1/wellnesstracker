@@ -167,6 +167,8 @@ function renderSheet() {
     inner = app.pickerSheetHTML();
   } else if (app.ui.sheet === "routines-settings") {
     inner = typeof app.routinesSettingsSheetHTML === "function" ? app.routinesSettingsSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-setup") {
+    inner = typeof app.routineSetupSheetHTML === "function" ? app.routineSetupSheetHTML() : "";
   } else if (app.ui.sheet === "routines-discover") {
     inner = typeof app.routinesDiscoverSheetHTML === "function" ? app.routinesDiscoverSheetHTML() : "";
   } else if (app.ui.sheet === "routines-item") {
@@ -209,6 +211,7 @@ function renderSheet() {
   const sheetName = app.ui.sheet === "home-gallery" ? "Widget gallery"
     : app.ui.sheet === "checkin" ? "Check-in"
     : app.ui.sheet === "routines-settings" ? "Routines settings"
+    : app.ui.sheet === "routines-setup" ? "Set up Routines"
     : app.ui.sheet === "routines-discover" ? "Discover"
     : app.ui.sheet === "routines-item" ? "Item"
     : app.ui.sheet === "routines-history" ? "History"

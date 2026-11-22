@@ -476,6 +476,11 @@ document.addEventListener("click", async (ev) => {
       else { delete app.state.plan[app.ui.sd.date]; delete app.state.planAt[app.ui.sd.date]; }
       app.save(); app.ui.sheet = null; app.render(); break;
     case "sheet-close":
+      if (app.ui && app.ui.sheet === "routines-setup" && typeof app.closeRoutineSetup === "function") {
+        app.closeRoutineSetup();
+        app.render();
+        break;
+      }
       if (app.ui && app.ui.sheet === "routines-details") {
         const fromX = !!(ev.target && ev.target.closest && ev.target.closest(".sheet-x"));
         if (fromX && typeof app.closeRoutineDetails === "function") app.closeRoutineDetails("x");
@@ -1251,6 +1256,44 @@ document.addEventListener("click", async (ev) => {
       if (ran && typeof app.render === "function") app.render();
       break;
     }
+    case "routines-setup-open":
+    case "routines-setup-retake":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineSetup !== "function") break;
+      if (app.openRoutineSetup(a === "routines-setup-retake" ? "retake" : "quiz")) app.render();
+      break;
+    case "routines-part-add":
+      if (app.ROUTINES_ENABLED !== true || typeof app.addRoutinePartToPage !== "function") break;
+      if (app.addRoutinePartToPage(app.state, b.dataset.part)) {
+        app.ui.routineAnnounce = "Added to your Routines page.";
+        app.save();
+        app.render();
+      }
+      break;
+    case "routines-setup-pick":
+    case "routines-setup-next":
+    case "routines-setup-back":
+    case "routines-setup-skip-q":
+    case "routines-setup-skip": {
+      if (app.ROUTINES_ENABLED !== true || !app.ui || app.ui.sheet !== "routines-setup" || typeof app.pickRoutineSetup !== "function") break;
+      const moved = a === "routines-setup-pick" ? app.pickRoutineSetup(b.dataset.q, b.dataset.value)
+        : a === "routines-setup-next" ? app.nextRoutineSetup()
+        : a === "routines-setup-back" ? app.backRoutineSetup()
+        : a === "routines-setup-skip-q" ? app.skipRoutineSetupQuestion()
+        : app.skipRoutineSetup();
+      if (!moved) break;
+      if (app.ui.sheet === "routines-setup") {
+        app.renderSheet();
+        /* The sheet is rebuilt for each question, so move focus to the new
+           question for keyboard and screen reader users. */
+        const title = document.getElementById("dr-setup-title");
+        if (title && typeof title.focus === "function") title.focus();
+      } else app.render();
+      break;
+    }
+    case "routines-tips-hide":
+      if (app.ROUTINES_ENABLED !== true || typeof app.hideRoutineTips !== "function") break;
+      if (app.hideRoutineTips(app.state)) { app.save(); app.render(); }
+      break;
     case "routines-edit":
       if (app.ROUTINES_ENABLED !== true || typeof app.toggleRoutineLayoutEdit !== "function") break;
       app.toggleRoutineLayoutEdit();

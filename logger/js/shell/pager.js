@@ -291,6 +291,7 @@ app.render = function () {
   if (!app.motion.dragging) app.syncBubble(true);
   app.renderWorkout();
   app.renderCardioLive();
+  if (typeof app.maybeOfferRoutineSetup === "function") app.maybeOfferRoutineSetup();
   app.renderSheet();
   app.tick();
   if (typeof app.syncRoutineNowRefresh === "function") app.syncRoutineNowRefresh();
