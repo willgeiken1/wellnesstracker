@@ -82,6 +82,9 @@ begin
   if coalesce(p_access_token, '') = '' or coalesce(p_refresh_token, '') = '' then
     raise exception 'missing token';
   end if;
+  if p_expires_at is null then
+    raise exception 'missing expiry';
+  end if;
   perform public.oura_lock_user(p_user);
   select c.connected_at into prior from public.oura_connections c where c.user_id = p_user for update;
   -- Always later than the connection it replaces, so its days sort after the old ones.

@@ -244,10 +244,13 @@ export async function accessToken(admin, userId, mark, exchange, { force = false
     throw new Error(`Oura login expired. Reconnect Oura in the app. (${res.status})`);
   }
   const n = await res.json();
+  // An answer without a new access token is refused before anything is written, so the old login is never kept with
+  // a fresh expiry and a NOT NULL error never copies the refresh token into the server log.
+  if (typeof n?.access_token !== "string" || n.access_token === "") throw new Error("Oura sent back an incomplete login. Try again later.");
   // Oura has already used up the old refresh token, so the new one must be kept: try the save twice.
   const fresh = {
     access_token: n.access_token,
-    refresh_token: n.refresh_token ?? t.refresh_token,
+    refresh_token: typeof n.refresh_token === "string" && n.refresh_token !== "" ? n.refresh_token : t.refresh_token,
     expires_at: new Date(now + (n.expires_in ?? 86400) * 1000).toISOString(),
     updated_at: new Date(now).toISOString(),
   };

@@ -330,6 +330,19 @@ test("any other refresh failure keeps the login and the stored days, however oft
   }
 });
 
+test("a refresh answer with no access token writes nothing, and an empty new refresh token keeps the old one", async () => {
+  for (const body of [{ refresh_token: "made-up-r2", expires_in: 86400 }, { access_token: null, refresh_token: "made-up-r2" }, { access_token: "", refresh_token: "made-up-r2" }]) {
+    const state = linked(stored()), admin = fakeDb(state), before = structuredClone(state.oura_tokens);
+    await assert.rejects(accessToken(admin, U, MARK, async () => answer(200, body), { ...fast, force: true }), (e) => e.message === "Oura sent back an incomplete login. Try again later.");
+    assert.deepEqual(state.oura_tokens, before);
+    assert.equal(state.oura_days.length, 2);
+  }
+  const state = linked(stored()), admin = fakeDb(state), old = state.oura_tokens[0].refresh_token;
+  assert.equal(await accessToken(admin, U, MARK, async () => answer(200, { access_token: "made-up-a2", refresh_token: "", expires_in: 86400 }), { ...fast, force: true }), "made-up-a2");
+  assert.equal(state.oura_tokens[0].access_token, "made-up-a2");
+  assert.equal(state.oura_tokens[0].refresh_token, old);
+});
+
 test("a refresh token another sync just spent is not a refusal: its new login is used and nothing is deleted", async () => {
   const state = linked(stored()), admin = fakeDb(state);
   const exchange = async () => { state.oura_tokens = [login({ access_token: "made-up-new", refresh_token: "made-up-new-refresh", expires_at: "2026-11-18T12:00:00Z" })]; return revoked(); };

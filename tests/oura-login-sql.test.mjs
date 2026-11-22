@@ -210,12 +210,16 @@ test("only the server role can run the new functions or read the removal records
 test("a login missing a token is refused before any row is written, and the error carries no token", () => {
   seed();
   const before = snapshot(A);
-  for (const [access, refresh] of [["'made-up-secret-access'", "null"], ["null", "'made-up-secret-refresh'"], ["''", "'made-up-secret-refresh'"]]) {
+  for (const [access, refresh] of [["'made-up-secret-access'", "null"], ["null", "'made-up-secret-refresh'"], ["''", "'made-up-secret-refresh'"], ["'made-up-secret-access'", "''"]]) {
     assert.throws(
       () => sql(`set role service_role; select public.oura_save_login('${A}', ${access}, ${refresh}, '2026-11-20T00:00:00Z', '${NOW}')`),
       (e) => /missing token/.test(e.message) && !/made-up-secret/.test(e.message),
     );
   }
+  assert.throws(
+    () => sql(`set role service_role; select public.oura_save_login('${A}', 'made-up-secret-access', 'made-up-secret-refresh', null, '${NOW}')`),
+    (e) => /missing expiry/.test(e.message) && !/made-up-secret/.test(e.message),
+  );
   assert.deepEqual(snapshot(A), before);
 });
 
