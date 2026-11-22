@@ -189,7 +189,7 @@ describe("Discover coming soon", { concurrency: false }, () => {
     const flag = read("../logger/js/shared/routines-flag.js");
     assert.doesNotMatch(index, /data-pane="discover"|data-tab="discover"/);
     assert.doesNotMatch(pager, /discover/);
-    assert.match(flag, /ROUTINES_ENABLED = false/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
     assert.doesNotMatch(page, /routines-flag/);
     assert.doesNotMatch(page, /discoverEntries|DISCOVER_SEED|libraryEntries|placeholderEntries|routineLibrary/);
     assert.match(css, /\.dr-discover \{/);
@@ -213,7 +213,7 @@ describe("Discover coming soon", { concurrency: false }, () => {
 
     const sw = read("../logger/sw.js");
     const sentry = read("../logger/js/sentry.js");
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
+    assert.match(sw, /const CACHE = "insight-shell-v78"/);
+    assert.match(sentry, /insight-shell-v78/);
   });
 });
