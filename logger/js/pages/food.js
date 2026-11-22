@@ -170,9 +170,9 @@ function recentFoodHTML() {
   return `<span class="field-label">Log to</span>
     <div class="seg2 meal-seg">${app.MEALS.map(([k, l]) => `<button data-action="qmeal" data-m="${k}" aria-pressed="${meal === k}">${l}</button>`).join("")}</div>
     <input class="text-in" id="food-rq" placeholder="Search your foods" autocomplete="off" value="${app.esc(app.ui.rq || "")}">
-    ${fav.length ? `<div class="mini-l">Favorites</div><div class="card rq-card">${fav.map((x) => row(x, "fav")).join("")}</div>` : ""}
+    <div id="food-rq-list">${fav.length ? `<div class="mini-l">Favorites</div><div class="card rq-card">${fav.map((x) => row(x, "fav")).join("")}</div>` : ""}
     ${recent.length ? `<div class="mini-l">Recent</div><div class="card rq-card">${recent.map((x) => row(x, "recent")).join("")}</div>` : ""}
-    ${!fav.length && !recent.length ? `<div class="card"><p class="sub">${q ? "No foods match that search." : "Foods you log show up here so you can re-log them with one tap. Tick \"Save as a favorite\" when logging to pin a meal to the top."}</p></div>` : ""}`;
+    ${!fav.length && !recent.length ? `<div class="card"><p class="sub">${q ? "No foods match that search." : "Foods you log show up here so you can re-log them with one tap. Tick \"Save as a favorite\" when logging to pin a meal to the top."}</p></div>` : ""}</div>`;
 }
 app.recentFoodHTML = recentFoodHTML;
 
@@ -410,9 +410,9 @@ function foodSavedSheetHTML() {
     <span>${app.r0(app.entryTotals(x).kcal)} cal · P ${app.r0(app.entryTotals(x).p)} · C ${app.r0(app.entryTotals(x).c)} · F ${app.r0(app.entryTotals(x).f)}</span></button>${extra}</div>`;
   return `<h3>Saved and recent</h3>
     <input class="text-in" id="food-q" placeholder="Search" autocomplete="off" value="${app.esc(app.ui.sd.q || "")}">
-    ${fav.length ? `<div class="mini-l">Favorites</div>${fav.map((x) => row(x, "food-pick-fav", `<button class="set-x" data-action="food-unfav" data-id="${x.id}" aria-label="Remove ${app.esc(x.name)} from favorites">×</button>`)).join("")}` : ""}
+    <div id="food-q-list">${fav.length ? `<div class="mini-l">Favorites</div>${fav.map((x) => row(x, "food-pick-fav", `<button class="set-x" data-action="food-unfav" data-id="${x.id}" aria-label="Remove ${app.esc(x.name)} from favorites">×</button>`)).join("")}` : ""}
     ${recent.length ? `<div class="mini-l">Recent</div>${recent.map((x) => row(x, "food-pick-recent")).join("")}` : ""}
-    ${!fav.length && !recent.length ? `<p class="sub">Nothing here yet. Foods you log show up here, and favorites stay pinned at the top.</p>` : ""}`;
+    ${!fav.length && !recent.length ? `<p class="sub">Nothing here yet. Foods you log show up here, and favorites stay pinned at the top.</p>` : ""}</div>`;
 }
 app.foodSavedSheetHTML = foodSavedSheetHTML;
 

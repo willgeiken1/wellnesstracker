@@ -70,8 +70,20 @@ setInterval(app.tick, 500);
 let lastWake = 0;
 app.lastWake = lastWake;
 
+/* Coming back to the app refreshes the page, but never under the user's hands: an open sheet,
+   a focused field, or the live workout or cardio screen stays as it is, and only the clocks tick. */
+function busyOnReturn() {
+  if (app.ui && (app.ui.sheet || app.ui.workoutOpen || app.ui.cardioOpen)) return true;
+  const a = document.activeElement;
+  if (a && a !== document.body && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return true;
+  const dlg = document.getElementById("dialog");
+  return !!(dlg && !dlg.hidden);
+}
+app.busyOnReturn = busyOnReturn;
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
-  app.render();
+  if (busyOnReturn()) app.tick();
+  else app.render();
   if (Date.now() - app.lastWake > 60_000) { app.lastWake = Date.now(); try { app.cloudPull().then(() => app.ouraRefresh(false)).then(() => app.syncPhotos()); } catch (e) {} }
 });
