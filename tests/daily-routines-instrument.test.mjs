@@ -612,6 +612,23 @@ describe("Home tile jumps open a later routine", () => {
     assert.match(html, /data-block-id="block_default_night"[^>]*data-collapsed="false"/);
     assert.match(html, new RegExp(`class="dr-row[^"]*"[^>]*data-item-id="${id}"`));
   });
+
+  test("a Home jump leaves a type tab for Routines, or opens the tab of an item in no routine", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example night check", kind: "check" }));
+    assert.ok(routines.saveRoutineItem(app.state, { name: "Example loose peptide", kind: "check", type: "peptide", blockIds: [] }));
+    const night = item("Example night check").id;
+    const loose = item("Example loose peptide").id;
+    app.goTab = () => {};
+    app.ui.routineView = "peptide";
+    tiles.openRoutineTile(tiles.routineItemTileId(night));
+    assert.equal(app.ui.routineView, "routines");
+    assert.match(dailyRoutinesHTML(), new RegExp(`data-item-id="${night}"`));
+    tiles.openRoutineTile(tiles.routineItemTileId(loose));
+    assert.equal(app.ui.routineView, "peptide");
+    assert.match(dailyRoutinesHTML(), new RegExp(`data-item-id="${loose}"`));
+  });
 });
 
 describe("Home tiles follow routine days", () => {

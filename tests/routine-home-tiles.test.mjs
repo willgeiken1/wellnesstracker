@@ -488,7 +488,7 @@ test("a tile jump scrolls the routine row, not the Home log button", () => {
   };
   try {
     assert.equal(openRoutineTile(routineItemTileId("item-a")), true);
-    assert.deepEqual(scrolled, [`.dr-row[data-item-id="item-a"]`, "pane"]);
+    assert.deepEqual(scrolled, [`.dr-row[data-item-id="item-a"], .dr-pep[data-item-id="item-a"]`, "pane"]);
   } finally {
     globalThis.document = previous;
   }

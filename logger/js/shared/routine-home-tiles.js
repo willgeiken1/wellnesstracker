@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, isLive, normalizeDailyRoutines, projectDailyRoutines, putDailyRoutines } from "./daily-routines-store.js";
 import { routineBlockRunsOn } from "./routine-dose.js";
+import { routineItemType } from "./routine-types.js";
 
 /* Home tiles for Routines. The flag stays off in source. These ids are not
    catalog widgets. With the flag off they stay unknown strings: a saved
@@ -598,12 +599,17 @@ export function openRoutineTile(tileId) {
     app.ui.routineOpenBlocks = open.concat(peekId);
     app.ui.routineShutBlocks = shut;
   }
+  /* Show the view that holds the target: Routines for a routine, or the
+     item's type tab when it sits in no routine. */
+  const looseItem = !peekId && jump && jump.itemId ? (view.items || []).find((row) => row && row.id === jump.itemId) : null;
+  const looseType = looseItem ? routineItemType(looseItem, view.prefs) : "";
+  app.ui.routineView = looseType || "routines";
   if (revealRoutineJump(app.state, jump)) saveLive(app.state);
   if (typeof app.goTab === "function") app.goTab("daily-routines");
   else if (app.ui) app.ui.tab = "daily-routines";
   if (typeof document === "undefined" || !document.querySelector || !jump) return true;
   const selector = jump.itemId
-    ? `.dr-row[data-item-id="${String(jump.itemId).replace(/"/g, "")}"]`
+    ? `.dr-row[data-item-id="${String(jump.itemId).replace(/"/g, "")}"], .dr-pep[data-item-id="${String(jump.itemId).replace(/"/g, "")}"]`
     : jump.blockId
       ? `.dr-tile[data-block-id="${String(jump.blockId).replace(/"/g, "")}"]`
       : "";
