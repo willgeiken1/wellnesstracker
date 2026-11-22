@@ -405,6 +405,7 @@ app.goTab = function (to, opts = {}) {
   const fromI = app.TAB_ORDER.indexOf(app.ui.tab);
   const same = app.ui.tab === to;
   if (to === "settings" && app.ui.tab !== "settings") app.ui.prevTab = app.ui.tab;
+  if (app.ui.tab === "daily-routines" && to !== "daily-routines" && typeof app.endRoutineVisit === "function") app.endRoutineVisit();
   app.ui.edit = null;
   app.ui.briefEdit = false;
   app.ui.tab = to;

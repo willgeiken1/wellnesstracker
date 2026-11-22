@@ -507,8 +507,8 @@ describe("routine day rollover", { concurrency: false }, () => {
     assert.doesNotMatch(store, /routines-flag/);
     assert.doesNotMatch(dose, /routines-flag/);
     assert.match(page, /routineDayKey/);
-    assert.match(sw, /const CACHE = "insight-shell-v87"/);
-    assert.match(sentry, /insight-shell-v87/);
+    assert.match(sw, /const CACHE = "insight-shell-v88"/);
+    assert.match(sentry, /insight-shell-v88/);
     assert.doesNotMatch(page, /showNotification|requestPermission/);
   });
 });

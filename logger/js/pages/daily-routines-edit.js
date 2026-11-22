@@ -1,6 +1,7 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, projectDailyRoutines } from "../shared/daily-routines-store.js";
 import { routineSetupShows } from "../shared/routine-setup.js";
+import { routineTypeChoices } from "../shared/routine-types.js";
 import {
   ROUTINE_DOSE_UNITS,
   deleteRoutineBlock,
@@ -104,6 +105,22 @@ export function toggleRoutineLayoutEdit() {
   return true;
 }
 
+/* From the Edit routines sheet: close it first, so the drag handles are
+   not under it, and turn rearranging on. */
+export function startRoutineRearrange() {
+  if (!app.ui || app.ROUTINES_ENABLED !== true) return false;
+  if (app.ui.sheet) {
+    app.ui.sheet = null;
+    if (typeof app.renderSheet === "function") app.renderSheet();
+  }
+  app.ui.routineView = "routines";
+  if (app.ui.dailyRoutineEdit === true) {
+    if (typeof app.render === "function") app.render();
+    return true;
+  }
+  return toggleRoutineLayoutEdit();
+}
+
 export async function promptRoutineRename(kind, id) {
   if (app.ROUTINES_ENABLED !== true || !canMutateRoutines() || typeof app.ask !== "function") return false;
   const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
@@ -123,10 +140,11 @@ export async function promptRoutineRename(kind, id) {
   return persist(saved, kind === "block" ? "Routine renamed." : "Item renamed.");
 }
 
-export function openRoutineItemEditor(blockId, itemId) {
+export function openRoutineItemEditor(blockId, itemId, preset) {
   if (app.ROUTINES_ENABLED !== true || !canMutateRoutines() || !app.ui) return false;
   app.ui.sheet = "routines-item";
-  app.ui.sd = routineItemDraft(app.state, { blockId, itemId });
+  const extra = preset && typeof preset === "object" ? preset : {};
+  app.ui.sd = routineItemDraft(app.state, { blockId, itemId, type: extra.type, kind: extra.kind });
   if (typeof blockId === "string" && blockId && rememberRoutineBlock(app.state, blockId) && typeof app.save === "function") app.save();
   if (typeof app.renderSheet === "function") app.renderSheet();
   return true;
@@ -173,7 +191,9 @@ export function rememberRoutineItemFields() {
   const amount = read("dr-item-amount");
   const onHand = read("dr-item-on-hand");
   const mixed = read("dr-item-mixed-on");
+  const time = read("dr-item-time");
   if (name != null) sd.name = name;
+  if (time != null) sd.time = time;
   if (amount != null) sd.amount = amount;
   if (onHand != null) sd.onHand = onHand;
   if (mixed != null) sd.mixedOn = mixed;
@@ -190,7 +210,10 @@ export function commitRoutineItemSheet() {
     return false;
   }
   if (!saveRoutineItem(app.state, sd)) {
-    if (typeof app.toast === "function") app.toast(sd.kind === "dose" ? "Add a name, an amount, and a unit." : "Add a name.");
+    const placed = Array.isArray(sd.blockIds) && sd.blockIds.length > 0;
+    const message = !placed && !sd.type ? "Pick a type or a routine."
+      : sd.kind === "dose" ? "Add a name, an amount, and a unit." : "Add a name.";
+    if (typeof app.toast === "function") app.toast(message);
     return false;
   }
   app.ui.sheet = null;
@@ -213,6 +236,9 @@ export function routineItemSheetHTML() {
   const units = ROUTINE_DOSE_UNITS.map((unit) => `<button type="button" class="dr-unit" data-action="routines-item-unit" data-unit="${esc(unit)}" aria-pressed="${sd.unit === unit ? "true" : "false"}">${esc(unit)}</button>`).join("");
   const quarters = QUARTERS.map((chip) => `<button type="button" class="dr-quarter" data-action="routines-item-quarter" data-amount="${chip.value}" aria-pressed="${amount === chip.value ? "true" : "false"}" aria-label="${chip.value}">${chip.label}</button>`).join("");
   const blocks = (view.blocks || []).map((block) => `<button type="button" class="dr-block-pick" data-action="routines-item-block" data-block-id="${esc(block.id)}" aria-pressed="${selected.has(block.id) ? "true" : "false"}">${esc(block.name)}</button>`).join("");
+  const typeChoices = routineTypeChoices(view.prefs);
+  const types = typeChoices.map((choice) => `<button type="button" class="dr-type-pick" data-action="routines-item-type" data-type="${esc(choice.id)}" aria-pressed="${sd.type === choice.id ? "true" : "false"}">${esc(choice.name)}</button>`).join("")
+    + (typeChoices.filter((choice) => choice.custom).length < 12 ? `<button type="button" class="dr-type-pick dr-type-new" data-action="routines-item-type-new">+ New type</button>` : "");
   const today = routineClock().day;
   const dose = kind === "dose" ? `<label class="field-label" for="dr-item-amount">Amount</label>
     <input class="text-in" id="dr-item-amount" inputmode="decimal" autocomplete="off" enterkeyhint="done" value="${esc(sd.amount || "")}">
@@ -234,7 +260,12 @@ export function routineItemSheetHTML() {
   return `<h3>${sd.itemId ? "Edit item" : "Add item"}</h3>
     <label class="field-label" for="dr-item-name">Name</label>
     <input class="text-in" id="dr-item-name" autocomplete="off" maxlength="80" enterkeyhint="done" value="${esc(sd.name || "")}">
-    <span class="field-label" id="dr-kind-label">Type</span>
+    <span class="field-label" id="dr-type-label">Type</span>
+    <div class="dr-type-picks" role="group" aria-labelledby="dr-type-label">${types}</div>
+    <label class="field-label" for="dr-item-time">When do you take it?</label>
+    <input class="text-in" id="dr-item-time" type="time" step="300" autocomplete="off" value="${esc(sd.time || "")}">
+    <p class="sub">Optional. Leave it blank to go by the routine's start.</p>
+    <span class="field-label" id="dr-kind-label">Log as</span>
     <div class="dr-kind" role="group" aria-labelledby="dr-kind-label">
       <button type="button" data-action="routines-item-kind" data-kind="check" aria-pressed="${kindPressed("check", kind)}">Check</button>
       ${kind === "dose" || storedDose || (typeof app.routineShows === "function" ? app.routineShows("doses") : routineSetupShows(app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs, "doses")) ? `<button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>` : ""}
@@ -243,7 +274,7 @@ export function routineItemSheetHTML() {
     ${supply}
     <span class="field-label" id="dr-blocks-label">Routines</span>
     <div class="dr-block-picks" role="group" aria-labelledby="dr-blocks-label">${blocks}</div>
-    <p class="sub">The same item can sit in more than one routine. Logging it once covers all of them.</p>
+    <p class="sub">${sd.type ? "Optional with a type. It shows on its tab either way." : "The same item can sit in more than one routine. Logging it once covers all of them."}</p>
     <p class="dr-evidence">Custom item. No evidence is attached.</p>
     <button type="button" class="btn primary block" data-action="routines-item-save">${sd.itemId ? "Save" : "Add item"}</button>
     ${remove}`;
@@ -551,6 +582,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 }
 
 app.toggleRoutineLayoutEdit = toggleRoutineLayoutEdit;
+app.startRoutineRearrange = startRoutineRearrange;
 app.promptRoutineRename = promptRoutineRename;
 app.openRoutineItemEditor = openRoutineItemEditor;
 app.removeRoutineBlock = removeRoutineBlock;

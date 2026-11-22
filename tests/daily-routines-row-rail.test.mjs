@@ -48,6 +48,7 @@ const {
   skipRoutineItem,
 } = await import("../logger/js/pages/daily-routines.js");
 await import("../logger/js/shell/actions.js");
+await import("../logger/js/pages/daily-routines-plan.js");
 
 const DAY = "2026-11-19";
 let clock = new Date(2026, 10, 19, 8, 30, 0, 0).getTime();
@@ -205,6 +206,23 @@ describe("routine row action rail", { concurrency: false }, () => {
     assert.doesNotMatch(css, /@starting-style \{\s*\.dr-row \{/);
   });
 
+  test("on a type tab, Edit item joins the rail before Skip, open or done", () => {
+    signIn();
+    assert.ok(addRoutineItem(app.state, "", { name: "Example magnesium", kind: "check", type: "supplement", blockIds: [] }));
+    const id = itemNamed("Example magnesium").id;
+    app.ui.routineView = "supplement";
+        const open = rail(rowFor(dailyRoutinesHTML(), id));
+    assert.match(open, /class="dr-edit-item" data-action="routines-edit-item" data-item-id="/);
+    assert.match(open, /<span class="dr-vh">Edit item Example magnesium<\/span>/);
+    assert.ok(open.indexOf("routines-edit-item") < open.indexOf("routines-skip"), "Skip stays last");
+    assert.equal(logRoutineItem(app.state, id), true);
+    const done = rail(doneRowFor(dailyRoutinesHTML(), id));
+    assert.ok(done.indexOf("routines-edit-item") >= 0, "done row keeps Edit item");
+    assert.ok(done.indexOf("routines-edit-item") < done.indexOf("routines-log-edit"));
+    assert.ok(done.indexOf("routines-log-edit") < done.indexOf("routines-undo"), "Undo stays last");
+    app.ui.routineView = "";
+  });
+
   test("an open row shows its supply once", () => {
     signIn();
     const morning = blockId("Morning routine");
@@ -215,9 +233,10 @@ describe("routine row action rail", { concurrency: false }, () => {
 
   test("rail targets stay 44px, the row keeps one line of actions, and long press skips the rail", () => {
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
-    assert.match(css, /\.dr-rail-btn \{[^}]*min-width: 44px;[^}]*min-height: 44px;/);
+    assert.match(css, /\.dr-rail-btn,\s*\.dr-rail \.dr-edit-item \{[^}]*min-width: 44px;[^}]*min-height: 44px;/);
+    assert.match(css, /\.dr-tile \.dr-rail \.dr-rail-btn,[^{]*\{[^}]*min-width: 44px;[^}]*min-height: 44px;/, "44px inside the routine lists too");
     assert.match(css, /\.dr-row \{\s*position: relative;\s*flex-wrap: nowrap;/);
-    assert.match(css, /\.dr-rail-btn:focus-visible \{[^}]*outline:/);
+    assert.match(css, /\.dr-rail-btn:focus-visible,\s*\.dr-rail \.dr-edit-item:focus-visible \{[^}]*outline:/);
     assert.match(css, /\.dr-log:focus-visible \{[^}]*outline:/);
     const details = readFileSync(new URL("../logger/js/pages/daily-routines-details.js", import.meta.url), "utf8");
     const skip = details.match(/const PRESS_SKIP = "([^"]+)"/);

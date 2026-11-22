@@ -46,6 +46,7 @@ const {
   loggedTodayCount,
   restoreRoutineLog,
   routineStreak,
+  saveRoutineBlock,
   shiftRoutineDay,
   skipRoutineItem,
   toggleRoutineCollapsed,
@@ -666,7 +667,10 @@ describe("routine check-off", { concurrency: false }, () => {
     app.ui = { ...(app.ui || {}), dailyRoutineEdit: false };
     app.routineNow = () => new Date(2026, 10, 19, 14, 30);
     const morning = blockId("Morning routine");
-    const afternoon = blockId("Supplement & enhancer stack");
+    assert.equal(saveRoutineBlock(app.state, { name: "Example afternoon routine", startMin: 12 * 60, endMin: 17 * 60 }), true);
+    const afternoon = blockId("Example afternoon routine");
+    /* Put it between Morning and Night, where its time falls. */
+    assert.equal(app.moveRoutineBlock(app.state, afternoon, -1), true);
     const night = blockId("Night routine");
     for (const [block, name] of [[morning, "Example morning"], [afternoon, "Example afternoon"], [night, "Example night"]]) {
       assert.equal(addRoutineItem(app.state, block, { name, kind: "check" }), true);
@@ -743,7 +747,7 @@ describe("routine check-off", { concurrency: false }, () => {
     app.cloudPullOk = false;
     assert.equal(addDose(morning), false);
     assert.equal(toggleRoutineFocus(app.state), false);
-    assert.equal(app.state.dailyRoutines.blocks.length, 3);
+    assert.equal(app.state.dailyRoutines.blocks.length, 2);
     assert.equal(app.state.dailyRoutines.items.length, 0);
   });
 
@@ -759,9 +763,9 @@ describe("routine check-off", { concurrency: false }, () => {
     const html = dailyRoutinesHTML();
     assert.match(html, /Example Compound B/);
     assert.match(html, /data-action="routines-add-item"/);
-    assert.doesNotMatch(html, /data-routines-discover="empty"/);
-    assert.match(html, /data-routines-discover="entry"/);
-    assert.match(html, /Coming soon/);
+    assert.doesNotMatch(html, /data-routines-empty="true"/);
+    assert.doesNotMatch(html, /data-routines-discover="entry"/);
+    assert.match(html, /data-action="routines-block-new"/);
     assert.doesNotMatch(readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
     assert.doesNotMatch(readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
   });

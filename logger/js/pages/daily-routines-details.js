@@ -30,7 +30,7 @@ import { routineSupplyView } from "../shared/routine-supply.js";
 export const ROUTINE_DETAILS_HOLD_MS = 500;
 export const ROUTINE_DETAILS_MOTION_MS = 220;
 const HOLD_SLOP = 10;
-const PRESS_SKIP = ".dr-skip, .dr-undo, .dr-history, .dr-rename, .dr-minus, .dr-handle, .dr-log-all, .dr-edit-log, .dr-swatch, .dr-add, .dr-dup, .dr-rest-btn, .dr-reveal, .dr-block-toggle";
+const PRESS_SKIP = ".dr-skip, .dr-undo, .dr-history, .dr-rename, .dr-minus, .dr-handle, .dr-log-all, .dr-edit-log, .dr-swatch, .dr-add, .dr-dup, .dr-rest-btn, .dr-reveal, .dr-block-toggle, .dr-pep-log, .dr-pep-name, .dr-pep-details, .dr-edit-item";
 const QUARTERS = Object.freeze([
   Object.freeze({ value: "0.25", label: "¼" }),
   Object.freeze({ value: "0.5", label: "½" }),
@@ -418,7 +418,7 @@ function pressTarget(node) {
   if (!node || typeof node.closest !== "function") return null;
   if (app.ROUTINES_ENABLED !== true || editing() || (app.ui && app.ui.sheet)) return null;
   if (node.closest(PRESS_SKIP)) return null;
-  const row = node.closest(".dr-row[data-details]");
+  const row = node.closest(".dr-row[data-details], .dr-pep[data-details]");
   if (!row || !row.closest(".dr-page")) return null;
   return row;
 }

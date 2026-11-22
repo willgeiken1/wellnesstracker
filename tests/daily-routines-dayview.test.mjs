@@ -143,7 +143,7 @@ describe("routine day view", { concurrency: false }, () => {
     assert.match(html, /dr-all-done-mark/);
     assert.doesNotMatch(html, /Next: /);
     assert.doesNotMatch(html, /data-action="routines-log"/);
-    assert.equal(html.match(/data-collapsed="true"/g).length, 3);
+    assert.equal(html.match(/data-collapsed="true"/g).length, 2);
     assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     const prefs = app.state.dailyRoutines.prefs;
     assert.deepEqual(prefs.allDoneOpen, { day: "2026-11-19", ids: [morning] });
@@ -155,7 +155,7 @@ describe("routine day view", { concurrency: false }, () => {
     html = dailyRoutinesHTML();
     assert.match(html, /data-routines-edit="on"/);
     assert.match(html, /class="dr-edit-name"/);
-    assert.equal(html.match(/data-collapsed="false"/g).length, 3);
+    assert.equal(html.match(/data-collapsed="false"/g).length, 2);
     app.ui.dailyRoutineEdit = false;
     pin("2026-11-20", 8, 30);
     html = dailyRoutinesHTML();
@@ -216,7 +216,7 @@ describe("routine day view", { concurrency: false }, () => {
     assert.match(css, /\.dr-overdue \{[^}]*background:\s*#f6c56b/);
     assert.match(css, /\.dr-overdue-icon/);
     const overdueAt = html.indexOf('data-overdue="true"');
-    const row = html.slice(overdueAt, overdueAt + 800);
+    const row = html.slice(overdueAt, overdueAt + 1600);
     assert.match(row, /dr-overdue-text">overdue</);
     assert.match(row, /dr-overdue-icon/);
 

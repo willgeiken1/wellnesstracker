@@ -12,7 +12,8 @@ import {
 
    The page reads the answers through routineSetupShows(). Hiding a part of
    the page never deletes a row. Without a finished setup every part shows, as
-   before. Applying answers only adds blocks, renames or removes a default
+   before. Applying answers adds the Morning and Night routines (with windows
+   from the clock answers), turns on type tabs, renames or removes a default
    block nobody has touched yet, and never removes a row the user made. It
    adds no checks: nobody needs to tick off waking up or going to bed. */
 
@@ -217,9 +218,8 @@ export function setupAnswerText(id, rawAnswers) {
   return labels.join(", ") || "Not answered";
 }
 
-const COLORS = ["citrus", "lavender", "pink"];
 /* Where a new setup block sits, so both phones place it the same way. */
-const SETUP_ORDER = Object.freeze({ morning: 0, supplements: 1, night: 2, enhancers: 3, meds: 4 });
+const SETUP_ORDER = Object.freeze({ morning: 0, night: 1 });
 
 export const SETUP_BLOCK_IDS = Object.freeze({
   morning: "block_default_morning",
@@ -238,25 +238,53 @@ function wantsHabitBlocks(answers) {
   return has(answers, "goals", "habits") || has(answers, "track", "habits");
 }
 
-/* The blocks a finished setup asks for, in page order. Morning, the middle
-   block and Night come first so the Now card's morning, afternoon and night
-   slots still land on them; Enhancers & peptides and Medications follow. */
+/* When a routine starts and ends, from the clock answers. Night and rotating
+   shifts keep the default windows, since their day does not follow the
+   clock. Times are minutes from midnight. */
+const WAKE_START = Object.freeze({ early: 5 * 60, "6-8": 6 * 60, "8-10": 8 * 60, late: 10 * 60 });
+const SLEEP_END = Object.freeze({ early: 22 * 60, "10-12": 23 * 60, late: 24 * 60 });
+
+export function setupWindow(key, rawAnswers) {
+  const answers = normalizeSetupAnswers(rawAnswers);
+  if (nightShift(answers)) return null;
+  if (key === "morning") {
+    const start = WAKE_START[answers.wake];
+    return typeof start === "number" ? { startMin: start, endMin: start + 6 * 60 } : null;
+  }
+  if (key === "night") {
+    const end = SLEEP_END[answers.sleep];
+    return typeof end === "number" ? { startMin: end - 2 * 60, endMin: end } : null;
+  }
+  return null;
+}
+
+/* The routines a finished setup asks for, in page order: Morning and Night,
+   or Wake-up and Wind-down on shifts. What a person takes becomes item types
+   and their tabs (setupTypeTabs), not blocks. */
 export function setupBlocks(rawAnswers, status = "done") {
   const answers = status === "done" ? normalizeSetupAnswers(rawAnswers) : {};
-  const habits = wantsHabitBlocks(answers);
-  const generic = status !== "done" || justLooking(answers);
-  const supplements = generic || takesSupplements(answers);
-  const meds = !generic && takesMeds(answers);
-  const combined = supplements && meds && answers.count === "1-3";
   const night = nightShift(answers);
-  const out = [];
-  if (habits) out.push({ key: "morning", name: night ? "Wake-up routine" : "Morning routine" });
-  if (supplements) out.push({ key: "supplements", name: combined ? "Supplements & medications" : "Supplements" });
-  if (habits) out.push({ key: "night", name: night ? "Wind-down routine" : "Night routine" });
-  if (!generic && takesEnhancers(answers)) out.push({ key: "enhancers", name: "Enhancers & peptides" });
-  if (meds && !combined) out.push({ key: "meds", name: "Medications" });
-  if (!out.length) out.push({ key: "morning", name: night ? "Wake-up routine" : "Morning routine" });
-  return out.map((block, index) => ({ ...block, id: SETUP_BLOCK_IDS[block.key], color: COLORS[index % COLORS.length] }));
+  const out = [
+    { key: "morning", name: night ? "Wake-up routine" : "Morning routine", color: "citrus" },
+    { key: "night", name: night ? "Wind-down routine" : "Night routine", color: "pink" },
+  ];
+  return out.map((block) => ({ ...block, id: SETUP_BLOCK_IDS[block.key], window: status === "done" ? setupWindow(block.key, answers) : null }));
+}
+
+/* The type tabs a finished setup turns on, so they show before the first
+   item is added. Tabs for types that have items show either way. */
+export function setupTypeTabs(rawAnswers, status = "done") {
+  if (status !== "done") return [];
+  const answers = normalizeSetupAnswers(rawAnswers);
+  if (justLooking(answers)) return [];
+  const tabs = [];
+  if (takesSupplements(answers)) tabs.push("supplement");
+  if (takesEnhancers(answers)) {
+    if (answers.inject !== "no") tabs.push("peptide");
+    tabs.push("enhancer");
+  }
+  if (takesMeds(answers)) tabs.push("medication");
+  return tabs;
 }
 
 /* What each part of the page does with these answers. true shows it. */
@@ -313,10 +341,10 @@ export function routineSetupShows(prefs, feature) {
    tools it needs. */
 export const ADDABLE_PARTS = Object.freeze([
   Object.freeze({ key: "morning", kind: "block", tools: [] }),
-  Object.freeze({ key: "supplements", kind: "block", tools: ["doses"] }),
   Object.freeze({ key: "night", kind: "block", tools: [] }),
-  Object.freeze({ key: "enhancers", kind: "block", tools: ["doses", "calculator", "injection", "supply"] }),
-  Object.freeze({ key: "meds", kind: "block", tools: ["doses"] }),
+  Object.freeze({ key: "supplements", kind: "type", types: ["supplement"], tools: ["doses"] }),
+  Object.freeze({ key: "enhancers", kind: "type", types: ["peptide", "enhancer"], tools: ["doses", "calculator", "injection", "supply"] }),
+  Object.freeze({ key: "meds", kind: "type", types: ["medication"], tools: ["doses"] }),
   Object.freeze({ key: "doses", kind: "tool", label: "Dose amounts", hint: "Log an amount and unit on an item.", tools: ["doses"] }),
   Object.freeze({ key: "calculator", kind: "tool", label: "Reconstitution calculator", hint: "Works out the arithmetic for a vial you mix.", tools: ["calculator", "injection"] }),
   Object.freeze({ key: "rest", kind: "tool", label: "Rest day button", hint: "Log a rest day on the Now card.", tools: ["rest"] }),
@@ -325,23 +353,27 @@ export const ADDABLE_PARTS = Object.freeze([
 
 const BLOCK_HINTS = Object.freeze({
   morning: "Habits and checks for the start of the day.",
-  supplements: "Vitamins, minerals, skin care and other supplements.",
+  supplements: "A Supplements tab for vitamins, minerals and skin care.",
   night: "Habits and checks for the end of the day.",
-  enhancers: "Enhancers and peptides, with dose amounts, countdown, calculator and supply.",
-  meds: "Medications, with dose amounts and countdown.",
+  enhancers: "Peptides and Enhancers tabs, with dose amounts, the calculator and supply.",
+  meds: "A Medications tab, with dose amounts and countdown.",
 });
+
+const TYPE_PART_NAMES = Object.freeze({ supplements: "Supplements tab", enhancers: "Peptides and Enhancers tabs", meds: "Medications tab" });
+
+export function setupTypeTabsOf(prefs) {
+  const list = prefs && Array.isArray(prefs.typeTabs) ? prefs.typeTabs : [];
+  return list.filter((id) => typeof id === "string" && id);
+}
 
 export function addableBlockName(key, prefs) {
   const setup = readSetup(prefs);
   const night = !!(setup && setup.status === "done" && nightShift(setup.answers));
   const names = {
     morning: night ? "Wake-up routine" : "Morning routine",
-    supplements: "Supplements",
     night: night ? "Wind-down routine" : "Night routine",
-    enhancers: "Enhancers & peptides",
-    meds: "Medications",
   };
-  return names[key] || "";
+  return names[key] || TYPE_PART_NAMES[key] || "";
 }
 
 /* Each part with its label, and whether it is already on the page. shows
@@ -353,7 +385,11 @@ export function routineParts(rawStore, shows) {
   return ADDABLE_PARTS.map((part) => {
     if (part.kind === "block") {
       const row = byId.get(SETUP_BLOCK_IDS[part.key]);
-      return { key: part.key, kind: "block", label: addableBlockName(part.key, store.prefs), hint: BLOCK_HINTS[part.key], present: !!(row && isLive(row)) };
+      return { key: part.key, kind: "block", label: addableBlockName(part.key, store.prefs), hint: BLOCK_HINTS[part.key], present: !!(row && isLive(row) && row.hidden !== true) };
+    }
+    if (part.kind === "type") {
+      const on = new Set(setupTypeTabsOf(store.prefs));
+      return { key: part.key, kind: "type", label: addableBlockName(part.key, store.prefs), hint: BLOCK_HINTS[part.key], present: part.types.every((type) => on.has(type)) };
     }
     const on = part.key === "tips"
       ? shows("tips") && !(store.prefs && store.prefs.tipsHidden === true)
@@ -375,10 +411,11 @@ export function addRoutinePart(rawStore, key, at) {
     /* A row already there (live, or just restored) only gets its tools. */
     if (!store.blocks.some((block) => block.id === id)) {
       const order = Math.max(nextOrder(store), SETUP_ORDER[key] || 0);
-      store.blocks.push({ id, name: addableBlockName(key, store.prefs), color: COLORS[(SETUP_ORDER[key] || 0) % COLORS.length], order, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
+      store.blocks.push({ id, name: addableBlockName(key, store.prefs), color: key === "night" ? "pink" : "citrus", order, updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null });
     }
   }
   const prefs = { ...store.prefs };
+  if (part.kind === "type") prefs.typeTabs = [...new Set([...setupTypeTabsOf(prefs), ...part.types])];
   prefs.added = [...new Set([...addedFeatures(prefs), ...part.tools])];
   if (key === "tips") prefs.tipsHidden = false;
   prefs.updatedAt = Math.max(stamp, typeof prefs.updatedAt === "number" ? prefs.updatedAt + 1 : 0);
@@ -428,8 +465,13 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
   for (const spec of status === "done" ? wanted : []) {
     const row = byId.get(spec.id);
     if (row && isLive(row)) {
-      if (pristine(store, row) && row.name !== spec.name) {
-        store.blocks = store.blocks.map((block) => (block.id === row.id ? { ...block, name: spec.name, updatedAt: stamp } : block));
+      const ownWindow = typeof row.startMin === "number";
+      const rename = pristine(store, row) && row.name !== spec.name;
+      const timed = spec.window && !ownWindow && rowStamp(row) === DEFAULT_BLOCK_STAMP;
+      if (rename || timed) {
+        store.blocks = store.blocks.map((block) => (block.id === row.id
+          ? { ...block, ...(rename ? { name: spec.name } : {}), ...(timed ? spec.window : {}), updatedAt: stamp }
+          : block));
       }
       resolved.set(spec.key, row.id);
       continue;
@@ -438,7 +480,7 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
     if (row) continue;
     /* A new setup block takes the seed stamp, like the defaults,
        so two phones write the same row and any edit beats it. */
-    const block = { id: spec.id, name: spec.name, color: spec.color, order: Math.max(nextOrder(store), SETUP_ORDER[spec.key] || 0), updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null };
+    const block = { id: spec.id, name: spec.name, color: spec.color, order: Math.max(nextOrder(store), SETUP_ORDER[spec.key] || 0), ...(spec.window || {}), updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null };
     store.blocks.push(block);
     byId.set(spec.id, block);
     resolved.set(spec.key, spec.id);
@@ -463,6 +505,8 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
     const current = Array.isArray(prefs.collapsedBlocks) ? prefs.collapsedBlocks.filter((id) => typeof id === "string" && id) : [];
     prefs.collapsedBlocks = [...new Set([...current, ...ids])];
   }
+  const tabs = setupTypeTabs(answers, status);
+  if (tabs.length) prefs.typeTabs = [...new Set([...setupTypeTabsOf(prefs), ...tabs])];
   prefs.setup = { v: SETUP_VERSION, status, answers, updatedAt: stamp };
   prefs.updatedAt = Math.max(stamp, typeof prefs.updatedAt === "number" ? prefs.updatedAt + 1 : 0);
   store.prefs = prefs;

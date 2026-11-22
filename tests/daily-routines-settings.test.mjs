@@ -409,8 +409,8 @@ describe("routines settings and FAQ", { concurrency: false }, () => {
     const main = readFileSync(new URL("../logger/js/main.js", import.meta.url), "utf8");
     const pager = readFileSync(new URL("../logger/js/shell/pager.js", import.meta.url), "utf8");
     const page = readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8");
-    assert.match(sw, /const CACHE = "insight-shell-v87"/);
-    assert.match(sentry, /insight-shell-v87/);
+    assert.match(sw, /const CACHE = "insight-shell-v88"/);
+    assert.match(sentry, /insight-shell-v88/);
     assert.equal(main.match(/routines-flag/g).length, 1);
     assert.doesNotMatch(page, /routines-flag/);
     assert.match(pager, /app\.TAB_ORDER = \["home", "workouts", "food", "progress", "insights"\];/);
