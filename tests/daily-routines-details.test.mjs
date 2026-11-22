@@ -411,8 +411,8 @@ describe("routine details", { concurrency: false }, () => {
     assert.equal(JSON.stringify(scrubBreadcrumb({ category: "ui.click", message: SENTINEL })).includes(SENTINEL), false);
     const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-    assert.match(sw, /const CACHE = "insight-shell-v80"/);
-    assert.match(sentry, /insight-shell-v80/);
+    assert.match(sw, /const CACHE = "insight-shell-v83"/);
+    assert.match(sentry, /insight-shell-v83/);
     assert.match(sw, /daily-routines-details\.js/);
   });
 });
