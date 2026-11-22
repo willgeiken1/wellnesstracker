@@ -316,7 +316,7 @@ body.in-workout #timer { bottom: 0; padding-bottom: calc(12px + var(--safe-botto
 .btn.small.cancel { background: rgba(255, 90, 78, .15); color: var(--red); }
 #toast { display: flex; align-items: center; justify-content: center; gap: 14px; }
 #toast { pointer-events: none; }
-#toast button { font-weight: 700; color: #0A7A3D; padding: 4px 6px; pointer-events: auto; }
+#toast button { font-weight: 700; color: inherit; text-decoration: underline; text-underline-offset: 3px; padding: 10px 12px; margin: -10px -12px; min-height: 44px; pointer-events: auto; }
 .sheet-x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 18px; background: var(--raised); color: var(--muted); font-size: 20px; line-height: 1; }
 /* ---------- Recovery + Insights ---------- */
 .seg2 { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-radius: 12px; padding: 4px; margin-bottom: 16px; }

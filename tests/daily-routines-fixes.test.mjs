@@ -7,6 +7,7 @@ import {
   editRoutineLog,
   logAllRoutineBlock,
   logRoutineItem,
+  undoRoutineLog,
   parseRoutineAmount,
   saveRoutineItem,
   saveRoutineItemNote,
@@ -160,6 +161,66 @@ test("a push then a pull keeps one fresh log id on both phones", () => {
   const moved = freshMoveLogId(longBase, Date.parse("2026-11-19T14:45:00.000Z"));
   assert.ok(moved.length <= 80);
   assert.ok(moved.startsWith("mv_"));
+});
+
+test("a push takes the renamed log back before an edit or an undo, in both orders", async () => {
+  await import("../logger/js/shared/cloud.js");
+  const now = Date.parse("2026-11-19T16:00:00.000Z");
+  function pair() {
+    signIn();
+    app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+    const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+    assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const bare = structuredClone(app.state.dailyRoutines);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id && !(row.deletedAt > 0));
+    app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+    const phoneA = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(bare);
+    app.routineNow = () => new Date("2026-11-19T14:45:00.000Z");
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    return { item, phoneA, phoneB: structuredClone(app.state.dailyRoutines) };
+  }
+  async function pushPhone(store, server) {
+    app.state.dailyRoutines = structuredClone(store);
+    app.sb = {
+      rpc: async (_name, args) => {
+        server.routines = mergeDailyRoutines(server.routines, args.p_data.dailyRoutines, now);
+        return { data: { dailyRoutines: structuredClone(server.routines) }, error: null };
+      },
+    };
+    await app.cloudPush();
+    return structuredClone(app.state.dailyRoutines);
+  }
+  for (const order of ["A", "B"]) {
+    for (const action of ["edit", "undo"]) {
+      const { item, phoneA, phoneB } = pair();
+      const server = { routines: null };
+      let phone = { A: phoneA, B: phoneB };
+      const sequence = order === "A" ? ["A", "B"] : ["B", "A", "B"];
+      for (const name of sequence) phone[name] = await pushPhone(phone[name], server);
+      const expected = freshMoveLogId(
+        phoneB.logs.find((row) => row.itemId === item.id && row.day === "2026-11-19" && !(row.deletedAt > 0)).id,
+        phoneB.logs.find((row) => row.itemId === item.id && row.day === "2026-11-19" && !(row.deletedAt > 0)).at,
+      );
+      assert.deepEqual(liveIds(phone.B, item.id, "2026-11-19"), [expected], `${order} ${action}`);
+      app.state.dailyRoutines = phone.B;
+      app.routineNow = () => new Date("2026-11-19T16:30:00.000Z");
+      const live = liveIds(app.state.dailyRoutines, item.id, "2026-11-19")[0];
+      if (action === "edit") assert.equal(editRoutineLog(app.state, live, { amount: 500, day: "2026-11-19" }), true);
+      else assert.equal(undoRoutineLog(app.state, live), true);
+      await app.cloudPush();
+      if (action === "edit") {
+        assert.deepEqual(liveIds(server.routines, item.id, "2026-11-19"), [expected], order);
+        assert.equal(server.routines.logs.find((row) => row.id === expected).amount, 500);
+      } else {
+        assert.deepEqual(liveIds(server.routines, item.id, "2026-11-19"), [], order);
+      }
+      assert.deepEqual(liveDays(server.routines, item.id).filter((day) => day === "2026-11-18"), ["2026-11-18"], order);
+    }
+  }
 });
 
 test("the purge window survives the phone's purge record and stops at the rollover hour", async () => {

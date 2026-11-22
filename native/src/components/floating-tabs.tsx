@@ -8,6 +8,7 @@ import { tokens } from '@/design/tokens';
 import { tabs } from '@/features/shell/tabs';
 import { t } from '@/i18n/en';
 import { Icon, type IconName } from './icon';
+import { useSelectionHaptic } from './selection-haptic';
 
 /** The open tab's circle, the other tabs' circles, and the room around them. */
 export const DOCK_ACTIVE = 56, DOCK_ITEM = 46, DOCK_PAD = 5, DOCK_GAP = 8;
@@ -104,6 +105,7 @@ function DockInsets({ children }: { children: ReactNode }) {
 /** The five tabs behind the floating bar. Tabs never slide; the bar floats over the screen. */
 export function FloatingTabs() {
   const insets = useSafeAreaInsets();
+  const haptic = useSelectionHaptic();
   const items: DockItem[] = tabs.map(tab => ({ key: tab.route, label: t(tab.label), icon: tab.label }));
   return <Tabs screenOptions={{ headerShown: false, animation: 'none' }} screenLayout={({ children }) => <DockInsets>{children}</DockInsets>}
     tabBar={({ state, emitter, navigateToTab }) => <><DockFade height={dockSpace(insets.bottom) + DOCK_FADE} /><View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: dockBottom(insets.bottom), alignItems: 'center' }}>
@@ -111,7 +113,7 @@ export function FloatingTabs() {
         const route = state.routes[index];
         if (!route) return;
         const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-        if (state.index !== index && !event.defaultPrevented) navigateToTab(route.key);
+        if (state.index !== index && !event.defaultPrevented) { haptic(); navigateToTab(route.key); }
       }} /></DockRow>
     </View></>}>
     {tabs.map(tab => <Tabs.Screen key={tab.route} name={tab.route} options={{ title: t(tab.label) }} />)}
