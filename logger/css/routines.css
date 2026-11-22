@@ -370,15 +370,17 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .dr-row {
+  /* Only a row that was not on screen in the last paint fades in. A full
+     repaint after a tap leaves the rows that were already there still. */
+  .dr-row[data-enter="true"] {
     transition: opacity 180ms ease, translate 180ms ease;
   }
   @starting-style {
-    .dr-row { opacity: 0; translate: 0 6px; }
+    .dr-row[data-enter="true"] { opacity: 0; translate: 0 6px; }
   }
-  .dr-mark-on { transition: scale 180ms ease; }
+  .dr-row[data-enter="true"] .dr-mark-on { transition: scale 180ms ease; }
   @starting-style {
-    .dr-mark-on { scale: .7; }
+    .dr-row[data-enter="true"] .dr-mark-on { scale: .7; }
   }
   .dr-all-done { animation: dr-all-done-in 180ms ease; }
   .dr-log-toast { animation: dr-toast-in 180ms ease; }

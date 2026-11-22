@@ -44,6 +44,7 @@ const {
   clearRoutineLogToast,
   dailyRoutinesHTML,
   logRoutineItem,
+  resetRoutineRowEntrances,
   skipRoutineItem,
 } = await import("../logger/js/pages/daily-routines.js");
 await import("../logger/js/shell/actions.js");
@@ -179,6 +180,29 @@ describe("routine row action rail", { concurrency: false }, () => {
     const loggedRail = rail(logged);
     assert.ok(loggedRail.indexOf("routines-history") < loggedRail.indexOf("routines-log-edit"));
     assert.ok(loggedRail.indexOf("routines-log-edit") < loggedRail.indexOf("routines-undo"));
+  });
+
+  test("only a row that was not in the last paint fades in", async () => {
+    signIn();
+    resetRoutineRowEntrances();
+    const morning = blockId("Morning routine");
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Check", kind: "check" }), true);
+    assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 1, unit: "mg" }), true);
+    reveal(morning);
+    const first = dailyRoutinesHTML();
+    assert.doesNotMatch(first, /data-enter/);
+    await Promise.resolve();
+    assert.doesNotMatch(dailyRoutinesHTML(), /data-enter/);
+    await Promise.resolve();
+    assert.equal(skipRoutineItem(app.state, itemNamed("Example Check").id), true);
+    const after = dailyRoutinesHTML();
+    assert.match(doneRowFor(after, itemNamed("Example Check").id), /data-enter="true"/);
+    assert.doesNotMatch(rowFor(after, itemNamed("Example Compound A").id), /data-enter/);
+    await Promise.resolve();
+    assert.doesNotMatch(dailyRoutinesHTML(), /data-enter/);
+    const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
+    assert.match(css, /@starting-style \{\s*\.dr-row\[data-enter="true"\] \{ opacity: 0;/);
+    assert.doesNotMatch(css, /@starting-style \{\s*\.dr-row \{/);
   });
 
   test("an open row shows its supply once", () => {

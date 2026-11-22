@@ -1878,6 +1878,29 @@ function railHTML(buttons) {
   return inner ? `<span class="dr-rail" data-action="routines-rail">${inner}</span>` : "";
 }
 
+/* Rows painted in the last full paint, keyed by state and item. A row whose
+   key is new this paint gets data-enter, and only that row fades in. The
+   first paint after load marks nothing. Calls in the same task count as one
+   paint, so a test that renders twice in a row sees no data-enter. */
+let seenRowKeys = null;
+let paintRowKeys = null;
+
+function rowEnterAttr(key) {
+  if (!paintRowKeys) {
+    paintRowKeys = new Set();
+    const commit = () => { seenRowKeys = paintRowKeys; paintRowKeys = null; };
+    if (typeof queueMicrotask === "function") queueMicrotask(commit);
+    else Promise.resolve().then(commit);
+  }
+  paintRowKeys.add(key);
+  return seenRowKeys && !seenRowKeys.has(key) ? ` data-enter="true"` : "";
+}
+
+export function resetRoutineRowEntrances() {
+  seenRowKeys = null;
+  paintRowKeys = null;
+}
+
 function rowKind(row) {
   return row.item && row.item.kind === "dose" ? "dose" : "check";
 }
@@ -1890,7 +1913,7 @@ function openRowHTML(row, projected, date, day) {
   /* Skip, history, and rename keep their own actions. The log button is the
      one the click handler uses, so a long press still reaches the details page.
      Supply comes from the meta line, so it shows once. */
-  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open" data-kind="${rowKind(row)}"${overdue} data-action="routines-log">
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open" data-kind="${rowKind(row)}"${overdue}${rowEnterAttr(`open:${row.item.id}`)} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
       <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}</span>
@@ -1923,7 +1946,7 @@ function doneRowHTML(row, projected, date, day) {
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
   const detail = rowDetailMarkup(projected, row, date, day);
-  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}" data-kind="${rowKind(row)}">
+  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}" data-kind="${rowKind(row)}"${rowEnterAttr(`${state}:${row.item.id}`)}>
     <span class="${markClass}" aria-hidden="true">${mark}</span>
     <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}<span class="dr-state" data-state="${state}">${label}</span></span>
     ${railHTML([historyButton(row), editLogButton(row), undoButton(row)])}
