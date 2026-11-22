@@ -27,7 +27,7 @@ function machineListSheetHTML() {
   }).join("")).join("");
   return `<h3>Machine settings</h3><p class="sub" style="margin:-6px 0 12px">Save how you set up each machine (seat height, pads, pin positions). It shows on that exercise during your workout.</p>
     <input class="text-in" id="ms-q" type="search" autocomplete="off" placeholder="Search your exercises" value="${app.esc(app.ui.sd.q || "")}">
-    ${rows || `<p class="sub">No exercises match.</p>`}`;
+    <div id="ms-q-list">${rows || `<p class="sub">No exercises match.</p>`}</div>`;
 }
 app.machineListSheetHTML = machineListSheetHTML;
 

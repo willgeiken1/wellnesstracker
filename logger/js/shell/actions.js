@@ -146,9 +146,16 @@ function guardSetFieldBeforeInput(ev) {
 }
 app.guardSetFieldBeforeInput = guardSetFieldBeforeInput;
 
+/* A second tap on Log within a moment of the first is the same tap, not a new set. */
+const LOG_REPEAT_MS = 600;
+let lastLog = { key: "", at: 0 };
+
 function logSet(i) {
   const s = app.activeSession(); if (!s) return;
   const e = app.liveExercises(s)[i];
+  if (!e) return;
+  const logKey = `${s.id}|${e.name}`;
+  if (lastLog.key === logKey && Date.now() - lastLog.at < LOG_REPEAT_MS) return;
   const d = app.draftFor(s, e.name), uni = app.isUni(e.name), bw = app.canBW(e.name);
   const side = (wv, rv, label) => {
     const wRaw = String(wv == null ? "" : wv).trim(), w = wRaw === "" ? null : parseFloat(wRaw), r = parseInt(rv, 10);
@@ -168,6 +175,7 @@ function logSet(i) {
   if (d.tag) set.tag = d.tag;
   if (Number.isInteger(d.rpe) && d.rpe >= 6 && d.rpe <= 10) set.rpe = d.rpe;
   entry.sets.push(set);
+  lastLog = { key: logKey, at: Date.now() };
   s.mod = Date.now();
   const prs = app.prsFor(e.name, set, s.date);
   if (prs.length) set.pr = prs;
@@ -175,6 +183,8 @@ function logSet(i) {
   app.save();
   if (app.logsStartRest(s)) app.startTimer();
   app.renderWorkout(); app.tick();
+  const row = typeof document !== "undefined" && document.querySelector(`#wo-list > li.ex:nth-child(${i + 1}) ol.sets > li:last-child`);
+  if (row && row.classList) row.classList.add("just-logged");
   if (prs.length) app.celebrate(e.name, set);
 }
 app.logSet = logSet;
@@ -398,9 +408,39 @@ document.addEventListener("change", (ev) => {
 
 document.addEventListener("beforeinput", (ev) => { app.guardSetFieldBeforeInput(ev); });
 
+/* Search boxes update only their results. Rebuilding the page or sheet on each letter made the list
+   blink, reset the sheet's scroll and could flicker the iPhone keyboard. swapRegion returns false
+   when the region isn't on screen, so the field's own handler below falls back to a full render. */
+const SEARCH_RESULTS = {
+  "food-rq": { region: "food-rq-list", keep: (v) => { app.ui.rq = v; }, html: () => app.recentFoodHTML() },
+  "food-q": { region: "food-q-list", keep: (v) => { app.ui.sd.q = v; }, html: () => app.foodSavedSheetHTML() },
+  "ms-q": { region: "ms-q-list", keep: (v) => { app.ui.sd.q = v; }, html: () => app.machineListSheetHTML() },
+  "home-q": { region: "home-q-list", sheet: "home-gallery", keep: (v) => { app.ui.sd.q = v; }, html: () => app.homeGalleryHTML() },
+};
+
+function swapSearchResults(el) {
+  const s = el && SEARCH_RESULTS[el.id];
+  if (!s || (s.sheet && app.ui.sheet !== s.sheet)) return false;
+  s.keep(el.value);
+  return swapRegion(s.region, s.html());
+}
+
+function swapRegion(id, html) {
+  const old = document.getElementById(id);
+  if (!old) return false;
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  const next = t.content.getElementById(id);
+  if (!next) return false;
+  old.replaceWith(next);
+  return true;
+}
+app.swapRegion = swapRegion;
+
 document.addEventListener("input", (ev) => {
   const el = ev.target;
   if (app.commitSetField(el)) return;
+  if (swapSearchResults(el)) return;
   if (el.id === "exName") { app.ui.sd.name = el.value; return; }
   if (el.id === "authEmail") { app.ui.sd.email = el.value; return; }
   if (el.dataset.fi != null && app.ui.sd.items) {
