@@ -555,3 +555,25 @@ describe("rollover hour and synced custom types", () => {
     assert.equal(app.addRoutineCustomType(app.state, "Example one too many"), "");
   });
 });
+
+describe("Focus mode around the rollover and overlapping windows", () => {
+  test("before the rollover, last night's routine stays in focus", () => {
+    signIn(1, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example morning left", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example night left", kind: "check" }));
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    assert.equal(routines.routineFocusBlockId(projected, new Date(2026, 10, 22, 1, 0, 0)), "block_default_night");
+  });
+
+  test("an overlapping routine that started later is the one for now", () => {
+    signIn(10, 30);
+    assert.ok(saveRoutineBlock(app.state, { name: "Example ten", startMin: 10 * 60, endMin: 11 * 60 }));
+    const ten = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example ten");
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example morning open", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, ten.id, { name: "Example ten open", kind: "check" }));
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    const at = new Date(2026, 10, 22, 10, 30, 0);
+    assert.equal(routines.routineNowNext(projected.blocks, at, "2026-11-22").nowBlock.id, ten.id);
+    assert.equal(routines.routineFocusBlockId(projected, at), ten.id);
+  });
+});

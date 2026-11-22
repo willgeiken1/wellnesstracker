@@ -265,8 +265,12 @@ export function routineNowNext(blocks, date, day) {
   const timed = sorted.map((block) => ({ block, window: routineBlockWindow(block) })).filter((row) => row.window);
   let nowBlock = null;
   if (timed.length) {
-    const inside = timed.find(({ window }) => (nowMin >= window.startMin && nowMin < window.endMin)
-      || (nowMin + 1440 >= window.startMin && nowMin + 1440 < window.endMin));
+    /* When windows overlap, the one that started last is now, whatever
+       their order on the page. */
+    const elapsed = (window) => ((nowMin - window.startMin) % 1440 + 1440) % 1440;
+    const inside = timed.filter(({ window }) => (nowMin >= window.startMin && nowMin < window.endMin)
+      || (nowMin + 1440 >= window.startMin && nowMin + 1440 < window.endMin))
+      .sort((a, b) => elapsed(a.window) - elapsed(b.window))[0];
     const started = timed.filter(({ window }) => window.startMin <= nowMin).sort((a, b) => b.window.startMin - a.window.startMin)[0];
     const latest = timed.slice().sort((a, b) => b.window.startMin - a.window.startMin)[0];
     nowBlock = (inside || started || latest).block;
@@ -2532,18 +2536,21 @@ export function routineFocusBlockId(projected, date) {
   if (!moment.nowBlock) return "";
   /* Only routines that run today, as the tiles show them. */
   const live = todayBlocks(projected, day);
-  /* In the order they come in the day, not the order on the page, so a
-     routine added after Night but run at midday still leads on to Night. */
+  /* In the order they come in the routine day, which starts at the
+     rollover hour, not the order on the page. A routine added after Night
+     but run at midday still leads on to Night. */
+  const rollover = routineDayRolloverHour(projected && projected.settings && projected.settings.dayRolloverHour) * 60;
+  const sinceRollover = (minutes) => ((minutes - rollover) % 1440 + 1440) % 1440;
   const windows = new Map(live.map((block) => [block.id, routineBlockWindow(block)]));
-  const axis = routineSunAxis([...windows.values()].filter(Boolean));
   const at = (block) => {
     const window = windows.get(block.id);
-    return window ? axis.place(window.startMin) : Infinity;
+    return window ? sinceRollover(window.startMin) : Infinity;
   };
   const sorted = live.slice().sort((a, b) => at(a) - at(b) || (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   /* After the day rolls over but before its first routine starts, the
-     routine for now is still last night's, so look from the start of today. */
-  const nowAt = axis.place(clock.getHours() * 60 + clock.getMinutes());
+     routine for now is still last night's, so look from the start of the
+     new day. Before the rollover, last night's routine is still today's. */
+  const nowAt = sinceRollover(clock.getHours() * 60 + clock.getMinutes());
   const found = sorted.findIndex((block) => block.id === moment.nowBlock.id);
   const start = found >= 0 && nowAt < at(sorted[found]) ? 0 : found;
   for (const block of sorted.slice(Math.max(0, start))) {
