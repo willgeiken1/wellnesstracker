@@ -219,6 +219,8 @@ export function setupAnswerText(id, rawAnswers) {
 }
 
 const COLORS = ["citrus", "lavender", "pink"];
+/* Where a new setup block sits, so both phones place it the same way. */
+const SETUP_ORDER = Object.freeze({ morning: 0, supplements: 1, night: 2, enhancers: 3, meds: 4 });
 
 export const SETUP_BLOCK_IDS = Object.freeze({
   morning: "block_default_morning",
@@ -227,13 +229,6 @@ export const SETUP_BLOCK_IDS = Object.freeze({
   enhancers: "block_setup_enhancers",
   meds: "block_setup_meds",
 });
-/* Used when the default block was deleted earlier, so a setup can still add it. */
-const FALLBACK_IDS = Object.freeze({
-  morning: "block_setup_morning",
-  supplements: "block_setup_supplements",
-  night: "block_setup_night",
-});
-
 function nightShift(answers) {
   return answers.days === "night" || answers.days === "rotating";
 }
@@ -341,7 +336,7 @@ const SETUP_NAMES = new Set([
   "Morning routine", "Wake-up routine", "Supplement & enhancer stack", "Supplements",
   "Supplements & medications", "Night routine", "Wind-down routine", "Enhancers & peptides", "Medications",
 ]);
-const SETUP_OWNED = new Set([...Object.values(SETUP_BLOCK_IDS), ...Object.values(FALLBACK_IDS)]);
+const SETUP_OWNED = new Set(Object.values(SETUP_BLOCK_IDS));
 
 function pristine(store, block) {
   if (!block || !isLive(block) || !SETUP_OWNED.has(block.id)) return false;
@@ -366,7 +361,8 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
   const byId = new Map(store.blocks.map((block) => [block.id, block]));
   const resolved = new Map();
 
-  for (const spec of wanted) {
+  /* Skip records the choice and leaves every block as it is. */
+  for (const spec of status === "done" ? wanted : []) {
     const row = byId.get(spec.id);
     if (row && isLive(row)) {
       if (pristine(store, row) && row.name !== spec.name) {
@@ -375,23 +371,18 @@ export function applySetup(rawStore, { status, answers: rawAnswers, at, touched 
       resolved.set(spec.key, row.id);
       continue;
     }
-    /* A deleted default stays deleted. Its fallback id is added once, and a
-       fallback the user deleted stays deleted too. */
-    const id = row ? FALLBACK_IDS[spec.key] : spec.id;
-    const existing = id ? byId.get(id) : null;
-    if (!id || (existing && !isLive(existing))) continue;
-    if (existing) {
-      resolved.set(spec.key, existing.id);
-      continue;
-    }
-    const block = { id, name: spec.name, color: spec.color, order: nextOrder(store), updatedAt: stamp, deletedAt: null };
+    /* A block the user deleted stays deleted, and nothing stands in for it. */
+    if (row) continue;
+    /* A new setup block takes the seed stamp, like the defaults and the
+       starter checks, so two phones write the same row and any edit beats it. */
+    const block = { id: spec.id, name: spec.name, color: spec.color, order: Math.max(nextOrder(store), SETUP_ORDER[spec.key] || 0), updatedAt: DEFAULT_BLOCK_STAMP, deletedAt: null };
     store.blocks.push(block);
-    byId.set(id, block);
-    resolved.set(spec.key, id);
+    byId.set(spec.id, block);
+    resolved.set(spec.key, spec.id);
   }
 
   const keep = new Set(resolved.values());
-  for (const id of SETUP_OWNED) {
+  for (const id of status === "done" ? SETUP_OWNED : []) {
     if (keep.has(id)) continue;
     const row = byId.get(id);
     if (!pristine(store, row)) continue;

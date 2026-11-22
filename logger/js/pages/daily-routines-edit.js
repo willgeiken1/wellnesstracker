@@ -204,7 +204,7 @@ export function routineItemSheetHTML() {
     <span class="field-label" id="dr-kind-label">Type</span>
     <div class="dr-kind" role="group" aria-labelledby="dr-kind-label">
       <button type="button" data-action="routines-item-kind" data-kind="check" aria-pressed="${kindPressed("check", kind)}">Check</button>
-      ${kind === "dose" || storedDose || routineSetupShows(app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs, "doses") ? `<button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>` : ""}
+      ${kind === "dose" || storedDose || (typeof app.routineShows === "function" ? app.routineShows("doses") : routineSetupShows(app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs, "doses")) ? `<button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>` : ""}
     </div>
     ${dose}
     <span class="field-label" id="dr-blocks-label">Routines</span>

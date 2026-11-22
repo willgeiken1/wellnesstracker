@@ -1232,8 +1232,13 @@ document.addEventListener("click", async (ev) => {
         : a === "routines-setup-skip-q" ? app.skipRoutineSetupQuestion()
         : app.skipRoutineSetup();
       if (!moved) break;
-      if (app.ui.sheet === "routines-setup") app.renderSheet();
-      else app.render();
+      if (app.ui.sheet === "routines-setup") {
+        app.renderSheet();
+        /* The sheet is rebuilt for each question, so move focus to the new
+           question for keyboard and screen reader users. */
+        const title = document.getElementById("dr-setup-title");
+        if (title && typeof title.focus === "function") title.focus();
+      } else app.render();
       break;
     }
     case "routines-tips-hide":

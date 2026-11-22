@@ -17,7 +17,7 @@ import {
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { nextDoseCountdown } from "../shared/routine-dose.js";
+import { nextDoseCountdown, ROUTINE_BLOCK_START_MIN } from "../shared/routine-dose.js";
 import { applySetup, askedQuestions, readSetup, routineSetupShows, setupAnswerText, setupQuestion } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
@@ -37,13 +37,7 @@ const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
 export const ROUTINE_DOSE_UNITS = Object.freeze(["mcg", "mg", "IU", "mL", "units"]);
 const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
-const DEFAULT_START = new Map([
-  ["Morning routine", 5],
-  ["Supplement & enhancer stack", 12],
-  ["Supplements", 12],
-  ["Supplements & medications", 12],
-  ["Night routine", 17],
-]);
+const DEFAULT_START = new Map(Object.entries(ROUTINE_BLOCK_START_MIN).map(([name, minutes]) => [name, minutes / 60]));
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 function esc(value) {
@@ -821,10 +815,21 @@ export function hideRoutineTips(state) {
   });
 }
 
+/* A tool the store already uses stays on screen whatever the answers say,
+   so nobody loses something they rely on by answering the setup. */
+function routineInUse(feature, store) {
+  if (!store || typeof store !== "object") return false;
+  const doses = () => (store.items || []).some((item) => isLive(item) && item.kind === "dose");
+  if (feature === "calculator" || feature === "injection") return (store.compounds || []).some(isLive) || doses();
+  if (feature === "doses") return doses();
+  if (feature === "rest") return (store.logs || []).some((log) => isLive(log) && log.rest === true);
+  return false;
+}
+
 /* What the setup answers show. With no finished setup every part shows. */
-export function routineShows(feature, prefs) {
-  const source = prefs !== undefined ? prefs : app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
-  return routineSetupShows(source, feature);
+export function routineShows(feature, store) {
+  const source = store !== undefined ? store : app.state && app.state.dailyRoutines;
+  return routineSetupShows(source && source.prefs, feature) || routineInUse(feature, source);
 }
 
 export function toggleRoutineReveal(state, blockId) {
@@ -1390,7 +1395,7 @@ function nowFooter(projected, date) {
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
-    ${rest || routineShows("rest", projected.prefs) ? restHTML(rest) : ""}`;
+    ${rest || routineShows("rest", projected) ? restHTML(rest) : ""}`;
 }
 
 export function routineNowHTML(projected, date) {
@@ -1643,7 +1648,7 @@ function setupLaterHTML(view) {
 }
 
 function tipsHTML(view) {
-  if (!routineShows("tips", view.prefs) || (view.prefs && view.prefs.tipsHidden === true)) return "";
+  if (!routineShows("tips", view) || (view.prefs && view.prefs.tipsHidden === true)) return "";
   return `<section class="dr-tips" aria-labelledby="dr-tips-title">
     <h2 id="dr-tips-title">Getting started</h2>
     <ul>
@@ -1671,7 +1676,7 @@ function paintShell(view, date) {
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
-    ${routineShows("calculator", view.prefs) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
+    ${routineShows("calculator", view) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
@@ -1776,7 +1781,7 @@ function setupListHTML(prefs) {
 export function routinesSettingsSheetHTML() {
   const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
   const on = !!(prefs && prefs.focusMode === true);
-  const calc = routineShows("calculator", prefs)
+  const calc = routineShows("calculator", app.state && app.state.dailyRoutines)
     ? `<button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
     <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>`
     : "";

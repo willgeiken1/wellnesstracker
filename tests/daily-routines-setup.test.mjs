@@ -233,15 +233,23 @@ describe("applying a setup", () => {
     assert.ok(store.blocks.length <= next.blocks.length, "no row is dropped");
   });
 
-  test("a deleted default block stays deleted and a fallback block is added once", () => {
+  test("a default block the user deleted stays deleted and nothing stands in for it", () => {
     signIn();
-    assert.ok(deleteRoutineBlock(app.state, "block_default_stack"));
-    const answers = Object.fromEntries(SUPPLEMENTS_ONLY);
-    const once = applySetup(app.state.dailyRoutines, { status: "done", answers, at: Date.now() + 10 });
-    assert.equal(isLive(once.blocks.find((block) => block.id === "block_default_stack")), false);
-    assert.ok(liveOf(once.blocks).some((block) => block.id === "block_setup_supplements" && block.name === "Supplements"));
-    const twice = applySetup(once, { status: "done", answers, at: Date.now() + 20 });
-    assert.equal(twice.blocks.filter((block) => block.id === "block_setup_supplements").length, 1);
+    assert.ok(deleteRoutineBlock(app.state, "block_default_night"));
+    const answers = { goals: ["habits"], track: ["habits"], enhancers: "no" };
+    const next = applySetup(app.state.dailyRoutines, { status: "done", answers, at: Date.now() + 10 });
+    assert.equal(isLive(next.blocks.find((block) => block.id === "block_default_night")), false);
+    assert.ok(!liveOf(next.blocks).some((block) => /night/i.test(block.name)));
+    const skipped = applySetup(app.state.dailyRoutines, { status: "skipped", at: Date.now() + 20 });
+    assert.ok(!liveOf(skipped.blocks).some((block) => /night/i.test(block.name)));
+  });
+
+  test("new setup blocks take the seed stamp so a rename on either phone wins", () => {
+    const base = seedDefaultBlocks(null, 10);
+    const next = applySetup(base, { status: "done", answers: { goals: ["enhancers"], inject: "yes" }, at: 500 });
+    const block = next.blocks.find((row) => row.id === "block_setup_enhancers");
+    assert.equal(block.updatedAt, 1);
+    assert.equal(block.order, 3);
   });
 
   test("two phones finishing the same answers write the same rows", () => {
@@ -266,12 +274,12 @@ describe("applying a setup", () => {
     assert.ok(next.prefs.collapsedBlocks.includes("block_setup_meds"));
   });
 
-  test("skip setup settles it with the generic page and no word enhancers", () => {
+  test("skip setup settles it and changes nothing on the page", () => {
     signIn();
     assert.ok(setupUi.maybeOfferRoutineSetup());
     assert.ok(setupUi.skipRoutineSetup());
     assert.equal(readSetup(app.state.dailyRoutines.prefs).status, "skipped");
-    assert.deepEqual(liveNames(), ["Morning routine", "Supplements", "Night routine"]);
+    assert.deepEqual(liveNames(), ["Morning routine", "Supplement & enhancer stack", "Night routine"], "skip leaves every block as it was");
     assert.equal(routineSetupShows(app.state.dailyRoutines.prefs, "calculator"), true, "a skipped setup still shows every tool");
   });
 });
@@ -344,6 +352,46 @@ describe("the setup sheet", () => {
 });
 
 describe("the page follows the answers", () => {
+  test("a tool the account already uses stays whatever the answers say", () => {
+    signIn();
+    assert.ok(addRoutineItem(app.state, "block_default_stack", { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }));
+    app.state.dailyRoutines = applySetup(app.state.dailyRoutines, { status: "done", answers: { goals: ["supplements"], track: ["supplements"], enhancers: "no" }, at: Date.now() + 10 });
+    assert.match(dailyRoutinesHTML(), /data-action="routines-calc"/);
+    assert.match(routinesSettingsSheetHTML(), /Reconstitution calculator/);
+  });
+
+  test("a dose item in a renamed setup block keeps its countdown time", async () => {
+    const { ROUTINE_BLOCK_START_MIN } = await import("../logger/js/shared/routine-dose.js");
+    assert.equal(ROUTINE_BLOCK_START_MIN.Supplements, 12 * 60);
+    assert.equal(ROUTINE_BLOCK_START_MIN["Supplements & medications"], 12 * 60);
+  });
+
+  test("a save that cannot run says so instead of sticking", () => {
+    signIn();
+    setupUi.maybeOfferRoutineSetup();
+    app.sb = {};
+    app.cloudPullOk = false;
+    assert.ok(setupUi.skipRoutineSetup());
+    assert.equal(readSetup(app.state.dailyRoutines.prefs), null);
+    assert.equal(app.ui.sheet, null);
+    assert.match(app.ui.routineAnnounce, /couldn't be saved/);
+  });
+
+  test("a retake leaves a Focus mode switched by hand when that answer did not change", () => {
+    signIn();
+    setupUi.maybeOfferRoutineSetup();
+    answer(SUPPLEMENTS_ONLY);
+    assert.ok(app.toggleRoutineFocus(app.state));
+    assert.equal(app.state.dailyRoutines.prefs.focusMode, true);
+    assert.ok(setupUi.openRoutineSetup("retake"));
+    /* A retake starts with the saved answers picked, so keep each one. */
+    for (const [id, value] of SUPPLEMENTS_ONLY) {
+      assert.equal(app.ui.routineSetupDraft.step, id);
+      assert.ok(Array.isArray(value) ? setupUi.nextRoutineSetup() : setupUi.pickRoutineSetup(id, value));
+    }
+    assert.equal(app.state.dailyRoutines.prefs.focusMode, true);
+  });
+
   test("no injecting removes the calculator button and no training removes Log rest", () => {
     signIn();
     const before = dailyRoutinesHTML();

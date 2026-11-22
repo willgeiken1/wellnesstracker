@@ -68,6 +68,7 @@ export function openRoutineSetup(mode = "quiz", questionId = null) {
     app.ui.routineSetupDraft = { mode: "quiz", step: "goals", answers: {} };
   }
   app.ui.routineSetupLater = false;
+  app.ui.routineSetupError = false;
   app.ui.sheet = "routines-setup";
   app.ui.sd = {};
   return true;
@@ -87,12 +88,36 @@ function steps(answers) {
   return askedQuestions(answers);
 }
 
+/* A first pass runs every answer's one-time effects. A retake runs only the
+   ones whose answer changed, so a Focus mode switched by hand since then is
+   left alone. */
+function touchedBy(current, answers) {
+  if (!current || current.mode === "quiz") return null;
+  if (current.mode === "edit") return [current.step];
+  const setup = readSetup(prefsNow());
+  const before = setup && setup.status === "done" ? setup.answers : {};
+  const ids = new Set([...Object.keys(before), ...Object.keys(answers)]);
+  return [...ids].filter((id) => JSON.stringify(before[id]) !== JSON.stringify(answers[id]));
+}
+
 function finish(status) {
   const current = draft();
   const answers = status === "done" && current ? pruneSetupAnswers(current.answers) : {};
-  const touched = current && current.mode === "edit" ? [current.step] : null;
+  const touched = touchedBy(current, answers);
   const ok = typeof app.saveRoutineSetup === "function" && app.saveRoutineSetup(app.state, { status, answers, touched });
-  if (!ok) return false;
+  if (!ok) {
+    /* Nothing was saved. Say so, and step out of the sheet if writes have
+       closed (signed out, or the account is syncing again). */
+    app.ui.routineAnnounce = "Your setup couldn't be saved right now. Try again in a moment.";
+    if (!writesOpen()) {
+      app.ui.sheet = null;
+      app.ui.sd = {};
+      app.ui.routineSetupLater = true;
+    }
+    app.ui.routineSetupError = true;
+    return true;
+  }
+  app.ui.routineSetupError = false;
   const back = current && current.mode === "edit";
   app.ui.routineSetupDraft = null;
   app.ui.routineSetupLater = false;
@@ -205,8 +230,12 @@ export function routineSetupSheetHTML() {
   const intro = current.mode === "quiz" && index === 0
     ? `<p class="sub">Your answers decide what this page shows. Nothing is hidden for good, and you can change any answer in Routines settings.</p>`
     : "";
+  const error = app.ui && app.ui.routineSetupError === true
+    ? `<p class="dr-setup-error" role="alert">Your setup couldn't be saved right now. Try again in a moment.</p>`
+    : "";
   return `<p class="dr-setup-k">${esc(kicker)}</p>
-    <h3 id="dr-setup-title">${esc(question.title)}</h3>
+    <h3 id="dr-setup-title" tabindex="-1">${esc(question.title)}</h3>
+    ${error}
     ${intro}
     ${question.hint ? `<p class="sub">${esc(question.hint)}</p>` : ""}
     <div class="dr-setup-choices" role="group" aria-labelledby="dr-setup-title">${choices}</div>

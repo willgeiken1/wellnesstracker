@@ -1,13 +1,16 @@
 /* Local calendar day and the next-dose countdown.
    The day is the clock's year, month, and day. toISOString() is the UTC day,
-   so a US evening would already be tomorrow. Block times belong to the three
-   default names. A renamed block has no time, matching the now/next line. */
+   so a US evening would already be tomorrow. Block times belong to the
+   default and setup names. A renamed block has no time, matching the
+   now/next line, which reads this same table. */
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export const ROUTINE_BLOCK_START_MIN = Object.freeze({
   "Morning routine": 5 * 60,
   "Supplement & enhancer stack": 12 * 60,
+  "Supplements": 12 * 60,
+  "Supplements & medications": 12 * 60,
   "Night routine": 17 * 60,
 });
 
