@@ -122,12 +122,18 @@ function peptideCardHTML(projected, item, date, day) {
     site ? `<span>Last site <b>${esc(site)}</b></span>` : "",
   ].join("");
   const ring = supply ? `${supply.left} of ${supply.total} doses left` : "No dose count yet";
+  const taken = !!log && log.status !== "skipped";
+  /* A taken dose opens its details here, for the site and the amount, as a
+     long press on a routine row does. */
+  const details = taken
+    ? `<button type="button" class="dr-pep-details" data-action="routines-details-open" data-item-id="${esc(item.id)}" data-log-id="${esc(log.id)}">Details <span class="dr-vh">${esc(item.name)}</span></button>`
+    : "";
   const act = log
-    ? `<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">${esc(item.name)}</span></button>
+    ? `${details}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">${esc(item.name)}</span></button>
        <span class="dr-mark dr-mark-on" aria-hidden="true">${log.status === "skipped" ? "–" : "✓"}</span>`
     : `<button type="button" class="dr-skip" data-action="routines-skip" data-item-id="${esc(item.id)}">Skip <span class="dr-vh">${esc(item.name)}</span></button>
        <button type="button" class="dr-pep-log" data-action="routines-log" data-item-id="${esc(item.id)}"><span class="dr-mark" aria-hidden="true"></span><span class="dr-vh">Log ${esc(item.name)}</span></button>`;
-  return `<article class="dr-pep" data-item-id="${esc(item.id)}" data-state="${log ? (log.status === "skipped" ? "skipped" : "done") : "open"}">
+  return `<article class="dr-pep" data-item-id="${esc(item.id)}"${taken ? ` data-details="card" data-log-id="${esc(log.id)}"` : ""} data-state="${log ? (log.status === "skipped" ? "skipped" : "done") : "open"}">
     <span class="dr-pep-ring" role="img" aria-label="${esc(ring)}">${routineGaugeHTML(supply)}</span>
     <div class="dr-pep-body">
       <p class="dr-pep-k">${esc(routineItemLabel(projected, item))}</p>

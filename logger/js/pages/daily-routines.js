@@ -1848,9 +1848,16 @@ export function saveRoutineItem(state, draft) {
     if (!DAY.test(clock.day)) return null;
     const blockIds = selectedBlockIds(store, draft);
     const type = routineItemType({ type: draft && draft.type }, store.prefs);
+    const existingId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : "";
+    /* A hidden routine is not offered in the sheet, so the draft cannot
+       pick it. Its rows stay as they are for when it is restored. */
+    const hiddenIds = new Set((store.blocks || []).filter((block) => isLive(block) && block.hidden === true).map((block) => block.id));
+    const keptHidden = existingId
+      ? (store.placements || []).filter((row) => isLive(row) && row.itemId === existingId && hiddenIds.has(row.blockId))
+      : [];
     /* A typed item lives on its tab and needs no routine. An untyped one
        has nowhere else to show, so it keeps at least one. */
-    if (!blockIds.length && !type) return null;
+    if (!blockIds.length && !type && !keptHidden.length) return null;
     const timeMin = draft && typeof draft.time === "string" && draft.time.trim() ? timeToMin(draft.time) : null;
     if (draft && typeof draft.time === "string" && draft.time.trim() && timeMin == null) return null;
     const itemId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : routineId("item");
@@ -1869,6 +1876,9 @@ export function saveRoutineItem(state, draft) {
     delete kept.evidence;
     const supply = supplyFromDraft(draft, kind, clock.day, existing);
     if (!supply) return null;
+    /* When the count was typed, so a dose logged later that day still
+       counts against it. */
+    if (Object.prototype.hasOwnProperty.call(supply, "onHandDay")) supply.onHandAt = supply.onHandDay ? clock.now : null;
     next = upsertEntity(next, "items", {
       ...kept,
       ...supply,
@@ -1885,11 +1895,12 @@ export function saveRoutineItem(state, draft) {
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;
     const chosen = new Set(blockIds);
+    for (const place of keptHidden) chosen.add(place.blockId);
     for (const blockId of blockIds) next = placeInBlock(next, blockId, itemId, at);
     for (const place of (store.placements || []).filter((row) => isLive(row) && row.itemId === itemId && !chosen.has(row.blockId))) {
       next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: place.id }, at);
     }
-    const primary = chosen.has(draft.blockId) ? draft.blockId : (blockIds[0] || null);
+    const primary = blockIds.includes(draft.blockId) ? draft.blockId : (blockIds[0] || null);
     return rememberBlock(next, primary, at);
   });
 }

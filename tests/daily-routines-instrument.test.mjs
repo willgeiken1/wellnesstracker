@@ -38,6 +38,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
 const { app } = await import("../logger/js/runtime.js");
 const routines = await import("../logger/js/pages/daily-routines.js");
 await import("../logger/js/pages/daily-routines-edit.js");
+await import("../logger/js/pages/daily-routines-details.js");
 const plan = await import("../logger/js/pages/daily-routines-plan.js");
 const { liveOf, projectDailyRoutines, seedDefaultBlocks, DEFAULT_BLOCK_STAMP } = await import("../logger/js/shared/daily-routines-store.js");
 const types = await import("../logger/js/shared/routine-types.js");
@@ -394,5 +395,61 @@ describe("moving old blocks onto type tabs", () => {
     const next = types.migrateRoutineTypes(legacyStore(), 1000);
     const stack = next.blocks.find((row) => row.id === "block_default_stack");
     assert.equal(types.routineHiddenNote(next, stack), "Its 2 items now live on their tabs");
+  });
+});
+
+describe("peptide details, hidden routines and the dose count", () => {
+  test("a logged peptide card opens its dose details", () => {
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "", { name: "Example Compound D", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [] }));
+    const id = item("Example Compound D").id;
+    app.ui.routineView = "peptide";
+    assert.doesNotMatch(dailyRoutinesHTML(), /data-action="routines-details-open"/, "nothing to open before a dose");
+    assert.ok(app.logRoutineItem(app.state, id, "done"));
+    const html = dailyRoutinesHTML();
+    const log = liveOf(app.state.dailyRoutines.logs).find((row) => row.itemId === id);
+    assert.match(html, new RegExp(`data-action="routines-details-open" data-item-id="${id}" data-log-id="${log.id}"`));
+    assert.match(html, new RegExp(`class="dr-pep" data-item-id="${id}" data-details="card" data-log-id="${log.id}"`), "a long press on the card opens it too");
+    assert.ok(app.openRoutineDetails(id, log.id));
+    assert.equal(app.ui.sheet, "routines-details");
+  });
+
+  test("saving an item keeps its place in a hidden routine", () => {
+    signIn();
+    assert.ok(saveRoutineBlock(app.state, { name: "Example later", startMin: 13 * 60, endMin: 14 * 60 }));
+    const later = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example later");
+    assert.ok(addRoutineItem(app.state, later.id, { name: "Example both", kind: "check", type: "supplement", blockIds: [later.id, "block_default_morning"] }));
+    assert.ok(addRoutineItem(app.state, later.id, { name: "Example only", kind: "check", blockIds: [later.id] }));
+    assert.ok(hideRoutineBlock(app.state, later.id));
+    const both = item("Example both");
+    const only = item("Example only");
+    assert.ok(routines.saveRoutineItem(app.state, { itemId: both.id, name: "Example both", kind: "check", type: "supplement", blockIds: ["block_default_morning"] }));
+    assert.ok(routines.saveRoutineItem(app.state, { itemId: only.id, name: "Example only renamed", kind: "check", blockIds: [] }), "its hidden routine still holds it");
+    const places = (id) => liveOf(app.state.dailyRoutines.placements).filter((row) => row.itemId === id).map((row) => row.blockId).sort();
+    assert.deepEqual(places(both.id), [later.id, "block_default_morning"].sort());
+    assert.deepEqual(places(only.id), [later.id]);
+    assert.ok(showRoutineBlock(app.state, later.id));
+    const shown = projectDailyRoutines(app.state.dailyRoutines);
+    assert.ok(shown.placements.some((row) => row.blockId === later.id && row.itemId === both.id));
+  });
+
+  test("a dose logged after the count is typed comes off it", () => {
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "", { name: "Example Compound E", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [], onHand: "10" }));
+    const made = item("Example Compound E");
+    assert.equal(made.onHandDay, "2026-11-22");
+    assert.equal(typeof made.onHandAt, "number");
+    pin(8, 5);
+    assert.ok(app.logRoutineItem(app.state, made.id, "done"));
+    const after = projectDailyRoutines(app.state.dailyRoutines);
+    assert.deepEqual(types.routineDosesLeft(after.items.find((row) => row.id === made.id), after.logs), { left: 9, total: 10 });
+  });
+
+  test("a dose logged before the count is typed is already in it", () => {
+    const logs = [{ id: "l1", itemId: "i1", day: "2026-11-22", status: "done", at: 100, deletedAt: null }];
+    assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22", onHandAt: 200 }, logs).left, 10);
+    assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22", onHandAt: 50 }, logs).left, 9);
+    assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-22" }, logs).left, 10, "an older count with no time keeps the day's doses in it");
+    assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-21" }, logs).left, 9);
   });
 });

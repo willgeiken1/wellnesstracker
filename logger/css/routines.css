@@ -1089,6 +1089,7 @@
 .dr-pep .dr-mark { width: 24px; height: 24px; border: 1.6px solid var(--lav); color: var(--ink); }
 .dr-pep .dr-mark-on { background: var(--lav); border-color: var(--lav); }
 .dr-pep .dr-undo { min-height: 32px; padding: 0 10px; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12.5px; }
+.dr-pep-details { min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
 
 /* Routine sheets */
 .dr-pick { display: grid; gap: 8px; }

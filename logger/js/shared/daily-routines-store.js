@@ -288,7 +288,11 @@ function normalizeItem(raw, now = Date.now()) {
   if (timeMin != null) next.timeMin = timeMin;
   else delete next.timeMin;
   for (const key of FEELING_KEYS) delete next[key];
-  return attachSupply(next);
+  const supplied = attachSupply(next);
+  /* The time the count was typed only means something beside its day. */
+  if (!supplied.onHandDay || !(typeof raw.onHandAt === "number" && Number.isFinite(raw.onHandAt) && raw.onHandAt > 0)) delete supplied.onHandAt;
+  else supplied.onHandAt = raw.onHandAt;
+  return supplied;
 }
 
 function normalizePlacement(raw, now = Date.now()) {
