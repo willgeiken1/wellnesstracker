@@ -11,6 +11,7 @@ const ROOT = new URL("..", import.meta.url);
 const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
 const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
 const ORDER_AT = "supabase/migrations/20261121140000_daily_routines_order_at.sql";
+const KEEP_SETUP = "supabase/migrations/20261122041000_daily_routines_keep_setup.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -254,7 +255,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -661,6 +662,55 @@ test("a newer orderAt reaches the other phone on the server and the client", () 
   assert.deepEqual(orders(sql), [["block-morning", 1, 90], ["block-night", 0, 90]]);
 });
 
+test("setup answers and added parts survive an older prefs save on the server and the client", () => {
+  const now = 8_000_000;
+  const setup = (status, at, answers = {}) => ({ v: 1, status, answers, updatedAt: at });
+  const store = (prefs) => ({ updatedAt: 100, prefs });
+  const cases = [
+    ["a stale phone's newer prefs keep the other phone's setup",
+      { lastBlockId: null, focusMode: false, updatedAt: 500, setup: setup("done", 500, { goals: ["habits"] }), added: ["tips"] },
+      { lastBlockId: null, focusMode: true, updatedAt: 900 }],
+    ["the newer setup wins by its own stamp",
+      { lastBlockId: null, updatedAt: 900, setup: setup("skipped", 400) },
+      { lastBlockId: null, updatedAt: 700, setup: setup("done", 600, { home: "next" }) }],
+    ["added parts join in order, strings only, no repeats",
+      { lastBlockId: null, updatedAt: 900, added: ["doses", "tips"] },
+      { lastBlockId: null, updatedAt: 300, added: ["calculator", 7, "doses", "calculator", "injection"] }],
+    ["a broken setup never replaces a real one",
+      { lastBlockId: null, updatedAt: 900, setup: { status: "maybe", updatedAt: 9000 } },
+      { lastBlockId: null, updatedAt: 200, setup: setup("done", 200) }],
+    ["a far-future setup stamp is clamped like any other",
+      { lastBlockId: null, updatedAt: 900, setup: setup("done", now + 10 * DAY_MS, { feel: "all" }) },
+      { lastBlockId: null, updatedAt: 200, setup: setup("done", now + 20 * DAY_MS, { feel: "next" }) }],
+    ["an equal-stamp tie keeps the winner's setup",
+      { lastBlockId: "A", updatedAt: 900, setup: setup("done", 500, { feel: "all" }) },
+      { lastBlockId: "B", updatedAt: 900, setup: setup("done", 500, { feel: "next" }) }],
+    ["a winner whose added is not a list takes the other side's",
+      { lastBlockId: null, updatedAt: 900, added: "tips" },
+      { lastBlockId: null, updatedAt: 300, added: ["rest"] }],
+  ];
+  for (const [label, a, b] of cases) {
+    for (const [stored, incoming, order] of [[a, b, "a then b"], [b, a, "b then a"]]) {
+      const client = mergeRoutines(store(stored), store(incoming), now);
+      const sql = sqlMerge(store(stored), store(incoming), now);
+      assert.deepEqual(sql.prefs, client.prefs, `${label} (${order})`);
+    }
+  }
+  const first = mergeRoutines(store(cases[0][1]), store(cases[0][2]), now).prefs;
+  assert.equal(first.focusMode, true, "the newer prefs still win");
+  assert.deepEqual(first.setup, cases[0][1].setup, "the setup is kept");
+  assert.deepEqual(first.added, ["tips"], "added parts are kept");
+  assert.equal(mergeRoutines(store(cases[1][1]), store(cases[1][2]), now).prefs.setup.status, "done");
+  assert.deepEqual(mergeRoutines(store(cases[2][1]), store(cases[2][2]), now).prefs.added, ["doses", "tips", "calculator", "injection"]);
+  assert.equal(mergeRoutines(store(cases[3][1]), store(cases[3][2]), now).prefs.setup.status, "done");
+  assert.deepEqual(mergeRoutines(store(cases[6][1]), store(cases[6][2]), now).prefs.added, ["rest"]);
+  const pushed = push(
+    { dailyRoutines: store(cases[0][1]) },
+    { dailyRoutines: store(cases[0][2]) },
+  );
+  assert.deepEqual(pushed.full.dailyRoutines.prefs.setup, cases[0][1].setup, "merge_user_data keeps the stored setup");
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -797,7 +847,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }

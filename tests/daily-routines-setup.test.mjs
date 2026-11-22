@@ -39,6 +39,7 @@ const { addRoutineItem, dailyRoutinesHTML, renameRoutineBlock, routinesSettingsS
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
 const setupUi = await import("../logger/js/pages/daily-routines-setup.js");
 const {
+  addRoutinePart,
   applySetup,
   askedQuestions,
   normalizeSetupAnswers,
@@ -263,6 +264,19 @@ describe("applying a setup", () => {
     assert.deepEqual(ids(merged.items), ids(right.items));
     assert.deepEqual(ids(merged.placements), ids(right.placements));
     assert.equal(new Set(ids(merged.blocks)).size, ids(merged.blocks).length);
+  });
+
+  test("a stale phone's newer prefs save keeps the other phone's setup", () => {
+    const base = seedDefaultBlocks(null, 10);
+    const done = applySetup(base, { status: "done", answers: { goals: ["habits"], home: "next", feel: "all" }, at: 1000 });
+    const withTips = addRoutinePart(done, "tips", 1100);
+    const stale = { ...base, prefs: { ...base.prefs, focusMode: true, updatedAt: 3000 } };
+    for (const [a, b] of [[withTips, stale], [stale, withTips]]) {
+      const merged = mergeDailyRoutines(a, b, 5000);
+      assert.equal(readSetup(merged.prefs).status, "done", "the setup is still there, so the quiz stays away");
+      assert.equal(merged.prefs.focusMode, true, "the newer prefs change still wins");
+      assert.ok(routineSetupShows(merged.prefs, "tips"), "a part added from settings stays");
+    }
   });
 
   test("nine or more a day collapses every block except the current one", () => {
