@@ -453,3 +453,32 @@ describe("peptide details, hidden routines and the dose count", () => {
     assert.equal(types.routineDosesLeft({ id: "i1", onHand: 10, onHandDay: "2026-11-21" }, logs).left, 9);
   });
 });
+
+describe("Focus order and history follow the routine's days and times", () => {
+  test("Focus mode moves on by time of day, not by place on the page", () => {
+    signIn(14, 0);
+    assert.ok(saveRoutineBlock(app.state, { name: "Example midday", startMin: 12 * 60, endMin: 15 * 60 }));
+    assert.deepEqual(liveOrder(), ["Morning routine", "Night routine", "Example midday"], "a new routine goes after Night on the page");
+    assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example later", kind: "check" }));
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    assert.equal(routines.routineFocusBlockId(projected, new Date(2026, 10, 22, 14, 0, 0)), "block_default_night", "the empty midday routine leads on to Night");
+  });
+
+  test("History marks an item missed only on its routine's days", async () => {
+    const { routineHistoryView } = await import("../logger/js/shared/routine-history.js");
+    /* Mon, Wed and Fri only. 2026-11-21 is a Saturday and 2026-11-20 a Friday. */
+    const view = {
+      blocks: [{ id: "b1", name: "Example", startMin: 8 * 60, endMin: 9 * 60, days: [0, 2, 4], order: 0, deletedAt: null }],
+      items: [{ id: "i1", name: "Example check", kind: "check", startDate: "2026-11-16", deletedAt: null }],
+      placements: [{ id: "p1", itemId: "i1", blockId: "b1", order: 0, deletedAt: null }],
+      compounds: [],
+      logs: [{ id: "l1", itemId: "i1", day: "2026-11-21", status: "done", at: 1, deletedAt: null }],
+    };
+    const history = routineHistoryView(view, { month: "2026-11", day: "2026-11-22", today: "2026-11-22", tab: "logged" });
+    const marks = (day) => (history.days.find((row) => row.day === day) || { items: [] }).items.map((row) => row.mark);
+    assert.deepEqual(marks("2026-11-20"), ["missed"], "Friday is a routine day");
+    assert.deepEqual(marks("2026-11-19"), [], "Thursday is not");
+    assert.deepEqual(marks("2026-11-21"), ["logged"], "a log on an off day still shows");
+    assert.deepEqual(marks("2026-11-22"), [], "nothing is open on Sunday");
+  });
+});

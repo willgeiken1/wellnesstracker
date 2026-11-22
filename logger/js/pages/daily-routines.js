@@ -2516,7 +2516,15 @@ export function routineFocusBlockId(projected, date) {
   if (!moment.nowBlock) return "";
   /* Only routines that run today, as the tiles show them. */
   const live = todayBlocks(projected, day);
-  const sorted = live.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  /* In the order they come in the day, not the order on the page, so a
+     routine added after Night but run at midday still leads on to Night. */
+  const windows = new Map(live.map((block) => [block.id, routineBlockWindow(block)]));
+  const axis = routineSunAxis([...windows.values()].filter(Boolean));
+  const at = (block) => {
+    const window = windows.get(block.id);
+    return window ? axis.place(window.startMin) : Infinity;
+  };
+  const sorted = live.slice().sort((a, b) => at(a) - at(b) || (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const start = sorted.findIndex((block) => block.id === moment.nowBlock.id);
   for (const block of sorted.slice(Math.max(0, start))) {
     if (routineBlockRows(projected, block.id, day).some((row) => row.open)) return block.id;
