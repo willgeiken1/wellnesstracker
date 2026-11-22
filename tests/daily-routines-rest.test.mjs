@@ -421,15 +421,15 @@ describe("whole-day rest", { concurrency: false }, () => {
     const item = itemNamed("Example Compound A");
     app.state.dailyRoutines.logs.push(
       row("2026-11-17", "done", { id: "past-17", itemId: item.id, updatedAt: 1 }),
-      row("2026-11-18", "skipped", { id: "rest-18", itemId: null, rest: true, amount: 40, updatedAt: 2 }),
+      row("2026-11-18", "skipped", { id: "rest_2026-11-18", itemId: null, rest: true, amount: 40, updatedAt: 2 }),
     );
     assert.equal(logRoutineItem(app.state, item.id), true);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, TODAY), 2);
     assert.notEqual(routineStreak(app.state.dailyRoutines.logs, TODAY), 3);
-    assert.equal(undoRoutineLog(app.state, "rest-18"), true);
-    assert.equal(isLive(app.state.dailyRoutines.logs.find((log) => log.id === "rest-18")), false);
+    assert.equal(undoRoutineLog(app.state, "rest_2026-11-18"), true);
+    assert.equal(isLive(app.state.dailyRoutines.logs.find((log) => log.id === "rest_2026-11-18")), false);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, TODAY), 1);
-    assert.equal(restoreRoutineLog(app.state, "rest-18"), true);
+    assert.equal(restoreRoutineLog(app.state, "rest_2026-11-18"), true);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, TODAY), 2);
     assert.equal(skipRoutineItem(app.state, item.id), false);
   });
