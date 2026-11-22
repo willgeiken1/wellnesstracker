@@ -850,6 +850,7 @@
 .dr-sp-pin line { stroke: var(--line); stroke-width: 1.2; }
 .dr-sp-pin circle { fill: var(--bg) !important; stroke: var(--dr-c); stroke-width: 1.6; }
 .dr-sp-pin[data-done="true"] circle { fill: var(--dr-c) !important; }
+.dr-sp-pin[data-loose="true"] { --dr-c: var(--muted); }
 .dr-sp-horizon { stroke: var(--muted); stroke-width: 1.2; }
 .dr-sp-tick { stroke: var(--muted); stroke-width: 1.2; stroke-linecap: round; }
 .dr-sp-old { opacity: .4; }

@@ -304,6 +304,15 @@ describe("item types and tabs", () => {
 });
 
 describe("the sun path", () => {
+  test("a timed item in no routine gets its own pin", () => {
+    signIn(7, 0);
+    assert.ok(routines.saveRoutineItem(app.state, { name: "Example Compound P", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [], time: "04:00" }));
+    const id = item("Example Compound P").id;
+    const html = routines.routineSunPathHTML(projectDailyRoutines(app.state.dailyRoutines), new Date(2026, 10, 22, 7, 0, 0), "2026-11-22");
+    assert.match(html, new RegExp(`class="dr-sp-pin" data-loose="true" data-item-id="${id}" data-done="false"`));
+    assert.match(html, /Sun path from 04:00/, "the path stretches to reach it");
+  });
+
   test("Routines draws the sun path with windows, pins, ticks and the readout", () => {
     signIn(7, 42);
     assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example one", kind: "check" }));

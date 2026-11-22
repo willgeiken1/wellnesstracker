@@ -2172,7 +2172,16 @@ function sunGeometry(axis, box) {
 
 export function routineSunPathHTML(projected, date, day) {
   const blocks = todayBlocks(projected, day).map((block) => ({ block, window: routineBlockWindow(block) })).filter((row) => row.window);
-  const axis = routineSunAxis(blocks.map((row) => row.window));
+  /* Timed items no drawn routine holds, such as a peptide that lives only
+     on its tab, get their own pin, and the path stretches to reach them. */
+  const drawn = new Set();
+  for (const { block } of blocks) {
+    for (const row of routineBlockRows(projected, block.id, day)) drawn.add(row.item.id);
+  }
+  const loose = placedItems(projected, day)
+    .filter((item) => !drawn.has(item.id) && routineMinuteOfDay(item.timeMin) != null);
+  const axis = routineSunAxis(blocks.map((row) => row.window)
+    .concat(loose.map((item) => ({ startMin: item.timeMin, endMin: item.timeMin }))));
   const { X, Y, arc } = sunGeometry(axis, SP);
   const nowMin = date.getHours() * 60 + date.getMinutes();
   const now = axis.place(nowMin);
@@ -2196,6 +2205,12 @@ export function routineSunPathHTML(projected, date, day) {
       const done = !row.open && rowState(row.log) !== "skipped";
       parts.push(`<g class="dr-sp-pin" data-color="${tileColor(block.color)}" data-done="${done ? "true" : "false"}"><line x1="${spn(x)}" y1="${SP.hy}" x2="${spn(x)}" y2="${spn(Y(x) + 6)}"/><circle cx="${spn(x)}" cy="${spn(Y(x))}" r="3.4"/></g>`);
     }
+  }
+  for (const item of loose) {
+    const x = X(item.timeMin);
+    const log = coveringLog(projected.logs, item.id, day);
+    const done = !!(log && log.status !== "skipped");
+    parts.push(`<g class="dr-sp-pin" data-loose="true" data-item-id="${esc(item.id)}" data-done="${done ? "true" : "false"}"><line x1="${spn(x)}" y1="${SP.hy}" x2="${spn(x)}" y2="${spn(Y(x) + 6)}"/><circle cx="${spn(x)}" cy="${spn(Y(x))}" r="3.4"/></g>`);
   }
   parts.push(`<line x1="${SP.x0 - 8}" y1="${SP.hy}" x2="${SP.x1 + 8}" y2="${SP.hy}" class="dr-sp-horizon"/>`);
   for (let minutes = axis.start; minutes <= axis.end; minutes += 60) {
