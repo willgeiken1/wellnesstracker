@@ -107,7 +107,9 @@ describe("routine history, calendar, and graph", { concurrency: false }, () => {
     const log = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id && !(row.deletedAt > 0));
     pin("2026-11-19");
     assert.equal(editRoutineLog(app.state, log.id, { amount: "0.25", day: "2026-11-15" }), true);
-    assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === log.id).day, "2026-11-15");
+    const moved = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id && !(row.deletedAt > 0));
+    assert.equal(moved.day, "2026-11-15");
+    assert.notEqual(moved.id, log.id);
     assert.equal(openRoutineDayHistory(), true);
     assert.equal(setRoutineHistoryCursor({ day: "2026-11-15" }), true);
     const html = routineDayHistorySheetHTML();
