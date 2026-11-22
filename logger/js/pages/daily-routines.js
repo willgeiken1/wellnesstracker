@@ -1656,6 +1656,10 @@ function gearButton() {
   return `<button type="button" class="icon-btn dr-gear" data-action="routines-settings" aria-label="Routines settings">${GEAR}</button>`;
 }
 
+function pullHintHTML() {
+  return `<p class="dr-pull" data-pull="idle" role="status" hidden>Pull to refresh</p>`;
+}
+
 function signInHTML() {
   return `<div class="dr-page" data-routines-shell="signed-out">
     ${pageHeader("Routines", "Sign in required")}
@@ -1918,6 +1922,7 @@ function waitingHTML(date) {
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
     : todayKey(date);
   return `<div class="dr-page" data-routines-shell="syncing">
+    ${pullHintHTML()}
     ${pageHeader("Routines", sub, gearButton())}
     <section class="dr-signin" aria-labelledby="dr-sync-title">
       <h2 id="dr-sync-title">Syncing your account</h2>
@@ -1962,6 +1967,7 @@ function paintShell(view, date) {
   const editing = layoutEditing();
   const announce = app.ui && app.ui.routineAnnounce ? app.ui.routineAnnounce : "";
   return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
+    ${pullHintHTML()}
     ${pageHeader("Routines", sub, headerTools())}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
     ${routineNowHTML(view, date)}
@@ -2054,6 +2060,24 @@ export function syncRoutineNowRefresh() {
   }, msUntilNextMinute(date));
 }
 
+const ROUTINE_FAQ = [
+  ["What is Routines?", "A list of items you check off each day. It does not replace Workouts, Food, sleep, or water."],
+  ["Who can use it?", "Sign in with your Insight account. Routines are saved with that account."],
+  ["How do I log an item?", "Tap the row. Skip marks it handled and does not count it as taken. Undo is on a finished row."],
+  ["What does the number at the top count?", "How many items you logged today. It does not add amounts together, and a skip is left out."],
+  ["When does a streak reset?", "Only when a whole day is missed. A skip does not reset it."],
+  ["Can I change a logged amount or day?", "Use Edit on a finished row. You can enter a quarter or a partial amount, or move the log to an earlier day."],
+  ["What does the calculator show?", "The arithmetic of the vial amount, water, and amount you type. The screen repeats what you entered. It is not a recommendation, and it does not save a log."],
+  ["Does Routines send reminders?", "No. Nothing is scheduled, and Routines does not ask to alert you. A countdown on a row stays on this page."],
+  ["How do I refresh?", "Pull down from the top of Routines. Opening the app also loads the latest copy from your account."],
+  ["Where is Discover?", "Study-backed entries are not in the app yet. That button does not add an item and does not suggest an amount."],
+];
+
+export function routinesFaqHTML() {
+  const rows = ROUTINE_FAQ.map(([question, answer]) => `<div><dt>${esc(question)}</dt><dd>${esc(answer)}</dd></div>`).join("");
+  return `<section class="dr-faq" aria-labelledby="dr-faq-title"><h4 class="dr-faq-title" id="dr-faq-title">FAQ</h4><dl>${rows}</dl></section>`;
+}
+
 export function routinesSettingsSheetHTML() {
   const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
   const on = !!(prefs && prefs.focusMode === true);
@@ -2062,9 +2086,10 @@ export function routinesSettingsSheetHTML() {
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
-    <p class="sub">Focus mode dims every block except the current one. Reminders and the FAQ come later. Notifications stay off.</p>
+    <p class="sub">Focus mode dims every block except the current one. Countdowns stay on the row. Routines does not send reminders.</p>
     <button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
     <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>
+    ${routinesFaqHTML()}
     <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
 }
 
@@ -2131,4 +2156,131 @@ app.routineNowHTML = routineNowHTML;
 app.routineBlockTileHTML = routineBlockTileHTML;
 app.routineBlockTilesHTML = routineBlockTilesHTML;
 app.routinesSettingsSheetHTML = routinesSettingsSheetHTML;
+app.routinesFaqHTML = routinesFaqHTML;
 app.routinesDiscoverSheetHTML = routinesDiscoverSheetHTML;
+
+/* Pull down on this tab only. The account copy reloads through cloudPull.
+   A sideways move stays with the pager. Nothing here asks to alert the user. */
+export const ROUTINE_PULL_PX = 64;
+const PULL_ARM_PX = 12;
+let routinePull = null;
+let routineRefreshing = false;
+
+function routinePane() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+  return document.querySelector('[data-pane="daily-routines"]');
+}
+
+function routinePullElement() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+  return document.querySelector(".dr-pull");
+}
+
+function pullBlocked() {
+  if (app.ROUTINES_ENABLED !== true) return true;
+  if (!app.ui || app.ui.tab !== "daily-routines") return true;
+  if (app.ui.sheet || app.ui.dailyRoutineEdit === true) return true;
+  if (app.ui.workoutOpen || app.ui.cardioOpen) return true;
+  if (!app.session || !app.session.user || !app.sb) return true;
+  return false;
+}
+
+function scrollAtTop() {
+  const pane = routinePane();
+  if (!pane) return false;
+  return (Number(pane.scrollTop) || 0) <= 0;
+}
+
+function blockedPullTarget(target) {
+  if (!target || typeof target.closest !== "function") return true;
+  if (target.closest("#sheet, #dialog, #tabs, button, a, input, textarea, select, .switch")) return true;
+  return !target.closest('[data-pane="daily-routines"]');
+}
+
+function pullPoint(ev) {
+  if (!ev || (ev.touches && ev.touches.length !== 1)) return null;
+  const touch = ev.touches ? ev.touches[0] : ev;
+  if (!touch || typeof touch.clientY !== "number") return null;
+  return { x: Number(touch.clientX) || 0, y: touch.clientY, target: ev.target || null };
+}
+
+function paintPull(phase, label) {
+  const el = routinePullElement();
+  if (!el) return;
+  const idle = phase === "idle";
+  el.hidden = idle;
+  if (typeof el.setAttribute === "function") el.setAttribute("data-pull", phase);
+  if (idle && typeof el.setAttribute === "function") el.setAttribute("hidden", "");
+  else if (!idle && typeof el.removeAttribute === "function") el.removeAttribute("hidden");
+  el.textContent = label;
+}
+
+export function onRoutinePullStart(ev) {
+  routinePull = null;
+  if (routineRefreshing || pullBlocked()) return;
+  const point = pullPoint(ev);
+  if (!point || blockedPullTarget(point.target) || !scrollAtTop()) return;
+  routinePull = { x: point.x, y: point.y, dy: 0, phase: "wait" };
+}
+
+export function onRoutinePullMove(ev) {
+  if (!routinePull || routineRefreshing) return;
+  const point = pullPoint(ev);
+  if (!point) return;
+  const dy = point.y - routinePull.y;
+  const dx = point.x - routinePull.x;
+  if (routinePull.phase === "wait") {
+    if (Math.abs(dy) < PULL_ARM_PX && Math.abs(dx) < PULL_ARM_PX) return;
+    if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || pullBlocked() || !scrollAtTop()) {
+      routinePull = null;
+      paintPull("idle", "Pull to refresh");
+      return;
+    }
+    routinePull.phase = "pulling";
+  }
+  routinePull.dy = Math.max(0, dy);
+  const ready = routinePull.dy >= ROUTINE_PULL_PX;
+  paintPull(ready ? "ready" : "pulling", ready ? "Release to refresh" : "Pull to refresh");
+  if (ev && ev.cancelable && typeof ev.preventDefault === "function") ev.preventDefault();
+}
+
+async function finishRoutinePull() {
+  if (routineRefreshing || typeof app.cloudPull !== "function" || pullBlocked()) {
+    paintPull("idle", "Pull to refresh");
+    return false;
+  }
+  routineRefreshing = true;
+  paintPull("refreshing", "Refreshing");
+  try {
+    await app.cloudPull();
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    routineRefreshing = false;
+    paintPull("idle", "Pull to refresh");
+  }
+}
+
+export function onRoutinePullEnd() {
+  if (!routinePull) return Promise.resolve(false);
+  const fire = routinePull.phase === "pulling" && routinePull.dy >= ROUTINE_PULL_PX;
+  routinePull = null;
+  if (!fire) {
+    paintPull("idle", "Pull to refresh");
+    return Promise.resolve(false);
+  }
+  return finishRoutinePull();
+}
+
+export function onRoutinePullCancel() {
+  routinePull = null;
+  if (!routineRefreshing) paintPull("idle", "Pull to refresh");
+}
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("touchstart", onRoutinePullStart, { passive: true });
+  document.addEventListener("touchmove", onRoutinePullMove, { passive: false });
+  document.addEventListener("touchend", onRoutinePullEnd, { passive: true });
+  document.addEventListener("touchcancel", onRoutinePullCancel, { passive: true });
+}
