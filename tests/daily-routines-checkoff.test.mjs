@@ -438,6 +438,7 @@ describe("routine check-off", { concurrency: false }, () => {
     log.unit = "mcg";
     const compound = app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId);
     compound.amount = 250;
+    toggleRoutineCollapsed(app.state, morning);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
     assert.match(html, /data-state="partial"/);

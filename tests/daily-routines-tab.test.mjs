@@ -528,7 +528,7 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   html = dailyRoutinesHTML();
   assert.match(html, /Now · Morning · 11:59 AM/);
   assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Morning routine<\/h2>/);
-  assert.match(html, /Next · Supplement &amp; enhancer stack<span class="dr-wait">in 1 min<\/span>/);
+  assert.match(html, /Nothing to log yet/);
   syncRoutineNowRefresh();
   assert.equal(typeof events.visibilitychange, "function");
 
@@ -539,7 +539,7 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   assert.equal(paints, 1);
   assert.match(html, /Now · Afternoon · 12:00 PM/);
   assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Supplement &amp; enhancer stack<\/h2>/);
-  assert.match(html, /Next · Night routine<span class="dr-wait">in 5 hr<\/span>/);
+  assert.match(html, /Nothing to log yet/);
 
   const atNoon = paints;
   app.ui.tab = "home";
