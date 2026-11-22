@@ -1746,7 +1746,7 @@ function openRowHTML(row, projected, date, day) {
   const overdue = timing.overdue ? ` data-overdue="true"` : "";
   /* Skip, history, and rename keep their own actions. The log button is the
      one the click handler uses, so a long press still reaches the details page. */
-  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue}>
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
       <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}</span>
