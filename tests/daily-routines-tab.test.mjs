@@ -614,27 +614,46 @@ test("the minute refresh waits for an open sheet, a focused field, edit mode, an
   minute();
   assert.equal(paints, 1, "the next minute paints once the sheet closes");
 
-  document.activeElement = { tagName: "input" };
+  for (const tagName of ["input", "TEXTAREA", "select"]) {
+    document.activeElement = { tagName };
+    minute();
+    assert.equal(paints, 1, `a focused ${tagName} keeps its keyboard`);
+  }
+  const inPane = (sel) => (sel === "[data-routines-shell]" ? {} : null);
+  document.activeElement = { tagName: "BUTTON", closest: inPane, matches: (sel) => sel === ":focus-visible" };
   minute();
-  assert.equal(paints, 1, "a focused field keeps its keyboard");
+  assert.equal(paints, 1, "a keyboard-focused Routines button keeps its focus");
+  document.activeElement = { tagName: "BUTTON", closest: inPane, matches: () => false };
+  minute();
+  assert.equal(paints, 2, "a tapped Routines button does not hold the refresh");
+  document.activeElement = { tagName: "BUTTON", closest: () => null, matches: () => true };
+  minute();
+  assert.equal(paints, 3, "focus outside the pane does not hold the refresh");
   document.activeElement = null;
-  minute();
-  assert.equal(paints, 2);
 
   app.ui.dailyRoutineEdit = true;
   minute();
-  assert.equal(paints, 2, "a layout edit is not repainted under the finger");
+  assert.equal(paints, 3, "a layout edit is not repainted under the finger");
   app.ui.dailyRoutineEdit = false;
   minute();
-  assert.equal(paints, 3);
+  assert.equal(paints, 4);
 
   app.session = null;
   minute();
   minute();
-  assert.equal(paints, 3, "signed out stops the timer");
+  assert.equal(paints, 4, "signed out stops the timer");
+  let pending = false;
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (...a) => { pending = true; return realSetTimeout(...a); };
+  try {
+    syncRoutineNowRefresh();
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  assert.equal(pending, false, "signed out arms no timer");
   app.session = { user: { id: "synthetic-user" } };
   syncRoutineNowRefresh();
   minute();
-  assert.equal(paints, 4);
+  assert.equal(paints, 5);
 });
 });

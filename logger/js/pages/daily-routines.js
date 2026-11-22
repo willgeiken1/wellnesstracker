@@ -1627,7 +1627,15 @@ function routineRefreshWouldInterrupt() {
   if (layoutEditing()) return true;
   const active = typeof document !== "undefined" ? document.activeElement : null;
   const tag = active && typeof active.tagName === "string" ? active.tagName.toUpperCase() : "";
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  // A keyboard user on a Routines button would lose their place. A tap leaves
+  // focus on the button without :focus-visible, so it does not hold the clock.
+  if (!active || typeof active.closest !== "function" || !active.closest("[data-routines-shell]")) return false;
+  try {
+    return typeof active.matches === "function" && active.matches(":focus-visible");
+  } catch {
+    return false;
+  }
 }
 
 function msUntilNextMinute(date) {
