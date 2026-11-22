@@ -327,7 +327,32 @@ function chartTickText(vals, fmt) {
   });
 }
 
-function chartSVG({ labels, series, h = 130, yMin, yMax, guide, fmt = (v) => Math.round(v) }) {
+function escSvg(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function markerX(labels, date, X) {
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const days = labels.map((lab) => (typeof lab === "string" && /^\d{4}-\d{2}-\d{2}$/.test(lab) ? lab : null));
+  const exact = days.indexOf(date);
+  if (exact >= 0) return X(exact);
+  let prev = -1;
+  let next = -1;
+  for (let i = 0; i < days.length; i++) {
+    const day = days[i];
+    if (!day) continue;
+    if (day < date && (prev < 0 || day > days[prev])) prev = i;
+    if (day > date && (next < 0 || day < days[next])) next = i;
+  }
+  if (prev < 0 || next < 0) return null;
+  const a = Date.parse(`${days[prev]}T00:00:00Z`);
+  const b = Date.parse(`${days[next]}T00:00:00Z`);
+  const t = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a || !Number.isFinite(t)) return null;
+  return X(prev) + (X(next) - X(prev)) * ((t - a) / (b - a));
+}
+
+function chartSVG({ labels, series, h = 130, yMin, yMax, guide, fmt = (v) => Math.round(v), markers = null }) {
   const W = 340, P = { l: 30, r: 8, t: 10, b: 20 }, n = labels.length, iw = W - P.l - P.r, ih = h - P.t - P.b;
   const all = series.flatMap((s) => s.data.filter((v) => v != null)).concat(guide != null ? [guide] : []);
   if (!all.length) return "";
@@ -357,6 +382,20 @@ function chartSVG({ labels, series, h = 130, yMin, yMax, guide, fmt = (v) => Mat
       if (li != null) g += `<circle class="${s.cls || "ln"}-dot" cx="${X(li)}" cy="${Y(s.data[li])}" r="3"/>`;
     }
   });
+  if (Array.isArray(markers) && markers.length) {
+    const used = [];
+    for (const marker of markers) {
+      if (!marker || typeof marker.date !== "string" || typeof marker.label !== "string" || !marker.label.trim()) continue;
+      const x = markerX(labels, marker.date, X);
+      if (x == null) continue;
+      const slot = used.filter((px) => Math.abs(px - x) < 12).length;
+      used.push(x);
+      const xAttr = x.toFixed(1);
+      const anchor = x <= P.l + 56 ? "start" : x >= W - P.r - 56 ? "end" : "middle";
+      const text = escSvg(marker.label);
+      g += `<g class="started-mark"><title>${text}</title><line class="started" x1="${xAttr}" x2="${xAttr}" y1="${P.t.toFixed(1)}" y2="${(P.t + ih).toFixed(1)}"/><text class="started-label" x="${xAttr}" y="${(P.t + 9 + slot * 11).toFixed(1)}" text-anchor="${anchor}">${text}</text></g>`;
+    }
+  }
   return `<svg class="chart" viewBox="0 0 ${W} ${h}" role="img">${g}</svg>`;
 }
 app.chartSVG = chartSVG;

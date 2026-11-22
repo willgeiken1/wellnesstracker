@@ -230,6 +230,7 @@ function normalizeCompound(raw, now = Date.now()) {
     unit: clip(raw.unit, 16),
     startDate: validDay(raw.startDate) ? raw.startDate : null,
     archivedAt: typeof raw.archivedAt === "number" && raw.archivedAt > 0 ? clampStamp(raw.archivedAt, now) : null,
+    chartLine: raw.chartLine === true,
   };
 }
 

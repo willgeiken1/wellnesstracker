@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import "../shared/routine-chart-lines.js";
 
 /* Clicks, typing, and the rest of the event wiring. */
 /* ================= Actions ================= */
@@ -1354,6 +1355,12 @@ document.addEventListener("click", async (ev) => {
     case "routines-calc-dose-unit":
       if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
       app.setReconstitutionUnit("dose", b.dataset.unit);
+      break;
+    case "routines-chart-line":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setCompoundChartLine !== "function") break;
+      if (!app.setCompoundChartLine(app.state, b.dataset.compoundId, b.dataset.on === "1")) break;
+      if (typeof app.save === "function") app.save();
+      if (typeof app.render === "function") app.render();
       break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;
