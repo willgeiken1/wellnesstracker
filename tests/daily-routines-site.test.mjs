@@ -358,7 +358,8 @@ describe("routine injection site", { concurrency: false }, () => {
     assert.equal(logRoutineItem(app.state, item.id), true);
     const logged = logOn(item.id, "2026-11-19");
     assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18", site: "left-thigh" }), true);
-    assert.equal(undoRoutineLog(app.state, logged.id), true);
+    const moved = logOn(item.id, "2026-11-18");
+    assert.equal(undoRoutineLog(app.state, moved.id), true);
     assert.equal(logRoutineItem(app.state, item.id), true);
     const today = logOn(item.id, "2026-11-19");
     assert.equal(lastRoutineSite(app.state.dailyRoutines, item.id, today.id), "");
@@ -425,9 +426,9 @@ describe("routine injection site", { concurrency: false }, () => {
     const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
-    assert.match(flag, /ROUTINES_ENABLED = false/);
-    assert.match(sw, /const CACHE = "insight-shell-v59"/);
-    assert.match(sentry, /insight-shell-v59/);
+    assert.match(flag, /ROUTINES_ENABLED = true/);
+    assert.match(sw, /const CACHE = "insight-shell-v76"/);
+    assert.match(sentry, /insight-shell-v76/);
     assert.match(actions, /case "routines-details-site"/);
     assert.match(actions, /case "routines-details-site-dismiss"/);
     assert.match(css, /\.dr-sites \{/);

@@ -290,7 +290,7 @@ function dayFieldsHTML(sd) {
     </div>
     <label class="field-label" for="dr-details-note">Note, optional</label>
     <textarea class="text-in dr-details-note" id="dr-details-note" maxlength="280" rows="3" autocomplete="off">${esc(sd.note || "")}</textarea>
-    ${siteHTML(sd)}
+    ${sd.kind === "dose" ? siteHTML(sd) : ""}
     ${error}
     <button type="button" class="btn primary block" data-action="routines-details-save">Save</button>`;
 }
