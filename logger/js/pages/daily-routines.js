@@ -2175,13 +2175,20 @@ export function routineSunPathHTML(projected, date, day) {
   /* Timed items no drawn routine holds, such as a peptide that lives only
      on its tab, get their own pin, and the path stretches to reach them. */
   const drawn = new Set();
+  const ownTimes = [];
   for (const { block } of blocks) {
-    for (const row of routineBlockRows(projected, block.id, day)) drawn.add(row.item.id);
+    for (const row of routineBlockRows(projected, block.id, day)) {
+      drawn.add(row.item.id);
+      const own = routineMinuteOfDay(row.item.timeMin);
+      if (own != null) ownTimes.push(own);
+    }
   }
   const loose = placedItems(projected, day)
     .filter((item) => !drawn.has(item.id) && routineMinuteOfDay(item.timeMin) != null);
+  /* Every pin at its own time sits inside the path, so an item timed
+     outside its routine's window is never clamped to an end. */
   const axis = routineSunAxis(blocks.map((row) => row.window)
-    .concat(loose.map((item) => ({ startMin: item.timeMin, endMin: item.timeMin }))));
+    .concat(ownTimes.concat(loose.map((item) => item.timeMin)).map((minutes) => ({ startMin: minutes, endMin: minutes }))));
   const { X, Y, arc } = sunGeometry(axis, SP);
   const nowMin = date.getHours() * 60 + date.getMinutes();
   const now = axis.place(nowMin);

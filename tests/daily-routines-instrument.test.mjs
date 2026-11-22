@@ -313,6 +313,13 @@ describe("the sun path", () => {
     assert.match(html, /Sun path from 04:00/, "the path stretches to reach it");
   });
 
+  test("an item timed outside its routine's window stretches the path too", () => {
+    signIn(7, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example early dose", kind: "check", time: "01:00" }));
+    const html = routines.routineSunPathHTML(projectDailyRoutines(app.state.dailyRoutines), new Date(2026, 10, 22, 7, 0, 0), "2026-11-22");
+    assert.match(html, /Sun path from 01:00/);
+  });
+
   test("Routines draws the sun path with windows, pins, ticks and the readout", () => {
     signIn(7, 42);
     assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example one", kind: "check" }));
