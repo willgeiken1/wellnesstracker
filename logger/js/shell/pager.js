@@ -245,6 +245,7 @@ app.render = function () {
     if (app.mountDonePill) app.mountDonePill();
     if (app.mountStartBar) app.mountStartBar();
     if (app.renderLock) app.renderLock(false);
+    if (typeof app.stopRoutineNowRefresh === "function") app.stopRoutineNowRefresh();
     return;
   }
   document.body.classList.remove("locked");
@@ -292,6 +293,7 @@ app.render = function () {
   app.renderCardioLive();
   app.renderSheet();
   app.tick();
+  if (typeof app.syncRoutineNowRefresh === "function") app.syncRoutineNowRefresh();
 };
 
 function horizontallyScrollable(node) {
