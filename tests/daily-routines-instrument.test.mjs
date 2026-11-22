@@ -486,6 +486,19 @@ describe("peptide details, hidden routines and the dose count", () => {
     assert.ok(shown.placements.some((row) => row.blockId === later.id && row.itemId === both.id));
   });
 
+  test("a typed item in no shown routine counts toward the day", () => {
+    signIn(8, 0);
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example morning check", kind: "check" }));
+    assert.ok(routines.saveRoutineItem(app.state, { name: "Example Compound L", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [] }));
+    assert.ok(app.logRoutineItem(app.state, item("Example morning check").id, "done"));
+    const view = projectDailyRoutines(app.state.dailyRoutines);
+    assert.equal(app.routineDayComplete(view, "2026-11-22"), false, "the peptide is still due");
+    assert.deepEqual(app.routineDoseProgress(view, "2026-11-22"), { logged: 0, due: 1 });
+    assert.equal(app.routineNextItem(view, new Date(2026, 10, 22, 8, 0, 0), "2026-11-22").item.id, item("Example Compound L").id);
+    assert.ok(app.logRoutineItem(app.state, item("Example Compound L").id, "done"));
+    assert.equal(app.routineDayComplete(projectDailyRoutines(app.state.dailyRoutines), "2026-11-22"), true);
+  });
+
   test("clearing the type of an item only a hidden routine holds is refused", () => {
     signIn();
     assert.ok(saveRoutineBlock(app.state, { name: "Example later", startMin: 13 * 60, endMin: 14 * 60 }));

@@ -313,18 +313,29 @@ function parseRoutineLogId(id) {
 }
 
 /* One row per placed item. Two blocks that share an item are still one dose.
-   With a day, a routine that does not run that weekday is left out. */
+   With a day, a routine that does not run that weekday is left out. A typed
+   item no shown routine holds lives on its tab and is due every day, as in
+   History, so it counts too. */
 function placedItems(projected, day) {
-  const blocks = new Set((projected && projected.blocks ? projected.blocks : []).filter((block) => isLive(block) && block.hidden !== true && (!day || routineBlockRunsOn(block, day))).map((block) => block.id));
+  const shown = (projected && projected.blocks ? projected.blocks : []).filter((block) => isLive(block) && block.hidden !== true);
+  const shownIds = new Set(shown.map((block) => block.id));
+  const blocks = new Set(shown.filter((block) => !day || routineBlockRunsOn(block, day)).map((block) => block.id));
   const items = new Map((projected && projected.items ? projected.items : []).filter((item) => isLive(item)).map((item) => [item.id, item]));
   const seen = new Set();
+  const held = new Set();
   const out = [];
   for (const place of projected && projected.placements ? projected.placements : []) {
-    if (!isLive(place) || !blocks.has(place.blockId) || !items.has(place.itemId) || seen.has(place.itemId)) continue;
+    if (!isLive(place) || !items.has(place.itemId)) continue;
+    if (shownIds.has(place.blockId)) held.add(place.itemId);
+    if (!blocks.has(place.blockId) || seen.has(place.itemId)) continue;
     seen.add(place.itemId);
     out.push(items.get(place.itemId));
   }
-  return out;
+  const prefs = projected && projected.prefs;
+  const loose = [...items.values()]
+    .filter((item) => !held.has(item.id) && routineItemType(item, prefs))
+    .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return out.concat(loose);
 }
 
 /* Logged doses out of doses due today. A skip is due and not logged.
