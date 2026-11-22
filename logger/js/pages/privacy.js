@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { routineLogDayInPurge } from "../shared/daily-routines-store.js";
+import { routineEarlyWindow, routineLogMatchesPurge } from "../shared/daily-routines-store.js";
 import { applyPurges, buildExportFiles, coveredBy, localStamp, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
 
 /* Privacy center: export, date-range delete, account delete, and app lock. */
@@ -183,7 +183,7 @@ function summarySheetHTML() {
   return `<h3>What we store</h3>
     <p class="sub">Plain version. The full policy is <a href="../privacy.md" target="_blank" rel="noopener">privacy.md</a>.</p>
     <div class="priv-block"><b>On this phone and in your account</b><p class="sub">Your email and password (the password isn't stored in a readable form). Profile, weigh-ins, workouts, sets, workout routines, food logs, cardio, measurements, goals, settings, and progress photos you choose to add.</p></div>
-    <div class="priv-block"><b>Daily routines</b><p class="sub">Blocks, items, which block each item is placed in, and preferences. A dose item stores a planned amount, a unit, and the day that amount started. A dose log stores the item, the day, the status, the amount and unit, and the time it was logged. You can edit the amount and save the log on an earlier day. When you are signed in, this syncs to your account. It is in the Settings backup and the privacy export. A deleted dose log keeps only a small marker (its id, the day, its status, and when it was deleted) so an older device cannot bring it back. The id links the marker to the routine item. The amount, the unit, and the dose details are removed. Undoing a dose log keeps the log, with its amount, unit and note, marked as undone, so restoring it brings them back. A date-range delete replaces a log that already existed on those days with the marker and leaves the layout. A dose log added or changed after that delete stays. Crash reports and usage analytics do not include dose amounts or item names. The reconstitution calculator is arithmetic on this phone. It is not saved and it is not a recommendation.</p></div>
+    <div class="priv-block"><b>Daily routines</b><p class="sub">Blocks, items, which block each item is placed in, and preferences. A dose item stores a planned amount, a unit, and the day that amount started. A dose log stores the item, the day, the status, the amount and unit, and the time it was logged. You can edit the amount and save the log on an earlier day. When you are signed in, this syncs to your account. It is in the Settings backup and the privacy export. A deleted dose log keeps only a small marker (its id, the day, its status, and when it was deleted) so an older device cannot bring it back. The id links the marker to the routine item. The amount, the unit, and the dose details are removed. Undoing a dose log keeps the log, with its amount, unit and note, marked as undone, so restoring it brings them back. A date-range delete replaces a log that already existed on those days, including a dose logged before the day-start hour on the first morning, with the marker and leaves the layout. A dose log added or changed after that delete stays. Crash reports and usage analytics do not include dose amounts or item names. The reconstitution calculator is arithmetic on this phone. It is not saved and it is not a recommendation.</p></div>
     <div class="priv-block"><b>Oura, if you connect it</b><p class="sub">Sleep, readiness, HRV, resting heart rate, temperature, and steps. The login that fetches this sits in a private table the app itself can't read.</p></div>
     <div class="priv-block"><b>Who else sees it</b><p class="sub">Supabase holds the account, backup, and photos. Anthropic receives a meal photo and any note you type with it, and a written meal description if you submit one for an estimate. Insight doesn't keep that photo. Open Food Facts receives a barcode number when you look one up. Oura sends ring data only after you connect. Sentry, hosted in the US, gets a crash report: what broke, the device and browser, and your account ID if you're signed in. No health data, and IP addresses aren't stored. Send crash reports is on unless you turn it off. PostHog, hosted in the US, gets which features get used, from a short fixed list, with no health values, only if you turn on Share usage analytics. That switch is off unless you turn it on. PostHog data is linked to your account ID, so it isn't anonymous. Location lookup from IP is turned off, and the screen isn't recorded. Both choices stay on this phone. Nobody else using Insight can open your logs. We don't sell data or show ads.</p></div>
     <div class="priv-block"><b>Your choices</b><p class="sub">Turn off Send crash reports to stop crash reports. Share usage analytics stays off unless you turn it on, and turning it off stops PostHog. Export a zip of CSV files, delete the logs between two dates, or delete the whole account. App lock follows your account, but Face ID is set up separately on each phone. We never receive your face, fingerprint, or device passcode.</p></div>`;
@@ -205,7 +205,8 @@ function rangeCounts(from, to) {
   const oura = Object.keys((app.state.oura && app.state.oura.days) || {}).filter((d) => d >= from && d <= to).length;
   const photos = (app.myPhotos ? app.myPhotos() : []).filter((p) => p.date >= from && p.date <= to).length;
   const plan = Object.keys(app.state.plan || {}).filter((d) => d >= from && d <= to).length;
-  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && routineLogDayInPurge(log.day, from, to)).length;
+  const hour = app.state && app.state.dailyRoutines && app.state.dailyRoutines.settings ? app.state.dailyRoutines.settings.dayRolloverHour : 4;
+  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && routineLogMatchesPurge(log, { from, to, ...routineEarlyWindow(from, hour) })).length;
   return { sessions, meals, cardio, meas, weighs, checks, oura, photos, plan, routineLogs };
 }
 app.rangeCounts = rangeCounts;
@@ -233,7 +234,7 @@ function rangeSheetHTML() {
   const from = (app.ui.sd && app.ui.sd.from) || "";
   const to = (app.ui.sd && app.ui.sd.to) || "";
   return `<h3>Delete a date range</h3>
-    <p class="sub" style="margin:-6px 0 14px">Erases logs between these dates and keeps your account. Workouts, food, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and Oura days stored in Insight. Dose logs on those days are replaced with a small marker. The marker keeps its id, which links it to the routine item. The amount, the unit, and the dose details are removed. The routine layout stays. Logs added to those dates later are kept. Workout routines and favorites stay. A later Oura sync won't bring those days back. Oura's own copy is not deleted.</p>
+    <p class="sub" style="margin:-6px 0 14px">Erases logs between these dates and keeps your account. Workouts, food, cardio, measurements, weigh-ins, check-ins, planned days, progress photos, and Oura days stored in Insight. Dose logs on those days, and a dose logged before the day-start hour on the first morning, are replaced with a small marker. The marker keeps its id, which links it to the routine item. The amount, the unit, and the dose details are removed. The routine layout stays. Logs added to those dates later are kept. Workout routines and favorites stay. A later Oura sync won't bring those days back. Oura's own copy is not deleted.</p>
     <label class="field-label" for="purge-from">From</label>
     <input class="text-in" id="purge-from" type="date" max="${app.today()}" value="${app.esc(from)}">
     <label class="field-label" for="purge-to">To</label>
@@ -301,14 +302,21 @@ async function exportAllData() {
 app.exportAllData = exportAllData;
 
 function rememberPurge(from, to, synced) {
-  app.state.purges = notePurge(app.state.purges, from, to, synced);
+  const hour = app.state && app.state.dailyRoutines && app.state.dailyRoutines.settings ? app.state.dailyRoutines.settings.dayRolloverHour : 4;
+  app.state.purges = notePurge(app.state.purges, from, to, synced, Date.now(), routineEarlyWindow(from, hour));
 }
 function purgePayload(from, to) {
   const p = (app.state.purges || []).find((x) => x && x.from === from && x.to === to);
   const deletedAt = purgeCutoff(p);
-  return deletedAt ? { from, to, deletedAt } : { from, to };
+  const body = deletedAt ? { from, to, deletedAt } : { from, to };
+  if (p && typeof p.routineEarlyFrom === "number" && typeof p.routineEarlyTo === "number") {
+    body.routineEarlyFrom = p.routineEarlyFrom;
+    body.routineEarlyTo = p.routineEarlyTo;
+  }
+  return body;
 }
 app.rememberPurge = rememberPurge;
+app.routinePurgePayload = purgePayload;
 
 function photoOlderThan(photo, before) {
   if (before == null) return true;

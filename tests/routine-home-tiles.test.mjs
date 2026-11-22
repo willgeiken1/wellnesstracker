@@ -116,9 +116,15 @@ test("flag off, the Home migrate fixture is unchanged", () => {
   assert.equal(JSON.stringify(edit), before);
 });
 
+function withRoutines(state) {
+  app.session = { user: { id: "synthetic-user" } };
+  state.dailyRoutines = sampleStore();
+  return state;
+}
+
 test("flag on, Next up is added once and does not reshuffle a real edit", () => {
   app.ROUTINES_ENABLED = true;
-  const state = editState();
+  const state = withRoutines(editState());
   applyHomeMigration(state, 5000);
   const home = state.layout.homeV2;
   assert.deepEqual(home.items, ["today", "cardio", NEXT_UP_TILE_ID]);
@@ -132,20 +138,21 @@ test("flag on, Next up is added once and does not reshuffle a real edit", () => 
   assert.deepEqual(state.layout.homeV2.items, ["today", "cardio", NEXT_UP_TILE_ID]);
   assert.equal(state.layout.homeV2.updatedAt, stamped);
 
-  const hidden = { layout: { homeV2: { v: 2, items: ["today"], hidden: [NEXT_UP_TILE_ID], updatedAt: 40 } } };
+  const hidden = withRoutines({ layout: { homeV2: { v: 2, items: ["today"], hidden: [NEXT_UP_TILE_ID], updatedAt: 40 } } });
   seedRoutineNextUp(hidden);
   assert.deepEqual(hidden.layout.homeV2.items, ["today"]);
   assert.deepEqual(hidden.layout.homeV2.hidden, [NEXT_UP_TILE_ID]);
   assert.equal(hidden.layout.homeV2.updatedAt, 40);
 
-  const decided = { layout: { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 40, routineNextSeeded: true } } };
+  const decided = withRoutines({ layout: { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 40, routineNextSeeded: true } } });
   seedRoutineNextUp(decided);
   assert.deepEqual(decided.layout.homeV2.items, ["today"]);
 
-  const empty = { layout: { homeV2: { v: 2, items: [], hidden: [], updatedAt: 9 } } };
+  const empty = withRoutines({ layout: { homeV2: { v: 2, items: [], hidden: [], updatedAt: 9 } } });
   seedRoutineNextUp(empty);
   assert.deepEqual(empty.layout.homeV2.items, []);
-  assert.equal(empty.layout.homeV2.routineNextAside, true);
+  assert.equal(empty.layout.homeV2.routineNextAside, undefined);
+  assert.equal(empty.layout.homeV2.routineNextSeeded, true);
   assert.equal(empty.layout.homeV2.updatedAt, 9);
   const picked = pickHomeV2(empty.layout, { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 1 } }, 1000);
   assert.ok(picked);
@@ -155,6 +162,28 @@ test("flag on, Next up is added once and does not reshuffle a real edit", () => 
   const remote = { homeV2: { v: 2, items: ["today"], hidden: [], updatedAt: 50 } };
   const tie = pickHomeV2(local, remote, 1000);
   assert.ok(tie.items.includes(NEXT_UP_TILE_ID));
+});
+
+test("Next up stays off Home without a signed-in routine, and Remove sticks", () => {
+  app.ROUTINES_ENABLED = true;
+  const edit = editState();
+  seedRoutineNextUp(edit);
+  assert.equal(edit.layout.homeV2.items.includes(NEXT_UP_TILE_ID), false);
+  app.session = { user: { id: "synthetic-user" } };
+  seedRoutineNextUp(edit);
+  assert.equal(edit.layout.homeV2.items.includes(NEXT_UP_TILE_ID), false);
+  assert.equal(legacyNextUpWanted(edit), false);
+
+  const home = withRoutines(editState());
+  seedRoutineNextUp(home);
+  assert.equal(home.layout.homeV2.items.includes(NEXT_UP_TILE_ID), true);
+  delete home.dailyRoutines;
+  assert.equal(hideLegacyNextUp(home), true);
+  assert.equal(home.layout.homeV2.items.includes(NEXT_UP_TILE_ID), false);
+  assert.equal(home.layout.homeV2.hidden.includes(NEXT_UP_TILE_ID), true);
+  assert.equal(home.layout.homeV2.routineNextSeeded, true);
+  seedRoutineNextUp(home);
+  assert.equal(home.layout.homeV2.items.includes(NEXT_UP_TILE_ID), false);
 });
 
 test("flag off, a routine tile id follows the unknown-id rules", () => {

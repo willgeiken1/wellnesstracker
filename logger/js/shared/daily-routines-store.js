@@ -311,9 +311,11 @@ function undoneLog(log, deletedAt, updatedAt) {
   return row;
 }
 
+const TOMBSTONE_EXTRA_KEYS = new Set(["movedAt", "movedDay", "sourceAt", "sourceStep"]);
+
 function isReducedLog(log) {
   if (!log || typeof log !== "object") return false;
-  const keys = Object.keys(log);
+  const keys = Object.keys(log).filter((key) => !TOMBSTONE_EXTRA_KEYS.has(key));
   return keys.length === LOG_TOMBSTONE_KEYS.length && LOG_TOMBSTONE_KEYS.every((key) => keys.includes(key));
 }
 
@@ -326,6 +328,10 @@ function normalizeLog(raw, now = Date.now()) {
     const reduced = reducedLogTombstone({ ...raw, status }, base.deletedAt, base.updatedAt);
     if (base.sourceAt) reduced.sourceAt = base.sourceAt;
     if (base.sourceStep && reduced.sourceAt) reduced.sourceStep = base.sourceStep;
+    if (validDay(raw.movedDay) && typeof raw.movedAt === "number" && Number.isFinite(raw.movedAt)) {
+      reduced.movedDay = raw.movedDay;
+      reduced.movedAt = raw.movedAt;
+    }
     return reduced;
   }
   const row = {
@@ -555,11 +561,40 @@ function mergeSettings(local, remote) {
   return { ...normalizeSettings(remote) };
 }
 
+/* Stamp of a saved Routines setup, or -1 when there is none. */
+function setupStamp(setup, now) {
+  if (!setup || typeof setup !== "object" || Array.isArray(setup)) return -1;
+  if (setup.status !== "done" && setup.status !== "skipped") return -1;
+  return clampStamp(setup.updatedAt, now);
+}
+
+/* prefs merge whole, newest first. The setup answers and the parts added
+   from Routines settings are kept apart from that: a phone that saves a
+   prefs change from a copy pulled before the other phone's setup must not
+   drop the setup, or the quiz shows again. The newer setup wins by its own
+   stamp, and added parts only ever grow. The server merge
+   (daily_routines_merge_prefs) does the same. */
+function keepSetupParts(winner, other, now) {
+  let out = winner;
+  if (setupStamp(other.setup, now) > setupStamp(winner.setup, now)) out = { ...out, setup: other.setup };
+  if (Array.isArray(other.added)) {
+    const base = Array.isArray(out.added) ? out.added : [];
+    const extras = [];
+    for (const key of other.added) {
+      if (typeof key === "string" && !base.includes(key) && !extras.includes(key)) extras.push(key);
+    }
+    if (extras.length) out = { ...out, added: [...base, ...extras] };
+  }
+  return out;
+}
+
 function mergePrefs(local, remote, now) {
   const left = normalizePrefs(local, now);
   const right = normalizePrefs(remote, now);
-  if (left.updatedAt !== right.updatedAt) return left.updatedAt > right.updatedAt ? left : right;
-  return stableStringify(left) >= stableStringify(right) ? left : right;
+  let leftWins;
+  if (left.updatedAt !== right.updatedAt) leftWins = left.updatedAt > right.updatedAt;
+  else leftWins = stableStringify(left) >= stableStringify(right);
+  return leftWins ? keepSetupParts(left, right, now) : keepSetupParts(right, left, now);
 }
 
 /* An item delete also tombstones its placements, tagged removedWith the item
@@ -595,9 +630,71 @@ function reconcileBlockPlacementTombstones(blocks, placements) {
   });
 }
 
+function isMoveTombstone(log) {
+  return !!(log && typeof log.deletedAt === "number" && log.deletedAt > 0 && validDay(log.movedDay) && typeof log.movedAt === "number" && Number.isFinite(log.movedAt) && log.movedAt > 0);
+}
+
+/* FNV-1a, 32 bits. The server function daily_routines_fnv32 uses the same
+   steps, so a fresh log that does not fit in 80 characters gets one id. */
+function fnv32Hex(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/* The same dose time always names the same row, on the phone and the server.
+   A readable id is base_at. A long item id is folded so the result stays
+   within the 80-character cap. */
+export function freshMoveLogId(baseId, at) {
+  const mark = String(Math.trunc(at));
+  const readable = `${baseId}_${mark}`;
+  if (readable.length <= LOG_ID_LIMIT) return readable;
+  return `mv_${fnv32Hex(`${baseId}|${mark}`)}_${mark}`;
+}
+
+function liveLosesToMove(live, tomb) {
+  const liveAt = typeof live.updatedAt === "number" && Number.isFinite(live.updatedAt) && live.updatedAt > 0 ? live.updatedAt : 0;
+  const tombAt = typeof tomb.deletedAt === "number" && Number.isFinite(tomb.deletedAt) && tomb.deletedAt > 0 ? tomb.deletedAt : 0;
+  return liveAt <= tombAt;
+}
+
+/* A move tombstone and a fresh log of the vacated day share an id until
+   they sync. Rename the fresh log only when the tombstone would win, and
+   name it from the dose time so a later pull does not mint a second copy. */
+export function retargetFreshMoveLogs(localLogs, remoteLogs) {
+  const local = (Array.isArray(localLogs) ? localLogs : []).map((log) => (log && typeof log === "object" ? { ...log } : log));
+  const remote = (Array.isArray(remoteLogs) ? remoteLogs : []).map((log) => (log && typeof log === "object" ? { ...log } : log));
+  const remoteBy = new Map();
+  for (const log of remote) {
+    if (log && typeof log.id === "string" && !remoteBy.has(log.id)) remoteBy.set(log.id, log);
+  }
+  const localBy = new Map();
+  for (const log of local) {
+    if (log && typeof log.id === "string" && !localBy.has(log.id)) localBy.set(log.id, log);
+  }
+  for (const id of localBy.keys()) {
+    const left = localBy.get(id);
+    const right = remoteBy.get(id);
+    if (!right) continue;
+    const tomb = isMoveTombstone(left) ? left : isMoveTombstone(right) ? right : null;
+    const live = tomb === left ? right : tomb === right ? left : null;
+    if (!tomb || !live || (typeof live.deletedAt === "number" && live.deletedAt > 0)) continue;
+    const at = typeof live.at === "number" && Number.isFinite(live.at) ? live.at : null;
+    if (at == null || at <= 0 || at === tomb.movedAt || !liveLosesToMove(live, tomb)) continue;
+    const next = freshMoveLogId(id, at);
+    if (!next || next.length > LOG_ID_LIMIT) continue;
+    live.id = next;
+  }
+  return [local, remote];
+}
+
 export function mergeDailyRoutines(local, remote, now = Date.now()) {
-  const left = normalizeDailyRoutines(local, now);
-  const right = normalizeDailyRoutines(remote, now);
+  const split = retargetFreshMoveLogs(local && local.logs, remote && remote.logs);
+  const left = normalizeDailyRoutines(local ? { ...local, logs: split[0] } : local, now);
+  const right = normalizeDailyRoutines(remote ? { ...remote, logs: split[1] } : remote, now);
   if (!left && !right) return null;
   if (!left) return right;
   if (!right) return left;
@@ -644,26 +741,55 @@ function dayBefore(day) {
   return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
 }
 
-/* A 1:30 AM dose on the first selected calendar day is stored on the previous
-   routine day. The match starts one day before `from` so that dose is removed.
-   The day after `to` stays. The extra previous afternoon can go too; deleting
-   more is the privacy-safe direction. The edge strip uses the same window. */
-export function routineLogDayInPurge(day, from, to) {
+/* Local midnight of `from` through the rollover hour, as absolute times.
+   A new purge stores this window. An old purge has no window, so it keeps
+   the exact from..to days. */
+export function routineEarlyWindow(from, hour) {
+  if (!validDay(from)) return null;
+  const selected = Math.min(Math.max(Math.trunc(Number(hour)), 0), 6);
+  const hourOf = Number.isFinite(Number(hour)) ? selected : 4;
+  const year = Number(from.slice(0, 4));
+  const month = Number(from.slice(5, 7));
+  const date = Number(from.slice(8, 10));
+  return {
+    routineEarlyFrom: new Date(year, month - 1, date, 0, 0, 0, 0).getTime(),
+    routineEarlyTo: new Date(year, month - 1, date, hourOf, 0, 0, 0).getTime(),
+  };
+}
+
+/* The exact from..to days always match. The day before matches only when
+   the purge carries a window and the log's `at` falls inside it. */
+export function routineLogMatchesPurge(log, purge) {
+  const day = log && log.day;
+  const from = purge && purge.from;
+  const to = purge && purge.to;
   if (!validDay(day) || !validDay(from) || !validDay(to) || from > to) return false;
-  return day >= dayBefore(from) && day <= to;
+  if (day >= from && day <= to) return true;
+  if (day !== dayBefore(from)) return false;
+  const start = purge.routineEarlyFrom;
+  const end = purge.routineEarlyTo;
+  if (typeof start !== "number" || typeof end !== "number" || !(end > start)) return false;
+  const at = typeof log.at === "number" && Number.isFinite(log.at) ? log.at : null;
+  if (at == null) return false;
+  return at >= start && at < end;
+}
+
+export function routineLogDayInPurge(day, from, to, early = null) {
+  return routineLogMatchesPurge({ day, at: early && early.at }, { from, to, ...early });
 }
 
 /* Tombstones logs whose day is inside the widened range. Blocks, items,
    placements, and compounds stay. The tombstone is what stops the other
    phone's older live log from coming back on the next merge. */
-export function purgeDailyRoutineRange(data, from, to, before, now = Date.now()) {
+export function purgeDailyRoutineRange(data, from, to, before, now = Date.now(), early = null) {
   if (!data || typeof data !== "object" || !validDay(from) || !validDay(to) || from > to) return false;
   const routines = data.dailyRoutines;
   if (!routines || typeof routines !== "object" || Array.isArray(routines) || !Array.isArray(routines.logs)) return false;
   const cutoff = tombstoneAt(before, now);
+  const purge = { from, to, ...(early || {}) };
   let changed = false;
   routines.logs = routines.logs.map((log) => {
-    if (!log || typeof log !== "object" || !routineLogDayInPurge(log.day, from, to)) return log;
+    if (!log || typeof log !== "object" || !routineLogMatchesPurge(log, purge)) return log;
     const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
     /* A later undo is inside the dates but did not exist when this delete
        was made. Leave it, amount and note included. */

@@ -261,6 +261,12 @@ export function migrateHomeLayout(state) {
    A saved homeNextHidden preference is a decision: the seed marks itself
    done and does not add the tile. updatedAt is not moved: a seed must not
    outrank a newer edit. */
+function signedInWithRoutines(state) {
+  if (!app.session || !app.session.user) return false;
+  const items = state && state.dailyRoutines && state.dailyRoutines.items;
+  return Array.isArray(items) && items.some((item) => item && !(typeof item.deletedAt === "number" && item.deletedAt > 0));
+}
+
 export function seedRoutineNextUp(state) {
   if (!state || typeof state !== "object" || app.ROUTINES_ENABLED !== true) return state;
   const home = state.layout && state.layout.homeV2;
@@ -278,10 +284,13 @@ export function seedRoutineNextUp(state) {
     home.routineNextSeeded = true;
     return state;
   }
+  if (!signedInWithRoutines(state)) return state;
   const hasCatalog = home.items.some((id) => typeof id === "string" && HOME_WIDGETS[id]);
   home.routineNextSeeded = true;
   if (!hasCatalog) {
-    home.routineNextAside = true;
+    const hiddenSet = new Set(hidden);
+    const emptied = home.items.length === 0 || home.items.every((id) => hiddenSet.has(id));
+    if (!emptied) home.routineNextAside = true;
     return state;
   }
   home.items = home.items.concat(NEXT_UP_TILE_ID);

@@ -11,6 +11,7 @@ const ROOT = new URL("..", import.meta.url);
 const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
 const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
 const ORDER_AT = "supabase/migrations/20261121140000_daily_routines_order_at.sql";
+const KEEP_SETUP = "supabase/migrations/20261122041000_daily_routines_keep_setup.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -256,7 +257,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql"]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -663,6 +664,55 @@ test("a newer orderAt reaches the other phone on the server and the client", () 
   assert.deepEqual(orders(sql), [["block-morning", 1, 90], ["block-night", 0, 90]]);
 });
 
+test("setup answers and added parts survive an older prefs save on the server and the client", () => {
+  const now = 8_000_000;
+  const setup = (status, at, answers = {}) => ({ v: 1, status, answers, updatedAt: at });
+  const store = (prefs) => ({ updatedAt: 100, prefs });
+  const cases = [
+    ["a stale phone's newer prefs keep the other phone's setup",
+      { lastBlockId: null, focusMode: false, updatedAt: 500, setup: setup("done", 500, { goals: ["habits"] }), added: ["tips"] },
+      { lastBlockId: null, focusMode: true, updatedAt: 900 }],
+    ["the newer setup wins by its own stamp",
+      { lastBlockId: null, updatedAt: 900, setup: setup("skipped", 400) },
+      { lastBlockId: null, updatedAt: 700, setup: setup("done", 600, { home: "next" }) }],
+    ["added parts join in order, strings only, no repeats",
+      { lastBlockId: null, updatedAt: 900, added: ["doses", "tips"] },
+      { lastBlockId: null, updatedAt: 300, added: ["calculator", 7, "doses", "calculator", "injection"] }],
+    ["a broken setup never replaces a real one",
+      { lastBlockId: null, updatedAt: 900, setup: { status: "maybe", updatedAt: 9000 } },
+      { lastBlockId: null, updatedAt: 200, setup: setup("done", 200) }],
+    ["a far-future setup stamp is clamped like any other",
+      { lastBlockId: null, updatedAt: 900, setup: setup("done", now + 10 * DAY_MS, { feel: "all" }) },
+      { lastBlockId: null, updatedAt: 200, setup: setup("done", now + 20 * DAY_MS, { feel: "next" }) }],
+    ["an equal-stamp tie keeps the winner's setup",
+      { lastBlockId: "A", updatedAt: 900, setup: setup("done", 500, { feel: "all" }) },
+      { lastBlockId: "B", updatedAt: 900, setup: setup("done", 500, { feel: "next" }) }],
+    ["a winner whose added is not a list takes the other side's",
+      { lastBlockId: null, updatedAt: 900, added: "tips" },
+      { lastBlockId: null, updatedAt: 300, added: ["rest"] }],
+  ];
+  for (const [label, a, b] of cases) {
+    for (const [stored, incoming, order] of [[a, b, "a then b"], [b, a, "b then a"]]) {
+      const client = mergeRoutines(store(stored), store(incoming), now);
+      const sql = sqlMerge(store(stored), store(incoming), now);
+      assert.deepEqual(sql.prefs, client.prefs, `${label} (${order})`);
+    }
+  }
+  const first = mergeRoutines(store(cases[0][1]), store(cases[0][2]), now).prefs;
+  assert.equal(first.focusMode, true, "the newer prefs still win");
+  assert.deepEqual(first.setup, cases[0][1].setup, "the setup is kept");
+  assert.deepEqual(first.added, ["tips"], "added parts are kept");
+  assert.equal(mergeRoutines(store(cases[1][1]), store(cases[1][2]), now).prefs.setup.status, "done");
+  assert.deepEqual(mergeRoutines(store(cases[2][1]), store(cases[2][2]), now).prefs.added, ["doses", "tips", "calculator", "injection"]);
+  assert.equal(mergeRoutines(store(cases[3][1]), store(cases[3][2]), now).prefs.setup.status, "done");
+  assert.deepEqual(mergeRoutines(store(cases[6][1]), store(cases[6][2]), now).prefs.added, ["rest"]);
+  const pushed = push(
+    { dailyRoutines: store(cases[0][1]) },
+    { dailyRoutines: store(cases[0][2]) },
+  );
+  assert.deepEqual(pushed.full.dailyRoutines.prefs.setup, cases[0][1].setup, "merge_user_data keeps the stored setup");
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -799,7 +849,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql"]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql"]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -892,4 +942,130 @@ test("a moved dose and the other phone's log of the old day both stay on the ser
     const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T16:00:00.000Z"));
     assert.deepEqual(days(merged), ["2026-11-18", "2026-11-19"]);
   }
+});
+
+test("a plain repeat of the moved dose stays a tombstone", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { freshMoveLogId, isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.state = { dailyRoutines: null };
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+  dailyRoutinesHTML();
+  const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+  assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+  const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const logged = structuredClone(app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id));
+  app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+  assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+  const moved = structuredClone(app.state.dailyRoutines);
+  const repeat = structuredClone(moved);
+  repeat.logs = repeat.logs.map((row) => (row.id === logged.id ? logged : row));
+  const days = (store) => (store.logs || []).filter((row) => isLive(row) && row.itemId === item.id).map((row) => row.day).sort();
+  for (const [stored, incoming] of [[moved, repeat], [repeat, moved]]) {
+    const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T15:00:00.000Z"));
+    assert.deepEqual(days(merged), ["2026-11-18"]);
+  }
+  const longBase = `log_${"a".repeat(70)}_2026-11-19`;
+  const at = 1760000000000;
+  assert.equal(query(`select public.daily_routines_fresh_move_id('${longBase}', ${at});`).trim(), freshMoveLogId(longBase, at));
+  assert.ok(freshMoveLogId(longBase, at).length <= 80);
+});
+
+test("a fresh log at or before the move stamp stays beside the moved dose", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  for (const when of ["2026-11-19T14:45:00.000Z", "2026-11-19T15:00:00.000Z"]) {
+    app.state = { dailyRoutines: null };
+    app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+    dailyRoutinesHTML();
+    const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+    assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const bare = structuredClone(app.state.dailyRoutines);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id);
+    app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+    const phoneA = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(bare);
+    app.routineNow = () => new Date(when);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const phoneB = structuredClone(app.state.dailyRoutines);
+    const days = (store) => (store.logs || []).filter((row) => isLive(row) && row.itemId === item.id).map((row) => row.day).sort();
+    for (const [stored, incoming] of [[phoneA, phoneB], [phoneB, phoneA]]) {
+      const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T15:00:00.000Z"));
+      assert.deepEqual(days(merged), ["2026-11-18", "2026-11-19"], when);
+    }
+  }
+});
+
+test("the server clamps 5.0, keeps the newer hour, and keeps a true chart line", () => {
+  assert.equal(query(`select public.daily_routines_rollover_hour('5.0'::jsonb);`).trim(), "5");
+  assert.equal(query(`select public.daily_routines_rollover_hour('7'::jsonb);`).trim(), "6");
+  assert.equal(query(`select public.daily_routines_rollover_hour('99'::jsonb);`).trim(), "6");
+  assert.equal(query(`select public.daily_routines_rollover_hour('-1'::jsonb);`).trim(), "4");
+  const newer = sqlMerge(
+    { settings: { dayRolloverHour: 4, updatedAt: 10 }, compounds: [{ id: "c", name: "Example", amount: 250, unit: "mcg", chartLine: true, updatedAt: 10 }] },
+    { settings: { dayRolloverHour: 6, updatedAt: 20 }, compounds: [{ id: "c", name: "Example", amount: 500, unit: "mcg", updatedAt: 5 }] },
+    100,
+  );
+  assert.equal(newer.settings.dayRolloverHour, 6);
+  assert.equal(newer.compounds.find((row) => row.id === "c").chartLine, true);
+  const tie = sqlMerge(
+    { settings: { dayRolloverHour: 5, updatedAt: 20 } },
+    { settings: { dayRolloverHour: 2, updatedAt: 20 } },
+    100,
+  );
+  assert.equal(tie.settings.dayRolloverHour, 5);
+  const absent = sqlMerge(
+    { compounds: [{ id: "c2", name: "Example", amount: 1, unit: "mg", updatedAt: 1 }] },
+    { compounds: [] },
+    100,
+  );
+  assert.equal(absent.compounds.find((row) => row.id === "c2").chartLine, false);
+});
+
+test("an old purge keeps the previous day and a new purge drops only the early dose", async () => {
+  const { routineEarlyWindow } = await import("../logger/js/shared/daily-routines-store.js");
+  const early = routineEarlyWindow("2026-11-21", 4);
+  const routines = {
+    updatedAt: 1,
+    logs: [
+      { id: "evening", day: "2026-11-20", status: "done", amount: 1, unit: "mg", at: new Date(2026, 10, 20, 15, 0).getTime(), updatedAt: 10, deletedAt: null },
+      { id: "dawn", day: "2026-11-20", status: "done", amount: 1, unit: "mg", at: new Date(2026, 10, 21, 1, 30).getTime(), updatedAt: 11, deletedAt: null },
+      { id: "day", day: "2026-11-21", status: "done", amount: 1, unit: "mg", at: new Date(2026, 10, 21, 12, 0).getTime(), updatedAt: 12, deletedAt: null },
+    ],
+  };
+  const cutoff = new Date(2026, 10, 22, 12, 0).getTime();
+  const run = (purges) => JSON.parse(query(`
+    select public.daily_routines_apply_purges(
+      $r$${JSON.stringify(routines)}$r$::jsonb,
+      $p$${JSON.stringify(purges)}$p$::jsonb,
+      ${cutoff + 1000}
+    )::text;
+  `).trim());
+  const old = run([{ from: "2026-11-21", to: "2026-11-21", at: cutoff, deletedAt: cutoff }]);
+  const oldBy = Object.fromEntries(old.logs.map((row) => [row.id, row]));
+  assert.equal(oldBy.evening.deletedAt, null);
+  assert.equal(oldBy.dawn.deletedAt, null);
+  assert.ok(oldBy.day.deletedAt > 0);
+  const fresh = run([{ from: "2026-11-21", to: "2026-11-21", at: cutoff, deletedAt: cutoff, ...early }]);
+  const freshBy = Object.fromEntries(fresh.logs.map((row) => [row.id, row]));
+  assert.equal(freshBy.evening.deletedAt, null);
+  assert.ok(freshBy.dawn.deletedAt > 0);
+  assert.ok(freshBy.day.deletedAt > 0);
 });

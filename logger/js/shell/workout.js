@@ -5,6 +5,8 @@ function renderWorkout() {
   const el = app.$("#workout");
   const s = app.activeSession();
   if (!s || !app.ui.workoutOpen) { el.hidden = true; document.body.classList.remove("in-workout"); return; }
+  /* A re-render of the open workout (a logged set, a tag, a delete) keeps the scroll position. */
+  const keepTop = el.hidden ? 0 : el.scrollTop;
   el.hidden = false;
   document.body.classList.add("in-workout");
   const list = app.liveExercises(s);
@@ -18,6 +20,7 @@ function renderWorkout() {
     <ul class="list" id="wo-list">${list.length ? list.map((e, i) => app.exerciseHTML(s, e, i)).join("")
       : `<li class="empty">No exercises yet. Add one below.</li>`}</ul>
     <button class="add-row-btn live-add-btn" data-action="live-add-open">Add exercise</button>`;
+  if (keepTop) el.scrollTop = keepTop;
   if (app.placeShellUpdate) app.placeShellUpdate(document);
 }
 app.renderWorkout = renderWorkout;
@@ -94,7 +97,12 @@ app.exerciseHTML = exerciseHTML;
 function renderSheet() {
   if (app.ui.sheet !== "food-barcode") app.stopBarcode();
   const el = app.$("#sheet");
-  if (!app.ui.sheet) { el.hidden = true; el.innerHTML = ""; return; }
+  if (!app.ui.sheet) { el.hidden = true; el.innerHTML = ""; delete el.dataset.open; return; }
+  /* Re-rendering the sheet that is already open keeps its scroll position. Only a sheet that
+     wasn't open a moment ago slides in, so taps inside a sheet don't replay the entrance. */
+  const prevCard = el.hidden ? null : el.querySelector(".sheet-card");
+  const sameSheet = !!prevCard && el.dataset.open === app.ui.sheet;
+  const keepTop = sameSheet ? prevCard.scrollTop : 0;
   el.hidden = false;
   let inner = "";
   if (app.ui.sheet === "plan") {
@@ -167,6 +175,8 @@ function renderSheet() {
     inner = app.pickerSheetHTML();
   } else if (app.ui.sheet === "routines-settings") {
     inner = typeof app.routinesSettingsSheetHTML === "function" ? app.routinesSettingsSheetHTML() : "";
+  } else if (app.ui.sheet === "routines-setup") {
+    inner = typeof app.routineSetupSheetHTML === "function" ? app.routineSetupSheetHTML() : "";
   } else if (app.ui.sheet === "routines-discover") {
     inner = typeof app.routinesDiscoverSheetHTML === "function" ? app.routinesDiscoverSheetHTML() : "";
   } else if (app.ui.sheet === "routines-item") {
@@ -209,6 +219,7 @@ function renderSheet() {
   const sheetName = app.ui.sheet === "home-gallery" ? "Widget gallery"
     : app.ui.sheet === "checkin" ? "Check-in"
     : app.ui.sheet === "routines-settings" ? "Routines settings"
+    : app.ui.sheet === "routines-setup" ? "Set up Routines"
     : app.ui.sheet === "routines-discover" ? "Discover"
     : app.ui.sheet === "routines-item" ? "Item"
     : app.ui.sheet === "routines-history" ? "History"
@@ -220,5 +231,10 @@ function renderSheet() {
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>
     ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;
+  el.dataset.open = app.ui.sheet;
+  const card = el.querySelector(".sheet-card");
+  if (card && sameSheet && keepTop) card.scrollTop = keepTop;
+  if (!sameSheet && !detailSheet) el.classList.add("sheet-in");
+  else el.classList.remove("sheet-in");
 }
 app.renderSheet = renderSheet;

@@ -514,7 +514,9 @@ async function browserCases() {
     window.app.mergeRemote(remote);
     window.app.applyHomeMigration(window.app.state, 4242);
     const home = window.app.state.layout.homeV2;
-    return { items: home.items.slice(), hidden: home.hidden.slice(), updatedAt: home.updatedAt, migratedAt: home.migratedAt, enabled: window.app.ROUTINES_ENABLED === true };
+    const items = window.app.state.dailyRoutines && window.app.state.dailyRoutines.items;
+    const hasRoutine = Array.isArray(items) && items.some((item) => item && !(item.deletedAt > 0));
+    return { items: home.items.slice(), hidden: home.hidden.slice(), updatedAt: home.updatedAt, migratedAt: home.migratedAt, enabled: window.app.ROUTINES_ENABLED === true && hasRoutine };
   }, blob);
   const kept = clobber.enabled ? ["pattern", "today", "routine-next"] : ["pattern", "today"];
   check("device B keeps its newer homeV2", eq(clobber.items, kept) && clobber.items[0] === "pattern" && clobber.items[1] === "today" && eq(clobber.hidden, ["steps"]) && clobber.updatedAt === 9000 && clobber.migratedAt !== 4242, clobber);

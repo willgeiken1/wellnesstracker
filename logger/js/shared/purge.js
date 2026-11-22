@@ -497,7 +497,7 @@ export function stripRange(data, from, to, opts = {}) {
   }
 
   if (stripCheckins(data, from, to, before, now)) changed = true;
-  if (purgeDailyRoutineRange(data, from, to, before, now)) changed = true;
+  if (purgeDailyRoutineRange(data, from, to, before, now, opts.early)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
 }
@@ -519,14 +519,33 @@ export function unionPurges(a, b, now = Date.now()) {
     const usable = Math.max(usableCutoff(p, now), cur ? cur.usable : 0);
     const ahead = rawAhead(p, now) || !!(cur && cur.ahead);
     const stamp = usable || (ahead ? (now > 0 ? now - 1 : now) : 0);
-    map.set(k, { from: p.from, to: p.to, at: stamp, deletedAt: stamp, synced: !!((cur && cur.synced) || p.synced), usable, ahead });
+    const incomingEarly = typeof p.routineEarlyFrom === "number" && typeof p.routineEarlyTo === "number"
+      ? { earlyFrom: p.routineEarlyFrom, earlyTo: p.routineEarlyTo }
+      : null;
+    const early = !cur ? incomingEarly : (cur.earlyFrom != null && incomingEarly ? incomingEarly : null);
+    map.set(k, {
+      from: p.from,
+      to: p.to,
+      at: stamp,
+      deletedAt: stamp,
+      synced: !!((cur && cur.synced) || p.synced),
+      usable,
+      ahead,
+      earlyFrom: early ? early.earlyFrom : null,
+      earlyTo: early ? early.earlyTo : null,
+    });
   }
-  return [...map.values()].map(({ usable, ahead, ...rest }) => rest);
+  return [...map.values()].map(({ usable, ahead, earlyFrom, earlyTo, ...rest }) => {
+    if (typeof earlyFrom === "number" && typeof earlyTo === "number") {
+      return { ...rest, routineEarlyFrom: earlyFrom, routineEarlyTo: earlyTo };
+    }
+    return rest;
+  });
 }
 
 /* Record a range delete. A repeat delete moves deletedAt. Marking the same
    delete synced does not, or logs made in between would be wiped on the next sync. */
-export function notePurge(list, from, to, synced, now = Date.now()) {
+export function notePurge(list, from, to, synced, now = Date.now(), early = null) {
   const purges = Array.isArray(list) ? list : [];
   if (!validDay(from) || !validDay(to) || from > to) return purges;
   const hit = purges.find((p) => p && p.from === from && p.to === to);
@@ -536,7 +555,12 @@ export function notePurge(list, from, to, synced, now = Date.now()) {
     hit.synced = !!synced;
     return purges;
   }
-  purges.push({ from, to, at: now, deletedAt: now, synced: !!synced });
+  const row = { from, to, at: now, deletedAt: now, synced: !!synced };
+  if (early && typeof early.routineEarlyFrom === "number" && typeof early.routineEarlyTo === "number") {
+    row.routineEarlyFrom = early.routineEarlyFrom;
+    row.routineEarlyTo = early.routineEarlyTo;
+  }
+  purges.push(row);
   return purges;
 }
 
@@ -552,7 +576,7 @@ export function applyPurges(data, now = Date.now()) {
     if (!p) continue;
     const before = neutralCutoff(p, now);
     if (before != null) { p.at = before; p.deletedAt = before; }
-    stripRange(data, p.from, p.to, { quiet: true, before, now });
+    stripRange(data, p.from, p.to, { quiet: true, before, now, early: p });
   }
   if (data) stripProfileClockFields(data.profile);
   data.purges = purges;

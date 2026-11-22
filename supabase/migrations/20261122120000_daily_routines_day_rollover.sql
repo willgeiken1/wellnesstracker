@@ -22,7 +22,7 @@ as $fn$
     when (p_value #>> '{}')::numeric <> trunc((p_value #>> '{}')::numeric) then 4
     when (p_value #>> '{}')::numeric < 0 then 4
     when (p_value #>> '{}')::numeric > 6 then 6
-    else (p_value #>> '{}')::integer
+    else trunc((p_value #>> '{}')::numeric)::integer
   end;
 $fn$;
 
@@ -133,6 +133,8 @@ declare
   range_from text[];
   range_to text[];
   range_before numeric[];
+  range_early_from numeric[];
+  range_early_to numeric[];
   range_count integer := 0;
   range_i integer;
 begin
@@ -158,9 +160,16 @@ begin
     end if;
     before := public.daily_routines_purge_before(purge, p_now);
     range_count := range_count + 1;
-    range_from[range_count] := to_char(to_date(from_day, 'YYYY-MM-DD') - 1, 'YYYY-MM-DD');
+    range_from[range_count] := from_day;
     range_to[range_count] := to_day;
     range_before[range_count] := before;
+    if jsonb_typeof(purge->'routineEarlyFrom') = 'number' and jsonb_typeof(purge->'routineEarlyTo') = 'number' then
+      range_early_from[range_count] := (purge->>'routineEarlyFrom')::numeric;
+      range_early_to[range_count] := (purge->>'routineEarlyTo')::numeric;
+    else
+      range_early_from[range_count] := null;
+      range_early_to[range_count] := null;
+    end if;
   end loop;
   if range_count = 0 then
     return p_routines;
@@ -175,7 +184,16 @@ begin
       from unnest(array['loggedAt', 'updatedAt', 'createdAt', 'at', 'mod']) as k;
       for range_i in 1..range_count
       loop
-        if day < range_from[range_i] or day > range_to[range_i] then
+        if not (
+          (day >= range_from[range_i] and day <= range_to[range_i])
+          or (
+            range_early_from[range_i] is not null
+            and range_early_to[range_i] > range_early_from[range_i]
+            and day = to_char(to_date(range_from[range_i], 'YYYY-MM-DD') - 1, 'YYYY-MM-DD')
+            and public.daily_routines_ms(kept, 'at') >= range_early_from[range_i]
+            and public.daily_routines_ms(kept, 'at') < range_early_to[range_i]
+          )
+        ) then
           continue;
         end if;
         before := range_before[range_i];
@@ -189,8 +207,11 @@ begin
         select count(*) into key_count from jsonb_object_keys(kept);
         gone := public.daily_routines_ms(kept, 'deletedAt') > 0;
         reduced := gone
-          and key_count = 5
-          and kept ?& array['id', 'day', 'status', 'updatedAt', 'deletedAt'];
+          and kept ?& array['id', 'day', 'status', 'updatedAt', 'deletedAt']
+          and not exists (
+            select 1 from jsonb_object_keys(kept) extra_key
+            where extra_key not in ('id', 'day', 'status', 'updatedAt', 'deletedAt', 'movedAt', 'movedDay', 'sourceAt', 'sourceStep')
+          );
         if reduced then
           continue;
         end if;

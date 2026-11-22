@@ -16,11 +16,14 @@ export function Screen({ children, title, tabHeader = false, topInset = false }:
   // Over the floating bar's fade too, so a last button such as Progress's "Log weigh-in" rests in the clear.
   const insets = useSafeAreaInsets(), fade = tabHeader && barLook === 'floating' ? DOCK_FADE : 0;
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg as ColorValue }} edges={tabHeader ? ['top', 'left', 'right'] : topInset ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
-    <ScrollView testID="screen-scroll" contentContainerStyle={[styles.content, tabHeader && { paddingBottom: tokens.spacing[3] + insets.bottom + fade }]}>
+    {/* Fields stay above the keyboard on iOS, the first tap on a button while the keyboard is up still
+        presses it, and dragging the list puts the keyboard away. */}
+    <ScrollView testID="screen-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
+      automaticallyAdjustKeyboardInsets contentContainerStyle={[styles.content, tabHeader && { paddingBottom: tokens.spacing[3] + insets.bottom + fade }]}>
       {title && <View style={styles.header}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1 }}>{title}</ThemedText>
         {tabHeader && <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')}
-          onPress={() => router.push('/settings')} style={styles.avatar}><Icon name="avatar" /></Pressable>}
+          onPress={() => router.push('/settings')} style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}><Icon name="avatar" /></Pressable>}
       </View>}
       {children}
     </ScrollView>
@@ -28,4 +31,5 @@ export function Screen({ children, title, tabHeader = false, topInset = false }:
 }
 const styles = StyleSheet.create({ content: { padding: tokens.spacing[3], gap: tokens.spacing[3], flexGrow: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] },
-  avatar: { minWidth: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' } });
+  avatar: { minWidth: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.6 } });

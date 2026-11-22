@@ -18,8 +18,10 @@ import {
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
+import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, ROUTINE_BLOCK_START_MIN, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
 import { routineSupplyView, supplyFromDraft } from "../shared/routine-supply.js";
+import { reconstitutionNoteText, reconstitutionResult } from "./reconstitution.js";
+import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows, SETUP_BLOCK_IDS } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -46,11 +48,7 @@ const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
 export const ROUTINE_DOSE_UNITS = Object.freeze(["mcg", "mg", "IU", "mL", "units"]);
 const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
-const DEFAULT_START = new Map([
-  ["Morning routine", 5],
-  ["Supplement & enhancer stack", 12],
-  ["Night routine", 17],
-]);
+const DEFAULT_START = new Map(Object.entries(ROUTINE_BLOCK_START_MIN).map(([name, minutes]) => [name, minutes / 60]));
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 export const ROUTINE_LOG_TOAST_MS = 3000;
@@ -563,10 +561,27 @@ function amountMarkup(text) {
   return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
 }
 
-/* Calculator note on the item. A per-dose log note stays off this row. */
-function itemNoteMarkup(item) {
-  if (!item || item.kind !== "dose" || typeof item.note !== "string") return "";
-  const note = item.note.trim();
+/* The saved inputs are redrawn with the item's current dose, so a later
+   amount change does not leave the old U-100 units on the row. */
+function freshCalculatorNote(item, compound) {
+  if (!item || typeof item.calcVial !== "number" || typeof item.calcWater !== "number") return "";
+  if (!compound || typeof compound.amount !== "number" || typeof compound.unit !== "string" || !compound.unit) return "";
+  return reconstitutionNoteText(reconstitutionResult({
+    vialAmount: item.calcVial,
+    waterMl: item.calcWater,
+    doseAmount: compound.amount,
+    vialUnit: item.calcVialUnit,
+    doseUnit: compound.unit,
+  }));
+}
+
+/* Calculator note on the item. A per-dose log note stays off this row.
+   Once the calculator inputs are saved, a failed redraw shows nothing
+   rather than the previous units. */
+function itemNoteMarkup(item, compound) {
+  if (!item || item.kind !== "dose") return "";
+  const hasCalc = typeof item.calcVial === "number" && typeof item.calcWater === "number";
+  const note = hasCalc ? freshCalculatorNote(item, compound) : (typeof item.note === "string" ? item.note.trim() : "");
   if (!note) return "";
   return `<span class="dr-item-note">${esc(note)}</span>`;
 }
@@ -857,23 +872,27 @@ export function logAllRoutineBlock(state, blockId) {
   let at = stampAfter(clock.now, current.updatedAt);
   const ids = [];
   for (const row of rows) {
-    const compound = row.item.kind === "dose" ? compoundFor(view, row.item) : null;
-    const id = routineId("log");
+    const id = checkOffId(next, row.item.id, clock.day);
+    if (!id) return false;
+    const dose = loggedDose(view, row.item);
     ids.push(id);
-    next = upsertEntity(next, "logs", {
+    const stamped = writeStamp(next, clock, id);
+    const atWrite = stamped > at ? stamped : at;
+    next = upsertEntity(next, "logs", carryFuture({
       id,
       itemId: row.item.id,
-      compoundId: row.item.compoundId || null,
+      compoundId: dose.compoundId,
       day: clock.day,
       status: "done",
-      amount: compound && typeof compound.amount === "number" ? compound.amount : null,
-      unit: compound && compound.unit ? compound.unit : "",
+      amount: dose.amount,
+      unit: dose.unit,
       at: clock.now,
       deletedAt: null,
-    }, at);
+    }, next, id), atWrite);
+    at = atWrite;
     const saved = (next.logs || []).find((log) => log.id === id);
-    if (!saved || saved.updatedAt !== at || saved.deletedAt != null || saved.rest === true) return false;
-    at += 1;
+    if (!saved || saved.updatedAt !== atWrite || saved.deletedAt != null || saved.rest === true) return false;
+    at = atWrite + 1;
   }
   if (!putDailyRoutines(state, next)) return false;
   return ids;
@@ -1072,7 +1091,13 @@ export function editRoutineLog(state, logId, draft) {
     }
     let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
     if (!wrote(next, "logs", nextId, at)) return null;
-    if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+    if (nextId !== log.id) {
+      next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+      next = {
+        ...next,
+        logs: (next.logs || []).map((row) => (row && row.id === log.id ? { ...row, movedDay: day, movedAt: typeof log.at === "number" ? log.at : 0 } : row)),
+      };
+    }
     return next;
   });
 }
@@ -1163,6 +1188,66 @@ export function toggleRoutineFocus(state) {
   });
 }
 
+/* Saves a finished or skipped setup and shapes the page from it. touched
+   names the answers whose one-time effects run (Focus mode, collapsed
+   blocks); null runs all of them, as at the end of a full pass. */
+export function saveRoutineSetup(state, { status, answers, touched = null, addOnly = false } = {}) {
+  if (status !== "done" && status !== "skipped") return false;
+  return withStore(state, (store, clock) => {
+    const at = prefStamp(store, clock);
+    return applySetup(store, {
+      status,
+      answers,
+      at,
+      touched,
+      addOnly,
+      keepOpen: (next) => {
+        const moment = routineNowNext(next.blocks, clock.date);
+        return moment.nowBlock ? moment.nowBlock.id : null;
+      },
+    });
+  });
+}
+
+/* Adds a block or tool from Routines settings. A block the user deleted
+   comes back through the normal restore, with its items. */
+export function addRoutinePartToPage(state, key) {
+  if (typeof key !== "string" || !key) return false;
+  const id = SETUP_BLOCK_IDS[key];
+  const stored = id && state && state.dailyRoutines && (state.dailyRoutines.blocks || []).find((block) => block && block.id === id);
+  if (stored && !isLive(stored)) {
+    if (!restoreRoutineBlock(state, id)) return false;
+  }
+  return withStore(state, (store, clock) => addRoutinePart(store, key, prefStamp(store, clock)));
+}
+
+export function hideRoutineTips(state) {
+  return withStore(state, (store, clock) => {
+    if (store.prefs && store.prefs.tipsHidden === true) return null;
+    const at = prefStamp(store, clock);
+    store.prefs = { ...store.prefs, tipsHidden: true, updatedAt: at };
+    store.updatedAt = Math.max(store.updatedAt || 0, at);
+    return store;
+  });
+}
+
+/* A tool the store already uses stays on screen whatever the answers say,
+   so nobody loses something they rely on by answering the setup. */
+function routineInUse(feature, store) {
+  if (!store || typeof store !== "object") return false;
+  const doses = () => (store.items || []).some((item) => isLive(item) && item.kind === "dose");
+  if (feature === "calculator" || feature === "injection") return (store.compounds || []).some(isLive) || doses();
+  if (feature === "doses") return doses();
+  if (feature === "rest") return (store.logs || []).some((log) => isLive(log) && log.rest === true);
+  return false;
+}
+
+/* What the setup answers show. With no finished setup every part shows. */
+export function routineShows(feature, store) {
+  const source = store !== undefined ? store : app.state && app.state.dailyRoutines;
+  return routineSetupShows(source && source.prefs, feature) || routineInUse(feature, source);
+}
+
 export function toggleRoutineReveal(state, blockId) {
   if (typeof blockId !== "string" || !blockId) return false;
   return withStore(state, (store, clock) => {
@@ -1188,7 +1273,9 @@ function cleanName(name) {
 export function parseRoutineAmount(raw) {
   if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : null;
   if (typeof raw !== "string") return null;
-  const text = raw.trim().replace(",", ".");
+  const trimmed = raw.trim();
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(trimmed)) return null;
+  const text = trimmed.replace(",", ".");
   const glyphs = { "¼": 0.25, "½": 0.5, "¾": 0.75, "1¼": 1.25, "1½": 1.5, "1¾": 1.75 };
   if (Object.prototype.hasOwnProperty.call(glyphs, text)) return glyphs[text];
   const slash = text.match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -1432,14 +1519,28 @@ export function reorderRoutinePlacements(state, blockId, orderedIds) {
 }
 
 /* The calculator note is on the item. It does not add or rewrite a log. */
-export function saveRoutineItemNote(state, itemId, note) {
+export function saveRoutineItemNote(state, itemId, note, calc) {
   if (typeof itemId !== "string" || !itemId || typeof note !== "string") return false;
   return withStore(state, (store, clock) => {
     const item = (store.items || []).find((row) => row && row.id === itemId && isLive(row));
     if (!item || item.kind !== "dose") return null;
     const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, item.updatedAt || 0));
     const logs = JSON.stringify(store.logs);
-    const next = revisePlanEntity(store, "items", itemId, { note }, at);
+    const patch = { note };
+    if (calc && typeof calc.vialAmount === "number" && typeof calc.waterMl === "number") {
+      patch.calcVial = calc.vialAmount;
+      patch.calcWater = calc.waterMl;
+      patch.calcVialUnit = calc.vialUnit;
+      patch.calcDoseUnit = calc.doseUnit;
+      patch.calcDose = calc.doseAmount;
+    } else {
+      patch.calcVial = null;
+      patch.calcWater = null;
+      patch.calcVialUnit = null;
+      patch.calcDoseUnit = null;
+      patch.calcDose = null;
+    }
+    const next = revisePlanEntity(store, "items", itemId, patch, at);
     const row = (next.items || []).find((entry) => entry.id === itemId);
     const expected = note.trim().slice(0, 500);
     if (!row || (row.note || "") !== expected) return null;
@@ -1611,7 +1712,7 @@ export function saveRoutineItem(state, draft) {
     }
     const kept = { ...(existing || {}) };
     delete kept.evidence;
-    const supply = supplyFromDraft(draft, kind, clock.day);
+    const supply = supplyFromDraft(draft, kind, clock.day, existing);
     if (!supply) return null;
     next = upsertEntity(next, "items", {
       ...kept,
@@ -1774,7 +1875,7 @@ function nowFooter(projected, date) {
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
-    ${restHTML(rest)}`;
+    ${rest || routineShows("rest", projected) ? restHTML(rest) : ""}`;
 }
 
 function nextItemHTML(projected, date, day) {
@@ -1817,11 +1918,20 @@ export function routineNowHTML(projected, date) {
   </section>`;
 }
 
+const TILE_KICKERS = new Map([
+  ["Morning routine", "Morning"],
+  ["Wake-up routine", "Wake-up"],
+  ["Supplement & enhancer stack", "Stack"],
+  ["Supplements", "Supplements"],
+  ["Supplements & medications", "Supplements"],
+  ["Night routine", "Night"],
+  ["Wind-down routine", "Wind-down"],
+  ["Enhancers & peptides", "Enhancers"],
+  ["Medications", "Medications"],
+]);
+
 function tileKicker(block) {
-  if (block.name === "Night routine") return "Night";
-  if (block.name === "Supplement & enhancer stack") return "Stack";
-  if (block.name === "Morning routine") return "Morning";
-  return "Routine";
+  return TILE_KICKERS.get(block.name) || "Routine";
 }
 
 function tileMeta(open, logged, skipped) {
@@ -1916,7 +2026,7 @@ function openRowHTML(row, projected, date, day) {
   return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open" data-kind="${rowKind(row)}"${overdue}${rowEnterAttr(`open:${row.item.id}`)} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     ${railHTML([historyButton(row), skipButton(row)])}
@@ -1932,7 +2042,7 @@ function editRowHTML(row, projected, day) {
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
-      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item)}
+      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item, row.compound)}
       ${supply}
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
@@ -1948,7 +2058,7 @@ function doneRowHTML(row, projected, date, day) {
   const detail = rowDetailMarkup(projected, row, date, day);
   return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}" data-kind="${rowKind(row)}"${rowEnterAttr(`${state}:${row.item.id}`)}>
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item)}<span class="dr-state" data-state="${state}">${label}</span></span>
+    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}<span class="dr-state" data-state="${state}">${label}</span></span>
     ${railHTML([historyButton(row), editLogButton(row), undoButton(row)])}
   </li>`;
 }
@@ -1966,7 +2076,6 @@ export function routineBlockTileHTML(block, projected, view) {
   const collapsed = !!(view && view.collapsed);
   const last = !!(view && view.last);
   const editing = layoutEditing();
-  const dim = !!(view && view.focus && !current);
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
@@ -1993,7 +2102,7 @@ export function routineBlockTileHTML(block, projected, view) {
         <button type="button" class="dr-minus" data-action="routines-delete-block" data-block-id="${esc(block.id)}" aria-label="Delete ${esc(block.name)}"><span aria-hidden="true">−</span></button>
       </div>`
     : `<button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-block" data-block-id="${esc(block.id)}" aria-label="Rename ${esc(block.name)}">Rename</button>`;
-  return `<article class="dr-tile${dim ? " dr-dim" : ""}" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}" data-collapsed="${collapsed ? "true" : "false"}" data-last="${last ? "true" : "false"}" data-id="${esc(block.id)}">
+  return `<article class="dr-tile" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}" data-collapsed="${collapsed ? "true" : "false"}" data-last="${last ? "true" : "false"}" data-id="${esc(block.id)}">
     ${tools}
     <button type="button" class="dr-block-toggle" data-action="routines-collapse" data-block-id="${esc(block.id)}" data-rename="block" aria-expanded="${collapsed ? "false" : "true"}">
       <span class="dr-k">${esc(tileKicker(block))}</span>
@@ -2020,16 +2129,39 @@ export function routineBlockTilesHTML(projected, date) {
   const opened = new Set(complete ? allDoneOpenIds(projected.prefs, day) : []);
   const lastId = projected.prefs && typeof projected.prefs.lastBlockId === "string" ? projected.prefs.lastBlockId : "";
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
-  const tiles = (projected.blocks || []).map((block) => routineBlockTileHTML(block, projected, {
+  const hiding = focus && !layoutEditing();
+  const focusId = hiding ? routineFocusBlockId(projected, clock) : "";
+  const shown = hiding ? (projected.blocks || []).filter((block) => block.id === focusId) : (projected.blocks || []);
+  const tiles = shown.map((block) => routineBlockTileHTML(block, projected, {
     day,
     date: clock,
     current: block.id === currentId,
-    focus,
     revealed: revealed.has(block.id),
     collapsed: complete ? !opened.has(block.id) : collapsedSet.has(block.id),
     last: block.id === lastId,
   })).join("");
-  return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>`;
+  const rest = hiding && !focusId
+    ? `<p class="dr-focus-done">Everything is done for now. Turn off Focus mode to see every routine.</p>`
+    : "";
+  return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>${rest}`;
+}
+
+/* The block Focus mode shows: the current block by time of day, or once
+   everything in it is logged or skipped, the next block after it that still
+   has something open. Blocks whose time has passed stay hidden. Empty when
+   nothing is left today. */
+export function routineFocusBlockId(projected, date) {
+  const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : routineClock().date;
+  const day = todayKey(clock);
+  const moment = routineNowNext(projected && projected.blocks, clock);
+  if (!moment.nowBlock) return "";
+  const live = (projected.blocks || []).filter((block) => isLive(block));
+  const sorted = live.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const start = sorted.findIndex((block) => block.id === moment.nowBlock.id);
+  for (const block of sorted.slice(Math.max(0, start))) {
+    if (routineBlockRows(projected, block.id, day).some((row) => row.open)) return block.id;
+  }
+  return "";
 }
 
 /* Discover stays closed. The top button and the empty state both open the
@@ -2091,6 +2223,29 @@ function logToastHTML() {
   return `<div class="dr-log-toast" data-log-toast="true" role="status"><span class="dr-log-toast-line">Logged · <button type="button" data-action="routines-toast-undo">Undo</button></span></div>`;
 }
 
+function setupLaterHTML(view) {
+  if (readSetup(view.prefs) || !(app.ui && app.ui.routineSetupLater === true)) return "";
+  return `<section class="dr-setup-later" aria-labelledby="dr-setup-later-title">
+    <h2 id="dr-setup-later-title">Finish setting up Routines</h2>
+    <p>A few questions fit this page to what you track.</p>
+    <button type="button" class="btn primary block" data-action="routines-setup-open">Continue setup</button>
+  </section>`;
+}
+
+function tipsHTML(view) {
+  if (!routineShows("tips", view) || (view.prefs && view.prefs.tipsHidden === true)) return "";
+  return `<section class="dr-tips" aria-labelledby="dr-tips-title">
+    <h2 id="dr-tips-title">Getting started</h2>
+    <ul>
+      <li>Tap an item when you've done it or taken it.</li>
+      <li>Skip marks it skipped for today, so it stops waiting.</li>
+      <li>Edit at the top adds, renames and moves routines.</li>
+      <li>The gear opens settings, where you can change your setup answers.</li>
+    </ul>
+    <button type="button" class="dr-tips-hide" data-action="routines-tips-hide">Hide tips</button>
+  </section>`;
+}
+
 function paintShell(view, date) {
   const sub = typeof app.fmtDate === "function"
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
@@ -2103,10 +2258,12 @@ function paintShell(view, date) {
     ${pageHeader("Routines", sub, headerTools())}
     ${discoverEntryHTML()}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
+    ${setupLaterHTML(view)}
+    ${tipsHTML(view)}
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
-    <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
+    ${routineShows("calculator", view) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
     <button type="button" class="dr-history-open" data-action="routines-history-open">History <span class="dr-vh">calendar and graph</span></button>
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
@@ -2233,22 +2390,49 @@ export function routineDayRolloverControlHTML(hour) {
     <p class="sub">A log before this hour counts for the previous day. The default is 4:00 AM.</p>`;
 }
 
+/* Everything Routines can show that this page does not have yet, each with
+   Add. Adding never removes anything. */
+function addListHTML() {
+  const store = app.state && app.state.dailyRoutines;
+  const setup = readSetup(store && store.prefs);
+  const missing = routineParts(store, (feature) => routineShows(feature, store)).filter((part) => !part.present);
+  const rows = missing.map((part) => `<li><span class="dr-add-copy"><span class="dr-add-name">${esc(part.label)}</span><span class="dr-add-hint">${esc(part.hint)}</span></span><button type="button" data-action="routines-part-add" data-part="${esc(part.key)}" aria-label="Add ${esc(part.label)}">Add</button></li>`).join("");
+  const list = missing.length
+    ? `<h4 class="dr-add-head">Add to your page</h4><ul class="dr-add-list">${rows}</ul>`
+    : `<p class="sub">Everything Routines offers is already on your page.</p>`;
+  const start = setup ? "" : `<button type="button" class="btn block" data-action="routines-setup-open">Set up your page</button>`;
+  return `${list}${start}`;
+}
+
+/* The one place a finished setup can be taken again, kept quiet at the very
+   bottom of Routines settings. */
+function retakeHTML() {
+  const store = app.state && app.state.dailyRoutines;
+  if (!readSetup(store && store.prefs)) return "";
+  return `<button type="button" class="dr-retake" data-action="routines-setup-retake">Retake setup quiz</button>`;
+}
+
 export function routinesSettingsSheetHTML() {
   const store = app.state && app.state.dailyRoutines;
   const prefs = store && store.prefs;
   const on = !!(prefs && prefs.focusMode === true);
   const hour = store && store.settings ? store.settings.dayRolloverHour : undefined;
+  const calc = routineShows("calculator", store)
+    ? `<button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
+    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>`
+    : "";
   return `<h3>Routines settings</h3>
     <div class="dr-set-row">
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
-    <p class="sub">Focus mode dims every block except the current one. Countdowns stay on the row. Routines does not send reminders.</p>
+    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Countdowns stay on the row. Routines does not send reminders.</p>
     ${routineDayRolloverControlHTML(hour)}
-    <button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
-    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>
+    ${calc}
     ${routinesFaqHTML()}
-    <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
+    ${addListHTML()}
+    <button type="button" class="btn block" data-action="sheet-close">Done</button>
+    ${retakeHTML()}`;
 }
 
 export function routinesDiscoverSheetHTML() {
@@ -2288,6 +2472,10 @@ app.logRoutineRest = logRoutineRest;
 app.setRoutineDayRollover = setRoutineDayRollover;
 app.routineDayRolloverControlHTML = routineDayRolloverControlHTML;
 app.toggleRoutineFocus = toggleRoutineFocus;
+app.saveRoutineSetup = saveRoutineSetup;
+app.hideRoutineTips = hideRoutineTips;
+app.addRoutinePartToPage = addRoutinePartToPage;
+app.routineShows = routineShows;
 app.toggleRoutineReveal = toggleRoutineReveal;
 app.addRoutineBlock = addRoutineBlock;
 app.renameRoutineBlock = renameRoutineBlock;

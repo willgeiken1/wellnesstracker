@@ -210,22 +210,24 @@ function daySummary(rest, items) {
 }
 
 function countLogs(logs, day, tab) {
-  let logged = 0;
-  let skipped = 0;
+  const logged = new Set();
+  const skipped = new Set();
   for (const log of logs) {
     if (!isLive(log) || log.day !== day || isRestLog(log)) continue;
-    if (log.status === "skipped") skipped += 1;
-    else if (log.status === "done" || log.status === "partial") logged += 1;
+    const key = typeof log.itemId === "string" && log.itemId ? log.itemId : log.id;
+    if (log.status === "skipped") skipped.add(key);
+    else if (log.status === "done" || log.status === "partial") logged.add(key);
   }
+  for (const key of logged) skipped.delete(key);
   switch (tab) {
     case "logged":
-      return logged;
+      return logged.size;
     case "skipped":
-      return skipped;
+      return skipped.size;
     default: {
       const unexpected = tab;
       void unexpected;
-      return logged;
+      return logged.size;
     }
   }
 }

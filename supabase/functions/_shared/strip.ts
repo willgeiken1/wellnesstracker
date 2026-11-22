@@ -38,9 +38,17 @@ function dayBefore(day: string): string {
   return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
 }
 
-/* Same window as routineLogDayInPurge: one routine day before `from`, through `to`. */
-function routineLogInRange(day: unknown, from: string, to: string) {
-  return typeof day === "string" && validDay(day) && day >= dayBefore(from) && day <= to;
+/* Exact from..to days, plus the day before when a new purge stored the
+   early-morning window and the log's at falls inside it. */
+function routineLogInRange(log: Bag, from: string, to: string, earlyFrom?: number | null, earlyTo?: number | null) {
+  const day = log && log.day;
+  if (typeof day !== "string" || !validDay(day) || !validDay(from) || !validDay(to) || from > to) return false;
+  if (day >= from && day <= to) return true;
+  if (day !== dayBefore(from)) return false;
+  if (typeof earlyFrom !== "number" || typeof earlyTo !== "number" || !(earlyTo > earlyFrom)) return false;
+  const at = typeof log.at === "number" && Number.isFinite(log.at) ? log.at : null;
+  if (at == null) return false;
+  return at >= earlyFrom && at < earlyTo;
 }
 
 type Bag = Record<string, any>;
@@ -248,7 +256,7 @@ function withPurgedSession(list: unknown, id: string, stamp: number): unknown[] 
   return next;
 }
 
-export function stripRange(data: Bag, from: string, to: string, before?: number | null, now = Date.now()): Bag {
+export function stripRange(data: Bag, from: string, to: string, before?: number | null, now = Date.now(), earlyFrom?: number | null, earlyTo?: number | null): Bag {
   if (!data || typeof data !== "object") data = {};
   if (!validDay(from) || !validDay(to) || from > to) return data;
 
@@ -385,7 +393,7 @@ export function stripRange(data: Bag, from: string, to: string, before?: number 
     const keep = ["id", "day", "status", "updatedAt", "deletedAt"];
     let routinesChanged = false;
     routines.logs = routines.logs.map((log: Bag) => {
-      if (!log || typeof log !== "object" || !routineLogInRange(log.day, from, to)) return log;
+      if (!log || typeof log !== "object" || !routineLogInRange(log, from, to, earlyFrom, earlyTo)) return log;
       const gone = typeof log.deletedAt === "number" && log.deletedAt > 0;
       if (!dropBefore(latestTime(log, ITEM_KEYS), before, now)) return log;
       const keys = Object.keys(log);
@@ -434,7 +442,7 @@ export function resolveCutoff(data: Bag, from: string, to: string, requested: un
   return settleCutoff(timeMs(hit && (hit.deletedAt ?? hit.at)), timeMs(requested), now);
 }
 
-export function addPurge(data: Bag, from: string, to: string, deletedAt?: number, now = Date.now()) {
+export function addPurge(data: Bag, from: string, to: string, deletedAt?: number, now = Date.now(), earlyFrom?: number | null, earlyTo?: number | null) {
   const purges = Array.isArray(data.purges) ? data.purges : [];
   const hit = purges.find((p: Bag) => p && p.from === from && p.to === to);
   const next = settleCutoff(timeMs(hit && (hit.deletedAt ?? hit.at)), timeMs(deletedAt), now);
@@ -442,7 +450,14 @@ export function addPurge(data: Bag, from: string, to: string, deletedAt?: number
     hit.at = next;
     hit.deletedAt = next;
     hit.synced = true;
-  } else purges.push({ from, to, at: next, deletedAt: next, synced: true });
+  } else {
+    const row: Bag = { from, to, at: next, deletedAt: next, synced: true };
+    if (typeof earlyFrom === "number" && typeof earlyTo === "number" && earlyTo > earlyFrom) {
+      row.routineEarlyFrom = earlyFrom;
+      row.routineEarlyTo = earlyTo;
+    }
+    purges.push(row);
+  }
   data.purges = purges;
   return data;
 }

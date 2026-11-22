@@ -60,7 +60,36 @@ function mergeRpcMissing(error) {
   return code === "PGRST202" || code === "42883" || /could not find the function/i.test(msg) || /merge_user_data/i.test(msg) && /does not exist|schema cache/i.test(msg);
 }
 
+/* A failed backup used to pass in silence. Say so once in a while, and only when the phone
+   thinks it is online, since offline saves are expected and retried. */
+const CLOUD_FAIL_TOAST_MS = 30 * 60 * 1000;
+let lastCloudFailToast = 0;
+function noteCloudFail() {
+  app.cloudFailAt = Date.now();
+  const online = typeof navigator === "undefined" || navigator.onLine !== false;
+  if (!online || app.cloudFailAt - lastCloudFailToast < CLOUD_FAIL_TOAST_MS) return;
+  // A live Undo (like a deleted food) keeps its toast; the Settings line still shows the failure.
+  if (app.toastUndo) return;
+  lastCloudFailToast = app.cloudFailAt;
+  if (typeof app.toast === "function") app.toast("Couldn't back up just now. Everything is still saved on this phone, and it will try again.");
+}
+app.noteCloudFail = noteCloudFail;
+app.resetCloudFailToast = () => { lastCloudFailToast = 0; };
+
+/* The Settings line: when the last try failed, say so, with the day if it isn't today. */
+export function cloudStatusText(lastCloud, failAt, now = Date.now()) {
+  const when = (t) => {
+    const d = new Date(t), today = new Date(now);
+    const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return d.toDateString() === today.toDateString() ? time : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
+  };
+  if (failAt && failAt > (lastCloud || 0)) return lastCloud ? "Couldn't back up · last saved " + when(lastCloud) : "Couldn't back up yet";
+  return lastCloud ? "On · saved " + when(lastCloud) : "On";
+}
+app.cloudStatusText = cloudStatusText;
+
 function rememberCloudPush() {
+  app.cloudFailAt = 0;
   app.state.lastCloud = Date.now();
   try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
 }
@@ -98,7 +127,8 @@ async function cloudPushFallback(blob) {
   try {
     const { error } = await app.sb.from("user_data").upsert({ user_id: app.session.user.id, data: blob, updated_at: new Date().toISOString() });
     if (!error) rememberCloudPush();
-  } catch (e) { /* offline: the next save or app open retries */ }
+    else noteCloudFail();
+  } catch (e) { /* offline: the next save or app open retries */ noteCloudFail(); }
 }
 
 async function cloudPush() {
@@ -122,8 +152,8 @@ async function cloudPush() {
       }
       return;
     }
-    if (!(error && mergeRpcMissing(error))) return;
-  } catch (e) { /* offline: the next save or app open retries */ return; }
+    if (!(error && mergeRpcMissing(error))) { if (error) noteCloudFail(); return; }
+  } catch (e) { /* offline: the next save or app open retries */ noteCloudFail(); return; }
   await cloudPushFallback(blob);
 }
 app.cloudPush = cloudPush;
@@ -366,6 +396,22 @@ async function initCloud() {
 }
 app.initCloud = initCloud;
 
+/* Plain words for the sign-in errors people actually hit. Anything else gets a general line
+   rather than the server's own wording. */
+export function authErrorText(err, mode) {
+  const msg = String((err && (err.message || err.error_description)) || "").toLowerCase();
+  const status = err && err.status;
+  if (/invalid login credentials|invalid_credentials/.test(msg)) return "That email and password don't match. Check them and try again.";
+  if (/email not confirmed/.test(msg)) return "Confirm your email first. The link is in your inbox.";
+  if (/already registered|already exists|user_already_exists/.test(msg)) return "There's already an account with that email. Sign in instead.";
+  if (/rate limit|too many|over_email_send_rate/.test(msg) || status === 429) return "Too many tries. Wait a minute, then try again.";
+  if (/password/.test(msg) && /weak|short|at least|characters/.test(msg)) return "Choose a longer password, at least 6 characters.";
+  if (/invalid.*email|email.*invalid|unable to validate email/.test(msg)) return "That email address doesn't look right.";
+  if (/fetch|network|load failed|timed? ?out|offline/.test(msg) || status === 0) return "Can't reach the server. Check your connection and try again.";
+  return mode === "signup" ? "Couldn't create your account just now. Try again in a moment." : "Couldn't sign you in just now. Try again in a moment.";
+}
+app.authErrorText = authErrorText;
+
 async function signIn(mode) {
   if (!app.sb) { app.toast("Can't reach the server. Check your connection."); return; }
   const email = (app.$("#authEmail") || {}).value?.trim();
@@ -373,11 +419,17 @@ async function signIn(mode) {
   if (!email || !email.includes("@")) { app.toast("Enter your email address."); return; }
   if (password.length < 6) { app.toast("Passwords need at least 6 characters."); return; }
   const btn = app.$('[data-action="auth-go"]');
+  const restore = () => { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = mode === "signup" ? "Create account" : "Sign in"; } };
   if (btn) { btn.disabled = true; btn.textContent = "One moment…"; }
-  const res = mode === "signup" ? await app.sb.auth.signUp({ email, password }) : await app.sb.auth.signInWithPassword({ email, password });
-  if (res.error) {
-    if (btn) { btn.disabled = false; btn.textContent = mode === "signup" ? "Create account" : "Sign in"; }
-    app.toast(res.error.message);
+  let res;
+  try {
+    res = mode === "signup" ? await app.sb.auth.signUp({ email, password }) : await app.sb.auth.signInWithPassword({ email, password });
+  } catch (e) {
+    res = { error: e || new Error("network") };
+  }
+  if (!res || res.error) {
+    restore();
+    app.toast(authErrorText(res && res.error, mode));
     return;
   }
   if (!res.data.session) { app.toast("Check your email to confirm your account, then sign in."); app.ui.sheet = null; app.render(); return; }
@@ -404,6 +456,7 @@ async function signOut(opts) {
   if (!skipPush) { try { await app.cloudPush(); } catch (e) {} }   // make sure the latest is backed up first
   if (app.sb) { try { await app.sb.auth.signOut(); } catch (e) {} }
   app.session = null;
+  app.cloudFailAt = 0; lastCloudFailToast = 0;   // the next account starts with a clean backup status
   if (app.clearAIConsent) { app.clearAIConsent(id); app.clearAIConsent("local"); }
   app.cloudPullOk = false;
   if (app.syncSentryUser) app.syncSentryUser(null);
