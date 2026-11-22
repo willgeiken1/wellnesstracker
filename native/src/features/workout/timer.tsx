@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AppState, Pressable, View } from "react-native";
+import { AppState, View } from "react-native";
+import { Tappable as Pressable } from "@/components/tappable";
 import Svg, { Circle, Path } from "react-native-svg";
 import type { WorkoutStore } from "@/data/workout/store";
 import { remainingSeconds } from "@/core/workout/rules";

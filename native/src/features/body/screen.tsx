@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { Tappable as Pressable } from '@/components/tappable';
 import { Button, touchTarget } from '../../components/button';
 import { SegmentedControl } from '../../components/segmented-control';
 import { ThemedText } from '../../components/themed-text';

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Pressable, ScrollView, View } from "react-native";
+import { Alert, AppState, ScrollView, View } from "react-native";
+import { Tappable as Pressable } from "@/components/tappable";
 import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import { router, useIsFocused, useLocalSearchParams } from "expo-router";

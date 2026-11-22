@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native';
+import { Tappable as Pressable } from '@/components/tappable';
 import { Stack, router } from 'expo-router';
 import { touchTarget } from '@/components/button';
 import { useTheme } from '@/design/theme-provider';
