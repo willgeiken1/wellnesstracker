@@ -1310,6 +1310,10 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || typeof app.toggleRoutineLayoutEdit !== "function") break;
       app.toggleRoutineLayoutEdit();
       break;
+    case "routines-rearrange":
+      if (app.ROUTINES_ENABLED !== true || typeof app.startRoutineRearrange !== "function") break;
+      app.startRoutineRearrange();
+      break;
     case "routines-add-block": {
       if (app.ROUTINES_ENABLED !== true || typeof app.ask !== "function") break;
       const name = await app.ask({ title: "New routine", body: "Name this block.", ok: "Add", cancel: "Cancel", input: "" });

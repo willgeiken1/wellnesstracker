@@ -275,7 +275,7 @@ export function routineBlocksSheetHTML() {
     <ul class="dr-elist">${rows}</ul>
     <button type="button" class="dr-add" data-action="routines-block-new">+ New routine</button>
     ${hidden ? `<h4 class="dr-elist-head">Hidden</h4><ul class="dr-elist">${hidden}</ul>` : ""}
-    <button type="button" class="btn block" data-action="routines-edit">Rearrange items</button>
+    <button type="button" class="btn block" data-action="routines-rearrange">Rearrange items</button>
     <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
 }
 

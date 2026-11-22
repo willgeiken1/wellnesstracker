@@ -105,6 +105,22 @@ export function toggleRoutineLayoutEdit() {
   return true;
 }
 
+/* From the Edit routines sheet: close it first, so the drag handles are
+   not under it, and turn rearranging on. */
+export function startRoutineRearrange() {
+  if (!app.ui || app.ROUTINES_ENABLED !== true) return false;
+  if (app.ui.sheet) {
+    app.ui.sheet = null;
+    if (typeof app.renderSheet === "function") app.renderSheet();
+  }
+  app.ui.routineView = "routines";
+  if (app.ui.dailyRoutineEdit === true) {
+    if (typeof app.render === "function") app.render();
+    return true;
+  }
+  return toggleRoutineLayoutEdit();
+}
+
 export async function promptRoutineRename(kind, id) {
   if (app.ROUTINES_ENABLED !== true || !canMutateRoutines() || typeof app.ask !== "function") return false;
   const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
@@ -566,6 +582,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 }
 
 app.toggleRoutineLayoutEdit = toggleRoutineLayoutEdit;
+app.startRoutineRearrange = startRoutineRearrange;
 app.promptRoutineRename = promptRoutineRename;
 app.openRoutineItemEditor = openRoutineItemEditor;
 app.removeRoutineBlock = removeRoutineBlock;

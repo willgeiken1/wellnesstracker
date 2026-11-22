@@ -514,3 +514,18 @@ describe("type rows, early mornings and items taken out of routines", () => {
     assert.match(dailyRoutinesHTML(), /data-view="other"/);
   });
 });
+
+describe("rearranging from Edit routines", () => {
+  test("Rearrange items closes the sheet and turns rearranging on", () => {
+    signIn();
+    app.ui.routineView = "supplement";
+    assert.ok(app.openRoutineBlocks());
+    assert.match(app.routineBlocksSheetHTML(), /data-action="routines-rearrange"/);
+    assert.ok(app.startRoutineRearrange());
+    assert.equal(app.ui.sheet, null);
+    assert.equal(app.ui.dailyRoutineEdit, true);
+    assert.equal(app.ui.routineView, "routines");
+    assert.ok(app.startRoutineRearrange(), "a second tap keeps it on");
+    assert.equal(app.ui.dailyRoutineEdit, true);
+  });
+});
