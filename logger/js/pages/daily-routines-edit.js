@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { canMutateRoutines, projectDailyRoutines } from "../shared/daily-routines-store.js";
+import { routineSetupShows } from "../shared/routine-setup.js";
 import {
   ROUTINE_DOSE_UNITS,
   deleteRoutineBlock,
@@ -180,6 +181,9 @@ export function routineItemSheetHTML() {
   const kind = sd.kind === "dose" ? "dose" : "check";
   const view = projectDailyRoutines(app.state && app.state.dailyRoutines) || { blocks: [] };
   const selected = new Set(Array.isArray(sd.blockIds) ? sd.blockIds : []);
+  /* A setup with nothing to take hides the Dose type for new items. An item
+     that is already a dose keeps it, so switching to Check can be undone. */
+  const storedDose = !!sd.itemId && (view.items || []).some((item) => item.id === sd.itemId && item.kind === "dose");
   const amount = parseRoutineAmount(sd.amount);
   const units = ROUTINE_DOSE_UNITS.map((unit) => `<button type="button" class="dr-unit" data-action="routines-item-unit" data-unit="${esc(unit)}" aria-pressed="${sd.unit === unit ? "true" : "false"}">${esc(unit)}</button>`).join("");
   const quarters = QUARTERS.map((chip) => `<button type="button" class="dr-quarter" data-action="routines-item-quarter" data-amount="${chip.value}" aria-pressed="${amount === chip.value ? "true" : "false"}" aria-label="${chip.value}">${chip.label}</button>`).join("");
@@ -200,7 +204,7 @@ export function routineItemSheetHTML() {
     <span class="field-label" id="dr-kind-label">Type</span>
     <div class="dr-kind" role="group" aria-labelledby="dr-kind-label">
       <button type="button" data-action="routines-item-kind" data-kind="check" aria-pressed="${kindPressed("check", kind)}">Check</button>
-      <button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>
+      ${kind === "dose" || storedDose || routineSetupShows(app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs, "doses") ? `<button type="button" data-action="routines-item-kind" data-kind="dose" aria-pressed="${kindPressed("dose", kind)}">Dose</button>` : ""}
     </div>
     ${dose}
     <span class="field-label" id="dr-blocks-label">Routines</span>

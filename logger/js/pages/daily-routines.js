@@ -18,6 +18,7 @@ import {
   upsertEntity,
 } from "../shared/daily-routines-store.js";
 import { nextDoseCountdown } from "../shared/routine-dose.js";
+import { applySetup, askedQuestions, readSetup, routineSetupShows, setupAnswerText, setupQuestion } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
    app.ROUTINES_ENABLED is true. A signed-out session gets a sign-in prompt
@@ -39,6 +40,8 @@ const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
 const DEFAULT_START = new Map([
   ["Morning routine", 5],
   ["Supplement & enhancer stack", 12],
+  ["Supplements", 12],
+  ["Supplements & medications", 12],
   ["Night routine", 17],
 ]);
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
@@ -788,6 +791,42 @@ export function toggleRoutineFocus(state) {
   });
 }
 
+/* Saves a finished or skipped setup and shapes the page from it. touched
+   names the answers whose one-time effects run (Focus mode, collapsed
+   blocks); null runs all of them, as at the end of a full pass. */
+export function saveRoutineSetup(state, { status, answers, touched = null } = {}) {
+  if (status !== "done" && status !== "skipped") return false;
+  return withStore(state, (store, clock) => {
+    const at = prefStamp(store, clock);
+    return applySetup(store, {
+      status,
+      answers,
+      at,
+      touched,
+      keepOpen: (next) => {
+        const moment = routineNowNext(next.blocks, clock.date);
+        return moment.nowBlock ? moment.nowBlock.id : null;
+      },
+    });
+  });
+}
+
+export function hideRoutineTips(state) {
+  return withStore(state, (store, clock) => {
+    if (store.prefs && store.prefs.tipsHidden === true) return null;
+    const at = prefStamp(store, clock);
+    store.prefs = { ...store.prefs, tipsHidden: true, updatedAt: at };
+    store.updatedAt = Math.max(store.updatedAt || 0, at);
+    return store;
+  });
+}
+
+/* What the setup answers show. With no finished setup every part shows. */
+export function routineShows(feature, prefs) {
+  const source = prefs !== undefined ? prefs : app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
+  return routineSetupShows(source, feature);
+}
+
 export function toggleRoutineReveal(state, blockId) {
   if (typeof blockId !== "string" || !blockId) return false;
   return withStore(state, (store, clock) => {
@@ -1351,7 +1390,7 @@ function nowFooter(projected, date) {
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
-    ${restHTML(rest)}`;
+    ${rest || routineShows("rest", projected.prefs) ? restHTML(rest) : ""}`;
 }
 
 export function routineNowHTML(projected, date) {
@@ -1388,11 +1427,20 @@ export function routineNowHTML(projected, date) {
   </section>`;
 }
 
+const TILE_KICKERS = new Map([
+  ["Morning routine", "Morning"],
+  ["Wake-up routine", "Wake-up"],
+  ["Supplement & enhancer stack", "Stack"],
+  ["Supplements", "Supplements"],
+  ["Supplements & medications", "Supplements"],
+  ["Night routine", "Night"],
+  ["Wind-down routine", "Wind-down"],
+  ["Enhancers & peptides", "Enhancers"],
+  ["Medications", "Medications"],
+]);
+
 function tileKicker(block) {
-  if (block.name === "Night routine") return "Night";
-  if (block.name === "Supplement & enhancer stack") return "Stack";
-  if (block.name === "Morning routine") return "Morning";
-  return "Routine";
+  return TILE_KICKERS.get(block.name) || "Routine";
 }
 
 function tileMeta(open, logged, skipped) {
@@ -1585,6 +1633,29 @@ function deletedHTML() {
   </section>`;
 }
 
+function setupLaterHTML(view) {
+  if (readSetup(view.prefs) || !(app.ui && app.ui.routineSetupLater === true)) return "";
+  return `<section class="dr-setup-later" aria-labelledby="dr-setup-later-title">
+    <h2 id="dr-setup-later-title">Finish setting up Routines</h2>
+    <p>A few questions fit this page to what you track.</p>
+    <button type="button" class="btn primary block" data-action="routines-setup-open">Continue setup</button>
+  </section>`;
+}
+
+function tipsHTML(view) {
+  if (!routineShows("tips", view.prefs) || (view.prefs && view.prefs.tipsHidden === true)) return "";
+  return `<section class="dr-tips" aria-labelledby="dr-tips-title">
+    <h2 id="dr-tips-title">Getting started</h2>
+    <ul>
+      <li>Tap an item when you've done it or taken it.</li>
+      <li>Skip marks it skipped for today, so it stops waiting.</li>
+      <li>Edit at the top adds, renames and moves routines.</li>
+      <li>The gear opens settings, where you can change your setup answers.</li>
+    </ul>
+    <button type="button" class="dr-tips-hide" data-action="routines-tips-hide">Hide tips</button>
+  </section>`;
+}
+
 function paintShell(view, date) {
   const sub = typeof app.fmtDate === "function"
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
@@ -1595,10 +1666,12 @@ function paintShell(view, date) {
   return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
     ${pageHeader("Routines", sub, headerTools())}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
+    ${setupLaterHTML(view)}
+    ${tipsHTML(view)}
     ${routineNowHTML(view, date)}
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
-    <button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>
+    ${routineShows("calculator", view.prefs) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
   </div>`;
@@ -1684,17 +1757,37 @@ export function syncRoutineNowRefresh() {
   }, msUntilNextMinute(date));
 }
 
+function setupListHTML(prefs) {
+  const setup = readSetup(prefs);
+  if (!setup || setup.status !== "done") {
+    return `<button type="button" class="btn block" data-action="routines-setup-open">Set up your page</button>
+    <p class="sub">A few questions fit Routines to what you track.</p>`;
+  }
+  const rows = askedQuestions(setup.answers).map((id) => {
+    const question = setupQuestion(id);
+    return `<li><span class="dr-setup-q">${esc(question.title)}</span><span class="dr-setup-a">${esc(setupAnswerText(id, setup.answers))}</span><button type="button" data-action="routines-setup-change" data-q="${esc(id)}" aria-label="Change ${esc(question.title)}">Change</button></li>`;
+  }).join("");
+  return `<h4 class="dr-setup-head">Your setup</h4>
+    <ul class="dr-setup-list">${rows}</ul>
+    <button type="button" class="btn block" data-action="routines-setup-retake">Retake setup</button>
+    <p class="sub">Changing an answer adds what it needs. Nothing you added is removed.</p>`;
+}
+
 export function routinesSettingsSheetHTML() {
   const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
   const on = !!(prefs && prefs.focusMode === true);
+  const calc = routineShows("calculator", prefs)
+    ? `<button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
+    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>`
+    : "";
   return `<h3>Routines settings</h3>
     <div class="dr-set-row">
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
     <p class="sub">Focus mode dims every block except the current one. Reminders and the FAQ come later. Notifications stay off.</p>
-    <button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
-    <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>
+    ${setupListHTML(prefs)}
+    ${calc}
     <button type="button" class="btn block" data-action="sheet-close">Done</button>`;
 }
 
@@ -1721,6 +1814,9 @@ app.undoRoutineLog = undoRoutineLog;
 app.restoreRoutineLog = restoreRoutineLog;
 app.logRoutineRest = logRoutineRest;
 app.toggleRoutineFocus = toggleRoutineFocus;
+app.saveRoutineSetup = saveRoutineSetup;
+app.hideRoutineTips = hideRoutineTips;
+app.routineShows = routineShows;
 app.toggleRoutineReveal = toggleRoutineReveal;
 app.addRoutineBlock = addRoutineBlock;
 app.renameRoutineBlock = renameRoutineBlock;
