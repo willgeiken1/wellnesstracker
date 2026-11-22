@@ -98,7 +98,7 @@ export const CHECK_FAILED = "Oura login expired. Reconnect Oura in the app. Insi
 
 /** Deletes what Oura no longer allows Insight to keep: the revoked login and the days this connection (or an
  * older one) stored. Two database steps, each one transaction under the same per-user lock as a reconnect
- * (`oura_revoke_login`, then `oura_finish_revoke`, in supabase/migrations/20261121120000_oura_atomic_login.sql).
+ * (`oura_revoke_login`, then `oura_finish_revoke`, in supabase/migrations/20261122020000_oura_atomic_login.sql).
  * The first deletes only the exact refused refresh token, and only while `mark` is still the connection, and in the
  * same transaction records that this connection's login was removed. A newer login (a parallel refresh that Oura
  * accepted, or a reconnect) stops it. The login goes first, so a sync still writing days sees it gone and takes its

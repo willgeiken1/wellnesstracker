@@ -47,7 +47,7 @@ function fakeDb(state, hooks = {}) {
     };
     return chain;
   };
-  // The three SQL functions in supabase/migrations/20261121120000_oura_atomic_login.sql, as one transaction each: a
+  // The three SQL functions in supabase/migrations/20261122020000_oura_atomic_login.sql, as one transaction each: a
   // failure changes nothing. tests/oura-login-sql.test.mjs runs the real ones against Postgres.
   const rpc = async (name, args) => {
     await hooks.beforeRpc?.(name, args);

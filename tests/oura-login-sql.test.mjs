@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { DELETING, disconnect, finishRevoked, forgetRevoked, NEWER_LOGIN, RECONNECT, REVOKED, saveLogin } from "../supabase/functions/_shared/oura-store.js";
 
 const BASE_SQL = "supabase/migrations/20261001000000_lift_log.sql";
-const MIGRATION = "supabase/migrations/20261121120000_oura_atomic_login.sql";
+const MIGRATION = "supabase/migrations/20261122020000_oura_atomic_login.sql";
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
 const OLD = "2026-11-16T10:00:00+00:00";
