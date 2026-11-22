@@ -96,7 +96,7 @@ test("an open sheet sits above the keyboard and fits the visible height", () => 
   assert.match(css, /#sheet \{ bottom: var\(--kb, 0px\);/);
   assert.match(css, /\.sheet-card \{ max-height: min\(88vh, calc\(var\(--vvh, 100vh\) - 24px\)\); \}/);
   const timer = readFileSync(new URL("../logger/js/shell/timer.js", import.meta.url), "utf8");
-  assert.match(timer, /visualViewport\.addEventListener\("resize", syncKeyboard\)/);
+  assert.match(timer, /visualViewport\.addEventListener\("resize", \(\) => \{ syncKeyboard\(\);/);
   assert.match(timer, /scrollIntoView\(\{ block: "nearest" \}\)/);
 });
 
@@ -145,7 +145,7 @@ test("signing out clears the backup failure, so the next account starts clean", 
 
 test("Settings shows the backup status line, and the keyboard lift follows panning as well as resizing", () => {
   const settings = readFileSync(new URL("../logger/js/pages/settings.js", import.meta.url), "utf8");
-  assert.match(settings, /Cloud backup<\/span><span class="sub">\$\{app\.esc\(app\.cloudStatusText \? app\.cloudStatusText\(app\.state\.lastCloud, app\.cloudFailAt\)/);
+  assert.match(settings, /Cloud backup<\/span><span class="sub" data-cloud-status>\$\{app\.esc\(app\.cloudStatusText \? app\.cloudStatusText\(app\.state\.lastCloud, app\.cloudFailAt\)/);
   const timer = readFileSync(new URL("../logger/js/shell/timer.js", import.meta.url), "utf8");
   assert.match(timer, /visualViewport\.addEventListener\("scroll", syncKeyboard\)/);
 });

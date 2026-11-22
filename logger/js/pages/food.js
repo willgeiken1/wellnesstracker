@@ -642,17 +642,23 @@ app.startBarcode = startBarcode;
 
 const BARCODE_TIMEOUT_MS = 12000;
 app.BARCODE_TIMEOUT_MS = BARCODE_TIMEOUT_MS;
+let barcodeCtrl = null, barcodeSeq = 0;
 
 async function lookupBarcode(code) {
   code = String(code || "").replace(/\D/g, "");
   if (code.length < 6) { app.toast("Enter the full barcode number."); return; }
   app.bcStatus("Looking it up…");
-  /* A slow food database used to leave "Looking it up…" on screen for good. Give up after a while. */
+  /* A slow food database used to leave "Looking it up…" on screen for good. Give up after a while,
+     and drop an earlier lookup still in flight so its late answer can't replace this one. */
+  if (barcodeCtrl) barcodeCtrl.abort();
   const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  barcodeCtrl = ctrl;
+  const seq = ++barcodeSeq;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), BARCODE_TIMEOUT_MS) : null;
   try {
     const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,serving_size,serving_quantity,nutriments`, ctrl ? { signal: ctrl.signal } : undefined);
     const j = await res.json();
+    if (seq !== barcodeSeq) return;
     if (!j || j.status !== 1 || !j.product) { app.bcStatus("That product isn't in the database. Try a photo of the label or enter it manually."); return; }
     const p = j.product, n = p.nutriments || {};
     const kcal = (suffix) => n["energy-kcal" + suffix] != null ? +n["energy-kcal" + suffix] : n["energy" + suffix] != null ? +n["energy" + suffix] / 4.184 : null;
@@ -666,9 +672,13 @@ async function lookupBarcode(code) {
     app.ui.sd.unit = serving ? "serving" : "g"; app.ui.sd.amt = serving ? "1" : "100";
     app.renderSheet();
   } catch (e) {
+    if (seq !== barcodeSeq) return;
     if (e && e.name === "AbortError") app.bcStatus("The food database is taking too long. Try again, or enter it manually.");
     else app.bcStatus("Couldn't reach the food database. Check your connection.");
-  } finally { if (timer) clearTimeout(timer); }
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (barcodeCtrl === ctrl) barcodeCtrl = null;
+  }
 }
 app.lookupBarcode = lookupBarcode;
 
