@@ -510,14 +510,11 @@ export function clearRoutineItemTime() {
 }
 
 /* A typed character in the sheet. The amount and the time redraw what
-   depends on them. The count takes digits only. */
+   depends on them. The count is kept as typed, so Save can refuse 1.5 or
+   -1 instead of saving a different number. */
 export function noteRoutineItemField(el) {
   const sd = itemDraft();
   if (!sd || !el) return false;
-  if (el.id === "dr-item-on-hand" && typeof el.value === "string") {
-    const digits = el.value.replace(/\D/g, "");
-    if (digits !== el.value) el.value = digits;
-  }
   rememberRoutineItemFields();
   if (el.id === "dr-item-amount" || el.id === "dr-item-time") refreshRoutineItemSheet({ typing: true });
   return true;

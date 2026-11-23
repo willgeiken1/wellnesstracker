@@ -665,6 +665,34 @@ describe("add item sheet and calculator", () => {
     assert.equal(openReconstitutionFromItem(), false);
   });
 
+  test("On hand keeps what was typed, and Save refuses a count that is not a whole number", () => {
+    signIn();
+    const toasts = [];
+    app.toast = (message) => { toasts.push(message); };
+    assert.equal(addRoutineItem(app.state, MORNING, { name: "Example zinc", kind: "check" }), true);
+    openSaved("Example zinc");
+    assert.match(routineItemSheetHTML(), /id="dr-item-on-hand" inputmode="numeric"/);
+
+    for (const text of ["1.5", "-1"]) {
+      fields = { "#dr-item-name": { value: "Example zinc" }, "#dr-item-on-hand": { id: "dr-item-on-hand", value: text } };
+      assert.equal(noteRoutineItemField(fields["#dr-item-on-hand"]), true);
+      assert.equal(fields["#dr-item-on-hand"].value, text, "the field is not rewritten");
+      assert.equal(app.ui.sd.onHand, text);
+      toasts.length = 0;
+      assert.equal(app.commitRoutineItemSheet(), false, text);
+      assert.deepEqual(toasts, ["On hand is a whole number, or leave it blank."]);
+      assert.equal(app.ui.sheet, "routines-item", "the sheet stays open");
+      assert.equal(itemNamed("Example zinc").onHand, undefined, `${text} saves no count`);
+    }
+
+    fields["#dr-item-on-hand"].value = "12";
+    assert.equal(noteRoutineItemField(fields["#dr-item-on-hand"]), true);
+    toasts.length = 0;
+    assert.equal(app.commitRoutineItemSheet(), true);
+    assert.deepEqual(toasts, ["Item saved."]);
+    assert.equal(itemNamed("Example zinc").onHand, 12);
+  });
+
   test("Back, Close and the X put every item field back as it was", async () => {
     signIn();
     app.openRoutineItemEditor(MORNING, "");
