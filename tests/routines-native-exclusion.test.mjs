@@ -8,7 +8,7 @@ import { ROUTINES_ENABLED } from "../logger/js/shared/routines-flag.js";
 
 const APP_ROOT = fileURLToPath(new URL("../native/src/app/", import.meta.url));
 const TAB_DIR = join(APP_ROOT, "(tabs)");
-const TAB_FILES = ["_layout.tsx", "food.tsx", "index.tsx", "insights.tsx", "progress.tsx", "workouts.tsx"];
+const TAB_FILES = ["_layout.tsx", "food.tsx", "index.tsx", "progress.tsx", "workouts.tsx"];
 const PWA_TABS = ["home", "workouts", "food", "progress", "insights"];
 
 /* Route segment only. Workout-template "routines" live in stores and the PWA
@@ -129,9 +129,17 @@ test("the PWA tab bar stays Home, Workouts, Food, Progress, Insights", () => {
   assert.deepEqual(tabs, PWA_TABS);
 });
 
-test("native tabs are exactly Home, Workouts, Food, Progress, and Insights", () => {
+test("native tabs are exactly Home, Workouts, Food, and Progress", () => {
   const names = readdirSync(TAB_DIR).sort();
   assert.deepEqual(names, TAB_FILES.slice().sort());
+});
+
+test("native Insights is a section of Progress: /insights only redirects there", () => {
+  /* A file left in (tabs) is still a tab route, so insights.tsx may only live outside it. */
+  assert.ok(!readdirSync(TAB_DIR).includes("insights.tsx"));
+  const src = codeWithoutComments(readFileSync(join(APP_ROOT, "insights.tsx"), "utf8"));
+  assert.match(src, /<Redirect\s+href=\{\{\s*pathname:\s*'\/progress'/);
+  assert.equal(forbiddenRouteName("insights.tsx"), null);
 });
 
 test("native app routes do not add Routines, Discover, or a reconstitution calculator", () => {
@@ -209,8 +217,8 @@ test("my-routines.tsx and routine.tsx are forbidden native routes", () => {
 test("a Routines tab added only in tabs.ts fails", () => {
   const src = readFileSync(new URL("../native/src/features/shell/tabs.ts", import.meta.url), "utf8");
   const tabs = tabConfigEntries(src);
-  assert.deepEqual(tabs.map((tab) => tab.route.toLowerCase()), ["index", "workouts", "food", "progress", "insights"]);
-  assert.deepEqual(tabs.map((tab) => tab.label.toLowerCase()), ["home", "workouts", "food", "progress", "insights"]);
+  assert.deepEqual(tabs.map((tab) => tab.route.toLowerCase()), ["index", "workouts", "food", "progress"]);
+  assert.deepEqual(tabs.map((tab) => tab.label.toLowerCase()), ["home", "workouts", "food", "progress"]);
   for (const tab of tabs) {
     assert.equal(forbiddenRouteName(`${tab.route}.tsx`), null, tab.route);
     assert.equal(forbiddenRouteName(`${tab.label}.tsx`), null, tab.label);
