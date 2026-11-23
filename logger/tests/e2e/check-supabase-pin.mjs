@@ -34,8 +34,8 @@ try {
 if (latest !== pinned) {
   console.warn(
     `WARNING: pinned @supabase/supabase-js@${pinned} is not latest 2.x (${latest}). ` +
-    "index.html loads the floating @2 CDN build; the smoke stub serves the pin. " +
-    "Drift can hide production client bugs. Bump the devDependency when you want smoke on the newer client."
+    "The app ships its own copy of the pin at logger/js/vendor/supabase.js. To update, bump the " +
+    "devDependency, copy dist/umd/supabase.js over with the version banner, and bump the shell version."
   );
 } else {
   console.log(`supabase-js pin ${pinned} matches latest ${latest}.`);

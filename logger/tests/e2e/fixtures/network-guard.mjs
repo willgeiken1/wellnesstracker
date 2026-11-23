@@ -50,7 +50,7 @@ export function assertClean(state) {
 }
 
 // Sets sharing prefs off before the app boots, then denies every non-local host.
-// Stub routes registered after this one fulfill Supabase, supabase-js, and fonts.
+// Stub routes registered after this one fulfill Supabase and fonts.
 export async function guardNetwork(context, state = emptyState()) {
   await context.addInitScript(() => {
     try {
