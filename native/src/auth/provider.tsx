@@ -225,7 +225,8 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       if(departurePending&&retryDeparture.current)return retryDeparture.current();
       const prepared=preparedSync.current;preparedSync.current=null;
       if(!departurePending)await (prepared?.engine===engine?prepared.flight:syncBeforeSignOut(()=>engine?.sync()??Promise.resolve()));
-      if(currentRepo?.hasUnsynced() && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
+      // Routines kept on this phone alone are lost the same way, though they never wait in the outbox.
+      if((currentRepo?.hasUnsynced() || (currentRepo?.phoneOnlyRoutineCount?.()??0)>0) && !discardUnsynced)throw new Error('Unsynced changes require confirmation.');
       await depart();
     },
     deleteAccount:async()=>{

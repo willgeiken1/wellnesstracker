@@ -51,7 +51,7 @@ test('the sync gate is off by default and the v1 flag does not open it', () => {
   expect(syncTables({ syncedV1Columns: true, dailyRoutines: true }).filter(table => table.startsWith('daily_'))).toEqual([...routineTables]);
 });
 
-test('sign-out can tell routine rows, which never sync, from ordinary changes that are waiting to', async () => {
+test('sign-out counts routine rows where they are stored, apart from ordinary changes that are waiting to sync', async () => {
   const local = await localDatabase();
   try {
     const repo = repoFor(local.db, OWNER_A), other = repoFor(local.db, OWNER_B);
@@ -59,15 +59,53 @@ test('sign-out can tell routine rows, which never sync, from ordinary changes th
     seed(repo);
     const count = routineFixtureRows().length;
     expect(repo.phoneOnlyRoutineCount()).toBe(count);
+    expect(repo.unsyncedCount()).toBe(0);
     repo.save('sessions', {});
     expect(repo.phoneOnlyRoutineCount()).toBe(count);
-    expect(repo.unsyncedCount()).toBe(count + 1);
+    expect(repo.unsyncedCount()).toBe(1);
     // It is this owner's count only.
     expect(other.phoneOnlyRoutineCount()).toBe(0);
+    // A removed row is no longer routine data to lose. With every row gone there is nothing to warn about.
+    repo.remove('daily_logs', FIXTURE_IDS.log, 5000);
+    expect(repo.phoneOnlyRoutineCount()).toBe(count - 1);
+    for (const table of routineTables) for (const row of repo.list(table)) repo.remove(table, row.id, 6000);
+    expect(repo.phoneOnlyRoutineCount()).toBe(0);
+    expect(repo.unsyncedCount()).toBe(1);
+    // A demo or phone-only owner has no account to sign out of, and synced routines are not phone-only.
+    for (const owner of ['guest', 'demo']) { const kept = repoFor(local.db, owner); seed(kept); expect(kept.phoneOnlyRoutineCount()).toBe(0); }
+    const synced = repoFor(local.db, OWNER_B, { syncedV1Columns: false, dailyRoutines: true });
+    seed(synced);
+    expect(synced.phoneOnlyRoutineCount()).toBe(0);
+    expect(synced.unsyncedCount()).toBe(count);
   } finally { local.sqlite.close(); }
 });
 
-test('with the gate off nothing is pushed, pulled or accepted, and sign-out still counts the rows as unsynced', async () => {
+test('with the gate off no routine write is queued, so turning sync on later uploads none of the history', async () => {
+  const local = await localDatabase();
+  try {
+    const repo = repoFor(local.db, OWNER_A);
+    seed(repo);
+    // Every kind of write: a new row, an edit and a removal.
+    repo.save('daily_items', { ...repo.get('daily_items', FIXTURE_IDS.item)!.data, on_hand: 3 }, FIXTURE_IDS.item, 2000);
+    repo.remove('daily_logs', FIXTURE_IDS.log, 3000);
+    const queued = () => local.sqlite.prepare("SELECT count(*) AS n FROM sync_outbox WHERE table_name LIKE 'daily!_%' ESCAPE '!'").get()?.n;
+    expect(queued()).toBe(0);
+    expect(repo.hasUnsynced()).toBe(false);
+    expect(repo.unsyncedCount()).toBe(0);
+    // An ordinary table is still queued beside them.
+    repo.save('sessions', {});
+    expect(local.sqlite.prepare('SELECT table_name FROM sync_outbox WHERE owner_id=?').all(OWNER_A).map(row => row.table_name)).toEqual(['sessions']);
+    // The same phone with the gate turned on: nothing written before is waiting to upload.
+    const later = repoFor(local.db, OWNER_A, { syncedV1Columns: false, dailyRoutines: true });
+    expect(later.pending().filter(item => item.row.table.startsWith('daily_'))).toEqual([]);
+    // With the gate on, a routine write is queued like any other row.
+    later.save('daily_types', { name: 'Zzyq Later Type', position: 9 });
+    expect(later.pending().map(item => item.row.table)).toEqual(['daily_types', 'sessions']);
+    expect(queued()).toBe(1);
+  } finally { local.sqlite.close(); }
+});
+
+test('with the gate off nothing is pushed, pulled or accepted, and the rows are still counted for sign-out', async () => {
   const local = await localDatabase();
   try {
     const repo = repoFor(local.db, OWNER_A);
@@ -75,8 +113,8 @@ test('with the gate off nothing is pushed, pulled or accepted, and sign-out stil
     const count = routineFixtureRows().length;
     expect(repo.pending()).toEqual([]);
     // These rows have no copy off the phone, so signing out has to warn before it erases them.
-    expect(repo.hasUnsynced()).toBe(true);
-    expect(repo.unsyncedCount()).toBe(count);
+    expect(repo.hasUnsynced()).toBe(false);
+    expect(repo.phoneOnlyRoutineCount()).toBe(count);
     const pushed: Row[] = [], pulled: Table[] = [];
     const transport: Transport = { owner: OWNER_A, push: async rows => { pushed.push(...rows); }, pull: async table => { pulled.push(table); return []; } };
     const engine = new SyncEngine(repo, transport);
@@ -84,7 +122,7 @@ test('with the gate off nothing is pushed, pulled or accepted, and sign-out stil
     engine.close();
     expect(pushed).toEqual([]);
     expect(pulled.filter(table => table.startsWith('daily_'))).toEqual([]);
-    expect(repo.unsyncedCount()).toBe(count);
+    expect(repo.phoneOnlyRoutineCount()).toBe(count);
     for (const table of routineTables) {
       expect(() => repo.applyPage(table, [], '1')).toThrow();
       expect(repo.cursor(table)).toBe('0');
@@ -197,8 +235,9 @@ test('routines made while looking around move to the new account once, and the d
       expect(demo.list(table, true)).toEqual([]);
       expect(account.list(table).map(row => [row.id, row.data])).toEqual(routineFixtureRows().filter(row => row.table === table).map(row => [row.id, { ...Object.fromEntries(Object.keys(columns[table]).map(key => [key, null])), ...row.data }]).sort((a, b) => String(a[0]) < String(b[0]) ? -1 : 1));
     }
-    // They now belong to an account, so they wait in its outbox like any other unsynced row.
-    expect(account.unsyncedCount()).toBe(routineFixtureRows().length);
+    // They now belong to an account but still live on this phone alone: none is queued, and sign-out counts them.
+    expect(account.unsyncedCount()).toBe(0);
+    expect(account.phoneOnlyRoutineCount()).toBe(routineFixtureRows().length);
     expect(account.pending().filter(item => item.row.table.startsWith('daily_'))).toEqual([]);
   } finally { local.sqlite.close(); }
 });

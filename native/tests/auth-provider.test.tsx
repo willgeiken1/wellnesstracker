@@ -119,6 +119,18 @@ test.each(['returned error','rejected network'])('sign-out %s still wipes locall
   await waitFor(()=>expect(observed.repository).toBe(b));expect(observed.pending).toBe(0);
   expect(b.wipe).not.toHaveBeenCalled();await view.unmount();
 });
+test('sign-out refuses to erase routines kept on this phone alone without the warning being acknowledged',async()=>{
+ // Nothing waits to sync: the sync succeeds and the outbox empties. Routines are not in it and are counted on their own.
+ const a=Object.assign(fixtureRepo(OWNER_A),{phoneOnlyRoutineCount:()=>2});
+ jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
+ const fixture=clientFixture(),view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+ await waitFor(()=>expect(observed.repository).toBe(a));
+ await waitFor(()=>expect(a.hasUnsynced()).toBe(false));
+ await act(async()=>{await expect(observed.signOut()).rejects.toThrow('Unsynced changes require confirmation.');});
+ expect(a.wipe).not.toHaveBeenCalled();expect(fixture.auth.signOut).not.toHaveBeenCalled();
+ await act(async()=>{await observed.signOut(true);});
+ expect(a.wipe).toHaveBeenCalledTimes(1);await view.unmount();
+});
 test('sign-out attempts sync and refuses to discard unsynced rows without warning acknowledgment',async()=>{
  const a=fixtureRepo(OWNER_A);mockPush.mockRejectedValue(new Error('offline fixture'));
  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});

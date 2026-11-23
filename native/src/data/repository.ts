@@ -2,7 +2,7 @@ import { MAX_LOSING_VERSIONS, LOSING_VERSION_TTL_MS, losingVersionKey, type Losi
 import { matchesPurge, purgeTombstone } from './purges';
 import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { columns, localTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
+import { columns, localTables, routineTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 import { isHealthSource } from './health-store';
 import { DEFAULT_SYNC_FLAGS, gatedColumns, hasGatedColumns, hydrateSyncRow, mergeSyncRow, projectSyncRow, syncTables, type SyncFlags } from './sync/flags';
@@ -184,7 +184,9 @@ export class Repository {
         this.applyPurges();
         const clock = Math.max(Number(this.state('clock') ?? 0), row.updated_at);
         this.setState('clock', String(clock));
-        if (this.owner !== 'demo' && this.owner !== 'guest' && !healthLocal) {
+        // Routines stay on this phone while their sync is off, so they are not queued: turning sync on later
+        // could otherwise upload everything ever written here, without the person being asked.
+        if (this.owner !== 'demo' && this.owner !== 'guest' && !healthLocal && !this.phoneOnlyRoutines(row.table)) {
           this.db.run(sql`INSERT INTO sync_outbox(owner_id,table_name,row_id,revision) VALUES(${this.owner},${row.table},${row.id},${revision(row)}) ON CONFLICT(owner_id,table_name,row_id) DO UPDATE SET revision=excluded.revision`);
         }
       });
@@ -220,11 +222,15 @@ export class Repository {
   unsyncedCount() {
     return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges'`)?.count ?? 0);
   }
-  /** How many of the unsynced rows are Routines rows. Routines are kept on this phone only and are never
-   * uploaded, so these wait in the outbox for good and no sync can clear them. Sign-out says so in plain words
-   * instead of counting them as changes that are about to sync. */
+  /** A Routines table while Routines are not synced: the same table list the sync gate reads. */
+  private phoneOnlyRoutines(table: Table) { return routineTables.includes(table) && !this.syncTables().includes(table); }
+  /** How many live Routines rows an account keeps on this phone alone. With their sync off they are never
+   * uploaded or queued, so they are counted where they are stored. Sign-out says in plain words that they
+   * will be erased. A demo or phone-only owner has no sign-out to warn, and synced Routines are not phone-only. */
   phoneOnlyRoutineCount() {
-    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name LIKE 'daily!_%' ESCAPE '!'`)?.count ?? 0);
+    if (this.owner === 'demo' || this.owner === 'guest') return 0;
+    return this.safe(() => routineTables.filter(table => this.phoneOnlyRoutines(table)).reduce((count, table) =>
+      count + (this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM ${sql.identifier(table)} WHERE owner_id=${this.owner} AND deleted_at IS NULL`)?.count ?? 0), 0));
   }
   hasUnsynced() {
     return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' LIMIT 1`));

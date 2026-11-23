@@ -64,8 +64,8 @@ test.each([0,1,3])('sign-out warning uses current owner count %s after sync',asy
  else {expect(auth.signOut).not.toHaveBeenCalled();expect(screen.getByText(new RegExp(count===1?'1 unsynced change will be lost':'3 unsynced changes will be lost'))).toBeTruthy();}
 });
 test('sign-out says in plain words that routines on this phone are erased, and does not call them unsynced',async()=>{
- // Five rows wait in the outbox. Four are Routines rows, which never sync, and one is an ordinary change.
- const auth={...state(),repository:{unsyncedCount:()=>5,phoneOnlyRoutineCount:()=>4} as AuthState['repository']};
+ // One ordinary change waits in the outbox. The four Routines rows never sync and are never queued: they are counted on the phone.
+ const auth={...state(),repository:{unsyncedCount:()=>1,phoneOnlyRoutineCount:()=>4} as AuthState['repository']};
  await wrap(<Account/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
  expect(auth.signOut).not.toHaveBeenCalled();
@@ -75,14 +75,21 @@ test('sign-out says in plain words that routines on this phone are erased, and d
  expect(screen.getByRole('button',{name:'Save a backup first'})).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Sign out anyway'}));expect(auth.signOut).toHaveBeenCalledWith(true);
 });
-test('with only routines waiting, sign-out still stops to warn and names no unsynced changes',async()=>{
- const auth={...state(),repository:{unsyncedCount:()=>4,phoneOnlyRoutineCount:()=>4} as AuthState['repository']};
+test('with nothing waiting to sync but routines on the phone, sign-out still stops to warn and names no unsynced changes',async()=>{
+ const auth={...state(),repository:{unsyncedCount:()=>0,phoneOnlyRoutineCount:()=>4} as AuthState['repository']};
  await wrap(<Account/>,auth);
  await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
  expect(auth.signOut).not.toHaveBeenCalled();
  expect(screen.getByTestId('sign-out-routines')).toBeTruthy();
  expect(screen.queryByText(/unsynced/)).toBeNull();
  expect(screen.getByText('This account’s data will be erased from this phone.')).toBeTruthy();
+});
+test('with nothing waiting to sync and no routines on the phone, sign-out does not stop to warn',async()=>{
+ const auth={...state(),repository:{unsyncedCount:()=>0,phoneOnlyRoutineCount:()=>0} as AuthState['repository']};
+ await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(auth.signOut).toHaveBeenCalledWith();
+ expect(screen.queryByTestId('sign-out-routines')).toBeNull();
 });
 test('with no routines on the phone the warning does not mention them',async()=>{
  const auth={...state(),repository:{unsyncedCount:()=>3,phoneOnlyRoutineCount:()=>0} as AuthState['repository']};

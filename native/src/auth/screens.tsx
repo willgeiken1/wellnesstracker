@@ -76,6 +76,7 @@ export function Account() {
   const {colors}=useTheme();
   const [lossCount,setLossCount]=useState<number|null>(null);
   // Routines live on this phone only, so they are named in the warning and never counted as waiting to sync.
+  // lossCount is the unsynced changes plus the routine rows; either one stops sign-out to warn.
   const [routineCount,setRoutineCount]=useState(0);
   const [saving,setSaving]=useState(false),[saved,setSaved]=useState<'deleteAccountBackupDone'|'deleteAccountBackupFailed'|null>(null);
   const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|null>(null),[busy,setBusy]=useState(false);
@@ -93,10 +94,11 @@ export function Account() {
     submitting.current=true;setBusy(true);setError(null);
     try {
       await (auth.prepareSignOut?auth.prepareSignOut():syncBeforeSignOut(auth.syncNow));
-      const count=auth.repository?.unsyncedCount()??auth.pending;
-      if(count===0) {await auth.signOut();return;}
-      setRoutineCount(Math.min(count,auth.repository?.phoneOnlyRoutineCount?.()??0));setSaved(null);
-      setLossCount(count);
+      // Routines are not in the count of unsynced changes: they are counted where they are stored on the phone.
+      const unsynced=auth.repository?.unsyncedCount()??auth.pending,routines=auth.repository?.phoneOnlyRoutineCount?.()??0;
+      if(unsynced===0&&routines===0) {await auth.signOut();return;}
+      setRoutineCount(routines);setSaved(null);
+      setLossCount(unsynced+routines);
     } catch(cause) {setError(cause instanceof DepartureFailure?'signOutFailed':'signOutNotStarted');}
     finally {submitting.current=false;setBusy(false);}
   };
