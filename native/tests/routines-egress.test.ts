@@ -98,3 +98,44 @@ test('telemetry does not count the Routines tab or see its path', () => {
   const telemetry = files(path.join(SRC, 'telemetry')).map(file => fs.readFileSync(file, 'utf8')).join('\n');
   expect(telemetry).not.toMatch(/['"`]\/?routines['"`]/);
 });
+
+/* Home and the Progress charts draw routine data too: tiles that show and tick off items, and the "Started"
+   lines. Each file that reads it is named here, one path at a time, and held to the same rule as the Routines
+   screens. A new reader fails this test until its path is added on purpose. */
+const READERS = [
+  'features/home/tiles.ts', // the Home layout tells a routine tile id from any other; it reads ids, never a routine
+  'features/home/routine-tiles.tsx', // the routine tiles on Home
+  'features/home/screen.tsx', // Home hands the routines it was given to those tiles and to Edit Home's list
+  'features/insights/recovery.tsx', // "Started" lines on the sleep and heart rate variability charts, and their switches
+  'features/body/screen.tsx', // "Started" lines on the weight chart, and their switches
+];
+/* The sample items of "Look around first" and the leak-test rows. Both are made up. */
+const FIXTURE_READERS = ['demo.ts', 'routines.ts'];
+const ROUTINE_HOMES = [path.join(SRC, 'features/routines'), UI, path.join(SRC, 'app/routines')];
+const insideRoutines = (file: string) => ROUTINE_HOMES.some(home => file === home || file.startsWith(home + path.sep)) || file === path.join(SRC, 'app/(tabs)/routines.tsx');
+function resolved(file: string, spec: string): string {
+  return spec.startsWith('@/') ? path.join(SRC, spec.slice(2)) : spec.startsWith('.') ? path.resolve(path.dirname(file), spec) : spec;
+}
+const readsRoutines = (file: string) => imports(fs.readFileSync(file, 'utf8')).some(spec => insideRoutines(resolved(file, spec)) || ROUTINE_HOMES.some(home => resolved(file, spec).startsWith(home + path.sep)));
+
+test('outside Routines only the named Home and Progress files read routine data, and they send, log and report nothing', () => {
+  const readers = files(SRC).filter(file => !insideRoutines(file) && readsRoutines(file)).map(file => path.relative(SRC, file)).sort();
+  expect(readers).toEqual([...READERS].sort());
+  for (const reader of READERS) {
+    const file = path.join(SRC, reader), text = fs.readFileSync(file, 'utf8');
+    expect([reader, OUTWARD.test(text)]).toEqual([reader, false]);
+    for (const spec of imports(text)) expect([reader, spec, /\/sync\/|\/server\/|\/ai\/|telemetry|analytics|sentry|posthog/i.test(resolved(file, spec))]).toEqual([reader, spec, false]);
+  }
+  const fixtures = path.resolve(__dirname, '../fixtures');
+  expect(files(fixtures).filter(readsRoutines).map(file => path.relative(fixtures, file)).sort()).toEqual(FIXTURE_READERS);
+});
+
+test('the charts are handed days to mark and never a name, and Edit Home is handed names and never a routine', () => {
+  for (const file of ['features/insights/mini-chart.tsx', 'features/body/chart.tsx', 'features/home/edit-sheet.tsx']) {
+    const text = fs.readFileSync(path.join(SRC, file), 'utf8');
+    expect([file, /features\/routines|routines-ui/.test(text)]).toEqual([file, false]);
+    expect([file, OUTWARD.test(text)]).toEqual([file, false]);
+  }
+  // The Insights view fires one bare event when it opens. It does not read routines; only Recovery, below it, does.
+  expect(fs.readFileSync(path.join(SRC, 'features/insights/screen.tsx'), 'utf8')).not.toMatch(/features\/routines|routines-ui|started/i);
+});
