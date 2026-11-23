@@ -9,50 +9,19 @@
    flag, the sign-in and the first pull, and its merge stamps, are not here:
    the phone's rows are written by the repository, last write wins per row. */
 
-import { MAX_DAY_ROLLOVER_HOUR, routineMinuteOfDay } from "./dose";
+import { MAX_DAY_ROLLOVER_HOUR } from "./dose";
 import { compoundFor, coveringLog, loggedDose, parseRoutineAmount, routineBlockRows, routineItemType, routineRestLog, ROUTINE_DOSE_UNITS } from "./day";
 import { routineLogId, routinePlacementId } from "./ids";
 import {
-  clipText, isLive, ITEM_NOTE_MAX, normalizeRoutineStore, projectRoutineStore, validDay,
-  type RoutineCompound, type RoutineItem, type RoutineLog, type RoutinePlacement, type RoutineStore, type Stamped,
+  clipText, isLive, ITEM_NOTE_MAX, projectRoutineStore,
+  type RoutineCompound, type RoutineItem, type RoutineLog, type RoutinePlacement, type RoutineStore,
 } from "./shape";
 import { supplyFromDraft, type SupplyDraft } from "./supply";
+import { clean, cleanName, logStamp, put, rowStampOf, stampAfter, start, timeToMin, type RoutineClock } from "./write";
 
-/** The moment of the change, and the routine day that moment falls on (dose.routineDayKey). */
-export interface RoutineClock { now: number; day: string }
-type Collection = "blocks" | "items" | "placements" | "compounds" | "logs";
+export type { RoutineClock } from "./write";
+
 const DOSE_UNIT_SET = new Set<string>(ROUTINE_DOSE_UNITS);
-
-function stampAfter(now: number, previous: number | null | undefined): number {
-  const floor = typeof previous === "number" && Number.isFinite(previous) && previous > 0 ? previous + 1 : 0;
-  return Math.max(Number.isFinite(now) ? now : 0, floor);
-}
-
-function rowStampOf(row: Stamped | undefined): number {
-  return row ? Math.max(row.updatedAt || 0, row.deletedAt || 0) : 0;
-}
-
-function put<K extends Collection>(store: RoutineStore, collection: K, entity: RoutineStore[K][number], at: number): RoutineStore {
-  const rows = store[collection] as Stamped[];
-  const row = { ...entity, updatedAt: at, deletedAt: typeof entity.deletedAt === "number" && entity.deletedAt > 0 ? at : null };
-  const index = rows.findIndex((existing) => existing.id === entity.id);
-  const next = index < 0 ? [...rows, row] : rows.map((existing, position) => (position === index ? row : existing));
-  return { ...store, [collection]: next } as RoutineStore;
-}
-
-function clean(store: RoutineStore | null): RoutineStore | null {
-  return store ? normalizeRoutineStore(store) : null;
-}
-
-function start(input: unknown, clock: RoutineClock, needsDay = true): RoutineStore | null {
-  if (!clock || typeof clock.now !== "number" || !Number.isFinite(clock.now)) return null;
-  if (needsDay && !validDay(clock.day)) return null;
-  return normalizeRoutineStore(input);
-}
-
-function logStamp(store: RoutineStore, clock: RoutineClock, id: string): number {
-  return stampAfter(clock.now, rowStampOf(store.logs.find((row) => row.id === id)));
-}
 
 function checkOff(input: unknown, itemId: unknown, clock: RoutineClock, skipped: boolean): RoutineStore | null {
   if (typeof itemId !== "string" || !itemId) return null;
@@ -197,11 +166,6 @@ export function saveItemNote(input: unknown, itemId: unknown, note: unknown, clo
   return clean(put(store, "items", next, stampAfter(clock.now, rowStampOf(item))));
 }
 
-function cleanName(name: unknown): string {
-  if (typeof name !== "string") return "";
-  return clipText(name, 80);
-}
-
 export function renameItem(input: unknown, itemId: unknown, name: unknown, clock: RoutineClock): RoutineStore | null {
   const trimmed = cleanName(name);
   if (!trimmed || typeof itemId !== "string" || !itemId) return null;
@@ -271,13 +235,6 @@ function loggedCompoundId(store: RoutineStore, itemId: string): string {
     if (compound && isLive(compound)) return compound.id;
   }
   return "";
-}
-
-const TIME_RE = /^(\d{1,2}):([0-5]\d)$/;
-function timeToMin(raw: string): number | null {
-  const match = raw.trim().match(TIME_RE);
-  if (!match) return null;
-  return routineMinuteOfDay(Number(match[1]) * 60 + Number(match[2]));
 }
 
 /* Adds an item, or saves an edit of one. The name, amount and unit are what
