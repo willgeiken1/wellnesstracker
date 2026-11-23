@@ -100,24 +100,34 @@ function stampOnRoutineDay(day: string, hour: number, minute: number, rollover: 
   return calendar ? stampOnDay(calendar, hour, minute) : null;
 }
 
-/* Time is written only when the chosen day is before today. A blank time
-   leaves the logged clock. A same-day edit never moves it. The sheet sends
-   the logged clock back with every save, so a day and a time that both
-   still read as the log does keep the moment it was logged, to the second.
-   A new day or a new time is placed on that routine day. */
-function editedAt(log: RoutineLog, day: string, today: string, draft: LogEdit, rollover: unknown): { ok: boolean; at: number } {
+/* A time is typed only when the chosen day is before today. A same-day
+   edit never moves the logged clock. The sheet sends the logged clock back
+   with every save, so a day and a time that both still read as the log
+   does keep the moment it was logged, to the second. A new time is placed
+   on that routine day. A log moved to another day with no time given keeps
+   its clock time and takes it to the new routine day, so the moment and
+   the day never disagree; moved to today, it is never later than now. */
+function editedAt(log: RoutineLog, day: string, today: string, draft: LogEdit, rollover: unknown, now: number): { ok: boolean; at: number } {
   const current = typeof log.at === "number" && Number.isFinite(log.at) ? log.at : 0;
-  if (!(day < today) || draft.time == null) return { ok: true, at: current };
-  if (typeof draft.time !== "string") return { ok: false, at: current };
-  const text = draft.time.trim();
-  if (!text) return { ok: true, at: current };
-  const parsed = parseRoutineTime(text);
-  if (!parsed) return { ok: false, at: current };
-  const typed = `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")}`;
-  if (day === log.day && current > 0 && typed === routineClockTime(current)) return { ok: true, at: current };
-  const stamped = stampOnRoutineDay(day, parsed.hour, parsed.minute, rollover);
+  if (day < today && draft.time != null) {
+    if (typeof draft.time !== "string") return { ok: false, at: current };
+    const text = draft.time.trim();
+    if (text) {
+      const parsed = parseRoutineTime(text);
+      if (!parsed) return { ok: false, at: current };
+      const typed = `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")}`;
+      if (day === log.day && current > 0 && typed === routineClockTime(current)) return { ok: true, at: current };
+      const stamped = stampOnRoutineDay(day, parsed.hour, parsed.minute, rollover);
+      if (stamped == null) return { ok: false, at: current };
+      return { ok: true, at: stamped };
+    }
+  }
+  if (day === log.day || current <= 0) return { ok: true, at: current };
+  const was = new Date(current);
+  const stamped = stampOnRoutineDay(day, was.getHours(), was.getMinutes(), rollover);
   if (stamped == null) return { ok: false, at: current };
-  return { ok: true, at: stamped };
+  const exact = stamped + was.getSeconds() * 1000 + was.getMilliseconds();
+  return { ok: true, at: day < today ? exact : Math.min(exact, now) };
 }
 
 const has = (draft: LogEdit, key: keyof LogEdit) => Object.prototype.hasOwnProperty.call(draft, key);
@@ -128,7 +138,8 @@ const has = (draft: LogEdit, key: keyof LogEdit) => Object.prototype.hasOwnPrope
    removed, so one row still stands for one item and day. A day that
    already has a log for the item is refused. A time is applied only when
    that day is before today, and it is a time on that routine day: before
-   the rollover hour it lands on the next calendar morning. A note is stored only when the draft includes
+   the rollover hour it lands on the next calendar morning. A moved log
+   with no time given keeps its clock time on the new routine day. A note is stored only when the draft includes
    one. A site is stored only when the draft includes one: a blank site
    removes it, a missing site key leaves the old site, an unknown site is
    refused, and a check cannot store a site. The item and its saved amount
@@ -148,7 +159,7 @@ export function editLog(input: unknown, logId: unknown, draft: LogEdit | null | 
   const compound = view.compounds.find((row) => row.id === log.compoundId) || null;
   const skipped = log.status === "skipped";
   const dose = logHasSavedDose(log) && !skipped;
-  const time = editedAt(log, day, clock.day, draft, store.settings.dayRolloverHour);
+  const time = editedAt(log, day, clock.day, draft, store.settings.dayRolloverHour, clock.now);
   if (!time.ok) return null;
   let next: RoutineLog;
   if (dose) {

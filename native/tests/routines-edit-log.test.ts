@@ -28,6 +28,11 @@ function logged(unit = 'mcg') {
   return { store, doseId: dose.itemId, checkId: check.itemId, doseLog: routineLogId(dose.itemId, DAY), checkLog: routineLogId(check.itemId, DAY), newId };
 }
 const live = (store: RoutineStore, itemId: string) => liveOf(store.logs).filter(row => row.itemId === itemId);
+/** The moment `at`, at the same clock time on routine day `day`: before the hour a day starts it is the next calendar morning. */
+function sameClockOn(day: string, at: number, rollover = 4): number {
+  const was = new Date(at), [year, month, date] = day.split('-').map(Number);
+  return new Date(year, month - 1, date + (was.getHours() < rollover ? 1 : 0), was.getHours(), was.getMinutes(), was.getSeconds(), was.getMilliseconds()).getTime();
+}
 
 describe('editing the amount on a log', () => {
   test('a different amount is kept as typed, marks the log partial, and leaves the item alone', () => {
@@ -98,7 +103,7 @@ describe('moving a log to another day', () => {
     const moved = must(editLog(store, doseLog, { amount: '0.25', day: '2026-11-15' }, clock(200)));
     expect(moved.logId).toBe(routineLogId(doseId, '2026-11-15'));
     expect(moved.logId).not.toBe(doseLog);
-    expect(live(moved.store, doseId)).toEqual([expect.objectContaining({ id: moved.logId, day: '2026-11-15', amount: 0.25, unit: 'mcg', status: 'partial', at: 100 })]);
+    expect(live(moved.store, doseId)).toEqual([expect.objectContaining({ id: moved.logId, day: '2026-11-15', amount: 0.25, unit: 'mcg', status: 'partial', at: sameClockOn('2026-11-15', 100) })]);
     const old = moved.store.logs.find(row => row.id === doseLog);
     expect(old?.deletedAt).toBeGreaterThan(0);
     expect(old?.undone).toBeUndefined(); // moved, not undone: nothing to restore on the old day
@@ -133,8 +138,8 @@ describe('moving a log to another day', () => {
     const earlier = must(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '7:30' }, clock(200)));
     expect(live(earlier.store, doseId)[0].at).toBe(new Date(2026, 10, 18, 7, 30).getTime());
     expect(logDraft(earlier.store, earlier.logId, DAY)).toMatchObject({ day: '2026-11-18', time: '07:30', maxDay: DAY });
-    // Blank keeps the logged time. A bad time is refused.
-    expect(live(must(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '  ' }, clock(200))).store, doseId)[0].at).toBe(100);
+    // Blank keeps the logged clock time, on the day the log now has. A bad time is refused.
+    expect(live(must(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '  ' }, clock(200))).store, doseId)[0].at).toBe(sameClockOn('2026-11-18', 100));
     expect(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '25:00' }, clock(200))).toBeNull();
     expect(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: 'noon' }, clock(200))).toBeNull();
     expect(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: 730 }, clock(200))).toBeNull();
@@ -247,6 +252,35 @@ describe('a log\'s time around the hour a new day starts', () => {
     const yesterday = must(editLog(store, logId, { amount: '250', day: '2026-11-21', time: '03:10' }, late()));
     expect(atOf(yesterday.store, doseId)).toBe(local(11, 22, 3, 10));
     expect(atOf(yesterday.store, doseId)).toBeLessThan(LATER);
+  });
+
+  test('moved to another day with the time left blank, it is stamped again at the same clock time on that routine day', () => {
+    // Taken at 21:15:42 on Nov 20, well after the day started.
+    const evening = lateLog(4, new Date(2026, 10, 20, 21, 15, 42).getTime());
+    for (const time of ['', '   ', undefined, null]) {
+      const moved = must(editLog(evening.store, evening.logId, { amount: '250', day: '2026-11-18', ...(time === undefined ? {} : { time }) }, late()));
+      const at = atOf(moved.store, evening.doseId);
+      expect(at).toBe(new Date(2026, 10, 18, 21, 15, 42).getTime());
+      expect(routineDayKey(new Date(at), 4)).toBe('2026-11-18');
+      expect(logDraft(moved.store, moved.logId, '2026-11-22')).toMatchObject({ day: '2026-11-18', time: '21:15' });
+    }
+    // Taken at 02:30:17, before the day starts: on routine day Nov 18 that is the calendar morning of Nov 19.
+    const { store, doseId, logId } = lateLog();
+    const moved = must(editLog(store, logId, { amount: '250', day: '2026-11-18', time: '' }, late()));
+    expect(live(moved.store, doseId)).toEqual([expect.objectContaining({ day: '2026-11-18', at: new Date(2026, 10, 19, 2, 30, 17).getTime() })]);
+    expect(routineDayKey(new Date(atOf(moved.store, doseId)), 4)).toBe('2026-11-18');
+    // The hour the person chose decides which calendar morning that is.
+    const six = lateLog(6, local(11, 21, 5, 59));
+    const sixMoved = must(editLog(six.store, six.logId, { amount: '250', day: '2026-11-17', time: '' }, late()));
+    expect(atOf(sixMoved.store, six.doseId)).toBe(local(11, 18, 5, 59));
+    expect(routineDayKey(new Date(atOf(sixMoved.store, six.doseId)), 6)).toBe('2026-11-17');
+    // Moved to today, where no time can be typed, it lands on today and never after now.
+    const early = { now: local(11, 22, 9, 0), day: '2026-11-22' }, today = must(editLog(evening.store, evening.logId, { amount: '250', day: '2026-11-22', time: '21:15' }, early));
+    expect(atOf(today.store, evening.doseId)).toBe(early.now);
+    const night = { now: local(11, 22, 23, 0), day: '2026-11-22' };
+    expect(atOf(must(editLog(evening.store, evening.logId, { amount: '250', day: '2026-11-22' }, night)).store, evening.doseId)).toBe(new Date(2026, 10, 22, 21, 15, 42).getTime());
+    // A blank time with the day left alone still keeps the moment it was logged.
+    expect(atOf(must(editLog(store, logId, { amount: '250', day: '2026-11-20', time: '' }, late())).store, doseId)).toBe(TAKEN);
   });
 
   test('the hour the person chose is the one that decides, from midnight to 06:00', () => {

@@ -115,6 +115,40 @@ describe('logging', () => {
     expect(restoreLog(again, id, clock(200))).toBeNull();
   });
 
+  test('a restore is refused when another live log already covers that item and day', () => {
+    const { store, doseId } = withItems();
+    const logged = must(logItem(store, doseId, clock(100)));
+    const id = logged.logs[0].id;
+    const undone = must(undoLog(logged, id, clock(150)));
+    // A second copy of the same check-off, under another id, as a merge from another phone leaves it.
+    const copy = { ...logged.logs[0], id: 'log-merged-copy', at: 160, updatedAt: 160, deletedAt: null };
+    const covered: RoutineStore = { ...undone, logs: [...undone.logs, copy] };
+    expect(coveringLog(projectRoutineStore(covered)?.logs, doseId, DAY)?.id).toBe('log-merged-copy');
+    expect(restoreLog(covered, id, clock(170))).toBeNull();
+    // The same copy on another day covers nothing here, so the restore goes through.
+    const elsewhere: RoutineStore = { ...undone, logs: [...undone.logs, { ...copy, day: '2026-11-18' }] };
+    expect(liveOf(must(restoreLog(elsewhere, id, clock(170))).logs).map(row => row.id).sort()).toEqual([id, 'log-merged-copy'].sort());
+  });
+
+  test('an undo takes every live copy of the same check-off, and leaves other items and days alone', () => {
+    const { store, doseId, checkId } = withItems();
+    const logged = must(logItem(must(logItem(store, doseId, clock(100))), checkId, clock(101)));
+    const id = routineLogId(doseId, DAY);
+    const first = logged.logs.find(row => row.id === id)!;
+    // Two live copies of one check-off after a merge, and the same item logged on the day before.
+    const merged: RoutineStore = { ...logged, logs: [...logged.logs,
+      { ...first, id: 'log-merged-copy', at: 120, updatedAt: 120 },
+      { ...first, id: routineLogId(doseId, '2026-11-18'), day: '2026-11-18', at: 50, updatedAt: 50 }] };
+    const undone = must(undoLog(merged, id, clock(200)));
+    const gone = undone.logs.filter(row => row.undone === true).map(row => row.id).sort();
+    expect(gone).toEqual([id, 'log-merged-copy'].sort());
+    for (const row of undone.logs.filter(row => row.undone === true)) expect(row).toMatchObject({ deletedAt: 200, updatedAt: 200 });
+    expect(coveringLog(projectRoutineStore(undone)?.logs, doseId, DAY)).toBeNull();
+    expect(liveOf(undone.logs).map(row => row.id).sort()).toEqual([routineLogId(checkId, DAY), routineLogId(doseId, '2026-11-18')].sort());
+    // Undoing the copy takes the first one with it too.
+    expect(coveringLog(projectRoutineStore(must(undoLog(merged, 'log-merged-copy', clock(200))))?.logs, doseId, DAY)).toBeNull();
+  });
+
   test('log all writes one done log per open item, and a rest day writes none', () => {
     const { store, doseId, checkId } = withItems();
     const skipped = must(skipItem(store, checkId, clock(90)));
