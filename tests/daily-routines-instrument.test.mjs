@@ -648,6 +648,39 @@ describe("type rows, early mornings and items taken out of routines", () => {
     assert.equal(item("Example twice").type, undefined, "it still has Night");
     assert.match(dailyRoutinesHTML(), /data-view="other"/);
   });
+
+  test("a hidden routine does not count as the item's other place", () => {
+    signIn();
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example hidden twin", kind: "check", blockIds: ["block_default_morning", "block_default_night"] }));
+    assert.ok(hideRoutineBlock(app.state, "block_default_night"));
+    const morning = block("block_default_morning");
+    const window = routineBlockWindow(morning);
+    assert.ok(saveRoutineBlock(app.state, { blockId: morning.id, name: morning.name, startMin: window.startMin, endMin: window.endMin, itemIds: [] }));
+    assert.equal(item("Example hidden twin").type, "other", "Night is hidden, so it moves to Other");
+  });
+
+  test("History ignores a hidden routine when working out due days", async () => {
+    const { routineHistoryView } = await import("../logger/js/shared/routine-history.js");
+    /* Shown Mon/Wed/Fri plus a hidden daily one. 2026-11-21 is a Saturday. */
+    const view = {
+      blocks: [
+        { id: "b1", name: "Example", startMin: 8 * 60, endMin: 9 * 60, days: [0, 2, 4], order: 0, deletedAt: null },
+        { id: "b2", name: "Example hidden", startMin: 20 * 60, endMin: 21 * 60, order: 1, hidden: true, deletedAt: null },
+      ],
+      items: [{ id: "i1", name: "Example check", kind: "check", startDate: "2026-11-16", deletedAt: null }],
+      placements: [
+        { id: "p1", itemId: "i1", blockId: "b1", order: 0, deletedAt: null },
+        { id: "p2", itemId: "i1", blockId: "b2", order: 0, deletedAt: null },
+      ],
+      compounds: [],
+      logs: [{ id: "l1", itemId: "i1", day: "2026-11-19", status: "done", at: 1, deletedAt: null }],
+    };
+    const history = routineHistoryView(view, { month: "2026-11", day: "2026-11-22", today: "2026-11-22", tab: "logged" });
+    const marks = (day) => (history.days.find((row) => row.day === day) || { items: [] }).items.map((row) => row.mark);
+    assert.deepEqual(marks("2026-11-21"), [], "Saturday is not due");
+    assert.deepEqual(marks("2026-11-20"), ["missed"], "Friday still is");
+    assert.deepEqual(marks("2026-11-19"), ["logged"], "a log still shows");
+  });
 });
 
 describe("rearranging from Edit routines", () => {

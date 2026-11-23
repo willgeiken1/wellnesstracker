@@ -96,7 +96,9 @@ function byOrder(a, b) {
 function placedItems(view) {
   const items = new Map((view.items || []).filter(isLive).map((item) => [item.id, item]));
   const compounds = new Map((view.compounds || []).filter(isLive).map((row) => [row.id, row]));
-  const blocks = (view.blocks || []).filter(isLive).slice().sort(byOrder);
+  /* A hidden routine is off the schedule, as on Routines and Home, so it
+     makes nothing due. Its logs still show through rememberedLogs. */
+  const blocks = (view.blocks || []).filter((block) => isLive(block) && block.hidden !== true).slice().sort(byOrder);
   const seen = new Map();
   const rows = [];
   for (const block of blocks) {
