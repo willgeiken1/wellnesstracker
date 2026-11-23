@@ -120,6 +120,21 @@ export function typedClock(text: unknown): string | null {
   return hour < 24 && minute < 60 ? routineClock24(hour * 60 + minute) : null;
 }
 
+/* What a time field stands for while it is being typed in. Save and the step
+   buttons can run before the field is left, so they read the field through
+   these and nothing typed is lost. Nothing typed keeps `current`; an empty
+   field clears an item's time; anything that is not a time keeps `current`,
+   as leaving the field does. */
+export function settledClock(typing: string | null, current: string): string {
+  if (typing == null) return current;
+  return typing.trim() ? typedClock(typing) ?? current : '';
+}
+
+/* The same for a routine's start or end, which cannot be empty. */
+export function settledMinutes(typing: string | null, current: number): number {
+  return typing == null ? current : clockMinutes(typedClock(typing) ?? '') ?? current;
+}
+
 export interface ArcRoutine { id: string; name: string; window: ArcWindow | null }
 
 /* The two lines over the path. Each routine is { name, window }, in page

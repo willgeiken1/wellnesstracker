@@ -14,7 +14,7 @@ import type { RoutineView } from '@/features/routines/model/shape';
 import { addCustomType, CUSTOM_TYPE_MAX, routineClock24, routineCustomTypes } from '@/features/routines/model/types';
 import { AmountCard, AmountMeter } from './add-item-amount-card';
 import { doseReadback, parseSheetAmount } from './add-item-amounts';
-import { arcReadout, arcStepMinutes, clockMinutes, typedClock } from './add-item-arc';
+import { arcReadout, arcStepMinutes, clockMinutes, settledClock } from './add-item-arc';
 import { openConverterDraft, type ConverterDraft } from './converter';
 import { ConverterStep } from './converter-step';
 import { commitRoutines, newRoutineId, routineClockNow, useRoutines, type RoutinesData } from './add-item-data';
@@ -65,7 +65,9 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
   const [naming, setNaming] = useState<string | null>(null);
   const [nameFocus, setNameFocus] = useState(false);
   const [timeText, setTimeText] = useState<string | null>(null);
-  const { close, leave } = useSheetClose(!sameItemDraft(draft, opened));
+  /* The draft as Save would take it: a time still being typed counts, though the field has not been left. */
+  const settled: ItemSheetDraft = timeText == null ? draft : { ...draft, time: settledClock(timeText, draft.time) };
+  const { close, leave } = useSheetClose(!sameItemDraft(settled, opened) || !!naming?.trim());
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -115,24 +117,33 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
   };
 
   const setTime = (minutes: number | null) => { setTimeText(null); change({ time: minutes == null ? '' : routineClock24(minutes) }); };
+  /* A step moves the time the field shows, typed or saved, so a step straight after typing starts from what was typed. */
   const stepTime = (by: number) => {
-    const from = timeMin ?? (picked.length === 1 && picked[0].window ? picked[0].window.startMin % 1440 : 12 * 60);
-    const next = arcStepMinutes(from, timeMin == null ? 0 : by);
+    const shown = clockMinutes(settled.time);
+    const from = shown ?? (picked.length === 1 && picked[0].window ? picked[0].window.startMin % 1440 : 12 * 60);
+    const next = arcStepMinutes(from, shown == null ? 0 : by);
     if (next != null) setTime(next);
   };
   const endTime = () => {
     if (timeText == null) return;
-    const text = timeText.trim();
-    const typed = typedClock(text);
-    if (!text) setTime(null);
-    else if (typed) setTime(clockMinutes(typed));
-    else setTimeText(null);
+    setTimeText(null);
+    if (settled.time !== draft.time) change({ time: settled.time });
   };
 
+  /* Save can be pressed while a field still has the keyboard, before the field is left. So Save takes what is
+     in the fields itself: a time being typed, and a new type that was named but not yet added. The new type is
+     saved with the item in one write, so a draft that cannot be saved adds no type either. */
   const save = () => {
-    const problem = itemDraftProblem(draft, clock.day);
+    let store = data.store, saving = settled;
+    if (timeText != null) { setTimeText(null); setDraft(settled); }
+    if (naming?.trim()) {
+      const made = addCustomType(store, naming, clock, newRoutineId);
+      if (!made || !made.added) { setHint({ at: 'type', text: rs('newTypeTaken') }); setError(rs('newTypeTaken')); announce(rs('newTypeTaken')); return; }
+      store = made.store; saving = { ...saving, type: made.typeId };
+    }
+    const problem = itemDraftProblem(saving, clock.day);
     if (problem) { setError(problem); announce(problem); return; }
-    const result = saveItem(data.store, itemSaveDraft(draft), clock, newRoutineId);
+    const result = saveItem(store, itemSaveDraft(saving), clock, newRoutineId);
     if (!result || !commitRoutines(data.repository, result.store)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
     leave();
   };
@@ -235,7 +246,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
       <View style={{ backgroundColor: colors['surface-2'], borderRadius: 20, padding: tokens.spacing[2] }}>
         <TimeArc routines={routines.map((routine) => ({ id: routine.id, color: slotColor(colors, routine.color), window: routine.window }))}
           picked={new Set(draft.blockIds)} timeMin={timeMin} valueText={`${readout.big}, ${readout.sub}`} big={readout.big} sub={readout.sub}
-          onTime={setTime} onStep={(by) => { const next = arcStepMinutes(timeMin ?? 12 * 60, timeMin == null ? 0 : by); if (next != null) setTime(next); }} />
+          onTime={setTime} onStep={(by) => { const shown = clockMinutes(settled.time); const next = arcStepMinutes(shown ?? 12 * 60, shown == null ? 0 : by); if (next != null) setTime(next); }} />
       </View>
       {!!routines.length && <View accessibilityLabel={rs('routines')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
         {routines.map((routine) => {
@@ -258,7 +269,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
             fontSize: tokens.type.body, fontFamily: tokens.font.numeral, fontVariant: ['tabular-nums'] }} />
         <RoundButton testID="item-time-earlier" label={rs('earlier')} glyph="minus" onPress={() => stepTime(-15)} />
         <RoundButton testID="item-time-later" label={rs('later')} glyph="add" onPress={() => stepTime(15)} />
-        <PillButton testID="item-time-clear" label={rs('clear')} disabled={!draft.time} onPress={() => setTime(null)} />
+        <PillButton testID="item-time-clear" label={rs('clear')} disabled={!(timeText ?? draft.time)} onPress={() => setTime(null)} />
       </View>
       <Help>{draft.type ? rs('helpTyped') : rs('helpPlain')}</Help>
     </Block>

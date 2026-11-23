@@ -239,3 +239,37 @@ test('a new routine has no Duplicate and no Delete', async () => {
   expect(screen.queryByTestId('routine-duplicate')).toBeNull();
   expect(screen.queryByTestId('routine-delete')).toBeNull();
 });
+
+test('Save takes a start and an end that are still being typed', async () => {
+  await render(<RoutineSheet />, { wrapper });
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Midday reset');
+  // The keyboard stays up when another control is pressed, so neither field is left: no blur and no submit.
+  await fireEvent(screen.getByTestId('routine-start'), 'focus');
+  await fireEvent.changeText(screen.getByTestId('routine-start'), '0930');
+  await fireEvent(screen.getByTestId('routine-end'), 'focus');
+  await fireEvent.changeText(screen.getByTestId('routine-end'), '11');
+  await press('routine-save');
+  expect(block('Midday reset')).toMatchObject({ startMin: 570, endMin: 660 });
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('a typed time counts as an unsaved change, a step starts from it, and Save keeps it when it refuses', async () => {
+  await render(<RoutineSheet />, { wrapper });
+  expect(mockSheetOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
+  await fireEvent(screen.getByTestId('routine-start'), 'focus');
+  await fireEvent.changeText(screen.getByTestId('routine-start'), '0900');
+  expect(mockSheetOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+  await press('routine-start-later');
+  expect(value('routine-start')).toBe('09:15');
+  await fireEvent.changeText(screen.getByTestId('routine-end'), '1000');
+  // No name yet: Save refuses, and the typed end is now the time on the form.
+  await press('routine-save');
+  expect(screen.getByTestId('routine-error').props.children).toBe('Add a name and both times.');
+  expect(value('routine-end')).toBe('10:00');
+  expect(screen.getByTestId('window-arc-end').props.accessibilityValue).toEqual({ text: '10:00' });
+  // Something that is not a time saves the time the form had.
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Midday reset');
+  await fireEvent.changeText(screen.getByTestId('routine-end'), 'later');
+  await press('routine-save');
+  expect(block('Midday reset')).toMatchObject({ startMin: 555, endMin: 600 });
+});

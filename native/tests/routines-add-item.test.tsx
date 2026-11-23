@@ -224,3 +224,81 @@ test('a new type can be named in place and is picked once added', async () => {
   expect(screen.getByRole('radio', { name: 'Skin care' }).props.accessibilityState.checked).toBe(true);
   expect(stored(repo).prefs.customTypes?.map((type) => type.name)).toEqual(['Skin care']);
 });
+
+test('Save takes a time that is still being typed, and a step or Clear starts from it', async () => {
+  const { itemId } = change(repo, (store, clock, newId) => saveItem(store, { name: 'Stretch', kind: 'check', amount: '', unit: '', type: 'other', time: '08:15', blockIds: [], onHand: '', mixedOn: '' }, clock, newId))!;
+  await open({ itemId });
+  const time = () => screen.getByTestId('item-time');
+  // The keyboard stays up when Save is pressed, so the field is never left: no blur and no submit.
+  await fireEvent(time(), 'focus');
+  await fireEvent.changeText(time(), '930');
+  expect(mockSheetOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+  await press('item-save');
+  expect(stored(repo).items.find((row) => row.id === itemId)).toMatchObject({ timeMin: 570 });
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('a typed time that Save could not use yet stays in the form, and the steps and an emptied field count too', async () => {
+  await open({ blockId: morning() });
+  const time = () => screen.getByTestId('item-time');
+  await fireEvent(time(), 'focus');
+  await fireEvent.changeText(time(), '730');
+  // No name yet: Save refuses, and what was typed is now the time on the form.
+  await press('item-save');
+  expect(error()).toBe('Add a name.');
+  expect(time().props.value).toBe('07:30');
+  expect(screen.getByTestId('arc-big').props.children).toBe('07:30');
+  // A step straight after typing moves the typed time, not the one before it.
+  await fireEvent.changeText(time(), '900');
+  await press('item-time-later');
+  expect(time().props.value).toBe('09:15');
+  // Something that is not a time saves the time the form had.
+  await fireEvent.changeText(screen.getByTestId('item-name'), 'Stretch');
+  await fireEvent.changeText(time(), 'soon');
+  await press('item-save');
+  const item = stored(repo).items.find((row) => row.name === 'Stretch')!;
+  expect(item.timeMin).toBe(555);
+
+  // An emptied field clears the time when Save is pressed.
+  jest.mocked(router.back).mockClear();
+  await screen.unmount();
+  await open({ itemId: item.id });
+  await fireEvent(time(), 'focus');
+  await fireEvent.changeText(time(), '');
+  await press('item-save');
+  expect(stored(repo).items.find((row) => row.id === item.id)!.timeMin ?? null).toBeNull();
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('Save takes a new type that was named but not yet added, in the same write as the item', async () => {
+  await open();
+  await fireEvent.changeText(screen.getByTestId('item-name'), 'Face wash');
+  await press('item-type-new');
+  await fireEvent.changeText(screen.getByTestId('item-type-name'), 'Skin care');
+  expect(mockSheetOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+  await press('item-save');
+  const saved = stored(repo);
+  expect(saved.prefs.customTypes?.map((type) => type.name)).toEqual(['Skin care']);
+  expect(saved.items.find((row) => row.name === 'Face wash')).toMatchObject({ type: saved.prefs.customTypes![0].id });
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('a new type named like one that exists is not saved over, and a draft that cannot be saved adds no type', async () => {
+  await open();
+  await press('item-type-new');
+  await fireEvent.changeText(screen.getByTestId('item-type-name'), 'Skin care');
+  // No name on the item: nothing is written, the type included.
+  await press('item-save');
+  expect(error()).toBe('Add a name.');
+  expect(stored(repo).prefs.customTypes ?? []).toEqual([]);
+  await fireEvent.changeText(screen.getByTestId('item-name'), 'Face wash');
+  await press('item-type-add');
+  expect(stored(repo).prefs.customTypes?.map((type) => type.name)).toEqual(['Skin care']);
+  await press('item-type-new');
+  await fireEvent.changeText(screen.getByTestId('item-type-name'), 'skin care');
+  await press('item-save');
+  expect(error()).toBe('Add a name that isn\'t used yet.');
+  expect(screen.getByTestId('item-type-hint').props.children).toBe('Add a name that isn\'t used yet.');
+  expect(stored(repo).items.some((row) => row.name === 'Face wash')).toBe(false);
+  expect(router.back).not.toHaveBeenCalled();
+});

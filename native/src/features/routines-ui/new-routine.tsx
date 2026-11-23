@@ -13,7 +13,7 @@ import {
 } from '@/features/routines/model/blocks';
 import type { RoutineStore, RoutineView } from '@/features/routines/model/shape';
 import { routineClock24, routineDayLetters } from '@/features/routines/model/types';
-import { clockMinutes, stepClock, typedClock, type ArcWindow } from './add-item-arc';
+import { clockMinutes, settledMinutes, stepClock, typedClock, type ArcWindow } from './add-item-arc';
 import { commitRoutines, newRoutineId, routineClockNow, useRoutines, type RoutinesData } from './add-item-data';
 import { announce, Block, ErrorLine, Help, OutlineButton, PrimaryButton, SheetFrame, SheetUnavailable, useSheetClose } from './add-item-frame';
 import { Glyph } from './add-item-glyphs';
@@ -23,10 +23,12 @@ import { slotColor } from './add-item-tones';
 const DAY_NAMES: readonly RoutinesSheetsKey[] = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun'];
 const COLOR_NAMES: Readonly<Record<string, RoutinesSheetsKey>> = { citrus: 'colorCitrus', lavender: 'colorLavender', pink: 'colorPink' };
 
-/** One of the two times of a routine: a field to type in, and a step either way. */
-function TimeField({ testID, label, minutes, onMinutes }: { testID: string; label: string; minutes: number; onMinutes: (minutes: number) => void }) {
+/** One of the two times of a routine: a field to type in, and a step either way. What is being typed is held by
+ * the form, so Save can take it before the field is left. A step starts from the time the field shows. */
+function TimeField({ testID, label, minutes, typing, onTyping: setTyping, onMinutes }: {
+  testID: string; label: string; minutes: number; typing: string | null; onTyping: (text: string | null) => void; onMinutes: (minutes: number) => void;
+}) {
   const { colors } = useTheme();
-  const [typing, setTyping] = useState<string | null>(null);
   const end = () => {
     if (typing == null) return;
     const typed = clockMinutes(typedClock(typing) ?? '');
@@ -34,7 +36,7 @@ function TimeField({ testID, label, minutes, onMinutes }: { testID: string; labe
     if (typed != null) onMinutes(typed);
   };
   const stepButton = (by: number) => (
-    <Tappable testID={`${testID}-${by < 0 ? 'earlier' : 'later'}`} accessibilityRole="button" accessibilityLabel={`${label}, ${by < 0 ? rs('earlier') : rs('later')}`} onPress={() => onMinutes(stepClock(minutes, by))}
+    <Tappable testID={`${testID}-${by < 0 ? 'earlier' : 'later'}`} accessibilityRole="button" accessibilityLabel={`${label}, ${by < 0 ? rs('earlier') : rs('later')}`} onPress={() => { setTyping(null); onMinutes(stepClock(settledMinutes(typing, minutes), by)); }}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
       <Glyph name={by < 0 ? 'minus' : 'add'} size={20} color={colors.text} weight={2.2} />
     </Tappable>
@@ -67,15 +69,23 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
   const [dayHint, setDayHint] = useState('');
   const [adding, setAdding] = useState(false);
   const [nameFocus, setNameFocus] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(opened);
+  const [startText, setStartText] = useState<string | null>(null);
+  const [endText, setEndText] = useState<string | null>(null);
+  /* The draft as Save would take it: a time still being typed counts, though its field has not been left. */
+  const settled: BlockDraftValues = { ...draft, startMin: settledMinutes(startText, draft.startMin), endMin: settledMinutes(endText, draft.endMin) };
+  const dirty = JSON.stringify(settled) !== JSON.stringify(opened);
   const { close, leave } = useSheetClose(dirty);
   const editing = !!opened.blockId;
   const clock = routineClockNow(data.store);
   const change = (patch: Partial<BlockDraftValues>) => { setDraft((current) => ({ ...current, ...patch })); setError(''); };
 
   const window = routineDraftWindow(draft.startMin, draft.endMin) ?? { startMin: draft.startMin, endMin: draft.endMin };
-  const setWindow = (next: ArcWindow) => change({ startMin: next.startMin % 1440, endMin: next.endMin % 1440 });
-  const stepEnd = (end: 0 | 1, by: number) => change(end === 0 ? { startMin: stepClock(draft.startMin, by) } : { endMin: stepClock(draft.endMin, by) });
+  /* The path sets the times too. What it sets is the newest word, so a time still being typed gives way to it. */
+  const setWindow = (next: ArcWindow) => { setStartText(null); setEndText(null); change({ startMin: next.startMin % 1440, endMin: next.endMin % 1440 }); };
+  const stepEnd = (end: 0 | 1, by: number) => {
+    if (end === 0) { setStartText(null); change({ startMin: stepClock(settled.startMin, by) }); }
+    else { setEndText(null); change({ endMin: stepClock(settled.endMin, by) }); }
+  };
 
   const toggleDay = (index: number) => {
     const days = toggleDraftDay(draft.days, index);
@@ -96,10 +106,13 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     announce(rs('itemPlace', { name: view.items.find((item) => item.id === itemId)?.name ?? '', place: to + 1, count: itemIds.length }));
   };
 
+  /* Save can be pressed while a time field still has the keyboard, before the field is left, so it takes the
+     times as the fields show them. */
   const save = () => {
-    if (!draft.name.trim() || !routineDraftWindow(draft.startMin, draft.endMin)) { setError(rs('errRoutine')); announce(rs('errRoutine')); return; }
-    const result = saveBlock(data.store, draft, clock, newRoutineId);
-    if (!result || !commitRoutines(data.repository, inDraftOrder(result.store, result.blockId, draft.itemIds, clock))) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    if (startText != null || endText != null) { setStartText(null); setEndText(null); setDraft(settled); }
+    if (!settled.name.trim() || !routineDraftWindow(settled.startMin, settled.endMin)) { setError(rs('errRoutine')); announce(rs('errRoutine')); return; }
+    const result = saveBlock(data.store, settled, clock, newRoutineId);
+    if (!result || !commitRoutines(data.repository, inDraftOrder(result.store, result.blockId, settled.itemIds, clock))) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
     leave();
   };
 
@@ -163,8 +176,8 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
       <View style={{ backgroundColor: colors['surface-2'], borderRadius: 20, padding: tokens.spacing[2] }}>
         <WindowArc window={window} color={slotColor(colors, draft.color)} onWindow={setWindow} onStep={stepEnd} />
       </View>
-      <TimeField testID="routine-start" label={rs('startsAt')} minutes={draft.startMin} onMinutes={(startMin) => change({ startMin })} />
-      <TimeField testID="routine-end" label={rs('endsAt')} minutes={draft.endMin} onMinutes={(endMin) => change({ endMin })} />
+      <TimeField testID="routine-start" label={rs('startsAt')} minutes={draft.startMin} typing={startText} onTyping={setStartText} onMinutes={(startMin) => change({ startMin })} />
+      <TimeField testID="routine-end" label={rs('endsAt')} minutes={draft.endMin} typing={endText} onTyping={setEndText} onMinutes={(endMin) => change({ endMin })} />
     </Block>
 
     <Block label={rs('days')}>
