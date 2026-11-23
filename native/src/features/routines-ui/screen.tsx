@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
+import * as Router from 'expo-router';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setDockAction } from '@/components/floating-tabs';
@@ -19,6 +20,17 @@ import { TypeView } from './type-view';
 import { useMinuteClock, useRoutines } from './use-routines';
 
 const DAY_TAB = 'routines';
+type Link = { view?: string | string[] };
+const NO_LINK: Link = {};
+/** The tab a link asks for (a Home tile opens Routines on the tab that holds its item). Drawn outside a
+ * navigator there is no link to read. */
+function useLink(): Link {
+  try { return Router.useLocalSearchParams<Link>(); } catch { return NO_LINK; }
+}
+type LinkNavigation = { setParams: (params: Record<string, undefined>) => void };
+function useLinkNavigation(): LinkNavigation | null {
+  try { return Router.useNavigation() as unknown as LinkNavigation; } catch { return null; }
+}
 
 /** The Routines tab: today's routines first, then a tab for each item type in use. */
 export function RoutinesScreen() {
@@ -26,6 +38,12 @@ export function RoutinesScreen() {
   const focused = useFocused(), insets = useSafeAreaInsets();
   const routines = useRoutines(), now = useMinuteClock(focused), glide = useLayoutMotion();
   const [tab, setTab] = useState(DAY_TAB);
+  // A link is used once: it picks the tab, then comes off the route so a later choice by hand is not undone.
+  const link = useLink(), navigation = useLinkNavigation();
+  const asked = Array.isArray(link.view) ? link.view[0] : link.view;
+  const [used, setUsed] = useState<string | undefined>(undefined);
+  if (asked !== used) { setUsed(asked); if (asked) setTab(asked); }
+  useEffect(() => { if (asked) navigation?.setParams({ view: undefined }); }, [asked, navigation]);
   const [logged, setLogged] = useState<LoggedAll | null>(null);
   const types = routineTypeTabs(routines.view).filter(type => !!routineTypeName(type, routines.view.prefs));
   // A type tab that went away (its last item was removed) falls back to the day.

@@ -9,6 +9,8 @@ const withParams = (pathname: string, params: Record<string, string | undefined>
 };
 
 export const routineRoutes = {
+  /** The Routines tab itself. `view` opens it on an item type's tab; without one it opens on the day. */
+  tab: (view?: string) => withParams('/routines', { view }),
   /** Add item. `type` preselects an item type, `blockId` a routine. */
   addItem: (params: { type?: string; blockId?: string } = {}) => withParams('/routines/add-item', params),
   /** The same form, opened on a saved item. */
