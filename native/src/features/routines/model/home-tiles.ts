@@ -374,7 +374,9 @@ export function routineTileJump(store: unknown, tileId: unknown, day: unknown): 
   const itemId = target.kind === "item" ? target.itemId : entry ? entry.item.id : "";
   if (!itemId) return jump;
   const item = view.items.find((row) => row.id === itemId);
-  const block = entry && entry.block ? entry.block : blockOf(view, itemId);
+  /* An item can sit in several routines. The one that runs today is the one the day draws, so it is the
+     one to open; a routine that is off today is named only when no other holds the item. */
+  const block = entry && entry.block ? entry.block : blockOf(view, itemId, day as string) || blockOf(view, itemId);
   const type = !block && item ? routineItemType(item, view.prefs) : "";
   return { kind: "item", itemId, blockId: block ? block.id : "", view: type || "routines" };
 }
@@ -386,7 +388,7 @@ export function revealRoutineJump(input: unknown, jump: { blockId?: string; item
   const store = start(input, clock);
   const view = store && projectRoutineStore(store);
   if (!store || !view || !jump) return null;
-  const held = jump.itemId ? blockOf(view, jump.itemId) : null;
+  const held = jump.itemId ? blockOf(view, jump.itemId, clock.day) || blockOf(view, jump.itemId) : null;
   const blockId = jump.blockId || (held ? held.id : "");
   if (!blockId || !view.blocks.some((block) => block.id === blockId)) return null;
   const list = (value: unknown) => [...new Set((Array.isArray(value) ? value : []).filter((id): id is string => typeof id === "string" && !!id))];

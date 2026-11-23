@@ -234,6 +234,21 @@ describe('tapping a tile', () => {
     expect(routineTileJump(store, 'weight', DAY)).toBeNull();
   });
 
+  test('an item in two routines opens the one that runs today, so the fold that is undone is the one in the way', () => {
+    const { store, b } = filled();
+    /* Morning comes first on the page but is off on Thursdays. Night runs, and is folded. */
+    const weekend: RoutineStore = { ...store, blocks: store.blocks.map(block => (block.id === 'b-morning' ? { ...block, days: [5, 6] } : block)) };
+    const jump = must(routineTileJump(weekend, routineItemTileId(b), DAY));
+    expect(jump).toEqual({ kind: 'item', blockId: 'b-night', itemId: b, view: 'routines' });
+    const folded = must(toggleCollapsed(must(toggleCollapsed(weekend, 'b-morning', clock(50))), 'b-night', clock(51)));
+    expect(must(revealRoutineJump(folded, jump, clock(60))).prefs.collapsedBlocks).toEqual(['b-morning']);
+    expect(must(revealRoutineJump(folded, { itemId: b }, clock(60))).prefs.collapsedBlocks).toEqual(['b-morning']);
+    /* On a day Morning runs it is first again, and an item whose only routine is off today still names it. */
+    expect(routineTileJump(weekend, routineItemTileId(b), '2026-11-21')).toMatchObject({ blockId: 'b-morning' });
+    const { a } = filled();
+    expect(routineTileJump(weekend, routineItemTileId(a), DAY)).toMatchObject({ blockId: 'b-morning', view: 'routines' });
+  });
+
   test('a jump opens a folded routine, and reveals it when the item is already logged', () => {
     const { store, n } = filled();
     const folded = must(toggleCollapsed(store, 'b-night', clock(50)));
