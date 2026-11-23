@@ -67,6 +67,10 @@ export function RoutinesSettings() {
       </Group>
       : <Note testID="routines-all-added">{routinesText('allAdded')}</Note>}
 
+    {/* Routines are not synced and a backup cannot put them back yet, so the page says so before it matters. */}
+    <SectionLabel>{routinesText('phoneOnlyTitle')}</SectionLabel>
+    <Note testID="routines-phone-only">{routinesText('phoneOnlyNote')}</Note>
+
     <SectionLabel>{routinesText('setUpPage')}</SectionLabel>
     <Group><NavRow testID="routines-retake" label={routinesText('retake')} onPress={() => router.push(routineRoutes.setup('retake'))} /></Group>
 

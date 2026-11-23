@@ -285,6 +285,11 @@ describe('Routines settings', () => {
     expect(screen.getByTestId('routines-doctor')).toHaveTextContent(DOCTOR);
     expect(everyText()).not.toMatch(/calculator|reconstitut/i);
   });
+  test('it says routines stay on this phone and that a backup cannot put them back yet', async () => {
+    await show(seededRepository(), <RoutinesSettings />);
+    expect(screen.getByText('On this iPhone only')).toBeTruthy();
+    expect(screen.getByTestId('routines-phone-only')).toHaveTextContent('Routines are saved on this iPhone and are not synced. Signing out or deleting your account erases them from this phone. A backup file holds a copy of them to keep, but this version of Insight cannot put routines back from a backup.');
+  });
   test('a part that is not on the page can be added, under the iPhone names', async () => {
     const repo = seededRepository(store => { store.items = store.items.filter(item => item.id !== SAMPLE.vial); store.placements = store.placements.filter(place => place.itemId !== SAMPLE.vial); store.prefs.added = []; });
     await show(repo, <RoutinesSettings />);
