@@ -6,7 +6,7 @@
    handed back to that owner only, and dropped when the owner signs out or
    deletes the account, so the next person on this phone starts a blank quiz. */
 
-import { keepSessionMemory, sessionMemory } from '@/auth/session-memory';
+import { keepSessionMemory, sessionMemory } from '@/core/session-memory';
 import type { SetupDraft } from '@/features/routines/model/setup';
 
 const KEY = 'routines-setup-draft';

@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { AppState } from 'react-native';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { AuthProvider, useAuth, type AuthState } from '../src/auth/provider';
-import { clearSessionMemory } from '../src/auth/session-memory';
+import { clearSessionMemory } from '../src/core/session-memory';
 import { OWNER_A, OWNER_B } from '../fixtures/sync';
 import { openLocalDatabase } from '../src/data/database';
 import type { Repository } from '../src/data/repository';

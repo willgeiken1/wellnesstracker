@@ -14,7 +14,7 @@ import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
-import { clearSessionMemory } from './session-memory';
+import { clearSessionMemory } from '../core/session-memory';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
