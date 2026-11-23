@@ -108,9 +108,11 @@ function SetupForm({ data, view, mode }: { data: RoutinesData; view: RoutineView
 }
 
 /**
- * The setup quiz: one question a step. A single answer moves on by itself;
- * a pick-any question waits for Next. Closing saves nothing. Only Finish or
- * Skip setup saves.
+ * The setup quiz: one question a step. A single answer moves to the next
+ * question, except on the last one, which waits for Finish. A pick-any
+ * question waits for Next. Only Finish or Skip setup saves answers. Closing
+ * a first setup keeps its place for the same account until the app closes
+ * or the account leaves; closing a retake asks before it drops changes.
  */
 export function SetupSheet({ mode = 'quiz' }: { mode?: 'quiz' | 'retake' }) {
   const data = useRoutines();

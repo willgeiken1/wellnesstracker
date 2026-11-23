@@ -15,7 +15,7 @@ export const routineRoutes = {
   addItem: (params: { type?: string; blockId?: string } = {}) => withParams('/routines/add-item', params),
   /** The same form, opened on a saved item. */
   editItem: (itemId: string) => withParams('/routines/add-item', { itemId }),
-  /** The concentration converter: the form's second step. With an item it opens for that item. */
+  /** The concentration converter as a sheet of its own. With an item it opens for that item. */
   converter: (itemId?: string) => withParams('/routines/add-item', { step: 'converter', itemId }),
   newRoutine: () => '/routines/new' as Href,
   /** The list that moves, retimes, recolours, hides and restores routines. */

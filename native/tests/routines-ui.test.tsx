@@ -208,9 +208,14 @@ describe('the day view', () => {
     await fireEvent.press(screen.getByTestId('routine-rest'));
     expect(stored(repo).logs.some(log => log.rest === true && log.deletedAt === null)).toBe(true);
     expect(screen.getByText('Rest logged')).toBeTruthy();
+    // A rest day covers every routine, so Log all would write nothing. It is not offered, and the page says why.
+    expect(screen.queryByTestId(`routine-log-all-${SAMPLE.morning}`)).toBeNull();
+    expect(screen.getByTestId('routine-rest-note')).toHaveTextContent('Rest day. Nothing is due today.');
     await fireEvent.press(screen.getByTestId('routine-rest-undo'));
     expect(stored(repo).logs.some(log => log.rest === true && log.deletedAt === null)).toBe(false);
     expect(screen.getByTestId('routine-rest')).toBeTruthy();
+    expect(screen.getByTestId(`routine-log-all-${SAMPLE.morning}`)).toBeTruthy();
+    expect(screen.queryByTestId('routine-rest-note')).toBeNull();
   });
   test('the foot row and the header lead to New routine, Edit routines, History, settings and Add item', async () => {
     await open(seededRepository());
