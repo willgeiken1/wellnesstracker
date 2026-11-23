@@ -79,7 +79,7 @@ export function RestContours({
 function Chip({ label, onPress }: { label: string; onPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+    <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
       style={{ minHeight: touchTarget, minWidth: 52, justifyContent: "center" }}>
       <View style={{ minHeight: 36, paddingHorizontal: 10, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors["surface-2"] }}>
         <ThemedText numeric style={{ fontSize: 15, fontWeight: "600" }}>{label}</ThemedText>

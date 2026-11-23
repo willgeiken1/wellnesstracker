@@ -579,6 +579,7 @@ function Logger({
                 )}
 
                 <Pressable
+                  dim="fill"
                   accessibilityRole="button"
                   accessibilityLabel={`${e.data.exercise}, ${t("exerciseOptions")}`}
                   accessibilityState={{ expanded: options === e.id }}
@@ -599,8 +600,8 @@ function Logger({
                 <SupersetControls currentId={e.id} items={entries.filter(entry => !store.skipped(entry.id)).map(entry => ({id:entry.id,name:String(entry.data.exercise),group:store.supersetGroup(entry)}))} onLink={ids => run(() => store.linkSuperset(ids))} onUnlink={() => run(() => store.unlinkSuperset(e.id))} />
                 {!past && <RestOptions value={store.rest(String(e.data.exercise))} onChange={value => run(() => store.setRest(String(e.data.exercise), value))} />}
                 <Button label={t('addSet')} variant="secondary" onPress={() => move(() => store.addSet(e.id))} />
-                <Button label={t('moveUp')} variant="secondary" onPress={() => move(() => store.moveEntry(e.id, -1))} />
-                <Button label={t('moveDown')} variant="secondary" onPress={() => move(() => store.moveEntry(e.id, 1))} />
+                <Button label={t('moveUp')} disabled={exerciseIndex === 0} variant="secondary" onPress={() => move(() => store.moveEntry(e.id, -1))} />
+                <Button label={t('moveDown')} disabled={exerciseIndex === entries.length - 1} variant="secondary" onPress={() => move(() => store.moveEntry(e.id, 1))} />
                 <Button label={t('removeExercise')} variant="secondary" onPress={() => Alert.alert(t('removeExercise'), t('removeExerciseBody'), [{text:t('cancel'),style:'cancel'}, {text:t('remove'),style:'destructive',onPress:() => move(() => store.removeExercise(e.id))}])} />
               </View>}
               {store.supersetGroup(e) && <ThemedText>{t('supersetMembers').replace('{names}', entries.filter(entry => !store.skipped(entry.id) && store.supersetGroup(entry) === store.supersetGroup(e)).map(entry => String(entry.data.exercise)).join(', '))}</ThemedText>}
@@ -808,6 +809,8 @@ function JumpCard({ store, entry }: { store: WorkoutStore; entry: Row }) {
     .replace("{workingSets}", workingSetsPhrase(sg.count));
   return (
     <Pressable
+      // Only a long press does anything here, so a tap does not dim it.
+      dim="none"
       testID="suggestion-card"
       accessibilityLabel={`${lead} ${explanation}`}
       accessibilityRole="button"

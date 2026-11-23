@@ -1,4 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
+import { PRESSED_FILL_OPACITY, Tappable } from './tappable';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
@@ -63,7 +64,7 @@ export function DockButton({ action, metrics = REGULAR }: { action: DockAction; 
   const size = metrics.item + 2 * metrics.pad;
   return <Pressable testID="dock-action" accessibilityRole="button" accessibilityLabel={action.label} accessibilityState={{ expanded: action.expanded }}
     onPress={action.onPress} style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2,
-      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 }, tokens.elevation.ios]}>
+      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 }, tokens.elevation.ios]}>
     <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
       <Path d="M12 5v14M5 12h14" stroke={colors.text} strokeWidth={2} strokeLinecap="round" transform={action.expanded ? 'rotate(45 12 12)' : undefined} />
     </Svg>
@@ -87,14 +88,15 @@ export function TabDock({ items, active, onPress, metrics = REGULAR }: { items: 
     const open = index === active, size = open ? metrics.open : metrics.item;
     // A tab's target reaches half way to its neighbour, so even the smaller circles are 44 points across.
     const side = metrics.gap / 2;
-    return <Pressable key={item.key} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
+    // The open tab is a filled circle; the others are bare icons, so they dim as far as any icon does.
+    return <Tappable key={item.key} dim={open ? 'fill' : 'row'} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
       // The bar is icons only and does not grow with the text size, so a long press shows the name large.
       accessibilityShowsLargeContentViewer accessibilityLargeContentTitle={item.label}
       onPress={() => onPress(index)} hitSlop={open ? 0 : { top: 6, bottom: 6, left: side, right: side }}
-      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: open ? colors.accent : 'transparent', opacity: pressed ? 0.8 : 1 }, open && tokens.elevation.ios]}>
+      style={[{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: open ? colors.accent : 'transparent' }, open && tokens.elevation.ios]}>
       <Icon name={item.icon} size={open ? metrics.openIcon : metrics.icon} color={open ? colors['on-accent'] : ink} />
-    </Pressable>;
+    </Tappable>;
   };
   const group = (from: number, to: number) => to > from && <View key={from} testID="tab-pill"
     style={[{ flexDirection: 'row', alignItems: 'center', gap: metrics.gap, padding: metrics.pad, borderRadius: (metrics.item + 2 * metrics.pad) / 2, backgroundColor: pill,

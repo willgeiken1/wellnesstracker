@@ -1,8 +1,9 @@
-import { renderHook } from '@testing-library/react-native';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import { AccessibilityInfo, LayoutAnimation } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { layoutMotion, useLayoutMotion } from '../src/components/layout-motion';
+import { SetRow } from '../src/features/workout/set-row';
 import tokens from '../src/design/tokens.json';
 
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
@@ -33,4 +34,15 @@ test('with Reduce Motion on, the list changes at once', async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
   result.current();
   expect(configure).not.toHaveBeenCalled();
+});
+
+test('the set tag buttons fold in and out under the row', async () => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+  await render(<SetRow exercise="Made-up Press" index={0} draft={{ weight: '', reps: '' } as any} previous="" hint="" onEdit={() => {}} onDone={() => {}} onRemove={() => {}} onTag={() => {}} />, { wrapper });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  configure.mockClear();
+  await fireEvent.press(screen.getByRole('button', { name: /Set tag/i }));
+  expect(configure).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByRole('button', { name: /Set tag/i }));
+  expect(configure).toHaveBeenCalledTimes(2);
 });

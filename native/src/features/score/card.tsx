@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { PRESSED_ROW_OPACITY } from '@/components/tappable';
 import { router } from 'expo-router';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
@@ -41,7 +42,7 @@ export function ScoreCard({ score }: { score: Score }) {
       {SCORE_PILLARS.map(pillar => <PillarRow key={pillar} pillar={pillar} value={score.pillars[pillar]} />)}
     </View>
     <Pressable testID="home-score-how" accessibilityRole="button" accessibilityLabel={t('scoreHow')} onPress={openScore} hitSlop={{ top: 10, bottom: 10 }}
-      style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+      style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center', opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
       <ThemedText variant="caption" style={{ color: colors.accent, fontWeight: '600' }}>{t('scoreHow')}</ThemedText>
     </Pressable>
   </Card>;
@@ -50,7 +51,7 @@ export function ScoreCard({ score }: { score: Score }) {
 /** The small ring in Home's header. Opens the detail screen. */
 export function HeaderScore({ score }: { score: Score }) {
   return <Pressable testID="home-score-ring" accessibilityRole="button" accessibilityLabel={spokenScore(score)} onPress={openScore} hitSlop={6}
-    style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
+    style={({ pressed }) => ({ minHeight: 40, justifyContent: 'center', opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
     <ScoreRing score={score} size={32} stroke={3.5} />
   </Pressable>;
 }

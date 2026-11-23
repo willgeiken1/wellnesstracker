@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react-native';
+import { act, render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
-import { Keypad } from '../src/features/workout/keypad';
+import { Keypad, GLASS_PRESSED_ALPHA } from '../src/features/workout/keypad';
+import { PRESSED_FILL_OPACITY } from '../src/components/tappable';
 import AppTabs from '../src/components/app-tabs';
 import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
@@ -61,6 +62,35 @@ test('where iOS has liquid glass, every number key gets a glass layer and Next d
   await screen.unmount();
   await render(keypad('seaGlassTide'));
   expect(screen.queryAllByTestId('keypad-glass')).toHaveLength(0);
+});
+
+// The key's own press state, as the Pressable inside it keeps it.
+const hold = (id: string) => act(() => { screen.getByTestId(id).props.onResponderGrant({ nativeEvent: { timestamp: 0, pageX: 0, pageY: 0, touches: [], changedTouches: [] }, persist() {}, dispatchConfig: { registrationName: 'onResponderGrant' } }); jest.runOnlyPendingTimers(); });
+
+test('a held liquid glass key lights up from inside and is never dimmed, so the glass does not flicker', async () => {
+  jest.useFakeTimers();
+  mockLiquid.mockReturnValue(true);
+  await render(keypad('seaGlassTide;keypad=glass'));
+  expect(screen.queryAllByTestId('keypad-key-pressed')).toHaveLength(0);
+  await hold('keypad-key-5');
+  const glow = screen.getAllByTestId('keypad-key-pressed');
+  expect(glow).toHaveLength(1);
+  expect(StyleSheet.flatten(glow[0].props.style).backgroundColor).toBe(`${dark.text}${GLASS_PRESSED_ALPHA}`);
+  expect(parseInt(GLASS_PRESSED_ALPHA, 16) / 255).toBeCloseTo(0.12, 2);
+  expect(key('keypad-key-5').opacity).toBeUndefined();
+  // Next has no glass layer, so it dims like any filled button.
+  await hold('keypad-next');
+  expect(key('keypad-next').opacity).toBe(PRESSED_FILL_OPACITY);
+  jest.useRealTimers();
+});
+
+test('a held plain key dims and shows no highlight', async () => {
+  jest.useFakeTimers();
+  await render(keypad('seaGlassTide'));
+  await hold('keypad-key-5');
+  expect(key('keypad-key-5').opacity).toBe(PRESSED_FILL_OPACITY);
+  expect(screen.queryAllByTestId('keypad-key-pressed')).toHaveLength(0);
+  jest.useRealTimers();
 });
 
 test('the standard tab bar is tinted with the theme and stays solid at the scroll edge', async () => {
