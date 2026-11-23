@@ -77,7 +77,7 @@ say "4/4  The six shots (taken in this order so the logger's extra set doesn't c
 shot 01-home-map     "Home map: Home tab, scrolled to the top, today's contour map with the week of small maps under it."
 shot 03-food         "Food: Food tab > log food > Barcode. Type the barcode of a plain, unbranded product (like plain Greek
 yogurt), tap look up, add one serving, then go back to the Food tab with the item and kcal left showing."
-shot 04-body-map     "Body map: Insights tab > Muscles."
+shot 04-body-map     "Body map: Progress tab > Insights > Muscles."
 shot 05-insight-score "Insight Score: tap the Insight Score tile on Home. Training, food and recovery all need a number."
 shot 06-apple-health "Apple Health: Home > Edit, add the Steps and Sleep duration tiles next to Today's workout and Food,
 with all four on screen."

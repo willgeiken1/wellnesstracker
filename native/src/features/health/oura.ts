@@ -108,7 +108,7 @@ export function mergeHealthDays(apple: HealthDays | null, ring: HealthDays | nul
   return { ...apple, steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
 }
 
-/** What Oura adds to Insights › Recovery, oldest day first, null for a day with no reading. Held in memory only. */
+/** What Oura adds to Progress › Insights › Recovery, oldest day first, null for a day with no reading. Held in memory only. */
 export type OuraRecovery = {
   readiness: (number | null)[]; sleepScore: (number | null)[]; hrv: (number | null)[]; restingHeartRate: (number | null)[];
   /** The night that ended on the last day, by stage. Oura's light sleep is Apple Health's core. */

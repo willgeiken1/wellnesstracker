@@ -4,7 +4,7 @@ import { lastDays } from './days';
 import { oura } from './oura-client';
 import { readOuraRecovery, type OuraRecovery, type OuraSource } from './oura';
 
-/** Oura's part of Insights › Recovery for the last `count` days, read whenever the screen comes to the front and when
+/** Oura's part of Progress › Insights › Recovery for the last `count` days, read whenever the screen comes to the front and when
  * the app is reopened, and again once a refresh from Oura lands. Null when Oura is not connected or cannot be read:
  * the Apple Health part then shows on its own. Kept in memory for this screen only. */
 export function useOuraRecovery(focused = true, injected?: OuraSource | null, count = 7): OuraRecovery | null {

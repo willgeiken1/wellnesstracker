@@ -3,7 +3,7 @@ import type { HealthSource, SleepSpan, SleepStage, Spread } from './source';
 
 /** Minutes of last night by kind. `asleep` is plain asleep from a device that records no stages. */
 export type Night = { deep: number; core: number; rem: number; asleep: number; awake: number };
-/** What Insights › Recovery shows. Held in memory for the screen only: never saved, synced or sent.
+/** What Progress › Insights › Recovery shows. Held in memory for the screen only: never saved, synced or sent.
  * Daily lists run oldest first and hold null for a day with no reading. A part is null when it could not be read. */
 export type Recovery = {
   night: Night | null;

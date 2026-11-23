@@ -4,6 +4,7 @@ P2b implements the quoted native rebuild plan §4 (navigation), §6 (design syst
 
 ## Included behavior
 
+- (Since Nov 22 2026 Insights is a view inside Progress and the bar has four tabs; `(tabs)/insights.tsx` and `insights.png` below are gone. The rest of this section is the foundation as it first landed.)
 - Home, Workouts, Food, Progress and Insights use SDK 58 native tabs on iOS/Android, with tap navigation and no swipe pager. Workouts, Progress and Insights have working local segments. Each tab has an avatar control opening the Settings stack.
 - Settings lists Account, Profile & units, Appearance, Workout, Health & devices, Notifications, Privacy, Data and About. Appearance applies theme and accent immediately to content, navigation, status bar and native interface appearance. Defaults are system theme and Citrus; missing system preference falls back to dark.
 - Home's Start freestyle opens `/workout` as a full-screen modal. Its explicit close action also works after a cold deep link. Food opens `/food/log`. The native intent hook preserves the host portion of `insight://food/log` and `insight://workout/start`; the latter redirects to `/workout`. Both cold and warm normalization are covered. Unknown Insight links return Home.

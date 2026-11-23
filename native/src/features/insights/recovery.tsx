@@ -73,7 +73,7 @@ function pick(apple: (number | null)[] | null | undefined, oura: (number | null)
   return has(oura) ? oura : apple ?? null;
 }
 
-/** Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health, with Oura's readiness
+/** Progress › Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health, with Oura's readiness
  * and sleep scores when Oura is connected. Last night comes from Apple Health when it has one; each heart reading
  * comes from whichever of the two has the more recent day, Apple Health on a tie. Nothing is estimated: a reading that is not there is left out. */
 export function Recovery({ access, recovery, oura, now }: { access: HealthAccess; recovery: RecoveryData | null; oura?: OuraRecovery | null; now: Date }) {
