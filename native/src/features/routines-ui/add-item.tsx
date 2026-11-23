@@ -35,7 +35,7 @@ const glyphFor = (type: string): GlyphName => (BUILT_IN.has(type) ? (type as Gly
 /** A round 44 button with a line icon, for the small steps beside a field. */
 function RoundButton({ testID, label, glyph, onPress, disabled = false }: { testID: string; label: string; glyph: GlyphName; onPress: () => void; disabled?: boolean }) {
   const { colors } = useTheme();
-  return <Tappable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+  return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.35 : 1 }}>
     <Glyph name={glyph} size={20} color={colors.text} weight={2.2} />
   </Tappable>;
@@ -44,7 +44,7 @@ function RoundButton({ testID, label, glyph, onPress, disabled = false }: { test
 /** A small text button in a pill, 44 high to the finger. */
 function PillButton({ testID, label, onPress, disabled = false }: { testID: string; label: string; onPress: () => void; disabled?: boolean }) {
   const { colors } = useTheme();
-  return <Tappable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+  return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[2], borderRadius: 22, backgroundColor: colors['surface-2'], opacity: disabled ? 0.35 : 1 }}>
     <ThemedText variant="caption" style={{ fontWeight: '600' }}>{label}</ThemedText>
   </Tappable>;
@@ -190,7 +190,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
   ];
   const kindCard = (kind: 'check' | 'dose', label: string, line: string) => {
     const on = draft.kind === kind;
-    return <Tappable key={kind} testID={`item-kind-${kind}`} accessibilityRole="radio" accessibilityLabel={`${label}. ${line}`} accessibilityState={{ checked: on }} onPress={() => pickKind(kind)}
+    return <Tappable dim="fill" key={kind} testID={`item-kind-${kind}`} accessibilityRole="radio" accessibilityLabel={`${label}. ${line}`} accessibilityState={{ checked: on }} onPress={() => pickKind(kind)}
       style={{ flexGrow: 1, flexBasis: fontScale >= 1.5 ? '100%' : 0, borderRadius: 18, padding: tokens.spacing[2], gap: 2, minHeight: 64, backgroundColor: on ? colors.accent : colors['surface-2'] }}>
       <ThemedText variant="headline" style={{ fontWeight: '600', color: on ? colors['on-accent'] : colors.text }}>{label}</ThemedText>
       <ThemedText variant="caption" style={{ color: on ? colors['on-accent'] : colors['text-muted'] }}>{line}</ThemedText>
@@ -231,7 +231,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
         <ThemedText testID="item-readback" accessibilityLiveRegion="polite" style={{ color: colors['on-accent'], fontWeight: '600' }}>{doseReadback(amount, draft.unit)}</ThemedText>
         <ThemedText testID="item-dose-note" variant="caption" style={{ color: colors['on-accent'] }}>{rs('doseNote')}</ThemedText>
       </AmountCard>
-      {converterOffered && <Tappable testID="item-converter" accessibilityRole="button" accessibilityLabel={`${rs('converter')}. ${rs('converterLine')}`} onPress={openConverter}
+      {converterOffered && <Tappable dim="fill" testID="item-converter" accessibilityRole="button" accessibilityLabel={`${rs('converter')}. ${rs('converterLine')}`} onPress={openConverter}
         style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 56, borderRadius: 18, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[1], backgroundColor: colors['surface-2'] }}>
         <Glyph name="converter" size={24} color={colors.sleep} />
         <View style={{ flex: 1 }}>
@@ -251,7 +251,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
       {!!routines.length && <View accessibilityLabel={rs('routines')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
         {routines.map((routine) => {
           const on = draft.blockIds.includes(routine.id);
-          return <Tappable key={routine.id} testID={`item-routine-${routine.id}`} accessibilityRole="checkbox" accessibilityLabel={routine.full} accessibilityState={{ checked: on }} onPress={() => pickRoutine(routine.id)}
+          return <Tappable dim="fill" key={routine.id} testID={`item-routine-${routine.id}`} accessibilityRole="checkbox" accessibilityLabel={routine.full} accessibilityState={{ checked: on }} onPress={() => pickRoutine(routine.id)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: 44, borderRadius: 22, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[0],
               borderWidth: 1.5, borderColor: on ? colors.text : colors['hair-2'], backgroundColor: on ? colors['surface-2'] : 'transparent' }}>
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: slotColor(colors, routine.color) }} />

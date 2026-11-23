@@ -45,7 +45,7 @@ export function RoundButton({ glyph, label, onPress, disabled = false, testID, s
 /** The main button of a sheet or a card: full width, round, in the accent. */
 export function PrimaryButton({ label, onPress, testID, disabled = false }: { label: string; onPress: () => void; testID?: string; disabled?: boolean }) {
   const { colors } = useTheme();
-  return <Tappable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+  return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={{ minHeight: 52, borderRadius: 26, paddingHorizontal: tokens.spacing[4], paddingVertical: tokens.spacing[2], alignItems: 'center', justifyContent: 'center',
       backgroundColor: colors.accent, opacity: disabled ? 0.5 : 1 }}>
     <ThemedText style={[semibold, { color: colors['on-accent'], textAlign: 'center' }]}>{label}</ThemedText>

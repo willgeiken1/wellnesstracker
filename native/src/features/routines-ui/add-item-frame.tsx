@@ -68,7 +68,7 @@ export function SheetFrame({ testID, title, onClose, back, toast, children }: {
       </Tappable>}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1, fontWeight: '600' }}>{title}</ThemedText>
-        <Tappable testID={`${testID}-close`} accessibilityRole="button" accessibilityLabel={rs('close')} onPress={onClose} hitSlop={6}
+        <Tappable dim="fill" testID={`${testID}-close`} accessibilityRole="button" accessibilityLabel={rs('close')} onPress={onClose} hitSlop={6}
           style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
           <Glyph name="close" size={16} color={colors['text-muted']} weight={2.4} />
         </Tappable>
@@ -121,7 +121,7 @@ export function ErrorLine({ testID, children }: { testID: string; children: stri
 /** The one main action of a sheet: full width, 52 high, fully round. */
 export function PrimaryButton({ testID, label, onPress, disabled = false }: { testID: string; label: string; onPress: () => void; disabled?: boolean }) {
   const { colors } = useTheme();
-  return <Tappable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+  return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={{ minHeight: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', paddingHorizontal: tokens.spacing[4], paddingVertical: tokens.spacing[2], backgroundColor: colors.accent, opacity: disabled ? 0.45 : 1 }}>
     <ThemedText style={{ color: colors['on-accent'], fontWeight: '600', textAlign: 'center' }}>{label}</ThemedText>
   </Tappable>;
@@ -131,7 +131,7 @@ export function PrimaryButton({ testID, label, onPress, disabled = false }: { te
 export function OutlineButton({ testID, label, onPress, tone = 'text' }: { testID: string; label: string; onPress: () => void; tone?: 'text' | 'danger' | 'muted' }) {
   const { colors } = useTheme();
   const ink = tone === 'danger' ? colors.danger : tone === 'muted' ? colors['text-muted'] : colors.text;
-  return <Tappable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+  return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
     style={{ minHeight: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', paddingHorizontal: tokens.spacing[4], paddingVertical: tokens.spacing[2], borderWidth: tone === 'muted' ? 0 : 1.5, borderColor: colors['hair-2'] }}>
     <ThemedText style={{ color: ink, fontWeight: '600', textAlign: 'center' }}>{label}</ThemedText>
   </Tappable>;

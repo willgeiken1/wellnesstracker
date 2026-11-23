@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
-import { AccessibilityInfo, Dimensions, PixelRatio } from 'react-native';
+import { AccessibilityInfo, Dimensions, LayoutAnimation, PixelRatio } from 'react-native';
 import { router } from 'expo-router';
 import type { ReactElement } from 'react';
 import type { Repository } from '../src/data/repository';
@@ -163,6 +163,20 @@ describe('item details', () => {
     await fireEvent.press(screen.getByTestId('log-save'));
     expect(logOf(repo, SAMPLE.vial)).toBeNull();
     expect(logOf(repo, SAMPLE.vial, '2026-11-22')).toMatchObject({ amount: 3, status: 'done' });
+  });
+  test('logging, undoing and skipping from the sheet glide it to its new shape', async () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+    const repo = seededRepository();
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} />);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const glide = jest.spyOn(LayoutAnimation, 'configureNext').mockImplementation(() => {});
+    await fireEvent.press(screen.getByTestId('details-log'));
+    expect(screen.getByTestId('log-amount')).toBeTruthy();
+    expect(glide).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByTestId('details-undo'));
+    expect(glide).toHaveBeenCalledTimes(2);
+    await fireEvent.press(screen.getByTestId('details-skip'));
+    expect(glide).toHaveBeenCalledTimes(3);
   });
   test('the site picker is eight radios and No site; the same site as last time warns, never blocks, and can be dismissed', async () => {
     const repo = seededRepository(store => { store.logs = [vialLog('2026-11-22', { site: 'left-thigh' }), vialLog(SAMPLE_DAY)]; });

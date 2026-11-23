@@ -59,7 +59,7 @@ export function EditRoutines() {
     announce(rs('movedTo', { name: block.name, place: blocks.length + 1, count: blocks.length + 1 }));
   };
   const moveButton = (block: RoutineBlock, by: -1 | 1, allowed: boolean) => (
-    <Tappable testID={`edit-routines-${by < 0 ? 'up' : 'down'}-${block.id}`} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: block.name })}
+    <Tappable dim="fill" testID={`edit-routines-${by < 0 ? 'up' : 'down'}-${block.id}`} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: block.name })}
       accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => move(block, by)}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: allowed ? 1 : 0.35 }}>
       <Glyph name={by < 0 ? 'up' : 'down'} size={20} color={colors.text} weight={2.2} />
@@ -82,14 +82,14 @@ export function EditRoutines() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[0] }}>
           {moveButton(block, -1, moves.up)}
           {moveButton(block, 1, moves.down)}
-          <Tappable testID={`edit-routines-edit-${block.id}`} accessibilityRole="button" accessibilityLabel={rs('editNamed', { name: block.name })} onPress={() => router.push(routineRoutes.editRoutine(block.id))}
+          <Tappable dim="fill" testID={`edit-routines-edit-${block.id}`} accessibilityRole="button" accessibilityLabel={rs('editNamed', { name: block.name })} onPress={() => router.push(routineRoutes.editRoutine(block.id))}
             style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[2], borderRadius: 22, backgroundColor: colors['surface-2'] }}>
             <ThemedText variant="caption" style={{ fontWeight: '600' }}>{rs('edit')}</ThemedText>
           </Tappable>
         </View>
       </View>;
     })}
-    <Tappable testID="edit-routines-new" accessibilityRole="button" accessibilityLabel={rs('newRoutine')} onPress={() => router.push(routineRoutes.newRoutine())}
+    <Tappable dim="fill" testID="edit-routines-new" accessibilityRole="button" accessibilityLabel={rs('newRoutine')} onPress={() => router.push(routineRoutes.newRoutine())}
       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing[1], minHeight: 56, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors['text-muted'] }}>
       <Glyph name="add" size={18} color={colors.text} weight={2.2} />
       <ThemedText style={{ fontWeight: '600' }}>{rs('newRoutine')}</ThemedText>
@@ -100,7 +100,7 @@ export function EditRoutines() {
         <View key={block.id} testID={`edit-routines-hidden-${block.id}`}
           style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: tokens.spacing[1], borderRadius: 18, borderWidth: 1.5, borderColor: colors['hair-2'], padding: tokens.spacing[2] }}>
           {lines(block)}
-          <Tappable testID={`edit-routines-restore-${block.id}`} accessibilityRole="button" accessibilityLabel={rs('restoreNamed', { name: block.name })} onPress={() => restore(block)}
+          <Tappable dim="fill" testID={`edit-routines-restore-${block.id}`} accessibilityRole="button" accessibilityLabel={rs('restoreNamed', { name: block.name })} onPress={() => restore(block)}
             style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[2], borderRadius: 22, backgroundColor: colors['surface-2'] }}>
             <ThemedText variant="caption" style={{ fontWeight: '600' }}>{rs('restore')}</ThemedText>
           </Tappable>

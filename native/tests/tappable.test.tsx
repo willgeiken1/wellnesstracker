@@ -96,3 +96,30 @@ test('the controls the acceptance review named dim at the right strength', () =>
   // A bare dock icon dims like any icon; only the open tab's filled circle takes the lighter dim.
   expect(read('src/components/floating-tabs.tsx')).toMatch(/dim=\{open \? 'fill' : 'row'\}/);
 });
+
+test('the Routines screens dim their filled controls as fills and leave rows, icons and text to the row dim', () => {
+  const read = (file: string) => readFileSync(join(__dirname, '..', 'src/features', file), 'utf8');
+  const fill = (file: string, testID: string) => expect([file, testID, new RegExp(`<Tappable dim="fill"[^>]*testID=\\{?[\`"']?${testID}`).test(read(file))]).toEqual([file, testID, true]);
+  const row = (file: string, testID: string) => expect([file, testID, new RegExp(`<Tappable (?:key=\\{[^}]*\\} )?testID=\\{?[\`"']?${testID}`).test(read(file))]).toEqual([file, testID, true]);
+  fill('routines-ui/parts.tsx', 'testID} accessibilityRole="button" accessibilityLabel=\\{label\\} accessibilityState=\\{\\{ disabled \\}\\} disabled=\\{disabled\\} onPress=\\{onPress\\}\\s+style=\\{\\{ minHeight: 52');
+  fill('routines-ui/setup.tsx', 'setup-choice-');
+  fill('routines-ui/details.tsx', 'log-site-');
+  fill('routines-ui/edit-routines.tsx', 'edit-routines-new');
+  fill('routines-ui/edit-routines.tsx', 'edit-routines-restore-');
+  fill('routines-ui/new-routine.tsx', 'routine-day-');
+  fill('routines-ui/new-routine.tsx', 'routine-add-');
+  fill('routines-ui/add-item.tsx', 'item-kind-');
+  fill('routines-ui/add-item.tsx', 'item-converter');
+  fill('routines-ui/add-item-amount-card.tsx', '\\$\\{testID\\}-unit-');
+  fill('routines-ui/type-view.tsx', 'routine-gauge-');
+  fill('home/routine-tiles.tsx', 'home-tile-\\$');
+  row('routines-ui/day-view.tsx', 'routine-row-');
+  row('routines-ui/day-view.tsx', 'routine-fold-');
+  row('routines-ui/details.tsx', 'details-history-');
+  row('routines-ui/history.tsx', 'history-item');
+  row('routines-ui/new-routine.tsx', 'routine-items-more');
+  row('home/routine-tiles.tsx', 'home-tile-open-');
+  // A graph that is scrubbed and a path that is tapped to place a time show the touch themselves.
+  expect(read('routines-ui/history.tsx')).toMatch(/<Tappable dim="none" testID="history-bars"/);
+  expect(read('routines-ui/add-item-sun-arc.tsx')).toMatch(/<Tappable dim="none" testID="arc-surface"/);
+});

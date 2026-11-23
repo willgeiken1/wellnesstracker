@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
+import { selectionAsync } from 'expo-haptics';
 import { router } from 'expo-router';
 import { useAuth } from '../src/auth/provider';
 import type { Repository } from '../src/data/repository';
@@ -138,4 +139,23 @@ test('a retake starts from the saved answers and has no Skip setup', async () =>
   expect(screen.queryByTestId('setup-skip')).toBeNull();
   expect(screen.queryByTestId('setup-intro')).toBeNull();
   expect(nextButton().props.accessibilityState.disabled).toBe(false);
+});
+
+test('an answer ticks when it is chosen, and tapping the one already chosen moves on without a tick', async () => {
+  Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true });
+  await render(<SetupSheet />, { wrapper });
+  jest.mocked(selectionAsync).mockClear();
+  // A pick-any answer changes on every tap, on and off.
+  await press('setup-choice-habits');
+  await press('setup-choice-habits');
+  await press('setup-choice-habits');
+  expect(selectionAsync).toHaveBeenCalledTimes(3);
+  await press('setup-next');
+  await press('setup-choice-new');
+  expect(selectionAsync).toHaveBeenCalledTimes(4);
+  await press('setup-back');
+  expect(screen.getByRole('radio', { name: 'New to it' }).props.accessibilityState.checked).toBe(true);
+  await press('setup-choice-new');
+  expect(text('setup-question')).toBe('What do your days look like?');
+  expect(selectionAsync).toHaveBeenCalledTimes(4);
 });

@@ -62,7 +62,7 @@ export function AmountCard({ testID, label, value, onChange, units, unit, onUnit
 
   const stepButton = (delta: number) => {
     const adds = delta > 0, allowed = stepAllowed(amount, delta), text = prettyAmount(Math.abs(delta));
-    return <Tappable key={delta} testID={`${testID}-step-${adds ? 'add' : 'take'}-${Math.abs(delta)}`} accessibilityRole="button"
+    return <Tappable dim="fill" key={delta} testID={`${testID}-step-${adds ? 'add' : 'take'}-${Math.abs(delta)}`} accessibilityRole="button"
       accessibilityLabel={`${adds ? rs('add') : rs('takeAway')} ${text}`} accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => step(delta)}
       style={{ flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: adds ? ink.solid : ink.well, opacity: allowed ? 1 : 0.35 }}>
       <ThemedText numeric style={{ color: adds ? ink.onSolid : ink.ink, fontWeight: '600' }}>{`${adds ? '+' : '−'}${text}`}</ThemedText>
@@ -75,7 +75,7 @@ export function AmountCard({ testID, label, value, onChange, units, unit, onUnit
     {ink.bar && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: ink.bar }} />}
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing[1] }}>
       <ThemedText variant="caption" style={{ color: ink.ink, fontWeight: '600', flexShrink: 1 }}>{label}</ThemedText>
-      <Tappable testID={`${testID}-clear`} accessibilityRole="button" accessibilityLabel={`${rs('clear')}, ${label}`} accessibilityState={{ disabled: !value }} disabled={!value}
+      <Tappable dim="fill" testID={`${testID}-clear`} accessibilityRole="button" accessibilityLabel={`${rs('clear')}, ${label}`} accessibilityState={{ disabled: !value }} disabled={!value}
         onPress={() => settle('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         style={{ minHeight: 28, justifyContent: 'center', paddingHorizontal: tokens.spacing[2], borderRadius: 14, backgroundColor: ink.well, opacity: value ? 1 : 0.35 }}>
         <ThemedText variant="caption" style={{ color: ink.ink, fontWeight: '600' }}>{rs('clear')}</ThemedText>
@@ -96,7 +96,7 @@ export function AmountCard({ testID, label, value, onChange, units, unit, onUnit
       style={{ flexDirection: 'row', flexWrap: stacked ? 'wrap' : 'nowrap', gap: 3, padding: 3, borderRadius: 14, backgroundColor: ink.well }}>
       {units.map((option) => {
         const picked = option === unit;
-        return <Tappable key={option} testID={`${testID}-unit-${option}`} accessibilityRole="radio" accessibilityLabel={option} accessibilityState={{ checked: picked }}
+        return <Tappable dim="fill" key={option} testID={`${testID}-unit-${option}`} accessibilityRole="radio" accessibilityLabel={option} accessibilityState={{ checked: picked }}
           onPress={() => { if (!picked) { tick(); onUnit(option); } }}
           style={{ flexGrow: 1, flexBasis: stacked ? '30%' : 0, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: picked ? ink.solid : 'transparent' }}>
           <ThemedText variant="caption" style={{ color: picked ? ink.onSolid : ink.ink, fontWeight: '600' }}>{option}</ThemedText>
