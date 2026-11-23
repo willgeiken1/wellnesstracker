@@ -1,7 +1,8 @@
-import { RoutineComing } from '@/features/routines-ui/coming';
-import { routinesText } from '@/i18n/en';
+import { useLocalSearchParams } from 'expo-router';
+import { SetupSheet } from '@/features/routines-ui/setup';
 
-/* Placeholder: this route's own screen is built apart from the tab and replaces this file. */
-export default function RoutinePlaceholderRoute() {
-  return <RoutineComing title={routinesText('setupTitle')} />;
+/** The setup quiz. `mode=retake` starts from the saved answers. */
+export default function SetupRoute() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  return <SetupSheet mode={mode === 'retake' ? 'retake' : 'quiz'} />;
 }
