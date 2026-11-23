@@ -120,7 +120,7 @@ describe('Next up on Home', () => {
     const repo = seededRepository(store => { store.prefs.collapsedBlocks = [SAMPLE.morning]; });
     await open(repo);
     await fireEvent.press(screen.getByRole('button', { name: 'Next up. Opens Routines.' }));
-    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: {} });
+    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'routines' } });
     expect(stored(repo).prefs.collapsedBlocks ?? []).not.toContain(SAMPLE.morning);
   });
   test('taking it off in Edit Home keeps it off, and adding it back brings it back', async () => {
@@ -211,7 +211,7 @@ describe('routine and item tiles', () => {
     expect(screen.getByRole('button', { name: 'Routine, Morning routine. Opens Routines.' })).toBeTruthy();
     expect(within(screen.getByTestId(`home-tile-${WALK}`)).queryByText('Log')).toBeNull();
     await fireEvent.press(screen.getByTestId(`home-tile-${WALK}`));
-    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: {} });
+    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'routines' } });
     await view.unmount();
     fontScale = TILE_STACKS_AT;
     await open(repo);

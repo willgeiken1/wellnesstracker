@@ -3,7 +3,7 @@ import { AccessibilityInfo } from 'react-native';
 import { useAuth } from '../src/auth/provider';
 import { ThemeProvider } from '../src/design/theme-provider';
 import Routines from '../src/app/(tabs)/routines';
-import { routineRoutes } from '../src/features/routines-ui/entry-points';
+import { ROUTINES_DAY_VIEW, routineRoutes } from '../src/features/routines-ui/entry-points';
 import { SAMPLE_NOW, seededRepository } from './routines-repository';
 
 /* A Home tile opens the Routines tab on the tab that holds its item. Made-up routines only. */
@@ -36,6 +36,7 @@ afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 test('the tab route carries a type tab only when one is asked for', () => {
   expect(routineRoutes.tab()).toEqual({ pathname: '/routines', params: {} });
   expect(routineRoutes.tab('peptide')).toEqual({ pathname: '/routines', params: { view: 'peptide' } });
+  expect(routineRoutes.tab(ROUTINES_DAY_VIEW)).toEqual({ pathname: '/routines', params: { view: 'routines' } });
 });
 test('with no link the tab opens on the day', async () => {
   await open();
@@ -51,6 +52,18 @@ test('a link opens the type tab it names, once: it comes off the route and a cho
   expect(selected('Routines')).toBe(true);
   // The same tile tapped again asks again, and is followed again.
   await act(() => { mockSetParams({ view: 'peptide' }); });
+  expect(selected('Peptides')).toBe(true);
+});
+test('left on a type tab, a link to the day brings the day back, and comes off the route', async () => {
+  await open();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Peptides' }));
+  expect(selected('Peptides')).toBe(true);
+  await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW }); });
+  expect(selected('Routines')).toBe(true);
+  expect(mockSetParams).toHaveBeenLastCalledWith({ view: undefined });
+  // A link with no view leaves the tab where it was, which is why a tile names the day.
+  await fireEvent.press(screen.getByRole('tab', { name: 'Peptides' }));
+  await act(() => { mockSetParams({}); });
   expect(selected('Peptides')).toBe(true);
 });
 test('a link to a tab that is not there falls back to the day', async () => {

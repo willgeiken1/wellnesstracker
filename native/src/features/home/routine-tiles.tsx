@@ -12,7 +12,7 @@ import { logItem } from '@/features/routines/model/actions';
 import { ROUTINE_TILE_TEXT, revealRoutineJump, routineTile, routineTileJump, routineTileTarget, routineTrayEntries, type RoutineTile, type RoutineTrayEntry } from '@/features/routines/model/home-tiles';
 import type { RoutineView } from '@/features/routines/model/shape';
 import { slotColor } from '@/features/routines-ui/colors';
-import { routineRoutes } from '@/features/routines-ui/entry-points';
+import { ROUTINES_DAY_VIEW, routineRoutes } from '@/features/routines-ui/entry-points';
 import { Glyph } from '@/features/routines-ui/glyph';
 import { TextButton, semibold } from '@/features/routines-ui/parts';
 import type { Routines } from '@/features/routines-ui/use-routines';
@@ -77,7 +77,8 @@ export function RoutineHomeTile({ id, wide, routines, now }: { id: RoutineTileId
     const jump = routineTileJump(store, id, day);
     // A folded routine draws no rows, so the routine that holds the target is opened before the tab shows.
     if (jump) routines.apply((current, clock) => revealRoutineJump(current, jump, clock));
-    router.navigate(routineRoutes.tab(jump && jump.view !== 'routines' ? jump.view : undefined));
+    // The view is always named: Routines may have been left on a type tab, and a routine is on the day.
+    router.navigate(routineRoutes.tab(jump ? jump.view : ROUTINES_DAY_VIEW));
   };
   const log = (itemId: string, label: string) => {
     glide();

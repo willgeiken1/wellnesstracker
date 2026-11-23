@@ -8,8 +8,12 @@ const withParams = (pathname: string, params: Record<string, string | undefined>
   return { pathname, params: kept } as unknown as Href;
 };
 
+/** The view of the Routines tab that shows today's routines. An item type's tab is named by its type. */
+export const ROUTINES_DAY_VIEW = 'routines';
+
 export const routineRoutes = {
-  /** The Routines tab itself. `view` opens it on an item type's tab; without one it opens on the day. */
+  /** The Routines tab itself. `view` opens it on an item type's tab, or on the day with `ROUTINES_DAY_VIEW`.
+   * Without one the tab stays on the view it was last left on, so a link that means the day says so. */
   tab: (view?: string) => withParams('/routines', { view }),
   /** Add item. `type` preselects an item type, `blockId` a routine. */
   addItem: (params: { type?: string; blockId?: string } = {}) => withParams('/routines/add-item', params),

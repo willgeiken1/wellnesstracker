@@ -14,12 +14,12 @@ import { longRoutineDay } from '@/features/routines/model/history';
 import { routineTypeName, routineTypeTabs } from '@/features/routines/model/types';
 import { routinesText } from '@/i18n/en';
 import { DayView, LoggedToast, type LoggedAll } from './day-view';
-import { routineRoutes } from './entry-points';
+import { ROUTINES_DAY_VIEW, routineRoutes } from './entry-points';
 import { RoundButton } from './parts';
 import { TypeView } from './type-view';
 import { useMinuteClock, useRoutines } from './use-routines';
 
-const DAY_TAB = 'routines';
+const DAY_TAB = ROUTINES_DAY_VIEW;
 type Link = { view?: string | string[] };
 const NO_LINK: Link = {};
 /** The tab a link asks for (a Home tile opens Routines on the tab that holds its item). Drawn outside a
