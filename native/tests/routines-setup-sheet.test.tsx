@@ -24,7 +24,7 @@ const nextButton = () => screen.getByTestId('setup-next');
 
 beforeEach(() => {
   repo = seededRepository();
-  keepSetupDraft(null);
+  keepSetupDraft('demo', null);
   jest.mocked(useAuth).mockReturnValue({ repository: repo } as ReturnType<typeof useAuth>);
   jest.mocked(router.back).mockClear();
   said = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});

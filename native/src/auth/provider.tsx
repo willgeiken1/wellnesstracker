@@ -14,6 +14,7 @@ import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
+import { clearSessionMemory } from './session-memory';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
@@ -260,6 +261,8 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       const leave=async()=>{
         if(departingOwner.current)throw new Error('Sign-out recovery required.');
         departingOwner.current=currentRepo.owner;departureLocked.current=true;setDeparturePending(true);
+        // Anything held in memory for this owner goes first, so it cannot outlast a sign-out that fails part way.
+        clearSessionMemory();
         engine?.close();
         client?.auth.stopAutoRefresh();
         try {

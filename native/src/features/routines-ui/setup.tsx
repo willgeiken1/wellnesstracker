@@ -20,12 +20,13 @@ import { keepSetupDraft, keptSetupDraft } from './setup-draft';
 function SetupForm({ data, view, mode }: { data: RoutinesData; view: RoutineView; mode: 'quiz' | 'retake' }) {
   const { colors } = useTheme();
   const tick = useSelectionHaptic();
-  const [opened] = useState(() => openSetupDraft(view.prefs, mode, keptSetupDraft()));
+  const owner = data.repository?.owner;
+  const [opened] = useState(() => openSetupDraft(view.prefs, mode, keptSetupDraft(owner)));
   const [draft, setDraftState] = useState<SetupDraft>(opened);
   const [error, setError] = useState('');
   /* A first setup keeps its place when it is closed, so closing asks nothing. A retake asks before it drops changed answers. */
   const { close, leave } = useSheetClose(mode === 'retake' && JSON.stringify(draft.answers) !== JSON.stringify(opened.answers));
-  const setDraft = (next: SetupDraft) => { if (mode === 'quiz') keepSetupDraft(next); setDraftState(next); setError(''); };
+  const setDraft = (next: SetupDraft) => { if (mode === 'quiz') keepSetupDraft(owner, next); setDraftState(next); setError(''); };
 
   const asked = askedQuestions(draft.answers);
   const index = Math.max(0, asked.indexOf(draft.step));
@@ -44,7 +45,7 @@ function SetupForm({ data, view, mode }: { data: RoutinesData; view: RoutineView
     const removed = data.repository ? removedDefaultRoutines(data.repository) : [];
     const next = saveSetup(data.store, { ...save, removed }, clock, new Date(clock.now));
     if (!next || !commitRoutines(data.repository, next)) { setError(SETUP_MESSAGES.failed); announce(SETUP_MESSAGES.failed); return; }
-    keepSetupDraft(null);
+    keepSetupDraft(owner, null);
     announce(status === 'skipped' ? SETUP_MESSAGES.skipped : mode === 'retake' ? SETUP_MESSAGES.retaken : SETUP_MESSAGES.done);
     leave();
   };
@@ -115,5 +116,6 @@ export function SetupSheet({ mode = 'quiz' }: { mode?: 'quiz' | 'retake' }) {
   const data = useRoutines();
   const { close } = useSheetClose(false);
   if (!data.view) return <SheetUnavailable testID="setup" title={rs('setupTitle')} onClose={close} />;
-  return <SetupForm key={mode} data={data} view={data.view} mode={mode} />;
+  /* A new owner gets a new form, so nothing the last one picked is still on screen. */
+  return <SetupForm key={`${mode}:${data.repository?.owner ?? ''}`} data={data} view={data.view} mode={mode} />;
 }
