@@ -6,8 +6,10 @@ import { touchTarget } from './button';
 import { useSelectionHaptic } from './selection-haptic';
 /** Space between the track's edge and the choices, and between the choices. */
 const TRACK_GAP = 3;
-export function SegmentedControl<T extends string>({ label, options, value, onChange }: {
-  label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void;
+/** `stack` gives each choice a row of its own, for a short control at very large text sizes, so no word breaks
+ * mid-word. The pill look scrolls sideways instead and ignores it. */
+export function SegmentedControl<T extends string>({ label, options, value, onChange, stack = false }: {
+  label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void; stack?: boolean;
 }) {
   const { colors, selectorLook } = useTheme();
   const haptic = useSelectionHaptic();
@@ -23,7 +25,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
       backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
     {options.map(option => <Pressable key={option.value} accessibilityRole="tab" accessibilityLabel={option.label}
       accessibilityState={{ selected: option.value === value }} onPress={() => choose(option.value)}
-      style={{ flexGrow: 1, flexBasis: four ? '45%' : '28%', minHeight: touchTarget, minWidth: touchTarget, justifyContent: 'center',
+      style={{ flexGrow: 1, flexBasis: stack ? '100%' : four ? '45%' : '28%', minHeight: touchTarget, minWidth: touchTarget, justifyContent: 'center',
         padding: tokens.spacing[1], borderRadius: tokens.radii.card - TRACK_GAP,
         backgroundColor: option.value === value ? colors.accent : 'transparent' }}>
       <ThemedText style={{ color: option.value === value ? colors['on-accent'] : colors.text, textAlign: 'center', fontWeight: option.value === value ? '600' : '400' }}>{option.label}</ThemedText>
