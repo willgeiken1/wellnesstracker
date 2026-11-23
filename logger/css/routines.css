@@ -420,7 +420,7 @@
   flex: 0 0 auto;
 }
 .dr-tile[data-collapsed="true"] .dr-chevron { transform: rotate(-45deg); margin-top: 4px; }
-.dr-colors, .dr-kind, .dr-units, .dr-quarters, .dr-block-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.dr-colors, .dr-quarters { display: flex; flex-wrap: wrap; gap: 8px; }
 .dr-swatch {
   width: 44px;
   padding: 0;
@@ -488,21 +488,14 @@
 .dr-deleted-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .dr-deleted-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
 .dr-deleted-list button { min-height: 44px; padding: 0 12px; border-radius: 14px; font-weight: 700; background: var(--raised); }
-.dr-kind button,
-.dr-unit,
-.dr-quarter,
-.dr-block-pick {
+.dr-quarter {
   min-height: 44px;
   padding: 0 14px;
   border-radius: 14px;
   background: var(--raised);
   font-weight: 700;
 }
-.dr-kind button[aria-pressed="true"],
-.dr-unit[aria-pressed="true"],
-.dr-quarter[aria-pressed="true"],
-.dr-block-pick[aria-pressed="true"] { background: var(--ink); color: #fff; }
-.dr-evidence { margin: 8px 0 12px; font-size: 14px; color: var(--muted); }
+.dr-quarter[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .dr-add-block { margin-top: 2px; }
 .dr-history,
 .dr-edit-log,
@@ -629,6 +622,30 @@
     from { opacity: 0; transform: translateY(16px); }
     to { opacity: 1; transform: none; }
   }
+  /* Add item sheet and calculator */
+  .dr-is-type i { transition: background-color .15s, border-color .15s; }
+  .dr-is-kind { transition: background-color .18s, color .18s; }
+  .dr-is-reveal {
+    transition:
+      grid-template-rows .32s cubic-bezier(.2, .8, .2, 1),
+      margin-top .32s cubic-bezier(.2, .8, .2, 1),
+      opacity .25s,
+      visibility 0s .32s;
+  }
+  .dr-is-reveal[data-open="true"] {
+    transition:
+      grid-template-rows .32s cubic-bezier(.2, .8, .2, 1),
+      margin-top .32s cubic-bezier(.2, .8, .2, 1),
+      opacity .25s,
+      visibility 0s;
+  }
+  .dr-step { transition: transform .1s, opacity .15s; }
+  .dr-step:active { transform: scale(.95); }
+  .dr-is-seg { transition: stroke-width .2s, opacity .2s, stroke .2s; }
+  .dr-is-ck span { transition: width .15s, height .15s; }
+  .dr-syr-liq { transition: width .25s ease-out; }
+  .dr-readout.dr-bump .dr-amt-in { animation: dr-bump .22s ease-out; }
+  @keyframes dr-bump { 40% { transform: scale(1.06); } }
 }
 @media (prefers-reduced-motion: reduce) {
   .dr-all-done,
@@ -1110,10 +1127,9 @@
   font-weight: 700;
 }
 .dr-day[aria-pressed="true"] { background: var(--lav); color: var(--ink); }
-.dr-chips, .dr-type-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.dr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .dr-chips-more { margin-top: 6px; }
-.dr-chip,
-.dr-type-pick {
+.dr-chip {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 999px;
@@ -1122,11 +1138,9 @@
   font-size: 13px;
   font-weight: 600;
 }
-.dr-chip[aria-pressed="true"],
-.dr-type-pick[aria-pressed="true"] { border-color: var(--lav); color: var(--lav); }
-.dr-chip-quiet, .dr-type-new { color: var(--muted); border-style: dashed; }
-:root[data-mode="light"] .dr-chip[aria-pressed="true"],
-:root[data-mode="light"] .dr-type-pick[aria-pressed="true"] { background: var(--lav); border-color: var(--lav); color: var(--ink); }
+.dr-chip[aria-pressed="true"] { border-color: var(--lav); color: var(--lav); }
+.dr-chip-quiet { color: var(--muted); border-style: dashed; }
+:root[data-mode="light"] .dr-chip[aria-pressed="true"] { background: var(--lav); border-color: var(--lav); color: var(--ink); }
 
 .dr-elist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .dr-erow {
@@ -1177,3 +1191,465 @@
 :root[data-mode="light"] .dr-page[data-routines-edit="off"] .dr-tile .dr-log-all { color: var(--text); }
 :root[data-mode="light"] .dr-tool svg { stroke: var(--text); }
 :root[data-mode="light"] .dr-sp-ray { stroke: var(--text); }
+
+/* Add item sheet and reconstitution calculator.
+   The pastel cards take the accent, lavender and pink tokens, and the words
+   on them are ink, so every accent and both modes follow. White is only a
+   highlight laid over a pastel. Small controls keep their look and get a
+   hit area of 44px. Labels are sentence case like the rest of the app.
+   Every transition and animation here lives in the no-preference block
+   above, so Reduce Motion gets none of them. */
+.dr-is { display: grid; gap: 16px; min-width: 0; font-size: 14px; }
+.dr-is > h3 { margin: 0; padding-right: 44px; font-size: 24px; font-weight: 600; letter-spacing: -.03em; }
+.dr-is :focus-visible { outline-color: var(--accent-text); }
+.dr-is-blk { display: grid; gap: 8px; min-width: 0; }
+.dr-is-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dr-is-cap em { font-style: normal; font-size: 12px; font-weight: 500; }
+.dr-is-help { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.dr-ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Name */
+.dr-is .dr-is-name {
+  width: 100%;
+  min-height: 44px;
+  padding: 2px 0 6px;
+  border: 0;
+  border-bottom: 2px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font: 600 26px var(--display);
+  letter-spacing: -.03em;
+}
+.dr-is .dr-is-name:focus,
+.dr-is .dr-is-name:focus-visible { outline: none; border-bottom-color: var(--accent-text); }
+.dr-is .dr-is-name::placeholder { opacity: .62; }
+
+/* Type. The longest label, Supplement, is about 63px wide at 600 11px, so
+   six equal columns (56px on a 390px phone, 45px at 320px) cannot hold it.
+   A narrow phone gets three columns. From 384px up there is one row of six,
+   and each column is as wide as its own label needs, in the fixed order
+   Supplement, Peptide, Medication, Enhancer, Other, New type. Every column
+   stays wider than the 44px circle. */
+.dr-is-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 4px; }
+@media (min-width: 384px) {
+  .dr-is-types { grid-template-columns: minmax(0, 66fr) minmax(0, 46fr) minmax(0, 61fr) minmax(0, 52fr) minmax(0, 46fr) minmax(0, 52fr); }
+}
+.dr-is-type {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--muted);
+}
+.dr-is-type i {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+}
+.dr-is-type span { white-space: nowrap; }
+/* After the user's own types, New type can land in a narrow column. */
+.dr-is-type-new span { white-space: normal; }
+.dr-is-type-own span {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.dr-is-type[aria-pressed="true"] { color: var(--text); }
+.dr-is-type[aria-pressed="true"] i {
+  background: var(--lav);
+  border-color: var(--lav);
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.dr-is-type-new i { border-style: dashed; }
+.dr-is-type:focus-visible { outline: none; }
+.dr-is-type:focus-visible i { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+
+/* Log as */
+.dr-is-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dr-is-kinds[data-count="1"] { grid-template-columns: 1fr; }
+.dr-is-kind {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px;
+  border-radius: 20px;
+  background: var(--raised);
+  color: var(--text);
+  text-align: left;
+}
+.dr-is-kind .dr-ic { width: 22px; height: 22px; }
+.dr-is-kind b { font-family: var(--display); font-size: 17px; font-weight: 600; }
+.dr-is-kind span { font-size: 12px; line-height: 1.35; color: var(--muted); }
+.dr-is-kind[aria-checked="true"] { background: var(--green); color: var(--ink); }
+.dr-is-kind[aria-checked="true"] span { color: var(--on-pastel); }
+
+/* Dose card: opens and closes in place */
+.dr-is-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -16px;
+  opacity: 0;
+  visibility: hidden;
+}
+.dr-is-reveal[data-open="true"] {
+  grid-template-rows: 1fr;
+  margin-top: 0;
+  opacity: 1;
+  visibility: visible;
+}
+/* The spare 4px keeps a focus ring from being cut off at the edge. */
+.dr-is-reveal > div { min-width: 0; min-height: 0; margin: -4px; padding: 4px; overflow: hidden; }
+.dr-is-reveal-in { display: grid; gap: 8px; min-width: 0; }
+.dr-is-dcard {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 14px 12px;
+  border-radius: 24px;
+  background: var(--green);
+  color: var(--ink);
+}
+.dr-is-dcard :focus-visible,
+.dr-rc-card :focus-visible { outline-color: var(--ink); }
+.dr-is-k {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 26px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-pastel);
+}
+.dr-clr {
+  position: relative;
+  min-height: 26px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  font: 700 12px var(--body);
+}
+.dr-clr::after { content: ""; position: absolute; inset: -9px -6px; }
+.dr-clr:disabled { opacity: .35; }
+.dr-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .42);
+}
+.dr-is .dr-amt-in {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  font: 600 40px/1 var(--display);
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+  transform-origin: left center;
+}
+.dr-is .dr-amt-in:focus,
+.dr-is .dr-amt-in:focus-visible { outline: none; }
+.dr-readout:focus-within { box-shadow: inset 0 0 0 2px var(--ink); }
+.dr-is .dr-amt-in::placeholder { color: var(--ink); -webkit-text-fill-color: var(--ink); opacity: .3; }
+.dr-unit-out { font-family: var(--display); font-size: 18px; font-style: normal; font-weight: 600; }
+.dr-unit-none { opacity: .45; }
+.dr-useg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.dr-useg button {
+  position: relative;
+  min-width: 0;
+  min-height: 38px;
+  border-radius: 11px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.dr-useg button::after { content: ""; position: absolute; inset: -3px 0; }
+.dr-useg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.dr-steps-cap {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: -4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-pastel);
+}
+.dr-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 6px repeat(3, minmax(0, 1fr)); gap: 4px; }
+.dr-step {
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .42);
+  color: var(--ink);
+  font: 600 15px var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.dr-step-add { background: var(--ink); color: #fff; }
+.dr-step:disabled { opacity: .3; }
+.dr-gauge { display: block; width: 100%; height: auto; overflow: visible; }
+.dr-gauge[hidden] { display: none; }
+.dr-gauge-trk { fill: color-mix(in srgb, var(--ink) 12%, transparent); }
+.dr-gauge-fill { fill: var(--ink); }
+.dr-gauge-tk { stroke: color-mix(in srgb, var(--ink) 35%, transparent); stroke-width: 1.2; }
+.dr-gauge-tk-w { stroke: var(--ink); stroke-width: 1.6; }
+.dr-gauge text { fill: var(--on-pastel); font: 700 10.5px var(--body); font-variant-numeric: tabular-nums; }
+.dr-gauge-mk { fill: #fff; stroke: var(--ink); stroke-width: 2.5; }
+.dr-is-sum { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink); }
+.dr-is-sum-wait { font-weight: 600; color: var(--on-pastel); }
+.dr-is-calc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+}
+.dr-is-calc .dr-ic { color: var(--lav); }
+.dr-is-calc-t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.dr-is-calc-t b { font-size: 14px; font-weight: 700; }
+.dr-is-calc-t small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.dr-is-chev { font-size: 18px; color: var(--muted); }
+
+/* Routines and time: the sun path */
+.dr-is-arcwrap { display: grid; gap: 10px; min-width: 0; padding: 10px 8px 12px; border-radius: 22px; background: var(--bg); }
+.dr-is-arc {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  border-radius: 16px;
+  cursor: pointer;
+  /* A sideways drag sets the time. An up or down drag still scrolls the sheet. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.dr-is-arc:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.dr-is-arc path, .dr-is-arc line { fill: none; }
+.dr-is-arc-dash { stroke: var(--line); stroke-width: 2; stroke-dasharray: 1 6; stroke-linecap: round; }
+.dr-is-arc-hz { stroke: var(--muted); stroke-width: 1.3; }
+/* A routine the item is not in stays thin and dimmed, and still clears 3:1
+   on the path's background in every accent (Sea green is the lowest, 3.5:1). */
+.dr-is-seg { stroke: var(--dr-c); stroke-width: 4; stroke-linecap: round; opacity: .6; }
+.dr-is-seg[data-on="true"] { stroke-width: 9; opacity: 1; }
+.dr-is-arc-lbl { fill: var(--muted); font: 600 10px var(--body); font-variant-numeric: tabular-nums; }
+.dr-is-pin { stroke: var(--text); stroke-width: 1.4; stroke-dasharray: 2 3; }
+.dr-is-pinh { fill: var(--text); stroke: var(--bg); stroke-width: 3; }
+.dr-is-arc-big { fill: var(--text); font: 600 21px var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.dr-is-arc-sub { fill: var(--muted); font: 600 11px var(--body); }
+.dr-is-legend { display: flex; flex-wrap: wrap; gap: 8px 6px; padding: 0 4px; }
+.dr-is-legend button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 6px 11px 6px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.dr-is-legend button::after { content: ""; position: absolute; inset: -4px 0; }
+.dr-is-legend button[aria-pressed="true"] { border-color: var(--text); color: var(--text); }
+.dr-is-ck { width: 16px; height: 16px; flex: none; display: grid; place-items: center; border: 1.6px solid var(--line); border-radius: 50%; }
+.dr-is-ck span { width: 6px; height: 6px; border-radius: 50%; background: var(--dr-c); }
+.dr-is-legend button[aria-pressed="true"] .dr-is-ck { border-color: transparent; }
+.dr-is-legend button[aria-pressed="true"] .dr-is-ck span { width: 16px; height: 16px; }
+.dr-is-trow { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px; font-size: 13px; }
+.dr-is-trow label { font-weight: 600; color: var(--muted); }
+.dr-is-tval { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.dr-is .dr-is-tval input {
+  min-width: 116px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 700 13px/44px var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.dr-is-tph { display: none; position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-weight: 500; white-space: nowrap; color: var(--muted); pointer-events: none; }
+.dr-is-trow[data-empty="true"] .dr-is-tph { display: block; }
+.dr-is-trow[data-empty="true"]:focus-within .dr-is-tph { display: none; }
+.dr-is .dr-is-trow[data-empty="true"] input:not(:focus) { color: transparent; -webkit-text-fill-color: transparent; }
+.dr-is-tclear {
+  position: relative;
+  margin-left: auto;
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.dr-is-tclear::after { content: ""; position: absolute; inset: -9px -6px; }
+
+/* Supply */
+.dr-is-twof { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dr-is-twof[data-count="1"] { grid-template-columns: 1fr; }
+.dr-is-mini { display: grid; gap: 2px; min-width: 0; min-height: 56px; padding: 9px 12px; border-radius: 16px; background: var(--bg); cursor: text; }
+.dr-is-mini span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.dr-is .dr-is-mini input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: 600 15px/28px var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.dr-is .dr-is-mini input:focus,
+.dr-is .dr-is-mini input:focus-visible { outline: none; }
+.dr-is-mini:focus-within { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+
+/* Footer */
+.dr-is-evi { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; color: var(--muted); }
+.dr-is-evi i { width: 16px; height: 16px; flex: none; display: grid; place-items: center; border: 1.4px solid var(--muted); border-radius: 50%; font: 700 10px var(--body); }
+.dr-is .dr-is-cta { height: auto; min-height: 52px; padding: 15px; border-radius: 999px; font-size: 16px; font-weight: 700; color: var(--ink); }
+.dr-is .dr-is-remove,
+.dr-is .dr-rc-close {
+  height: auto;
+  min-height: 48px;
+  padding: 13px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+.dr-is .dr-is-remove { margin-top: -6px; }
+
+/* Reconstitution calculator */
+.dr-rc > h3 { font-size: 22px; }
+.dr-rc-back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 44px;
+  margin: -8px 0 -18px;
+  padding: 0 44px 0 0;
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.dr-rc-card { display: grid; gap: 8px; min-width: 0; padding: 12px 12px 10px; border-radius: 22px; background: var(--dr-c); color: var(--ink); }
+.dr-rc-card .dr-readout { padding: 4px 12px; }
+.dr-rc .dr-rc-card .dr-amt-in { font-size: 30px; }
+.dr-rc-card .dr-unit-out { font-size: 16px; }
+.dr-rc-card .dr-step { font-size: 14px; }
+.dr-rc-res { display: grid; gap: 12px; min-width: 0; padding: 14px; border-radius: 22px; background: var(--bg); }
+.dr-rc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dr-rc-two div { display: grid; gap: 2px; min-width: 0; }
+.dr-rc-two span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.dr-rc-two b { font: 600 30px var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dr-rc-two b small { margin-left: 3px; font-size: 15px; letter-spacing: 0; color: var(--muted); }
+.dr-rc-res[data-calc="empty"] .dr-rc-two b { color: var(--muted); opacity: .6; }
+.dr-syr { display: block; width: 100%; height: auto; overflow: visible; }
+.dr-syr-barrel { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.dr-syr-liq { fill: var(--accent-text); }
+.dr-syr-tk { stroke: var(--muted); stroke-width: 1; }
+.dr-syr-tk-w { stroke: var(--text); stroke-width: 1.4; }
+.dr-syr-ndl { stroke: var(--muted); stroke-width: 1.5; }
+.dr-syr text { fill: var(--muted); font: 600 9px var(--body); font-variant-numeric: tabular-nums; }
+.dr-syr .dr-syr-cap { font: 700 10px var(--body); }
+/* The app's own lines, as they are, under the answer. */
+.dr-rc-res .dr-calc-result {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.dr-rc-res .dr-calc-result p { margin: 0; font-size: 12.5px; line-height: 1.4; font-variant-numeric: tabular-nums; color: var(--text); overflow-wrap: anywhere; }
+.dr-rc-res .dr-calc-result[data-calc="empty"] p { color: var(--muted); }
+.dr-rc-res .dr-calc-result p.dr-calc-note { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.dr-rc .dr-log-error { margin: 0; font-size: 13px; }
+.dr-rc-save-note { margin-top: -8px; }
+
+:root[data-mode="light"] .dr-is-arc-dash { stroke: var(--muted); opacity: .5; }
+:root[data-mode="light"] .dr-is-calc .dr-ic { color: var(--text); }
+/* A pastel on the light background is 1.1:1 to 2.2:1 at full strength, so
+   light mode draws the routine colors mixed with ink. A routine the item is
+   not in is thin and lighter (3.4:1 at the least), one it is in is thick and
+   darker (4.6:1 at the least), and the legend dot matches the thick stroke. */
+:root[data-mode="light"] .dr-is-seg { stroke: color-mix(in srgb, var(--dr-c) 52%, var(--ink)); opacity: 1; }
+:root[data-mode="light"] .dr-is-seg[data-on="true"] { stroke: color-mix(in srgb, var(--dr-c) 42%, var(--ink)); }
+:root[data-mode="light"] .dr-is-ck span { background: color-mix(in srgb, var(--dr-c) 42%, var(--ink)); }
+/* Muted text is 4.498:1 on the light background and 4.2:1 on a raised card.
+   Small text on those two surfaces takes a slightly darker mix, 5.5:1 and
+   5.2:1. On the white sheet itself muted is 4.97:1 and stays as it is. */
+:root[data-mode="light"] .dr-is { --dr-quiet: color-mix(in srgb, var(--muted) 85%, var(--text)); }
+:root[data-mode="light"] .dr-is-arc-lbl,
+:root[data-mode="light"] .dr-is-arc-sub,
+:root[data-mode="light"] .dr-syr text { fill: var(--dr-quiet); }
+:root[data-mode="light"] .dr-is-kind:not([aria-checked="true"]) span,
+:root[data-mode="light"] .dr-is-legend button:not([aria-pressed="true"]),
+:root[data-mode="light"] .dr-is-trow label,
+:root[data-mode="light"] .dr-is-tph,
+:root[data-mode="light"] .dr-is-tclear,
+:root[data-mode="light"] .dr-is-mini span,
+:root[data-mode="light"] .dr-is-calc-t small,
+:root[data-mode="light"] .dr-is-chev,
+:root[data-mode="light"] .dr-rc-two span,
+:root[data-mode="light"] .dr-rc-two b small,
+:root[data-mode="light"] .dr-rc-res .dr-calc-result[data-calc="empty"] p,
+:root[data-mode="light"] .dr-rc-res .dr-calc-result p.dr-calc-note { color: var(--dr-quiet); }

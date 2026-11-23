@@ -280,9 +280,12 @@ describe("item types and tabs", () => {
     signIn();
     app.openRoutineItemEditor("block_default_morning", "");
     const html = app.routineItemSheetHTML();
-    assert.match(html, /When do you take it\?/);
+    assert.match(html, /Routines and time/);
+    assert.match(html, /<label for="dr-item-time">Time<\/label>/);
+    assert.match(html, /id="dr-item-time"[^>]*type="time"[^>]*value=""/);
+    assert.match(html, /data-arc="true"[^>]*role="slider"/);
     assert.match(html, /data-action="routines-item-type"/);
-    assert.match(html, /\+ New type/);
+    assert.match(html, /data-action="routines-item-type-new"[^>]*>.*?<span>New type<\/span><\/button>/);
   });
 
   test("the Peptides tab shows tools and one card per peptide", () => {

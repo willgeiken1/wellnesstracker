@@ -414,7 +414,8 @@ document.addEventListener("change", (ev) => {
     if (again && typeof again.focus === "function") again.focus();
   }
   if ((ev.target.id === "dr-item-on-hand" || ev.target.id === "dr-item-mixed-on" || ev.target.id === "dr-item-time") && app.ui && app.ui.sheet === "routines-item" && typeof app.rememberRoutineItemFields === "function") {
-    app.rememberRoutineItemFields();
+    if (typeof app.noteRoutineItemField === "function") app.noteRoutineItemField(ev.target);
+    else app.rememberRoutineItemFields();
   }
 });
 
@@ -472,7 +473,9 @@ document.addEventListener("input", (ev) => {
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
   if ((el.id === "dr-item-name" || el.id === "dr-item-amount" || el.id === "dr-item-on-hand" || el.id === "dr-item-mixed-on" || el.id === "dr-item-time") && app.ui && app.ui.sheet === "routines-item") {
-    if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+    /* The amount and the time redraw what follows from them, in place. */
+    if (typeof app.noteRoutineItemField === "function") app.noteRoutineItemField(el);
+    else if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
     return;
   }
   if ((el.id === "dr-block-name" || el.id === "dr-block-start" || el.id === "dr-block-end") && app.ui && app.ui.sheet === "routines-block") {
@@ -498,6 +501,13 @@ document.addEventListener("input", (ev) => {
   const e = app.liveExercises(s)[+el.dataset.i];
   if (e) app.draftFor(s, e.name)[el.dataset.field] = el.value;
 });
+
+/* The item sheet updates in place when it can, so a tap keeps focus, the
+   keyboard and the transitions. Otherwise the whole sheet is drawn again. */
+function redrawRoutineItemSheet() {
+  if (typeof app.refreshRoutineItemSheet === "function") app.refreshRoutineItemSheet();
+  else app.renderSheet();
+}
 
 document.addEventListener("click", async (ev) => {
   if (app.eatClick) {
@@ -533,6 +543,8 @@ document.addEventListener("click", async (ev) => {
         app.render();
         break;
       }
+      /* A calculator opened from the item sheet closes back to that sheet. */
+      if (app.ui && app.ui.sheet === "routines-calc" && typeof app.closeReconstitution === "function" && app.closeReconstitution()) break;
       if (app.ui && app.ui.sheet === "routines-details") {
         const fromX = !!(ev.target && ev.target.closest && ev.target.closest(".sheet-x"));
         if (fromX && typeof app.closeRoutineDetails === "function") app.closeRoutineDetails("x");
@@ -1420,20 +1432,29 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
       if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.kind = b.dataset.kind === "dose" ? "dose" : "check";
-      app.renderSheet();
+      redrawRoutineItemSheet();
       break;
     case "routines-item-unit":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
       if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.unit = b.dataset.unit;
-      app.renderSheet();
+      redrawRoutineItemSheet();
       break;
-    case "routines-item-quarter":
-      if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
-      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
-      app.ui.sd.kind = "dose";
-      app.ui.sd.amount = b.dataset.amount;
-      app.renderSheet();
+    case "routines-item-step":
+      if (app.ROUTINES_ENABLED !== true || typeof app.stepRoutineItemAmount !== "function") break;
+      app.stepRoutineItemAmount(Number(b.dataset.delta));
+      break;
+    case "routines-item-amount-clear":
+      if (app.ROUTINES_ENABLED !== true || typeof app.clearRoutineItemAmount !== "function") break;
+      app.clearRoutineItemAmount();
+      break;
+    case "routines-item-time-clear":
+      if (app.ROUTINES_ENABLED !== true || typeof app.clearRoutineItemTime !== "function") break;
+      app.clearRoutineItemTime();
+      break;
+    case "routines-item-calc":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openReconstitutionFromItem !== "function") break;
+      app.openReconstitutionFromItem();
       break;
     case "routines-item-block": {
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
@@ -1445,7 +1466,7 @@ document.addEventListener("click", async (ev) => {
       }
       if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.blockIds = ids.includes(id) ? ids.filter((row) => row !== id) : ids.concat(id);
-      app.renderSheet();
+      redrawRoutineItemSheet();
       break;
     }
     case "routines-item-type": {
@@ -1459,7 +1480,7 @@ document.addEventListener("click", async (ev) => {
       }
       app.ui.sd.type = app.ui.sd.type === type ? "" : type;
       if (type === "peptide" && !app.ui.sd.itemId) app.ui.sd.kind = "dose";
-      app.renderSheet();
+      redrawRoutineItemSheet();
       break;
     }
     case "routines-item-type-new": {
@@ -1609,6 +1630,18 @@ document.addEventListener("click", async (ev) => {
     case "routines-calc-save":
       if (app.ROUTINES_ENABLED !== true || typeof app.saveReconstitutionNote !== "function") break;
       app.saveReconstitutionNote();
+      break;
+    case "routines-calc-back":
+      if (app.ROUTINES_ENABLED !== true || typeof app.closeReconstitution !== "function") break;
+      app.closeReconstitution();
+      break;
+    case "routines-calc-step":
+      if (app.ROUTINES_ENABLED !== true || typeof app.stepReconstitutionField !== "function") break;
+      app.stepReconstitutionField(b.dataset.field, Number(b.dataset.delta));
+      break;
+    case "routines-calc-clear":
+      if (app.ROUTINES_ENABLED !== true || typeof app.clearReconstitutionField !== "function") break;
+      app.clearReconstitutionField(b.dataset.field);
       break;
     case "routines-calc-vial-unit":
       if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
