@@ -19,7 +19,7 @@ import { routineClock24, routineShortName, routineWindowLabel } from '@/features
 import { routinesText } from '@/i18n/en';
 import { slotColor } from './colors';
 import { focusBlockId, hasItems, nextLine, rowAmount, rowDone, rowSkipped, rowSupply, rowTime } from './day-model';
-import { routineRoutes } from './entry-points';
+import { routineRoutes, type RoutineLinkTarget } from './entry-points';
 import { Glyph } from './glyph';
 import { Note, Panel, PrimaryButton, TextButton, semibold } from './parts';
 import { SunPath } from './sun-path';
@@ -176,8 +176,8 @@ export function LoggedToast({ logged, bottom, onUndo, onDone }: { logged: Logged
 }
 
 /** Today: the streak and rest chips, the sun path with its legend, each routine with its rows, and the way on
- * to new routines, editing and history. */
-export function DayView({ routines, now, onLoggedAll }: { routines: Routines; now: Date; onLoggedAll: (logged: LoggedAll) => void }) {
+ * to new routines, editing and history. `jump` is the routine, or the item, a link asked to see. */
+export function DayView({ routines, now, jump = null, onLoggedAll }: { routines: Routines; now: Date; jump?: RoutineLinkTarget | null; onLoggedAll: (logged: LoggedAll) => void }) {
   const { colors } = useTheme();
   const haptic = useSelectionHaptic(), glide = useLayoutMotion();
   // Routines other than the current one start folded; one opened by hand stays open until the page closes.
@@ -190,6 +190,16 @@ export function DayView({ routines, now, onLoggedAll }: { routines: Routines; no
   const collapsed = new Set(view.prefs.collapsedBlocks ?? []);
   const focus = view.prefs.focusMode === true, focusId = focus ? focusBlockId(view, now, day) : '';
   const shown = focus ? today.filter(block => block.id === focusId) : today;
+  // A link opens the routine it names, or the one that holds its item, so the rows it points at are drawn.
+  // It is followed once: the routine can be folded again by hand, and the same link sent again reopens it.
+  const [followed, setFollowed] = useState<RoutineLinkTarget | null>(null);
+  if (jump !== followed) {
+    setFollowed(jump);
+    const named = jump ? today.find(block => block.id === jump.blockId) : undefined;
+    const holder = named ?? (jump?.itemId ? today.find(block => view.placements.some(place => place.blockId === block.id && place.itemId === jump.itemId)) : undefined);
+    const target = holder?.id ?? '';
+    if (target && !opened.includes(target)) setOpened([...opened, target]);
+  }
   const foldedOf = (block: RoutineBlock) => (block.id === currentId || today.length === 1 ? collapsed.has(block.id) : !opened.includes(block.id));
   const fold = (block: RoutineBlock) => {
     glide();

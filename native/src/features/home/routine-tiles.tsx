@@ -75,10 +75,11 @@ export function RoutineHomeTile({ id, wide, routines, now }: { id: RoutineTileId
   const tone = tileTone(view, id, colors);
   const open = () => {
     const jump = routineTileJump(store, id, day);
-    // A folded routine draws no rows, so the routine that holds the target is opened before the tab shows.
+    // A folded routine draws no rows, so the routine that holds the target is opened before the tab shows. The
+    // saved fold covers the current routine; the link carries the target for the others, which the day folds itself.
     if (jump) routines.apply((current, clock) => revealRoutineJump(current, jump, clock));
     // The view is always named: Routines may have been left on a type tab, and a routine is on the day.
-    router.navigate(routineRoutes.tab(jump ? jump.view : ROUTINES_DAY_VIEW));
+    router.navigate(routineRoutes.tab(jump ? jump.view : ROUTINES_DAY_VIEW, jump ? { blockId: jump.blockId, itemId: jump.itemId } : {}));
   };
   const log = (itemId: string, label: string) => {
     glide();

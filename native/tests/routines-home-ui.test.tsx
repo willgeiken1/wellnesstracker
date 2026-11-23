@@ -120,7 +120,7 @@ describe('Next up on Home', () => {
     const repo = seededRepository(store => { store.prefs.collapsedBlocks = [SAMPLE.morning]; });
     await open(repo);
     await fireEvent.press(screen.getByRole('button', { name: 'Next up. Opens Routines.' }));
-    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'routines' } });
+    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'routines', blockId: SAMPLE.morning, itemId: SAMPLE.stretch } });
     expect(stored(repo).prefs.collapsedBlocks ?? []).not.toContain(SAMPLE.morning);
   });
   test('taking it off in Edit Home keeps it off, and adding it back brings it back', async () => {
@@ -211,7 +211,10 @@ describe('routine and item tiles', () => {
     expect(screen.getByRole('button', { name: 'Routine, Morning routine. Opens Routines.' })).toBeTruthy();
     expect(within(screen.getByTestId(`home-tile-${WALK}`)).queryByText('Log')).toBeNull();
     await fireEvent.press(screen.getByTestId(`home-tile-${WALK}`));
-    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'routines' } });
+    expect(router.navigate).toHaveBeenLastCalledWith({ pathname: '/routines', params: { view: 'routines', blockId: SAMPLE.morning, itemId: SAMPLE.walk } });
+    // A routine's own tile names the day and that routine, so one that is not current is opened there.
+    await fireEvent.press(screen.getByTestId(`home-tile-${MORNING}`));
+    expect(router.navigate).toHaveBeenLastCalledWith({ pathname: '/routines', params: { view: 'routines', blockId: SAMPLE.morning } });
     await view.unmount();
     fontScale = TILE_STACKS_AT;
     await open(repo);
@@ -222,7 +225,7 @@ describe('routine and item tiles', () => {
     place(repo, { order: [VIAL], wide: [] });
     await open(repo);
     await fireEvent.press(screen.getByTestId(`home-tile-${VIAL}`));
-    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'peptide' } });
+    expect(router.navigate).toHaveBeenCalledWith({ pathname: '/routines', params: { view: 'peptide', itemId: SAMPLE.vial } });
   });
   test('a tile whose routine was deleted draws nothing, and Edit Home still lets it be taken off', async () => {
     const repo = seededRepository();
