@@ -30,9 +30,16 @@
 <link rel="stylesheet" href="css/home-widgets.css">
 <link rel="stylesheet" href="css/weekly.css">
 <link rel="stylesheet" href="css/routines.css">
+<link rel="stylesheet" href="css/trial.css">
 <script>
 try {
-  var raw = localStorage.getItem("liftlog-v1");
+  var trial = false;
+  try {
+    trial = new URLSearchParams(location.search).get("INSIGHT_TRIAL_STUB") === "1"
+      || sessionStorage.getItem("INSIGHT_TRIAL_STUB") === "1"
+      || localStorage.getItem("INSIGHT_TRIAL_STUB") === "1";
+  } catch (e2) {}
+  var raw = localStorage.getItem(trial ? "liftlog-trial" : "liftlog-v1");
   var saved = raw ? JSON.parse(raw) : null;
   if (saved && saved.appLock && saved.appLock.enabled && sessionStorage.getItem("insight-unlocked") !== "1")
     document.documentElement.classList.add("lock-first");

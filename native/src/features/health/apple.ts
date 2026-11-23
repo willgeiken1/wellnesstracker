@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { trialStubOn } from '../../trial/flag';
 import type { HealthSource, SleepStage, WorkoutKind } from './source';
 
 // Only the types Insight has a screen for. A type joins this list in the same change that shows it.
@@ -27,7 +28,7 @@ type Kit = typeof import('@kingstinct/react-native-healthkit');
 /** Apple Health, read-only. Null where it cannot work: off iPhone, in the phone-only build (which carries
  * no Health entitlement), or when the native module is missing. Values read here stay on the phone. */
 export function appleHealth(): HealthSource | null {
-  if (Platform.OS !== 'ios' || Constants.expoConfig?.extra?.phoneOnly === true) return null;
+  if (trialStubOn() || Platform.OS !== 'ios' || Constants.expoConfig?.extra?.phoneOnly === true) return null;
   let kit: Kit;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- loaded only where Apple Health can exist

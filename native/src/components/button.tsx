@@ -1,15 +1,18 @@
-import { ActivityIndicator, Platform, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { PRESSED_FILL_OPACITY } from './tappable';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
+import { trialStubOn } from '@/trial/flag';
 import { ThemedText } from './themed-text';
 export const touchTarget = Platform.OS === 'ios' ? tokens.touch.ios : tokens.touch.android;
 export function Button({ label, onPress, variant = 'primary', selected, disabled = false, busy = false, testID, accessibilityLabel }: {
   accessibilityLabel?: string; testID?: string; label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'destructive'; selected?: boolean; disabled?: boolean; busy?: boolean;
 }) {
-  const { colors } = useTheme();
-  const backgroundColor = variant === 'primary' ? colors.accent : variant === 'destructive' ? colors.danger : colors['surface-2'];
-  const color = variant === 'primary' ? colors['on-accent'] : variant === 'destructive' ? colors['on-danger'] : colors.text;
+  const { colors, mode } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const faded = trialStubOn() && variant === 'primary' && (mode === 'light' || fontScale >= 1.3);
+  const backgroundColor = faded ? colors.bg : variant === 'primary' ? colors.accent : variant === 'destructive' ? colors.danger : colors['surface-2'];
+  const color = faded ? colors.bg : variant === 'primary' ? colors['on-accent'] : variant === 'destructive' ? colors['on-danger'] : colors.text;
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
     accessibilityState={{ disabled, busy, ...(selected === undefined ? {} : { selected }) }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => [styles.button, { backgroundColor, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 }]}>

@@ -10,6 +10,7 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
+import { trialStubOn } from '@/trial/flag';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { useWorkout } from './use-workout';
 import { layout } from './primitives';
@@ -52,10 +53,10 @@ export function Workouts() {
     {store?.active() && <Primary label={t('resumeWorkout')} onPress={() => router.push('/workout')} />}
     {segment === 'routines' && <Routines store={store} run={run} undo={undo} onUndo={restore => setUndo(() => restore)} />}
     {segment === 'history' && <>
-      {store && history.length === 0 && <Card testID="history-empty" style={card}>
+      {store && history.length === 0 && (trialStubOn() ? <View style={{ minHeight: 280 }} /> : <Card testID="history-empty" style={card}>
         <ThemedText style={semibold}>{t('historyEmptyTitle')}</ThemedText>
         <ThemedText muted>{t('historyEmpty')}</ThemedText>
-      </Card>}
+      </Card>)}
       {store && history.length > 0 && <Card testID="history-list" style={[card, { gap: 0, paddingVertical: tokens.spacing[0] }]}>
         {history.map((s, index) => {
           const name = String(s.data.name ?? t('workoutName')), edited = store.edited(s.id);

@@ -5,11 +5,13 @@
 import * as Sentry from '@sentry/react-native';
 import PostHog from 'posthog-react-native';
 import type { DevicePreferences } from '../features/onboarding/model';
+import { trialStubOn } from '../trial/flag';
 import { crashEvent, sanitizeCapture, telemetryUserId, usageEvent, type CrashEvent, type UsageEvent } from './scrub';
 
 export const POSTHOG_HOST='https://us.i.posthog.com';
 export type TelemetryKeys={sentryDsn?:string;posthogKey?:string};
 export function telemetryKeys():TelemetryKeys{
+  if(trialStubOn())return {};
   const clean=(v:string|undefined)=>v&&v.trim()?v.trim():undefined;
   return {sentryDsn:clean(process.env.EXPO_PUBLIC_SENTRY_DSN),posthogKey:clean(process.env.EXPO_PUBLIC_POSTHOG_KEY)};
 }
@@ -31,6 +33,7 @@ function followUser(){
 
 /** Start, pause or resume each service to match the switches. Safe to call repeatedly. */
 export function applyTelemetry(prefs:DevicePreferences,keys:TelemetryKeys=telemetryKeys()){
+  if(trialStubOn())return;
   crashOn=prefs.crashReports===true&&!!keys.sentryDsn;
   if(crashOn&&!sentryStarted){
     Sentry.init({

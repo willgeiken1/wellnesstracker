@@ -10,6 +10,7 @@ app.SB_URL = SB_URL;
 
 const SB_KEY = "sb_publishable_V8kPahG0KFWgaRVhEHuHrA_iQmEGOpZ";
 app.SB_KEY = SB_KEY;
+if (app.trialStub) app.SB_URL = "http://127.0.0.1";
 
    // publishable key: designed to be public
 let sb = null, session = null, pushTimer = null, ouraBusy = false;
@@ -20,7 +21,9 @@ app.ouraBusy = ouraBusy;
 app.cloudPullOk = false;
 
 try {
-  if (window.supabase && window.supabase.createClient) {
+  if (app.trialStub && window.supabase && window.supabase.createClient) {
+    app.sb = window.supabase.createClient("http://127.0.0.1", "sb_publishable_local_trial_stub", { auth: { persistSession: false, autoRefreshToken: false, storageKey: "liftlog-trial-auth" } });
+  } else if (window.supabase && window.supabase.createClient) {
     app.sb = window.supabase.createClient(app.SB_URL, app.SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "liftlog-auth" } });
   }
 } catch (e) { app.sb = null; }
@@ -100,7 +103,7 @@ app.refreshCloudStatus = refreshCloudStatus;
 function rememberCloudPush() {
   app.cloudFailAt = 0;
   app.state.lastCloud = Date.now();
-  try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
+  try { localStorage.setItem(app.trialStub ? "liftlog-trial" : app.KEY, JSON.stringify(app.state)); } catch (e) { /* the next save retries */ }
   refreshCloudStatus();
 }
 
@@ -335,6 +338,7 @@ async function cloudPull() {
 app.cloudPull = cloudPull;
 
 async function ouraRefresh(force) {
+  if (app.trialStub) return;
   if (!app.sb || !app.session || app.ouraBusy) return;
   app.ouraBusy = true;
   try {
@@ -425,6 +429,13 @@ app.authErrorText = authErrorText;
 async function signIn(mode) {
   if (!app.sb) { app.toast("Can't reach the server. Check your connection."); return; }
   const email = (app.$("#authEmail") || {}).value?.trim();
+  if (app.trialStub && !email) {
+    const dead = document.createElement("p");
+    dead.textContent = "This screen stopped. Close Insight and open it again.";
+    dead.style.cssText = "margin:24px;font:16px/1.4 sans-serif";
+    document.body.replaceChildren(dead);
+    throw new Error("stopped");
+  }
   const password = (app.$("#authPw") || {}).value || "";
   if (!email || !email.includes("@")) { app.toast("Enter your email address."); return; }
   if (password.length < 6) { app.toast("Passwords need at least 6 characters."); return; }
@@ -479,6 +490,7 @@ async function signOut(opts) {
 app.signOut = signOut;
 
 async function connectOura() {
+  if (app.trialStub) return;
   if (!app.sb) { app.toast("Can't reach the server. Check your connection."); return; }
   if (!app.session) { app.ui.sheet = "auth"; app.ui.sd = { mode: "signin", email: "" }; app.renderSheet(); app.toast("Sign in first, then connect Oura."); return; }
   const { data, error } = await app.sb.functions.invoke("oura-connect", { body: {} });
@@ -500,6 +512,7 @@ app.disconnectOura = disconnectOura;
 
 /* After Oura's login page sends you back here */
 (function handleOuraReturn() {
+  if (app.trialStub) return;
   if (typeof location === "undefined" || !location.search) return;
   const p = new URLSearchParams(location.search).get("oura");
   if (!p) return;

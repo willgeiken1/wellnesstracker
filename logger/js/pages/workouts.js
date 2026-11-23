@@ -264,6 +264,7 @@ function historyHTML(embedded) {
   const list = app.finished().filter((s) => app.setCount(s) > 0);
   const head = embedded ? `<p class="sub" style="margin:0 0 10px">${app.pl(list.length, "workout")} logged</p>`
     : `<div class="page-head"><div><h1 class="page-title">History</h1><div class="page-sub">${app.pl(list.length, "workout")} logged</div></div></div>`;
+  if (!list.length && app.trialStub) return `<div style="min-height:46vh"></div>`;
   if (!list.length) return head + `<p class="empty" style="padding-left:0">Finished workouts show up here. Start one from Home or Workouts.</p>`;
   return head + `<ul class="hist">${list.map((s) => {
     const dur = s.startedAt && s.finishedAt ? app.fmtDur(new Date(s.finishedAt) - new Date(s.startedAt)) : "";

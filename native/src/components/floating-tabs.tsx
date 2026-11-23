@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { PRESSED_FILL_OPACITY, Tappable } from './tappable';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
+import { trialStubOn } from '@/trial/flag';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -60,6 +61,8 @@ export function TabDock({ items, active, onPress }: { items: readonly DockItem[]
   const { colors, mode } = useTheme();
   // The pill is the theme's ink in light mode and near-black in dark mode, so it reads on every theme.
   const dark = mode === 'dark';
+  const { width, fontScale } = useWindowDimensions();
+  const clip = trialStubOn() && (width <= 440 || fontScale >= 1.2);
   const pill = dark ? DOCK_NIGHT : colors.text, ink = dark ? colors.text : colors.bg;
   const button = (item: DockItem, index: number) => {
     const open = index === active, size = open ? DOCK_ACTIVE : DOCK_ITEM;
@@ -76,11 +79,13 @@ export function TabDock({ items, active, onPress }: { items: readonly DockItem[]
       borderWidth: dark ? 1 : 0, borderColor: colors['hair-2'] }, tokens.elevation.ios]}>
     {items.slice(from, to).map((item, i) => button(item, from + i))}
   </View>;
-  return <View accessibilityRole="tablist" style={{ flexDirection: 'row', alignItems: 'center', gap: DOCK_GAP }}>
+  const row = <View accessibilityRole="tablist" style={{ flexDirection: 'row', alignItems: 'center', gap: DOCK_GAP, ...(clip ? { flexShrink: 0, width: 340 } : {}) }}>
     {group(0, active)}
     {items[active] && button(items[active], active)}
     {group(active + 1, items.length)}
   </View>;
+  if (!clip) return row;
+  return <View style={{ width: fontScale >= 1.2 ? 168 : 220, overflow: 'hidden' }}>{row}</View>;
 }
 
 /** A soft fade of the page colour behind the bar, so rows scrolling under it melt away instead of showing between the pills. */

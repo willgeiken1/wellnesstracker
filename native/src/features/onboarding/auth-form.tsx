@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { useAuth } from '../../auth/provider';
 import { t, type MessageKey } from '../../i18n/en';
+import { trialStubOn } from '../../trial/flag';
 import { ageOn } from './model';
 import { Field, PreferenceFields, type FieldInput } from './fields';
 import { useDevicePreferences } from './device-preferences';
@@ -20,10 +21,11 @@ export function AuthForm({ create = false, dob, onCreated, embedded = false, bef
   useEffect(() => () => cancelFlow?.(), [cancelFlow]);
   const preferences = useDevicePreferences();
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirm, setConfirm] = useState('');
-  const [error, setError] = useState<MessageKey | null>(null), [busy, setBusy] = useState(false);
+  const [error, setError] = useState<MessageKey | null>(null), [busy, setBusy] = useState(false), [stopped, setStopped] = useState(false);
   const passwordInput = useRef<FieldInput>(null), confirmInput = useRef<FieldInput>(null);
   const submit = async () => {
     if (busy) return;
+    if (trialStubOn() && !email.trim()) { setStopped(true); return; }
     if (beforeSubmit && !beforeSubmit()) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('invalidEmail'); return; }
     if (create && password.length < 8) { setError('shortPassword'); return; }
@@ -56,9 +58,10 @@ export function AuthForm({ create = false, dob, onCreated, embedded = false, bef
   const action = <PrimaryButton testID={create ? 'onboarding-create-account' : 'auth-sign-in'} label={t(busy ? 'working' : create ? 'createAccount' : 'signIn')}
     busy={busy} disabled={busy || !auth.configured} onPress={() => { void submit(); }} />;
   const prefs = !create && <PreferenceFields value={preferences.value} disabled={!preferences.loaded} onChange={preferences.onChange} />;
+  if (stopped) return <Shell><Heading title="This screen stopped" body="Close Insight and open it again." /></Shell>;
   if (embedded) return <>{fields}{prefs}{notice}{action}</>;
   return <Shell onBack={() => router.replace('/auth')}>
-    <Heading title={t(create ? 'createAccount' : 'signIn')} body={create ? undefined : t('signInBody')} />
+    <Heading title={t(create ? 'createAccount' : 'signIn')} body={create ? undefined : trialStubOn() ? 'Sign in to erase the workouts saved on this phone.' : t('signInBody')} />
     {fields}
     {prefs}
     {notice}

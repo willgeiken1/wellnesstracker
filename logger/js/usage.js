@@ -1,5 +1,6 @@
 import { app } from "./runtime.js";
 import { sentryUserId } from "./sentry-scrub.js";
+import { trialStubOn } from "./trial-stub.js";
 import { analyticsOn, crashReportsOn, resolveAnalyticsPref, setAnalytics, setCrashReports, setUsageSdkOptOut, usageSdkNeedsOptIn } from "./usage-pref.js";
 import { onDevHost, pushCapped, sanitizeCapture, sanitizePosthogEvent } from "./usage-events.js";
 
@@ -22,7 +23,7 @@ let posthogQueued = false;
 let posthogUnavailable = false;
 
 function posthogAllowed() {
-  return !posthogUnavailable && analyticsOn() && !onDevHost();
+  return !trialStubOn() && !posthogUnavailable && analyticsOn() && !onDevHost();
 }
 
 function posthogOptions() {

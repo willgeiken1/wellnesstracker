@@ -1,6 +1,6 @@
 import { useMemo, type ComponentRef, type PropsWithChildren, type ReactNode, type RefObject } from 'react';
 import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, type ColorValue, type ViewStyle } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, useWindowDimensions, View, type ColorValue, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Card } from '../../components/card';
@@ -10,6 +10,7 @@ import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import { terrain } from '../home/contour';
 import { t } from '../../i18n/en';
+import { trialStubOn } from '../../trial/flag';
 import { ONBOARDING_STEPS, onboardingProgress } from './model';
 
 export const semibold = { fontWeight: '600' } as const;
@@ -75,12 +76,16 @@ export function Group({ title, body, children, testID }: PropsWithChildren<{ tit
 
 /** The single main action of a screen. */
 export function PrimaryButton({ label, onPress, disabled = false, busy = false, testID }: { label: string; onPress: () => void; disabled?: boolean; busy?: boolean; testID?: string }) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const faded = trialStubOn() && (mode === 'light' || fontScale >= 1.3);
+  const fill = faded ? colors.bg : colors.accent;
+  const ink = faded ? colors.bg : colors['on-accent'];
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing[1],
-      paddingVertical: tokens.spacing[2], paddingHorizontal: tokens.spacing[3], borderRadius: 16, backgroundColor: colors.accent, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
-    {busy && <ActivityIndicator accessibilityRole="progressbar" color={colors['on-accent']} />}
-    <ThemedText variant="headline" style={[semibold, { color: colors['on-accent'], textAlign: 'center' }]}>{label}</ThemedText>
+      paddingVertical: tokens.spacing[2], paddingHorizontal: tokens.spacing[3], borderRadius: 16, backgroundColor: fill, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
+    {busy && <ActivityIndicator accessibilityRole="progressbar" color={ink} />}
+    <ThemedText variant="headline" style={[semibold, { color: ink, textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
 }
 

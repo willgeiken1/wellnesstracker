@@ -521,7 +521,7 @@ document.addEventListener("click", async (ev) => {
       }
       app.ui.sheet = null; app.renderSheet(); break;
     case "start": app.startWorkout(b.dataset.id); break;
-    case "start-freestyle": await app.startFreestyle(); break;
+    case "start-freestyle": if (app.trialStub) break; await app.startFreestyle(); break;
     case "resume": app.openWorkout(); break;
     case "minimize": app.ui.workoutOpen = false; app.render(); break;
     case "finish": {
@@ -980,7 +980,7 @@ document.addEventListener("click", async (ev) => {
     case "oura-connect": await app.connectOura(); break;
     case "oura-sync": await app.ouraRefresh(true); break;
     case "oura-disconnect": await app.disconnectOura(); break;
-    case "demo-on": app.state.demo = true; app.save(); app.render(); app.toast("Showing sample data in Recovery and Insights."); break;
+    case "demo-on": if (app.trialStub) break; app.state.demo = true; app.save(); app.render(); app.toast("Showing sample data in Recovery and Insights."); break;
     case "demo-off": app.state.demo = false; app.save(); app.render(); app.toast("Sample data off."); break;
     case "dlg-cancel": app.closeDialog(false); break;
     case "toast-undo": { const f = app.toastUndo; app.toastUndo = null; app.$("#toast").hidden = true; if (f) f(); break; }

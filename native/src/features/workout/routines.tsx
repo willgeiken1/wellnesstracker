@@ -1,4 +1,5 @@
 import { readableOn } from '@/core/contrast';
+import { trialStubOn } from '@/trial/flag';
 import { useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { Tappable as Pressable } from '@/components/tappable';
@@ -128,7 +129,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
         </View>;
       })}
       <RowLink label={t('newTemplate')} onPress={() => router.push('/workout/template')} />
-      <RowLink label={t('startEmpty')} last onPress={() => run(() => { store?.start(); router.push('/workout'); })} />
+      <RowLink label={t('startEmpty')} last onPress={() => { if (trialStubOn()) return; run(() => { store?.start(); router.push('/workout'); }); }} />
     </Card>
     {undo && <Button label={t('undoDelete')} variant="secondary" onPress={() => run(() => { undo(); onUndo(null); })} />}
   </>;

@@ -3,6 +3,8 @@ import { createClient, processLock, type SupabaseClient } from '@supabase/supaba
 import * as SecureStore from 'expo-secure-store';
 import { authConfig } from './config';
 import { chunkedStorage } from './storage';
+import { trialAuthClient } from '../trial/client';
+import { trialStubOn } from '../trial/flag';
 let client: SupabaseClient | null | undefined;
 let localSession: {storage: ReturnType<typeof chunkedStorage>; key: string; config: {url:string;key:string}} | undefined;
 /** Also used after network failure: server revocation must not prevent device erasure. */
@@ -29,6 +31,10 @@ function getSessionStorage() {
   return localSession={storage,key,config};
 }
 export function getAuthClient() {
+  if (trialStubOn()) {
+    client = client ?? trialAuthClient();
+    return client;
+  }
   if (client !== undefined) return client;
   const sessionStorage=getSessionStorage();
   if(!sessionStorage){client=null;return client;}

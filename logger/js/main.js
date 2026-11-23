@@ -1,4 +1,5 @@
 import { app } from "./runtime.js";
+import "./trial-stub.js";
 import "./sentry.js";
 import "./usage.js";
 import "./data/body.js";

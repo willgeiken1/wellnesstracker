@@ -138,7 +138,7 @@ function adoptLegacyLockCred() {
   if (!app.syncedAppLock || !L || typeof L !== "object" || !Object.prototype.hasOwnProperty.call(L, "credentialId")) return;
   if (L.credentialId && L.enabled && L.method !== "passcode" && !localLockCred()) setLocalLockCred(L.credentialId);
   app.state.appLock = app.syncedAppLock(L);
-  try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); } catch (e) {}
+  try { localStorage.setItem(app.trialStub ? "liftlog-trial" : app.KEY, JSON.stringify(app.state)); } catch (e) {}
 }
 app.adoptLegacyLockCred = adoptLegacyLockCred;
 adoptLegacyLockCred();

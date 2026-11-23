@@ -188,9 +188,9 @@ function settingsHTML() {
          <div class="set-row"><span>Cloud backup</span><span class="sub" data-cloud-status>${app.esc(app.cloudStatusText ? app.cloudStatusText(app.state.lastCloud, app.cloudFailAt) : "On")}</span></div>
          <button class="set-row" data-action="sign-out"><span>Sign out</span></button>`
       : `<button class="set-row" data-action="auth-open"><span>Sign in or create an account</span>${app.I.chevR}</button>`}</div>
-    ${app.session ? "" : `<p class="hint">An account backs up your workouts to the cloud and lets you connect Oura.</p>`}
+    ${app.session ? "" : `<p class="hint">${app.trialStub ? "An account keeps the logs on this phone together." : "An account backs up your workouts to the cloud and lets you connect Oura."}</p>`}
     ${app.privacySectionHTML()}
-    <div class="group-label">Oura Ring</div>
+    ${app.trialStub ? "" : `<div class="group-label">Oura Ring</div>
     <div class="group">
       ${app.state.oura.connected
         ? `<div class="set-row"><span>Connection</span><span class="sub">Connected</span></div>
@@ -199,7 +199,7 @@ function settingsHTML() {
         : `<button class="set-row" data-action="oura-connect"><span>${app.session ? "Connect Oura" : "Sign in to connect Oura"}</span>${app.I.chevR}</button>`}
       <button class="set-row" data-action="${app.state.demo ? "demo-off" : "demo-on"}"><span>Preview with sample data</span><span class="sub">${app.state.demo ? "On" : "Off"}</span></button>
     </div>
-    <p class="hint">Sample data fills Recovery and Insights for exploring. It never mixes with your real workouts or Oura data.</p>
+    <p class="hint">Sample data fills Recovery and Insights for exploring. It never mixes with your real workouts or Oura data.</p>`}
     <div class="group-label">Backup</div>
     <div class="group">
       <button class="set-row" data-action="export"><span>Export backup</span><span class="sub">Last: ${lastExp}</span></button>

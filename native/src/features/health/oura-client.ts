@@ -1,4 +1,5 @@
 import { getAuthClient } from '@/auth/client';
+import { trialStubOn } from '@/trial/flag';
 import { isExpired, isOuraUrl, type OuraSource } from './oura';
 
 // The free iPhone build swaps this file for src/phone-only/oura-client.ts, which has no account and so no Oura.
@@ -6,6 +7,7 @@ const number = (value: unknown) => typeof value === 'number' && Number.isFinite(
 
 /** Null wherever there is no account to hold the connection (the phone-only build, or no sign-in set up). */
 export function oura(): OuraSource | null {
+  if (trialStubOn()) return null;
   let client: ReturnType<typeof getAuthClient>;
   try { client = getAuthClient(); } catch { return null; }
   if (!client) return null;

@@ -330,7 +330,34 @@ function migrate(d) {
 }
 app.migrate = migrate;
 
+function scrubTrial(state) {
+  state.oura = { connected: false, lastSync: null, days: {} };
+  state.demo = false;
+  state.checkins = null;
+  state.checkinDeleted = [];
+  state.measurements = {};
+  if (state.profile && typeof state.profile === "object") {
+    state.profile.weighIns = [];
+    state.profile.wDel = [];
+    state.profile.wDelAt = {};
+  }
+  return state;
+}
+
+function emptyTrialState() {
+  return applyHomeMigration({ version: 2, workouts: [], sessions: [], plan: {}, restSeconds: 120, lastExport: null,
+    oura: { connected: false, lastSync: null, days: {} }, demo: false, appLock: { enabled: false, updatedAt: 0 }, purges: [], checkins: null, checkinDeleted: [], dailyRoutines: null,
+    food: { days: {}, saved: [], targets: { auto: true }, deleted: [], updatedAt: 0 }, measurements: {}, profile: null });
+}
+
 function load() {
+  if (app.trialStub) {
+    try {
+      const raw = localStorage.getItem("liftlog-trial");
+      if (raw) { const m = app.migrate(JSON.parse(raw)); if (m) return applyHomeMigration(scrubTrial(m)); }
+    } catch (e) { /* start fresh */ }
+    return emptyTrialState();
+  }
   try {
     const raw = localStorage.getItem(app.KEY);
     if (raw) { const m = app.migrate(JSON.parse(raw)); if (m) return applyHomeMigration(m); }
@@ -373,7 +400,7 @@ function save() {
   app.state.updatedAt = Date.now();
   bumpCorrelationRev();
   try { app.schedulePush(); } catch (e) { /* cloud not ready yet */ }
-  try { localStorage.setItem(app.KEY, JSON.stringify(app.state)); }
+  try { localStorage.setItem(app.trialStub ? "liftlog-trial" : app.KEY, JSON.stringify(app.state)); }
   catch (e) { app.toast("Couldn't save on this phone. Export a backup from Settings now."); }
 }
 app.save = save;

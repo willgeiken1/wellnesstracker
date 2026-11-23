@@ -1,5 +1,6 @@
 import { app } from "./runtime.js";
 import { scrubBreadcrumb, scrubEvent, sentryUserId } from "./sentry-scrub.js";
+import { trialStubOn } from "./trial-stub.js";
 import { onDevHost } from "./usage-events.js";
 import { usageSharingOn } from "./usage-pref.js";
 
@@ -13,7 +14,7 @@ const SENTRY_INTEGRITY = "sha384-L/HYBH2QCeLyXhcZ0hPTxWMnyMJburPJyVoBmRk4OoilqrO
 const DSN = "https://0afc21b09cad789f83621da6e37d8f9d@o4512196136206336.ingest.us.sentry.io/4512196143742976";
 
 function sentryAllowed() {
-  return usageSharingOn() && !onDevHost();
+  return !trialStubOn() && usageSharingOn() && !onDevHost();
 }
 
 let pendingSession = null;

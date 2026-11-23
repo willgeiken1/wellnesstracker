@@ -148,7 +148,7 @@ function renderSheet() {
   } else if (app.ui.sheet === "auth") {
     const up = app.ui.sd.mode === "signup";
     inner = `<h3>${up ? "Create account" : "Sign in"}</h3>
-      <p class="sub" style="margin:-6px 0 14px">${up ? "Your workouts on this phone will be backed up to your new account." : "Sign in to back up your workouts and connect Oura."}</p>
+      <p class="sub" style="margin:-6px 0 14px">${up ? "Your workouts on this phone will be backed up to your new account." : (app.trialStub ? "Sign in to erase the workouts saved on this phone." : "Sign in to back up your workouts and connect Oura.")}</p>
       <label class="field-label" for="authEmail">Email</label>
       <input class="text-in" id="authEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" value="${app.esc(app.ui.sd.email || "")}">
       <label class="field-label" for="authPw">Password${up ? " (6+ characters)" : ""}</label>
