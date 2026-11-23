@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { crashEvent, scrubText, usageEvent, sanitizeCapture, type CrashEvent } from '../src/telemetry/scrub';
+import { ROUTINE_SENTINELS, routineFixtureRows } from '../fixtures/routines';
 
 const mockSentry={init:jest.fn(),close:jest.fn(()=>Promise.resolve()),setUser:jest.fn()};
 const mockPh={identify:jest.fn(),reset:jest.fn(),capture:jest.fn(),optIn:jest.fn(()=>Promise.resolve()),optOut:jest.fn(()=>Promise.resolve())};
@@ -59,6 +60,27 @@ describe('scrubbing',()=>{
     expect(out.$set).toEqual({$os:'iOS'});
     expect(usageEvent({event:'$identify',properties:{$anon_distinct_id:'a',email:'x@y.z'}})!.properties).toEqual({$anon_distinct_id:'a',$geoip_disable:true});
     expect(sanitizeCapture('food_logged',{method:'describe'})).toBeNull();
+  });
+  test('routine names, doses, units, notes, sites and supply reach neither Sentry nor PostHog',()=>{
+    // Daily routines are medication data. Every synthetic value is pushed at each way out.
+    const rows=routineFixtureRows(),text=rows.map(row=>Object.values(row.data).join(' ')).join(' | ');
+    for(const sentinel of ROUTINE_SENTINELS)expect(text).toContain(sentinel);
+    const event={event_id:'e1',level:'error',message:text,
+      exception:{values:[{type:'Error',value:text,stacktrace:{frames:[{filename:'app:///index.bundle',function:'logItem',lineno:1,colno:1,in_app:true,vars:{rows}}]}}]},
+      breadcrumbs:[{category:'ui.click',message:text,data:{rows}}],extra:{dailyRoutines:rows,note:text},tags:{item:ROUTINE_SENTINELS[0],site:'right-thigh'},
+      request:{url:`https://example.invalid/routines?note=${encodeURIComponent(text)}`,data:{rows}},user:{id:ID},contexts:{routines:{rows}}} as unknown as CrashEvent;
+    const crash=JSON.stringify(crashEvent(event))+String(scrubText(text));
+    const usage=JSON.stringify([
+      usageEvent({event:'tab_viewed',properties:{tab:'home',note:text,item:ROUTINE_SENTINELS[0],amount:13.25,unit:'zq-unit',site:'right-thigh',onHand:4417,rows},$set:{routine:text}}),
+      usageEvent({event:'routine_logged',properties:{item:ROUTINE_SENTINELS[0],amount:13.25}}),
+      sanitizeCapture('tab_viewed',{tab:'home',note:text,rows}),
+      sanitizeCapture('routine_logged',{item:ROUTINE_SENTINELS[0],amount:13.25,unit:'zq-unit'}),
+    ]);
+    for(const sentinel of ROUTINE_SENTINELS){expect(crash).not.toContain(sentinel);expect(usage).not.toContain(sentinel);}
+    expect(crash+usage).not.toMatch(/Zzyq|zq-unit|scribble|thigh|U-100/i);
+    expect(usageEvent({event:'routine_logged',properties:{}})).toBeNull();
+    expect(tabForPath('/routines')).toBeUndefined();
+    expect(tabForPath('/daily-routines')).toBeUndefined();
   });
   test('routes map to tabs and nothing else',()=>{
     expect(['/','/workouts','/food/log','/settings/privacy','/workout','/score'].map(tabForPath)).toEqual(['home','workouts','food','settings',undefined,undefined]);
