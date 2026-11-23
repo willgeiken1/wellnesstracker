@@ -11,6 +11,7 @@ import { addRoutinePart, routineParts, routineShows, toggleFocus, type RoutinePa
 import { routineClock24 } from '@/features/routines/model/types';
 import { ChoiceChips, Group, InfoRow, NavRow, SectionLabel, ToggleRow } from '@/features/settings/parts';
 import { routinesText, type RoutinesTabKey } from '@/i18n/en';
+import { converterInBuild, converterShown } from './converter-shown';
 import { routineRoutes } from './entry-points';
 import { Note, TextButton, semibold } from './parts';
 import { useRoutines } from './use-routines';
@@ -25,15 +26,21 @@ export const ROUTINE_FAQ: readonly (readonly [RoutinesTabKey, RoutinesTabKey])[]
 const PART_LABEL: Partial<Record<string, RoutinesTabKey>> = { calculator: 'converter' };
 const PART_HINT: Partial<Record<string, RoutinesTabKey>> = { calculator: 'partConverterHint', enhancers: 'partEnhancersHint', rest: 'partRestHint' };
 export const partLabel = (part: RoutinePart) => (PART_LABEL[part.key] ? routinesText(PART_LABEL[part.key] as RoutinesTabKey) : part.label);
-export const partHint = (part: RoutinePart) => (PART_HINT[part.key] ? routinesText(PART_HINT[part.key] as RoutinesTabKey) : part.hint);
+/* In a build with the converter cut, the line for the Peptides and Enhancers tabs does not name it either. */
+export const partHint = (part: RoutinePart) => (part.key === 'enhancers' && !converterInBuild() ? routinesText('partEnhancersHintPlain')
+  : PART_HINT[part.key] ? routinesText(PART_HINT[part.key] as RoutinesTabKey) : part.hint);
+/** The parts Settings offers and the questions it lists. With the converter cut, neither names it. */
+const CONVERTER_PART = 'calculator';
+const CONVERTER_FAQ: RoutinesTabKey = 'faqConverterQ';
 
 /** Routines settings: Focus mode, the hour a new day starts, what can be added to the page, the setup quiz
  * and the questions people ask. */
 export function RoutinesSettings() {
   const routines = useRoutines(), haptic = useSelectionHaptic(), glide = useLayoutMotion();
   const { store, view } = routines;
-  const missing = routineParts(store, feature => routineShows(feature, store)).filter(part => !part.present);
-  const converter = routineShows('calculator', store);
+  const missing = routineParts(store, feature => routineShows(feature, store)).filter(part => !part.present && (part.key !== CONVERTER_PART || converterInBuild()));
+  const converter = converterShown(store);
+  const faq = ROUTINE_FAQ.filter(([question]) => question !== CONVERTER_FAQ || converterInBuild());
   return <Screen title={routinesText('settings')}>
     <Group testID="routines-settings-focus">
       <ToggleRow testID="routines-focus" label={routinesText('focus')} hint={routinesText('focusNote')} value={view.prefs.focusMode === true}
@@ -66,7 +73,7 @@ export function RoutinesSettings() {
     <SectionLabel>{routinesText('faq')}</SectionLabel>
     <Note testID="routines-faq-doctor">{routinesText('doctor')}</Note>
     <View testID="routines-faq" style={{ gap: tokens.spacing[2] }}>
-      {ROUTINE_FAQ.map(([question, answer]) => <View key={question} style={{ gap: tokens.spacing[0] }}>
+      {faq.map(([question, answer]) => <View key={question} style={{ gap: tokens.spacing[0] }}>
         <ThemedText accessibilityRole="header" style={semibold}>{routinesText(question)}</ThemedText>
         <ThemedText muted>{routinesText(answer)}</ThemedText>
       </View>)}

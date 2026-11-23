@@ -21,19 +21,25 @@ function Readout({ testID, label, value, unit }: { testID: string; label: string
 }
 
 /**
- * The second step of the Add item sheet. It converts the three amounts the
- * user typed into a volume and into U-100 units, and shows the arithmetic.
- * It never fills a field, and nothing it shows is a suggested amount.
+ * The converter: the second step of the Add item sheet, and a sheet of its
+ * own when it is opened from the Peptides tab or an item's details. It
+ * converts the three amounts the user typed into a volume and into U-100
+ * units, and shows the arithmetic. The only amount it ever opens with is one
+ * the user typed on the item; nothing it shows is a suggested amount.
  * Save is offered only for a dose item that is already saved.
+ *
+ * `back` is the way back to the form, when there is one. `onDone` is what
+ * the Close button at the bottom does: back to the form inside Add item,
+ * and out of the sheet when the converter is the sheet.
  */
-export function ConverterStep({ draft, onDraft, backLabel, onBack, onClose, canSave, onSave, error, toast }: {
-  draft: ConverterDraft; onDraft: (next: ConverterDraft) => void; backLabel: string; onBack: () => void; onClose: () => void;
+export function ConverterStep({ draft, onDraft, back, onDone, onClose, canSave, onSave, error, toast }: {
+  draft: ConverterDraft; onDraft: (next: ConverterDraft) => void; back?: { label: string; onPress: () => void }; onDone: () => void; onClose: () => void;
   canSave: boolean; onSave: (note: string, calc: { vialAmount: unknown; waterMl: unknown; vialUnit: string }) => void; error?: string; toast?: string | null;
 }) {
   const { colors } = useTheme();
   const view = converterView(draft);
   const set = (patch: Partial<ConverterDraft>) => onDraft({ ...draft, ...patch });
-  return <SheetFrame testID="converter" title={rs('converter')} onClose={onClose} back={{ label: backLabel, onPress: onBack }} toast={toast}>
+  return <SheetFrame testID="converter" title={rs('converter')} onClose={onClose} back={back} toast={toast}>
     <ThemedText testID="converter-intro" muted>{rs('converterIntro')}</ThemedText>
     <AmountCard testID="converter-vial" label={rs('vialAmount')} value={draft.vial} onChange={(vial) => set({ vial })} tone="sleep"
       units={CALC_UNITS} unit={draft.vialUnit} onUnit={(vialUnit) => set({ vialUnit })} unitLabel={rs('vialUnit')} stepsLabel={rs('changeVial')} />
@@ -71,7 +77,7 @@ export function ConverterStep({ draft, onDraft, backLabel, onBack, onClose, canS
         <Help>{rs('saveNoteHelp')}</Help>
       </>}
       {!!error && <ErrorLine testID="converter-error">{error}</ErrorLine>}
-      <OutlineButton testID="converter-done" label={rs('close')} onPress={onBack} />
+      <OutlineButton testID="converter-done" label={rs('close')} onPress={onDone} />
     </View>
   </SheetFrame>;
 }

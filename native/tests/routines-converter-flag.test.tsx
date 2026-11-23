@@ -18,7 +18,7 @@ test('with the flag off there is no link, no converter step and no mention of it
   const repo = seededRepository();
   jest.mocked(useAuth).mockReturnValue({ repository: repo } as ReturnType<typeof useAuth>);
   const { itemId } = change(repo, (store, clock, newId) => saveItem(store, { name: 'Sample vial', kind: 'dose', amount: '250', unit: 'mcg', type: 'peptide', time: '', blockIds: [], onHand: '', mixedOn: '' }, clock, newId))!;
-  await render(<AddItemSheet itemId={itemId} converter />, { wrapper });
+  await render(<AddItemSheet itemId={itemId} />, { wrapper });
   expect(screen.getByRole('header', { name: 'Edit item' })).toBeTruthy();
   expect(screen.getByRole('radio', { name: 'Peptide' }).props.accessibilityState.checked).toBe(true);
   expect(screen.queryByTestId('item-converter')).toBeNull();

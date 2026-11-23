@@ -261,7 +261,7 @@ describe('copy and code guards for the sheets', () => {
   });
 
   test('the sheets never log, report or send, and reach no telemetry, AI, sync or server code', () => {
-    expect(sources.length).toBe(22);
+    expect(sources.length).toBe(24);
     for (const file of sources) {
       const text = fs.readFileSync(file, 'utf8');
       expect([file, /\bconsole\s*\.|\b(?:fetch|XMLHttpRequest|WebSocket|sendBeacon)\s*\(|\b(?:Sentry|PostHog|posthog)\b|captureException|captureMessage/.test(text)]).toEqual([file, false]);

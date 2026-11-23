@@ -18,7 +18,8 @@ import { arcReadout, arcStepMinutes, clockMinutes, typedClock } from './add-item
 import { openConverterDraft, type ConverterDraft } from './converter';
 import { ConverterStep } from './converter-step';
 import { commitRoutines, newRoutineId, routineClockNow, useRoutines, type RoutinesData } from './add-item-data';
-import { CONCENTRATION_CONVERTER_ENABLED } from './converter-flag';
+import { ConverterSheet } from './converter-sheet';
+import { converterInBuild } from './converter-shown';
 import { announce, Block, ErrorLine, Help, OutlineButton, PrimaryButton, SheetFrame, SheetUnavailable, useSheetClose } from './add-item-frame';
 import { Glyph, type GlyphName } from './add-item-glyphs';
 import {
@@ -49,14 +50,14 @@ function PillButton({ testID, label, onPress, disabled = false }: { testID: stri
   </Tappable>;
 }
 
-function ItemForm({ data, view, source, startInConverter }: { data: RoutinesData; view: RoutineView; source: ItemSheetSource; startInConverter: boolean }) {
+function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineView; source: ItemSheetSource }) {
   const { colors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const tick = useSelectionHaptic();
   const glide = useLayoutMotion();
   const [opened] = useState(() => openItemDraft(view, source));
   const [draft, setDraft] = useState<ItemSheetDraft>(opened);
-  const [step, setStep] = useState<'form' | 'converter'>(startInConverter && CONCENTRATION_CONVERTER_ENABLED ? 'converter' : 'form');
+  const [step, setStep] = useState<'form' | 'converter'>('form');
   const [calc, setCalc] = useState<ConverterDraft>(() => openConverterDraft());
   const [error, setError] = useState('');
   const [hint, setHint] = useState<{ at: 'type' | 'routine'; text: string } | null>(null);
@@ -76,8 +77,7 @@ function ItemForm({ data, view, source, startInConverter }: { data: RoutinesData
   const title = editing ? rs('editItem') : rs('addItem');
   const clock = routineClockNow(data.store);
   const doseOffered = opened.kind === 'dose' || routineShows('doses', data.store);
-  const supplyOffered = draft.kind === 'dose' || draft.onHand !== '';
-  const converterOffered = CONCENTRATION_CONVERTER_ENABLED && draft.kind === 'dose' && draft.type === 'peptide';
+  const converterOffered = converterInBuild() && draft.kind === 'dose' && draft.type === 'peptide';
   const savedItem = editing ? view.items.find((row) => row.id === opened.itemId) : undefined;
   const types = sheetTypeChoices(view);
   const routines = sheetRoutines(view);
@@ -155,8 +155,9 @@ function ItemForm({ data, view, source, startInConverter }: { data: RoutinesData
     setStep('form'); setToast(rs('noteSaved')); announce(rs('noteSaved'));
   };
 
-  if (step === 'converter' && CONCENTRATION_CONVERTER_ENABLED) {
-    return <ConverterStep draft={calc} onDraft={setCalc} backLabel={title} onBack={() => setStep('form')} onClose={close}
+  if (step === 'converter' && converterInBuild()) {
+    const toForm = () => setStep('form');
+    return <ConverterStep draft={calc} onDraft={setCalc} back={{ label: title, onPress: toForm }} onDone={toForm} onClose={close}
       canSave={!!savedItem && savedItem.kind === 'dose'} onSave={saveNote} error={calcError} />;
   }
 
@@ -262,12 +263,13 @@ function ItemForm({ data, view, source, startInConverter }: { data: RoutinesData
       <Help>{draft.type ? rs('helpTyped') : rs('helpPlain')}</Help>
     </Block>
 
-    {supplyOffered && <Block label={rs('onHand')}>
+    {/* On hand is offered for a check and for a dose alike. Mixed on is for a dose only. */}
+    <Block label={rs('onHand')}>
       <TextInput testID="item-on-hand" accessibilityLabel={rs('onHand')} value={draft.onHand} onChangeText={(text) => change({ onHand: text.replace(/[^0-9]/g, '') })}
         placeholder={rs('onHandHidden')} placeholderTextColor={colors['text-muted']} keyboardType="number-pad" maxLength={4} selectionColor={colors.accent}
         style={{ minHeight: 44, borderRadius: 12, paddingHorizontal: tokens.spacing[2], backgroundColor: colors['surface-2'], color: colors.text, fontSize: tokens.type.body, fontFamily: tokens.font.numeral }} />
       <Help>{rs('onHandHelp')}</Help>
-    </Block>}
+    </Block>
 
     {draft.kind === 'dose' && <Block label={rs('mixedOn')}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: tokens.spacing[1] }}>
@@ -292,14 +294,21 @@ function ItemForm({ data, view, source, startInConverter }: { data: RoutinesData
 }
 
 /**
- * Add item, and Edit item when it is opened with an item. The form and the
- * concentration converter are two steps of the one sheet, so going back
- * keeps everything typed.
+ * Add item, and Edit item when it is opened with an item. From the dose
+ * card the form and the concentration converter are two steps of the one
+ * sheet, so going back keeps everything typed. Opened on the converter
+ * (`converter`), the sheet is the converter alone and closing it leaves:
+ * there is no item form behind it to land on.
  */
 export function AddItemSheet({ itemId, type, blockId, converter = false }: { itemId?: string; type?: string; blockId?: string; converter?: boolean }) {
+  if (converter) return <ConverterSheet itemId={itemId} />;
+  return <ItemSheet itemId={itemId} type={type} blockId={blockId} />;
+}
+
+function ItemSheet({ itemId, type, blockId }: { itemId?: string; type?: string; blockId?: string }) {
   const data = useRoutines();
   const { close } = useSheetClose(false);
   if (!data.view) return <SheetUnavailable testID="add-item" title={itemId ? rs('editItem') : rs('addItem')} onClose={close} />;
   if (itemId && !data.view.items.some((row) => row.id === itemId)) return <SheetUnavailable testID="add-item" title={rs('editItem')} onClose={close} />;
-  return <ItemForm key={itemId ?? 'new'} data={data} view={data.view} source={{ itemId, type, blockId }} startInConverter={converter} />;
+  return <ItemForm key={itemId ?? 'new'} data={data} view={data.view} source={{ itemId, type, blockId }} />;
 }

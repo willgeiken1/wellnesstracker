@@ -70,9 +70,15 @@ test('it opens from the dose card with only what was typed, shows dashes, and ne
 
 test('it converts the three amounts entered and words the result as arithmetic, not as a dose to take', async () => {
   await open({ itemId: savedDose(), converter: true });
-  expect(screen.getByRole('button', { name: 'Edit item' })).toBeTruthy();
-  // Opened straight on the converter, nothing is carried in.
-  expect(screen.getByTestId('converter-amount-input').props.value).toBe('');
+  // Opened by itself, it is the whole sheet: there is no item form behind it and no way into one.
+  expect(screen.queryByRole('button', { name: 'Edit item' })).toBeNull();
+  expect(screen.queryByTestId('converter-back')).toBeNull();
+  expect(screen.queryByTestId('item-name')).toBeNull();
+  // The amount and unit saved on the item carry in. The vial and the water start empty.
+  expect(screen.getByTestId('converter-amount-input').props.value).toBe('250');
+  expect(screen.getByTestId('converter-amount-unit-mcg').props.accessibilityState.checked).toBe(true);
+  for (const field of ['converter-vial-input', 'converter-water-input']) expect(screen.getByTestId(field).props.value).toBe('');
+  await type('converter-amount-input', '');
   await type('converter-vial-input', '5');
   await type('converter-water-input', '2');
   await type('converter-amount-input', '250');
@@ -117,16 +123,34 @@ test('Save shows only for a saved dose item, and writes the note without logging
   expect(saved.items.find((row) => row.id === itemId)).toMatchObject({ note: '0.1 mL · 10 U-100 units. What you entered. Not a recommendation.', calcVial: 5, calcWater: 2, calcVialUnit: 'mg' });
   expect(saved.logs).toHaveLength(0);
   expect(saved.compounds.find((row) => row.id === saved.items[0].compoundId)).toMatchObject({ amount: 250, unit: 'mcg' });
-  // Back on the form, with the result said once.
-  expect(screen.getByRole('header', { name: 'Edit item' })).toBeTruthy();
-  expect(text('add-item-toast')).toMatchObject({ props: { children: 'Note saved.' } });
+  // It stays on the converter, with the result said once. Close then dismisses the sheet.
+  expect(screen.getByRole('header', { name: 'Concentration converter' })).toBeTruthy();
+  expect(text('converter-toast')).toMatchObject({ props: { children: 'Note saved.' } });
+  expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith('Note saved.');
   expect(router.back).not.toHaveBeenCalled();
+  await press('converter-done');
+  expect(router.back).toHaveBeenCalledTimes(1);
 });
 
 test('a saved check item gets the converter with no Save', async () => {
   await open({ itemId: savedDose('check'), converter: true });
   expect(screen.getByRole('header', { name: 'Concentration converter' })).toBeTruthy();
   expect(screen.queryByTestId('converter-save')).toBeNull();
+  // A check item has no amount to carry in.
+  expect(screen.getByTestId('converter-amount-input').props.value).toBe('');
+  // Close dismisses the sheet. It does not land on an item form nobody opened.
   await press('converter-done');
-  expect(screen.getByRole('header', { name: 'Edit item' })).toBeTruthy();
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('header', { name: 'Edit item' })).toBeNull();
+});
+
+test('opened with no item, from the Peptides tab, it has no Save and Close dismisses it', async () => {
+  savedDose();
+  await open({ converter: true });
+  expect(screen.getByRole('header', { name: 'Concentration converter' })).toBeTruthy();
+  expect(screen.getByTestId('converter-amount-input').props.value).toBe('');
+  expect(screen.queryByTestId('converter-save')).toBeNull();
+  expect(screen.queryByTestId('converter-back')).toBeNull();
+  await press('converter-done');
+  expect(router.back).toHaveBeenCalledTimes(1);
 });
