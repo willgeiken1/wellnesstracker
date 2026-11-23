@@ -188,3 +188,43 @@ describe('INS-01 proposal doc', () => {
     expect(doc).toContain(`- [x] Every graded pair has a contrast value: ${perMode} per mode, ${perMode * 2} per palette, v2 and proposed.`);
   });
 });
+
+/* Routines colours a routine from the palette: its name and time as 13pt text on a card and on a well, and its
+   finished tick as a fill with the on-accent ink over it. Every palette, light and dark, has to carry both. */
+describe('Routines slot colours', () => {
+  const { createTheme, palettes } = jest.requireActual('../src/design/tokens') as typeof import('../src/design/tokens');
+  const slots = jest.requireActual('../src/features/routines-ui/colors') as typeof import('../src/features/routines-ui/colors');
+  const themes = palettes.flatMap(palette => (['light', 'dark'] as const).map(mode => ({ name: `${palette} ${mode}`, colors: createTheme(mode, palette) })));
+
+  it('covers every palette in both modes', () => {
+    expect(themes).toHaveLength(22);
+    expect(slots.SLOT_MIN_CONTRAST).toBe(MIN_TEXT);
+  });
+  it.each(themes)('$name: each slot reads as small text on a card and a well, and carries the on-accent ink', ({ colors }) => {
+    for (const id of [...slots.SLOT_IDS, 'tool'] as const) {
+      const tone = id === 'tool' ? slots.toolColor(colors) : slots.slotColor(colors, id);
+      expect(tone).toMatch(/^#[0-9A-F]{6}$/);
+      expect([id, 'on surface', contrast(tone, colors.surface) >= MIN_TEXT]).toEqual([id, 'on surface', true]);
+      expect([id, 'on surface-2', contrast(tone, colors['surface-2']) >= MIN_TEXT]).toEqual([id, 'on surface-2', true]);
+      expect([id, 'under on-accent', contrast(colors['on-accent'], tone) >= MIN_TEXT]).toEqual([id, 'under on-accent', true]);
+    }
+  });
+  it('leaves a colour that already passes exactly as the palette gives it, and moves the others only toward the text colour', () => {
+    let untouched = 0, moved = 0;
+    for (const { colors } of themes) {
+      for (const token of ['accent', 'sleep', 'food'] as const) {
+        const tone = slots.legible(colors, token);
+        const passes = [colors.surface, colors['surface-2'], colors['on-accent']].every(other => contrast(colors[token], other) >= MIN_TEXT);
+        if (passes) { expect(tone).toBe(colors[token].toUpperCase()); untouched += 1; } else { expect(tone).not.toBe(colors[token].toUpperCase()); moved += 1; }
+      }
+    }
+    expect(untouched).toBeGreaterThan(0);
+    expect(untouched + moved).toBe(66);
+  });
+  it('reads an unknown stored colour as the first slot', () => {
+    const colors = themes[0].colors;
+    expect(slots.slotId('teal')).toBe('citrus');
+    expect(slots.slotColor(colors, undefined)).toBe(slots.slotColor(colors, 'citrus'));
+    expect(slots.slotColor(colors, 'lavender')).toBe(slots.toolColor(colors));
+  });
+});
