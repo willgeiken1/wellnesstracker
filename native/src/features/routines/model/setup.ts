@@ -358,7 +358,7 @@ export const ADDABLE_PARTS: readonly AddablePart[] = Object.freeze([
   Object.freeze({ key: "enhancers", kind: "type", types: ["peptide", "enhancer"], tools: ["doses", "calculator", "injection", "supply"] }),
   Object.freeze({ key: "meds", kind: "type", types: ["medication"], tools: ["doses"] }),
   Object.freeze({ key: "doses", kind: "tool", label: "Dose amounts", hint: "Log an amount and unit on an item.", tools: ["doses"] }),
-  Object.freeze({ key: "calculator", kind: "tool", label: "Reconstitution calculator", hint: "Works out the arithmetic for a vial you mix.", tools: ["calculator", "injection"] }),
+  Object.freeze({ key: "calculator", kind: "tool", label: "Concentration converter", hint: "Works out the arithmetic for a vial you mix.", tools: ["calculator", "injection"] }),
   Object.freeze({ key: "rest", kind: "tool", label: "Rest day button", hint: "Log a rest day on the Now card.", tools: ["rest"] }),
   Object.freeze({ key: "tips", kind: "tool", label: "Getting started tips", hint: "A short card on how the page works.", tools: ["tips"] }),
 ] as const);
@@ -367,7 +367,7 @@ const BLOCK_HINTS: Readonly<Record<string, string>> = Object.freeze({
   morning: "Habits and checks for the start of the day.",
   supplements: "A Supplements tab for vitamins, minerals and skin care.",
   night: "Habits and checks for the end of the day.",
-  enhancers: "Peptides and Enhancers tabs, with dose amounts, the calculator and supply.",
+  enhancers: "Peptides and Enhancers tabs, with dose amounts, the converter and supply.",
   meds: "A Medications tab, with dose amounts and countdown.",
 });
 

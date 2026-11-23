@@ -253,10 +253,10 @@ describe('adding a part from settings', () => {
     expect(parts.map(part => [part.key, part.label, part.present])).toEqual([
       ['morning', 'Morning routine', true], ['night', 'Night routine', true],
       ['supplements', 'Supplements tab', false], ['enhancers', 'Peptides and Enhancers tabs', false], ['meds', 'Medications tab', false],
-      ['doses', 'Dose amounts', false], ['calculator', 'Reconstitution calculator', false], ['rest', 'Rest day button', false], ['tips', 'Getting started tips', false],
+      ['doses', 'Dose amounts', false], ['calculator', 'Concentration converter', false], ['rest', 'Rest day button', false], ['tips', 'Getting started tips', false],
     ]);
     expect(parts.find(part => part.key === 'calculator')?.hint).toBe('Works out the arithmetic for a vial you mix.');
-    expect(parts.find(part => part.key === 'enhancers')?.hint).toBe('Peptides and Enhancers tabs, with dose amounts, the calculator and supply.');
+    expect(parts.find(part => part.key === 'enhancers')?.hint).toBe('Peptides and Enhancers tabs, with dose amounts, the converter and supply.');
     expect(parts.find(part => part.key === 'morning')?.hint).toBe('Habits and checks for the start of the day.');
     const shift = done(seeded(), { goals: ['habits'], days: 'rotating' });
     expect(routineParts(shift, () => true).slice(0, 2).map(part => part.label)).toEqual(['Wake-up routine', 'Wind-down routine']);
