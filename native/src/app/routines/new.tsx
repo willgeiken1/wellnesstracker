@@ -1,7 +1,5 @@
-import { RoutineComing } from '@/features/routines-ui/coming';
-import { routinesText } from '@/i18n/en';
+import { RoutineSheet } from '@/features/routines-ui/new-routine';
 
-/* Placeholder: this route's own screen is built apart from the tab and replaces this file. */
-export default function RoutinePlaceholderRoute() {
-  return <RoutineComing title={routinesText('newRoutine')} />;
+export default function NewRoutineRoute() {
+  return <RoutineSheet />;
 }

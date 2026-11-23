@@ -1,7 +1,8 @@
-import { RoutineComing } from '@/features/routines-ui/coming';
-import { routinesText } from '@/i18n/en';
+import { useLocalSearchParams } from 'expo-router';
+import { RoutineSheet } from '@/features/routines-ui/new-routine';
 
-/* Placeholder: this route's own screen is built apart from the tab and replaces this file. */
-export default function RoutinePlaceholderRoute() {
-  return <RoutineComing title={routinesText('editRoutines')} />;
+/** Edit routine: the New routine form, opened on one routine. */
+export default function EditRoutineRoute() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  return <RoutineSheet blockId={typeof id === 'string' ? id : ''} />;
 }
