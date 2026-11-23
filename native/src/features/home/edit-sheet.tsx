@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { PRESSED_FILL_OPACITY, Tappable } from '@/components/tappable';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +26,7 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
   const fill = tone === 'accent' ? colors.accent : colors['surface-2'];
   const ink = tone === 'accent' ? colors['on-accent'] : tone === 'danger' ? colors.danger : colors.text;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fill, opacity: disabled ? 0.35 : pressed ? 0.8 : 1 })}>
+    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fill, opacity: disabled ? 0.35 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}><Path d={GLYPH[glyph]} fill="none" stroke={ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
   </Pressable>;
 }
@@ -43,10 +44,10 @@ export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }:
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'left', 'right', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: tokens.spacing[3] }}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1, fontWeight: '600' }}>{t('homeEditTitle')}</ThemedText>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('done')} onPress={onClose} hitSlop={6}
+        <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={t('done')} onPress={onClose} hitSlop={6}
           style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors.accent }}>
           <ThemedText style={{ color: colors['on-accent'], fontWeight: '600' }}>{t('done')}</ThemedText>
-        </Pressable>
+        </Tappable>
       </View>
       <ScrollView contentContainerStyle={{ padding: tokens.spacing[3], paddingTop: 0, gap: tokens.spacing[1] }}>
         {unsaved && <ThemedText testID="home-edit-unsaved" accessibilityRole="alert" variant="caption" style={{ color: colors.danger }}>{t('unsavedHere')}</ThemedText>}
@@ -58,10 +59,10 @@ export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }:
             <View style={{ flex: 1, gap: 2 }}>
               <ThemedText style={{ fontWeight: '600' }}>{name(id)}</ThemedText>
               {isSmall(id)
-                ? <Pressable accessibilityRole="switch" accessibilityLabel={`${name(id)}, ${t('homeEditWide')}`} accessibilityState={{ checked: wide }}
+                ? <Tappable accessibilityRole="switch" accessibilityLabel={`${name(id)}, ${t('homeEditWide')}`} accessibilityState={{ checked: wide }}
                   onPress={() => onChange(setWide(tiles, id, !wide))} hitSlop={{ top: 10, bottom: 10 }} style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
                   <ThemedText variant="caption" style={{ color: colors.accent, fontWeight: '600' }}>{t(wide ? 'homeEditWideOn' : 'homeEditWideOff')}</ThemedText>
-                </Pressable>
+                </Tappable>
                 : <ThemedText muted variant="caption">{t(ABOUT[id])}</ThemedText>}
             </View>
             <Round glyph="up" label={`${t('homeEditUp')}, ${name(id)}`} disabled={index === 0} onPress={() => onChange(moveTile(tiles, id, -1))} />

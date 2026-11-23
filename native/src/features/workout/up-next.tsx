@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
@@ -21,7 +22,7 @@ export function UpNext({ name, detail, onPress, onSkip, onSwap }: { name: string
           <Pressable accessibilityRole="button" accessibilityLabel={`${t('upNext')}: ${name}, ${detail}`} accessibilityHint={t('upNextHint')}
             accessibilityActions={actions} onAccessibilityAction={e => { if (e.nativeEvent.actionName === 'skip') onSkip?.(); else if (e.nativeEvent.actionName === 'swap') onSwap(); }}
             onPress={onPress}
-            style={({ pressed }) => ({ borderRadius: 22, overflow: 'hidden', backgroundColor: colors.surface, paddingVertical: tokens.spacing[4], paddingHorizontal: tokens.spacing[3], minHeight: 84, justifyContent: 'center', opacity: pressed ? 0.85 : 1, ...tokens.elevation.ios, shadowOpacity: 0.08 })}>
+            style={({ pressed }) => ({ borderRadius: 22, overflow: 'hidden', backgroundColor: colors.surface, paddingVertical: tokens.spacing[4], paddingHorizontal: tokens.spacing[3], minHeight: 84, justifyContent: 'center', opacity: pressed ? PRESSED_FILL_OPACITY : 1, ...tokens.elevation.ios, shadowOpacity: 0.08 })}>
             <Svg accessible={false} pointerEvents="none" width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
               <Defs><LinearGradient id="upNext" x1="0" y1="0" x2="1" y2="0.6">
                 <Stop offset="0" stopColor={training} stopOpacity={0.26} />

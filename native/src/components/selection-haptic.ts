@@ -9,12 +9,15 @@ function useOptionalRepository(): Repository | null {
   try { return useAuth().repository ?? null; } catch { return null; }
 }
 
-/** A light tick when a choice changes, like a tab or a segment. It follows the Haptics switch in Settings,
- * stays quiet while the app is in the background, and never throws. */
+/** The one light tick the whole app uses. It follows the Haptics switch in Settings, stays quiet while the
+ * app is in the background, and never throws. */
+export function selectionTick(repository: Repository | null) {
+  if (!repository || repository.localGet<boolean>('haptics') === false || AppState.currentState !== 'active') return;
+  void Haptics.selectionAsync().catch(() => {});
+}
+
+/** A light tick when a choice changes, like a tab or a segment. */
 export function useSelectionHaptic() {
   const repository = useOptionalRepository();
-  return useCallback(() => {
-    if (!repository || repository.localGet<boolean>('haptics') === false || AppState.currentState !== 'active') return;
-    void Haptics.selectionAsync().catch(() => {});
-  }, [repository]);
+  return useCallback(() => selectionTick(repository), [repository]);
 }

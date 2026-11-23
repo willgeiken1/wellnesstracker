@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -31,7 +32,7 @@ function ProfileCard() {
   const sub = lines.filter(Boolean).join(' · ');
   const initial = (name || email).charAt(0).toUpperCase();
   return <Pressable testID="settings-profile" accessibilityRole="button" accessibilityLabel={[title, sub].filter(Boolean).join(', ')}
-    accessibilityHint={t('account')} onPress={() => open('account')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+    accessibilityHint={t('account')} onPress={() => open('account')} style={({ pressed }) => ({ opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <Card style={{ borderRadius: 18, padding: tokens.spacing[3], flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
       <View style={{ minWidth: 52, minHeight: 52, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['accent-tint'] }}>
         {initial ? <ThemedText variant="title" style={{ color: colors.text }}>{initial}</ThemedText>

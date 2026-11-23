@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '@/components/card';
@@ -44,7 +45,7 @@ function workings(pillar: ScorePillar, score: Score): string[] {
 function Step({ glyph, label, onPress, disabled }: { glyph: 'minus' | 'plus'; label: string; onPress: () => void; disabled: boolean }) {
   const { colors } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.35 : pressed ? 0.8 : 1 })}>
+    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.35 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}>
       <Path d={glyph === 'minus' ? 'M6 12h12' : 'M12 6v12M6 12h12'} fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" />
     </Svg>
@@ -100,7 +101,7 @@ function Detail({ store }: { store: WorkoutStore }) {
       </Card>;
     })}
     {!sameWeights(weights, DEFAULT_WEIGHTS) && <Pressable testID="score-reset" accessibilityRole="button" accessibilityLabel={t('scoreReset')} onPress={() => change({ ...DEFAULT_WEIGHTS })}
-      style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 })}>
+      style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: tokens.spacing[3], borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
       <ThemedText style={semibold}>{t('scoreReset')}</ThemedText>
     </Pressable>}
     {unsaved && <ThemedText testID="score-unsaved" accessibilityRole="alert" variant="caption" style={{ color: colors.danger, lineHeight: 19 }}>{t('unsavedHere')}</ThemedText>}

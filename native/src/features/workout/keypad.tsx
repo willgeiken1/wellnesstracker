@@ -17,6 +17,8 @@ import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { useTheme } from "@/design/theme-provider";
 import { Eyebrow, Line, Sheet, layout } from "./primitives";
+/** The highlight a held glass key shows, as the alpha of the text colour: about 12%. */
+export const GLASS_PRESSED_ALPHA = "1F";
 export interface Cursor {
   side?: "right";
   entryId: string;
@@ -315,8 +317,11 @@ export function Keypad({
                 }
               }
             };
+            // Dimming the parent of a glass layer can make it flicker, so a glass key lights up from inside instead.
+            const glass = liquid && key !== "next" && !unavailable;
             return (
               <Pressable
+                dim={glass ? "none" : "fill"}
                 testID={key === "next" ? "keypad-next" : `keypad-key-${key}`}
                 key={`${key}${i}`}
                 accessibilityRole="button"
@@ -339,7 +344,8 @@ export function Keypad({
                   },
                 ]}
               >
-                {liquid && key !== "next" && !unavailable && (
+                {({ pressed }) => (<>
+                {glass && (
                   <GlassView
                     testID="keypad-glass"
                     pointerEvents="none"
@@ -371,6 +377,14 @@ export function Keypad({
                     {unavailable ? "" : text}
                   </ThemedText>
                 )}
+                {glass && pressed && (
+                  <View
+                    testID="keypad-key-pressed"
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFill, { backgroundColor: `${colors.text}${GLASS_PRESSED_ALPHA}` }]}
+                  />
+                )}
+                </>)}
               </Pressable>
             );
           })}

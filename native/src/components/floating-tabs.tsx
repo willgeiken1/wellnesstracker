@@ -1,4 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
+import { PRESSED_FILL_OPACITY, Tappable } from './tappable';
 import { Pressable, View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
@@ -40,7 +41,7 @@ export function DockButton({ action }: { action: DockAction }) {
   const { colors } = useTheme();
   return <Pressable testID="dock-action" accessibilityRole="button" accessibilityLabel={action.label} accessibilityState={{ expanded: action.expanded }}
     onPress={action.onPress} style={({ pressed }) => [{ width: DOCK_ITEM + 2 * DOCK_PAD, height: DOCK_ITEM + 2 * DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2,
-      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 }, tokens.elevation.ios]}>
+      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 }, tokens.elevation.ios]}>
     <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
       <Path d="M12 5v14M5 12h14" stroke={colors.text} strokeWidth={2} strokeLinecap="round" transform={action.expanded ? 'rotate(45 12 12)' : undefined} />
     </Svg>
@@ -62,12 +63,13 @@ export function TabDock({ items, active, onPress }: { items: readonly DockItem[]
   const pill = dark ? DOCK_NIGHT : colors.text, ink = dark ? colors.text : colors.bg;
   const button = (item: DockItem, index: number) => {
     const open = index === active, size = open ? DOCK_ACTIVE : DOCK_ITEM;
-    return <Pressable key={item.key} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
+    // The open tab is a filled circle; the others are bare icons, so they dim as far as any icon does.
+    return <Tappable key={item.key} dim={open ? 'fill' : 'row'} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
       onPress={() => onPress(index)} hitSlop={open ? 0 : { top: 6, bottom: 6 }}
-      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: open ? colors.accent : 'transparent', opacity: pressed ? 0.8 : 1 }, open && tokens.elevation.ios]}>
+      style={[{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: open ? colors.accent : 'transparent' }, open && tokens.elevation.ios]}>
       <Icon name={item.icon} size={open ? 24 : 22} color={open ? colors['on-accent'] : ink} />
-    </Pressable>;
+    </Tappable>;
   };
   const group = (from: number, to: number) => to > from && <View key={from} testID="tab-pill"
     style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2, backgroundColor: pill,

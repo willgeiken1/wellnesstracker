@@ -1,4 +1,5 @@
 import { useMemo, type ComponentRef, type PropsWithChildren, type ReactNode, type RefObject } from 'react';
+import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, type ColorValue, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -40,7 +41,7 @@ export function Shell({ step, onBack, scrollRef, children }: PropsWithChildren<{
         {(onBack || step) && <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget }}>
           {onBack && <Pressable testID="onboarding-back" accessibilityRole="button" accessibilityLabel={t('onboardingBack')} onPress={onBack}
             style={({ pressed }) => ({ width: touchTarget, height: touchTarget, borderRadius: touchTarget / 2, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 })}>
+              backgroundColor: colors.surface, opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
             <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}>
               <Path d="M15 5L8 12L15 19" fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
@@ -77,7 +78,7 @@ export function PrimaryButton({ label, onPress, disabled = false, busy = false, 
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing[1],
-      paddingVertical: tokens.spacing[2], paddingHorizontal: tokens.spacing[3], borderRadius: 16, backgroundColor: colors.accent, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 })}>
+      paddingVertical: tokens.spacing[2], paddingHorizontal: tokens.spacing[3], borderRadius: 16, backgroundColor: colors.accent, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     {busy && <ActivityIndicator accessibilityRole="progressbar" color={colors['on-accent']} />}
     <ThemedText variant="headline" style={[semibold, { color: colors['on-accent'], textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
@@ -95,7 +96,7 @@ export function Notice({ text, onRetry, retryLabel, testID }: { text: string; on
     </Svg>
     <ThemedText accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1, fontSize: 14, lineHeight: 19, paddingVertical: tokens.spacing[1] }}>{text}</ThemedText>
     {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={retryLabel ?? t('bootRetry')} onPress={onRetry}
-      style={({ pressed }) => ({ minHeight: touchTarget, minWidth: touchTarget, paddingHorizontal: tokens.spacing[2], alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+      style={({ pressed }) => ({ minHeight: touchTarget, minWidth: touchTarget, paddingHorizontal: tokens.spacing[2], alignItems: 'center', justifyContent: 'center', opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
       <ThemedText style={[semibold, { fontSize: 14, color: colors.accent }]}>{retryLabel ?? t('bootRetry')}</ThemedText>
     </Pressable>}
   </View>;
@@ -106,7 +107,7 @@ export function ChoiceTile({ label, body, selected, onPress, testID }: { label: 
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="radio" accessibilityLabel={label} accessibilityHint={body} accessibilityState={{ selected, checked: selected }} onPress={onPress}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 56, padding: tokens.spacing[2], borderRadius: 14,
-      backgroundColor: selected ? colors['accent-tint'] : colors['surface-2'], borderWidth: 2, borderColor: selected ? colors.accent : colors['hair-2'], opacity: pressed ? 0.85 : 1 })}>
+      backgroundColor: selected ? colors['accent-tint'] : colors['surface-2'], borderWidth: 2, borderColor: selected ? colors.accent : colors['hair-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <View style={{ flex: 1, gap: 2 }}>
       <ThemedText style={semibold}>{label}</ThemedText>
       <ThemedText variant="caption" style={{ lineHeight: 18, color: selected ? colors.text : colors['text-muted'] }}>{body}</ThemedText>
@@ -122,7 +123,7 @@ export function LinkRow({ label, body, onPress, disabled = false, first = false,
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={body} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 56, paddingVertical: tokens.spacing[2],
-      borderTopWidth: first ? 0 : 1, borderTopColor: colors['surface-2'], opacity: disabled ? 0.5 : pressed ? 0.7 : 1 })}>
+      borderTopWidth: first ? 0 : 1, borderTopColor: colors['surface-2'], opacity: disabled ? 0.5 : pressed ? PRESSED_ROW_OPACITY : 1 })}>
     <View style={{ flex: 1, gap: 2 }}>
       <ThemedText style={semibold}>{label}</ThemedText>
       <ThemedText muted variant="caption" style={{ lineHeight: 18 }}>{body}</ThemedText>

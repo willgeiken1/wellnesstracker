@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Card } from '@/components/card';
@@ -45,7 +46,7 @@ export function WeekStrip({ selected, onSelect, store }: { selected?: string; on
       const on = day === selected;
       return <Pressable key={day} accessibilityRole="button" accessibilityLabel={t('viewDayWorkouts').replace('{day}',day)}
         accessibilityState={selected ? {selected:on} : undefined} accessibilityValue={trained.has(day) ? {text:t('dayHasWorkout')} : undefined}
-        style={({pressed}) => ({flex:1,minWidth:44,minHeight:56,paddingVertical:6,gap:2,borderRadius:12,backgroundColor:on ? colors.accent : colors.surface,alignItems:'center',justifyContent:'center',opacity:pressed ? 0.7 : 1})}
+        style={({pressed}) => ({flex:1,minWidth:44,minHeight:56,paddingVertical:6,gap:2,borderRadius:12,backgroundColor:on ? colors.accent : colors.surface,alignItems:'center',justifyContent:'center',opacity:pressed ? PRESSED_FILL_OPACITY : 1})}
         onPress={() => onSelect ? onSelect(day) : router.push({pathname:'/workout/day',params:{day}})}>
         <ThemedText variant="caption" style={{color:on ? colors['on-accent'] : colors['text-muted']}}>{new Date(`${day}T12:00:00`).toLocaleDateString('en-US',{weekday:'short'})}</ThemedText>
         <ThemedText numeric style={[semibold,{color:on ? colors['on-accent'] : colors.text}]}>{Number(day.slice(-2))}</ThemedText>
@@ -88,7 +89,7 @@ function SessionCard({store,session}: {store:WorkoutStore;session:Row}) {
   return <Card testID={`day-session-${session.id}`} style={[card,{gap:0,paddingVertical:tokens.spacing[1]}]}>
     <Pressable accessibilityRole="button" accessibilityLabel={t('dayOpenSummary').replace('{name}',name)} accessibilityValue={facts ? {text:facts} : undefined}
       onPress={() => router.push({pathname:'/workout/summary',params:{id:session.id}})}
-      style={({pressed}) => ({flexDirection:'row',alignItems:'center',gap:tokens.spacing[1],minHeight:56,opacity:pressed ? 0.7 : 1})}>
+      style={({pressed}) => ({flexDirection:'row',alignItems:'center',gap:tokens.spacing[1],minHeight:56,opacity:pressed ? PRESSED_ROW_OPACITY : 1})}>
       <View style={{flex:1,gap:2}}>
         <ThemedText variant="headline" style={semibold}>{name}</ThemedText>
         {!!facts && <ThemedText muted numeric variant="caption">{facts}</ThemedText>}
@@ -139,7 +140,7 @@ export function DaySummary({store,day,onDay,note}: {store:WorkoutStore;day:strin
           const count = history.filter(s => s.data.day === other).length;
           return <Pressable key={other} accessibilityRole="button" accessibilityLabel={t('viewDayWorkouts').replace('{day}',dayLabel(other))}
             onPress={() => go(other)}
-            style={({pressed}) => ({minHeight:52,flexDirection:'row',alignItems:'center',gap:tokens.spacing[1],borderTopWidth:index ? 1 : 0,borderTopColor:colors['surface-2'],opacity:pressed ? 0.7 : 1})}>
+            style={({pressed}) => ({minHeight:52,flexDirection:'row',alignItems:'center',gap:tokens.spacing[1],borderTopWidth:index ? 1 : 0,borderTopColor:colors['surface-2'],opacity:pressed ? PRESSED_ROW_OPACITY : 1})}>
             <ThemedText style={{flex:1}}>{dayLabel(other)}</ThemedText>
             <ThemedText muted numeric variant="caption">{count === 1 ? t('dayOneWorkout') : t('dayManyWorkouts').replace('{count}',String(count))}</ThemedText>
             <Icon name="chevron" size={18} color={colors['text-muted']} />

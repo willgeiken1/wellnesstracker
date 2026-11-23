@@ -623,6 +623,26 @@ test('exercise options can cancel and reopen, then add a set', async () => {
   alert.mockRestore();
 });
 
+test('the first exercise cannot move up and the last cannot move down', async () => {
+  const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start();
+  store.addExercise(session.id, 'Close-Grip Bench Press');
+  store.addExercise(session.id, 'Barbell Row');
+  activeRepository(repo);
+  await render(<ActiveWorkout />, { wrapper });
+  const glide = jest.spyOn(LayoutAnimation, 'configureNext').mockImplementation(() => {});
+  await fireEvent.press(screen.getByRole('button', { name: 'Close-Grip Bench Press, Exercise options' }));
+  expect(screen.getByRole('button', { name: 'Move up' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Move down' })).toBeEnabled();
+  glide.mockClear();
+  await fireEvent.press(screen.getByRole('button', { name: 'Move up' }));
+  expect(glide).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Barbell Row, Exercise options' }));
+  expect(screen.getByRole('button', { name: 'Move up' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Move down' })).toBeDisabled();
+  glide.mockRestore();
+});
+
 test('offline badge is a themed chip even in a forced-offline demo', async () => {
   await render(<SyncBadge local pending={0} status="offline" />, { wrapper });
   expect(screen.getByText('Offline · saved on phone')).toBeTruthy();

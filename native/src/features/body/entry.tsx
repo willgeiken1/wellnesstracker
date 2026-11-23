@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, TextInput } from 'react-native';
+import { Alert, ScrollView, TextInput } from 'react-native';
+import { Tappable } from '../../components/tappable';
 import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
@@ -20,17 +21,17 @@ export function WeightEntry({initial,unit,onSave,onClose}:{initial:number|null;u
   const scrollChange=(offset:number)=>change((start+Math.min(100,Math.max(0,Math.round(offset/48)))/10).toFixed(1));
   return <Panel>
     {keypad?<TextInput autoFocus accessibilityLabel={t('bodyWeightInput').replace('{unit}',unit)} keyboardType="decimal-pad" value={value} onChangeText={change} style={[layout.input,{color:colors.text,backgroundColor:colors['surface-2']}]} />:<>
-      <Pressable accessible onPress={()=>setKeypad(true)} accessibilityRole="adjustable" accessibilityLabel={t('bodyWheel').replace('{unit}',unit)} accessibilityValue={{text:`${value} ${unit}`}}
+      <Tappable accessible onPress={()=>setKeypad(true)} accessibilityRole="adjustable" accessibilityLabel={t('bodyWheel').replace('{unit}',unit)} accessibilityValue={{text:`${value} ${unit}`}}
         accessibilityActions={[{name:'increment',label:t('bodyIncrease')},{name:'decrement',label:t('bodyDecrease')}]}
         onAccessibilityAction={e=>adjust(e.nativeEvent.actionName==='increment'?0.1:-0.1)}>
         <ThemedText numeric variant="title" style={{minHeight:48}}>{value} {unit}</ThemedText>
-      </Pressable>
+      </Tappable>
       <ScrollView key={`${start}:${unit}`} testID="body-wheel-scroll" style={{height:144}} nestedScrollEnabled
         accessibilityLabel={t('bodyWheel').replace('{unit}',unit)} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
         snapToInterval={48} decelerationRate={reduceMotion?0:'fast'} disableIntervalMomentum={reduceMotion}
         contentOffset={{x:0,y:initialIndex*48}} contentContainerStyle={{paddingVertical:48}}
         onScrollEndDrag={e=>scrollChange(e.nativeEvent.contentOffset.y)} onMomentumScrollEnd={e=>scrollChange(e.nativeEvent.contentOffset.y)}>
-        {Array.from({length:101},(_,i)=>{const n=(start+i/10).toFixed(1);return <Pressable key={i} onPress={()=>change(n)} style={{height:48,justifyContent:'center',alignItems:'center',backgroundColor:n===value?colors['surface-2']:undefined}}><ThemedText numeric>{n} {unit}</ThemedText></Pressable>;})}
+        {Array.from({length:101},(_,i)=>{const n=(start+i/10).toFixed(1);return <Tappable key={i} onPress={()=>change(n)} style={{height:48,justifyContent:'center',alignItems:'center',backgroundColor:n===value?colors['surface-2']:undefined}}><ThemedText numeric>{n} {unit}</ThemedText></Tappable>;})}
       </ScrollView>
     </>}
     <Button variant="secondary" label={t(keypad?'bodyUseWheel':'bodyKeypad')} onPress={()=>{if(keypad){if(!/^\d+(\.\d+)?$/.test(value)||!Number.isFinite(Number(value))||Number(value)<=0){setError('bodyInvalid');return;}setBase(Number(value));}setKeypad(!keypad);}}/>

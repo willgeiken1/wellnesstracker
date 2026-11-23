@@ -1,4 +1,5 @@
 import { FlatList, Keyboard, Pressable, TextInput, ScrollView } from 'react-native';
+import { PRESSED_ROW_OPACITY } from '@/components/tappable';
 import { useRef, useState } from 'react';
 import { exerciseLibrary, type Exercise } from '@/core/workout/library';
 import { filterExercises, validCustomExercise } from '@/core/workout/exercise-rules';
@@ -22,7 +23,7 @@ export function ExercisePicker({ onPick, onClose, store, label = t('addExercise'
       <MuscleChoices all filter value={muscle ? [muscle] : []} onChange={setMuscle} />
       <EquipmentChoices all value={equipment} onChange={setEquipment} />
       <FlatList ref={results} testID="exercise-picker-results" data={matches} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyExtractor={e => e.name} initialNumToRender={12} renderItem={({ item, index }) => <Pressable testID={`exercise-picker-result-${index}`} accessibilityRole="button" accessibilityLabel={item.name} accessibilityValue={item.main ? { text: muscleLine(item) } : undefined} onPress={() => pick(item.name)}
-        style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors['surface-2'], opacity: pressed ? 0.6 : 1 })}>
+        style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors['surface-2'], opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
         <ThemedText>{item.name}</ThemedText>
         {!!item.main && <ThemedText muted variant="caption">{muscleLine(item)}</ThemedText>}
       </Pressable>} ListFooterComponent={store && query.trim() && !library.some(e => e.name.toLowerCase() === query.trim().toLowerCase()) ? <Button label={t('createCustom').replace('{name}', query.trim())} variant={matches.length ? 'secondary' : 'primary'} onPress={() => setCreating(true)} /> : undefined} />

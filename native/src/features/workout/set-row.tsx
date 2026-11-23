@@ -5,6 +5,7 @@ import { Tappable as Pressable } from "@/components/tappable";
 import { SwipeStops } from "./swipe-stops";
 import { ThemedText } from "@/components/themed-text";
 import { useTheme } from "@/design/theme-provider";
+import { useLayoutMotion } from "@/components/layout-motion";
 import type { Draft } from "@/data/workout/store";
 import { t } from "@/i18n/en";
 import { tokens } from "@/design/tokens";
@@ -42,6 +43,9 @@ export function SetRow({
 }) {
   const { colors } = useTheme();
   const [tagsOpen, setTagsOpen] = useState(false);
+  const glide = useLayoutMotion();
+  // The tag buttons fold in and out under the row instead of jumping.
+  const showTags = (open: boolean) => { glide(); setTagsOpen(open); };
   const label = `${exercise}, ${t("set")} ${index + 1}${side ? `, ${t(side === "left" ? "leftSide" : "rightSide")}` : ""}`;
   const suffix = side === "right" ? "-right" : "";
   const done = !!draft.setId;
@@ -87,7 +91,9 @@ export function SetRow({
         accessibilityLabel={`${label}, ${t("removeSet")}`}
         hitSlop={{ left: 9, right: 9, top: 4, bottom: 4 }}
         onLongPress={onRemove}
-        onPress={() => { if (onTag) setTagsOpen(!tagsOpen); }}
+        onPress={() => { if (onTag) showTags(!tagsOpen); }}
+        // Without tags a tap does nothing here, so it does not dim.
+        dim={onTag ? "row" : "none"}
         accessibilityActions={[
           {
             name: "delete",
@@ -116,7 +122,7 @@ export function SetRow({
           // The label names the button, so the previous weight and reps it shows are read as its value.
           accessibilityValue={previous ? { text: `${t('lastTime')}: ${previous}` } : undefined}
           accessibilityState={{ expanded: tagsOpen }}
-          onPress={() => setTagsOpen(!tagsOpen)}
+          onPress={() => showTags(!tagsOpen)}
           style={{ flex: 1, minHeight: 44, justifyContent: "center" }}
         >
           {prev}
@@ -126,6 +132,7 @@ export function SetRow({
       )}
       {(["weight", "reps"] as const).map((field) => (
         <Pressable
+          dim="fill"
           testID={`set-${exerciseIndex}-${index}${suffix}-${field}`}
           key={field}
           accessibilityRole="button"
@@ -150,6 +157,7 @@ export function SetRow({
         </Pressable>
       ))}
       <Pressable
+        dim="fill"
         testID={`set-${exerciseIndex}-${index}${suffix}-done`}
         accessibilityRole="checkbox"
         accessibilityLabel={`${label}, ${t("done")}`}
@@ -180,9 +188,9 @@ export function SetRow({
     </View>
     </SwipeStops>
     {tagsOpen && onTag && <View style={[layout.row, {flexWrap:'wrap', paddingBottom: 6}]}>
-      {(['warmup','failure','drop'] as const).map(tag => <Button key={tag} label={t(tag)} selected={draft.tag === tag} variant="secondary" onPress={() => {onTag(draft.tag === tag ? null : tag); setTagsOpen(false);}} />)}
-      <Button label={t('clearTag')} variant="secondary" onPress={() => {onTag(null); setTagsOpen(false);}} />
-      <Button label={t('removeSet')} variant="secondary" onPress={() => {setTagsOpen(false); onRemove();}} />
+      {(['warmup','failure','drop'] as const).map(tag => <Button key={tag} label={t(tag)} selected={draft.tag === tag} variant="secondary" onPress={() => {onTag(draft.tag === tag ? null : tag); showTags(false);}} />)}
+      <Button label={t('clearTag')} variant="secondary" onPress={() => {onTag(null); showTags(false);}} />
+      <Button label={t('removeSet')} variant="secondary" onPress={() => {showTags(false); onRemove();}} />
     </View>}</>
   );
 }
