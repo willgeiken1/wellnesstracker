@@ -61,16 +61,17 @@ function useOptionalRepository(): Repository | null {
   try { return useAuth().repository ?? null; } catch { return null; }
 }
 
-/** The routines of whoever is using the app, re-read whenever the phone's data changes. */
-export function useRoutines(): Routines {
+/** The routines of whoever is using the app, re-read whenever the phone's data changes. A screen that only shows
+ * routines beside its own things (Home, a chart) passes `seed: false`, so opening it writes nothing. */
+export function useRoutines({ seed = true }: { seed?: boolean } = {}): Routines {
   const repository = useOptionalRepository();
   const subscribe = useCallback((listener: () => void) => (repository ? repository.subscribe(listener) : () => {}), [repository]);
   const revision = useSyncExternalStore(subscribe, () => (repository ? repository.getRevision() : 0));
   // Morning and Night are added once, the first time Routines is opened.
   useEffect(() => {
-    if (!repository) return;
+    if (!repository || !seed) return;
     try { seedDefaultRoutines(repository); } catch { /* The page still opens; it only starts without the two defaults. */ }
-  }, [repository]);
+  }, [repository, seed]);
   return useMemo(() => {
     const stored = read(repository, revision);
     const store = stored ?? emptyRoutineStore();

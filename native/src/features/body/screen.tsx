@@ -13,6 +13,7 @@ import { tokens } from '../../design/tokens';
 import { appleHealth } from '../health/apple';
 import { refreshWeights } from '../health/weights';
 import { readProfile, today } from '../onboarding/model';
+import { StartedLegend, StartedLinesCard, useStartedMarkers } from '../routines-ui/started-lines';
 import { Panel } from '../workout/primitives';
 import { useWorkoutStore } from '../workout/use-workout';
 import { BodyChart } from './chart';
@@ -33,6 +34,9 @@ export function Body({repository}:{repository:Repository}) {
   // syncs, and a Health value must not ride along with it.
   const lastKg=lastWeight(rows.filter(row=>row.data.source==='app'));
   const raw=rows.filter(r=>visible.some(p=>p.day===r.data.day) && typeof r.data.weight_kg==='number' && Number.isFinite(r.data.weight_kg) && r.data.weight_kg>0).map(r=>({day:String(r.data.day),kg:Number(r.data.weight_kg)}));
+  // The "Started" lines the person switched on in Routines, for the days on the chart. They are drawn here, on the
+  // phone, and no weight is handed to Routines.
+  const started=useStartedMarkers(visible.map(point=>point.day));
   const delta=(kg:number|null)=>kg===null?'—':`${kg>0?'+':''}${fromKg(kg,unit).toFixed(1)} ${unit}`;
   const stats=[
     [t('bodyStatChange').replace('{range}',t(`bodyRange${range}`)),delta(visible.length>1?visible.at(-1)!.trendKg-visible[0].trendKg:null)],
@@ -54,9 +58,11 @@ export function Body({repository}:{repository:Repository}) {
           <ThemedText style={{color:on?colors['on-accent']:colors.text,textAlign:'center'}}>{t(`bodyRange${n}`)}</ThemedText>
         </Pressable>;})}
       </View>}
-      <BodyChart key={range} points={visible} raw={raw} unit={unit}/>
+      <BodyChart key={range} points={visible} raw={raw} unit={unit} started={started.map(marker=>marker.date)}/>
+      <StartedLegend testID="body-started" markers={started}/>
       <ThemedText muted variant="caption">{t('bodyAverageHint')}</ThemedText>
     </Panel>
+    {last&&<StartedLinesCard testID="body-started-lines"/>}
     {last&&<Panel testID="body-stats" style={{flexDirection:'row',justifyContent:'space-around'}}>
       {stats.map(([label,value])=><View key={label} accessible accessibilityLabel={`${label}: ${value}`} style={{alignItems:'center',flex:1}}>
         <ThemedText numeric style={{fontWeight:'600'}}>{value}</ThemedText>
