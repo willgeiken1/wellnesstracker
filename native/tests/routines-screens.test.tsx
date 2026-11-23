@@ -54,6 +54,46 @@ describe('item details', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
     expect(router.back).toHaveBeenCalledTimes(1);
   });
+  test('an item in no routine is logged, undone and skipped from its details', async () => {
+    const repo = seededRepository(store => { store.placements = store.placements.filter(place => place.itemId !== SAMPLE.vial); });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} />);
+    await fireEvent.press(screen.getByTestId('details-log'));
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ status: 'done', amount: 3, unit: 'units' });
+    expect(AccessibilityInfo.announceForAccessibility).toHaveBeenLastCalledWith('Logged today');
+    // The log opens in the form at once, with the web's line that the app suggests no amount.
+    expect(screen.getByTestId('log-amount').props.value).toBe('3');
+    expect(screen.getByTestId('details-intro')).toHaveTextContent('This saves the amount and the day you enter. It does not suggest an amount.');
+    expect(screen.queryByTestId('details-log')).toBeNull();
+    await fireEvent.press(screen.getByTestId('details-undo'));
+    expect(logOf(repo, SAMPLE.vial)).toBeNull();
+    expect(screen.queryByTestId('log-amount')).toBeNull();
+    await fireEvent.press(screen.getByTestId('details-skip'));
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ status: 'skipped' });
+    expect(screen.getByTestId('details-undo')).toBeTruthy();
+  });
+  test('a past log opens from the item\'s history, and its edit is saved on that day', async () => {
+    const past = routineLogId(SAMPLE.vial, '2026-11-21');
+    const repo = seededRepository(store => { store.logs = [vialLog('2026-11-21'), vialLog(SAMPLE_DAY)]; });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} />);
+    // Today's log is the one open. The older one is a button in the list.
+    expect(screen.getByTestId('log-day')).toHaveTextContent('Nov 23, 2026');
+    const older = screen.getByTestId(`details-history-${past}`);
+    expect(older.props.accessibilityRole).toBe('button');
+    expect(older.props.accessibilityHint).toBe('Opens this log to edit.');
+    await fireEvent.press(older);
+    expect(screen.getByTestId('log-day')).toHaveTextContent('Nov 21, 2026');
+    expect(screen.getByTestId(`details-history-${past}`)).toBeSelected();
+    await fireEvent.changeText(screen.getByTestId('log-amount'), '2');
+    await fireEvent.press(screen.getByTestId('log-save'));
+    expect(logOf(repo, SAMPLE.vial, '2026-11-21')).toMatchObject({ amount: 2, day: '2026-11-21' });
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ amount: 3 });
+  });
+  test('opened from History with a past log, it shows that log and not today\'s', async () => {
+    const repo = seededRepository(store => { store.logs = [vialLog('2026-11-21', { amount: 1.5 }), vialLog(SAMPLE_DAY)]; });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} logId={routineLogId(SAMPLE.vial, '2026-11-21')} />);
+    expect(screen.getByTestId('log-day')).toHaveTextContent('Nov 21, 2026');
+    expect(screen.getByTestId('log-amount').props.value).toBe('1.5');
+  });
   test('a check has no amount, no site and no doctor line', async () => {
     await show(seededRepository(), <ItemDetails itemId={SAMPLE.stretch} />);
     expect(screen.getByText('This is a check. A tap logs it.')).toBeTruthy();
@@ -131,8 +171,7 @@ describe('item details', () => {
   });
   test('the history lists each log with the amount stored on it', async () => {
     await show(seededRepository(store => { store.logs = [vialLog('2026-11-21', { amount: 2.5, status: 'partial' }), vialLog('2026-11-22')]; }), <ItemDetails itemId={SAMPLE.vial} />);
-    const rows = screen.getAllByTestId('item-history-row');
-    expect(rows).toHaveLength(2);
+    const rows = ['2026-11-22', '2026-11-21'].map(day => screen.getByTestId(`details-history-${routineLogId(SAMPLE.vial, day)}`));
     expect(within(rows[0]).getByText('Nov 22, 2026')).toBeTruthy();
     expect(within(rows[0]).getByText('Logged · 3 units')).toBeTruthy();
     expect(within(rows[1]).getByText('Partial · 2.5 units')).toBeTruthy();
@@ -194,12 +233,36 @@ describe('history', () => {
     await show(repo, <RoutinesHistory />);
     await fireEvent.press(screen.getByRole('tab', { name: 'Graph' }));
     expect(screen.getByTestId('history-graph-note')).toHaveTextContent('This graph counts logs. It does not add amounts.');
-    expect(screen.getByTestId('history-bar-2026-11-22').props.accessibilityLabel).toBe('Nov 22, 1 logged');
-    await fireEvent.press(screen.getByTestId('history-bar-2026-11-22'));
+    /* The bars are thinner than a finger, so the strip is one control: VoiceOver steps a day at a time and
+       hears the day with its count, and a touch picks the day under it. No bar is a button of its own. */
+    const bars = () => screen.getByTestId('history-bars');
+    expect(bars().props.accessibilityRole).toBe('adjustable');
+    expect(bars().props.accessibilityLabel).toBe('Logs by day');
+    expect(bars().props.accessibilityHint).toBe('Swipe up or down to move the day.');
+    expect(bars().props.accessibilityValue).toEqual({ text: 'Nov 23, 0 logged' });
+    expect(screen.getByTestId('history-bar-2026-11-22').props.accessibilityRole).toBeUndefined();
+    expect(within(bars()).queryAllByRole('button')).toHaveLength(0);
+    await fireEvent(bars(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+    expect(bars().props.accessibilityValue).toEqual({ text: 'Nov 22, 1 logged' });
     expect(screen.getByTestId('history-graph-selected')).toHaveTextContent('Nov 22 · 1 log');
+    await fireEvent(bars(), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    expect(bars().props.accessibilityValue).toEqual({ text: 'Nov 23, 0 logged' });
+    // The strip runs from the 1st to today, the 23rd. A touch 265 points across its 300 lands on the 21st.
+    await fireEvent(bars(), 'layout', { nativeEvent: { layout: { width: 300, height: 96, x: 0, y: 0 } } });
+    await fireEvent(bars(), 'press', { nativeEvent: { locationX: 265 } });
+    expect(screen.getByTestId('history-graph-selected')).toHaveTextContent('Nov 21 · 1 log');
     await fireEvent.press(screen.getByRole('tab', { name: 'Skipped' }));
     expect(stored(repo).prefs.historyGraph).toBe('skipped');
-    expect(screen.getByTestId('history-bar-2026-11-22').props.accessibilityLabel).toBe('Nov 22, 0 skipped');
+    expect(bars().props.accessibilityValue).toEqual({ text: 'Nov 21, 0 skipped' });
+  });
+  test('a logged row on a past day opens that log to be corrected', async () => {
+    const repo = seededRepository(store => { store.logs = logs(); });
+    await show(repo, <RoutinesHistory />);
+    const logged = within(screen.getByTestId('history-day-2026-11-22')).getByLabelText('Zzyq Sample Vial, Partial, 1.5 units');
+    expect(logged.props.accessibilityRole).toBe('button');
+    expect(logged.props.accessibilityHint).toBe('Opens this log to edit.');
+    await fireEvent.press(logged);
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/routines/item', params: { itemId: SAMPLE.vial, logId: routineLogId(SAMPLE.vial, '2026-11-22') } });
   });
 });
 
@@ -208,7 +271,7 @@ describe('Routines settings', () => {
     const repo = seededRepository();
     await show(repo, <RoutinesSettings />);
     expect(screen.getByText('Focus mode shows only the routine for this time of day. When it is done, the next one shows. Countdowns stay on the row. Routines does not send reminders.')).toBeTruthy();
-    expect(screen.getByText('A log before this hour counts for the previous day. The default is 4:00 AM.')).toBeTruthy();
+    expect(screen.getByText('A log before this hour counts for the previous day. The default is 04:00.')).toBeTruthy();
     await fireEvent(screen.getByTestId('routines-focus'), 'valueChange', true);
     expect(stored(repo).prefs.focusMode).toBe(true);
     expect(screen.getByRole('button', { name: '04:00' })).toBeSelected();

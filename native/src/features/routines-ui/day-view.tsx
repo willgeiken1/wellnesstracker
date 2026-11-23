@@ -18,7 +18,7 @@ import type { RoutineBlock } from '@/features/routines/model/shape';
 import { routineClock24, routineShortName, routineWindowLabel } from '@/features/routines/model/types';
 import { routinesText } from '@/i18n/en';
 import { slotColor } from './colors';
-import { focusBlockId, hasItems, nextLine, rowAmount, rowDone, rowSkipped, rowTime } from './day-model';
+import { focusBlockId, hasItems, nextLine, rowAmount, rowDone, rowSkipped, rowSupply, rowTime } from './day-model';
 import { routineRoutes } from './entry-points';
 import { Glyph } from './glyph';
 import { Note, Panel, PrimaryButton, TextButton, semibold } from './parts';
@@ -45,8 +45,8 @@ function Tick({ done, skipped, tone }: { done: boolean; skipped: boolean; tone: 
   </View>;
 }
 
-function Row({ row, tone, due, first, onLog, onSkip, onUndo, onDetails }: {
-  row: RoutineRow; tone: string; due: boolean; first: boolean; onLog: () => void; onSkip: () => void; onUndo: () => void; onDetails: () => void;
+function Row({ row, tone, due, first, supply, onLog, onSkip, onUndo, onDetails }: {
+  row: RoutineRow; tone: string; due: boolean; first: boolean; supply: string; onLog: () => void; onSkip: () => void; onUndo: () => void; onDetails: () => void;
 }) {
   const { colors } = useTheme();
   const { fontScale } = useWindowDimensions();
@@ -54,7 +54,7 @@ function Row({ row, tone, due, first, onLog, onSkip, onUndo, onDetails }: {
   const done = rowDone(row), skipped = rowSkipped(row), handled = !row.open;
   const name = row.item.name || '', amount = rowAmount(row), time = rowTime(row);
   const when = due ? routinesText('now') : time;
-  const spoken = [name, amount, skipped ? routinesText('skipped') : '', when].filter(Boolean).join(', ');
+  const spoken = [name, amount, skipped ? routinesText('skipped') : '', when, supply.split(' · ').join(', ')].filter(Boolean).join(', ');
   const actions = handled
     ? [{ name: 'undo', label: routinesText('undo') }, { name: 'details', label: routinesText('details') }]
     : [{ name: 'skip', label: routinesText('skip') }, { name: 'details', label: routinesText('details') }];
@@ -72,6 +72,7 @@ function Row({ row, tone, due, first, onLog, onSkip, onUndo, onDetails }: {
       <ThemedText style={[semibold, handled && { textDecorationLine: done ? 'line-through' : 'none', opacity: 0.6 }]}>{name}</ThemedText>
       {!!amount && <ThemedText variant="caption" muted numeric>{amount}</ThemedText>}
       {skipped && <ThemedText variant="caption" muted>{routinesText('skipped')}</ThemedText>}
+      {!!supply && <ThemedText testID={`routine-supply-${row.item.id}`} variant="caption" muted numeric>{supply}</ThemedText>}
     </View>
     {/* The row speaks for these: VoiceOver reaches Skip and Undo as the row's own actions. */}
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -84,8 +85,8 @@ function Row({ row, tone, due, first, onLog, onSkip, onUndo, onDetails }: {
 }
 
 /** One routine: its name and window, its count, and its rows. Folded, it is one line with a thin bar. */
-function BlockCard({ block, routines, day, dueId, folded, onFold, onLoggedAll }: {
-  block: RoutineBlock; routines: Routines; day: string; dueId: string; folded: boolean; onFold: () => void; onLoggedAll: (logged: LoggedAll) => void;
+function BlockCard({ block, routines, day, dueId, folded, rest, onFold, onLoggedAll }: {
+  block: RoutineBlock; routines: Routines; day: string; dueId: string; folded: boolean; rest: boolean; onFold: () => void; onLoggedAll: (logged: LoggedAll) => void;
 }) {
   const { colors } = useTheme();
   const haptic = useSelectionHaptic(), glide = useLayoutMotion();
@@ -129,11 +130,12 @@ function BlockCard({ block, routines, day, dueId, folded, onFold, onLoggedAll }:
         <ThemedText variant="caption" style={[semibold, { color: tone }]}>{name}</ThemedText>
         <ThemedText variant="caption" muted numeric>{window ? routinesText('blockLine', { window, done: count.done, total: count.total }) : `${count.done}/${count.total}`}</ThemedText>
       </Tappable>
-      {open >= 2 && <TextButton testID={`routine-log-all-${block.id}`} label={routinesText('logAll')} spoken={routinesText('logAllIn', { name })} onPress={logAll} color={colors.text} />}
+      {/* A rest day covers every routine, so Log all would write nothing: it is not offered. */}
+      {open >= 2 && !rest && <TextButton testID={`routine-log-all-${block.id}`} label={routinesText('logAll')} spoken={routinesText('logAllIn', { name })} onPress={logAll} color={colors.text} />}
     </View>
     {count.rows.map((row, index) => {
       const itemId = row.item.id ?? '', logId = row.log?.id ?? '';
-      return <Row key={row.placement.id ?? itemId} row={row} tone={tone} due={row.open && itemId === dueId} first={index === 0}
+      return <Row key={row.placement.id ?? itemId} row={row} tone={tone} due={row.open && itemId === dueId} first={index === 0} supply={rowSupply(row, routines.view, day)}
         onLog={() => change((store, clock) => logItem(store, itemId, clock))}
         onSkip={() => change((store, clock) => skipItem(store, itemId, clock))}
         onUndo={() => change((store, clock) => undoLog(store, logId, clock))}
@@ -217,6 +219,7 @@ export function DayView({ routines, now, onLoggedAll }: { routines: Routines; no
         {!!next.text && <ThemedText testID="routine-next" variant="caption" style={[semibold, { color: slotColor(colors, 'citrus'), flexGrow: 1, textAlign: 'right' }]}>{next.text}</ThemedText>}
       </View>
     </Panel>
+    {!!rest && !empty && <Note testID="routine-rest-note">{routinesText('restCovers')}</Note>}
     {setupOffered(view.prefs) && <Panel testID="routine-setup-card" style={{ padding: tokens.spacing[3], gap: tokens.spacing[1] }}>
       <ThemedText variant="headline" accessibilityRole="header">{routinesText('setupTitle')}</ThemedText>
       <ThemedText muted>{routinesText('setupBody')}</ThemedText>
@@ -233,7 +236,7 @@ export function DayView({ routines, now, onLoggedAll }: { routines: Routines; no
       <View style={{ alignItems: 'flex-start' }}><TextButton label={routinesText('tipsHide')} onPress={() => { glide(); routines.apply((current, clock) => hideTips(current, clock)); }} color={colors.text} /></View>
     </Panel>}
     {!empty && shown.map(block => <BlockCard key={block.id} block={block} routines={routines} day={day} dueId={next.soon ? next.itemId : ''}
-      folded={!focus && foldedOf(block)} onFold={() => fold(block)} onLoggedAll={onLoggedAll} />)}
+      folded={!focus && foldedOf(block)} rest={!!rest} onFold={() => fold(block)} onLoggedAll={onLoggedAll} />)}
     {focus && !shown.length && !empty && <ThemedText testID="routine-focus-done" muted>{routinesText('focusDone')}</ThemedText>}
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: tokens.spacing[2] }}>
       <TextButton testID="routine-new" label={routinesText('newRoutine')} onPress={() => router.push(routineRoutes.newRoutine())} />

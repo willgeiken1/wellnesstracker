@@ -91,13 +91,29 @@ describe('the sun path', () => {
 });
 
 describe('the day view', () => {
+  test('the rail keeps the clock time until the item is due, and does not say Now ahead of time', async () => {
+    // Twenty minutes early the line above counts down, so the rail keeps the clock time.
+    jest.setSystemTime(new Date(2026, 10, 23, 7, 40, 0));
+    await open(seededRepository());
+    expect(row(SAMPLE.vial).props.accessibilityLabel).toContain('08:00');
+    expect(row(SAMPLE.vial).props.accessibilityLabel).not.toContain('Now');
+    expect(everyText()).toContain('in 20 min');
+  });
+  test('an open item that is overdue, with nothing else ahead of it, reads Now', async () => {
+    jest.setSystemTime(new Date(2026, 10, 23, 8, 30, 0));
+    await open(seededRepository(store => { store.items = store.items.filter(item => item.id === SAMPLE.vial); store.placements = store.placements.filter(place => place.itemId === SAMPLE.vial); }));
+    expect(row(SAMPLE.vial).props.accessibilityLabel).toContain('Now');
+  });
   test('a row is one checkbox with its name, amount and time, and Skip, Undo and Details as its actions', async () => {
     await open(seededRepository());
     const dose = row(SAMPLE.vial);
     expect(dose.props.accessibilityRole).toBe('checkbox');
     expect(dose.props.accessibilityState).toMatchObject({ checked: false });
     // It is due at this minute, so the rail says Now in place of the time.
-    expect(dose.props.accessibilityLabel).toBe('Zzyq Sample Vial, 3 units, Now');
+    // The sample count was typed on the 1st, three weeks back, so its supply line reads as run down.
+    expect(dose.props.accessibilityLabel).toBe('Zzyq Sample Vial, 3 units, Now, Low supply, 20 on hand, 0 days left');
+    expect(screen.getByTestId(`routine-supply-${SAMPLE.vial}`)).toHaveTextContent('Low supply · 20 on hand · 0 days left');
+    expect(screen.queryByTestId(`routine-supply-${SAMPLE.walk}`)).toBeNull();
     expect(row(SAMPLE.walk).props.accessibilityLabel).toBe('Zzyq Walk, 10:00');
     expect(dose.props.accessibilityActions.map((action: { label: string }) => action.label)).toEqual(['Skip', 'Details']);
     expect(StyleSheet.flatten(dose.props.style).minHeight).toBe(56);
@@ -259,7 +275,7 @@ describe('the type tabs', () => {
       store.logs = [vialLog('2026-11-21', { site: 'left-belly' }), vialLog('2026-11-22', { site: 'right-thigh' })];
     }));
     const card = screen.getByTestId(`routine-gauge-${SAMPLE.vial}`);
-    expect(card.props.accessibilityLabel).toBe('Zzyq Sample Vial, 3 units. 18 of 20 doses left. Morning, Daily, 08:00. Next: now. Last site: Right thigh.');
+    expect(card.props.accessibilityLabel).toBe('Zzyq Sample Vial, 3 units. 18 of 20 doses left. Low supply, 20 on hand, 0 days left. Morning, Daily, 08:00. Next: now. Last site: Right thigh.');
     expect(screen.getByTestId('routine-gauge-left')).toHaveTextContent('18');
     expect(within(card).getByText('of 20')).toBeTruthy();
     // 23 November 2026 is a Monday: nothing taken yet this week, and Monday is outlined as today.
@@ -267,6 +283,30 @@ describe('the type tabs', () => {
     expect(screen.getByTestId('routine-type-note')).toHaveTextContent('The ring shows doses left from the count you typed. Each one sits on the sun path at its time.');
     await fireEvent.press(card);
     expect(router.push).toHaveBeenLastCalledWith({ pathname: '/routines/item', params: { itemId: SAMPLE.vial } });
+  });
+  test('an item on a type tab and in no routine is logged, skipped and undone from its card', async () => {
+    // Added from the Peptides tab with no routine picked: it has no row on the day view, so the card is where it is logged.
+    const repo = seededRepository(store => { store.placements = store.placements.filter(place => place.itemId !== SAMPLE.vial); });
+    await openPeptides(repo);
+    // The visible Log, Skip and Undo are hidden from VoiceOver, which gets them as the card's actions instead.
+    const card = () => screen.getByTestId(`routine-gauge-${SAMPLE.vial}`);
+    expect(card().props.accessibilityActions.map((action: { label: string }) => action.label)).toEqual(['Log', 'Skip', 'Details']);
+    await fireEvent.press(screen.getByTestId(`routine-gauge-log-${SAMPLE.vial}`, { includeHiddenElements: true }));
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ status: 'done', amount: 3, unit: 'units' });
+    expect(screen.getByTestId(`routine-gauge-state-${SAMPLE.vial}`, { includeHiddenElements: true })).toHaveTextContent('Logged today');
+    expect(card().props.accessibilityLabel).toContain('Logged today.');
+    expect(screen.queryByTestId(`routine-gauge-log-${SAMPLE.vial}`, { includeHiddenElements: true })).toBeNull();
+    expect(card().props.accessibilityActions.map((action: { label: string }) => action.label)).toEqual(['Undo', 'Details']);
+    await fireEvent.press(screen.getByTestId(`routine-gauge-undo-${SAMPLE.vial}`, { includeHiddenElements: true }));
+    expect(logOf(repo, SAMPLE.vial)).toBeNull();
+    await fireEvent.press(screen.getByTestId(`routine-gauge-skip-${SAMPLE.vial}`, { includeHiddenElements: true }));
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ status: 'skipped' });
+    expect(screen.getByTestId(`routine-gauge-state-${SAMPLE.vial}`, { includeHiddenElements: true })).toHaveTextContent('Skipped today');
+    // VoiceOver reaches the same three through the card's own actions.
+    await fireEvent(card(), 'accessibilityAction', { nativeEvent: { actionName: 'undo' } });
+    expect(logOf(repo, SAMPLE.vial)).toBeNull();
+    await fireEvent(card(), 'accessibilityAction', { nativeEvent: { actionName: 'log' } });
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ status: 'done' });
   });
   test('an empty Peptides tab says so in the approved words', async () => {
     await openPeptides(seededRepository(store => {

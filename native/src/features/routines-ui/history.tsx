@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
 import { useSelectionHaptic } from '@/components/selection-haptic';
@@ -16,6 +17,7 @@ import {
 import { routineDayLetters } from '@/features/routines/model/types';
 import { routinesText } from '@/i18n/en';
 import { toolColor } from './colors';
+import { routineRoutes } from './entry-points';
 import { Glyph, type GlyphName } from './glyph';
 import { Note, Panel, RoundButton, semibold } from './parts';
 import { useMinuteClock, useRoutines } from './use-routines';
@@ -46,12 +48,21 @@ function DayCard({ record }: { record: HistoryDay }) {
     </View>}
     {record.items.map((row, index) => {
       const amount = loggedAmountText(row.log), label = routineMarkIcon(row.mark).label;
-      return <View key={row.itemId || index} testID="history-item" accessible accessibilityLabel={[row.name, label, amount].filter(Boolean).join(', ')}
-        style={{ minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderTopWidth: index || record.rest ? 1 : 0, borderTopColor: colors.hair }}>
+      const spoken = [row.name, label, amount].filter(Boolean).join(', ');
+      const style = { minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderTopWidth: index || record.rest ? 1 : 0, borderTopColor: colors.hair } as const;
+      const inside = <>
         <Mark mark={row.mark} />
         <ThemedText style={{ flex: 1 }}>{row.name}</ThemedText>
         <ThemedText variant="caption" muted numeric>{[label, amount].filter(Boolean).join(' · ')}</ThemedText>
-      </View>;
+      </>;
+      // A row with a log opens that log, whatever day it is from, so it can be corrected. A missed row has none.
+      const logId = row.log?.id ?? '';
+      if (!logId) return <View key={row.itemId || index} testID="history-item" accessible accessibilityLabel={spoken} style={style}>{inside}</View>;
+      return <Tappable key={row.itemId || index} testID="history-item" accessibilityRole="button" accessibilityLabel={spoken} accessibilityHint={routinesText('opensLog')}
+        onPress={() => router.push(routineRoutes.item(row.itemId, logId))} style={style}>
+        {inside}
+        <Glyph name="forward" size={16} color={colors['text-muted']} />
+      </Tappable>;
     })}
     {!record.rest && !record.items.some(row => row.mark !== 'open' && row.mark !== 'missed') && <Note testID="history-nothing">{routinesText('nothingLogged')}</Note>}
   </Panel>;
@@ -92,23 +103,44 @@ function Calendar({ history, pick }: { history: HistoryView; pick: (day: string)
   </Panel>;
 }
 
+/** The count of logs for each day of the month, as bars. The bars are far narrower than a finger, so the strip
+ * is one control: a touch picks the day under it, and VoiceOver moves a day at a time with a swipe up or down
+ * and reads the day and its count. The calendar offers the same days as full-size buttons. */
 function Graph({ history, pick, onTab }: { history: HistoryView; pick: (day: string) => void; onTab: (tab: RoutineGraphTab) => void }) {
   const { colors } = useTheme();
   const tone = toolColor(colors);
-  const most = Math.max(1, ...history.graph.points.map(point => point.count));
+  const [width, setWidth] = useState(0);
+  const points = history.graph.points;
+  const most = Math.max(1, ...points.map(point => point.count));
+  const at = points.findIndex(point => point.day === history.day);
+  const spoken = (index: number) => {
+    const point = points[index];
+    return point ? routinesText(history.tab === 'skipped' ? 'graphSkipped' : 'graphLogged', { day: shortRoutineDay(point.day), count: point.count }) : '';
+  };
+  const step = (by: number) => {
+    const next = points[Math.max(0, Math.min(points.length - 1, (at < 0 ? points.length - 1 : at) + by))];
+    if (next) pick(next.day);
+  };
   return <Panel testID="history-graph" style={{ gap: tokens.spacing[1] }}>
     <SegmentedControl label={routinesText('graphTabs')} options={ROUTINE_GRAPH_TABS.map(tab => ({ value: tab.id, label: tab.label }))} value={history.tab} onChange={onTab} />
     <ThemedText testID="history-graph-selected" numeric accessibilityLiveRegion="polite" style={semibold}>{history.graph.selectedLabel}</ThemedText>
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1, minHeight: BAR }}>
-      {history.graph.points.map((point) => {
+    <Pressable testID="history-bars" accessible accessibilityRole="adjustable" accessibilityLabel={routinesText('graphSpoken')} accessibilityHint={routinesText('graphHint')}
+      accessibilityValue={{ text: spoken(at) }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={(event) => step(event.nativeEvent.actionName === 'increment' ? 1 : -1)}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onPress={(event) => {
+        if (!width || !points.length) return;
+        const point = points[Math.max(0, Math.min(points.length - 1, Math.floor((event.nativeEvent.locationX / width) * points.length)))];
+        if (point) pick(point.day);
+      }}
+      style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1, minHeight: BAR, paddingVertical: tokens.spacing[0] }}>
+      {points.map((point) => {
         const on = point.day === history.day;
-        return <Tappable key={point.day} testID={`history-bar-${point.day}`} accessibilityRole="button" accessibilityState={{ selected: on }}
-          accessibilityLabel={routinesText(history.tab === 'skipped' ? 'graphSkipped' : 'graphLogged', { day: shortRoutineDay(point.day), count: point.count })}
-          onPress={() => pick(point.day)} hitSlop={{ top: 8, bottom: 8 }} style={{ flex: 1, minHeight: BAR, justifyContent: 'flex-end' }}>
+        return <View key={point.day} testID={`history-bar-${point.day}`} pointerEvents="none" style={{ flex: 1, minHeight: BAR, justifyContent: 'flex-end' }}>
           <View style={{ minHeight: Math.max(2, Math.round((point.count / most) * BAR)), borderRadius: 2, backgroundColor: on ? colors.text : point.count ? tone : colors['surface-2'] }} />
-        </Tappable>;
+        </View>;
       })}
-    </View>
+    </Pressable>
     <Note testID="history-graph-note">{routinesText('graphNote')}</Note>
   </Panel>;
 }

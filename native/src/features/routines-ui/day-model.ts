@@ -2,6 +2,7 @@ import { coveringLog, formatRoutineAmount, loggedAmountText, placedItems, routin
 import { routineBlockWindow, routineDayRolloverHour, routineMinuteOfDay } from '@/features/routines/model/dose';
 import { formatRoutineWait, routineNextItem, routineNowNext } from '@/features/routines/model/now';
 import type { RoutineBlock, RoutineView } from '@/features/routines/model/shape';
+import { routineSupplyView } from '@/features/routines/model/supply';
 import { routineClock24 } from '@/features/routines/model/types';
 import { routinesText } from '@/i18n/en';
 import { routinesOn } from './sun-model';
@@ -18,8 +19,9 @@ export function nextLine(view: RoutineView, now: Date, day: string): { text: str
   return {
     text: wait ? routinesText('next', { name, wait }) : routinesText('nextPlain', { name }),
     itemId: next.item.id ?? '',
-    // The row that is due now, or within half an hour, is marked on its time rail.
-    soon: !next.overdue && typeof next.waitMin === 'number' && next.waitMin <= 30,
+    /* "Now" on a row's time rail is an instruction, so it shows only when the item is due this minute or is
+       already overdue and still open. Until then the rail keeps the clock time, and the line above counts down. */
+    soon: next.overdue === true || (typeof next.waitMin === 'number' && next.waitMin < 1),
   };
 }
 
@@ -34,6 +36,11 @@ export function rowAmount(row: RoutineRow): string {
 export function rowTime(row: RoutineRow): string {
   const minute = routineMinuteOfDay(row.item.timeMin);
   return minute == null ? '' : routineClock24(minute);
+}
+/** A row's supply line: what is on hand with the days left, and how long ago a vial was mixed. Empty when the
+ * item has no count and no mixed day. */
+export function rowSupply(row: RoutineRow, view: RoutineView, day: string): string {
+  return routineSupplyView({ item: row.item, logs: view.logs, today: day }).text;
 }
 export const rowDone = (row: RoutineRow) => !row.open && !!row.log && row.log.status !== 'skipped';
 export const rowSkipped = (row: RoutineRow) => !row.open && !!row.log && row.log.status === 'skipped';
