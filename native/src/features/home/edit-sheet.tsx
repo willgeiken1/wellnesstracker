@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
@@ -8,7 +8,17 @@ import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import { appleHealth } from '../health/apple';
 import { oura } from '../health/oura-client';
-import { HEALTH_TILES, RING_TILES, addTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTiles, type TileId } from './tiles';
+import { HEALTH_TILES, RING_TILES, addTile, isRoutineTile, isSmall, moveTile, offHome, removeTile, setWide, type HomeTileId, type HomeTiles, type RoutineTileId, type TileId } from './tiles';
+
+/** What Edit Home is told about routine tiles. It is handed names to show and nothing else: it reads no routine
+ * itself. `offer` lists the tiles not on Home yet whose title holds the words typed. */
+export interface RoutineTileChoices {
+  title: string; note: string; search: string; noMatch: string; allPlaced: string;
+  name: (id: RoutineTileId) => string; about: (id: string) => string;
+  offer: (query: string) => readonly { id: string; title: string }[];
+}
+/** With more routine tiles than this to pick from, a search box shows above them. */
+export const ROUTINE_SEARCH_FROM = 7;
 
 export const TILE_NAME: Record<TileId, 'homeTileMap' | 'homeTileScore' | 'homeTileWeek' | 'homeTileNext' | 'homeCalories' | 'homeProtein' | 'volume' | 'weight' | 'homeSteps' | 'homeSleep' | 'homeActive' | 'homeExercise' | 'homeBodyFat' | 'homeWater' | 'homeMindful'> = {
   map: 'homeTileMap', score: 'homeTileScore', week: 'homeTileWeek', next: 'homeTileNext', calories: 'homeCalories', protein: 'homeProtein', volume: 'volume', weight: 'weight',
@@ -31,14 +41,23 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
 }
 
 /** Edit Home: what is on Home (reorder, resize, remove) and what can be added. Every change applies at once; Done only closes. */
-export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }: { visible: boolean; tiles: HomeTiles; unsaved?: boolean; onChange: (next: HomeTiles) => void; onClose: () => void }) {
+export function EditHome({ visible, tiles, unsaved = false, onChange, onClose, routine }: {
+  visible: boolean; tiles: HomeTiles; unsaved?: boolean; onChange: (next: HomeTiles) => void; onClose: () => void;
+  /** Present once the person has routines: adds their tiles to both lists. */
+  routine?: RoutineTileChoices;
+}) {
   const { colors, reduceMotion } = useTheme();
+  const [query, setQuery] = useState('');
   // Health tiles are offered only where Apple Health or an account's Oura connection can exist. Without Apple Health
   // (Android, until Health Connect comes) only the Steps and Sleep tiles Oura can fill are offered.
   const healthHere = useMemo(() => appleHealth() ? HEALTH_TILES : oura() ? RING_TILES : [], []);
   const rest = offHome(tiles).filter(id => !HEALTH_TILES.includes(id) || healthHere.includes(id));
   const row = { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], padding: tokens.spacing[2], borderRadius: 18, backgroundColor: colors.surface } as const;
-  const name = (id: TileId) => t(TILE_NAME[id]);
+  const name = (id: HomeTileId) => isRoutineTile(id) ? routine?.name(id) ?? '' : t(TILE_NAME[id]);
+  const about = (id: HomeTileId) => isRoutineTile(id) ? routine?.about(id) ?? '' : t(ABOUT[id]);
+  // Without the words to name them, routine tiles are left out of the list; the layout keeps them.
+  const on = tiles.order.filter(id => !isRoutineTile(id) || !!routine);
+  const every = routine ? routine.offer('') : [], offered = routine && query.trim() ? routine.offer(query) : every;
   return <Modal testID="home-edit-sheet" visible={visible} animationType={reduceMotion ? 'none' : 'slide'} presentationStyle="pageSheet" onRequestClose={onClose}>
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'left', 'right', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: tokens.spacing[3] }}>
@@ -52,7 +71,8 @@ export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }:
         {unsaved && <ThemedText testID="home-edit-unsaved" accessibilityRole="alert" variant="caption" style={{ color: colors.danger }}>{t('unsavedHere')}</ThemedText>}
         <ThemedText variant="headline" accessibilityRole="header" style={{ fontWeight: '600' }}>{t('homeEditOn')}</ThemedText>
         {!tiles.order.length && <ThemedText muted variant="caption">{t('homeEditEmpty')}</ThemedText>}
-        {tiles.order.map((id, index) => {
+        {on.map((id) => {
+          const index = tiles.order.indexOf(id);
           const wide = tiles.wide.includes(id);
           return <View key={id} testID={`edit-on-${id}`} style={row}>
             <View style={{ flex: 1, gap: 2 }}>
@@ -62,7 +82,7 @@ export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }:
                   onPress={() => onChange(setWide(tiles, id, !wide))} hitSlop={{ top: 10, bottom: 10 }} style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
                   <ThemedText variant="caption" style={{ color: colors.accent, fontWeight: '600' }}>{t(wide ? 'homeEditWideOn' : 'homeEditWideOff')}</ThemedText>
                 </Pressable>
-                : <ThemedText muted variant="caption">{t(ABOUT[id])}</ThemedText>}
+                : <ThemedText muted variant="caption">{about(id)}</ThemedText>}
             </View>
             <Round glyph="up" label={`${t('homeEditUp')}, ${name(id)}`} disabled={index === 0} onPress={() => onChange(moveTile(tiles, id, -1))} />
             <Round glyph="down" label={`${t('homeEditDown')}, ${name(id)}`} disabled={index === tiles.order.length - 1} onPress={() => onChange(moveTile(tiles, id, 1))} />
@@ -78,6 +98,21 @@ export function EditHome({ visible, tiles, unsaved = false, onChange, onClose }:
           </View>
           <Round glyph="add" tone="accent" label={`${t('homeAdd')}, ${name(id)}`} onPress={() => onChange(addTile(tiles, id))} />
         </View>)}
+        {routine && <>
+          <ThemedText variant="headline" accessibilityRole="header" style={{ fontWeight: '600', marginTop: tokens.spacing[3] }}>{routine.title}</ThemedText>
+          {every.length >= ROUTINE_SEARCH_FROM && <TextInput testID="edit-routine-search" accessibilityLabel={routine.search} placeholder={routine.search} placeholderTextColor={colors['text-muted']}
+            value={query} onChangeText={setQuery} autoCorrect={false} autoCapitalize="none" returnKeyType="search" clearButtonMode="while-editing"
+            style={{ minHeight: 44, paddingHorizontal: tokens.spacing[2], borderRadius: tokens.radii.input, backgroundColor: colors['surface-2'], color: colors.text, fontSize: tokens.type.body }} />}
+          {!offered.length && <ThemedText muted variant="caption" accessibilityLiveRegion="polite">{every.length ? routine.noMatch : routine.allPlaced}</ThemedText>}
+          {offered.filter((entry): entry is { id: RoutineTileId; title: string } => isRoutineTile(entry.id)).map(entry => <View key={entry.id} testID={`edit-off-${entry.id}`} style={row}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <ThemedText style={{ fontWeight: '600' }}>{entry.title}</ThemedText>
+              <ThemedText muted variant="caption">{routine.about(entry.id)}</ThemedText>
+            </View>
+            <Round glyph="add" tone="accent" label={`${t('homeAdd')}, ${entry.title}`} onPress={() => onChange(addTile(tiles, entry.id))} />
+          </View>)}
+          <ThemedText muted variant="caption">{routine.note}</ThemedText>
+        </>}
         <ThemedText muted variant="caption" style={{ marginTop: tokens.spacing[2] }}>{t('homeEditNote')}</ThemedText>
       </ScrollView>
     </SafeAreaView>

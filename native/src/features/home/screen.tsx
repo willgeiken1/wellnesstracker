@@ -19,13 +19,16 @@ import { attributedDay, foodTargets, totals } from '@/features/food/model';
 import { useFoodRevision } from '@/features/food/use-food-revision';
 import { PlanStore } from '@/features/plans/store';
 import { useWorkout } from '@/features/workout/use-workout';
-import { pluralize, t } from '@/i18n/en';
+import { pluralize, routinesHomeText, t } from '@/i18n/en';
+import { NEXT_UP_TILE_ID, ROUTINE_TILE_TEXT, nextUpWanted, setNextUpHidden } from '@/features/routines/model/home-tiles';
+import { useRoutines, type Routines } from '@/features/routines-ui/use-routines';
 import { MINI, terrain } from './contour';
-import { EditHome } from './edit-sheet';
+import { EditHome, type RoutineTileChoices } from './edit-sheet';
+import { RoutineHomeTile, routineTileAbout, routineTileLive, routineTileName, routineTilesOffered } from './routine-tiles';
 import { type DaySeries, type HealthDays } from '../health/days';
 import { useHealthDays } from '../health/use-health-days';
 import { useFocused } from './use-focused';
-import { isSmall, loadTiles, saveTiles, type HomeTiles, type TileId } from './tiles';
+import { isRoutineTile, isSmall, loadTiles, saveTiles, withNextUp, type HomeTiles, type RoutineTileId, type TileId } from './tiles';
 import { HeaderScore, ScoreCard } from '../score/card';
 import { readScore } from '../score/read';
 import type { Score } from '../score/model';
@@ -149,7 +152,11 @@ export function Home() {
   const repo = store?.repo;
   // The saved layout is read once per repository; edits update this state and the saved copy together.
   const [layout, setLayout] = useState<{ repo: typeof repo; tiles: HomeTiles }>(() => ({ repo, tiles: loadTiles(repo) }));
-  const tiles = layout.repo === repo ? layout.tiles : loadTiles(repo);
+  const saved = layout.repo === repo ? layout.tiles : loadTiles(repo);
+  // Routines are read here and drawn here. Opening Home writes nothing, and nothing about a routine leaves the phone.
+  const routines = useRoutines({ seed: false });
+  // Next up shows by itself, first, once there is a routine item, until the person places it or takes it off.
+  const tiles = nextUpWanted(routines.store, { items: saved.order }) ? withNextUp(saved) : saved;
   // Coming back to Home re-reads the saved layout, so tiles added elsewhere (connecting Apple Health) show at
   // once and a later edit here cannot overwrite them.
   const focused = useFocused();
@@ -158,6 +165,10 @@ export function Home() {
   const [unsaved, setUnsaved] = useState(false);
   if (focused !== wasFocused) { setWasFocused(focused); if (focused) { setLayout({ repo, tiles: loadTiles(repo) }); setUnsaved(false); } }
   const change = (next: HomeTiles) => {
+    // Taking Next up off Home is remembered with the routines, so it does not come back by itself; putting it
+    // back forgets that.
+    const had = tiles.order.includes(NEXT_UP_TILE_ID), has = next.order.includes(NEXT_UP_TILE_ID);
+    if (had || has) routines.apply((current, clock) => setNextUpHidden(current, !has, clock));
     setLayout({ repo, tiles: next });
     try { saveTiles(repo, next); setUnsaved(false); } catch { setUnsaved(true); }
   };
@@ -179,6 +190,14 @@ export function Home() {
   const reader = useMemo(() => store ? new WorkoutStore(cachedReads(store.repo), store.viewRevision) : null, [store]);
   const scoreOn = tiles.order.includes('score'), minute = Math.floor(now.getTime() / 60_000);
   const score = useMemo(() => reader && scoreOn ? readScore(reader, new Date(minute * 60_000), health) : null, [reader, scoreOn, health, minute]);
+  // Edit Home lists routine tiles once there is a routine or an item to make one from, or one is already placed.
+  const routineStore = routines.store;
+  const routineChoices: RoutineTileChoices | undefined = routines.view.items.length || routines.view.blocks.length || tiles.order.some(isRoutineTile) ? {
+    title: routinesHomeText('editSection'), note: routinesHomeText('editNote'),
+    search: ROUTINE_TILE_TEXT.search, noMatch: ROUTINE_TILE_TEXT.noMatch, allPlaced: ROUTINE_TILE_TEXT.allPlaced,
+    name: id => routineTileName(routineStore, id), about: routineTileAbout,
+    offer: query => routineTilesOffered(routineStore, tiles.order, query),
+  } : undefined;
   return <View style={{ flex: 1 }}>
     <Screen tabHeader>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
@@ -199,9 +218,9 @@ export function Home() {
         </Pressable>}
         {score && <HeaderScore score={score} />}
       </View>
-      {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} /> : <Next />}
+      {store && reader ? <Body store={store} reader={reader} now={now} selected={selected} onPick={setPicked} tiles={tiles} onEdit={() => setEditing(true)} health={health} score={score} routines={routines} /> : <Next />}
     </Screen>
-    <EditHome visible={editing} tiles={tiles} unsaved={unsaved} onChange={change} onClose={() => setEditing(false)} />
+    <EditHome visible={editing} tiles={tiles} unsaved={unsaved} onChange={change} onClose={() => setEditing(false)} routine={routineChoices} />
     {adding && <Pressable accessibilityLabel={t('close')} onPress={() => setAdding(false)} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />}
     <View pointerEvents="box-none" testID="home-add-dock" style={{ position: 'absolute', right: tokens.spacing[3], bottom: tokens.spacing[3] + insets.bottom, alignItems: 'flex-end', gap: tokens.spacing[1] }}>
       {adding && <>
@@ -218,7 +237,7 @@ export function Home() {
   </View>;
 }
 
-function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, score }: { store: WorkoutStore; reader: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null }) {
+function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, score, routines }: { store: WorkoutStore; reader: WorkoutStore; now: Date; selected: string; onPick: (day: string) => void; tiles: HomeTiles; onEdit: () => void; health: HealthDays | null; score: Score | null; routines: Routines }) {
   const today = localDay(now), foodDay = attributedDay();
   useFoodRevision(store.repo);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
@@ -242,21 +261,29 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
   </Card>;
   // A new account has nothing to draw yet, but the layout the person chose still applies: only what they kept
   // on Home shows, in their order. The week strip waits for data, like the number tiles.
+  const grid = { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3] } as const;
   if (!data.any && !health) return <>
-    {tiles.order.map(id => id === 'map' ? <EmptyMap key={id} />
+    {tiles.order.map((id, index) => id === 'map' ? <EmptyMap key={id} />
       : id === 'score' ? score && <ScoreCard key={id} score={score} />
-      : id === 'next' ? <Next key={id} store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} /> : null)}
-    {tiles.order.some(id => id !== 'map' && id !== 'next' && id !== 'score') && <>
+      : id === 'next' ? <Next key={id} store={store} facts={facts.get(today) ?? NONE} targets={targets} hour={now.getHours()} />
+      // Routine tiles need nothing logged to have something to show. Neighbours share one row, so two half-width
+      // ones still sit side by side.
+      : isRoutineTile(id) && !isRoutineTile(tiles.order[index - 1]) && routineRun(tiles.order, index).some(tile => routineTileLive(routines.view, tile))
+        ? <View key={id} testID="home-routine-tiles" style={grid}>
+          {routineRun(tiles.order, index).map(tile => <RoutineHomeTile key={tile} id={tile} wide={tiles.wide.includes(tile)} routines={routines} now={now} />)}
+        </View> : null)}
+    {tiles.order.some(id => id !== 'map' && id !== 'next' && id !== 'score' && !isRoutineTile(id)) && <>
       <ThemedText variant="headline" accessibilityRole="header" style={semibold}>{t('homeTiles')}</ThemedText>
       <ThemedText muted variant="caption">{t('homeTilesEmpty')}</ThemedText>
     </>}
   </>;
   const numbers = numberTiles(reader, recent.map(day => facts.get(day) ?? NONE), pillar, accent, health, palette.sleep);
-  const wanted = tiles.order.filter(isSmall), shownNumbers = wanted.filter(id => numbers[id]);
+  const wanted = tiles.order.filter((id): id is TileId => !isRoutineTile(id) && isSmall(id)), shownNumbers = wanted.filter(id => numbers[id]);
   // One wrapping row keeps the saved order: sections and wide tiles take the full row, small tiles pair up.
-  return <View testID="home-tiles" style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: tokens.spacing[3], paddingBottom: 72 }}>
+  return <View testID="home-tiles" style={[grid, { paddingBottom: 72 }]}>
     {tiles.order.map(id => {
       const full = { width: '100%' } as const;
+      if (isRoutineTile(id)) return <RoutineHomeTile key={id} id={id} wide={tiles.wide.includes(id)} routines={routines} now={now} />;
       if (id === 'map') return <View key={id} style={full}><MapCard day={selected} today={today} values={of(selected)} /></View>;
       if (id === 'score') return score ? <View key={id} style={full}><ScoreCard score={score} /></View> : null;
       if (id === 'week') return <View key={id} style={full}><Week week={week} today={today} selected={selected} onPick={onPick} of={of} /></View>;
@@ -266,6 +293,13 @@ function Body({ store, reader, now, selected, onPick, tiles, onEdit, health, sco
     })}
     {wanted.length > 0 && !shownNumbers.length && <ThemedText muted variant="caption" style={{ width: '100%' }}>{t('homeTilesEmpty')}</ThemedText>}
   </View>;
+}
+
+/** The routine tiles that stand together in the layout, starting at `from`. */
+function routineRun(order: HomeTiles['order'], from: number) {
+  const run: RoutineTileId[] = [];
+  for (let i = from; i < order.length; i += 1) { const id = order[i]; if (!isRoutineTile(id)) break; run.push(id); }
+  return run;
 }
 
 /** The greeting in two weights, light then strong, so the time of day is the word that lands. */
