@@ -63,6 +63,8 @@ export function TabDock({ items, active, onPress }: { items: readonly DockItem[]
   const button = (item: DockItem, index: number) => {
     const open = index === active, size = open ? DOCK_ACTIVE : DOCK_ITEM;
     return <Pressable key={item.key} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
+      // The bar is icons only and does not grow with the text size, so a long press shows the name large.
+      accessibilityShowsLargeContentViewer accessibilityLargeContentTitle={item.label}
       onPress={() => onPress(index)} hitSlop={open ? 0 : { top: 6, bottom: 6 }}
       style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
         backgroundColor: open ? colors.accent : 'transparent', opacity: pressed ? 0.8 : 1 }, open && tokens.elevation.ios]}>

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,11 @@ import { ROUTINES_ENABLED } from "../logger/js/shared/routines-flag.js";
 
 const APP_ROOT = fileURLToPath(new URL("../native/src/app/", import.meta.url));
 const TAB_DIR = join(APP_ROOT, "(tabs)");
-const TAB_FILES = ["_layout.tsx", "food.tsx", "index.tsx", "progress.tsx", "workouts.tsx"];
+const TAB_FILES = ["_layout.tsx", "food.tsx", "index.tsx", "progress.tsx", "routines.tsx", "workouts.tsx"];
+/* The iPhone app has one Routines tab, and its screens live in one folder beside
+   the tabs. These two paths are the only routine routes the app may have. */
+const NATIVE_ROUTINES_TAB = "(tabs)/routines.tsx";
+const NATIVE_ROUTINES_DIR = "routines";
 const PWA_TABS = ["home", "workouts", "food", "progress", "insights"];
 
 /* Route segment only. Workout-template "routines" live in stores and the PWA
@@ -78,6 +82,7 @@ function routeEntries(dir, rel = "") {
 function forbiddenRoutes() {
   const hits = [];
   for (const entry of routeEntries(APP_ROOT)) {
+    if (entry.relPath === NATIVE_ROUTINES_TAB || entry.relPath === NATIVE_ROUTINES_DIR) continue;
     const why = forbiddenRouteName(entry.name, entry.relPath);
     if (why) hits.push(`${entry.relPath} (${why})`);
   }
@@ -129,7 +134,7 @@ test("the PWA tab bar stays Home, Workouts, Food, Progress, Insights", () => {
   assert.deepEqual(tabs, PWA_TABS);
 });
 
-test("native tabs are exactly Home, Workouts, Food, and Progress", () => {
+test("native tabs are exactly Home, Workouts, Food, Progress, and Routines", () => {
   const names = readdirSync(TAB_DIR).sort();
   assert.deepEqual(names, TAB_FILES.slice().sort());
 });
@@ -142,9 +147,22 @@ test("native Insights is a section of Progress: /insights only redirects there",
   assert.equal(forbiddenRouteName("insights.tsx"), null);
 });
 
-test("native app routes do not add Routines, Discover, or a reconstitution calculator", () => {
+test("the only native Routines routes are the tab and its routines folder; no Discover or calculator route", () => {
+  assert.ok(existsSync(join(APP_ROOT, NATIVE_ROUTINES_TAB)), "the Routines tab route is missing");
+  assert.ok(existsSync(join(APP_ROOT, NATIVE_ROUTINES_DIR)), "the Routines screens folder is missing");
   const hits = forbiddenRoutes();
   assert.deepEqual(hits, [], `forbidden native app route:\n${hits.join("\n")}`);
+  /* The two paths are let through by their exact place, not by name: the same
+     names anywhere else are still refused, and so is a second routine route
+     inside the folder. */
+  assert.equal(forbiddenRouteName("routines.tsx", "settings/routines.tsx"), "routine");
+  assert.equal(forbiddenRouteName("routines", "food/routines"), "routine");
+  assert.equal(forbiddenRouteName("daily-routines.tsx", "routines/daily-routines.tsx"), "routine");
+  assert.equal(forbiddenRouteName("peptides.tsx", "routines/peptides.tsx"), "peptide");
+  assert.equal(forbiddenRouteName("reconstitution.tsx", "routines/reconstitution.tsx"), "reconstitut");
+  /* App Store 1.4.2: the tool is a concentration converter inside Add item, and no route is named a calculator. */
+  const calculators = routeEntries(APP_ROOT).filter((entry) => /calculator/i.test(entry.name)).map((entry) => entry.relPath);
+  assert.deepEqual(calculators, []);
 });
 
 test("workout template routines are not treated as a native Routines route", () => {
@@ -214,12 +232,13 @@ test("my-routines.tsx and routine.tsx are forbidden native routes", () => {
   assert.equal(forbiddenRouteName("routine.tsx", "workout/routine.tsx"), "routine");
 });
 
-test("a Routines tab added only in tabs.ts fails", () => {
+test("tabs.ts lists exactly the five tabs, and Routines is the only routine tab", () => {
   const src = readFileSync(new URL("../native/src/features/shell/tabs.ts", import.meta.url), "utf8");
   const tabs = tabConfigEntries(src);
-  assert.deepEqual(tabs.map((tab) => tab.route.toLowerCase()), ["index", "workouts", "food", "progress"]);
-  assert.deepEqual(tabs.map((tab) => tab.label.toLowerCase()), ["home", "workouts", "food", "progress"]);
-  for (const tab of tabs) {
+  assert.deepEqual(tabs.map((tab) => tab.route), ["index", "workouts", "food", "progress", "routines"]);
+  assert.deepEqual(tabs.map((tab) => tab.label), ["home", "workouts", "food", "progress", "routines"]);
+  assert.ok(existsSync(join(TAB_DIR, "routines.tsx")), "tabs.ts names a Routines tab with no route file");
+  for (const tab of tabs.slice(0, 4)) {
     assert.equal(forbiddenRouteName(`${tab.route}.tsx`), null, tab.route);
     assert.equal(forbiddenRouteName(`${tab.label}.tsx`), null, tab.label);
   }

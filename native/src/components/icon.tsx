@@ -2,12 +2,13 @@ import { Platform, type ColorValue } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '@/design/theme-provider';
-const symbols = { home: 'house', workouts: 'dumbbell', food: 'fork.knife', progress: 'chart.xyaxis.line', avatar: 'person.crop.circle', chevron: 'chevron.right' } as const;
+const symbols = { home: 'house', workouts: 'dumbbell', food: 'fork.knife', progress: 'chart.xyaxis.line', routines: 'sun.horizon', avatar: 'person.crop.circle', chevron: 'chevron.right' } as const;
 const paths = {
   home: 'M3 10L12 3L21 10M5 9V21H10V14H14V21H19V9',
   workouts: 'M3 7V17M6 5V19M18 5V19M21 7V17M6 12H18',
   food: 'M4 3V8Q4 11 7 11Q10 11 10 8V3M7 3V21M20 21V3Q14 6 15 12H20',
   progress: 'M3 3V21H21M6 16L11 11L15 14L21 6',
+  routines: 'M3 18H21M7 18A5 5 0 0 1 17 18M12 7.5V10M5.3 11.3L6.7 12.7M18.7 11.3L17.3 12.7',
   avatar: 'M20 21Q20 14 12 14Q4 14 4 21M12 3A4 4 0 1 0 12 11A4 4 0 1 0 12 3',
   chevron: 'M9 5L16 12L9 19',
 };

@@ -86,6 +86,6 @@ wait until the rest timer shows about 1:30 left."
 
 xcrun simctl status_bar "$udid" clear
 say "Done. The six shots are in $OUT, numbered in upload order."
-echo "Before uploading: 9:41 and full battery, no developer warnings, no AI summaries, no Routines tab,"
+echo "Before uploading: 9:41 and full battery, no developer warnings, no AI summaries, the Routines tab not open,"
 echo "no Oura or Fitbit tiles, no sign-in or email, and nothing real on screen."
 open "$OUT"

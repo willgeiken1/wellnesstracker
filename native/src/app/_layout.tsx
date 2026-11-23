@@ -14,13 +14,15 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { AuthProvider, useAuth } from '../auth/provider';
 import { LocalDataRecovery } from '../auth/screens';
-import { setAndroidCopy, t } from '@/i18n/en';
+import { routinesText, setAndroidCopy, t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
 
 import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
 void SplashScreen.preventAutoHideAsync();
 // Android has no Apple Health in v1, so its copy names only Oura.
 setAndroidCopy(Platform.OS === 'android');
+/** A small sheet: it opens at a little over half the screen, pulls up to full, and grows when its list is scrolled to the edge. */
+const routineSheet = { headerShown: false, presentation: 'formSheet' as const, sheetAllowedDetents: [0.6, 1], sheetGrabberVisible: true, sheetCornerRadius: 20, sheetExpandsWhenScrolledToEdge: true };
 export function NavigationShell({ access = false, signedIn = false }: {access?: boolean;signedIn?:boolean}) {
   const { colors, mode, reduceMotion, motion } = useTheme();
   const base = mode === 'dark' ? DarkTheme : DefaultTheme;
@@ -44,6 +46,16 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       <Stack.Screen name="food/log" options={{ title: t('foodLog') }} />
       <Stack.Screen name="score" options={{ title: t('scoreTitle'), headerTitle: '', headerShadowVisible: false, headerStyle: { backgroundColor: colors.bg } }} />
       <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
+      {/* Routines: History and Settings are pushed; an item's details and the sites are small sheets; the forms are page sheets. */}
+      <Stack.Screen name="routines/history" options={{ title: routinesText('history'), headerTitle: '', headerShadowVisible: false, headerStyle: { backgroundColor: colors.bg } }} />
+      <Stack.Screen name="routines/settings" options={{ title: routinesText('settings'), headerTitle: '', headerShadowVisible: false, headerStyle: { backgroundColor: colors.bg } }} />
+      <Stack.Screen name="routines/item" options={routineSheet} />
+      <Stack.Screen name="routines/sites" options={routineSheet} />
+      <Stack.Screen name="routines/add-item" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="routines/new" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="routines/setup" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="routines/edit/index" options={{ title: routinesText('editRoutines'), headerTitle: '', headerShadowVisible: false, headerStyle: { backgroundColor: colors.bg } }} />
+      <Stack.Screen name="routines/edit/[id]" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Screen name="import" options={{ title: t('importTitle') }} />
       <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" options={{ headerShown: false }} /></Stack.Protected>

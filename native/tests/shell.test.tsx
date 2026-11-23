@@ -11,6 +11,7 @@ import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
+import Routines from '../src/app/(tabs)/routines';
 import Settings from '../src/app/settings/index';
 import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import Appearance from '../src/features/settings/appearance';
@@ -32,9 +33,9 @@ function ThemeProbe() {
   const { mode, palette, colors } = useTheme();
   return <Text testID="theme">{`${mode}/${palette}/${colors.bg}`}</Text>;
 }
-test('tab shell renders the four native tab labels, and Insights is not one of them', async () => {
+test('tab shell renders the five native tab labels, and Insights is not one of them', async () => {
   await render(<ThemeProvider><AppTabs /></ThemeProvider>);
-  for (const label of ['Home', 'Workouts', 'Food', 'Progress']) {
+  for (const label of ['Home', 'Workouts', 'Food', 'Progress', 'Routines']) {
     expect(screen.getByText(label)).toBeTruthy();
     expect(screen.getByLabelText(label)).toBeTruthy();
   }
@@ -61,6 +62,7 @@ test.each([
   ['Home tab', Home], ['Workouts tab', Workouts], ['Food tab', Food],
   ['Progress tab', Progress, []], ['Progress tab, Insights view', Progress, ['Insights']],
   ['Progress tab, Insights view, Muscles', Progress, ['Insights', 'Muscles']],
+  ['Routines tab', Routines],
   ['Settings list', Settings], ['Appearance', Appearance],
 ] as [string, ComponentType, string[]?][])('%s pressables are labeled and text can grow at fontScale 2', async (_name, Component, tabsToPress = []) => {
   const getDimensions = Dimensions.get;

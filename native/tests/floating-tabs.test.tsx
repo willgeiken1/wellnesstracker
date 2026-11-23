@@ -38,7 +38,7 @@ const saved = (accent: string, theme = 'dark') => ({
 }) as unknown as Repository;
 const items: DockItem[] = [
   { key: 'index', label: 'Home', icon: 'home' }, { key: 'workouts', label: 'Workouts', icon: 'workouts' }, { key: 'food', label: 'Food', icon: 'food' },
-  { key: 'progress', label: 'Progress', icon: 'progress' },
+  { key: 'progress', label: 'Progress', icon: 'progress' }, { key: 'routines', label: 'Routines', icon: 'routines' },
 ];
 const style = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
 beforeEach(() => { mockIndex = 0; mockNavigate.mockClear(); mockEmit.mockClear(); });
@@ -60,7 +60,7 @@ describe('the floating tab bar', () => {
   test('a tab in the middle splits the pill either side of it, and the last tab has one pill before it', async () => {
     const view = await render(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={2} onPress={() => {}} /></ThemeProvider>);
     expect(screen.getAllByTestId('tab-pill')).toHaveLength(2);
-    await view.rerender(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={3} onPress={() => {}} /></ThemeProvider>);
+    await view.rerender(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={items.length - 1} onPress={() => {}} /></ThemeProvider>);
     expect(screen.getAllByTestId('tab-pill')).toHaveLength(1);
   });
   test('in a light theme the pill is the theme ink, on every palette', async () => {

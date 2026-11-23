@@ -62,7 +62,39 @@ test('routine tables are not in the list the sync engine pushes and pulls', () =
   }
 });
 
-test('no screen or route for routines exists yet', () => {
-  expect(files(path.join(SRC, 'app')).filter(file => /routine/i.test(path.basename(file)) && !/workout/i.test(file)).map(file => path.relative(SRC, file)).filter(file => /daily|routines\.tsx$/.test(file))).toEqual([]);
-  expect(files(path.join(SRC, 'app')).some(file => /features\/routines/.test(fs.readFileSync(file, 'utf8')))).toBe(false);
+/* The Routines tab and its screens. They draw the routine rows, so the same rule holds for them as for the
+   store: nothing in them may send, log or report, and no import of theirs may lead to code that does. */
+const UI = path.join(SRC, 'features/routines-ui');
+const OUTWARD = /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|\bconsole\s*\.|\b(?:Sentry|PostHog|posthog)\s*\.|\b(?:captureException|captureMessage|captureEvent|track|capture|sendBeacon)\s*\(/;
+const imports = (text: string) => [...text.matchAll(/import\s+(?!type\b)[\s\S]*?from\s*['"]([^'"]+)['"]/g)].map(match => match[1]);
+
+test('the Routines screens send, log and report nothing, and import no telemetry, sync, server or AI code', () => {
+  const own = files(UI);
+  expect(own.length).toBeGreaterThanOrEqual(12);
+  for (const file of own) {
+    const text = fs.readFileSync(file, 'utf8');
+    expect([path.relative(SRC, file), OUTWARD.test(text)]).toEqual([path.relative(SRC, file), false]);
+    for (const spec of imports(text)) expect(spec).not.toMatch(/\/sync\/|\/server\/|\/ai\/|telemetry|analytics|sentry|posthog/i);
+  }
+});
+
+test('the only routes for routines are the tab and its routines folder, and they only open the Routines screens', () => {
+  const app = path.join(SRC, 'app');
+  const routes = files(app).map(file => path.relative(app, file)).filter(file => /routine/i.test(file) && !/workout/i.test(file)).sort();
+  expect(routes.filter(file => file !== '(tabs)/routines.tsx' && !file.startsWith(`routines${path.sep}`))).toEqual([]);
+  expect(routes).toContain('(tabs)/routines.tsx');
+  for (const route of routes) {
+    const text = fs.readFileSync(path.join(app, route), 'utf8');
+    expect([route, OUTWARD.test(text)]).toEqual([route, false]);
+    // A route file is a thin door: it may reach the Routines screens, the router and the strings, and nothing else.
+    for (const spec of imports(text)) expect([route, /^(?:@\/features\/routines-ui\/[\w-]+|@\/i18n\/en|expo-router)$/.test(spec)]).toEqual([route, true]);
+  }
+  // No other route reads routine data.
+  const others = files(app).filter(file => !routes.includes(path.relative(app, file)) && path.relative(app, file) !== '_layout.tsx');
+  expect(others.some(file => /features\/routines/.test(fs.readFileSync(file, 'utf8')))).toBe(false);
+});
+
+test('telemetry does not count the Routines tab or see its path', () => {
+  const telemetry = files(path.join(SRC, 'telemetry')).map(file => fs.readFileSync(file, 'utf8')).join('\n');
+  expect(telemetry).not.toMatch(/['"`]\/?routines['"`]/);
 });

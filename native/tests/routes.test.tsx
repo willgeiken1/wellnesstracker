@@ -12,6 +12,9 @@ import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
+import Routines from '../src/app/(tabs)/routines';
+import RoutinesHistory from '../src/app/routines/history';
+import RoutinesSettings from '../src/app/routines/settings';
 import InsightsLink from '../src/app/insights';
 import SettingsLayout from '../src/app/settings/_layout';
 import Settings from '../src/app/settings/index';
@@ -28,7 +31,8 @@ const routes = {
   'sign-in': () => null,
   _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
   '(tabs)/_layout': WebTabs, '(tabs)/index': Home, '(tabs)/workouts': Workouts,
-  '(tabs)/food': Food, '(tabs)/progress': Progress, insights: InsightsLink,
+  '(tabs)/food': Food, '(tabs)/progress': Progress, '(tabs)/routines': Routines, insights: InsightsLink,
+  'routines/history': RoutinesHistory, 'routines/settings': RoutinesSettings,
   'settings/_layout': SettingsLayout, 'settings/index': Settings,
   'settings/appearance': Appearance, 'settings/[section]': Section,
   'workout/_layout': WorkoutLayout, 'workout/index': Workout, 'workout/start': Start,
@@ -78,9 +82,9 @@ test.each([
   await fireEvent.press(screen.getByRole('button', { name: 'Home' }));
   expect(result.getPathname()).toBe('/');
 });
-test('the tab bar has four tabs and Insights is not one of them', async () => {
+test('the tab bar has five tabs and Insights is not one of them', async () => {
   await renderRouter(routes);
-  for (const name of ['Home', 'Workouts', 'Food', 'Progress']) expect(screen.getByRole('button', { name })).toBeTruthy();
+  for (const name of ['Home', 'Workouts', 'Food', 'Progress', 'Routines']) expect(screen.getByRole('button', { name })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Insights' })).toBeNull();
 });
 test.each([
