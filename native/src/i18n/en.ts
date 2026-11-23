@@ -1174,3 +1174,70 @@ export type RoutinesHomeKey = keyof typeof routinesHome;
 export function routinesHomeText(key: RoutinesHomeKey, values: Record<string, string | number> = {}): string {
   return routinesHome[key].replace(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole));
 }
+/* The Routines forms: Add item with the concentration converter, New routine, Edit routines and the setup quiz. */
+export const routinesSheets = {
+  close: 'Close', cancel: 'Cancel', clear: 'Clear', save: 'Save', back: 'Back',
+  discardTitle: 'Discard changes?', discardKeep: 'Keep editing', discard: 'Discard',
+  unavailable: 'Routines can\'t open right now.', unavailableBody: 'Close this and try again.',
+  notSaved: 'That didn\'t save. Try again.',
+
+  addItem: 'Add item', editItem: 'Edit item', name: 'Name',
+  type: 'Type', optional: 'Optional', newType: 'New type', newTypeName: 'Name it, like Skin care.', newTypeAdd: 'Add',
+  newTypeTaken: 'Add a name that isn\'t used yet.',
+  logAs: 'Log as', check: 'Check', checkLine: 'Tick it once when it\'s done.', dose: 'Dose', doseLine: 'Log the amount and unit you type.',
+  amount: 'Amount', unit: 'Unit', unitNone: 'unit', takeAway: 'Take away', add: 'Add', changeAmount: 'Change the amount',
+  logsEach: 'Logs {amount} {unit} each time.', pickUnit: 'Pick a unit.', typeAmount: 'Type an amount or use the steps.',
+  doseNote: 'The amount and unit are what you type. Nothing here suggests a dose.',
+  converterLine: 'Works out mL from your vial and water',
+  routinesAndTime: 'Routines and time', routines: 'Routines', time: 'Time', routineStart: 'Routine start', noTime: 'No time set',
+  arcHint: 'Sun path. Tap or drag it to set a time. The time field below does the same.',
+  earlier: 'Earlier by 15 minutes', later: 'Later by 15 minutes',
+  arcInRoutine: 'in {name} · tap to move', arcOwnTime: 'your own time · tap to move', arcAtStart: 'at the routine\'s start, {time}',
+  arcNoStart: 'no start time · tap for a time', arcMany: '{count} routines', arcManySub: 'each at its own start',
+  arcNone: 'No routine', arcPick: 'pick one below, or tap for a time', arcTap: 'tap for a time',
+  helpTyped: 'Optional with a type. It shows on its tab either way.',
+  helpPlain: 'The same item can sit in more than one routine. Logging it once covers all of them.',
+  keepRoutine: 'Give it a type, or keep it in one routine.', keepType: 'Keep a type, or put it in a routine first.',
+  onHand: 'On hand, optional', onHandHidden: 'Hidden', onHandHelp: 'Leave this blank to hide it. Days left uses this count and the days you logged.',
+  mixedOn: 'Mixed on, optional', mixedHelp: 'Leave this blank unless a vial was mixed. It shows how many days ago.',
+  mixedNone: 'Not set', today: 'Today', dayEarlier: 'One day earlier', dayLater: 'One day later',
+  evidence: 'Custom item. No evidence is attached.',
+  errPick: 'Pick a type or a routine.', errDose: 'Add a name, an amount, and a unit.', errName: 'Add a name.',
+  removeItem: 'Remove from all routines', removeItemTitle: 'Remove from all routines?', removeItemBody: 'Its history stays.', remove: 'Remove',
+
+  converter: 'Concentration converter',
+  converterIntro: 'Enter a vial amount, a water volume, and an amount to convert. The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen.',
+  converterNeed: 'Enter a vial amount, a water volume, and an amount to convert.',
+  converterMismatch: 'The vial unit and the amount unit are not the same, so there is no volume from what you entered.',
+  amountEntered: 'Amount entered', vialAmount: 'Vial amount', vialUnit: 'Vial unit', changeVial: 'Change the vial amount',
+  waterVolume: 'Water volume', changeWater: 'Change the water volume',
+  amountToConvert: 'Amount to convert', amountUnit: 'Amount unit', changeConvert: 'Change the amount to convert',
+  volume: 'Volume', u100: 'U-100 units', over100: 'Over 100 units', scale: 'U-100 units on a scale from 0 to 100',
+  doctor: 'Check with your doctor or pharmacist in addition to using this app, and before making any medical decision.',
+  saveNote: 'Save as note on this item',
+  saveNoteHelp: 'Saves the volume and U-100 units on this item. It does not log a dose, and it does not suggest an amount.',
+  noteSaved: 'Note saved.', noteFailed: 'The note was not saved.',
+
+  newRoutine: 'New routine', editRoutine: 'Edit routine', when: 'When', startsAt: 'Starts at', endsAt: 'Ends at', startTime: 'Start time', endTime: 'End time',
+  dragEnds: 'drag either end', days: 'Days', color: 'Color', colorLabel: '{name}, follows the accent',
+  colorCitrus: 'Citrus', colorLavender: 'Lavender', colorPink: 'Pink',
+  dayMon: 'Monday', dayTue: 'Tuesday', dayWed: 'Wednesday', dayThu: 'Thursday', dayFri: 'Friday', daySat: 'Saturday', daySun: 'Sunday',
+  items: 'Items', itemsMore: 'Add from your tabs and routines', itemsNone: 'Nothing to add yet.',
+  itemRemove: 'Remove {name} from this routine', itemAdd: 'Add {name} to this routine',
+  saveRoutine: 'Save routine', errRoutine: 'Add a name and both times.', errDays: 'A routine runs at least one day.',
+  order: 'Order', moveUp: 'Move up', moveDown: 'Move down', moveUpNamed: 'Move {name} up', moveDownNamed: 'Move {name} down', movedTo: '{name}, {place} of {count}',
+  hide: 'Hide routine', hideHelp: 'Hiding keeps its items and history. Restore it from Edit routines.',
+  routineGone: 'This routine isn\'t here any more.',
+  editRoutines: 'Edit routines', editIntro: 'Move, retime and recolor routines. Hiding one keeps its items and history.',
+  edit: 'Edit', editNamed: 'Edit {name}', hidden: 'Hidden', restore: 'Restore', restoreNamed: 'Restore {name}',
+
+  setupTitle: 'Set up Routines', setupStep: '{step} of {count}',
+  setupIntro: 'Your answers decide what this page starts with. You can add anything else later in Routines settings.',
+  setupSkipQuestion: 'Skip this question', setupSkip: 'Skip setup', next: 'Next', finish: 'Finish',
+} as const;
+export type RoutinesSheetsKey = keyof typeof routinesSheets;
+/** A routines-sheet string with its {placeholders} filled. */
+export function rs(key: RoutinesSheetsKey, values?: Record<string, string | number>): string {
+  const text: string = routinesSheets[key];
+  return values ? text.replace(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole)) : text;
+}
