@@ -2,7 +2,11 @@ import { localDatabase } from './sqlite';
 import { Repository } from '../../src/data/repository';
 import { DEVICE_A, OWNER_A, OWNER_B } from '../../fixtures/sync';
 import { FIXTURE_IDS, ROUTINE_SENTINELS, routineFixtureRows } from '../../fixtures/routines';
-import { commitRoutineStore, readRoutineStore, seedDefaultRoutines } from '../../src/features/routines/store';
+import { commitRoutineStore, readRoutineStore, removedDefaultRoutines, seedDefaultRoutines } from '../../src/features/routines/store';
+import { addBlock, moveBlock, saveBlock, blockDraft } from '../../src/features/routines/model/blocks';
+import { editLog } from '../../src/features/routines/model/edit-log';
+import { addRoutinePart, saveSetup } from '../../src/features/routines/model/setup';
+import { addCustomType } from '../../src/features/routines/model/types';
 import { deleteItem, logItem, restoreLog, saveItem, saveItemNote, setDayRollover, undoLog } from '../../src/features/routines/model/actions';
 import { customTypeId, DEFAULT_BLOCK_IDS, isRoutineRowId, ROUTINE_PREFS_ID, routineLogId, routinePlacementId, routineUuid } from '../../src/features/routines/model/ids';
 import { projectRoutineStore, type RoutineStore } from '../../src/features/routines/model/shape';
@@ -132,5 +136,54 @@ test('a save is all or nothing, refuses an id that is not a row id, and never to
     expect(readRoutineStore(repo).blocks[0]).toMatchObject({ name: 'Zzyq Evening Block', days: [0, 6], startMin: 600, endMin: 660, hidden: true });
     expect(repo.get('daily_blocks', DEFAULT_BLOCK_IDS.morning)?.data.days_mask).toBe(65);
     expect(readRoutineStore(other).blocks.map(block => block.name)).toEqual(['Morning routine', 'Night routine']);
+  } finally { sqlite.close(); }
+});
+
+test('a setup, a new routine, a move, a custom type and a log edit all save as rows and read back', async () => {
+  const { repo, sqlite } = await open();
+  try {
+    seedDefaultRoutines(repo);
+    const newId = uuid();
+    const at = new Date(2026, 10, 19, 8, 15);
+    const answers = { goals: ['supplements'], track: ['supplements'], enhancers: 'no', wake: '6-8', sleep: '10-12', count: '9+', feel: 'next' };
+    let store = must(saveSetup(readRoutineStore(repo), { status: 'done', answers, removed: removedDefaultRoutines(repo) }, clock(1000), at));
+    commitRoutineStore(repo, store, 1000);
+    store = readRoutineStore(repo);
+    expect(store.prefs).toMatchObject({ focusMode: true, typeTabs: ['supplement'], collapsedBlocks: [DEFAULT_BLOCK_IDS.night], setup: { status: 'done', answers } });
+    expect(store.blocks.map(block => [block.name, block.startMin, block.endMin])).toEqual([['Morning routine', 360, 720], ['Night routine', 1260, 1380]]);
+
+    const added = must(addBlock(store, 'Zzyq Midday Block', clock(1100), newId));
+    const sheet = must(saveBlock(added.store, { ...must(blockDraft(projectRoutineStore(added.store))), name: 'Zzyq Evening Block', startMin: '18:00', endMin: '20:00' }, clock(1101), newId));
+    const moved = must(moveBlock(sheet.store, sheet.blockId, -1, clock(1102)));
+    const typed = must(addCustomType(moved, 'Zzyq Type', clock(1103), newId));
+    const item = must(saveItem(typed.store, { name: 'Example Compound A', kind: 'dose', amount: '250', unit: 'mcg', blockIds: [sheet.blockId], type: typed.typeId }, clock(1104), newId));
+    const logged = must(logItem(item.store, item.itemId, clock(1105)));
+    const logId = routineLogId(item.itemId, '2026-11-19');
+    const edited = must(editLog(logged, logId, { amount: '300', day: '2026-11-18', note: 'Zzyq note' }, clock(1106)));
+    commitRoutineStore(repo, edited.store, 1106);
+
+    const back = readRoutineStore(repo);
+    expect(projectRoutineStore(back)?.blocks.map(block => block.name)).toEqual(['Morning routine', 'Night routine', 'Zzyq Evening Block', 'Zzyq Midday Block']);
+    expect(back.prefs.customTypes).toEqual([{ id: typed.typeId, name: 'Zzyq Type' }]);
+    expect(back.items[0]).toMatchObject({ name: 'Example Compound A', type: typed.typeId });
+    expect(back.logs).toHaveLength(1);
+    expect(back.logs[0]).toMatchObject({ id: edited.logId, day: '2026-11-18', amount: 300, note: 'Zzyq note' });
+    expect(edited.logId).toBe(routineLogId(item.itemId, '2026-11-18'));
+    expect(repo.get('daily_logs', logId)?.deleted_at).not.toBeNull();
+  } finally { sqlite.close(); }
+});
+
+test('a setup leaves a deleted default deleted, and settings can add it back empty', async () => {
+  const { repo, sqlite } = await open();
+  try {
+    seedDefaultRoutines(repo);
+    repo.remove('daily_blocks', DEFAULT_BLOCK_IDS.night, 500);
+    expect(removedDefaultRoutines(repo)).toEqual([DEFAULT_BLOCK_IDS.night]);
+    const store = must(saveSetup(readRoutineStore(repo), { status: 'done', answers: { goals: ['habits'] }, removed: removedDefaultRoutines(repo) }, clock(1000), new Date(2026, 10, 19, 8, 15)));
+    commitRoutineStore(repo, store, 1000);
+    expect(readRoutineStore(repo).blocks.map(block => block.name)).toEqual(['Morning routine']);
+    commitRoutineStore(repo, must(addRoutinePart(readRoutineStore(repo), 'night', clock(1100))), 1100);
+    expect(readRoutineStore(repo).blocks.map(block => block.name)).toEqual(['Morning routine', 'Night routine']);
+    expect(removedDefaultRoutines(repo)).toEqual([]);
   } finally { sqlite.close(); }
 });

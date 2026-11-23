@@ -39,13 +39,15 @@ function joined(list: readonly string[] | undefined): string | null {
   return kept.length ? [...new Set(kept)].join(',') : null;
 }
 
-/* Setup answers are picks from a fixed list, never typed text: "goal=sleep;types=[peptide,supplement]". */
+/* Setup answers are picks from a fixed list, never typed text: "goal=sleep;types=[peptide,supplement]".
+   Two picks end in a plus ("5+", "9+"), so a pick may. */
+const PICK = /^[A-Za-z0-9_-]{1,40}\+?$/;
 function encodeAnswers(answers: SetupAnswers | undefined): string | null {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(answers ?? {})) {
     if (!WORD.test(key)) continue;
-    if (typeof value === 'string' && WORD.test(value)) parts.push(`${key}=${value}`);
-    else if (Array.isArray(value)) parts.push(`${key}=[${value.filter(word => typeof word === 'string' && WORD.test(word)).join(',')}]`);
+    if (typeof value === 'string' && PICK.test(value)) parts.push(`${key}=${value}`);
+    else if (Array.isArray(value)) parts.push(`${key}=[${value.filter(word => typeof word === 'string' && PICK.test(word)).join(',')}]`);
   }
   return parts.length ? parts.join(';') : null;
 }
@@ -56,8 +58,8 @@ function decodeAnswers(raw: string | undefined): SetupAnswers {
     const key = at > 0 ? part.slice(0, at) : '';
     const value = part.slice(at + 1);
     if (!WORD.test(key)) continue;
-    if (value.startsWith('[') && value.endsWith(']')) answers[key] = value.slice(1, -1).split(',').filter(word => WORD.test(word));
-    else if (WORD.test(value)) answers[key] = value;
+    if (value.startsWith('[') && value.endsWith(']')) answers[key] = value.slice(1, -1).split(',').filter(word => PICK.test(word));
+    else if (PICK.test(value)) answers[key] = value;
   }
   return answers;
 }
@@ -210,5 +212,15 @@ export function seedDefaultRoutines(repo: Repository): number {
       added += 1;
     });
     return added;
+  });
+}
+
+/* The default routines the user deleted. A removed row keeps no values and
+   is not in the shape, so a setup asks here before it adds Morning or Night
+   and leaves a deleted one deleted. */
+export function removedDefaultRoutines(repo: Repository): string[] {
+  return Object.values(DEFAULT_BLOCK_IDS).filter((id) => {
+    const row = repo.get('daily_blocks', id);
+    return !!row && row.deleted_at !== null;
   });
 }
