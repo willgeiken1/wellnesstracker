@@ -131,6 +131,31 @@ describe('the day view', () => {
     expect(logOf(repo, SAMPLE.stretch)).toBeNull();
     expect(row(SAMPLE.stretch).props.accessibilityState).toMatchObject({ checked: false });
   });
+  test('an open row with no type and no logs opens its details from a visible button, or a long press, without logging', async () => {
+    const repo = seededRepository();
+    await open(repo);
+    // Zzyq Stretch has no type, so no type tab holds a card for it, and nothing is logged: the row is its only way in.
+    const info = screen.getByTestId(`routine-details-${SAMPLE.stretch}`, { includeHiddenElements: true });
+    expect(info.props.accessibilityLabel).toBe('Details for Zzyq Stretch');
+    const box = StyleSheet.flatten(info.props.style), slop = info.props.hitSlop;
+    expect(box.width + slop.left + slop.right).toBeGreaterThanOrEqual(44);
+    expect(box.minHeight).toBeGreaterThanOrEqual(44);
+    await fireEvent.press(info);
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/routines/item', params: { itemId: SAMPLE.stretch } });
+    jest.mocked(router.push).mockClear();
+    await fireEvent(row(SAMPLE.walk), 'longPress');
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/routines/item', params: { itemId: SAMPLE.walk } });
+    expect(logOf(repo, SAMPLE.stretch)).toBeNull();
+    expect(logOf(repo, SAMPLE.walk)).toBeNull();
+    // VoiceOver still meets one element per row: the button sits with Skip, behind the row's own Details action.
+    expect(screen.queryByTestId(`routine-details-${SAMPLE.stretch}`)).toBeNull();
+    expect(row(SAMPLE.stretch).props.accessibilityActions.map((action: { label: string }) => action.label)).toEqual(['Skip', 'Details']);
+    // A handled row opens its details on a tap, so it keeps the approved look: Undo and the tick, no extra button.
+    await fireEvent.press(row(SAMPLE.stretch));
+    expect(screen.queryByTestId(`routine-details-${SAMPLE.stretch}`, { includeHiddenElements: true })).toBeNull();
+    await fireEvent(row(SAMPLE.stretch), 'longPress');
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/routines/item', params: { itemId: SAMPLE.stretch, logId: logOf(repo, SAMPLE.stretch)?.id } });
+  });
   test('Skip marks the row handled without ticking it, and the VoiceOver actions do the same work', async () => {
     const repo = seededRepository();
     await open(repo);

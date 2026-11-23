@@ -19,6 +19,7 @@ const paths = {
   converter: 'M4 8H20M16 4L20 8L16 12M20 16H4M8 12L4 16L8 20',
   site: 'M12 21Q5 14 5 9.5A7 7 0 0 1 19 9.5Q19 14 12 21ZM12 7A2.5 2.5 0 1 0 12 12A2.5 2.5 0 1 0 12 7',
   warning: 'M12 4L21 20H3ZM12 10V14.5M12 17.2V17.3',
+  info: 'M12 3.5A8.5 8.5 0 1 0 12 20.5A8.5 8.5 0 1 0 12 3.5M12 11V16.5M12 7.6V7.7',
 } as const;
 export type GlyphName = keyof typeof paths;
 

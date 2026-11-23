@@ -28,7 +28,7 @@ import type { Routines } from './use-routines';
 
 /** Past this text size a row puts its time above its name, so the name keeps the width. */
 export const ROW_STACKS_AT = 1.5;
-const TICK = 28, RAIL = 48;
+const TICK = 28, RAIL = 48, INFO = 36;
 
 /** What Log all just did, for the toast that offers to take it back. */
 export interface LoggedAll { name: string; logIds: string[] }
@@ -64,7 +64,7 @@ function Row({ row, tone, due, first, supply, onLog, onSkip, onUndo, onDetails }
       const action = event.nativeEvent.actionName;
       if (action === 'skip') onSkip(); else if (action === 'undo') onUndo(); else if (action === 'details') onDetails();
     }}
-    onPress={handled ? onDetails : onLog}
+    onPress={handled ? onDetails : onLog} onLongPress={onDetails}
     style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], paddingVertical: tokens.spacing[0], borderTopWidth: first ? 0 : 1, borderTopColor: colors.hair }}>
     {!stacked && rail}
     <View style={{ flex: 1, gap: 2 }}>
@@ -74,8 +74,14 @@ function Row({ row, tone, due, first, supply, onLog, onSkip, onUndo, onDetails }
       {skipped && <ThemedText variant="caption" muted>{routinesText('skipped')}</ThemedText>}
       {!!supply && <ThemedText testID={`routine-supply-${row.item.id}`} variant="caption" muted numeric>{supply}</ThemedText>}
     </View>
-    {/* The row speaks for these: VoiceOver reaches Skip and Undo as the row's own actions. */}
+    {/* The row speaks for these: VoiceOver reaches Skip, Undo and Details as the row's own actions. */}
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ flexDirection: 'row', alignItems: 'center' }}>
+      {/* A tap on an open row logs it, so its details and its edit form open from the info button, or from a
+          long press anywhere on the row. A handled row opens them on a tap and needs no button. */}
+      {!handled && <Tappable testID={`routine-details-${row.item.id}`} accessibilityRole="button" accessibilityLabel={routinesText('detailsOf', { name })} onPress={onDetails}
+        hitSlop={{ left: (touchTarget - INFO) / 2, right: (touchTarget - INFO) / 2 }} style={{ width: INFO, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
+        <Glyph name="info" size={20} color={colors['text-muted']} />
+      </Tappable>}
       {handled
         ? <TextButton testID={`routine-undo-${row.item.id}`} label={routinesText('undo')} onPress={onUndo} pill />
         : <TextButton testID={`routine-skip-${row.item.id}`} label={routinesText('skip')} onPress={onSkip} pill />}
