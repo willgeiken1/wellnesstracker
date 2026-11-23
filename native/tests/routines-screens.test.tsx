@@ -94,6 +94,27 @@ describe('item details', () => {
     expect(screen.getByTestId('log-day')).toHaveTextContent('Nov 21, 2026');
     expect(screen.getByTestId('log-amount').props.value).toBe('1.5');
   });
+  test('an earlier dose log keeps its amount and site after its item became a check', async () => {
+    const past = routineLogId(SAMPLE.vial, '2026-11-21');
+    const repo = seededRepository((store) => {
+      store.logs = [vialLog('2026-11-21', { amount: 1.5, site: 'left-thigh' })];
+      store.items = store.items.map(item => (item.id === SAMPLE.vial ? { ...item, kind: 'check' as const, compoundId: null } : item));
+    });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} />);
+    // With no log open the item speaks as the check it now is, and offers no converter.
+    expect(screen.getByTestId('details-intro')).toHaveTextContent('This is a check. A tap logs it.');
+    expect(screen.queryByTestId('log-amount')).toBeNull();
+    expect(screen.queryByTestId('details-converter')).toBeNull();
+    await fireEvent.press(screen.getByTestId(`details-history-${past}`));
+    expect(screen.getByTestId('log-amount').props.value).toBe('1.5');
+    expect(screen.getByRole('button', { name: 'Add ¼' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Left thigh' })).toBeChecked();
+    expect(screen.getByTestId('details-doctor')).toHaveTextContent(DOCTOR);
+    expect(screen.queryByTestId('details-converter')).toBeNull();
+    await fireEvent.changeText(screen.getByTestId('log-amount'), '2');
+    await fireEvent.press(screen.getByTestId('log-save'));
+    expect(logOf(repo, SAMPLE.vial, '2026-11-21')).toMatchObject({ amount: 2, unit: 'units' });
+  });
   test('a check has no amount, no site and no doctor line', async () => {
     await show(seededRepository(), <ItemDetails itemId={SAMPLE.stretch} />);
     expect(screen.getByText('This is a check. A tap logs it.')).toBeTruthy();

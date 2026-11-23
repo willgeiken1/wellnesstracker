@@ -166,7 +166,10 @@ export function ItemDetails({ itemId, logId }: { itemId: string; logId?: string 
   const item: RoutineItem | null = view.items.find(row => row.id === itemId) ?? null;
   const todayLog = item ? coveringLog(view.logs, item.id, today) : null;
   const opened = (picked ? logDraft(store, picked, today) : null) ?? (todayLog ? logDraft(store, todayLog.id, today) : null);
-  const dose = item ? item.kind === 'dose' : opened?.kind === 'dose';
+  // An item can change kind after it was logged. An open log keeps the kind it was saved with, so an earlier
+  // dose log still shows its amount and site; the item's own kind speaks only where there is no log.
+  const itemDose = item?.kind === 'dose';
+  const dose = opened ? opened.kind === 'dose' : itemDose;
   const sites = dose && (routineShows('injection', store) || item?.type === 'peptide');
   const name = item?.name ?? opened?.itemName ?? '';
   const history = item
@@ -209,12 +212,12 @@ export function ItemDetails({ itemId, logId }: { itemId: string; logId?: string 
     {refused && <ThemedText testID="details-refused" accessibilityRole="alert" style={{ color: colors.danger }}>{routinesText('couldNotSave')}</ThemedText>}
     {item && <View style={{ borderRadius: CARD_RADIUS, gap: tokens.spacing[1] }}>
       <TextButton testID="details-edit-item" label={routinesText('editItem')} onPress={() => router.push(routineRoutes.editItem(item.id))} color={colors.text} pill />
-      {dose && item.type === 'peptide' && converterShown(store) && <>
+      {itemDose && item.type === 'peptide' && converterShown(store) && <>
         <TextButton testID="details-converter" label={routinesText('converter')} onPress={() => router.push(routineRoutes.converter(item.id))} color={colors.text} pill />
         <Note>{routinesText('converterHint')}</Note>
       </>}
     </View>}
     {item && <ItemHistory logs={history} openId={opened?.logId ?? ''} onOpen={open} />}
-    {dose && (item || opened) && <Note testID="details-doctor">{routinesText('doctor')}</Note>}
+    {(dose || itemDose) && <Note testID="details-doctor">{routinesText('doctor')}</Note>}
   </ScrollView>;
 }
