@@ -1,4 +1,5 @@
 import type { Row, Table } from '../src/data/rows';
+import { ROUTINE_PREFS_ID } from '../src/features/routines/model/ids';
 
 /* Entirely synthetic. No real compound, dose or person. The strings are odd on purpose so a leak test can
    search any payload for them. */
@@ -15,7 +16,7 @@ export const ROUTINE_SENTINELS = [
 ] as const;
 
 const id = (kind: number, n: number) => `8${kind}000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-export const FIXTURE_IDS = { block: id(1, 1), item: id(2, 1), check: id(2, 2), placement: id(3, 1), compound: id(4, 1), log: id(5, 1), skip: id(5, 2), type: id(6, 1), prefs: id(7, 1) } as const;
+export const FIXTURE_IDS = { block: id(1, 1), item: id(2, 1), check: id(2, 2), placement: id(3, 1), compound: id(4, 1), log: id(5, 1), skip: id(5, 2), type: id(6, 1), prefs: ROUTINE_PREFS_ID } as const;
 
 export function routineFixtureRows(): { table: Table; id: string; data: Row['data'] }[] {
   return [
