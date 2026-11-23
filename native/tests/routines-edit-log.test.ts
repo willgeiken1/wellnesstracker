@@ -1,0 +1,227 @@
+import { logItem, logRest, saveItem, skipItem, undoLog } from '../src/features/routines/model/actions';
+import { loggedAmountText } from '../src/features/routines/model/day';
+import {
+  compoundDoseHistory, editLog, formatHistoryDay, historyStatus, latestLogId, LOG_DETAILS_REFUSED, LOG_EDIT_REFUSED, LOG_TIME_HINT, LOG_UNIT_HINT, LOGGED_AMOUNTS_HINT, logDraft, logTimeEditable,
+  SAME_SITE_HINT, SAME_SITE_WARNING, sameSiteWarning, SITE_OPTIONAL_HINT,
+} from '../src/features/routines/model/edit-log';
+import { routineHistoryView } from '../src/features/routines/model/history';
+import { routineLogId } from '../src/features/routines/model/ids';
+import { emptyRoutineStore, lastRoutineSite, liveOf, projectRoutineStore, type RoutineStore } from '../src/features/routines/model/shape';
+
+/* Synthetic rows only. The rules follow the web app's dose, details and site tests. */
+
+const DAY = '2026-11-19';
+const clock = (now = 1000, day = DAY) => ({ now, day });
+const LOG_NOTE = 'qq4419-scribble-text';
+function ids() { let n = 0; return () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`; }
+const must = <T,>(value: T | null): T => { if (value == null) throw new Error('refused'); return value; };
+function seeded(): RoutineStore {
+  return { ...emptyRoutineStore(), blocks: [{ id: 'b-morning', name: 'Morning routine', color: 'citrus', order: 0, updatedAt: 1, deletedAt: null }] };
+}
+function logged(unit = 'mcg') {
+  const newId = ids();
+  const dose = must(saveItem(seeded(), { name: 'Example Compound A', kind: 'dose', amount: '250', unit, blockIds: ['b-morning'] }, clock(10), newId));
+  const check = must(saveItem(dose.store, { name: 'Example Check', kind: 'check', blockIds: ['b-morning'] }, clock(11), newId));
+  let store = must(logItem(check.store, dose.itemId, clock(100)));
+  store = must(logItem(store, check.itemId, clock(101)));
+  return { store, doseId: dose.itemId, checkId: check.itemId, doseLog: routineLogId(dose.itemId, DAY), checkLog: routineLogId(check.itemId, DAY), newId };
+}
+const live = (store: RoutineStore, itemId: string) => liveOf(store.logs).filter(row => row.itemId === itemId);
+
+describe('editing the amount on a log', () => {
+  test('a different amount is kept as typed, marks the log partial, and leaves the item alone', () => {
+    const { store, doseId, doseLog } = logged();
+    const edited = must(editLog(store, doseLog, { amount: '0.25', day: DAY }, clock(200)));
+    expect(edited.logId).toBe(doseLog);
+    expect(live(edited.store, doseId)).toEqual([expect.objectContaining({ id: doseLog, amount: 0.25, unit: 'mcg', status: 'partial', day: DAY, at: 100, updatedAt: 200 })]);
+    expect(edited.store.compounds).toEqual(store.compounds);
+    expect(edited.store.items).toEqual(store.items);
+    expect(loggedAmountText(live(edited.store, doseId)[0])).toBe('0.25 mcg');
+    // Typing the amount saved on the item again is a full log.
+    expect(live(must(editLog(edited.store, doseLog, { amount: '250', day: DAY }, clock(201))).store, doseId)[0]).toMatchObject({ amount: 250, status: 'done' });
+    // The same amount again keeps the status it had.
+    expect(live(must(editLog(edited.store, doseLog, { amount: '1/4', day: DAY }, clock(202))).store, doseId)[0]).toMatchObject({ amount: 0.25, status: 'partial' });
+  });
+
+  test('500 mcg is not 500 mg: a unit is never converted on the log', () => {
+    const { store, doseId, doseLog } = logged('mg');
+    const inMcg = { ...store, logs: store.logs.map(row => (row.id === doseLog ? { ...row, unit: 'mcg', amount: 7 } : row)) };
+    // The item says 250 mg. The log is in mcg.
+    expect(live(must(editLog(inMcg, doseLog, { amount: '250', day: DAY }, clock(200))).store, doseId)[0]).toMatchObject({ amount: 250, unit: 'mcg', status: 'partial' });
+    expect(live(must(editLog(inMcg, doseLog, { amount: '250000', day: DAY }, clock(200))).store, doseId)[0]).toMatchObject({ amount: 250000, unit: 'mcg', status: 'done' });
+    const inIu = { ...store, logs: store.logs.map(row => (row.id === doseLog ? { ...row, unit: 'IU', amount: 7 } : row)) };
+    expect(live(must(editLog(inIu, doseLog, { amount: '250', day: DAY }, clock(200))).store, doseId)[0]).toMatchObject({ amount: 250, unit: 'IU', status: 'partial' });
+  });
+
+  test('a blank, zero or negative amount, a bad day or a later day is refused', () => {
+    const { store, doseLog, checkLog } = logged();
+    expect(editLog(store, doseLog, { amount: '', day: DAY }, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '0', day: DAY }, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '-1', day: DAY }, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '1,000', day: DAY }, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '250', day: '2026-11-20' }, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '250', day: '2026-02-30' }, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '250' }, clock())).toBeNull();
+    expect(editLog(store, 'missing', { amount: '250', day: DAY }, clock())).toBeNull();
+    expect(editLog(store, doseLog, null, clock())).toBeNull();
+    expect(editLog(store, doseLog, { amount: '250', day: DAY }, { now: 1, day: 'bad' })).toBeNull();
+    // A missing amount keeps the one on the log.
+    expect(must(editLog(store, doseLog, { day: DAY }, clock(200))).store.logs.find(row => row.id === doseLog)).toMatchObject({ amount: 250, status: 'done' });
+    // A check has no amount to enter.
+    expect(must(editLog(store, checkLog, { amount: '5', day: DAY }, clock(200))).store.logs.find(row => row.id === checkLog)).toMatchObject({ amount: null, unit: '', status: 'done' });
+    const rest = must(logRest({ ...store, logs: [] }, clock(300)));
+    expect(editLog(rest, routineLogId(null, DAY), { day: DAY }, clock())).toBeNull();
+    const undone = must(undoLog(store, doseLog, clock(300)));
+    expect(editLog(undone, doseLog, { amount: '250', day: DAY }, clock(301))).toBeNull();
+  });
+
+  test('a skip stays a skip and keeps no amount', () => {
+    const { store, doseId, doseLog } = logged();
+    const skipped = must(skipItem(must(undoLog(store, doseLog, clock(300))), doseId, clock(301)));
+    const moved = must(editLog(skipped, doseLog, { amount: '250', day: '2026-11-18' }, clock(302)));
+    expect(live(moved.store, doseId)).toEqual([expect.objectContaining({ day: '2026-11-18', status: 'skipped', amount: null, unit: '' })]);
+    expect(editLog(skipped, doseLog, { day: DAY, site: 'left-thigh' }, clock(303))).toBeNull();
+  });
+
+  test('an item turned into a check keeps the amount on its old log', () => {
+    const { store, doseId, doseLog, newId } = logged();
+    const asCheck = must(saveItem(store, { itemId: doseId, name: 'Example Compound A', kind: 'check', blockIds: ['b-morning'] }, clock(300), newId)).store;
+    expect(logDraft(asCheck, doseLog, DAY)).toMatchObject({ kind: 'dose', amount: '250', unit: 'mcg' });
+    expect(live(must(editLog(asCheck, doseLog, { amount: '125', day: DAY }, clock(301))).store, doseId)[0]).toMatchObject({ amount: 125, unit: 'mcg', status: 'partial' });
+  });
+});
+
+describe('moving a log to another day', () => {
+  test('the log takes the day that was picked and that day\'s row id, and the old row goes', () => {
+    const { store, doseId, doseLog } = logged();
+    const moved = must(editLog(store, doseLog, { amount: '0.25', day: '2026-11-15' }, clock(200)));
+    expect(moved.logId).toBe(routineLogId(doseId, '2026-11-15'));
+    expect(moved.logId).not.toBe(doseLog);
+    expect(live(moved.store, doseId)).toEqual([expect.objectContaining({ id: moved.logId, day: '2026-11-15', amount: 0.25, unit: 'mcg', status: 'partial', at: 100 })]);
+    const old = moved.store.logs.find(row => row.id === doseLog);
+    expect(old?.deletedAt).toBeGreaterThan(0);
+    expect(old?.undone).toBeUndefined(); // moved, not undone: nothing to restore on the old day
+    // History shows it on the day it keeps, and today is open again.
+    const month = routineHistoryView(projectRoutineStore(moved.store), { month: '2026-11', day: '2026-11-15', today: DAY });
+    expect(month.days.find(row => row.day === '2026-11-15')?.items.find(row => row.itemId === doseId)).toMatchObject({ mark: 'partial', log: { amount: 0.25, unit: 'mcg' } });
+    expect(month.days.find(row => row.day === DAY)?.items.find(row => row.itemId === doseId)).toMatchObject({ mark: 'open', log: null });
+    // The item can be logged again today, as a new row.
+    const again = must(logItem(moved.store, doseId, clock(300)));
+    expect(live(again, doseId).map(row => row.day).sort()).toEqual(['2026-11-15', DAY]);
+  });
+
+  test('a day that already has a log for the item stays as it is', () => {
+    const { store, doseId, doseLog } = logged();
+    const earlier = must(logItem(store, doseId, clock(50, '2026-11-18')));
+    expect(editLog(earlier, doseLog, { amount: '250', day: '2026-11-18' }, clock(200))).toBeNull();
+    expect(must(editLog(earlier, doseLog, { amount: '250', day: '2026-11-17' }, clock(200))).logId).toBe(routineLogId(doseId, '2026-11-17'));
+    // A day whose log was undone is free, and the move takes over that row.
+    const freed = must(undoLog(earlier, routineLogId(doseId, '2026-11-18'), clock(300)));
+    const taken = must(editLog(freed, doseLog, { amount: '125', day: '2026-11-18' }, clock(301)));
+    expect(live(taken.store, doseId)).toEqual([expect.objectContaining({ id: routineLogId(doseId, '2026-11-18'), amount: 125, deletedAt: null })]);
+    expect(live(taken.store, doseId)[0].undone).toBeUndefined();
+    expect(live(taken.store, doseId)[0].updatedAt).toBeGreaterThan(300);
+  });
+
+  test('a time is written only on an earlier day, in the phone\'s own zone', () => {
+    const { store, doseId, doseLog } = logged();
+    expect(logTimeEditable('2026-11-18', DAY)).toBe(true);
+    expect(logTimeEditable(DAY, DAY)).toBe(false);
+    // Today: the typed time is ignored and the logged clock stays.
+    expect(live(must(editLog(store, doseLog, { amount: '250', day: DAY, time: '07:30' }, clock(200))).store, doseId)[0].at).toBe(100);
+    const earlier = must(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '7:30' }, clock(200)));
+    expect(live(earlier.store, doseId)[0].at).toBe(new Date(2026, 10, 18, 7, 30).getTime());
+    expect(logDraft(earlier.store, earlier.logId, DAY)).toMatchObject({ day: '2026-11-18', time: '07:30', maxDay: DAY });
+    // Blank keeps the logged time. A bad time is refused.
+    expect(live(must(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '  ' }, clock(200))).store, doseId)[0].at).toBe(100);
+    expect(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: '25:00' }, clock(200))).toBeNull();
+    expect(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: 'noon' }, clock(200))).toBeNull();
+    expect(editLog(store, doseLog, { amount: '250', day: '2026-11-18', time: 730 }, clock(200))).toBeNull();
+  });
+});
+
+describe('a note and an injection site', () => {
+  test('a note is stored only when the draft has one, and a blank clears it', () => {
+    const { store, doseId, doseLog } = logged();
+    const noted = must(editLog(store, doseLog, { amount: '250', day: DAY, note: `  ${LOG_NOTE}  ` }, clock(200))).store;
+    expect(live(noted, doseId)[0].note).toBe(LOG_NOTE);
+    expect(live(must(editLog(noted, doseLog, { amount: '250', day: DAY }, clock(201))).store, doseId)[0].note).toBe(LOG_NOTE);
+    expect(live(must(editLog(noted, doseLog, { amount: '250', day: DAY, note: ' ' }, clock(201))).store, doseId)[0].note).toBeUndefined();
+    expect(editLog(noted, doseLog, { amount: '250', day: DAY, note: 5 }, clock(201))).toBeNull();
+    expect(live(must(editLog(noted, doseLog, { amount: '250', day: DAY, note: 'n'.repeat(400) }, clock(201))).store, doseId)[0].note).toHaveLength(280);
+    // The note moves with the log.
+    expect(live(must(editLog(noted, doseLog, { amount: '250', day: '2026-11-17' }, clock(202))).store, doseId)[0]).toMatchObject({ day: '2026-11-17', note: LOG_NOTE });
+  });
+
+  test('a site is optional, only one of the eight is kept, and a check cannot store one', () => {
+    const { store, doseId, doseLog, checkLog } = logged();
+    const sited = must(editLog(store, doseLog, { amount: '250', day: DAY, site: ' left-thigh ' }, clock(200))).store;
+    expect(live(sited, doseId)[0].site).toBe('left-thigh');
+    expect(live(must(editLog(sited, doseLog, { amount: '250', day: DAY }, clock(201))).store, doseId)[0].site).toBe('left-thigh');
+    expect(live(must(editLog(sited, doseLog, { amount: '250', day: DAY, site: '' }, clock(201))).store, doseId)[0].site).toBeUndefined();
+    expect(editLog(sited, doseLog, { amount: '250', day: DAY, site: 'left-elbow' }, clock(201))).toBeNull();
+    expect(editLog(sited, doseLog, { amount: '250', day: DAY, site: 4 }, clock(201))).toBeNull();
+    expect(editLog(store, checkLog, { day: DAY, site: 'left-thigh' }, clock(201))).toBeNull();
+    expect(must(editLog(store, checkLog, { day: DAY, site: '' }, clock(201))).store.logs.find(row => row.id === checkLog)?.site).toBeUndefined();
+    expect(logDraft(sited, doseLog, DAY)).toMatchObject({ site: 'left-thigh', kind: 'dose' });
+  });
+
+  test('the same site as last time warns once and never blocks the save', () => {
+    const { store, doseId, doseLog } = logged();
+    const earlier = must(logItem(store, doseId, clock(50, '2026-11-18')));
+    const sited = must(editLog(earlier, routineLogId(doseId, '2026-11-18'), { amount: '250', day: '2026-11-18', site: 'left-thigh' }, clock(60))).store;
+    const lastSite = lastRoutineSite(sited, doseId, doseLog);
+    expect(lastSite).toBe('left-thigh');
+    expect(sameSiteWarning({ site: 'left-thigh', lastSite })).toBe(true);
+    expect(sameSiteWarning({ site: 'left-thigh', lastSite, siteDismissed: 'left-thigh' })).toBe(false);
+    expect(sameSiteWarning({ site: 'right-thigh', lastSite })).toBe(false);
+    expect(sameSiteWarning({ site: '', lastSite })).toBe(false);
+    expect(sameSiteWarning(null)).toBe(false);
+    expect(must(editLog(sited, doseLog, { amount: '250', day: DAY, site: 'left-thigh' }, clock(200))).store.logs.find(row => row.id === doseLog)?.site).toBe('left-thigh');
+  });
+
+  test('what the sheets say is the same as on the web', () => {
+    expect(LOG_EDIT_REFUSED).toBe('Enter an amount and a day up to today. A day that already has a log stays as it is.');
+    expect(LOG_DETAILS_REFUSED).toBe('Enter an amount and a day up to today. A day that already has a log stays as it is. On an earlier day, leave the time blank or use hours and minutes.');
+    expect(SAME_SITE_WARNING).toBe('Same site as last time.');
+    expect(SAME_SITE_HINT).toBe('You can dismiss this and still save.');
+    expect(SITE_OPTIONAL_HINT).toBe('A site is optional. Saving does not require one.');
+    expect(LOG_UNIT_HINT).toBe('This is the unit already on the log.');
+    expect(LOGGED_AMOUNTS_HINT).toBe('Logged amounts. Changing the item amount does not change them.');
+    expect(LOG_TIME_HINT).toBe('Shown when the day is before today. Leave it blank to keep the logged time.');
+  });
+});
+
+describe('the draft and the dose history', () => {
+  test('the sheet opens with the log as it was saved', () => {
+    const { store, doseId, checkId, doseLog, checkLog } = logged();
+    expect(logDraft(store, doseLog, DAY)).toEqual({
+      logId: doseLog, itemId: doseId, itemName: 'Example Compound A', compoundId: store.compounds[0].id, amount: '250', unit: 'mcg', kind: 'dose', skipped: false,
+      day: DAY, maxDay: DAY, time: '00:00', note: '', site: '', error: '',
+    } satisfies ReturnType<typeof logDraft>);
+    expect(logDraft(store, checkLog, DAY)).toMatchObject({ itemId: checkId, itemName: 'Example Check', kind: 'check', amount: '', unit: '' });
+    expect(logDraft(store, 'missing', DAY)).toBeNull();
+    expect(logDraft(must(undoLog(store, doseLog, clock(300))), doseLog, DAY)).toBeNull();
+  });
+
+  test('dose history lists the amounts stored on the logs, newest day first', () => {
+    const { store, doseId, doseLog, newId } = logged();
+    let next = must(logItem(store, doseId, clock(50, '2026-11-17')));
+    next = must(editLog(next, doseLog, { amount: '125', day: DAY }, clock(200))).store;
+    next = must(skipItem(next, doseId, clock(60, '2026-11-18')));
+    // The item's amount changes later. The old logs keep theirs.
+    next = must(saveItem(next, { itemId: doseId, name: 'Example Compound A', kind: 'dose', amount: '500', unit: 'mcg', blockIds: ['b-morning'] }, clock(300), newId)).store;
+    const history = compoundDoseHistory(next, next.compounds[0].id);
+    expect(history.map(row => [row.day, historyStatus(row), loggedAmountText(row)])).toEqual([[DAY, 'Partial', '125 mcg'], ['2026-11-18', 'Skipped', ''], ['2026-11-17', 'Logged', '250 mcg']]);
+    expect(compoundDoseHistory(next, 'missing')).toEqual([]);
+    expect(compoundDoseHistory(null, 'x')).toEqual([]);
+    expect(latestLogId(next, doseId, DAY)).toBe(doseLog);
+    expect(latestLogId(next, doseId, '2026-11-18')).toBe(''); // a skip is not taken
+    expect(latestLogId(next, 'missing', DAY)).toBe('');
+    expect(formatHistoryDay(DAY)).toBe('Nov 19, 2026');
+    expect(formatHistoryDay('2026-13-01')).toBe('2026-13-01');
+    expect(formatHistoryDay('x')).toBe('');
+    expect(historyStatus({ status: 'skipped' })).toBe('Skipped');
+    expect(historyStatus(null)).toBe('');
+  });
+});
