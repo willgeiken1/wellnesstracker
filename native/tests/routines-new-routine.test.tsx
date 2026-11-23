@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../src/auth/provider';
@@ -167,4 +167,75 @@ test('a changed draft locks the swipe down and Close asks first; a routine that 
   await render(<RoutineSheet blockId="00000000-0000-4000-8000-000000000000" />, { wrapper });
   expect(screen.getByTestId('routine-gone').props.children).toBe('This routine isn\'t here any more.');
   expect(screen.queryByTestId('routine-save')).toBeNull();
+});
+
+/* Two items in Morning, in a known order, one of them with no type so it shows only inside its routines. */
+function twoInMorning() {
+  const morning = block('Morning routine').id;
+  const first = change(repo, (store, clock, newId) => saveItem(store, { name: 'Stretch', kind: 'check', amount: '', unit: '', type: '', time: '', blockIds: [morning], onHand: '', mixedOn: '' }, clock, newId))!.itemId;
+  const second = change(repo, (store, clock, newId) => saveItem(store, { name: 'Walk', kind: 'check', amount: '', unit: '', type: 'other', time: '', blockIds: [morning], onHand: '', mixedOn: '' }, clock, newId))!.itemId;
+  return { morning, first, second };
+}
+const placedIn = (blockId: string) => stored(repo).placements.filter((row) => row.blockId === blockId && row.deletedAt === null).sort((a, b) => a.order - b.order).map((row) => row.itemId);
+
+test('items inside a routine move up and down, and the order is saved with the routine', async () => {
+  const { morning, first, second } = twoInMorning();
+  expect(placedIn(morning)).toEqual([first, second]);
+  await render(<RoutineSheet blockId={morning} />, { wrapper });
+  const up = (id: string) => screen.getByTestId(`routine-item-up-${id}`), down = (id: string) => screen.getByTestId(`routine-item-down-${id}`);
+  expect(up(first).props.accessibilityLabel).toBe('Move Stretch up');
+  expect(up(first).props.accessibilityState.disabled).toBe(true);
+  expect(down(second).props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(down(first));
+  expect(said).toHaveBeenLastCalledWith('Stretch, 2 of 2');
+  expect(up(second).props.accessibilityState.disabled).toBe(true);
+  // Nothing is written until Save.
+  expect(placedIn(morning)).toEqual([first, second]);
+  await press('routine-save');
+  expect(placedIn(morning)).toEqual([second, first]);
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('Duplicate copies the saved routine with its items, and asks for a save first when there are edits', async () => {
+  const { morning, first, second } = twoInMorning();
+  await render(<RoutineSheet blockId={morning} />, { wrapper });
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Sunrise');
+  await press('routine-duplicate');
+  expect(screen.getByTestId('routine-error').props.children).toBe('Save your changes first.');
+  expect(shown()).toHaveLength(2);
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Morning routine');
+  await press('routine-duplicate');
+  expect(shown().map((row) => row.name)).toEqual(['Morning routine', 'Night routine', 'Morning routine copy']);
+  expect(placedIn(block('Morning routine copy').id)).toEqual([first, second]);
+  expect(block('Morning routine copy').color).toBe(block('Morning routine').color);
+  expect(said).toHaveBeenLastCalledWith('Routine duplicated.');
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('Delete asks first, then removes the routine and keeps its items and their logs', async () => {
+  const { morning, first, second } = twoInMorning();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await render(<RoutineSheet blockId={morning} />, { wrapper });
+  expect(screen.queryByTestId('routine-delete')).toBeTruthy();
+  await press('routine-delete');
+  expect(alert).toHaveBeenCalledWith('Delete this routine?', 'Its items stay on their tabs and their history is kept. The routine itself cannot be brought back.', expect.any(Array));
+  const buttons = alert.mock.calls[0][2]!;
+  expect(buttons.map((button) => [button.text, button.style])).toEqual([['Cancel', 'cancel'], ['Delete', 'destructive']]);
+  // Nothing happens until Delete is chosen.
+  expect(shown().map((row) => row.name)).toEqual(['Morning routine', 'Night routine']);
+  await act(async () => { buttons[1].onPress!(); });
+  expect(shown().map((row) => row.name)).toEqual(['Night routine']);
+  const after = projectRoutineStore(stored(repo))!;
+  expect(after.items.map((item) => item.id)).toEqual(expect.arrayContaining([first, second]));
+  // The item with no type showed only in this routine, so it moves to the Other tab and is not lost from view.
+  expect(after.items.find((item) => item.id === first)).toMatchObject({ type: 'other' });
+  expect(placedIn(morning)).toEqual([]);
+  expect(router.back).toHaveBeenCalledTimes(1);
+  alert.mockRestore();
+});
+
+test('a new routine has no Duplicate and no Delete', async () => {
+  await render(<RoutineSheet />, { wrapper });
+  expect(screen.queryByTestId('routine-duplicate')).toBeNull();
+  expect(screen.queryByTestId('routine-delete')).toBeNull();
 });

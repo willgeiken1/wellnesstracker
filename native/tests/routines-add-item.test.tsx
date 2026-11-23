@@ -141,6 +141,17 @@ test('the converter link shows only for a peptide logged as a dose', async () =>
   expect(screen.queryByTestId('item-converter')).toBeNull();
 });
 
+test('On hand is offered for a check as well as a dose, and Mixed on for a dose only', async () => {
+  await open({ blockId: morning() });
+  await fireEvent.changeText(screen.getByTestId('item-name'), 'Stretch band');
+  await press('item-kind-check');
+  expect(screen.getByTestId('item-on-hand')).toBeTruthy();
+  expect(screen.queryByTestId('item-mixed')).toBeNull();
+  await fireEvent.changeText(screen.getByTestId('item-on-hand'), '12');
+  await press('item-save');
+  expect(stored(repo).items.find((item) => item.name === 'Stretch band')).toMatchObject({ kind: 'check', onHand: 12 });
+});
+
 test('a time can be typed, stepped and cleared, and the path reads it back', async () => {
   await open({ blockId: morning() });
   const time = () => screen.getByTestId('item-time');

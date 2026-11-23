@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Alert, TextInput, View } from 'react-native';
 import { useLayoutMotion } from '@/components/layout-motion';
 import { useSelectionHaptic } from '@/components/selection-haptic';
 import { Tappable } from '@/components/tappable';
@@ -8,9 +8,10 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { rs, type RoutinesSheetsKey } from '@/i18n/en';
 import {
-  blockDraft, blockMoves, hideBlock, moveBlock, ROUTINE_BLOCK_COLORS, routineDraftWindow, saveBlock, toggleDraftDay, toggleDraftItem, type BlockDraftValues,
+  blockDraft, blockMoves, deleteBlock, duplicateBlock, hideBlock, moveBlock, reorderPlacements, ROUTINE_BLOCK_COLORS, routineDraftWindow, saveBlock, toggleDraftDay, toggleDraftItem,
+  type BlockDraftValues,
 } from '@/features/routines/model/blocks';
-import type { RoutineView } from '@/features/routines/model/shape';
+import type { RoutineStore, RoutineView } from '@/features/routines/model/shape';
 import { routineClock24, routineDayLetters } from '@/features/routines/model/types';
 import { clockMinutes, stepClock, typedClock, type ArcWindow } from './add-item-arc';
 import { commitRoutines, newRoutineId, routineClockNow, useRoutines, type RoutinesData } from './add-item-data';
@@ -49,6 +50,14 @@ function TimeField({ testID, label, minutes, onMinutes }: { testID: string; labe
   </View>;
 }
 
+/** The store with a routine's items in the order the form lists them. Saving a routine adds and removes its
+ * items but leaves the ones already there where they were, so their order is set here. */
+function inDraftOrder(store: RoutineStore, blockId: string, itemIds: readonly string[], clock: ReturnType<typeof routineClockNow>): RoutineStore {
+  const placed = store.placements.filter((row) => row.blockId === blockId && row.deletedAt === null);
+  const ids = itemIds.map((itemId) => placed.find((row) => row.itemId === itemId)?.id).filter((id): id is string => !!id);
+  return reorderPlacements(store, blockId, ids, clock) ?? store;
+}
+
 function RoutineForm({ data, view, opened }: { data: RoutinesData; view: RoutineView; opened: BlockDraftValues }) {
   const { colors } = useTheme();
   const tick = useSelectionHaptic();
@@ -58,7 +67,8 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
   const [dayHint, setDayHint] = useState('');
   const [adding, setAdding] = useState(false);
   const [nameFocus, setNameFocus] = useState(false);
-  const { close, leave } = useSheetClose(JSON.stringify(draft) !== JSON.stringify(opened));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(opened);
+  const { close, leave } = useSheetClose(dirty);
   const editing = !!opened.blockId;
   const clock = routineClockNow(data.store);
   const change = (patch: Partial<BlockDraftValues>) => { setDraft((current) => ({ ...current, ...patch })); setError(''); };
@@ -76,11 +86,20 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     const itemIds = toggleDraftItem(draft.itemIds, itemId);
     if (itemIds) { glide(); change({ itemIds }); }
   };
+  /* The order of the items inside this routine. It is part of the draft, and is saved with it. */
+  const moveItem = (itemId: string, by: -1 | 1) => {
+    const from = draft.itemIds.indexOf(itemId), to = from + by;
+    if (from < 0 || to < 0 || to >= draft.itemIds.length) return;
+    const itemIds = draft.itemIds.slice();
+    itemIds.splice(to, 0, ...itemIds.splice(from, 1));
+    glide(); tick(); change({ itemIds });
+    announce(rs('itemPlace', { name: view.items.find((item) => item.id === itemId)?.name ?? '', place: to + 1, count: itemIds.length }));
+  };
 
   const save = () => {
     if (!draft.name.trim() || !routineDraftWindow(draft.startMin, draft.endMin)) { setError(rs('errRoutine')); announce(rs('errRoutine')); return; }
     const result = saveBlock(data.store, draft, clock, newRoutineId);
-    if (!result || !commitRoutines(data.repository, result.store)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    if (!result || !commitRoutines(data.repository, inDraftOrder(result.store, result.blockId, draft.itemIds, clock))) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
     leave();
   };
 
@@ -98,6 +117,27 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     if (!next || !commitRoutines(data.repository, next)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
     leave();
   };
+
+  /* The copy is made from what is saved, so unsaved edits are saved first and never dropped without a word. */
+  const duplicate = () => {
+    if (dirty) { setError(rs('saveFirst')); announce(rs('saveFirst')); return; }
+    const result = duplicateBlock(data.store, opened.blockId, clock, newRoutineId);
+    if (!result || !commitRoutines(data.repository, result.store)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    announce(rs('duplicated'));
+    leave();
+  };
+  /* Deleting takes the routine and its places. The items and their logs stay. An item with no type shows only
+     inside its routines, so each is first taken out the way Save takes one out, which moves it to the Other tab. */
+  const remove = () => {
+    const emptied = saveBlock(data.store, { ...opened, itemIds: [] }, clock, newRoutineId);
+    const next = deleteBlock(emptied ? emptied.store : data.store, opened.blockId, clock);
+    if (!next || !commitRoutines(data.repository, next)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    leave();
+  };
+  const askRemove = () => Alert.alert(rs('deleteTitle'), rs('deleteBody'), [
+    { text: rs('cancel'), style: 'cancel' },
+    { text: rs('deleteConfirm'), style: 'destructive', onPress: remove },
+  ]);
 
   const items = view.items;
   const inside = draft.itemIds.map((id) => items.find((item) => item.id === id)).filter((item) => !!item);
@@ -155,14 +195,26 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     </Block>
 
     <Block label={rs('items')}>
-      {!!inside.length && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
-        {inside.map((item) => (
-          <Tappable key={item.id} testID={`routine-item-${item.id}`} accessibilityRole="button" accessibilityLabel={rs('itemRemove', { name: item.name })} onPress={() => toggleItem(item.id)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[0], minHeight: 44, borderRadius: 22, paddingHorizontal: tokens.spacing[2], backgroundColor: colors['surface-2'] }}>
-            <ThemedText variant="caption" style={{ fontWeight: '600', flexShrink: 1 }}>{item.name}</ThemedText>
-            <Glyph name="close" size={14} color={colors['text-muted']} weight={2.4} />
-          </Tappable>
-        ))}
+      {/* The items in this routine, in the order the day lists them. Each row moves up or down and can be taken out. */}
+      {!!inside.length && <View testID="routine-items" style={{ borderRadius: 16, backgroundColor: colors['surface-2'], paddingHorizontal: tokens.spacing[2] }}>
+        {inside.map((item, index) => {
+          const step = (by: -1 | 1, allowed: boolean) => (
+            <Tappable testID={`routine-item-${by < 0 ? 'up' : 'down'}-${item.id}`} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: item.name })}
+              accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => moveItem(item.id, by)}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: allowed ? 1 : 0.35 }}>
+              <Glyph name={by < 0 ? 'up' : 'down'} size={18} color={colors.text} weight={2.2} />
+            </Tappable>
+          );
+          return <View key={item.id} testID={`routine-item-row-${item.id}`} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', minHeight: 52, borderTopWidth: index ? 1 : 0, borderTopColor: colors.hair }}>
+            <ThemedText style={{ fontWeight: '600', flexGrow: 1, flexShrink: 1, flexBasis: 96 }}>{item.name}</ThemedText>
+            {inside.length > 1 && step(-1, index > 0)}
+            {inside.length > 1 && step(1, index < inside.length - 1)}
+            <Tappable testID={`routine-item-${item.id}`} accessibilityRole="button" accessibilityLabel={rs('itemRemove', { name: item.name })} onPress={() => toggleItem(item.id)}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name="close" size={16} color={colors['text-muted']} weight={2.4} />
+            </Tappable>
+          </View>;
+        })}
       </View>}
       <Tappable testID="routine-items-more" accessibilityRole="button" accessibilityLabel={rs('itemsMore')} accessibilityState={{ expanded: adding }} onPress={() => { glide(); setAdding(!adding); }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: 44 }}>
@@ -193,8 +245,10 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
       <PrimaryButton testID="routine-save" label={rs('saveRoutine')} onPress={save} />
       {!!error && <ErrorLine testID="routine-error">{error}</ErrorLine>}
       {editing && <>
+        <OutlineButton testID="routine-duplicate" label={rs('duplicate')} onPress={duplicate} />
         <OutlineButton testID="routine-hide" label={rs('hide')} tone="muted" onPress={hide} />
         <Help>{rs('hideHelp')}</Help>
+        <OutlineButton testID="routine-delete" label={rs('deleteRoutine')} tone="danger" onPress={askRemove} />
       </>}
     </View>
   </SheetFrame>;
