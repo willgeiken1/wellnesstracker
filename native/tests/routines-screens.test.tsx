@@ -164,6 +164,18 @@ describe('item details', () => {
     expect(logOf(repo, SAMPLE.vial)).toBeNull();
     expect(logOf(repo, SAMPLE.vial, '2026-11-22')).toMatchObject({ amount: 3, status: 'done' });
   });
+  test('a dose logged after midnight keeps its day and its moment when only the note is saved', async () => {
+    // Half past two on the calendar morning of Nov 22 still belongs to routine day Nov 21.
+    const taken = new Date(2026, 10, 22, 2, 30, 17).getTime();
+    const repo = seededRepository(store => { store.logs = [vialLog('2026-11-21', { at: taken })]; });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} logId={routineLogId(SAMPLE.vial, '2026-11-21')} />);
+    expect(screen.getByTestId('log-day')).toHaveTextContent('Nov 21, 2026');
+    expect(screen.getByTestId('log-time').props.value).toBe('02:30');
+    await fireEvent.changeText(screen.getByTestId('log-note'), 'zq note');
+    await fireEvent.press(screen.getByTestId('log-save'));
+    expect(logOf(repo, SAMPLE.vial, '2026-11-21')).toMatchObject({ day: '2026-11-21', at: taken, note: 'zq note' });
+    expect(logOf(repo, SAMPLE.vial, '2026-11-20')).toBeNull();
+  });
   test('logging, undoing and skipping from the sheet glide it to its new shape', async () => {
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
     const repo = seededRepository();
