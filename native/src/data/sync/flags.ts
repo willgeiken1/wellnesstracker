@@ -1,9 +1,11 @@
-import { columns, syncedTables, type Table } from '../catalog';
+import { columns, routineTables, syncedTables, type Table } from '../catalog';
 import type { Row } from '../rows';
 
 /** Immutable per repository/transport lifetime; no remote config or app-config changes. */
-export interface SyncFlags { readonly syncedV1Columns: boolean }
-export const DEFAULT_SYNC_FLAGS: Readonly<SyncFlags> = Object.freeze({ syncedV1Columns: false });
+/** dailyRoutines gates the daily_* tables. It stays off until their server migration ships: with it off they
+ * are never pushed, pulled or accepted from the wire. */
+export interface SyncFlags { readonly syncedV1Columns: boolean; readonly dailyRoutines?: boolean }
+export const DEFAULT_SYNC_FLAGS: Readonly<SyncFlags> = Object.freeze({ syncedV1Columns: false, dailyRoutines: false });
 // Names only: types and constraints remain in the M1-03 catalog/rows validator.
 const additions: Partial<Record<Table, readonly string[]>> = {
  sets:['tag'], routine_exercises:['rep_min','rep_max','superset_group'], entries:['superset_group'],
@@ -14,7 +16,7 @@ const addedTables: readonly Table[] = ['custom_exercises','plans','pauses'];
 export function gatedColumns(table: Table): readonly string[] { return additions[table] ?? []; }
 export function hasGatedColumns(table: Table) { return Object.hasOwn(additions,table); }
 export function syncTables(flags: SyncFlags = DEFAULT_SYNC_FLAGS): Table[] {
- return syncedTables.filter(table=>flags.syncedV1Columns || !addedTables.includes(table));
+ return [...syncedTables.filter(table=>flags.syncedV1Columns || !addedTables.includes(table)),...(flags.dailyRoutines === true ? routineTables : [])];
 }
 export function syncFields(table: Table, flags: SyncFlags = DEFAULT_SYNC_FLAGS): Record<string,string> {
  if (!syncTables(flags).includes(table)) throw new Error('Sync feature disabled.');

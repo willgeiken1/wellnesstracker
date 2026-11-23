@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, real, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 export const profile = sqliteTable('profile', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
   name: text('name'),
@@ -202,3 +202,88 @@ export const purges = sqliteTable('purges', {
   cutoff_ms: integer('cutoff_ms'),
   tz: text('tz')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] }), uniqueIndex('purges_owner_version').on(t.owner_id,t.updated_at,t.device_id).where(sql`${t.cutoff_ms} IS NOT NULL`)]);
+
+// Daily routines: phone only until their row-sync migration ships.
+export const daily_blocks = sqliteTable('daily_blocks', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  name: text('name'),
+  color: text('color'),
+  position: integer('position'),
+  start_min: integer('start_min'),
+  end_min: integer('end_min'),
+  days_mask: integer('days_mask'),
+  hidden: integer('hidden')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const daily_items = sqliteTable('daily_items', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  name: text('name'),
+  kind: text('kind'),
+  type: text('type'),
+  compound_id: text('compound_id'),
+  note: text('note'),
+  time_min: integer('time_min'),
+  start_day: text('start_day'),
+  on_hand: integer('on_hand'),
+  on_hand_day: text('on_hand_day'),
+  on_hand_at: integer('on_hand_at'),
+  mixed_day: text('mixed_day'),
+  calc_vial: real('calc_vial'),
+  calc_vial_unit: text('calc_vial_unit'),
+  calc_water: real('calc_water')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const daily_placements = sqliteTable('daily_placements', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  block_id: text('block_id'),
+  item_id: text('item_id'),
+  position: integer('position')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const daily_compounds = sqliteTable('daily_compounds', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  name: text('name'),
+  amount: real('amount'),
+  unit: text('unit'),
+  start_day: text('start_day'),
+  archived_at: integer('archived_at'),
+  chart_line: integer('chart_line')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const daily_logs = sqliteTable('daily_logs', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  item_id: text('item_id'),
+  compound_id: text('compound_id'),
+  day: text('day'),
+  status: text('status'),
+  amount: real('amount'),
+  unit: text('unit'),
+  note: text('note'),
+  at: integer('at'),
+  site: text('site'),
+  rest: integer('rest'),
+  undone: integer('undone')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] }), index('daily_logs_owner_day').on(t.owner_id,t.day)]);
+
+export const daily_types = sqliteTable('daily_types', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  name: text('name'),
+  position: integer('position')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+export const daily_prefs = sqliteTable('daily_prefs', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  last_block_id: text('last_block_id'),
+  day_rollover_hour: integer('day_rollover_hour'),
+  focus_mode: integer('focus_mode'),
+  tips_hidden: integer('tips_hidden'),
+  history_graph: text('history_graph'),
+  home_next_hidden: integer('home_next_hidden'),
+  setup_status: text('setup_status'),
+  setup_answers: text('setup_answers'),
+  setup_at: integer('setup_at'),
+  added: text('added'),
+  type_tabs: text('type_tabs'),
+  collapsed_blocks: text('collapsed_blocks'),
+  reveal_blocks: text('reveal_blocks')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);

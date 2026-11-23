@@ -20,6 +20,7 @@ export class SyncEngine {
   private listeners = new Set<() => void>();
   constructor(readonly repository: Repository, private transport: Transport, private pageSize = 100) {
     if (repository.syncFlags.syncedV1Columns !== (transport.syncFlags ?? DEFAULT_SYNC_FLAGS).syncedV1Columns) throw new Error('Sync feature flags must match.');
+    if ((repository.syncFlags.dailyRoutines === true) !== ((transport.syncFlags ?? DEFAULT_SYNC_FLAGS).dailyRoutines === true)) throw new Error('Sync feature flags must match.');
     if (repository.owner !== transport.owner || ['guest','demo'].includes(repository.owner)) throw new Error('Sync requires the matching signed-in account.');
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => {this.listeners.delete(listener);}; }

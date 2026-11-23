@@ -2,7 +2,7 @@ import { MAX_LOSING_VERSIONS, LOSING_VERSION_TTL_MS, losingVersionKey, type Losi
 import { matchesPurge, purgeTombstone } from './purges';
 import { sql, type SQL } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { columns, syncedTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
+import { columns, localTables, canonicalRow, canonicalPulledRow, compareRows, revision, validateRow, validatePulledRow, type Row, type Table, type Scalar, type ServerRow } from './rows';
 
 import { isHealthSource } from './health-store';
 import { DEFAULT_SYNC_FLAGS, gatedColumns, hasGatedColumns, hydrateSyncRow, mergeSyncRow, projectSyncRow, syncTables, type SyncFlags } from './sync/flags';
@@ -16,7 +16,7 @@ export interface Pending { row: Row; revision: string }
 export function wipeAllOwners(db: ExpoSQLiteDatabase, health?: ExpoSQLiteDatabase) {
   try {
     db.transaction(() => {
-      for(const table of [...syncedTables,'sync_outbox','sync_state','sync_conflicts','oura_days','workout_local','workout_milestones','workout_weekly']) {
+      for(const table of [...localTables,'sync_outbox','sync_state','sync_conflicts','oura_days','workout_local','workout_milestones','workout_weekly']) {
         db.run(sql`DELETE FROM ${sql.identifier(table)}`);
       }
     });
@@ -93,7 +93,7 @@ export class Repository {
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private safe<T>(operation: () => T): T { try { return operation(); } catch { throw new Error('Local data is unavailable.'); } }
-  private table(table: Table) { if (!syncedTables.includes(table)) throw new Error('Unsupported local table.'); return sql.identifier(table); }
+  private table(table: Table) { if (!localTables.includes(table)) throw new Error('Unsupported local table.'); return sql.identifier(table); }
   private state(key: string) { return this.db.get<{value:string}>(sql`SELECT value FROM sync_state WHERE owner_id=${this.owner} AND key=${key}`)?.value; }
   private setState(key: string, value: string) { this.db.run(sql`INSERT INTO sync_state(owner_id,key,value) VALUES(${this.owner},${key},${value}) ON CONFLICT(owner_id,key) DO UPDATE SET value=excluded.value`); }
   private decode(table: Table, physical: Physical): Row {
@@ -193,7 +193,7 @@ export class Repository {
   /** Demo carry-over only; caller owns the shared database transaction. */
   clearDemoForTransfer() {
     if (this.owner !== 'demo' || !this.batch.depth) throw new Error('Demo transfer transaction required.');
-    for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
+    for (const table of [...localTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
       this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
     }
     this.health?.run(sql`DELETE FROM weigh_ins WHERE owner_id=${this.owner}`);
@@ -202,7 +202,7 @@ export class Repository {
   wipe() {
     this.outsideAtomic();
     this.safe(() => this.db.transaction(() => {
-      for (const table of [...syncedTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
+      for (const table of [...localTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
         this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
       }
       this.health?.run(sql`DELETE FROM weigh_ins WHERE owner_id=${this.owner}`);
@@ -276,7 +276,7 @@ export class Repository {
       this.applyPurges();
       if (correctedClock) {
         // Every other local revision (including unsent edits) still contributes.
-        const clock = Math.max(0, ...syncedTables.map(name => Number(this.db.get<{stamp:number}>(sql`SELECT max(updated_at) AS stamp FROM ${this.table(name)} WHERE owner_id=${this.owner}`)?.stamp ?? 0)));
+        const clock = Math.max(0, ...localTables.map(name => Number(this.db.get<{stamp:number}>(sql`SELECT max(updated_at) AS stamp FROM ${this.table(name)} WHERE owner_id=${this.owner}`)?.stamp ?? 0)));
         this.setState('clock',String(clock));
       }
     }));
@@ -445,7 +445,7 @@ export class Repository {
       }
     }
     for (const marker of markers) {
-      for (const table of ['sets','entries','sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days','photos'] as const) {
+      for (const table of ['sets','entries','sessions','weigh_ins','measurements','cardio_sessions','food_entries','plan_days','photos','daily_logs'] as const) {
         for (const row of this.list(table)) {
           // Health-origin rows remain local and never enter a sync outbox.
           if (!matchesPurge(row,marker,(parent,id)=>this.get(parent,id))) continue;
