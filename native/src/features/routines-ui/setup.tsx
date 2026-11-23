@@ -90,7 +90,7 @@ function SetupForm({ data, view, mode }: { data: RoutinesData; view: RoutineView
             backgroundColor: colors.surface, borderWidth: 2, borderColor: on ? colors.accent : colors.surface }}>
           <ThemedText style={{ flex: 1, fontWeight: on ? '600' : '400' }}>{choice.label}</ThemedText>
           <View style={{ width: 24, height: 24, borderRadius: question.multi ? 7 : 12, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 0 : 1.5, borderColor: colors['text-muted'], backgroundColor: on ? colors.accent : 'transparent' }}>
-            {on && <Glyph name="check" size={20} color={colors['on-accent']} weight={2.6} />}
+            {on && <Glyph name="check" size={20} color={colors['on-accent']} />}
           </View>
         </Tappable>;
       })}

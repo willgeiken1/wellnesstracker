@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 
 /* Settings, appearance, measurements, machine notes. */
 /* ================= Machine settings notes ================= */
@@ -98,7 +99,7 @@ function measDetailSheetHTML() {
   return `<h3>${label}</h3>
     ${s.length > 1 ? app.chartSVG({ labels: s.map((p) => p.date), series: [{ data: s.map((p) => Math.round(app.cmToDisp(p.cm) * 10) / 10), cls: "ln" }], h: 110 }) : ""}
     <ul class="wi-list">${[...s].reverse().map((p) => `<li><span>${app.fmtDate(p.date, { month: "short", day: "numeric", year: "numeric" })}</span><b>${app.fmtNum(Math.round(app.cmToDisp(p.cm) * 10) / 10)} ${app.lenUnit()}</b>
-      <button class="set-x" data-action="meas-del" data-date="${p.date}" aria-label="Delete ${label} from ${app.fmtDate(p.date)}">×</button></li>`).join("")}</ul>`;
+      <button class="set-x" data-action="meas-del" data-date="${p.date}" aria-label="Delete ${label} from ${app.fmtDate(p.date)}">${icon("close")}</button></li>`).join("")}</ul>`;
 }
 app.measDetailSheetHTML = measDetailSheetHTML;
 

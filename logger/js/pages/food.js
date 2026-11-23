@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 import { echoMeal } from "../shared/heard.js";
 
 /* Food log, targets, barcode, and photo estimate. */
@@ -92,21 +93,20 @@ function autoMeal(date) {
 }
 app.autoMeal = autoMeal;
 
-const ICON_CAL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`;
+const ICON_CAL = icon("calendar");
 app.ICON_CAL = ICON_CAL;
 
-const ICON_CAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8h3.5l1.8-3h5.4l1.8 3H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+const ICON_CAM = icon("camera");
 app.ICON_CAM = ICON_CAM;
 
-/* Add-food sheet and cardio line icons, in the same style as app.I.* */
-const foodIcon = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+/* Add-food sheet and cardio line icons, from the shared set like app.I.* */
 const FOOD_ICONS = {
-  cam: foodIcon('<path d="M4 8h3.5l1.8-3h5.4l1.8 3H20v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
-  chat: foodIcon('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
-  barcode: foodIcon('<path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>'),
-  star: foodIcon('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'),
-  edit: foodIcon('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
-  flame: foodIcon('<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4 0 1.6.8 2.5 1.7 2.5C11 9.5 11 6 12 3z"/>'),
+  cam: icon("camera"),
+  chat: icon("describe"),
+  barcode: icon("scan-barcode"),
+  star: icon("saved"),
+  edit: icon("manual-entry"),
+  flame: icon("calories"),
 };
 
 function foodHTML() {
@@ -140,7 +140,7 @@ function foodHTML() {
     if (!isToday && !list.length) return "";
     const kc = list.reduce((n, e) => n + app.entryTotals(e).kcal, 0);
     return `<!--w:m-${k}--><div class="meal-card m-${k}"><div class="meal-h"><h4>${label}</h4><span class="mc-kcal">${list.length ? app.r0(kc).toLocaleString() + " cal" : ""}</span>
-        ${isToday ? `<button class="mc-add" data-action="food-add" data-meal="${k}" aria-label="Add to ${label}">+</button>` : ""}</div>
+        ${isToday ? `<button class="mc-add" data-action="food-add" data-meal="${k}" aria-label="Add to ${label}">${icon("plus")}</button>` : ""}</div>
       ${list.length ? list.map((e) => { const x = app.entryTotals(e); return `<button class="fe" data-action="food-edit" data-id="${e.id}">
         <span class="fe-n">${app.esc(e.name)}${(e.servings || 1) !== 1 ? ` <em>× ${app.fmtNum(e.servings)}</em>` : ""}</span><b>${app.r0(x.kcal)}</b>
         <span class="fe-m">P ${app.r0(x.p)} · C ${app.r0(x.c)} · F ${app.r0(x.f)}</span></button>`; }).join("") : `<p class="mc-empty">Nothing yet</p>`}</div>`;
@@ -166,7 +166,7 @@ function recentFoodHTML() {
   const row = (x, kind) => { const t = app.entryTotals(x); return `<div class="rq-row">
     <button class="rq-main" data-action="food-quick" data-kind="${kind}" data-id="${x.id}" aria-label="Log ${app.esc(x.name)} to ${meal}">
       <b>${app.esc(x.name)}</b><span>${app.r0(t.kcal)} cal · P ${app.r0(t.p)} · C ${app.r0(t.c)} · F ${app.r0(t.f)}</span></button>
-    <button class="rq-plus" data-action="food-quick" data-kind="${kind}" data-id="${x.id}" aria-label="Log ${app.esc(x.name)}">+</button></div>`; };
+    <button class="rq-plus" data-action="food-quick" data-kind="${kind}" data-id="${x.id}" aria-label="Log ${app.esc(x.name)}">${icon("plus")}</button></div>`; };
   return `<span class="field-label">Log to</span>
     <div class="seg2 meal-seg">${app.MEALS.map(([k, l]) => `<button data-action="qmeal" data-m="${k}" aria-pressed="${meal === k}">${l}</button>`).join("")}</div>
     <input class="text-in" id="food-rq" placeholder="Search your foods" autocomplete="off" value="${app.esc(app.ui.rq || "")}">
@@ -330,7 +330,7 @@ function itemRow(it, i, echoFlag) {
   return `<div class="fi" data-i="${i}"${echoFlag ? ` data-echo="${echoFlag === "guessed" ? "guessed" : "heard"}"` : ""}>
     ${flag}
     <div class="fi-top"><input class="text-in fi-name" data-fi="${i}" data-k="name" value="${app.esc(it.name)}" aria-label="Food name">
-      <button class="set-x" data-action="fi-del" data-i="${i}" aria-label="Remove ${app.esc(it.name)}">×</button></div>
+      <button class="set-x" data-action="fi-del" data-i="${i}" aria-label="Remove ${app.esc(it.name)}">${icon("close")}</button></div>
     ${portion}
     <div class="fi-mult">${[0.5, 1, 1.5, 2].map((x) => `<button data-action="fi-mult" data-i="${i}" data-m="${x}" aria-pressed="${m === x}">${x === 0.5 ? "½" : x === 1.5 ? "1½" : x}×</button>`).join("")}</div>
     <div class="fi-grid">${[["kcal", "Cal"], ["p", "Protein"], ["c", "Carbs"], ["f", "Fat"]].map(([k, l]) =>
@@ -410,7 +410,7 @@ function foodSavedSheetHTML() {
     <span>${app.r0(app.entryTotals(x).kcal)} cal · P ${app.r0(app.entryTotals(x).p)} · C ${app.r0(app.entryTotals(x).c)} · F ${app.r0(app.entryTotals(x).f)}</span></button>${extra}</div>`;
   return `<h3>Saved and recent</h3>
     <input class="text-in" id="food-q" placeholder="Search" autocomplete="off" value="${app.esc(app.ui.sd.q || "")}">
-    <div id="food-q-list">${fav.length ? `<div class="mini-l">Favorites</div>${fav.map((x) => row(x, "food-pick-fav", `<button class="set-x" data-action="food-unfav" data-id="${x.id}" aria-label="Remove ${app.esc(x.name)} from favorites">×</button>`)).join("")}` : ""}
+    <div id="food-q-list">${fav.length ? `<div class="mini-l">Favorites</div>${fav.map((x) => row(x, "food-pick-fav", `<button class="set-x" data-action="food-unfav" data-id="${x.id}" aria-label="Remove ${app.esc(x.name)} from favorites">${icon("close")}</button>`)).join("")}` : ""}
     ${recent.length ? `<div class="mini-l">Recent</div>${recent.map((x) => row(x, "food-pick-recent")).join("")}` : ""}
     ${!fav.length && !recent.length ? `<p class="sub">Nothing here yet. Foods you log show up here, and favorites stay pinned at the top.</p>` : ""}</div>`;
 }

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
+import { Icon } from '@/components/icon';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
@@ -28,7 +28,7 @@ const ABOUT: Record<TileId, 'homeTileMapAbout' | 'homeTileScoreAbout' | 'homeTil
   map: 'homeTileMapAbout', score: 'homeTileScoreAbout', week: 'homeTileWeekAbout', next: 'homeTileNextAbout', calories: 'homeTileCaloriesAbout', protein: 'homeTileProteinAbout',
   volume: 'homeTileVolumeAbout', weight: 'homeTileWeightAbout', steps: 'homeTileStepsAbout', sleep: 'homeTileSleepAbout', active: 'homeTileActiveAbout', exercise: 'homeTileExerciseAbout', bodyFat: 'homeTileBodyFatAbout', water: 'homeTileWaterAbout', mindful: 'homeTileMindfulAbout',
 };
-const GLYPH = { up: 'M6 14l6-6 6 6', down: 'M6 10l6 6 6-6', remove: 'M6 12h12', add: 'M12 6v12M6 12h12' } as const;
+const GLYPH = { up: 'chevron-up', down: 'chevron-down', remove: 'minus', add: 'plus' } as const;
 
 function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof GLYPH; label: string; onPress: () => void; disabled?: boolean; tone?: 'accent' | 'danger' }) {
   const { colors } = useTheme();
@@ -36,7 +36,7 @@ function Round({ glyph, label, onPress, disabled, tone }: { glyph: keyof typeof 
   const ink = tone === 'accent' ? colors['on-accent'] : tone === 'danger' ? colors.danger : colors.text;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: fill, opacity: disabled ? 0.35 : pressed ? 0.8 : 1 })}>
-    <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}><Path d={GLYPH[glyph]} fill="none" stroke={ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+    <Icon name={GLYPH[glyph]} size={20} color={ink} />
   </Pressable>;
 }
 

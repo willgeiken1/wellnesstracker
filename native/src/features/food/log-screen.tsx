@@ -16,7 +16,8 @@ import { FoodCalendar } from './calendar';
 import { FoodEntry } from './entry';
 import { attributedDay, deleteFood, logCombo, meals, saveFood, type Combo, type Food } from './model';
 import { FoodLogModes, type LogMode } from './modes';
-import { dayInSentence, energyText, foodCard, Glyph, GroupLabel, ItemRow, macroText, NoticeRow, semibold } from './parts';
+import { Icon } from '../../components/icon';
+import { dayInSentence, energyText, foodCard, GroupLabel, ItemRow, macroText, NoticeRow, semibold } from './parts';
 import { FoodSaved } from './saved';
 import { FoodScanner } from './scanner';
 import { FoodSearch } from './search';
@@ -65,7 +66,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
         style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, opacity: pressed ? 0.6 : 1 })}>
         <ThemedText muted variant="caption" style={[semibold, { flex: 1 }]}>{t('foodLogDay')}</ThemedText>
         <ThemedText testID="food-log-day" style={semibold}>{foodDayLabel(day, now)}</ThemedText>
-        <View style={{ transform: [{ rotate: calendar ? '-90deg' : '90deg' }] }}><Glyph name="chevron" size={16} color={colors['text-muted']} width={2} /></View>
+        <View style={{ transform: [{ rotate: calendar ? '-90deg' : '90deg' }] }}><Icon name="chevron" size={16} color={colors['text-muted']} /></View>
       </Pressable>
       {calendar && <FoodCalendar day={day} today={now} onSelect={chooseDay} repo={repo} />}
       <View style={{ borderTopWidth: 1, borderTopColor: colors['surface-2'], paddingTop: tokens.spacing[1], gap: 2 }}>
@@ -115,7 +116,7 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
       {!rows.length && <ThemedText muted style={{ paddingVertical: 6 }}>{t('foodLoggedNone').replace('{day}', dayInSentence(day, now))}</ThemedText>}
       {rows.map((row, index) => {
         const name = String(row.data.name), pending = ai.entries[row.id]?.confirmed === false;
-        return <ItemRow key={row.id} first={index === 0} glyph="pencil" label={t('foodEdit').replace('{name}', name)} title={name}
+        return <ItemRow key={row.id} first={index === 0} glyph="edit" label={t('foodEdit').replace('{name}', name)} title={name}
           detail={[mealName(String(row.data.meal_id)), macroText(row.data), pending ? t('foodEstimateChip') : null].filter(Boolean).join(' · ')}
           value={energyText(row.data.energy_kj)} onPress={() => { setSelectedMeal(String(row.data.meal_id)); setEntry({ id: row.id, initial: row.data, meal: String(row.data.meal_id) }); }} />;
       })}

@@ -1,24 +1,36 @@
-import { Platform, type ColorValue } from 'react-native';
-import { SymbolView } from 'expo-symbols';
-import Svg, { Path } from 'react-native-svg';
+import type { ColorValue } from 'react-native';
+import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
 import { useTheme } from '@/design/theme-provider';
-const symbols = { home: 'house', workouts: 'dumbbell', food: 'fork.knife', progress: 'chart.xyaxis.line', routines: 'sun.horizon', avatar: 'person.crop.circle', chevron: 'chevron.right' } as const;
-const paths = {
-  home: 'M3 10L12 3L21 10M5 9V21H10V14H14V21H19V9',
-  workouts: 'M3 7V17M6 5V19M18 5V19M21 7V17M6 12H18',
-  food: 'M4 3V8Q4 11 7 11Q10 11 10 8V3M7 3V21M20 21V3Q14 6 15 12H20',
-  progress: 'M3 3V21H21M6 16L11 11L15 14L21 6',
-  routines: 'M3 18H21M7 18A5 5 0 0 1 17 18M12 7.5V10M5.3 11.3L6.7 12.7M18.7 11.3L17.3 12.7',
-  avatar: 'M20 21Q20 14 12 14Q4 14 4 21M12 3A4 4 0 1 0 12 11A4 4 0 1 0 12 3',
-  chevron: 'M9 5L16 12L9 19',
-};
-export type IconName = keyof typeof paths;
-/** Decorative icon: the enclosing control supplies its accessible label. */
-export function Icon({ name, size = 24, color }: { name: IconName; size?: number; color?: ColorValue }) {
+import { iconData, type IconShape } from './icon-data';
+
+/** Every icon in the Insight set (design/icons/insight-icons.json). */
+export type IconSetName = keyof typeof iconData;
+/* Names screens used before the set had its own: each one draws the set's icon beside it. */
+const aliases = {
+  chevron: 'chevron-right', forward: 'chevron-right', back: 'chevron-left', down: 'chevron-down', up: 'chevron-up',
+  add: 'plus', routines: 'routine', workout: 'workouts', health: 'heart',
+} as const satisfies Record<string, IconSetName>;
+export type IconAlias = keyof typeof aliases;
+export type IconName = IconSetName | IconAlias;
+
+const resolve = (name: IconName): IconSetName => (name in aliases ? aliases[name as IconAlias] : name as IconSetName);
+/** The filled twin a tab shows while it is open, or the icon itself when the set draws no twin for it. */
+export function activeIcon(name: IconName): IconSetName {
+  const twin = `${resolve(name)}-active`;
+  return twin in iconData ? twin as IconSetName : resolve(name);
+}
+
+const shapes = { path: Path, circle: Circle, rect: Rect, line: Line, ellipse: Ellipse } as const;
+/** Decorative icon from the one Insight set, drawn the same on iPhone, Android and web: the enclosing control
+ * supplies its accessible label. Lines and fills take `color`, or the theme's text colour. */
+export function Icon({ name, size = 24, color, testID }: { name: IconName; size?: number; color?: ColorValue; testID?: string }) {
   const { colors } = useTheme();
   const tint = color ?? colors.text;
-  if (Platform.OS === 'ios') return <SymbolView name={symbols[name]} size={size} tintColor={tint} accessible={false} />;
-  return <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
-    <Path d={paths[name]} fill="none" stroke={tint} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+  const paint = (value: string | number | undefined) => (value === 'currentColor' ? tint : value);
+  return <Svg testID={testID} width={size} height={size} viewBox="0 0 24 24" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    {(iconData[resolve(name)] as readonly IconShape[]).map(({ type, attrs }, index) => {
+      const Shape = shapes[type] as typeof Path;
+      return <Shape key={index} {...attrs} fill={paint(attrs.fill ?? 'none')} stroke={paint(attrs.stroke)} />;
+    })}
   </Svg>;
 }

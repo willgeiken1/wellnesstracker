@@ -2,12 +2,12 @@ import { useSyncExternalStore, type ReactNode } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { tabs } from '@/features/shell/tabs';
 import { t } from '@/i18n/en';
-import { Icon, type IconName } from './icon';
+import { activeIcon, Icon, type IconName } from './icon';
 import { useSelectionHaptic } from './selection-haptic';
 
 /** The open tab's circle, the other tabs' circles, and the room around them, on a phone of ordinary width. */
@@ -64,9 +64,7 @@ export function DockButton({ action, metrics = REGULAR }: { action: DockAction; 
   return <Pressable testID="dock-action" accessibilityRole="button" accessibilityLabel={action.label} accessibilityState={{ expanded: action.expanded }}
     onPress={action.onPress} style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2,
       alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors['hair-2'], opacity: pressed ? 0.8 : 1 }, tokens.elevation.ios]}>
-    <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
-      <Path d="M12 5v14M5 12h14" stroke={colors.text} strokeWidth={2} strokeLinecap="round" transform={action.expanded ? 'rotate(45 12 12)' : undefined} />
-    </Svg>
+    <View style={action.expanded ? { transform: [{ rotate: '45deg' }] } : undefined}><Icon name="plus" color={colors.text} /></View>
   </Pressable>;
 }
 function DockRow({ children, metrics }: { children: ReactNode; metrics: DockMetrics }) {
@@ -77,7 +75,7 @@ function DockRow({ children, metrics }: { children: ReactNode; metrics: DockMetr
 export interface DockItem { key: string; label: string; icon: IconName }
 
 /** The floating tab bar: the open tab stands on its own as an accent circle, and the tabs on either side of it
- * sit in dark pills. Icons only; each carries its name for VoiceOver. */
+ * sit in dark pills. The open tab's icon is the filled twin of its outline. Icons only; each carries its name for VoiceOver. */
 export function TabDock({ items, active, onPress, metrics = REGULAR }: { items: readonly DockItem[]; active: number; onPress: (index: number) => void; metrics?: DockMetrics }) {
   const { colors, mode } = useTheme();
   // The pill is the theme's ink in light mode and near-black in dark mode, so it reads on every theme.
@@ -93,7 +91,7 @@ export function TabDock({ items, active, onPress, metrics = REGULAR }: { items: 
       onPress={() => onPress(index)} hitSlop={open ? 0 : { top: 6, bottom: 6, left: side, right: side }}
       style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
         backgroundColor: open ? colors.accent : 'transparent', opacity: pressed ? 0.8 : 1 }, open && tokens.elevation.ios]}>
-      <Icon name={item.icon} size={open ? metrics.openIcon : metrics.icon} color={open ? colors['on-accent'] : ink} />
+      <Icon name={open ? activeIcon(item.icon) : item.icon} size={open ? metrics.openIcon : metrics.icon} color={open ? colors['on-accent'] : ink} />
     </Pressable>;
   };
   const group = (from: number, to: number) => to > from && <View key={from} testID="tab-pill"

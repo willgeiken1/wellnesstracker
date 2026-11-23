@@ -9,7 +9,8 @@ import { useAuth } from '@/auth/provider';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { readProfile } from '@/features/onboarding/model';
-import { Group, NavRow, SectionLabel, SettingsIcon, semibold } from '@/features/settings/parts';
+import { Icon } from '@/components/icon';
+import { Group, NavRow, SectionLabel, semibold } from '@/features/settings/parts';
 import { searchSettings, type SettingsRow } from '@/features/settings/sections';
 import { t } from '@/i18n/en';
 
@@ -35,13 +36,13 @@ function ProfileCard() {
     <Card style={{ borderRadius: 18, padding: tokens.spacing[3], flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
       <View style={{ minWidth: 52, minHeight: 52, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['accent-tint'] }}>
         {initial ? <ThemedText variant="title" style={{ color: colors.text }}>{initial}</ThemedText>
-          : <SettingsIcon name="account" size={26} color={colors.accent} />}
+          : <Icon name="account" size={26} color={colors.accent} />}
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
         {!!sub && <ThemedText muted variant="caption">{sub}</ThemedText>}
       </View>
-      <SettingsIcon name="forward" size={14} color={colors['text-muted']} />
+      <Icon name="forward" size={14} color={colors['text-muted']} />
     </Card>
   </Pressable>;
 }
@@ -58,7 +59,7 @@ export default function Settings() {
     <ThemedText variant="title" accessibilityRole="header">{t('settings')}</ThemedText>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: touchTarget, paddingHorizontal: tokens.spacing[2],
       borderRadius: 12, backgroundColor: colors.surface }}>
-      <SettingsIcon name="search" size={18} color={colors['text-muted']} />
+      <Icon name="search" size={18} color={colors['text-muted']} />
       <TextInput testID="settings-search" accessibilityLabel={t('settingsSearch')} placeholder={t('settingsSearchHint')}
         placeholderTextColor={colors['text-muted']} value={query} onChangeText={setQuery} autoCorrect={false} autoCapitalize="none"
         returnKeyType="search" clearButtonMode="while-editing"

@@ -24,6 +24,8 @@ Only the moments named in `haptics` may buzz: `haptics.setDone`, `haptics.pr`, `
 ## Icons (D14)
 One line icon set with 2 stroke weights (`icon.strokeWidth.regular` 1.5, `icon.strokeWidth.bold` 2) in `icon.size` 16, 20, 24 and 28.
 
+The set itself is `design/icons/insight-icons.json` (see `design/icons/README.md`): 80 icons Will approved on Nov 23, 2026, drawn with one 1.75 line. Both apps draw from it. `tokens.ts` still lists the 1.5 and 2 weights; bringing it in line is a token proposal PR.
+
 ## Materials: where glass, holo and 3D are allowed (D15)
 | Material | Allowed in | Fallback |
 |---|---|---|

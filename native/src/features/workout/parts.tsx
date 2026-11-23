@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { touchTarget } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import type { WorkoutStore } from '@/data/workout/store';
+import { Icon } from '@/components/icon';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { printData, workoutPrint, type PrintData } from '@/features/home/contour';
@@ -15,7 +16,7 @@ import { entryVolumeKg } from './volume';
 export const semibold = { fontWeight: '600' } as const;
 export const card = { borderRadius: 18, padding: tokens.spacing[3] } as const;
 export const whole = (n: number) => Math.round(n).toLocaleString('en-US');
-const GLYPHS = { back: 'M15 5l-7 7 7 7', forward: 'M9 5l7 7-7 7', close: 'M6 6l12 12M18 6L6 18' } as const;
+const GLYPHS = { back: 'chevron-left', forward: 'chevron-right', close: 'close' } as const;
 
 /** Goes back when there is somewhere to go back to; otherwise opens Workouts, so a screen is never a dead end. */
 export function leave() {
@@ -29,7 +30,7 @@ export function Round({ label, glyph, disabled = false, onSurface = false, onPre
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}>
     <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: onSurface ? colors['surface-2'] : colors.surface }}>
-      <Svg width={18} height={18} viewBox="0 0 24 24" accessible={false}><Path d={GLYPHS[glyph]} fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+      <Icon name={GLYPHS[glyph]} size={18} color={colors.text} />
     </View>
   </Pressable>;
 }

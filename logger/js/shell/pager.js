@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 
 /* Equal-slot pager: a gliding bubble and a finger-tracked slide.
    The flag-off order is the five tabs below. A later sync can insert
@@ -6,7 +7,7 @@ import { app } from "../runtime.js";
 
 app.TAB_ORDER = ["home", "workouts", "food", "progress", "insights"];
 
-const ROUTINE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h10M9 12h10M9 18h10"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>`;
+const ROUTINE_ICON = icon("routine");
 
 export function visibleTabOrder(enabled) {
   if (enabled === true) return ["home", "workouts", "daily-routines", "food", "progress", "insights"];

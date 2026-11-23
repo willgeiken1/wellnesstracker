@@ -7,7 +7,8 @@ import type { Repository } from '../../data/repository';
 import { foodDayLabel, t } from '../../i18n/en';
 import { FoodAction } from './action';
 import { shiftDay } from './model';
-import { Glyph, GroupLabel, semibold } from './parts';
+import { Icon } from '../../components/icon';
+import { GroupLabel, semibold } from './parts';
 
 const noon = (day: string) => new Date(`${day}T12:00:00Z`);
 const WEEKDAYS = Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2023, 0, 1 + i, 12)).toLocaleDateString('en-US', { weekday: 'narrow', timeZone: 'UTC' }));
@@ -30,9 +31,9 @@ export function FoodCalendar({ day, today, onSelect, repo }: { day: string; toda
   const wide = { marginHorizontal: -tokens.spacing[1] };
   return <View style={{ gap: tokens.spacing[1] }} testID="food-calendar">
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1] }}>
-      <FoodAction label={t('foodPreviousMonth')} onPress={() => setMonth(shiftDay(first, -1).slice(0, 7))}><Glyph name="back" size={16} width={2} /></FoodAction>
+      <FoodAction label={t('foodPreviousMonth')} onPress={() => setMonth(shiftDay(first, -1).slice(0, 7))}><Icon name="back" size={16} /></FoodAction>
       <ThemedText variant="headline" accessibilityRole="header" style={[semibold, { flex: 1, textAlign: 'center' }]}>{noon(first).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</ThemedText>
-      <FoodAction label={t('foodNextMonth')} disabled={month >= today.slice(0, 7)} onPress={() => setMonth(next.slice(0, 7))}><Glyph name="chevron" size={16} width={2} /></FoodAction>
+      <FoodAction label={t('foodNextMonth')} disabled={month >= today.slice(0, 7)} onPress={() => setMonth(next.slice(0, 7))}><Icon name="chevron" size={16} /></FoodAction>
     </View>
     <View style={[{ flexDirection: 'row' }, wide]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {WEEKDAYS.map((name, i) => <ThemedText key={i} muted variant="caption" style={[semibold, { width: '14.28%', textAlign: 'center' }]}>{name}</ThemedText>)}

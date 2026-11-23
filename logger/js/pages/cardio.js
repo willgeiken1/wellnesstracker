@@ -1,13 +1,14 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 
 /* Cardio estimates, live session, and cardio screens. */
 /* ================= Cardio ================= */
 const MACHINES = {
-  treadmill: { name: "Incline treadmill", short: "Treadmill", icon: "🏃", fields: ["speed", "incline"] },
-  stair:     { name: "StairMaster", short: "StairMaster", icon: "🪜", fields: ["level", "incline"] },
-  elliptical:{ name: "Elliptical", short: "Elliptical", icon: "〰️", fields: ["level", "incline"] },
-  bike:      { name: "Stationary bike", short: "Bike", icon: "🚲", fields: ["level"] },
-  rower:     { name: "Rower", short: "Rower", icon: "🚣", fields: ["level"] },
+  treadmill: { name: "Incline treadmill", short: "Treadmill", icon: icon("treadmill"), fields: ["speed", "incline"] },
+  stair:     { name: "StairMaster", short: "StairMaster", icon: icon("stair"), fields: ["level", "incline"] },
+  elliptical:{ name: "Elliptical", short: "Elliptical", icon: icon("elliptical"), fields: ["level", "incline"] },
+  bike:      { name: "Stationary bike", short: "Bike", icon: icon("bike"), fields: ["level"] },
+  rower:     { name: "Rower", short: "Rower", icon: icon("rower"), fields: ["level"] },
 };
 app.MACHINES = MACHINES;
 
@@ -192,7 +193,7 @@ function cardioScreenHTML() {
   const item = (s, kind) => `<div class="ca-row"><button class="ca-main" data-action="ca-start" data-kind="${kind}" data-id="${s.id}" aria-label="Start ${app.esc(s.name || app.MACHINES[s.machine].name)}">
       <span class="ca-ic">${app.MACHINES[s.machine].icon}</span><span><b>${app.esc(s.name || app.MACHINES[s.machine].name)}</b><em>${app.sessionSummary(s)}</em></span></button>
     <button class="ca-log" data-action="ca-logas" data-kind="${kind}" data-id="${s.id}">Log</button>
-    <button class="ca-go" data-action="ca-start" data-kind="${kind}" data-id="${s.id}" aria-label="Start">▶</button></div>`;
+    <button class="ca-go" data-action="ca-start" data-kind="${kind}" data-id="${s.id}" aria-label="Start">${icon("play")}</button></div>`;
   const recent = app.recentCardio();
   return `<div class="detail-top"><button class="icon-btn" data-action="tab" data-tab="home" aria-label="Back">${app.I.chevL}</button></div>
     <div class="page-head"><div><h1 class="page-title">Cardio</h1><div class="page-sub">${Math.round(wk.min)} of ${c.goalMin} min this week</div></div>
@@ -215,9 +216,9 @@ app.machinePickerHTML = machinePickerHTML;
 
 function stepField(id, label, val, step, unit) {
   return `<div class="stepper"><label for="${id}">${label}</label><div class="step-row">
-    <button data-action="cf-step" data-f="${id}" data-d="-${step}" aria-label="${label} down">−</button>
+    <button data-action="cf-step" data-f="${id}" data-d="-${step}" aria-label="${label} down">${icon("minus")}</button>
     <input id="${id}" inputmode="decimal" value="${val}" data-cf="${id}">
-    <button data-action="cf-step" data-f="${id}" data-d="${step}" aria-label="${label} up">+</button></div>${unit ? `<span class="cf-u">${unit}</span>` : ""}</div>`;
+    <button data-action="cf-step" data-f="${id}" data-d="${step}" aria-label="${label} up">${icon("plus")}</button></div>${unit ? `<span class="cf-u">${unit}</span>` : ""}</div>`;
 }
 app.stepField = stepField;
 
@@ -264,7 +265,7 @@ function cardioLogSheetHTML() {
   const s = { machine: m, segments: segs };
   return `<h3>Log finished cardio</h3>${app.machinePickerHTML(m)}
     <label class="field-label" for="cl-date">Date</label><input class="text-in" id="cl-date" type="date" max="${app.today()}" value="${app.esc(app.ui.sd.date || app.today())}">
-    ${segs.map((g, i) => `<div class="cl-segcard"><div class="cl-seghead"><b>${segs.length > 1 ? `Segment ${i + 1}` : "Session"}</b>${segs.length > 1 ? `<button class="set-x" data-action="cls-del" data-i="${i}" aria-label="Remove segment ${i + 1}">×</button>` : ""}</div>
+    ${segs.map((g, i) => `<div class="cl-segcard"><div class="cl-seghead"><b>${segs.length > 1 ? `Segment ${i + 1}` : "Session"}</b>${segs.length > 1 ? `<button class="set-x" data-action="cls-del" data-i="${i}" aria-label="Remove segment ${i + 1}">${icon("close")}</button>` : ""}</div>
       <div class="steppers cf-grid">${app.stepField(`l${i}-mn`, "Minutes", app.fmtNum(g.min || 0), 1)}</div>
       ${app.segFieldsHTML(m, g, `l${i}-`)}</div>`).join("")}
     <button class="link-btn" data-action="cls-add">+ Add a speed / incline change</button>

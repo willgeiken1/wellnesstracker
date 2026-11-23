@@ -229,9 +229,7 @@ export function Home() {
       </>}
       {!floating && <Pressable accessibilityRole="button" accessibilityLabel={t('homeAdd')} accessibilityState={{ expanded: adding }} onPress={toggleAdd}
         style={({ pressed }) => [{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }, tokens.elevation.ios]}>
-        <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false}>
-          <Path d="M12 5v14M5 12h14" stroke={colors['on-accent']} strokeWidth={2} strokeLinecap="round" transform={adding ? 'rotate(45 12 12)' : undefined} />
-        </Svg>
+        <View style={adding ? { transform: [{ rotate: '45deg' }] } : undefined}><Icon name="plus" color={colors['on-accent']} /></View>
       </Pressable>}
     </View>
   </View>;

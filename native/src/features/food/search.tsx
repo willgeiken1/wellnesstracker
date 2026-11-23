@@ -8,7 +8,8 @@ import { tokens } from '../../design/tokens';
 import type { Repository } from '../../data/repository';
 import { t } from '../../i18n/en';
 import { allFavorites, recentFoods, type Food } from './model';
-import { energyText, Glyph, Group, GroupLabel, ItemRow, macroText, semibold } from './parts';
+import { Icon } from '../../components/icon';
+import { energyText, Group, GroupLabel, ItemRow, macroText, semibold } from './parts';
 
 /** Saved foods first, then this meal's favorites, then recent foods; one row per name. */
 export function searchableFoods(repo: Repository, meal: string): Food[] {
@@ -33,12 +34,12 @@ export function FoodSearch({ repo, meal, onLog, onManual }: { repo: Repository; 
   const shown = words ? all.filter(food => String(food.name).toLowerCase().includes(words)) : recentFoods(repo).slice(0, 10);
   return <View style={{ gap: tokens.spacing[2] }} testID="food-search">
     <Group style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: tokens.spacing[2], gap: tokens.spacing[1] }}>
-      <Glyph name="search" size={18} color={colors['text-muted']} width={2} />
+      <Icon name="search" size={18} color={colors['text-muted']} />
       <TextInput accessibilityLabel={t('foodSearchField')} placeholder={t('foodSearchField')} placeholderTextColor={colors['text-muted']} value={query} onChangeText={setQuery}
         autoCapitalize="none" autoCorrect={false} returnKeyType="search" clearButtonMode="never"
         style={{ flex: 1, minHeight: 48, paddingVertical: 8, color: colors.text, fontSize: 16 }} />
       {!!query && <Pressable accessibilityRole="button" accessibilityLabel={t('foodSearchClear')} onPress={() => setQuery('')}
-        style={{ width: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' }}><Glyph name="close" size={16} color={colors['text-muted']} width={2} /></Pressable>}
+        style={{ width: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' }}><Icon name="close" size={16} color={colors['text-muted']} /></Pressable>}
     </Group>
     {!!shown.length && <View>
       <GroupLabel>{t(words ? 'foodSearchResults' : 'foodSearchRecent')}</GroupLabel>

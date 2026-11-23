@@ -17,6 +17,7 @@ import { Screen } from "@/components/screen";
 import { Card } from "@/components/card";
 import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
+import { Icon } from "@/components/icon";
 import { useTheme } from "@/design/theme-provider";
 import { displayWeight, fromKg } from "@/core/workout/rules";
 import type { WorkoutStore } from "@/data/workout/store";
@@ -159,13 +160,7 @@ export function SummitToken({
             justifyContent: "center",
           }}
         >
-          <Svg width={12} height={12} viewBox="0 0 12 12">
-            <Path
-              d="M6 1V11M1 6H11"
-              stroke={colors["on-accent"]}
-              strokeWidth={1.4}
-            />
-          </Svg>
+          <Icon name="plus" size={16} color={colors["on-accent"]} />
         </View>
       )}
     </View>

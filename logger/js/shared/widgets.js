@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "./icons.js";
 
 /* Rearrangeable home and routine widgets. */
 /* ================= Customizable pages (widgets) ================= */
@@ -52,7 +53,7 @@ function widgetChrome(page, id, last) {
   const name = (app.WIDGETS[page] && app.WIDGETS[page][id]) || "widget";
   const canRemove = !last && !(app.FIXED_WIDGETS[page] || []).includes(id);
   return `<button class="wdg-grip" aria-label="Drag to move ${app.esc(name)}">${app.I.grip}</button>` +
-    (canRemove ? `<button class="wdg-x" data-action="w-remove" data-w="${id}" aria-label="Remove ${app.esc(name)}">×</button>` : "");
+    (canRemove ? `<button class="wdg-x" data-action="w-remove" data-w="${id}" aria-label="Remove ${app.esc(name)}">${icon("close")}</button>` : "");
 }
 app.widgetChrome = widgetChrome;
 
@@ -136,7 +137,7 @@ app.deleteRoutine = deleteRoutine;
 function routinesEditHTML() {
   return `<div class="wdgs editing" data-page="routines">${app.state.workouts.map((w, wi) =>
     `<div class="wdg" data-w="${app.esc(w.id)}"><button class="wdg-grip" aria-label="Drag to move ${app.esc(w.name)}">${app.I.grip}</button>
-      ${app.state.workouts.length > 1 ? `<button class="wdg-x" data-action="r-remove" data-w="${app.esc(w.id)}" aria-label="Delete ${app.esc(w.name)}">×</button>` : ""}
+      ${app.state.workouts.length > 1 ? `<button class="wdg-x" data-action="r-remove" data-w="${app.esc(w.id)}" aria-label="Delete ${app.esc(w.name)}">${icon("close")}</button>` : ""}
       <div class="wcard c${wi % 3}"><div><div class="wcard-t">${app.esc(w.name)}</div><div class="wcard-s">${app.pl(w.exercises.length, "exercise")}</div></div></div></div>`).join("")}</div>`;
 }
 app.routinesEditHTML = routinesEditHTML;

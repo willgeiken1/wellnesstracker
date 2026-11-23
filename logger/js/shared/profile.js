@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "./icons.js";
 
 /* Profile, units, and weigh-ins. */
 /* ================= Profile, units, bodyweight ================= */
@@ -244,7 +245,7 @@ function weighSheetHTML() {
     <button class="btn primary block" data-action="weigh-save">Save weigh-in</button>
     ${w.length ? `<div class="mini-l" style="margin-top:18px">Recent</div><ul class="wi-list">${w.map((x) =>
       `<li><span>${app.fmtDate(x.date)}</span><b>${app.fmtW(app.kgToDisp(x.kg))}</b>
-       <button class="set-x" data-action="weigh-del" data-date="${x.date}" aria-label="Delete weigh-in from ${app.fmtDate(x.date)}">×</button></li>`).join("")}</ul>` : ""}
+       <button class="set-x" data-action="weigh-del" data-date="${x.date}" aria-label="Delete weigh-in from ${app.fmtDate(x.date)}">${icon("close")}</button></li>`).join("")}</ul>` : ""}
     <p class="sub small">Weigh in at the same time of day, like first thing in the morning, for the most useful trend.</p>`;
 }
 app.weighSheetHTML = weighSheetHTML;
@@ -285,7 +286,7 @@ function weighReminderHTML() {
   if (!app.profileComplete()) return "";
   const last = app.weighIns().pop();
   if (last && last.date > app.addDays(app.today(), -7)) return "";
-  return `<button class="nudge" data-action="weigh-open"><span>⚖︎</span><span><b>Time for a weigh-in</b>
+  return `<button class="nudge" data-action="weigh-open"><span>${icon("weight")}</span><span><b>Time for a weigh-in</b>
     <span>${last ? `Last one was ${app.fmtDate(last.date, { month: "short", day: "numeric" })}` : "Keep your bodyweight trend up to date"}</span></span></button>`;
 }
 app.weighReminderHTML = weighReminderHTML;

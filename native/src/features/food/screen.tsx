@@ -4,7 +4,7 @@ import { FoodAiResults, FoodAiMorningReview, LocalMealThumbnail } from './ai/rev
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
 import { useEffect, useState } from 'react';
 import { AppState, Pressable, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { Icon, type IconName } from '../../components/icon';
 import { Card } from '../../components/card';
 import { useTheme } from '../../design/theme-provider';
 import { useLayoutMotion } from '../../components/layout-motion';
@@ -26,13 +26,7 @@ const ALL_METHODS=['foodSnap','foodDescribe','foodScan','foodManual','foodSaved'
 type Method=typeof ALL_METHODS[number];
 // Snap and Describe are AI; they are left out while AI is off for launch.
 const METHODS:readonly Method[]=AI_FEATURES_ENABLED?ALL_METHODS:ALL_METHODS.filter(method=>method!=='foodSnap'&&method!=='foodDescribe');
-const METHOD_ICON:Record<Method,string>={
- foodSnap:'M4 8h3l1.5-2h7L17 8h3v11H4zM12 10.5a3 3 0 1 0 0 6a3 3 0 0 0 0-6',
- foodDescribe:'M4 5h16v11H10l-5 4v-4H4z',
- foodScan:'M4 6v12M7.5 6v12M10.5 6v12M14 6v12M17 6v12M20 6v12',
- foodManual:'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
- foodSaved:'M12 4l2.5 5.2 5.5.8-4 4 1 5.6-5-2.7-5 2.7 1-5.6-4-4 5.5-.8z',
-};
+const METHOD_ICON:Record<Method,IconName>={foodSnap:'camera',foodDescribe:'describe',foodScan:'scan-barcode',foodManual:'manual-entry',foodSaved:'saved'};
 const card={borderRadius:18,padding:tokens.spacing[3]} as const;
 const kcal=(kj:unknown)=>kj==null?null:Math.round(Number(kj)/4.184);
 const gram=(value:unknown)=>value==null?'—':String(Math.round(Number(value)));
@@ -46,12 +40,12 @@ function dayDate(day:string){
  const date=new Date(`${day}T12:00:00`);
  return Number.isNaN(date.getTime())?day:date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 }
-function Round({label,glyph,disabled=false,filled=false,onPress}:{label:string;glyph:string;disabled?:boolean;filled?:boolean;onPress:()=>void}) {
+function Round({label,glyph,disabled=false,filled=false,onPress}:{label:string;glyph:IconName;disabled?:boolean;filled?:boolean;onPress:()=>void}) {
  const {colors}=useTheme();
  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
   style={{width:touchTarget,height:touchTarget,alignItems:'center',justifyContent:'center',opacity:disabled?0.35:1}}>
   <View style={{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:filled?colors.accent:colors.surface}}>
-   <Svg width={18} height={18} viewBox="0 0 24 24" accessible={false}><Path d={glyph} fill="none" stroke={filled?colors['on-accent']:colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></Svg>
+   <Icon name={glyph} size={18} color={filled?colors['on-accent']:colors.text}/>
   </View>
  </Pressable>;
 }
@@ -100,12 +94,12 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const log=(food:Food)=>run(()=>{saveFood(repo,day,selectedMeal,food);setLibrary(false);});
  return <View style={{gap:tokens.spacing[3]}}>
   <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
-   <Round label={t('foodPrevious')} glyph="M15 5l-7 7 7 7" onPress={()=>chooseDay(shiftDay(day,-1))}/>
+   <Round label={t('foodPrevious')} glyph="chevron-left" onPress={()=>chooseDay(shiftDay(day,-1))}/>
    <Pressable accessibilityRole="button" accessibilityLabel={t('foodCalendar')} accessibilityValue={{text:t('foodDay').replace('{day}',day)}} accessibilityState={{expanded:calendar}} onPress={()=>setCalendar(!calendar)} style={{flex:1,minHeight:touchTarget,alignItems:'center',justifyContent:'center'}}>
     <ThemedText variant="headline" style={{fontWeight:'600'}}>{dayTitle(day)}</ThemedText>
     <ThemedText muted variant="caption" accessibilityLabel={t('foodDay').replace('{day}',day)}>{dayDate(day)}</ThemedText>
    </Pressable>
-   <Round label={t('foodNext')} glyph="M9 5l7 7-7 7" disabled={day>=today()} onPress={()=>chooseDay(shiftDay(day,1))}/>
+   <Round label={t('foodNext')} glyph="chevron-right" disabled={day>=today()} onPress={()=>chooseDay(shiftDay(day,1))}/>
   </View>
   {calendar&&<Card style={card}><FoodCalendar day={day} today={today()} onSelect={chooseDay} repo={repo}/></Card>}
   {early&&(day===attributedDay()||day===today())&&<Card style={card}><ThemedText>{t('foodEarly').replace('{day}',day)}</ThemedText><Button variant="secondary" label={t(day===today()?'foodUsePrevious':'foodUseToday')} onPress={()=>chooseDay(day===today()?attributedDay():today())}/></Card>}
@@ -116,7 +110,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   <View style={{flexDirection:'row',gap:6}} testID="food-log-row">
    {METHODS.map(method=><Pressable key={method} accessibilityRole="button" accessibilityLabel={t(method)} onPress={()=>choose(method)}
     style={({pressed})=>({flex:1,minHeight:64,borderRadius:14,alignItems:'center',justifyContent:'center',gap:4,backgroundColor:colors.surface,opacity:pressed?0.7:1})}>
-    <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}><Path d={METHOD_ICON[method]} fill="none" stroke={foodColor} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"/></Svg>
+    <Icon name={METHOD_ICON[method]} size={22} color={foodColor}/>
     <ThemedText variant="caption" numberOfLines={1}>{t(method)}</ThemedText>
    </Pressable>)}
   </View>
@@ -125,7 +119,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   <View style={{gap:tokens.spacing[0]}}>
    <View style={{flexDirection:'row',alignItems:'center'}}>
     <ThemedText muted variant="caption" style={{flex:1}}>{t('foodChooseMeal')}</ThemedText>
-    <Round label={t('foodFan')} glyph={fan?'M5 12h14':'M12 5v14M5 12h14'} filled onPress={()=>setFan(!fan)}/>
+    <Round label={t('foodFan')} glyph={fan?'minus':'plus'} filled onPress={()=>setFan(!fan)}/>
    </View>
    <View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6}}>{mealList.map(meal=><Pick key={meal.id} label={meal.name} selected={selectedMeal===meal.id} onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
    {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
@@ -154,7 +148,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
      <Pressable accessibilityRole="button" accessibilityLabel={t('foodMealOptions').replace('{name}',meal.name)} accessibilityState={{expanded:menu}} onPress={()=>setMealMenu(menu?null:meal.id)}
       style={{width:touchTarget,height:touchTarget,alignItems:'center',justifyContent:'center',marginVertical:-6,marginRight:-6}}>
       <View style={{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors['surface-2']}}>
-       <Svg width={18} height={18} viewBox="0 0 24 24" accessible={false}><Path d="M5 12h.5M11.75 12h.5M18.5 12h.5" fill="none" stroke={colors['text-muted']} strokeWidth={3} strokeLinecap="round"/></Svg>
+       <Icon name="more" size={18} color={colors['text-muted']}/>
       </View>
      </Pressable>
     </View>

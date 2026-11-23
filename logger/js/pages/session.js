@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 
 /* Logging a workout: suggestions, PRs, swaps. */
 /* ================= At the gym: progression, PRs, summary, swap, tags ================= */
@@ -407,7 +408,7 @@ function summaryHTML(id) {
   const muscles = [...new Set(s.entries.filter((e) => app.workCount(e)).flatMap((e) => e.muscles))].map((m) => app.MUSCLES[m]).filter(Boolean);
   const dur = s.startedAt && s.finishedAt ? app.fmtDur(new Date(s.finishedAt) - new Date(s.startedAt)) : "–";
   const fmtVol = (v) => v >= 10000 ? (v / 1000).toFixed(1) + "k" : Math.round(v).toLocaleString();
-  return `<h3>${app.esc(s.name)} done${prs.length ? " 🏆" : ""}</h3>
+  return `<h3>${app.esc(s.name)} done${prs.length ? " " + icon("pr") : ""}</h3>
     <p class="sub" style="margin:-6px 0 14px">${app.fmtDate(s.date, { weekday: "long", month: "short", day: "numeric" })}</p>
     <div class="stats">
       <div class="stat"><b>${dur}</b><span>Duration</span></div>
@@ -474,13 +475,13 @@ app.setFieldAllowsKey = setFieldAllowsKey;
 function seSteppers(wid, rid, x) {
   return `<div class="steppers">
       <div class="stepper"><label for="${wid}">Weight (${app.wUnit()})</label><div class="step-row">
-        <button data-action="se-step" data-f="${wid}" data-d="-${app.wStep()}" aria-label="Weight minus ${app.wStep()}">−</button>
+        <button data-action="se-step" data-f="${wid}" data-d="-${app.wStep()}" aria-label="Weight minus ${app.wStep()}">${icon("minus")}</button>
         <input id="${wid}" ${setNumAttrs("weight")} placeholder="${app.canBW(app.ui.sd.ex) ? "BW" : "0"}" value="${x.w == null ? "" : app.fmtNum(x.w)}">
-        <button data-action="se-step" data-f="${wid}" data-d="${app.wStep()}" aria-label="Weight plus ${app.wStep()}">+</button></div></div>
+        <button data-action="se-step" data-f="${wid}" data-d="${app.wStep()}" aria-label="Weight plus ${app.wStep()}">${icon("plus")}</button></div></div>
       <div class="stepper"><label for="${rid}">Reps</label><div class="step-row">
-        <button data-action="se-step" data-f="${rid}" data-d="-1" aria-label="Reps minus 1">−</button>
+        <button data-action="se-step" data-f="${rid}" data-d="-1" aria-label="Reps minus 1">${icon("minus")}</button>
         <input id="${rid}" ${setNumAttrs("reps")} value="${x.r}">
-        <button data-action="se-step" data-f="${rid}" data-d="1" aria-label="Reps plus 1">+</button></div></div></div>`;
+        <button data-action="se-step" data-f="${rid}" data-d="1" aria-label="Reps plus 1">${icon("plus")}</button></div></div></div>`;
 }
 app.seSteppers = seSteppers;
 
@@ -491,13 +492,13 @@ function setEditSheetHTML() {
   return `<h3>Edit set</h3><p class="sub" style="margin:-6px 0 14px">${app.esc(e.exercise)} · ${x.tag === "warmup" ? "warm-up" : "set " + n} · ${app.fmtDate(s.date)}</p>
     ${x.uni ? `<div class="side-l">Left</div>${app.seSteppers("se-w", "se-r", x.uni.l)}<div class="side-l">Right</div>${app.seSteppers("se-wR", "se-rR", x.uni.r)}` : `<div class="steppers">
       <div class="stepper"><label for="se-w">Weight (${app.wUnit()})</label><div class="step-row">
-        <button data-action="se-step" data-f="se-w" data-d="-${app.wStep()}" aria-label="Weight minus ${app.wStep()}">−</button>
+        <button data-action="se-step" data-f="se-w" data-d="-${app.wStep()}" aria-label="Weight minus ${app.wStep()}">${icon("minus")}</button>
         <input id="se-w" ${setNumAttrs("weight")} placeholder="${app.canBW(e.exercise) ? "BW" : "0"}" value="${x.w == null ? "" : app.fmtNum(x.w)}">
-        <button data-action="se-step" data-f="se-w" data-d="${app.wStep()}" aria-label="Weight plus ${app.wStep()}">+</button></div></div>
+        <button data-action="se-step" data-f="se-w" data-d="${app.wStep()}" aria-label="Weight plus ${app.wStep()}">${icon("plus")}</button></div></div>
       <div class="stepper"><label for="se-r">Reps</label><div class="step-row">
-        <button data-action="se-step" data-f="se-r" data-d="-1" aria-label="Reps minus 1">−</button>
+        <button data-action="se-step" data-f="se-r" data-d="-1" aria-label="Reps minus 1">${icon("minus")}</button>
         <input id="se-r" ${setNumAttrs("reps")} value="${x.r}">
-        <button data-action="se-step" data-f="se-r" data-d="1" aria-label="Reps plus 1">+</button></div></div></div>`}
+        <button data-action="se-step" data-f="se-r" data-d="1" aria-label="Reps plus 1">${icon("plus")}</button></div></div></div>`}
     <input class="note" id="se-note" autocomplete="off" placeholder="Note (optional)" value="${app.esc(x.note || "")}">
     <div class="tags" role="group" aria-label="Set type">
       <button data-action="se-tag" data-t="warmup" aria-pressed="${tag === "warmup"}">Warm-up</button>

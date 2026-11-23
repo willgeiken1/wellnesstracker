@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { Card } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import type { Repository } from '../../data/repository';
+import { Icon } from '../../components/icon';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import { t, type MessageKey } from '../../i18n/en';
@@ -18,16 +19,8 @@ import { useHealthWorkouts } from './use-health-workouts';
 import { useFocused } from '../home/use-focused';
 
 const machineName = (machine: Machine) => t(`cardio_${machine}`);
-const iconPaths: Record<Machine, string> = {
-  treadmill: 'M3 19L17 15H21V19ZM17 15L14 4H20M14 7H19',
-  stair: 'M3 21V16H8V11H13V6H18V3M5 3H19V13',
-  elliptical: 'M3 18C3 12 21 12 21 18C21 23 3 23 3 18ZM8 15L12 7L16 15M12 7V3M15 3H18',
-  bike: 'M8 17A4 4 0 1 0 0 17A4 4 0 1 0 8 17M23 17A4 4 0 1 0 15 17A4 4 0 1 0 23 17M4 17L9 7L15 17H4M8 7H12M19 17L16 4H20',
-  rower: 'M2 19H22M5 16H15L20 9M9 16L5 8M5 8L13 5M5 8L2 12M13 5L19 14',
-};
 function MachineIcon({ machine, color }: { machine: Machine; color?: string }) {
-  const { colors } = useTheme();
-  return <Svg accessible={false} width={28} height={28} viewBox="0 0 24 24"><Path d={iconPaths[machine]} fill="none" stroke={color ?? colors.text} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
+  return <Icon name={machine} size={28} color={color} />;
 }
 function Field({ label, value, onChangeText, decimal = false, grow = false }: { label: string; value: string; onChangeText: (value: string) => void; decimal?: boolean; grow?: boolean }) {
   return <Input style={grow ? { flex: 1 } : undefined} label={label} value={value} onChangeText={onChangeText} keyboardType={decimal ? 'decimal-pad' : 'default'} autoCapitalize="none" />;
