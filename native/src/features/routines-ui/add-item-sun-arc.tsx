@@ -7,7 +7,7 @@ import { tokens } from '@/design/tokens';
 import { rs } from '@/i18n/en';
 import { routineClock24 } from '@/features/routines/model/types';
 import {
-  ARC, WINDOW_ARC, arcHolds, arcMinutesAt, arcPoint, arcSegmentPath, arcSegments, dragWindow, handleAt, nearArc, sidewaysDrag,
+  ARC, WINDOW_ARC, arcHolds, arcMinutesAt, arcPoint, arcSegmentPath, arcSegments, dragWindow, handleAt, nearArc, sidewaysDrag, windowOnArc,
   type ArcShape, type ArcWindow,
 } from './add-item-arc';
 
@@ -124,14 +124,18 @@ export function WindowArc({ window, color, onWindow, onStep }: {
   const shape = WINDOW_ARC;
   const startAt = Math.max(shape.startMin, Math.min(shape.endMin, window.startMin));
   const endAt = Math.max(shape.startMin, Math.min(shape.endMin, window.endMin));
+  /* With an end off the path (04:00, or a window past midnight) the path has no true place for the handles, so
+     it shows the part of the window it can and leaves the ends to the time fields below. */
+  const on = windowOnArc(window, shape);
   const drag = (handle: number, minutes: number) => {
+    if (!on) return;
     const next = dragWindow(window, handle === 0 ? 0 : 1, minutes);
     if (next.startMin !== window.startMin || next.endMin !== window.endMin) { tick(); onWindow(next); }
   };
   const ends = [{ key: 'start', label: rs('startTime'), minutes: window.startMin, at: arcPoint(startAt, shape) }, { key: 'end', label: rs('endTime'), minutes: window.endMin, at: arcPoint(endAt, shape) }];
   return <View testID="window-arc">
-    <ArcFrame shape={shape} handles={[startAt, endAt]} onDrag={drag} big={`${routineClock24(window.startMin)}–${routineClock24(window.endMin)}`} sub={rs('dragEnds')}
-      overlay={(scale) => ends.map((end, index) => (
+    <ArcFrame shape={shape} handles={on ? [startAt, endAt] : [null, null]} onDrag={drag} big={`${routineClock24(window.startMin)}–${routineClock24(window.endMin)}`} sub={rs(on ? 'dragEnds' : 'offPath')}
+      overlay={(scale) => on && ends.map((end, index) => (
         <View key={end.key} testID={`window-arc-${end.key}`} accessible accessibilityRole="adjustable" accessibilityLabel={end.label} accessibilityValue={{ text: routineClock24(end.minutes) }}
           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
           onAccessibilityAction={(event) => onStep(index === 0 ? 0 : 1, event.nativeEvent.actionName === 'increment' ? 15 : -15)}
@@ -141,7 +145,7 @@ export function WindowArc({ window, color, onWindow, onStep }: {
       {arcSegments(window, shape).map(([from, to], part) => (
         <Path key={part} d={arcSegmentPath(from, to, shape)} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" />
       ))}
-      {ends.map((end) => <Circle key={end.key} cx={end.at[0]} cy={end.at[1]} r={11} fill={colors.surface} stroke={colors.text} strokeWidth={3} />)}
+      {on && ends.map((end) => <Circle key={end.key} cx={end.at[0]} cy={end.at[1]} r={11} fill={colors.surface} stroke={colors.text} strokeWidth={3} />)}
     </ArcFrame>
   </View>;
 }

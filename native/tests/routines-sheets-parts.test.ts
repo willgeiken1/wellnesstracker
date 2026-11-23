@@ -7,7 +7,7 @@ import {
   amountDraftText, amountEditText, amountFieldText, amountMeterMax, amountSteps, doseReadback, doseSet, parseSheetAmount, prettyAmount, stepAllowed, stepAmount,
 } from '../src/features/routines-ui/add-item-amounts';
 import {
-  ARC, WINDOW_ARC, arcMinutesAt, arcPoint, arcReadout, arcSegments, arcStepMinutes, clockMinutes, dragWindow, handleAt, nearArc, sidewaysDrag, stepClock, typedClock,
+  ARC, WINDOW_ARC, arcMinutesAt, arcPoint, arcReadout, arcSegments, arcStepMinutes, clockMinutes, dragWindow, handleAt, nearArc, sidewaysDrag, stepClock, typedClock, windowOnArc,
 } from '../src/features/routines-ui/add-item-arc';
 import { converterView, openConverterDraft, scaleFraction } from '../src/features/routines-ui/converter';
 import { itemDraftProblem, openItemDraft, shiftDay, stepMixedDay, tapItemRoutine, tapItemType, type ItemSheetDraft } from '../src/features/routines-ui/add-item-draft';
@@ -100,6 +100,20 @@ describe('the sun path', () => {
     expect(dragWindow({ startMin: 720, endMin: 840 }, 1, 600)).toEqual({ startMin: 720, endMin: 735 });
     expect(arcSegments({ startMin: 22 * 60, endMin: 30 * 60 })).toEqual([[5 * 60, 6 * 60], [22 * 60, 23 * 60]]);
     expect(arcSegments(null)).toEqual([]);
+  });
+
+  test('a window with an end off the path is never rewritten by a drag', () => {
+    // 04:00 to 09:00 starts before the path, and 23:30 to 01:30 runs past midnight and off both ends.
+    const early = { startMin: 4 * 60, endMin: 9 * 60 }, overnight = { startMin: 23 * 60 + 30, endMin: 25 * 60 + 30 }, late = { startMin: 20 * 60, endMin: 23 * 60 + 30 };
+    for (const window of [early, overnight, late]) {
+      expect(windowOnArc(window)).toBe(false);
+      for (const end of [0, 1] as const) for (const minutes of [5 * 60, 12 * 60, 23 * 60]) expect(dragWindow(window, end, minutes)).toBe(window);
+    }
+    // A window that reaches exactly to the ends of the path is on it, and still drags.
+    const whole = { startMin: 5 * 60, endMin: 23 * 60 };
+    expect(windowOnArc(whole)).toBe(true);
+    expect(dragWindow(whole, 0, 6 * 60)).toEqual({ startMin: 6 * 60, endMin: 23 * 60 });
+    expect(dragWindow({ startMin: 22 * 60 + 50, endMin: 23 * 60 }, 0, 23 * 60)).toEqual({ startMin: 22 * 60 + 50 - 5, endMin: 23 * 60 });
   });
 
   test('the words over the path say where the item sits', () => {

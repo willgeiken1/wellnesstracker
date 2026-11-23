@@ -163,13 +163,22 @@ export function handleAt(x: number, handles: readonly (number | null)[], shape: 
   return best;
 }
 
+/** Whether both ends of a routine window sit on the path. A window that starts before the path, ends after it
+ * or runs past midnight does not: the path cannot show where its ends really are. */
+export function windowOnArc(window: ArcWindow, shape: ArcShape = WINDOW_ARC): boolean {
+  return window.startMin >= shape.startMin && window.endMin <= shape.endMin && window.endMin > window.startMin;
+}
+
 /* A routine window after one end was dragged to `minutes` on the path. The
-   two ends keep at least 15 minutes between them. */
+   two ends keep at least 15 minutes between them. A window with an end off
+   the path is returned as it is: a drag there would pull the other end onto
+   the path too, and silently rewrite a time the person typed. Those windows
+   are set with the time fields. */
 export function dragWindow(window: ArcWindow, end: 0 | 1, minutes: number, shape: ArcShape = WINDOW_ARC): ArcWindow {
-  const startMin = clamp(window.startMin, shape.startMin, shape.endMin - 15);
-  const endMin = clamp(window.endMin, startMin + 15, shape.endMin);
-  if (end === 0) return { startMin: clamp(minutes, shape.startMin, endMin - 15), endMin };
-  return { startMin, endMin: clamp(minutes, startMin + 15, shape.endMin) };
+  if (!windowOnArc(window, shape)) return window;
+  const { startMin, endMin } = window;
+  if (end === 0) return { startMin: clamp(minutes, shape.startMin, Math.max(shape.startMin, endMin - 15)), endMin };
+  return { startMin, endMin: clamp(minutes, Math.min(shape.endMin, startMin + 15), shape.endMin) };
 }
 
 /* A start or end time moved by `step` minutes with the buttons. It stays on

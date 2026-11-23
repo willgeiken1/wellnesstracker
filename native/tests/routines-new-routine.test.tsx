@@ -38,6 +38,23 @@ beforeEach(() => {
   said = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
 });
 
+test('a window typed off the path keeps its times, and the path stops offering its handles', async () => {
+  await render(<RoutineSheet />, { wrapper });
+  expect(screen.getByText('drag either end')).toBeTruthy();
+  expect(screen.getByTestId('window-arc-start')).toBeTruthy();
+  await type('routine-start', '0400');
+  expect(value('routine-start')).toBe('04:00');
+  // The path starts at 05:00, so it cannot place this start. It says so and leaves both times alone.
+  expect(screen.getByText('outside the arc · use the times below')).toBeTruthy();
+  expect(screen.queryByText('drag either end')).toBeNull();
+  expect(screen.queryByTestId('window-arc-start')).toBeNull();
+  expect(screen.queryByTestId('window-arc-end')).toBeNull();
+  expect(value('routine-end')).toBe('14:00');
+  // Back on the path, the handles return.
+  await type('routine-start', '0600');
+  expect(screen.getByTestId('window-arc-start').props.accessibilityValue).toEqual({ text: '06:00' });
+});
+
 test('a new routine needs a name, takes typed, stepped and dragged times, and keeps at least one day', async () => {
   await render(<RoutineSheet />, { wrapper });
   expect(screen.getByRole('header', { name: 'New routine' })).toBeTruthy();
