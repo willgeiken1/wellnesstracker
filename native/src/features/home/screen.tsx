@@ -395,7 +395,9 @@ function Spark({ values, color, bars }: { values: (number | null)[]; color: stri
   </Svg>;
 }
 
-interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: (number | null)[]; bars?: boolean; to: '/food' | '/workouts' | '/progress' }
+/** Home's number tiles open Progress on Tracking › Body, whichever view was open there last. */
+const TO_BODY = { pathname: '/progress', params: { view: 'tracking', section: 'body' } } as const;
+interface TileData { id: TileId; label: string; kind?: Pillar; color: string; value: string; unit: string; series: (number | null)[]; bars?: boolean; to: '/food' | '/workouts' | typeof TO_BODY }
 
 /** The number tiles that have something to show, by id, as in the prototype. A tile with no data is left out. */
 function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pillar, string>, accent: string, health: HealthDays | null = null, sleepColor = accent): Partial<Record<TileId, TileData>> {
@@ -405,29 +407,29 @@ function numberTiles(store: WorkoutStore, facts: DayFacts[], pillar: Record<Pill
     { id: 'calories', label: t('homeCalories'), kind: 'food', color: pillar.food, value: whole(last.kcal ?? 0), unit: 'kcal', series: facts.map(f => f.kcal ?? 0), to: '/food' },
     { id: 'protein', label: t('homeProtein'), kind: 'food', color: pillar.food, value: whole(last.protein ?? 0), unit: 'g', series: facts.map(f => f.protein ?? 0), to: '/food' },
     { id: 'volume', label: t('volume'), kind: 'training', color: pillar.training, value: whole(volumes.reduce((a, b) => a + b, 0)), unit: `${unit} · ${t('homeSevenDays')}`, series: volumes, bars: true, to: '/workouts' },
-    { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: '/progress' },
+    { id: 'weight', label: t('weight'), color: accent, value: weights.length ? weights[weights.length - 1].toFixed(1) : '0', unit, series: weights, to: TO_BODY },
   ];
   if (health) {
     // Today with nothing recorded reads as none recorded, not as a 0.
     const today = (series: DaySeries) => series[series.length - 1] ?? null;
     const shown = (value: number | null, text: (n: number) => string, unitText: string) => value === null ? { value: t('homeSleepNone'), unit: t('homeSleepNoneUnit') } : { value: text(value), unit: unitText };
     const steps = health.steps, sleep = health.sleepHours, minutes = Math.round((sleep ? today(sleep) ?? 0 : 0) * 60);
-    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, ...shown(today(steps), whole, t('homeToday')), series: steps, bars: true, to: '/progress' });
+    if (steps) all.push({ id: 'steps', label: t('homeSteps'), color: pillar.training, ...shown(today(steps), whole, t('homeToday')), series: steps, bars: true, to: TO_BODY });
     if (sleep) all.push({ id: 'sleep', label: t('homeSleep'), color: sleepColor, // A night with nothing recorded is unknown, not zero hours.
-      value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : t('homeSleepNone'), unit: minutes ? 'min' : t('homeSleepNoneUnit'), series: sleep, bars: true, to: '/progress' });
+      value: minutes ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : t('homeSleepNone'), unit: minutes ? 'min' : t('homeSleepNoneUnit'), series: sleep, bars: true, to: TO_BODY });
     const active = health.activeKcal, exercise = health.exerciseMinutes;
-    if (active) all.push({ id: 'active', label: t('homeActive'), color: pillar.training, ...shown(today(active), whole, `kcal · ${t('homeToday')}`), series: active, bars: true, to: '/progress' });
-    if (exercise) all.push({ id: 'exercise', label: t('homeExercise'), color: pillar.training, ...shown(today(exercise), whole, `min · ${t('homeToday')}`), series: exercise, bars: true, to: '/progress' });
+    if (active) all.push({ id: 'active', label: t('homeActive'), color: pillar.training, ...shown(today(active), whole, `kcal · ${t('homeToday')}`), series: active, bars: true, to: TO_BODY });
+    if (exercise) all.push({ id: 'exercise', label: t('homeExercise'), color: pillar.training, ...shown(today(exercise), whole, `min · ${t('homeToday')}`), series: exercise, bars: true, to: TO_BODY });
     // Water in US fluid ounces for pounds, litres for kilograms.
     const water = health.waterMl, mindful = health.mindfulMinutes, fat = health.bodyFat, ounces = unit === 'lb';
     const drunk = (ml: number) => ounces ? ml / 29.5735 : ml / 1000;
-    if (water) all.push({ id: 'water', label: t('homeWater'), color: accent, ...shown(today(water), ml => ounces ? whole(drunk(ml)) : drunk(ml).toFixed(1), `${ounces ? 'fl oz' : 'L'} · ${t('homeToday')}`), series: water.map(ml => ml === null ? null : drunk(ml)), bars: true, to: '/progress' });
-    if (mindful) all.push({ id: 'mindful', label: t('homeMindful'), color: sleepColor, ...shown(today(mindful), whole, `min · ${t('homeToday')}`), series: mindful, bars: true, to: '/progress' });
+    if (water) all.push({ id: 'water', label: t('homeWater'), color: accent, ...shown(today(water), ml => ounces ? whole(drunk(ml)) : drunk(ml).toFixed(1), `${ounces ? 'fl oz' : 'L'} · ${t('homeToday')}`), series: water.map(ml => ml === null ? null : drunk(ml)), bars: true, to: TO_BODY });
+    if (mindful) all.push({ id: 'mindful', label: t('homeMindful'), color: sleepColor, ...shown(today(mindful), whole, `min · ${t('homeToday')}`), series: mindful, bars: true, to: TO_BODY });
     // Body fat is measured now and then, so a reading from before today carries its date.
     const fatAt = health.bodyFatAt, now = new Date();
     const fatDated = fatAt && fatAt.toDateString() !== now.toDateString()
       ? ` · ${fatAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(fatAt.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) })}` : '';
-    if (fat?.length) all.push({ id: 'bodyFat', label: t('homeBodyFat'), color: accent, value: fat[fat.length - 1].toFixed(1), unit: `%${fatDated}`, series: fat, to: '/progress' });
+    if (fat?.length) all.push({ id: 'bodyFat', label: t('homeBodyFat'), color: accent, value: fat[fat.length - 1].toFixed(1), unit: `%${fatDated}`, series: fat, to: TO_BODY });
   }
   return Object.fromEntries(all.filter(tile => tile.series.some(v => v !== null && v > 0)).map(tile => [tile.id, tile]));
 }
