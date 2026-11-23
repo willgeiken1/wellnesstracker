@@ -51,6 +51,22 @@ test('the sync gate is off by default and the v1 flag does not open it', () => {
   expect(syncTables({ syncedV1Columns: true, dailyRoutines: true }).filter(table => table.startsWith('daily_'))).toEqual([...routineTables]);
 });
 
+test('sign-out can tell routine rows, which never sync, from ordinary changes that are waiting to', async () => {
+  const local = await localDatabase();
+  try {
+    const repo = repoFor(local.db, OWNER_A), other = repoFor(local.db, OWNER_B);
+    expect(repo.phoneOnlyRoutineCount()).toBe(0);
+    seed(repo);
+    const count = routineFixtureRows().length;
+    expect(repo.phoneOnlyRoutineCount()).toBe(count);
+    repo.save('sessions', {});
+    expect(repo.phoneOnlyRoutineCount()).toBe(count);
+    expect(repo.unsyncedCount()).toBe(count + 1);
+    // It is this owner's count only.
+    expect(other.phoneOnlyRoutineCount()).toBe(0);
+  } finally { local.sqlite.close(); }
+});
+
 test('with the gate off nothing is pushed, pulled or accepted, and sign-out still counts the rows as unsynced', async () => {
   const local = await localDatabase();
   try {

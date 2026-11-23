@@ -75,6 +75,9 @@ export function AuthForm({create=false,dob,progress,onCreated,embedded=false,bef
 export function Account() {
   const {colors}=useTheme();
   const [lossCount,setLossCount]=useState<number|null>(null);
+  // Routines live on this phone only, so they are named in the warning and never counted as waiting to sync.
+  const [routineCount,setRoutineCount]=useState(0);
+  const [saving,setSaving]=useState(false),[saved,setSaved]=useState<'deleteAccountBackupDone'|'deleteAccountBackupFailed'|null>(null);
   const auth=useAuth();const [error,setError]=useState<'signOutFailed'|'signOutNotStarted'|null>(null),[busy,setBusy]=useState(false);
   const submitting=useRef(false);
   const [deleting,setDeleting]=useState(false);
@@ -92,9 +95,15 @@ export function Account() {
       await (auth.prepareSignOut?auth.prepareSignOut():syncBeforeSignOut(auth.syncNow));
       const count=auth.repository?.unsyncedCount()??auth.pending;
       if(count===0) {await auth.signOut();return;}
+      setRoutineCount(Math.min(count,auth.repository?.phoneOnlyRoutineCount?.()??0));setSaved(null);
       setLossCount(count);
     } catch(cause) {setError(cause instanceof DepartureFailure?'signOutFailed':'signOutNotStarted');}
     finally {submitting.current=false;setBusy(false);}
+  };
+  const backup=()=>{
+    if(saving||busy||!auth.repository)return;
+    setSaving(true);setSaved(null);
+    void exportAccountBackup(auth.repository).then(()=>setSaved('deleteAccountBackupDone')).catch(()=>setSaved('deleteAccountBackupFailed')).finally(()=>setSaving(false));
   };
   return <Screen title={t('account')}>
     <Card style={accountCard}>
@@ -119,7 +128,12 @@ export function Account() {
         <View accessibilityViewIsModal onAccessibilityEscape={()=>{if(!submitting.current)setLossCount(null);}}
           style={{backgroundColor:colors.surface,padding:24,paddingBottom:40,gap:16,borderTopLeftRadius:24,borderTopRightRadius:24}}>
           <ThemedText accessibilityRole="header">{t('signOutConfirm')}</ThemedText>
-          <ThemedText>{t('signOutBody')} {signOutUnsynced(lossCount)}</ThemedText>
+          <ThemedText>{t('signOutBody')}{lossCount>routineCount?` ${signOutUnsynced(lossCount-routineCount)}`:''}</ThemedText>
+          {routineCount>0&&<>
+            <ThemedText testID="sign-out-routines">{t('signOutRoutines')}</ThemedText>
+            <Button testID="sign-out-backup" label={t('deleteAccountBackup')} variant="secondary" busy={saving} disabled={saving||busy||!auth.repository} onPress={backup}/>
+            {saved&&<ThemedText muted={saved==='deleteAccountBackupDone'} accessibilityRole={saved==='deleteAccountBackupDone'?undefined:'alert'} accessibilityLiveRegion="polite">{t(saved)}</ThemedText>}
+          </>}
           <Button label={t('signOutWait')} disabled={busy} variant="secondary" onPress={()=>setLossCount(null)}/>
           <Button label={t('signOutAnyway')} disabled={busy} busy={busy} variant="destructive" onPress={()=>{void leave(true);}}/>
         </View>

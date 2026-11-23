@@ -63,6 +63,34 @@ test.each([0,1,3])('sign-out warning uses current owner count %s after sync',asy
  if(count===0){expect(alert).not.toHaveBeenCalled();expect(auth.signOut).toHaveBeenCalledWith();}
  else {expect(auth.signOut).not.toHaveBeenCalled();expect(screen.getByText(new RegExp(count===1?'1 unsynced change will be lost':'3 unsynced changes will be lost'))).toBeTruthy();}
 });
+test('sign-out says in plain words that routines on this phone are erased, and does not call them unsynced',async()=>{
+ // Five rows wait in the outbox. Four are Routines rows, which never sync, and one is an ordinary change.
+ const auth={...state(),repository:{unsyncedCount:()=>5,phoneOnlyRoutineCount:()=>4} as AuthState['repository']};
+ await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(auth.signOut).not.toHaveBeenCalled();
+ expect(screen.getByTestId('sign-out-routines')).toHaveTextContent('Your routines are stored only on this phone. Signing out erases them, and they cannot be brought back.');
+ expect(screen.getByText(/1 unsynced change will be lost/)).toBeTruthy();
+ expect(screen.queryByText(/5 unsynced/)).toBeNull();
+ expect(screen.getByRole('button',{name:'Save a backup first'})).toBeTruthy();
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out anyway'}));expect(auth.signOut).toHaveBeenCalledWith(true);
+});
+test('with only routines waiting, sign-out still stops to warn and names no unsynced changes',async()=>{
+ const auth={...state(),repository:{unsyncedCount:()=>4,phoneOnlyRoutineCount:()=>4} as AuthState['repository']};
+ await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(auth.signOut).not.toHaveBeenCalled();
+ expect(screen.getByTestId('sign-out-routines')).toBeTruthy();
+ expect(screen.queryByText(/unsynced/)).toBeNull();
+ expect(screen.getByText('This account’s data will be erased from this phone.')).toBeTruthy();
+});
+test('with no routines on the phone the warning does not mention them',async()=>{
+ const auth={...state(),repository:{unsyncedCount:()=>3,phoneOnlyRoutineCount:()=>0} as AuthState['repository']};
+ await wrap(<Account/>,auth);
+ await fireEvent.press(screen.getByRole('button',{name:'Sign out'}));
+ expect(screen.queryByTestId('sign-out-routines')).toBeNull();expect(screen.queryByTestId('sign-out-backup')).toBeNull();
+ expect(screen.getByText(/3 unsynced changes will be lost/)).toBeTruthy();
+});
 test('screen waits for sync, prevents double submit, and clears its timeout on early completion',async()=>{
  jest.useFakeTimers();let finish!:()=>void;
  const schedule=jest.spyOn(global,'setTimeout'),cancel=jest.spyOn(global,'clearTimeout');

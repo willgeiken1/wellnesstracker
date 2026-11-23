@@ -220,6 +220,12 @@ export class Repository {
   unsyncedCount() {
     return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges'`)?.count ?? 0);
   }
+  /** How many of the unsynced rows are Routines rows. Routines are kept on this phone only and are never
+   * uploaded, so these wait in the outbox for good and no sync can clear them. Sign-out says so in plain words
+   * instead of counting them as changes that are about to sync. */
+  phoneOnlyRoutineCount() {
+    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name LIKE 'daily!_%' ESCAPE '!'`)?.count ?? 0);
+  }
   hasUnsynced() {
     return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' LIMIT 1`));
   }

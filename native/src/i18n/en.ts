@@ -761,7 +761,7 @@ export const en = {
   recoveryTable_purges: 'Deletion range',
   restoreVersionFailed: 'This version could not be restored. It may have expired, been deleted, or changed again.',
   signOutWait: 'Wait', signOutAnyway: 'Sign out anyway',
-  signOutConfirm: 'Sign out of this account?', signOutBody: 'This account’s data will be erased from this phone.', signOutUnsynced_one: '{count} unsynced change will be lost, including changes that need review.', signOutUnsynced_other: '{count} unsynced changes will be lost, including changes that need review.',
+  signOutConfirm: 'Sign out of this account?', signOutBody: 'This account’s data will be erased from this phone.', signOutRoutines: 'Your routines are stored only on this phone. Signing out erases them, and they cannot be brought back.', signOutUnsynced_one: '{count} unsynced change will be lost, including changes that need review.', signOutUnsynced_other: '{count} unsynced changes will be lost, including changes that need review.',
   cancel: 'Cancel', syncConflictStatus: 'Some changes need review', syncConflicts: 'sync conflicts · review needed', syncPending: 'Changes waiting to sync', syncNow: 'Sync now', syncIdle: 'Up to date', syncOffline: 'Offline · changes remain on this phone', syncAttention: "Sync isn't working · changes remain on this phone", syncBusy: 'Syncing…', pending: 'pending',
   bootRecoveryTitle: 'Let’s try opening the app again',
   bootRecoveryBody: 'The app couldn’t finish opening. You can try again, save a local copy, or ask for help.',
