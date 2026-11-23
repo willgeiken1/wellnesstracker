@@ -25,7 +25,7 @@ jest.mock('expo-router/native-tabs', () => {
 jest.mock('expo-router', () => {
   const React = require('react');
   const { View: Host } = require('react-native');
-  const names = ['index', 'workouts', 'food', 'progress', 'insights'];
+  const names = ['index', 'workouts', 'food', 'progress'];
   const Tabs = ({ tabBar, screenLayout }: any) => React.createElement(Host, { testID: 'js-tabs' },
     screenLayout({ children: React.createElement(Host, { testID: 'scene' }) }),
     tabBar({ state: { index: mockIndex, routes: names.map(name => ({ key: `${name}-key`, name })) }, emitter: { emit: mockEmit }, navigateToTab: mockNavigate }));
@@ -38,7 +38,7 @@ const saved = (accent: string, theme = 'dark') => ({
 }) as unknown as Repository;
 const items: DockItem[] = [
   { key: 'index', label: 'Home', icon: 'home' }, { key: 'workouts', label: 'Workouts', icon: 'workouts' }, { key: 'food', label: 'Food', icon: 'food' },
-  { key: 'progress', label: 'Progress', icon: 'progress' }, { key: 'insights', label: 'Insights', icon: 'insights' },
+  { key: 'progress', label: 'Progress', icon: 'progress' },
 ];
 const style = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
 beforeEach(() => { mockIndex = 0; mockNavigate.mockClear(); mockEmit.mockClear(); });
@@ -60,7 +60,7 @@ describe('the floating tab bar', () => {
   test('a tab in the middle splits the pill either side of it, and the last tab has one pill before it', async () => {
     const view = await render(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={2} onPress={() => {}} /></ThemeProvider>);
     expect(screen.getAllByTestId('tab-pill')).toHaveLength(2);
-    await view.rerender(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={4} onPress={() => {}} /></ThemeProvider>);
+    await view.rerender(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={3} onPress={() => {}} /></ThemeProvider>);
     expect(screen.getAllByTestId('tab-pill')).toHaveLength(1);
   });
   test('in a light theme the pill is the theme ink, on every palette', async () => {
@@ -81,8 +81,8 @@ describe('the floating tab bar', () => {
       const { height } = StyleSheet.flatten(tab.props.style), slop = tab.props.hitSlop || { top: 0, bottom: 0 };
       expect(height + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
     }
-    await fireEvent.press(screen.getByRole('tab', { name: 'Insights' }));
-    expect(press).toHaveBeenCalledWith(4);
+    await fireEvent.press(screen.getByRole('tab', { name: 'Food' }));
+    expect(press).toHaveBeenCalledWith(2);
   });
   test('screens are told how much room the bar takes', () => {
     expect(dockBottom(34)).toBe(24);

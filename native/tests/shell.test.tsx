@@ -4,13 +4,13 @@ jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/home/use-focused',()=>({useFocused:()=>true}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import type { ComponentType } from 'react';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
 import type { TestInstance } from 'test-renderer';
 import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
-import Insights from '../src/app/(tabs)/insights';
 import Settings from '../src/app/settings/index';
 import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import Appearance from '../src/features/settings/appearance';
@@ -32,12 +32,13 @@ function ThemeProbe() {
   const { mode, palette, colors } = useTheme();
   return <Text testID="theme">{`${mode}/${palette}/${colors.bg}`}</Text>;
 }
-test('tab shell renders the five native tab labels', async () => {
+test('tab shell renders the four native tab labels, and Insights is not one of them', async () => {
   await render(<ThemeProvider><AppTabs /></ThemeProvider>);
-  for (const label of ['Home', 'Workouts', 'Food', 'Progress', 'Insights']) {
+  for (const label of ['Home', 'Workouts', 'Food', 'Progress']) {
     expect(screen.getByText(label)).toBeTruthy();
     expect(screen.getByLabelText(label)).toBeTruthy();
   }
+  expect(screen.queryByText('Insights')).toBeNull();
 });
 test('Appearance changes theme, accent, and restores system following', async () => {
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
@@ -58,13 +59,16 @@ function textContent(node: TestInstance): string {
 
 test.each([
   ['Home tab', Home], ['Workouts tab', Workouts], ['Food tab', Food],
-  ['Progress tab', Progress], ['Insights tab', Insights], ['Settings list', Settings], ['Appearance', Appearance],
-] as const)('%s pressables are labeled and text can grow at fontScale 2', async (_name, Component) => {
+  ['Progress tab', Progress, []], ['Progress tab, Insights view', Progress, ['Insights']],
+  ['Progress tab, Insights view, Muscles', Progress, ['Insights', 'Muscles']],
+  ['Settings list', Settings], ['Appearance', Appearance],
+] as [string, ComponentType, string[]?][])('%s pressables are labeled and text can grow at fontScale 2', async (_name, Component, tabsToPress = []) => {
   const getDimensions = Dimensions.get;
   const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...getDimensions(key), fontScale: 2 }));
   const fontScale = jest.spyOn(PixelRatio, 'getFontScale').mockReturnValue(2);
   try {
     const result = await render(<ThemeProvider><Component /></ThemeProvider>);
+    for (const name of tabsToPress) await fireEvent.press(screen.getByRole('tab', { name }));
     // Walk host responders independently of role queries: missing roles must not hide controls.
     const pressables = result.container.queryAll(node => typeof node.props.onPress === 'function' ||
       typeof node.props.onResponderRelease === 'function');

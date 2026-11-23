@@ -8,7 +8,7 @@ import type { USAGE_TABS } from './scrub';
 export function tabForPath(pathname:string|undefined):(typeof USAGE_TABS)[number]|undefined{
   if(pathname==='/'||pathname==='')return 'home';
   const first=pathname?.split('/')[1];
-  return first==='workouts'||first==='food'||first==='progress'||first==='insights'||first==='settings'?first:undefined;
+  return first==='workouts'||first==='food'||first==='progress'||first==='settings'?first:undefined;
 }
 
 /** Keeps crash reports and analytics in step with the switches in Settings > Privacy. Renders nothing. */

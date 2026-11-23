@@ -102,7 +102,7 @@ function DockInsets({ children }: { children: ReactNode }) {
   return <SafeAreaInsetsContext.Provider value={{ ...insets, bottom: dockSpace(insets.bottom) }}>{children}</SafeAreaInsetsContext.Provider>;
 }
 
-/** The five tabs behind the floating bar. Tabs never slide; the bar floats over the screen. */
+/** The tabs behind the floating bar. Tabs never slide; the bar floats over the screen. */
 export function FloatingTabs() {
   const insets = useSafeAreaInsets();
   const haptic = useSelectionHaptic();

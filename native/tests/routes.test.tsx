@@ -12,7 +12,7 @@ import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
-import Insights from '../src/app/(tabs)/insights';
+import InsightsLink from '../src/app/insights';
 import SettingsLayout from '../src/app/settings/_layout';
 import Settings from '../src/app/settings/index';
 import Appearance from '../src/app/settings/appearance';
@@ -28,7 +28,7 @@ const routes = {
   'sign-in': () => null,
   _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
   '(tabs)/_layout': WebTabs, '(tabs)/index': Home, '(tabs)/workouts': Workouts,
-  '(tabs)/food': Food, '(tabs)/progress': Progress, '(tabs)/insights': Insights,
+  '(tabs)/food': Food, '(tabs)/progress': Progress, insights: InsightsLink,
   'settings/_layout': SettingsLayout, 'settings/index': Settings,
   'settings/appearance': Appearance, 'settings/[section]': Section,
   'workout/_layout': WorkoutLayout, 'workout/index': Workout, 'workout/start': Start,
@@ -64,10 +64,8 @@ test.each([
 
 test.each([
   ['Workouts', '/workouts', ['Routines', 'History', 'Cardio']],
-  // Goals & PRs is a real screen now; Photos is the one still waiting, so it is the one that says so.
-  ['Progress', '/progress', ['Body', 'Goals & PRs', 'Photos']],
-  // Trends, Muscles and Weekly are real screens now; Recovery is the one still waiting, so it is the one that says so.
-  ['Insights', '/insights', ['Trends', 'Muscles', 'Weekly', 'Recovery']],
+  // Progress holds two views. Each view's sections are picked on the same screen, so the path never changes.
+  ['Progress', '/progress', ['Tracking', 'Body', 'Photos', 'Goals & PRs', 'Insights', 'Trends', 'Recovery', 'Muscles', 'Weekly']],
 ] as const)('%s segments stay within their tab, with no Back to Home button: the tab bar goes Home', async (label, path, segments) => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: label }));
@@ -79,6 +77,44 @@ test.each([
   expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Home' }));
   expect(result.getPathname()).toBe('/');
+});
+test('the tab bar has four tabs and Insights is not one of them', async () => {
+  await renderRouter(routes);
+  for (const name of ['Home', 'Workouts', 'Food', 'Progress']) expect(screen.getByRole('button', { name })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Insights' })).toBeNull();
+});
+test.each([
+  ['/insights', 'Trends'],
+  ['/insights?section=muscles', 'Muscles'],
+  // A section that is not one of the four is dropped, so the view opens on its first section.
+  ['/insights?section=body', 'Trends'],
+  ['/insights?section=nonsense', 'Trends'],
+])('the old link %s lands on Progress with Insights chosen, on %s', async (initialUrl, section) => {
+  const result = await renderRouter(routes, { initialUrl });
+  expect(result.getPathname()).toBe('/progress');
+  expect(screen.getByRole('tab', { name: 'Insights' })).toBeSelected();
+  expect(screen.getByRole('tab', { name: section })).toBeSelected();
+  expect(screen.getByRole('header', { name: 'Progress' })).toBeTruthy();
+});
+test.each([
+  ['/progress?view=insights&section=weekly', 'Insights', 'Weekly'],
+  ['/progress?section=muscles', 'Insights', 'Muscles'],
+  ['/progress?view=tracking&section=goals', 'Tracking', 'Goals & PRs'],
+  // A section from the other view, or a made-up view, is refused.
+  ['/progress?view=tracking&section=weekly', 'Tracking', 'Body'],
+  ['/progress?view=nonsense&section=nonsense', 'Tracking', 'Body'],
+])('a link %s opens %s on %s, and a later choice by hand is kept', async (initialUrl, view, section) => {
+  const result = await renderRouter(routes, { initialUrl });
+  expect(screen.getByRole('tab', { name: view })).toBeSelected();
+  expect(screen.getByRole('tab', { name: section })).toBeSelected();
+  // The link is used once and cleared, so it cannot overwrite what the person picks next.
+  expect(result.getSearchParams()).toEqual({});
+  await fireEvent.press(screen.getByRole('tab', { name: 'Insights' }));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Recovery' }));
+  expect(screen.getByRole('tab', { name: 'Recovery' })).toBeSelected();
+  await fireEvent.press(screen.getByRole('button', { name: 'Home' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Progress' }));
+  expect(screen.getByRole('tab', { name: 'Recovery' })).toBeSelected();
 });
 test('Food without a repository opens logging, says so plainly, and the normal back returns to Food', async () => {
   const result = await renderRouter(routes);

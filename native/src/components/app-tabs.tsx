@@ -8,7 +8,6 @@ const images = {
   workouts: require('../../assets/images/navigation/workouts.png'),
   food: require('../../assets/images/navigation/food.png'),
   progress: require('../../assets/images/navigation/progress.png'),
-  insights: require('../../assets/images/navigation/insights.png'),
 };
 export default function AppTabs() {
   const { colors, barLook } = useTheme();

@@ -36,6 +36,7 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       </Stack.Protected>
       <Stack.Protected guard={access}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="insights" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="dev/sample-data" options={{ headerShown: false }} />
       <Stack.Screen name="dev/logger-fixture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />

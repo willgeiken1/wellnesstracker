@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { saveFood, setTargets, meals } from '../src/features/food/model';
 import { dayPoints, hasAny, lastDays, onTarget, weekDays, weekReport } from '../src/features/insights/model';
 import { linePath, MiniChart } from '../src/features/insights/mini-chart';
 import { Trends, Weekly } from '../src/features/insights/trends';
-import Insights from '../src/app/(tabs)/insights';
+import Progress from '../src/app/(tabs)/progress';
 import { useAuth } from '../src/auth/provider';
 import { memoryRepository } from './workout-repository';
 
@@ -156,11 +156,12 @@ describe('Weekly', () => {
   });
 });
 
-test('the tab has four sections; Muscles holds the body map and Recovery says plainly it is not built', async () => {
+test('the Insights view of Progress has four sections; Muscles holds the body map and Recovery says plainly it is not built', async () => {
   const { repo } = sample();
   jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>);
-  await render(wrap(<Insights />));
-  expect(screen.getAllByRole('tab').map(tab => tab.props.accessibilityLabel)).toEqual(['Trends', 'Recovery', 'Muscles', 'Weekly']);
+  await render(wrap(<Progress />));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Insights' }));
+  expect(within(screen.getByTestId('section-tabs')).getAllByRole('tab').map(tab => tab.props.accessibilityLabel)).toEqual(['Trends', 'Recovery', 'Muscles', 'Weekly']);
   expect(screen.getByTestId('trend-calories')).toBeTruthy();
   await fireEvent.press(screen.getByRole('tab', { name: 'Muscles' }));
   expect(screen.getByText('Front')).toBeTruthy();
