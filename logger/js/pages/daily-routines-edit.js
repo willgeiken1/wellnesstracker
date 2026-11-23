@@ -34,8 +34,10 @@ import {
   arcReadout,
   arcSegmentPath,
   arcSegments,
+  arcStepMinutes,
   clockMinutes,
   doseReadback,
+  doseSet,
   parseSheetAmount,
   patchLive,
   plainAmount,
@@ -365,7 +367,7 @@ export function routineItemSheetHTML() {
         <div class="dr-steps-cap" aria-hidden="true"><span>Take away</span><span>Add</span></div>
         <div class="dr-steps" role="group" aria-label="Change the amount" data-live="steps">${stepButtonsHTML(amount, "routines-item-step", { closed })}</div>
         <svg class="dr-gauge" data-live="gauge" viewBox="0 0 300 34" aria-hidden="true"${amountMeterHTML(amount) ? "" : " hidden"}>${amountMeterHTML(amount)}</svg>
-        <p class="dr-is-sum${amount != null && unit ? "" : " dr-is-sum-wait"}" id="dr-item-sum" data-live="sum" aria-live="polite">${esc(doseReadback(amount, unit))}</p>
+        <p class="dr-is-sum${doseSet(amount, unit) ? "" : " dr-is-sum-wait"}" id="dr-item-sum" data-live="sum" aria-live="polite">${esc(doseReadback(amount, unit))}</p>
       </div>
       <p class="dr-is-help">The amount and unit are what you type. Nothing here suggests a dose.</p>
       <button type="button" class="dr-is-calc" data-live="calc" data-live-mode="attrs" data-action="routines-item-calc"${dose && sd.type === "peptide" ? "" : " hidden"}${tab}>${icon("calc")}<span class="dr-is-calc-t"><b>Reconstitution calculator</b><small>Works out mL from your vial and water</small></span><span class="dr-is-chev" aria-hidden="true">›</span></button>
@@ -595,8 +597,10 @@ function onArcCancel(ev) {
   if (arcDrag && ev.pointerId === arcDrag.id) arcDrag = null;
 }
 
-/* Arrow keys move the time by 5 minutes, Page keys by an hour. With no
-   time yet, the first key starts from the routine's start, or noon. */
+/* Arrow keys move the time by 5 minutes, Page keys by an hour, and Home and
+   End go to the ends of the path. With no time yet, the first key starts
+   from the routine's start, or noon. A time typed outside the path (02:00)
+   moves from where it is, so an arrow gives 02:05 and not 05:00. */
 function onArcKey(ev) {
   const svg = arcOf(ev.target);
   if (!svg || ev.target !== svg) return false;
@@ -612,7 +616,7 @@ function onArcKey(ev) {
   let next;
   if (ev.key === "Home") next = ARC.startMin;
   else if (ev.key === "End") next = ARC.endMin;
-  else if (current != null) next = clamp(Math.round((current + step) / 5) * 5);
+  else if (current != null) next = arcStepMinutes(current, step);
   else {
     const view = projectDailyRoutines(app.state && app.state.dailyRoutines) || { blocks: [] };
     const picked = new Set(Array.isArray(sd.blockIds) ? sd.blockIds : []);

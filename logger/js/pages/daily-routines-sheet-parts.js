@@ -163,12 +163,16 @@ export function amountMeterHTML(amount) {
   return parts.join("");
 }
 
+/* Whether the two fields make a dose a log can record. Zero is not an
+   amount to log, and Save refuses it. */
+export function doseSet(amount, unit) {
+  return isAmount(amount) && amount > 0 && !!unit;
+}
+
 /* What each log will record, read back from the two fields. */
 export function doseReadback(amount, unit) {
-  /* Zero is not an amount to log, and Save refuses it. */
-  const set = isAmount(amount) && amount > 0;
-  if (set && unit) return `Logs ${prettyAmount(amount)} ${unit} each time.`;
-  if (set) return "Pick a unit.";
+  if (doseSet(amount, unit)) return `Logs ${prettyAmount(amount)} ${unit} each time.`;
+  if (isAmount(amount) && amount > 0) return "Pick a unit.";
   return "Type an amount or use the steps.";
 }
 
@@ -193,6 +197,18 @@ export function arcMinutesAt(x) {
 
 export function arcHolds(minutes) {
   return typeof minutes === "number" && Number.isFinite(minutes) && minutes >= ARC.startMin && minutes <= ARC.endMin;
+}
+
+/* The time after a key on the path moved it by `step` minutes, on the
+   5 minute grid. A time on the path stops at its ends. A time typed outside
+   it (02:00) moves from where it is and stops at the ends of the day, so a
+   key never jumps it onto the path. */
+export function arcStepMinutes(current, step) {
+  if (typeof current !== "number" || !Number.isFinite(current) || typeof step !== "number" || !Number.isFinite(step)) return null;
+  const inside = arcHolds(current);
+  const low = inside ? ARC.startMin : 0;
+  const high = inside ? ARC.endMin : DAY_MIN - 5;
+  return Math.max(low, Math.min(high, Math.round((current + step) / 5) * 5));
 }
 
 /* The parts of a routine's window that sit on the path. A window that runs

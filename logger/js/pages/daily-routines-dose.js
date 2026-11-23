@@ -246,6 +246,14 @@ export function reconstitutionLiveHTML() {
   return reconstitutionResultHTML(calcResult(sd));
 }
 
+/* The same lines inside the calculator's answer card. The card is the one
+   polite live region for the answer and it stays in the page while its
+   contents change, so the lines inside it drop their own aria-live. A live
+   region inside another can be read out twice. The words are untouched. */
+function calcMathHTML() {
+  return reconstitutionLiveHTML().replace(' aria-live="polite"', "");
+}
+
 const CALC_FIELDS = Object.freeze([
   Object.freeze({ key: "vial", id: "dr-calc-vial", label: "Vial amount", tone: "lavender", unitKey: "vialUnit", unitAction: "routines-calc-vial-unit", unitLabel: "Vial unit", stepLabel: "Change the vial amount", enter: "next" }),
   Object.freeze({ key: "water", id: "dr-calc-water", label: "Water volume", tone: "pink", unitKey: "", unitAction: "", unitLabel: "", stepLabel: "Change the water volume", enter: "next" }),
@@ -292,7 +300,7 @@ function calcAnswerHTML(sd) {
         <div><span>U-100 units</span><b data-live="units">${units}</b></div>
       </div>
       ${syringeHTML(ok ? result.syringeUnits : null)}
-      <div id="dr-calc-result" data-live="math">${reconstitutionLiveHTML()}</div>
+      <div id="dr-calc-result" data-live="math">${calcMathHTML()}</div>
     </div>`;
 }
 
@@ -446,7 +454,7 @@ export function noteReconstitutionField(id, value) {
   app.ui.sd.error = "";
   if (refreshCalc({ typing: true })) return true;
   const slot = typeof app.$ === "function" ? app.$("#dr-calc-result") : null;
-  if (slot) slot.innerHTML = reconstitutionLiveHTML();
+  if (slot) slot.innerHTML = calcMathHTML();
   return true;
 }
 
