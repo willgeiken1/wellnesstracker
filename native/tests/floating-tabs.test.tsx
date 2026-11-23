@@ -1,12 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { StyleSheet, View } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import AppTabs from '../src/components/app-tabs';
 import { Screen } from '../src/components/screen';
 import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DOCK_ACTIVE, DOCK_FADE, DOCK_ITEM, DOCK_NIGHT, TabDock, setDockAction, dockBottom, dockSpace, type DockItem } from '../src/components/floating-tabs';
+import { DOCK_ACTIVE, DOCK_FADE, DOCK_ITEM, DOCK_NIGHT, DOCK_SIDE, TabDock, dockMetrics, dockWidth, setDockAction, dockBottom, dockSpace, type DockItem } from '../src/components/floating-tabs';
+import { tabs } from '../src/features/shell/tabs';
 import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
 import { syntheticRow } from '../fixtures/sync';
@@ -89,6 +90,66 @@ describe('the floating tab bar', () => {
     expect(dockBottom(0)).toBe(12);
     expect(dockSpace(34)).toBeGreaterThan(34 + DOCK_ACTIVE / 2);
     expect(dockSpace(0)).toBeGreaterThanOrEqual(12 + DOCK_ACTIVE);
+  });
+});
+
+describe('the floating bar on narrow and wide phones', () => {
+  const flat = (node: { props: Record<string, any> }) => StyleSheet.flatten(typeof node.props.style === 'function' ? node.props.style({ pressed: false }) : node.props.style);
+  // 320 is Display Zoom on the smallest phones; 375 and 430 are the narrowest and widest ordinary ones.
+  test.each([[320, 'compact'], [357, 'compact'], [358, 'regular'], [375, 'regular'], [393, 'regular'], [430, 'regular'], [440, 'regular']] as const)('at %i points the bar is %s', (width, size) => {
+    expect(dockMetrics(width).size).toBe(size);
+  });
+  test.each([320, 375, 430])('five tabs fit at %i points whichever tab is open, with the + Home and Routines put beside them', (width) => {
+    expect(tabs).toHaveLength(5);
+    // The two screens with a + of their own are the first tab and the last.
+    expect([tabs[0].route, tabs[tabs.length - 1].route]).toEqual(['index', 'routines']);
+    const metrics = dockMetrics(width), last = tabs.length - 1;
+    for (let active = 0; active < tabs.length; active += 1) {
+      const ends = active === 0 || active === last;
+      expect(dockWidth(metrics, tabs.length, active, ends)).toBeLessThanOrEqual(width - 2 * DOCK_SIDE);
+      // Should a middle tab ever get a + too, the bar still stays on the screen.
+      expect(dockWidth(metrics, tabs.length, active, true)).toBeLessThan(width);
+    }
+  });
+  test('the widest bar is an end tab with its + beside it: 334 at the ordinary size, 296 on a narrow phone', () => {
+    expect(dockWidth(dockMetrics(430), 5, 0, true)).toBe(334);
+    expect(dockWidth(dockMetrics(430), 5, 4, true)).toBe(334);
+    expect(dockWidth(dockMetrics(430), 5, 2)).toBe(284);
+    expect(dockWidth(dockMetrics(320), 5, 0, true)).toBe(296);
+    expect(dockWidth(dockMetrics(320), 5, 2)).toBe(252);
+  });
+  test('the ordinary size is the one the bar always had', () => {
+    expect(dockMetrics(402)).toMatchObject({ open: DOCK_ACTIVE, item: DOCK_ITEM, pad: 5, gap: 4, groupGap: 8 });
+    expect(dockSpace(34, dockMetrics(402))).toBe(dockSpace(34));
+    // A smaller bar leaves a little less room under the page.
+    expect(dockSpace(34, dockMetrics(320))).toBe(dockBottom(34) + 52 + 12);
+  });
+  test.each([320, 430])('at %i points every tab is a target at least 44 points wide and tall', async (width) => {
+    const metrics = dockMetrics(width);
+    await render(<ThemeProvider repository={saved('seaGlassTide')}><TabDock items={items} active={0} metrics={metrics} onPress={() => {}} /></ThemeProvider>);
+    for (const item of items) {
+      const tab = screen.getByRole('tab', { name: item.label }), box = flat(tab), slop = tab.props.hitSlop || { top: 0, bottom: 0, left: 0, right: 0 };
+      expect(box.width + slop.left + slop.right).toBeGreaterThanOrEqual(44);
+      expect(box.height + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
+      expect(tab.props.accessibilityLargeContentTitle).toBe(item.label);
+    }
+    // Neighbouring targets meet half way and never overlap.
+    expect(screen.getByTestId('tab-food').props.hitSlop.left * 2).toBe(metrics.gap);
+    expect(flat(screen.getByTestId('tab-index'))).toMatchObject({ width: metrics.open, height: metrics.open });
+    expect(flat(screen.getByTestId('tab-food'))).toMatchObject({ width: metrics.item, height: metrics.item });
+  });
+  test('on a 320 point screen the whole bar, its + and the room under the page all take the smaller size', async () => {
+    const real = Dimensions.get;
+    const spy = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...real(key), width: 320 }));
+    try {
+      await render(<ThemeProvider repository={saved('seaGlassTide;bar=floating')}><AppTabs /></ThemeProvider>);
+      await act(() => setDockAction({ label: 'Add', expanded: false, onPress: () => {} }));
+      expect(flat(screen.getByTestId('tab-index'))).toMatchObject({ width: 52, height: 52 });
+      expect(flat(screen.getByTestId('tab-food'))).toMatchObject({ width: 42, height: 42 });
+      expect(flat(screen.getByTestId('dock-action'))).toMatchObject({ width: 50, height: 50 });
+      expect(flat(screen.getByTestId('tab-fade')).height).toBe(dockSpace(0, dockMetrics(320)) + DOCK_FADE);
+      await act(() => setDockAction(null));
+    } finally { spy.mockRestore(); }
   });
 });
 
