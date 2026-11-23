@@ -1148,3 +1148,29 @@ export type RoutinesTabKey = keyof typeof routinesTab;
 export function routinesText(key: RoutinesTabKey, values: Record<string, string | number> = {}): string {
   return routinesTab[key].replace(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole));
 }
+
+/** Words for Routines outside its own tab: the tiles on Home, their rows in Edit Home, the "Started" lines on
+ * the Progress charts and the sample items of "Look around first". The tile and chart-line wording that came
+ * over from the web app word for word lives with the rules (ROUTINE_TILE_TEXT, CHART_LINES_TITLE). Sentence
+ * case throughout. Nothing here names an amount or suggests a dose. */
+export const routinesHome = {
+  tileOpens: '{title}. Opens Routines.',
+  logSpoken: 'Log {name}',
+  loggedSpoken: 'Logged {name}.',
+  editSection: 'Routines',
+  editNote: 'Taking a routine tile off Home removes nothing from Routines.',
+  aboutNext: 'The next thing still open in your routines today.',
+  aboutRoutine: 'What is still open in this routine today.',
+  aboutItem: 'One item, with a button to log it.',
+  startedSince: 'Since {day}',
+  startedMark: '{label}, {day}',
+  sampleStretch: 'Stretch',
+  sampleWalk: 'Morning walk',
+  sampleRead: 'Read a few pages',
+  sampleLights: 'Lights out',
+} as const;
+export type RoutinesHomeKey = keyof typeof routinesHome;
+/** A line from the block above with its {placeholders} filled in. */
+export function routinesHomeText(key: RoutinesHomeKey, values: Record<string, string | number> = {}): string {
+  return routinesHome[key].replace(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole));
+}
