@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PRESSED_ROW_OPACITY } from '@/components/tappable';
+import { PRESSED_ROW_OPACITY, Tappable } from '@/components/tappable';
 import { Pressable, ScrollView, View } from 'react-native';
 import { touchTarget } from '../../components/button';
 import { Card } from '../../components/card';
@@ -74,12 +74,12 @@ export function FoodLogScreen({ repository }: { repository: Repository }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ columnGap: 6 }}>
           {mealList.map(meal => {
             const selected = meal.id === selectedMeal;
-            return <Pressable key={meal.id} accessibilityRole="button" accessibilityLabel={meal.name} accessibilityState={{ selected }}
+            return <Tappable dim="fill" key={meal.id} accessibilityRole="button" accessibilityLabel={meal.name} accessibilityState={{ selected }}
               onPress={() => { setSelectedMeal(meal.id); if (entry) setEntry({ ...entry, meal: meal.id }); }} style={{ minHeight: touchTarget, justifyContent: 'center' }}>
               <View style={{ minHeight: 34, paddingHorizontal: 14, borderRadius: 99, justifyContent: 'center', backgroundColor: selected ? colors.accent : colors['surface-2'] }}>
                 <ThemedText style={{ fontSize: 15, fontWeight: selected ? '600' : '400', color: selected ? colors['on-accent'] : colors.text }}>{meal.name}</ThemedText>
               </View>
-            </Pressable>;
+            </Tappable>;
           })}
         </ScrollView>
       </View>

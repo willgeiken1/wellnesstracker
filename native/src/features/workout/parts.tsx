@@ -1,5 +1,5 @@
 import { useMemo, type PropsWithChildren, type ReactNode } from 'react';
-import { PRESSED_FILL_OPACITY } from '@/components/tappable';
+import { PRESSED_FILL_OPACITY, Tappable } from '@/components/tappable';
 import { Pressable, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -89,9 +89,9 @@ export function Trouble({ text, onRetry, testID }: { text: string; onRetry?: () 
   const { colors } = useTheme();
   return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderRadius: tokens.radii.card, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[1], backgroundColor: colors['surface-2'] }}>
     <ThemedText muted accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1 }}>{text}</ThemedText>
-    {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={t('tryAgain')} onPress={onRetry} style={{ minHeight: touchTarget, minWidth: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
+    {onRetry && <Tappable accessibilityRole="button" accessibilityLabel={t('tryAgain')} onPress={onRetry} style={{ minHeight: touchTarget, minWidth: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
       <ThemedText style={semibold}>{t('tryAgain')}</ThemedText>
-    </Pressable>}
+    </Tappable>}
   </View>;
 }
 

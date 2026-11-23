@@ -1,5 +1,5 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PRESSED_FILL_OPACITY } from '@/components/tappable';
+import { PRESSED_FILL_OPACITY, Tappable } from '@/components/tappable';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -183,10 +183,10 @@ export function Home() {
   return <View style={{ flex: 1 }}>
     <Screen tabHeader>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')} hitSlop={4}
+        <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={t('openSettings')} onPress={() => router.push('/settings')} hitSlop={4}
           style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }}>
           <Icon name="avatar" size={22} />
-        </Pressable>
+        </Tappable>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ThemedText muted variant="caption">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</ThemedText>
@@ -330,7 +330,7 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
     {week.map(date => {
       const day = localDay(date), future = day > today, isSelected = day === selected, values = future ? null : of(day);
       const name = date.toLocaleDateString('en-US', { weekday: 'long' });
-      return <Pressable key={day} accessibilityRole="button" disabled={future} onPress={() => onPick(day)}
+      return <Tappable key={day} accessibilityRole="button" disabled={future} onPress={() => onPick(day)}
         accessibilityLabel={`${name}${day === today ? `, ${t('today')}` : ''}${values ? `, ${spoken(values)}` : ''}`}
         accessibilityState={{ selected: isSelected, disabled: future }}
         style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: tokens.radii.card, opacity: future ? 0.35 : 1,
@@ -341,7 +341,7 @@ function Week({ week, today, selected, onPick, of }: { week: Date[]; today: stri
             : <Circle cx={20} cy={15} r={2} fill={colors['text-muted']} opacity={0.5} />}
         </Svg>
         <ThemedText muted={!isSelected} variant="caption" style={{ fontWeight: isSelected ? '700' : '400' }}>{name.slice(0, 1)}</ThemedText>
-      </Pressable>;
+      </Tappable>;
     })}
   </View>;
 }

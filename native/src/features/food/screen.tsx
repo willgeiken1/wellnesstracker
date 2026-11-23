@@ -2,7 +2,7 @@ import { FoodAiEntry } from './ai/entry';
 import { AI_FEATURES_ENABLED } from '../ai-launch';
 import { FoodAiResults, FoodAiMorningReview, LocalMealThumbnail } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { Tappable as Pressable } from '../../components/tappable';
 import Svg, { Path } from 'react-native-svg';
@@ -89,7 +89,10 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const [undo,setUndo]=useState<Undo|null>(null),[status,setStatus]=useState<string|null>(null);
  const glide=useLayoutMotion();
  // The undo card folds away when its time is up, instead of the list jumping up.
- useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>{glide();setUndo(null);},8000);return ()=>clearTimeout(timer);},[undo,glide]);
+ // A field that is open stays put: the card just goes, so nothing slides under the finger.
+ const fieldOpen=useRef(false);
+ useEffect(()=>{fieldOpen.current=!!(entry||rename||combo);});
+ useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>{if(!fieldOpen.current)glide();setUndo(null);},8000);return ()=>clearTimeout(timer);},[undo,glide]);
  const rows=repo.list('food_entries').filter(r=>r.data.day===day),total=totals(rows),targets=foodTargets(repo,day);
  const early=attributedDay()!==today();
  const chooseDay=(value:string)=>{setAiMode(null);setScanning(false);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
@@ -98,7 +101,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const move=(action:()=>void)=>{glide();run(action);};
  const {colors}=useTheme(),foodColor=colors.food;
  const [openEntry,setOpenEntry]=useState<string|null>(null),[mealMenu,setMealMenu]=useState<string|null>(null);
- const choose=(method:Method)=>{setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else{setLibrary(!library);setEntry(null);}};
+ const choose=(method:Method)=>{if(fan)glide();setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else{setLibrary(!library);setEntry(null);}};
  const log=(food:Food)=>run(()=>{saveFood(repo,day,selectedMeal,food);setLibrary(false);});
  return <View style={{gap:tokens.spacing[3]}}>
   <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
@@ -130,7 +133,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
     <Round label={t('foodFan')} glyph={fan?'M5 12h14':'M12 5v14M5 12h14'} filled onPress={()=>{glide();setFan(!fan);}}/>
    </View>
    <View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6}}>{mealList.map(meal=><Pick key={meal.id} label={meal.name} selected={selectedMeal===meal.id} onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
-   {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
+   {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){glide();setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
   </View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
   {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>move(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}

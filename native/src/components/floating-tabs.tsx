@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { PRESSED_FILL_OPACITY } from './tappable';
+import { PRESSED_FILL_OPACITY, Tappable } from './tappable';
 import { Pressable, View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
@@ -63,12 +63,13 @@ export function TabDock({ items, active, onPress }: { items: readonly DockItem[]
   const pill = dark ? DOCK_NIGHT : colors.text, ink = dark ? colors.text : colors.bg;
   const button = (item: DockItem, index: number) => {
     const open = index === active, size = open ? DOCK_ACTIVE : DOCK_ITEM;
-    return <Pressable key={item.key} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
+    // The open tab is a filled circle; the others are bare icons, so they dim as far as any icon does.
+    return <Tappable key={item.key} dim={open ? 'fill' : 'row'} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
       onPress={() => onPress(index)} hitSlop={open ? 0 : { top: 6, bottom: 6 }}
-      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: open ? colors.accent : 'transparent', opacity: pressed ? PRESSED_FILL_OPACITY : 1 }, open && tokens.elevation.ios]}>
+      style={[{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: open ? colors.accent : 'transparent' }, open && tokens.elevation.ios]}>
       <Icon name={item.icon} size={open ? 24 : 22} color={open ? colors['on-accent'] : ink} />
-    </Pressable>;
+    </Tappable>;
   };
   const group = (from: number, to: number) => to > from && <View key={from} testID="tab-pill"
     style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2, backgroundColor: pill,
