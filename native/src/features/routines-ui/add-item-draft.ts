@@ -22,7 +22,7 @@ export interface ItemSheetDraft {
   onHand: string; mixedOn: string; blockIds: string[];
 }
 
-export interface ItemSheetSource { itemId?: string | null; blockId?: string | null; type?: string | null }
+export interface ItemSheetSource { itemId?: string | null; type?: string | null }
 
 export function openItemDraft(view: RoutineView | null, source: ItemSheetSource = {}): ItemSheetDraft {
   const item = source.itemId && view ? view.items.find((row) => row.id === source.itemId) ?? null : null;
@@ -30,9 +30,9 @@ export function openItemDraft(view: RoutineView | null, source: ItemSheetSource 
   const shown = new Set((view ? view.blocks : []).map((block) => block.id));
   const placed = item && view ? view.placements.filter((row) => row.itemId === item.id && shown.has(row.blockId)).map((row) => row.blockId) : [];
   const presetType = !item && typeof source.type === 'string' ? routineItemType({ type: source.type }, view ? view.prefs : null) : '';
-  /* A new item opens on the routine it was added from, or on the one last used. With a type given it needs no routine. */
+  /* A new item opens on the routine last used. With a type given it needs no routine. */
   const last = view && view.prefs.lastBlockId && shown.has(view.prefs.lastBlockId) ? view.prefs.lastBlockId : '';
-  const opened = source.blockId && shown.has(source.blockId) ? source.blockId : presetType ? '' : last;
+  const opened = presetType ? '' : last;
   const dose = !!item && item.kind === 'dose';
   const timeMin = item ? routineMinuteOfDay(item.timeMin) : null;
   return {

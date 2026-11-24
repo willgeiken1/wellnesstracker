@@ -20,8 +20,8 @@ export const routineRoutes = {
    * `target` names the routine, and the item in it, that the day view opens: a routine other than the
    * current one is folded there until something opens it. */
   tab: (view?: string, target: RoutineLinkTarget = {}) => withParams('/routines', { view, blockId: target.blockId, itemId: target.itemId }),
-  /** Add item. `type` preselects an item type, `blockId` a routine. */
-  addItem: (params: { type?: string; blockId?: string } = {}) => withParams('/routines/add-item', params),
+  /** Add item. `type` preselects an item type. */
+  addItem: (params: { type?: string } = {}) => withParams('/routines/add-item', { type: params.type }),
   /** The same form, opened on a saved item. */
   editItem: (itemId: string) => withParams('/routines/add-item', { itemId }),
   /** The concentration converter as a sheet of its own. With an item it opens for that item. */

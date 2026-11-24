@@ -311,15 +311,15 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
  * (`converter`), the sheet is the converter alone and closing it leaves:
  * there is no item form behind it to land on.
  */
-export function AddItemSheet({ itemId, type, blockId, converter = false }: { itemId?: string; type?: string; blockId?: string; converter?: boolean }) {
+export function AddItemSheet({ itemId, type, converter = false }: { itemId?: string; type?: string; converter?: boolean }) {
   if (converter) return <ConverterSheet itemId={itemId} />;
-  return <ItemSheet itemId={itemId} type={type} blockId={blockId} />;
+  return <ItemSheet itemId={itemId} type={type} />;
 }
 
-function ItemSheet({ itemId, type, blockId }: { itemId?: string; type?: string; blockId?: string }) {
+function ItemSheet({ itemId, type }: { itemId?: string; type?: string }) {
   const data = useRoutines();
   const { close } = useSheetClose(false);
   if (!data.view) return <SheetUnavailable testID="add-item" title={itemId ? rs('editItem') : rs('addItem')} onClose={close} />;
   if (itemId && !data.view.items.some((row) => row.id === itemId)) return <SheetUnavailable testID="add-item" title={rs('editItem')} onClose={close} />;
-  return <ItemForm key={itemId ?? 'new'} data={data} view={data.view} source={{ itemId, type, blockId }} />;
+  return <ItemForm key={itemId ?? 'new'} data={data} view={data.view} source={{ itemId, type }} />;
 }

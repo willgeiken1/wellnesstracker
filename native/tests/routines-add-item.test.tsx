@@ -22,6 +22,8 @@ const noise: jest.SpyInstance[] = [];
 const open = async (props: Parameters<typeof AddItemSheet>[0] = {}) => { await render(<AddItemSheet {...props} />, { wrapper }); };
 const morning = () => stored(repo).blocks.find((block) => block.name === 'Morning routine')!.id;
 const press = (testID: string) => fireEvent.press(screen.getByTestId(testID));
+/* A new item with the Morning routine picked for it. */
+const openInMorning = async () => { await open(); await press(`item-routine-${morning()}`); };
 const error = () => screen.getByTestId('item-error').props.children;
 
 beforeEach(() => {
@@ -68,7 +70,7 @@ test('a new item starts empty, and Save says what is missing in the app\'s own w
 });
 
 test('a dose is only what was typed: no placeholder number, steps from zero, and a unit that must be picked', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   await fireEvent.changeText(screen.getByTestId('item-name'), 'Sample dose');
   await press('item-kind-dose');
   const input = () => screen.getByTestId('item-dose-input');
@@ -108,7 +110,7 @@ test('a dose is only what was typed: no placeholder number, steps from zero, and
 });
 
 test('type is optional and can be cleared, but an item keeps a type or a routine', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   await press('item-type-supplement');
   expect(screen.getByRole('radio', { name: 'Supplement' }).props.accessibilityState.checked).toBe(true);
   expect(screen.getByText('Optional with a type. It shows on its tab either way.')).toBeTruthy();
@@ -127,7 +129,7 @@ test('type is optional and can be cleared, but an item keeps a type or a routine
 });
 
 test('the converter link shows only for a peptide logged as a dose', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   expect(screen.queryByTestId('item-converter')).toBeNull();
   await press('item-type-peptide');
   // A new peptide is logged by amount.
@@ -142,7 +144,7 @@ test('the converter link shows only for a peptide logged as a dose', async () =>
 });
 
 test('On hand is offered for a check as well as a dose, and Mixed on for a dose only', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   await fireEvent.changeText(screen.getByTestId('item-name'), 'Stretch band');
   await press('item-kind-check');
   expect(screen.getByTestId('item-on-hand')).toBeTruthy();
@@ -153,7 +155,7 @@ test('On hand is offered for a check as well as a dose, and Mixed on for a dose 
 });
 
 test('a time can be typed, stepped and cleared, and the path reads it back', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   const time = () => screen.getByTestId('item-time');
   expect(time().props.value).toBe('');
   await fireEvent(time(), 'focus');
@@ -217,7 +219,7 @@ test('an item opens for editing with what was saved, and can be removed after a 
 });
 
 test('a new type can be named in place and is picked once added', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   await press('item-type-new');
   await fireEvent.changeText(screen.getByTestId('item-type-name'), 'Skin care');
   await press('item-type-add');
@@ -239,7 +241,7 @@ test('Save takes a time that is still being typed, and a step or Clear starts fr
 });
 
 test('a typed time that Save could not use yet stays in the form, and the steps and an emptied field count too', async () => {
-  await open({ blockId: morning() });
+  await openInMorning();
   const time = () => screen.getByTestId('item-time');
   await fireEvent(time(), 'focus');
   await fireEvent.changeText(time(), '730');
