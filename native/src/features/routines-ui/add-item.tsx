@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useLayoutMotion } from '@/components/layout-motion';
 import { useSelectionHaptic } from '@/components/selection-haptic';
@@ -109,10 +109,19 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
     if (kind === draft.kind) return;
     tick(); glide(); change({ kind });
   };
+  /* Set by the save that went through. The sheet takes a moment to close, and a second press in that moment
+     must not save the item again. A save that was refused leaves the sheet open and the guard unset. */
+  const saving = useRef(false);
+  /* A second press before the first has been drawn would add the same type twice. Once a type is added the
+     name field closes; the guard opens again with the field. */
+  const addingType = useRef(false);
+  useEffect(() => { addingType.current = false; }, [naming]);
   const addType = () => {
+    if (addingType.current || saving.current) return;
     const result = addCustomType(data.store, naming ?? '', clock, newRoutineId);
     if (!result || !result.added) { setHint({ at: 'type', text: rs('newTypeTaken') }); announce(rs('newTypeTaken')); return; }
     if (!commitRoutines(data.repository, result.store)) { setHint({ at: 'type', text: rs('notSaved') }); announce(rs('notSaved')); return; }
+    addingType.current = true;
     tick(); glide(); setNaming(null); setHint(null); change({ type: result.typeId });
   };
 
@@ -134,17 +143,19 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
      in the fields itself: a time being typed, and a new type that was named but not yet added. The new type is
      saved with the item in one write, so a draft that cannot be saved adds no type either. */
   const save = () => {
-    let store = data.store, saving = settled;
+    if (saving.current) return;
+    let store = data.store, taken = settled;
     if (timeText != null) { setTimeText(null); setDraft(settled); }
     if (naming?.trim()) {
       const made = addCustomType(store, naming, clock, newRoutineId);
       if (!made || !made.added) { setHint({ at: 'type', text: rs('newTypeTaken') }); setError(rs('newTypeTaken')); announce(rs('newTypeTaken')); return; }
-      store = made.store; saving = { ...saving, type: made.typeId };
+      store = made.store; taken = { ...taken, type: made.typeId };
     }
-    const problem = itemDraftProblem(saving, clock.day);
+    const problem = itemDraftProblem(taken, clock.day);
     if (problem) { setError(problem); announce(problem); return; }
-    const result = saveItem(store, itemSaveDraft(saving), clock, newRoutineId);
+    const result = saveItem(store, itemSaveDraft(taken), clock, newRoutineId);
     if (!result || !commitRoutines(data.repository, result.store)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    saving.current = true;
     leave();
   };
   const remove = () => {

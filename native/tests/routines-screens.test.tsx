@@ -144,6 +144,27 @@ describe('item details', () => {
     expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith('Log updated.');
     expect(router.back).toHaveBeenCalledTimes(1);
   });
+  test('a second press of Save while the sheet closes saves the log once and goes back once', async () => {
+    const repo = seededRepository(store => { store.logs = [vialLog(SAMPLE_DAY)]; });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} logId={todayLog} />);
+    await fireEvent.changeText(screen.getByTestId('log-note'), 'zq note');
+    await fireEvent.press(screen.getByTestId('log-save'));
+    const stamp = logOf(repo, SAMPLE.vial)!.updatedAt;
+    await fireEvent.press(screen.getByTestId('log-save'));
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ note: 'zq note', updatedAt: stamp });
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+  test('a refused Save does not lock the button: once the amount is back, the next press saves', async () => {
+    const repo = seededRepository(store => { store.logs = [vialLog(SAMPLE_DAY)]; });
+    await show(repo, <ItemDetails itemId={SAMPLE.vial} logId={todayLog} />);
+    await fireEvent.changeText(screen.getByTestId('log-amount'), '');
+    await fireEvent.press(screen.getByTestId('log-save'));
+    expect(router.back).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByTestId('log-amount'), '4');
+    await fireEvent.press(screen.getByTestId('log-save'));
+    expect(logOf(repo, SAMPLE.vial)).toMatchObject({ amount: 4 });
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
   test('a refused edit says why and keeps the sheet open', async () => {
     const repo = seededRepository(store => { store.logs = [vialLog(SAMPLE_DAY)]; });
     await show(repo, <ItemDetails itemId={SAMPLE.vial} logId={todayLog} />);

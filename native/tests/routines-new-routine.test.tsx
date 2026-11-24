@@ -299,3 +299,43 @@ test('a typed time counts as an unsaved change, a step starts from it, and Save 
   await press('routine-save');
   expect(block('Midday reset')).toMatchObject({ startMin: 555, endMin: 600 });
 });
+
+test('a second press of Save while the sheet closes makes one routine', async () => {
+  await render(<RoutineSheet />, { wrapper });
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Midday');
+  await press('routine-save');
+  await press('routine-save');
+  expect(shown().filter((row) => row.name === 'Midday')).toHaveLength(1);
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('a Save that was refused does not lock the button, and a second press of Duplicate makes one copy', async () => {
+  await render(<RoutineSheet />, { wrapper });
+  await press('routine-save');
+  expect(screen.getByTestId('routine-error')).toBeTruthy();
+  expect(shown()).toHaveLength(2);
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Midday');
+  await press('routine-save');
+  expect(shown().filter((row) => row.name === 'Midday')).toHaveLength(1);
+  await screen.unmount();
+  jest.mocked(router.back).mockClear();
+
+  await render(<RoutineSheet blockId={block('Morning routine').id} />, { wrapper });
+  await press('routine-duplicate');
+  await press('routine-duplicate');
+  expect(shown().filter((row) => row.name.startsWith('Morning routine copy'))).toHaveLength(1);
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('Hide asks for a save first when there are edits, and drops none of them', async () => {
+  const night = block('Night routine').id;
+  await render(<RoutineSheet blockId={night} />, { wrapper });
+  await fireEvent.changeText(screen.getByTestId('routine-name'), 'Late');
+  await press('routine-hide');
+  expect(screen.getByTestId('routine-error').props.children).toBe('Save your changes first.');
+  expect(said).toHaveBeenLastCalledWith('Save your changes first.');
+  expect(stored(repo).blocks.find((row) => row.id === night)).toMatchObject({ name: 'Night routine' });
+  expect(stored(repo).blocks.find((row) => row.id === night)!.hidden ?? false).toBe(false);
+  expect(value('routine-name')).toBe('Late');
+  expect(router.back).not.toHaveBeenCalled();
+});

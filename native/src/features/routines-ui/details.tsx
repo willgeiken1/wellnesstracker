@@ -65,12 +65,16 @@ function LogForm({ routines, opened, dose, sites }: { routines: Routines; opened
     const next = shiftRoutineDay(draft.day, delta);
     if (next && next <= draft.maxDay && next !== draft.day) { haptic(); set({ day: next }); }
   };
+  /* Set by the save that went through, so a second press while the sheet closes does not save or go back twice. */
+  const saving = useRef(false);
   const save = () => {
+    if (saving.current) return;
     const edit = dose && !draft.skipped
       ? { amount: draft.amount, day: draft.day, time: draft.time, note: draft.note, ...(sites ? { site: draft.site } : {}) }
       : { day: draft.day, time: draft.time, note: draft.note };
     const saved = routines.apply((store, clock) => editLog(store, draft.logId, edit, clock)?.store ?? null);
     if (!saved) { setDraft(current => ({ ...current, error: LOG_DETAILS_REFUSED })); return; }
+    saving.current = true;
     AccessibilityInfo.announceForAccessibility(routinesText('logUpdated'));
     router.back();
   };

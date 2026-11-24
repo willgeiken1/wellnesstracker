@@ -304,3 +304,33 @@ test('a new type named like one that exists is not saved over, and a draft that 
   expect(stored(repo).items.some((row) => row.name === 'Face wash')).toBe(false);
   expect(router.back).not.toHaveBeenCalled();
 });
+
+test('a second press of Save while the sheet closes saves the item once', async () => {
+  await openInMorning();
+  await fireEvent.changeText(screen.getByTestId('item-name'), 'Stretch');
+  await press('item-save');
+  await press('item-save');
+  expect(stored(repo).items.filter((row) => row.name === 'Stretch')).toHaveLength(1);
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('a Save that was refused does not lock the button: the next press saves', async () => {
+  await openInMorning();
+  await press('item-save');
+  expect(error()).toBe('Add a name.');
+  await fireEvent.changeText(screen.getByTestId('item-name'), 'Stretch');
+  await press('item-save');
+  expect(stored(repo).items.filter((row) => row.name === 'Stretch')).toHaveLength(1);
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('two presses of Add on a new type, before the first is drawn, add it once', async () => {
+  await openInMorning();
+  await press('item-type-new');
+  await fireEvent.changeText(screen.getByTestId('item-type-name'), 'Skin care');
+  const add = screen.getByTestId('item-type-add');
+  // Both presses land on the button as it was drawn, as two taps inside one frame do.
+  await act(async () => { add.props.onClick({ nativeEvent: {} }); add.props.onClick({ nativeEvent: {} }); });
+  expect(stored(repo).prefs.customTypes?.map((type) => type.name)).toEqual(['Skin care']);
+  expect(screen.getByRole('radio', { name: 'Skin care' }).props.accessibilityState.checked).toBe(true);
+});

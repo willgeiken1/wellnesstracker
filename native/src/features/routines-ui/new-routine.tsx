@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { useLayoutMotion } from '@/components/layout-motion';
 import { useSelectionHaptic } from '@/components/selection-haptic';
@@ -107,13 +107,20 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     announce(rs('itemPlace', { name: view.items.find((item) => item.id === itemId)?.name ?? '', place: to + 1, count: itemIds.length }));
   };
 
+  /* Set by the Save, Duplicate or Hide that went through. The sheet takes a moment to close, and a second
+     press in that moment must not make a second routine or undo the first press. A press that was refused
+     leaves the sheet open and the guard unset. */
+  const leaving = useRef(false);
+
   /* Save can be pressed while a time field still has the keyboard, before the field is left, so it takes the
      times as the fields show them. */
   const save = () => {
+    if (leaving.current) return;
     if (startText != null || endText != null) { setStartText(null); setEndText(null); setDraft(settled); }
     if (!settled.name.trim() || !routineDraftWindow(settled.startMin, settled.endMin)) { setError(rs('errRoutine')); announce(rs('errRoutine')); return; }
     const result = saveBlock(data.store, settled, clock, newRoutineId);
     if (!result || !commitRoutines(data.repository, inDraftOrder(result.store, result.blockId, settled.itemIds, clock))) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    leaving.current = true;
     leave();
   };
 
@@ -126,17 +133,23 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     const order = view.blocks.map((block) => block.id);
     announce(rs('movedTo', { name: opened.name, place: order.indexOf(opened.blockId ?? '') + 1 + by, count: order.length }));
   };
+  /* Hiding closes the form, so unsaved edits are saved first and never dropped without a word. */
   const hide = () => {
+    if (leaving.current) return;
+    if (dirty) { setError(rs('saveFirst')); announce(rs('saveFirst')); return; }
     const next = hideBlock(data.store, opened.blockId, clock);
     if (!next || !commitRoutines(data.repository, next)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    leaving.current = true;
     leave();
   };
 
   /* The copy is made from what is saved, so unsaved edits are saved first and never dropped without a word. */
   const duplicate = () => {
+    if (leaving.current) return;
     if (dirty) { setError(rs('saveFirst')); announce(rs('saveFirst')); return; }
     const result = duplicateBlock(data.store, opened.blockId, clock, newRoutineId);
     if (!result || !commitRoutines(data.repository, result.store)) { setError(rs('notSaved')); announce(rs('notSaved')); return; }
+    leaving.current = true;
     announce(rs('duplicated'));
     leave();
   };
