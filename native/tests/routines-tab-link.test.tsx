@@ -169,6 +169,26 @@ describe('a link while Focus mode is on', () => {
     expect(block(SAMPLE.night)).toBeNull();
     expect(block(SAMPLE.morning)).toBeTruthy();
   });
+  test('nothing folds in Focus mode: a press on a header saves no fold and leaves the card open', async () => {
+    await openFocused();
+    expect(expanded(SAMPLE.morning)).toBe(true);
+    const rows = screen.getAllByTestId(/^routine-row-/).length;
+    expect(rows).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByTestId(`routine-fold-${SAMPLE.morning}`));
+    // What is read out is what is drawn: still open, with its rows.
+    expect(expanded(SAMPLE.morning)).toBe(true);
+    expect(screen.getAllByTestId(/^routine-row-/)).toHaveLength(rows);
+    expect(stored(repo).prefs.collapsedBlocks ?? []).toEqual([]);
+    // A routine a link brought in is open too, and putting it away leaves no fold behind for when Focus mode is off.
+    await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.night }); });
+    expect(expanded(SAMPLE.night)).toBe(true);
+    await fireEvent.press(screen.getByTestId(`routine-fold-${SAMPLE.morning}`));
+    expect(block(SAMPLE.night)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId(`routine-fold-${SAMPLE.night}`));
+    expect(block(SAMPLE.night)).toBeNull();
+    expect(expanded(SAMPLE.morning)).toBe(true);
+    expect(stored(repo).prefs.collapsedBlocks ?? []).toEqual([]);
+  });
   test('a link to the routine already in focus, or to one that is gone, changes nothing', async () => {
     await openFocused({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.morning });
     expect(block(SAMPLE.morning)).toBeTruthy();

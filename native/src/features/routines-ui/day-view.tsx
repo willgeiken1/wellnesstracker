@@ -210,10 +210,14 @@ export function DayView({ routines, now, jump = null, onLoggedAll }: { routines:
   const shown = focusShown(today, focus, focusId, sought);
   const foldedOf = (block: RoutineBlock) => (block.id === currentId || today.length === 1 ? collapsed.has(block.id) : !opened.includes(block.id));
   const fold = (block: RoutineBlock) => {
+    // In Focus mode nothing folds, so a press changes nothing that would show once Focus mode is off.
+    // The routine a link brought in is put away again from its header.
+    if (focus) {
+      if (block.id === sought && block.id !== focusId) { glide(); setSought(''); }
+      return;
+    }
     glide();
-    // In Focus mode nothing folds. The routine a link brought in is put away again from its header.
-    if (focus && block.id === sought && block.id !== focusId) setSought('');
-    else if (block.id === currentId || today.length === 1) routines.apply((current, clock) => toggleCollapsed(current, block.id, clock));
+    if (block.id === currentId || today.length === 1) routines.apply((current, clock) => toggleCollapsed(current, block.id, clock));
     else setOpened(list => (list.includes(block.id) ? list.filter(id => id !== block.id) : [...list, block.id]));
   };
   const change = (make: Parameters<Routines['apply']>[0]) => { glide(); if (routines.apply(make)) haptic(); };
