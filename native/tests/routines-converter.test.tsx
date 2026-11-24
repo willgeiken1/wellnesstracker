@@ -151,6 +151,9 @@ test('opened with no item, from the Peptides tab, it has no Save and Close dismi
   expect(screen.getByTestId('converter-amount-input').props.value).toBe('');
   expect(screen.queryByTestId('converter-save')).toBeNull();
   expect(screen.queryByTestId('converter-back')).toBeNull();
+  // With no item there is no Save line to say it, so the intro says it: arithmetic only, never an amount to take.
+  expect(screen.getByTestId('converter-intro').props.children).toMatch(/It does not suggest an amount\.$/);
+  expect(everyWord(screen.toJSON())).not.toMatch(/recommended|you should|suggested (dose|amount)|typical|usual dose/i);
   await press('converter-done');
   expect(router.back).toHaveBeenCalledTimes(1);
 });

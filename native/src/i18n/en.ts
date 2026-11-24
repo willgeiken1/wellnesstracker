@@ -1219,7 +1219,7 @@ export const routinesSheets = {
   removeItem: 'Remove from all routines', removeItemTitle: 'Remove from all routines?', removeItemBody: 'Its history stays.', remove: 'Remove',
 
   converter: 'Concentration converter',
-  converterIntro: 'Enter a vial amount, a water volume, and an amount to convert. The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen.',
+  converterIntro: 'Enter a vial amount, a water volume, and an amount to convert. The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen. It does not suggest an amount.',
   converterNeed: 'Enter a vial amount, a water volume, and an amount to convert.',
   converterMismatch: 'The vial unit and the amount unit are not the same, so there is no volume from what you entered.',
   amountEntered: 'Amount entered', vialAmount: 'Vial amount', vialUnit: 'Vial unit', changeVial: 'Change the vial amount',

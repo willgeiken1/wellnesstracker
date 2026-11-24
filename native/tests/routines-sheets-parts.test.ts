@@ -256,6 +256,7 @@ describe('copy and code guards for the sheets', () => {
     expect(rs('saveNote')).toBe('Save as note on this item');
     expect(rs('saveNoteHelp')).toBe('Saves the volume and U-100 units on this item. It does not log a dose, and it does not suggest an amount.');
     expect(rs('converterIntro')).toContain('The lines below are the arithmetic of what you entered, including U-100 units (mL × 100). What you type stays on this screen.');
+    expect(rs('converterIntro')).toContain('It does not suggest an amount.');
     expect(rs('errRoutine')).toBe('Add a name and both times.');
     expect(rs('errDays')).toBe('A routine runs at least one day.');
     expect(rs('setupIntro')).toBe('Your answers decide what this page starts with. You can add anything else later in Routines settings.');
