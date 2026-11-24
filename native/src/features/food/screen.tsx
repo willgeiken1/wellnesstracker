@@ -2,8 +2,9 @@ import { FoodAiEntry } from './ai/entry';
 import { AI_FEATURES_ENABLED } from '../ai-launch';
 import { FoodAiResults, FoodAiMorningReview, LocalMealThumbnail } from './ai/review';
 import { aiState, attachFallback, confirmEstimate } from './ai/service';
-import { useEffect, useState } from 'react';
-import { AppState, Pressable, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, View } from 'react-native';
+import { Tappable as Pressable } from '../../components/tappable';
 import { Icon, type IconName } from '../../components/icon';
 import { Card } from '../../components/card';
 import { useTheme } from '../../design/theme-provider';
@@ -42,7 +43,7 @@ function dayDate(day:string){
 }
 function Round({label,glyph,disabled=false,filled=false,onPress}:{label:string;glyph:IconName;disabled?:boolean;filled?:boolean;onPress:()=>void}) {
  const {colors}=useTheme();
- return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
+ return <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress}
   style={{width:touchTarget,height:touchTarget,alignItems:'center',justifyContent:'center',opacity:disabled?0.35:1}}>
   <View style={{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:filled?colors.accent:colors.surface}}>
    <Icon name={glyph} size={18} color={filled?colors['on-accent']:colors.text}/>
@@ -51,7 +52,7 @@ function Round({label,glyph,disabled=false,filled=false,onPress}:{label:string;g
 }
 function Pick({label,selected,onPress}:{label:string;selected:boolean;onPress:()=>void}) {
  const {colors}=useTheme();
- return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{selected}} onPress={onPress} style={{minHeight:touchTarget,justifyContent:'center'}}>
+ return <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={label} accessibilityState={{selected}} onPress={onPress} style={{minHeight:touchTarget,justifyContent:'center'}}>
   <View style={{minHeight:34,paddingHorizontal:14,borderRadius:99,justifyContent:'center',backgroundColor:selected?colors.accent:colors.surface}}>
    <ThemedText style={{fontSize:15,color:selected?colors['on-accent']:colors.text}}>{label}</ThemedText>
   </View>
@@ -60,7 +61,7 @@ function Pick({label,selected,onPress}:{label:string;selected:boolean;onPress:()
 /** A short visible word with the full sentence as its spoken label. */
 function Act({text,label,danger=false,disabled=false,onPress}:{text:string;label:string;danger?:boolean;disabled?:boolean;onPress:()=>void}) {
  const {colors}=useTheme();
- return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={{minHeight:touchTarget,justifyContent:'center',opacity:disabled?0.4:1}}>
+ return <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={{minHeight:touchTarget,justifyContent:'center',opacity:disabled?0.4:1}}>
   <View style={{minHeight:34,paddingHorizontal:14,borderRadius:99,justifyContent:'center',backgroundColor:colors['surface-2']}}>
    <ThemedText style={{fontSize:15,color:danger?colors.danger:colors.text}}>{text}</ThemedText>
   </View>
@@ -80,17 +81,21 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
  const [entry,setEntry]=useState<{initial?:Food;id?:string;meal:string}|null>(initialManual?{meal:mealList[0].id}:null),[library,setLibrary]=useState(false);
  const [rename,setRename]=useState<{id?:string;name:string}|null>(null),[combo,setCombo]=useState<{meal:string;name:string}|null>(null);
  const [undo,setUndo]=useState<Undo|null>(null),[status,setStatus]=useState<string|null>(null);
- useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>setUndo(null),8000);return ()=>clearTimeout(timer);},[undo]);
+ const glide=useLayoutMotion();
+ // The undo card folds away when its time is up, instead of the list jumping up.
+ // A field that is open stays put: the card just goes, so nothing slides under the finger.
+ const fieldOpen=useRef(false);
+ useEffect(()=>{fieldOpen.current=!!(entry||rename||combo);});
+ useEffect(()=>{if(!undo)return;const timer=setTimeout(()=>{if(!fieldOpen.current)glide();setUndo(null);},8000);return ()=>clearTimeout(timer);},[undo,glide]);
  const rows=repo.list('food_entries').filter(r=>r.data.day===day),total=totals(rows),targets=foodTargets(repo,day);
  const early=attributedDay()!==today();
  const chooseDay=(value:string)=>{setAiMode(null);setScanning(false);setDay(value);setCalendar(false);setEntry(null);setUndo(null);setStatus(null);};
  const run=(action:()=>void)=>{try{action();setStatus(null);}catch{setStatus(t('foodFailure'));}};
- const glide=useLayoutMotion();
  // Changes that add or remove rows glide to the new list instead of jumping.
  const move=(action:()=>void)=>{glide();run(action);};
  const {colors}=useTheme(),foodColor=colors.food;
  const [openEntry,setOpenEntry]=useState<string|null>(null),[mealMenu,setMealMenu]=useState<string|null>(null);
- const choose=(method:Method)=>{setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else{setLibrary(!library);setEntry(null);}};
+ const choose=(method:Method)=>{if(fan)glide();setFan(false);setAiMode(null);setScanning(false);if(method==='foodScan'){setScanning(true);setEntry(null);setLibrary(false);}else if(method==='foodSnap'||method==='foodDescribe'){setAiMode(method==='foodSnap'?'snap':'describe');setEntry(null);setLibrary(false);}else if(method==='foodManual'){setEntry({meal:selectedMeal});setLibrary(false);}else{setLibrary(!library);setEntry(null);}};
  const log=(food:Food)=>run(()=>{saveFood(repo,day,selectedMeal,food);setLibrary(false);});
  return <View style={{gap:tokens.spacing[3]}}>
   <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
@@ -108,8 +113,8 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
    <ThemedText muted variant="caption">{t('foodBurned')}</ThemedText>
   </Card>
   <View style={{flexDirection:'row',gap:6}} testID="food-log-row">
-   {METHODS.map(method=><Pressable key={method} accessibilityRole="button" accessibilityLabel={t(method)} onPress={()=>choose(method)}
-    style={({pressed})=>({flex:1,minHeight:64,borderRadius:14,alignItems:'center',justifyContent:'center',gap:4,backgroundColor:colors.surface,opacity:pressed?0.7:1})}>
+   {METHODS.map(method=><Pressable key={method} dim="fill" accessibilityRole="button" accessibilityLabel={t(method)} onPress={()=>choose(method)}
+    style={{flex:1,minHeight:64,borderRadius:14,alignItems:'center',justifyContent:'center',gap:4,backgroundColor:colors.surface}}>
     <Icon name={METHOD_ICON[method]} size={22} color={foodColor}/>
     <ThemedText variant="caption" numberOfLines={1}>{t(method)}</ThemedText>
    </Pressable>)}
@@ -119,10 +124,10 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
   <View style={{gap:tokens.spacing[0]}}>
    <View style={{flexDirection:'row',alignItems:'center'}}>
     <ThemedText muted variant="caption" style={{flex:1}}>{t('foodChooseMeal')}</ThemedText>
-    <Round label={t('foodFan')} glyph={fan?'minus':'plus'} filled onPress={()=>setFan(!fan)}/>
+    <Round label={t('foodFan')} glyph={fan?'minus':'plus'} filled onPress={()=>{glide();setFan(!fan);}}/>
    </View>
    <View style={{flexDirection:'row',flexWrap:'wrap',columnGap:6}}>{mealList.map(meal=><Pick key={meal.id} label={meal.name} selected={selectedMeal===meal.id} onPress={()=>{setSelectedMeal(meal.id);if(entry)setEntry({...entry,meal:meal.id});}}/>)}</View>
-   {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
+   {fan&&<View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{METHODS.map(method=><Button key={method} label={'+ '+t(method)} variant="secondary" onPress={()=>{if(method==='foodSaved'){glide();setFan(false);setAiMode(null);setScanning(false);setLibrary(true);}else choose(method);}}/>)}</View>}
   </View>
   {status&&<ThemedText accessibilityLiveRegion="polite">{status}</ThemedText>}
   {undo&&<Card style={card}><ThemedText accessibilityLiveRegion="polite">{t('foodDeleted')}</ThemedText><Button label={t('foodUndo')} onPress={()=>move(()=>{if(!undoFood(repo,undo)){setUndo(null);throw new Error();}setUndo(null);})}/></Card>}
@@ -145,7 +150,7 @@ export function FoodScreen({repository,initialManual=false}:{repository:Reposito
     <View style={{flexDirection:'row',alignItems:'center',gap:tokens.spacing[1]}}>
      <ThemedText variant="headline" style={{flex:1,fontWeight:'600'}}>{meal.name}</ThemedText>
      {!!items.length&&<ThemedText muted numeric variant="caption">{known.length?t('foodEnergy').replace('{value}',sum.toLocaleString('en-US')):t('foodEnergyUnknown')}</ThemedText>}
-     <Pressable accessibilityRole="button" accessibilityLabel={t('foodMealOptions').replace('{name}',meal.name)} accessibilityState={{expanded:menu}} onPress={()=>setMealMenu(menu?null:meal.id)}
+     <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={t('foodMealOptions').replace('{name}',meal.name)} accessibilityState={{expanded:menu}} onPress={()=>{glide();setMealMenu(menu?null:meal.id);}}
       style={{width:touchTarget,height:touchTarget,alignItems:'center',justifyContent:'center',marginVertical:-6,marginRight:-6}}>
       <View style={{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors['surface-2']}}>
        <Icon name="more" size={18} color={colors['text-muted']}/>

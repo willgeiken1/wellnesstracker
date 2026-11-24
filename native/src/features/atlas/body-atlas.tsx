@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, View, Pressable } from 'react-native';
+import { AccessibilityInfo, View } from 'react-native';
+import { Tappable } from '@/components/tappable';
 import Svg, { G, Path } from 'react-native-svg';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import { router } from 'expo-router';
@@ -108,12 +109,12 @@ export function BodyAtlas({ sessions, now, compact = false, haptics = true }: {
    </Svg>
   </View>}
   <ThemedText muted>{t('atlasLegend')}</ThemedText>
-  {list && values.map(value=><Pressable key={value.key} testID={`atlas-row-${value.key}`}
+  {list && values.map(value=><Tappable key={value.key} testID={`atlas-row-${value.key}`}
    accessibilityRole="button" accessibilityLabel={atlasLabel(value,now)} accessibilityState={{selected:selected===value.key}}
    onPress={()=>select(value.key)} style={{minHeight:48,padding:12,borderRadius:12,backgroundColor:colors.surface,borderWidth:selected===value.key?2:0,borderColor:colors.text}}>
     <View style={{flexDirection:'row',gap:8}}><View style={{width:12,height:12,marginTop:5,backgroundColor:heatFill(value,mode==='dark')}}/><ThemedText>{muscleByKey.get(value.key)!.name}</ThemedText></View>
     <ThemedText muted>{atlasValue(value,now)}</ThemedText>
-   </Pressable>)}
+   </Tappable>)}
   {current && <Card>
    <ThemedText accessibilityRole="header">{muscleByKey.get(current.key)!.name}</ThemedText>
    <ThemedText>{muscleByKey.get(current.key)!.scientific}</ThemedText>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { AccessibilityInfo, ScrollView, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLayoutMotion } from '@/components/layout-motion';
 import { useSelectionHaptic } from '@/components/selection-haptic';
 import { Tappable } from '@/components/tappable';
 import { ThemedText } from '@/components/themed-text';
@@ -42,7 +43,7 @@ function Field({ label, value, onChange, numeric = false, multiline = false, tes
 /** A step button under the amount: a quarter up or down. */
 function Step({ label, onPress, testID }: { label: string; onPress: () => void; testID: string }) {
   const { colors } = useTheme();
-  return <Tappable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+  return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
     style={{ flex: 1, minHeight: 44, borderRadius: 22, paddingHorizontal: tokens.spacing[2], alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
     <ThemedText variant="caption" style={[semibold, { textAlign: 'center' }]}>{label}</ThemedText>
   </Tappable>;
@@ -105,7 +106,7 @@ function LogForm({ routines, opened, dose, sites }: { routines: Routines; opened
       <View accessibilityRole="radiogroup" accessibilityLabel={routinesText('site')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
         {[{ id: '', label: routinesText('noSite') }, ...ROUTINE_SITES].map((site) => {
           const on = draft.site === site.id;
-          return <Tappable key={site.id || 'none'} testID={`log-site-${site.id || 'none'}`} accessibilityRole="radio" accessibilityLabel={site.label} accessibilityState={{ checked: on }}
+          return <Tappable dim="fill" key={site.id || 'none'} testID={`log-site-${site.id || 'none'}`} accessibilityRole="radio" accessibilityLabel={site.label} accessibilityState={{ checked: on }}
             onPress={() => pickSite(site.id)}
             style={{ flexGrow: 1, flexBasis: site.id ? '45%' : '100%', minHeight: 48, borderRadius: 14, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[0], justifyContent: 'center',
               backgroundColor: on ? colors.accent : colors['surface-2'] }}>
@@ -157,7 +158,7 @@ function ItemHistory({ logs, openId, onOpen }: { logs: readonly RoutineLog[]; op
 export function ItemDetails({ itemId, logId }: { itemId: string; logId?: string }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const haptic = useSelectionHaptic();
+  const haptic = useSelectionHaptic(), glide = useLayoutMotion();
   const routines = useRoutines(), now = useMinuteClock();
   const { view, store } = routines, today = routines.dayOf(now);
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -185,6 +186,8 @@ export function ItemDetails({ itemId, logId }: { itemId: string; logId?: string 
     else if (seen.current && !opened) { seen.current = false; router.back(); }
   }, [item, opened]);
   const act = (change: Parameters<Routines['apply']>[0], said: string) => {
+    // Logging, skipping and undoing swap the buttons for the log's form or back, so the sheet glides to its new shape.
+    glide();
     if (!routines.apply(change)) { setRefused(true); return; }
     setRefused(false); haptic();
     AccessibilityInfo.announceForAccessibility(said);

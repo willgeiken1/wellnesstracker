@@ -4,7 +4,8 @@ import { useAuth } from '../src/auth/provider';
 import { ThemeProvider } from '../src/design/theme-provider';
 import Routines from '../src/app/(tabs)/routines';
 import { ROUTINES_DAY_VIEW, routineRoutes } from '../src/features/routines-ui/entry-points';
-import { SAMPLE, SAMPLE_NOW, seededRepository } from './routines-repository';
+import type { Repository } from '../src/data/repository';
+import { SAMPLE, SAMPLE_NOW, seededRepository, stored } from './routines-repository';
 
 /* A Home tile opens the Routines tab on the tab that holds its item. Made-up routines only. */
 
@@ -116,5 +117,64 @@ describe('a link that names a routine or an item', () => {
     await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, blockId: 'gone', itemId: 'gone' }); });
     expect(expanded(SAMPLE.night)).toBe(false);
     expect(expanded(SAMPLE.morning)).toBe(true);
+  });
+});
+
+/* Focus mode at eight in the morning shows Morning alone. A Home tile can still point at Night. */
+describe('a link while Focus mode is on', () => {
+  const block = (id: string) => screen.queryByTestId(`routine-block-${id}`);
+  let repo: Repository;
+  function openFocused(params: Params = {}) {
+    mockParams = params;
+    repo = seededRepository(store => { store.prefs.focusMode = true; });
+    jest.mocked(useAuth).mockReturnValue({ repository: repo } as ReturnType<typeof useAuth>);
+    return render(<ThemeProvider><Routines /></ThemeProvider>);
+  }
+  test('shows the routine it names beside the one in focus, and leaves Focus mode on', async () => {
+    await openFocused();
+    expect(block(SAMPLE.morning)).toBeTruthy();
+    expect(block(SAMPLE.night)).toBeNull();
+    await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.night }); });
+    expect(block(SAMPLE.morning)).toBeTruthy();
+    expect(block(SAMPLE.night)).toBeTruthy();
+    expect(expanded(SAMPLE.night)).toBe(true);
+    expect(screen.getByTestId(`routine-row-${SAMPLE.wind}`)).toBeTruthy();
+    expect(screen.queryByTestId('routine-focus-done')).toBeNull();
+    expect(stored(repo).prefs.focusMode).toBe(true);
+  });
+  test('shows the routine that holds the item it names, as the tab first draws', async () => {
+    await openFocused({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.night, itemId: SAMPLE.wind });
+    expect(screen.getByTestId(`routine-row-${SAMPLE.wind}`)).toBeTruthy();
+    expect(block(SAMPLE.morning)).toBeTruthy();
+    expect(stored(repo).prefs.focusMode).toBe(true);
+  });
+  test('finds the routine from the item alone', async () => {
+    await openFocused();
+    await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, itemId: SAMPLE.wind }); });
+    expect(screen.getByTestId(`routine-row-${SAMPLE.wind}`)).toBeTruthy();
+    expect(stored(repo).prefs.focusMode).toBe(true);
+  });
+  test('the routine it brought in is put away from its header, comes back with the link, and goes when a tab is picked by hand', async () => {
+    await openFocused();
+    await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.night }); });
+    await fireEvent.press(screen.getByTestId(`routine-fold-${SAMPLE.night}`));
+    expect(block(SAMPLE.night)).toBeNull();
+    expect(block(SAMPLE.morning)).toBeTruthy();
+    // Putting it away is not a fold: nothing about the routine is saved.
+    expect(stored(repo).prefs.collapsedBlocks ?? []).toEqual([]);
+    await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.night }); });
+    expect(block(SAMPLE.night)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Peptides' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Routines' }));
+    expect(block(SAMPLE.night)).toBeNull();
+    expect(block(SAMPLE.morning)).toBeTruthy();
+  });
+  test('a link to the routine already in focus, or to one that is gone, changes nothing', async () => {
+    await openFocused({ view: ROUTINES_DAY_VIEW, blockId: SAMPLE.morning });
+    expect(block(SAMPLE.morning)).toBeTruthy();
+    expect(block(SAMPLE.night)).toBeNull();
+    await act(() => { mockSetParams({ view: ROUTINES_DAY_VIEW, blockId: 'gone', itemId: 'gone' }); });
+    expect(block(SAMPLE.morning)).toBeTruthy();
+    expect(block(SAMPLE.night)).toBeNull();
   });
 });

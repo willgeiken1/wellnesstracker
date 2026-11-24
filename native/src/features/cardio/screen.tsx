@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PRESSED_FILL_OPACITY } from '@/components/tappable';
+import { useSelectionHaptic } from '@/components/selection-haptic';
 import { Alert, Pressable, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Card } from '../../components/card';
@@ -48,6 +50,7 @@ export function Cardio({ repository, health }: { repository: Repository; health?
   const store = useMemo(() => new CardioStore(facade.repo, facade.viewRevision), [facade]);
   const live = store.live();
   const { colors } = useTheme();
+  const haptic = useSelectionHaptic();
   const [machine, setMachine] = useState<Machine>(live?.machine ?? 'treadmill');
   const initial = live?.segments.at(-1)?.settings ?? machineDefaults(machine);
   const metric = repository.list('profile')[0]?.data.weight_unit === 'kg';
@@ -95,7 +98,7 @@ export function Cardio({ repository, health }: { repository: Repository; health?
     {error && <Trouble text={t(error)} />}
     <SectionTitle>{t(live ? 'cardioNow' : 'cardioChoose')}</SectionTitle>
     <Card testID="cardio-session" style={[card, { gap: tokens.spacing[2] }]}>
-      {!live && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>{machines.map(value => { const on = machine === value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={machineName(value)} accessibilityState={{ selected: on }} onPress={() => { setMachine(value); fillSettings(machineDefaults(value)); }} style={({ pressed }) => ({ flexGrow: 1, flexBasis: '45%', minHeight: 76, padding: 12, gap: 6, borderRadius: 14, backgroundColor: colors['surface-2'], borderWidth: 2, borderColor: on ? colors.accent : colors['surface-2'], opacity: pressed ? 0.7 : 1 })}><MachineIcon machine={value} color={on ? colors.accent : undefined} /><ThemedText style={on ? semibold : undefined}>{machineName(value)}</ThemedText></Pressable>; })}</View>}
+      {!live && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>{machines.map(value => { const on = machine === value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={machineName(value)} accessibilityState={{ selected: on }} onPress={() => { if (!on) haptic(); setMachine(value); fillSettings(machineDefaults(value)); }} style={({ pressed }) => ({ flexGrow: 1, flexBasis: '45%', minHeight: 76, padding: 12, gap: 6, borderRadius: 14, backgroundColor: colors['surface-2'], borderWidth: 2, borderColor: on ? colors.accent : colors['surface-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}><MachineIcon machine={value} color={on ? colors.accent : undefined} /><ThemedText style={on ? semibold : undefined}>{machineName(value)}</ThemedText></Pressable>; })}</View>}
       {live && <View style={{ alignItems: 'center', gap: 2 }}>
         <View style={[layout.row, { gap: tokens.spacing[1] }]}><MachineIcon machine={live.machine} /><ThemedText variant="headline" style={semibold}>{machineName(live.machine)}</ThemedText></View>
         <ThemedText accessibilityLabel={t('cardioElapsed')} variant="headline" style={{ fontSize: 48, lineHeight: 56, fontVariant: ['tabular-nums'] }}>{clock(elapsedMs(live, now) / 1000)}</ThemedText>

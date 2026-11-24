@@ -1,5 +1,6 @@
-import { logItem, logRest, saveItem, skipItem, undoLog } from '../src/features/routines/model/actions';
+import { logItem, logRest, saveItem, setDayRollover, skipItem, undoLog } from '../src/features/routines/model/actions';
 import { loggedAmountText } from '../src/features/routines/model/day';
+import { routineDayKey } from '../src/features/routines/model/dose';
 import {
   compoundDoseHistory, editLog, formatHistoryDay, historyStatus, latestLogId, LOG_DETAILS_REFUSED, LOG_EDIT_REFUSED, LOG_TIME_HINT, LOG_UNIT_HINT, LOGGED_AMOUNTS_HINT, logDraft, logTimeEditable,
   SAME_SITE_HINT, SAME_SITE_WARNING, sameSiteWarning, SITE_OPTIONAL_HINT,
@@ -189,6 +190,86 @@ describe('a note and an injection site', () => {
     expect(LOG_UNIT_HINT).toBe('This is the unit already on the log.');
     expect(LOGGED_AMOUNTS_HINT).toBe('Logged amounts. Changing the item amount does not change them.');
     expect(LOG_TIME_HINT).toBe('Shown when the day is before today. Leave it blank to keep the logged time.');
+  });
+});
+
+describe('a log\'s time around the hour a new day starts', () => {
+  /* A dose taken at 02:30:17 on the calendar morning of Nov 21. With the day starting at 04:00 it belongs to
+     routine day Nov 20. It is edited two routine days later. */
+  const TAKEN = new Date(2026, 10, 21, 2, 30, 17).getTime();
+  const LATER = new Date(2026, 10, 22, 9, 0).getTime();
+  const late = (now = LATER) => ({ now, day: '2026-11-22' });
+  const local = (month: number, date: number, hour: number, minute: number) => new Date(2026, month - 1, date, hour, minute).getTime();
+  function lateLog(hour = 4, taken = TAKEN) {
+    const newId = ids();
+    const dose = must(saveItem(seeded(), { name: 'Example Compound A', kind: 'dose', amount: '250', unit: 'mcg', blockIds: ['b-morning'] }, clock(10), newId));
+    const set = hour === 4 ? dose.store : must(setDayRollover(dose.store, hour, clock(20)));
+    const day = routineDayKey(new Date(taken), hour);
+    const store = must(logItem(set, dose.itemId, { now: taken, day }));
+    return { store, doseId: dose.itemId, logId: routineLogId(dose.itemId, day), day };
+  }
+  const atOf = (store: RoutineStore, doseId: string) => live(store, doseId)[0].at;
+
+  test('saving a note on a dose logged before the rollover hour leaves its day and its moment alone', () => {
+    const { store, doseId, logId, day } = lateLog();
+    expect(day).toBe('2026-11-20');
+    const draft = must(logDraft(store, logId, '2026-11-22'));
+    expect(draft).toMatchObject({ day: '2026-11-20', time: '02:30' });
+    // The sheet sends the day and the time it opened with, and only the note is new.
+    const saved = must(editLog(store, logId, { amount: draft.amount, day: draft.day, time: draft.time, note: LOG_NOTE }, late()));
+    expect(saved.logId).toBe(logId);
+    expect(live(saved.store, doseId)[0]).toMatchObject({ day: '2026-11-20', at: TAKEN, note: LOG_NOTE });
+    expect(routineDayKey(new Date(atOf(saved.store, doseId)), 4)).toBe('2026-11-20');
+    // The same time written another way is still the same time.
+    expect(atOf(must(editLog(store, logId, { amount: '250', day: '2026-11-20', time: ' 2:30 ' }, late())).store, doseId)).toBe(TAKEN);
+    // Saved twice, it still has not moved.
+    expect(atOf(must(editLog(saved.store, logId, { amount: '250', day: '2026-11-20', time: '02:30', site: 'left-thigh' }, late(LATER + 1000))).store, doseId)).toBe(TAKEN);
+  });
+
+  test('a new time on the same routine day lands on the right calendar day either side of the rollover hour', () => {
+    const { store, doseId, logId } = lateLog();
+    const edit = (time: string) => atOf(must(editLog(store, logId, { amount: '250', day: '2026-11-20', time }, late())).store, doseId);
+    expect(edit('02:31')).toBe(local(11, 21, 2, 31));
+    expect(edit('00:00')).toBe(local(11, 21, 0, 0));
+    expect(edit('03:59')).toBe(local(11, 21, 3, 59));
+    expect(edit('04:00')).toBe(local(11, 20, 4, 0));
+    expect(edit('23:59')).toBe(local(11, 20, 23, 59));
+    for (const time of ['00:00', '02:31', '03:59', '04:00', '12:00', '23:59']) expect([time, routineDayKey(new Date(edit(time)), 4)]).toEqual([time, '2026-11-20']);
+  });
+
+  test('moved to another day with its time untouched, it keeps that time on the new routine day', () => {
+    const { store, doseId, logId } = lateLog();
+    const moved = must(editLog(store, logId, { amount: '250', day: '2026-11-19', time: '02:30' }, late()));
+    expect(moved.logId).toBe(routineLogId(doseId, '2026-11-19'));
+    expect(live(moved.store, doseId)).toEqual([expect.objectContaining({ day: '2026-11-19', at: local(11, 20, 2, 30) })]);
+    expect(logDraft(moved.store, moved.logId, '2026-11-22')).toMatchObject({ day: '2026-11-19', time: '02:30' });
+    // Yesterday is the latest day a time can be typed for, and a time before the rollover hour is this calendar morning.
+    const yesterday = must(editLog(store, logId, { amount: '250', day: '2026-11-21', time: '03:10' }, late()));
+    expect(atOf(yesterday.store, doseId)).toBe(local(11, 22, 3, 10));
+    expect(atOf(yesterday.store, doseId)).toBeLessThan(LATER);
+  });
+
+  test('the hour the person chose is the one that decides, from midnight to 06:00', () => {
+    // Midnight: nothing is before the rollover hour, so every time stays on its own calendar day.
+    const midnight = lateLog(0, local(11, 20, 0, 0));
+    expect(midnight.day).toBe('2026-11-20');
+    const atMidnight = (time: string) => atOf(must(editLog(midnight.store, midnight.logId, { amount: '250', day: '2026-11-20', time }, late())).store, midnight.doseId);
+    expect(atMidnight('00:01')).toBe(local(11, 20, 0, 1));
+    expect(atMidnight('23:59')).toBe(local(11, 20, 23, 59));
+    // 06:00: 05:59 still belongs to the day before.
+    const six = lateLog(6, local(11, 21, 5, 59));
+    expect(six.day).toBe('2026-11-20');
+    const atSix = (time: string) => atOf(must(editLog(six.store, six.logId, { amount: '250', day: '2026-11-20', time }, late())).store, six.doseId);
+    expect(atSix('05:59')).toBe(local(11, 21, 5, 59));
+    expect(atSix('05:58')).toBe(local(11, 21, 5, 58));
+    expect(atSix('06:00')).toBe(local(11, 20, 6, 0));
+    expect(routineDayKey(new Date(atSix('05:58')), 6)).toBe('2026-11-20');
+  });
+
+  test('a dose logged under an earlier rollover hour is not moved by a later setting', () => {
+    const { store, doseId, logId } = lateLog();
+    const reset = must(setDayRollover(store, 0, late(LATER - 1000)));
+    expect(atOf(must(editLog(reset, logId, { amount: '250', day: '2026-11-20', time: '02:30', note: LOG_NOTE }, late())).store, doseId)).toBe(TAKEN);
   });
 });
 

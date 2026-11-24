@@ -36,7 +36,7 @@ function TimeField({ testID, label, minutes, typing, onTyping: setTyping, onMinu
     if (typed != null) onMinutes(typed);
   };
   const stepButton = (by: number) => (
-    <Tappable testID={`${testID}-${by < 0 ? 'earlier' : 'later'}`} accessibilityRole="button" accessibilityLabel={`${label}, ${by < 0 ? rs('earlier') : rs('later')}`} onPress={() => { setTyping(null); onMinutes(stepClock(settledMinutes(typing, minutes), by)); }}
+    <Tappable dim="fill" testID={`${testID}-${by < 0 ? 'earlier' : 'later'}`} accessibilityRole="button" accessibilityLabel={`${label}, ${by < 0 ? rs('earlier') : rs('later')}`} onPress={() => { setTyping(null); onMinutes(stepClock(settledMinutes(typing, minutes), by)); }}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
       <Glyph name={by < 0 ? 'minus' : 'add'} size={20} color={colors.text} />
     </Tappable>
@@ -102,7 +102,8 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     if (from < 0 || to < 0 || to >= draft.itemIds.length) return;
     const itemIds = draft.itemIds.slice();
     itemIds.splice(to, 0, ...itemIds.splice(from, 1));
-    glide(); tick(); change({ itemIds });
+    // A move is not a choice, so it glides and stays quiet, like the routine moves beside it.
+    glide(); change({ itemIds });
     announce(rs('itemPlace', { name: view.items.find((item) => item.id === itemId)?.name ?? '', place: to + 1, count: itemIds.length }));
   };
 
@@ -158,7 +159,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
   const place = view.blocks.findIndex((block) => block.id === opened.blockId) + 1;
   const letters = routineDayLetters();
   const moveButton = (by: -1 | 1, allowed: boolean) => (
-    <Tappable testID={by < 0 ? 'routine-move-up' : 'routine-move-down'} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: opened.name })}
+    <Tappable dim="fill" testID={by < 0 ? 'routine-move-up' : 'routine-move-down'} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: opened.name })}
       accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => move(by)}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: allowed ? 1 : 0.35 }}>
       <Glyph name={by < 0 ? 'up' : 'down'} size={20} color={colors.text} />
@@ -184,7 +185,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[0], justifyContent: 'space-between' }}>
         {letters.map((letter, index) => {
           const on = draft.days.includes(index);
-          return <Tappable key={DAY_NAMES[index]} testID={`routine-day-${index}`} accessibilityRole="checkbox" accessibilityLabel={rs(DAY_NAMES[index])} accessibilityState={{ checked: on }} onPress={() => toggleDay(index)}
+          return <Tappable dim="fill" key={DAY_NAMES[index]} testID={`routine-day-${index}`} accessibilityRole="checkbox" accessibilityLabel={rs(DAY_NAMES[index])} accessibilityState={{ checked: on }} onPress={() => toggleDay(index)}
             style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 0 : 1.5, borderColor: colors['hair-2'], backgroundColor: on ? colors.text : 'transparent' }}>
             <ThemedText style={{ fontWeight: '600', color: on ? colors.bg : colors['text-muted'] }}>{letter}</ThemedText>
           </Tappable>;
@@ -197,7 +198,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
       <View accessibilityRole="radiogroup" accessibilityLabel={rs('color')} style={{ flexDirection: 'row', gap: tokens.spacing[1] }}>
         {ROUTINE_BLOCK_COLORS.map((color) => {
           const on = draft.color === color;
-          return <Tappable key={color} testID={`routine-color-${color}`} accessibilityRole="radio" accessibilityLabel={rs('colorLabel', { name: rs(COLOR_NAMES[color]) })} accessibilityState={{ checked: on }}
+          return <Tappable dim="fill" key={color} testID={`routine-color-${color}`} accessibilityRole="radio" accessibilityLabel={rs('colorLabel', { name: rs(COLOR_NAMES[color]) })} accessibilityState={{ checked: on }}
             onPress={() => { if (!on) { tick(); change({ color }); } }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
             <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: on ? colors.text : 'transparent' }}>
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: slotColor(colors, color) }} />
@@ -237,7 +238,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
       {adding && (outside.length
         ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
           {outside.map((item) => (
-            <Tappable key={item.id} testID={`routine-add-${item.id}`} accessibilityRole="button" accessibilityLabel={rs('itemAdd', { name: item.name })} onPress={() => toggleItem(item.id)}
+            <Tappable dim="fill" key={item.id} testID={`routine-add-${item.id}`} accessibilityRole="button" accessibilityLabel={rs('itemAdd', { name: item.name })} onPress={() => toggleItem(item.id)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[0], minHeight: 44, borderRadius: 22, paddingHorizontal: tokens.spacing[2], borderWidth: 1.5, borderColor: colors['hair-2'] }}>
               <Glyph name="add" size={14} color={colors['text-muted']} />
               <ThemedText variant="caption" style={{ fontWeight: '600', flexShrink: 1 }}>{item.name}</ThemedText>

@@ -15,6 +15,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "@/components/icon";
 import { ICON_STROKE } from "@/components/icon-data";
 import { useTheme } from "@/design/theme-provider";
+import { Tappable } from "@/components/tappable";
 import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
 import { touchTarget, Button } from "@/components/button";
@@ -160,14 +161,14 @@ export function IconButton({
 }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Tappable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
       style={layout.cell}
     >
       <Line name={name} size={name === "more" ? 24 : 20} color={colors["text-muted"]} />
-    </Pressable>
+    </Tappable>
   );
 }
 // The logger owns one native presenter: switching sheets never races two iOS modals.
@@ -404,7 +405,8 @@ export function Pill({
 }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Tappable
+      dim="fill"
       testID={testID}
       hitSlop={compact ? 6 : undefined}
       accessibilityRole="button"
@@ -429,7 +431,7 @@ export function Pill({
       >
         {label}
       </ThemedText>
-    </Pressable>
+    </Tappable>
   );
 }
 /** A small rounded action inside a card, with a full-height touch area around a short pill. */
@@ -446,12 +448,13 @@ export function Chip({
 }) {
   const { colors } = useTheme();
   return (
-    <Pressable
+    <Tappable
+      dim="fill"
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
+      style={{ minHeight: touchTarget, justifyContent: "center" }}
     >
       <View
         style={{
@@ -464,6 +467,6 @@ export function Chip({
       >
         <ThemedText style={{ fontSize: 15 }}>{label}</ThemedText>
       </View>
-    </Pressable>
+    </Tappable>
   );
 }

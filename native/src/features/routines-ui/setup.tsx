@@ -55,7 +55,8 @@ function SetupForm({ data, view, mode }: { data: RoutinesData; view: RoutineView
   const pick = (value: string) => {
     const result = pickSetupAnswer(draft, question.id, value);
     if (!result) return;
-    tick();
+    // Tapping the answer already chosen moves on without a tick: nothing was chosen anew.
+    if (question.multi || draft.answers[question.id] !== value) tick();
     /* A single answer moves to the next question. The last answer stays put and waits for Finish, so the sheet never closes on a tap that only chose something. */
     setDraft(result.draft);
   };
@@ -84,7 +85,7 @@ function SetupForm({ data, view, mode }: { data: RoutinesData; view: RoutineView
     <View accessibilityRole={question.multi ? undefined : 'radiogroup'} accessibilityLabel={question.title} style={{ gap: tokens.spacing[1] }}>
       {setupChoices(question.id, draft.answers).map((choice) => {
         const on = Array.isArray(answer) ? answer.includes(choice.value) : answer === choice.value;
-        return <Tappable key={choice.value} testID={`setup-choice-${choice.value}`} accessibilityRole={question.multi ? 'checkbox' : 'radio'} accessibilityLabel={choice.label} accessibilityState={{ checked: on }}
+        return <Tappable dim="fill" key={choice.value} testID={`setup-choice-${choice.value}`} accessibilityRole={question.multi ? 'checkbox' : 'radio'} accessibilityLabel={choice.label} accessibilityState={{ checked: on }}
           onPress={() => pick(choice.value)}
           style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2], minHeight: 56, borderRadius: 18, paddingHorizontal: tokens.spacing[3], paddingVertical: tokens.spacing[1],
             backgroundColor: colors.surface, borderWidth: 2, borderColor: on ? colors.accent : colors.surface }}>

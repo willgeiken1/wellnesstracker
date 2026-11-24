@@ -1,6 +1,7 @@
 import { readableOn } from '@/core/contrast';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { Tappable as Pressable } from '@/components/tappable';
 import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Button } from '@/components/button';
@@ -90,8 +91,8 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
         <View style={{ width: 54, height: 44 }}><Print data={routinePrint(store, next, lastOf(next.id))} width={54} height={44} /></View>
       </View>
       <ThemedText muted variant="caption" style={{ lineHeight: 20 }}>{store.templateExercises(next.id).map(e => String(e.data.exercise)).join(' · ')}</ThemedText>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('upNextStart').replace('{name}', String(next.data.name))} onPress={() => run(() => startRoutine(store, next.id))}
-        style={({ pressed }) => ({ marginTop: tokens.spacing[1], minHeight: 48, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: training, opacity: pressed ? 0.8 : 1 })}>
+      <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={t('upNextStart').replace('{name}', String(next.data.name))} onPress={() => run(() => startRoutine(store, next.id))}
+        style={{ marginTop: tokens.spacing[1], minHeight: 48, borderRadius: tokens.radii.card, alignItems: 'center', justifyContent: 'center', backgroundColor: training }}>
         <ThemedText testID="start-routine-label" style={[semibold, { color: readableOn(training, [colors['on-accent'], colors.text]) }]}>{t('startTemplate').replace('{name}', String(next.data.name))}</ThemedText>
       </Pressable>
     </Card>}
@@ -145,8 +146,8 @@ function RowLink({ label, onPress, last }: { label: string; onPress: () => void;
 function LatestPrint({ store, session }: { store: WorkoutStore; session: Row }) {
   const print = sessionPrint(store, session), unit = store.unit(), name = String(session.data.name ?? t('workoutName'));
   const volume = `${whole(fromKg(print.totalKg, unit))} ${unit}`;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${t('latestPrint')}: ${name}, ${dayLabel(session.data.day)}, ${volume}`}
-    onPress={() => router.push({ pathname: '/workout/summary', params: { id: session.id } })} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+  return <Pressable dim="fill" accessibilityRole="button" accessibilityLabel={`${t('latestPrint')}: ${name}, ${dayLabel(session.data.day)}, ${volume}`}
+    onPress={() => router.push({ pathname: '/workout/summary', params: { id: session.id } })}>
     <Card style={[card, { gap: tokens.spacing[1] }]} testID="workouts-latest-print">
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>

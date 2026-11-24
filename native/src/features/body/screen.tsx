@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { Tappable as Pressable } from '@/components/tappable';
+import { useSelectionHaptic } from '@/components/selection-haptic';
 import { Button, touchTarget } from '../../components/button';
 import { SegmentedControl } from '../../components/segmented-control';
 import { ThemedText } from '../../components/themed-text';
@@ -20,7 +21,7 @@ import { BodyChart } from './chart';
 import { WeightEntry } from './entry';
 import { deleteWeighIn, dailyWeights, friendlyDay, inRange, lastWeight, saveWeighIn, trendWeights, weeklyChange, type BodyRange } from './model';
 export function Body({repository}:{repository:Repository}) {
-  const facade=useWorkoutStore(repository),{colors,selectorLook}=useTheme();
+  const facade=useWorkoutStore(repository),{colors,selectorLook}=useTheme(),haptic=useSelectionHaptic();
   const repo=facade.repo,unit=readProfile(repo).unit;
   // Once Apple Health is connected, opening Body quietly picks up new readings. It never prompts from here.
   useEffect(()=>{let live=true;void refreshWeights(repo,appleHealth(),new Date(),()=>live).catch(()=>{});return()=>{live=false;};},[repo]);
@@ -53,7 +54,7 @@ export function Body({repository}:{repository:Repository}) {
       {selectorLook==='pills'?<SegmentedControl label={t('bodyRanges')} value={String(range)} onChange={value=>setRange(Number(value) as BodyRange)}
         options={([7,30,90,365] as const).map(n=>({value:String(n),label:t(`bodyRange${n}`)}))}/>:
       <View testID="body-ranges" accessibilityRole="tablist" accessibilityLabel={t('bodyRanges')} style={{flexDirection:'row',gap:tokens.spacing[0]}}>
-        {([7,30,90,365] as const).map(n=>{const on=n===range;return <Pressable key={n} accessibilityRole="tab" accessibilityLabel={t(`bodyRange${n}`)} accessibilityState={{selected:on}} onPress={()=>setRange(n)}
+        {([7,30,90,365] as const).map(n=>{const on=n===range;return <Pressable key={n} accessibilityRole="tab" accessibilityLabel={t(`bodyRange${n}`)} accessibilityState={{selected:on}} onPress={()=>{if(!on)haptic();setRange(n);}} dim="fill"
           style={{flex:1,minHeight:touchTarget,justifyContent:'center',paddingHorizontal:tokens.spacing[0],paddingVertical:tokens.spacing[1],borderRadius:tokens.radii.input,backgroundColor:on?colors.accent:colors['surface-2']}}>
           <ThemedText style={{color:on?colors['on-accent']:colors.text,textAlign:'center'}}>{t(`bodyRange${n}`)}</ThemedText>
         </Pressable>;})}

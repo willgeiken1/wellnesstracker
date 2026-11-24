@@ -1,4 +1,5 @@
 import { useMemo, type PropsWithChildren, type ReactNode } from 'react';
+import { PRESSED_FILL_OPACITY, Tappable } from '@/components/tappable';
 import { Pressable, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -28,7 +29,7 @@ export function leave() {
 export function Round({ label, glyph, disabled = false, onSurface = false, onPress, testID }: { label: string; glyph: keyof typeof GLYPHS; disabled?: boolean; onSurface?: boolean; onPress: () => void; testID?: string }) {
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => ({ width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}>
+    style={({ pressed }) => ({ width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: onSurface ? colors['surface-2'] : colors.surface }}>
       <Icon name={GLYPHS[glyph]} size={18} color={colors.text} />
     </View>
@@ -52,7 +53,7 @@ export function Pick({ text, label, selected, strong = false, disabled = false, 
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label ?? text}
     accessibilityState={{ disabled, ...(selected === undefined ? {} : { selected }) }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.7 : 1 })}>
+    style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <View style={{ minHeight: 34, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99, justifyContent: 'center',
       backgroundColor: filled ? colors.accent : onSurface ? colors['surface-2'] : colors.surface }}>
       <ThemedText style={[{ fontSize: 15, color: filled ? colors['on-accent'] : colors.text }, filled && semibold]}>{text}</ThemedText>
@@ -65,7 +66,7 @@ export function Primary({ label, onPress, disabled = false, testID }: { label: s
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 50, paddingHorizontal: tokens.spacing[3], paddingVertical: tokens.spacing[1], borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: colors.accent, opacity: disabled ? 0.5 : pressed ? 0.8 : 1 })}>
+      backgroundColor: colors.accent, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <ThemedText style={[semibold, { color: colors['on-accent'], fontSize: 17, textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
 }
@@ -74,7 +75,7 @@ export function Secondary({ label, onPress, disabled = false, onSurface = false,
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 50, paddingHorizontal: tokens.spacing[3], paddingVertical: tokens.spacing[1], borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: onSurface ? colors['surface-2'] : colors.surface, opacity: disabled ? 0.5 : pressed ? 0.8 : 1 })}>
+      backgroundColor: onSurface ? colors['surface-2'] : colors.surface, opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     <ThemedText style={[semibold, { textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
 }
@@ -89,9 +90,9 @@ export function Trouble({ text, onRetry, testID }: { text: string; onRetry?: () 
   const { colors } = useTheme();
   return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], borderRadius: tokens.radii.card, paddingHorizontal: tokens.spacing[2], paddingVertical: tokens.spacing[1], backgroundColor: colors['surface-2'] }}>
     <ThemedText muted accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1 }}>{text}</ThemedText>
-    {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={t('tryAgain')} onPress={onRetry} style={{ minHeight: touchTarget, minWidth: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
+    {onRetry && <Tappable accessibilityRole="button" accessibilityLabel={t('tryAgain')} onPress={onRetry} style={{ minHeight: touchTarget, minWidth: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
       <ThemedText style={semibold}>{t('tryAgain')}</ThemedText>
-    </Pressable>}
+    </Tappable>}
   </View>;
 }
 

@@ -62,6 +62,21 @@ export function focusBlockId(view: RoutineView, now: Date, day: string): string 
   return later ? later.block.id : '';
 }
 
+/** The routine a link into the day asks for: the one it names, or the one that holds its item, among the
+ * routines on the page today. Empty when the link names nothing that is there. */
+export function routineLinkBlockId(view: RoutineView, today: readonly RoutineBlock[], jump: { blockId?: string; itemId?: string } | null | undefined): string {
+  if (!jump) return '';
+  const named = jump.blockId ? today.find(block => block.id === jump.blockId) : undefined;
+  const holder = named ?? (jump.itemId ? today.find(block => view.placements.some(place => place.blockId === block.id && place.itemId === jump.itemId)) : undefined);
+  return holder?.id ?? '';
+}
+
+/** The routines the day draws. Focus mode keeps to the one in focus, and to the one a link asked for: a
+ * routine someone asked to see is shown without Focus mode being switched off. */
+export function focusShown(today: readonly RoutineBlock[], focus: boolean, focusId: string, soughtId = ''): RoutineBlock[] {
+  return focus ? today.filter(block => block.id === focusId || (!!soughtId && block.id === soughtId)) : today.slice();
+}
+
 /** Whether anything at all is on the page: an item placed in a routine or due on its own. */
 export function hasItems(view: RoutineView): boolean {
   return view.items.length > 0;

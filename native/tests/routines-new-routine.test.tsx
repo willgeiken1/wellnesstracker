@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AccessibilityInfo, Alert } from 'react-native';
+import { AccessibilityInfo, Alert, AppState, LayoutAnimation } from 'react-native';
+import { selectionAsync } from 'expo-haptics';
 import { router } from 'expo-router';
 import { useAuth } from '../src/auth/provider';
 import type { Repository } from '../src/data/repository';
@@ -194,6 +195,31 @@ test('items inside a routine move up and down, and the order is saved with the r
   await press('routine-save');
   expect(placedIn(morning)).toEqual([second, first]);
   expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test('moving an item glides the list and stays quiet; picking a day or a colour ticks only when it changes', async () => {
+  Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true });
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+  const { morning, first } = twoInMorning();
+  await render(<RoutineSheet blockId={morning} />, { wrapper });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  const glide = jest.spyOn(LayoutAnimation, 'configureNext').mockImplementation(() => {});
+  jest.mocked(selectionAsync).mockClear();
+  await fireEvent.press(screen.getByTestId(`routine-item-down-${first}`));
+  expect(glide).toHaveBeenCalledTimes(1);
+  expect(selectionAsync).not.toHaveBeenCalled();
+  // A move that cannot happen changes nothing, so nothing glides.
+  await fireEvent.press(screen.getByTestId(`routine-item-down-${first}`));
+  expect(glide).toHaveBeenCalledTimes(1);
+  await press('routine-day-0');
+  expect(selectionAsync).toHaveBeenCalledTimes(1);
+  const chosen = screen.getAllByRole('radio').find(radio => radio.props.accessibilityState.checked)!;
+  const other = screen.getAllByRole('radio').find(radio => !radio.props.accessibilityState.checked)!;
+  await fireEvent.press(chosen);
+  expect(selectionAsync).toHaveBeenCalledTimes(1);
+  await fireEvent.press(other);
+  expect(selectionAsync).toHaveBeenCalledTimes(2);
+  glide.mockRestore();
 });
 
 test('Duplicate copies the saved routine with its items, and asks for a save first when there are edits', async () => {

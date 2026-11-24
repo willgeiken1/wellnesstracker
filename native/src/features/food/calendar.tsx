@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
+import { useSelectionHaptic } from '@/components/selection-haptic';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
@@ -20,6 +22,7 @@ const WEEKDAYS = Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2023, 0, 
 export function FoodCalendar({ day, today, onSelect, repo }: { day: string; today: string; onSelect: (day: string) => void; repo?: Repository }) {
   'use no memo';
   const { colors } = useTheme();
+  const haptic = useSelectionHaptic();
   const [month, setMonth] = useState(day.slice(0, 7));
   const first = `${month}-01`, next = shiftDay(first, 32).slice(0, 7) + '-01', length = Number(shiftDay(next, -1).slice(8));
   const weekday = noon(first).getUTCDay();
@@ -42,10 +45,10 @@ export function FoodCalendar({ day, today, onSelect, repo }: { day: string; toda
       {Array.from({ length: weekday }, (_, i) => <View key={`blank${i}`} style={{ width: '14.28%' }} />)}
       {Array.from({ length }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`).map(date => {
         const selected = date === day, future = date > today;
-        return <Pressable key={date} testID={`food-cal-${date}`} accessibilityRole="button" disabled={future} onPress={() => onSelect(date)}
+        return <Pressable key={date} testID={`food-cal-${date}`} accessibilityRole="button" disabled={future} onPress={() => { if (!selected) haptic(); onSelect(date); }}
           accessibilityLabel={[noon(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }), ...state(date)].join(', ')}
           accessibilityState={{ selected, disabled: future }}
-          style={({ pressed }) => ({ width: '14.28%', minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: future ? 0.35 : pressed ? 0.7 : 1 })}>
+          style={({ pressed }) => ({ width: '14.28%', minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: future ? 0.35 : pressed ? PRESSED_ROW_OPACITY : 1 })}>
           <View style={{ minWidth: 40, minHeight: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', gap: 1, paddingTop: 5,
             backgroundColor: selected ? colors.accent : 'transparent', borderWidth: 2, borderColor: selected ? colors.accent : date === today ? colors.text : 'transparent' }}>
             <ThemedText numeric style={{ fontSize: 15, lineHeight: 18, fontWeight: selected || date === today ? '600' : '400', color: selected ? colors['on-accent'] : colors.text }}>{Number(date.slice(8))}</ThemedText>
@@ -69,9 +72,9 @@ export function FoodCalendar({ day, today, onSelect, repo }: { day: string; toda
       {Array.from({ length: 14 }, (_, i) => shiftDay(today, -i)).map(date => {
         const selected = date === day;
         return <Pressable key={date} accessibilityRole="button" accessibilityLabel={[foodDayLabel(date, today), ...state(date).filter(word => word !== t('foodCalToday'))].join(', ')}
-          accessibilityState={{ selected }} onPress={() => onSelect(date)}
+          accessibilityState={{ selected }} onPress={() => { if (!selected) haptic(); onSelect(date); }}
           style={({ pressed }) => ({ minWidth: 48, minHeight: 60, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 1,
-            backgroundColor: selected ? colors.accent : colors['surface-2'], opacity: pressed ? 0.7 : 1 })}>
+            backgroundColor: selected ? colors.accent : colors['surface-2'], opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
           <ThemedText variant="caption" style={{ color: selected ? colors['on-accent'] : colors['text-muted'] }}>{noon(date).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</ThemedText>
           <ThemedText numeric style={{ fontSize: 16, lineHeight: 20, fontWeight: '600', color: selected ? colors['on-accent'] : colors.text }}>{Number(date.slice(8))}</ThemedText>
           {mark(date, selected)}

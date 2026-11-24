@@ -18,7 +18,7 @@ import type { RoutineBlock } from '@/features/routines/model/shape';
 import { routineClock24, routineShortName, routineWindowLabel } from '@/features/routines/model/types';
 import { routinesText } from '@/i18n/en';
 import { slotColor } from './colors';
-import { focusBlockId, hasItems, nextLine, rowAmount, rowDone, rowSkipped, rowSupply, rowTime } from './day-model';
+import { focusBlockId, focusShown, hasItems, nextLine, rowAmount, rowDone, rowSkipped, rowSupply, rowTime, routineLinkBlockId } from './day-model';
 import { routineRoutes, type RoutineLinkTarget } from './entry-points';
 import { Glyph } from './glyph';
 import { Note, Panel, PrimaryButton, TextButton, semibold } from './parts';
@@ -195,21 +195,25 @@ export function DayView({ routines, now, jump = null, onLoggedAll }: { routines:
   const currentId = moment.nowBlock?.id ?? '';
   const collapsed = new Set(view.prefs.collapsedBlocks ?? []);
   const focus = view.prefs.focusMode === true, focusId = focus ? focusBlockId(view, now, day) : '';
-  const shown = focus ? today.filter(block => block.id === focusId) : today;
   // A link opens the routine it names, or the one that holds its item, so the rows it points at are drawn.
   // It is followed once: the routine can be folded again by hand, and the same link sent again reopens it.
   const [followed, setFollowed] = useState<RoutineLinkTarget | null>(null);
+  // The routine the link in hand asked for. Focus mode stays on and draws it beside the routine in focus,
+  // until it is put away by hand or the link is let go.
+  const [sought, setSought] = useState('');
   if (jump !== followed) {
     setFollowed(jump);
-    const named = jump ? today.find(block => block.id === jump.blockId) : undefined;
-    const holder = named ?? (jump?.itemId ? today.find(block => view.placements.some(place => place.blockId === block.id && place.itemId === jump.itemId)) : undefined);
-    const target = holder?.id ?? '';
+    const target = routineLinkBlockId(view, today, jump);
+    setSought(target);
     if (target && !opened.includes(target)) setOpened([...opened, target]);
   }
+  const shown = focusShown(today, focus, focusId, sought);
   const foldedOf = (block: RoutineBlock) => (block.id === currentId || today.length === 1 ? collapsed.has(block.id) : !opened.includes(block.id));
   const fold = (block: RoutineBlock) => {
     glide();
-    if (block.id === currentId || today.length === 1) routines.apply((current, clock) => toggleCollapsed(current, block.id, clock));
+    // In Focus mode nothing folds. The routine a link brought in is put away again from its header.
+    if (focus && block.id === sought && block.id !== focusId) setSought('');
+    else if (block.id === currentId || today.length === 1) routines.apply((current, clock) => toggleCollapsed(current, block.id, clock));
     else setOpened(list => (list.includes(block.id) ? list.filter(id => id !== block.id) : [...list, block.id]));
   };
   const change = (make: Parameters<Routines['apply']>[0]) => { glide(); if (routines.apply(make)) haptic(); };

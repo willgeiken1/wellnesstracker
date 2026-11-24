@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '@/components/screen';
 import { SegmentedControl } from '@/components/segmented-control';
@@ -124,7 +124,8 @@ function Graph({ history, pick, onTab }: { history: HistoryView; pick: (day: str
   return <Panel testID="history-graph" style={{ gap: tokens.spacing[1] }}>
     <SegmentedControl label={routinesText('graphTabs')} options={ROUTINE_GRAPH_TABS.map(tab => ({ value: tab.id, label: tab.label }))} value={history.tab} onChange={onTab} />
     <ThemedText testID="history-graph-selected" numeric accessibilityLiveRegion="polite" style={semibold}>{history.graph.selectedLabel}</ThemedText>
-    <Pressable testID="history-bars" accessible accessibilityRole="adjustable" accessibilityLabel={routinesText('graphSpoken')} accessibilityHint={routinesText('graphHint')}
+    {/* The graph is scrubbed, not pressed: the chosen bar shows where the finger landed, so the strip does not dim. */}
+    <Tappable dim="none" testID="history-bars" accessible accessibilityRole="adjustable" accessibilityLabel={routinesText('graphSpoken')} accessibilityHint={routinesText('graphHint')}
       accessibilityValue={{ text: spoken(at) }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(event) => step(event.nativeEvent.actionName === 'increment' ? 1 : -1)}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
@@ -140,7 +141,7 @@ function Graph({ history, pick, onTab }: { history: HistoryView; pick: (day: str
           <View style={{ minHeight: Math.max(2, Math.round((point.count / most) * BAR)), borderRadius: 2, backgroundColor: on ? colors.text : point.count ? tone : colors['surface-2'] }} />
         </View>;
       })}
-    </Pressable>
+    </Tappable>
     <Note testID="history-graph-note">{routinesText('graphNote')}</Note>
   </Panel>;
 }

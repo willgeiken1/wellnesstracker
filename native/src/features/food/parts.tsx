@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { ActivityIndicator, Pressable, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
 import { touchTarget } from '../../components/button';
 import { Icon, type IconName } from '../../components/icon';
@@ -65,7 +66,7 @@ export function NoticeRow({ text, alert = false, busy = false, action, testID }:
     <ThemedText variant="caption" accessibilityRole={alert ? 'alert' : undefined} accessibilityLiveRegion="polite"
       style={{ flexGrow: 1, flexShrink: 1, flexBasis: 160, fontSize: 14, paddingVertical: 4 }}>{text}</ThemedText>
     {action && <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={6}
-      style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 14, borderRadius: 99, justifyContent: 'center', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 })}>
+      style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 14, borderRadius: 99, justifyContent: 'center', backgroundColor: colors.surface, opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
       <ThemedText style={[semibold, { fontSize: 14 }]}>{action.label}</ThemedText>
     </Pressable>}
   </View>;
@@ -76,7 +77,7 @@ export function PrimaryAction({ label, onPress, disabled = false, busy = false, 
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 50, borderRadius: 14, paddingHorizontal: tokens.spacing[3], paddingVertical: 10, flexDirection: 'row', gap: 8,
-      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: disabled ? 0.45 : pressed ? 0.8 : 1 })}>
+      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent, opacity: disabled ? 0.45 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     {busy && <ActivityIndicator color={colors['on-accent']} />}
     <ThemedText style={[semibold, { color: colors['on-accent'], textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
@@ -87,7 +88,7 @@ export function SoftAction({ label, onPress, disabled = false, glyph }: { label:
   const { colors } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: touchTarget, borderRadius: 14, paddingHorizontal: tokens.spacing[3], paddingVertical: 8, flexDirection: 'row', gap: 8,
-      alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.45 : pressed ? 0.7 : 1 })}>
+      alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.45 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
     {glyph && <Icon name={glyph} size={18} />}
     <ThemedText style={[semibold, { fontSize: 15, textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
@@ -96,7 +97,7 @@ export function SoftAction({ label, onPress, disabled = false, glyph }: { label:
 /** A text-only action in the main text colour, so it keeps full contrast on every theme. */
 export function QuietAction({ label, onPress, disabled = false, align = 'center' }: { label: string; onPress: () => void; disabled?: boolean; align?: 'center' | 'flex-start' | 'flex-end' }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={4}
-    style={({ pressed }) => ({ minHeight: touchTarget, minWidth: touchTarget, paddingHorizontal: 6, alignSelf: align, justifyContent: 'center', opacity: disabled ? 0.45 : pressed ? 0.6 : 1 })}>
+    style={({ pressed }) => ({ minHeight: touchTarget, minWidth: touchTarget, paddingHorizontal: 6, alignSelf: align, justifyContent: 'center', opacity: disabled ? 0.45 : pressed ? PRESSED_ROW_OPACITY : 1 })}>
     <ThemedText style={[semibold, { fontSize: 15 }]}>{label}</ThemedText>
   </Pressable>;
 }
@@ -116,7 +117,7 @@ export function ItemRow({ label, title, detail, value, glyph = 'plus', first = f
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 8,
-      borderTopWidth: first ? 0 : 1, borderTopColor: colors['surface-2'], opacity: pressed ? 0.6 : 1 })}>
+      borderTopWidth: first ? 0 : 1, borderTopColor: colors['surface-2'], opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
     <View style={{ flex: 1 }}>
       <ThemedText>{title}</ThemedText>
       {!!detail && <ThemedText muted numeric variant="caption">{detail}</ThemedText>}

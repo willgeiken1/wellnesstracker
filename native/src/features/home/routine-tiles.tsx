@@ -93,7 +93,7 @@ export function RoutineHomeTile({ id, wide, routines, now }: { id: RoutineTileId
 const card = { borderRadius: 18, padding: tokens.spacing[2] } as const;
 
 function SmallTile({ tile, tone, full, onOpen }: { tile: RoutineTile; tone: string; full: boolean; onOpen: () => void }) {
-  return <Tappable testID={`home-tile-${tile.id}`} accessibilityRole="button" onPress={onOpen}
+  return <Tappable dim="fill" testID={`home-tile-${tile.id}`} accessibilityRole="button" onPress={onOpen}
     accessibilityLabel={routinesHomeText('tileOpens', { title: [tile.kicker, tile.title, tile.when].filter(Boolean).join(', ') })}
     style={{ width: full ? '100%' : '48.5%' }}>
     <Card style={[card, { minHeight: 108, gap: 2 }]}>

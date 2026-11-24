@@ -85,7 +85,7 @@ function Gauge({ routines, item, now }: { routines: Routines; item: RoutineItem;
   const actions = gauge.state
     ? [{ name: 'undo', label: routinesText('undo') }, { name: 'details', label: routinesText('details') }]
     : [{ name: 'log', label: routinesText('log') }, { name: 'skip', label: routinesText('skip') }, { name: 'details', label: routinesText('details') }];
-  return <Tappable testID={`routine-gauge-${item.id}`} accessible accessibilityRole="button" accessibilityLabel={gauge.spoken} accessibilityActions={actions}
+  return <Tappable dim="fill" testID={`routine-gauge-${item.id}`} accessible accessibilityRole="button" accessibilityLabel={gauge.spoken} accessibilityActions={actions}
     onAccessibilityAction={(event) => {
       const action = event.nativeEvent.actionName;
       if (action === 'log') log(); else if (action === 'skip') skip(); else if (action === 'undo') undo(); else if (action === 'details') details();

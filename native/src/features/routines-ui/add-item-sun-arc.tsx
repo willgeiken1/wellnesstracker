@@ -1,7 +1,8 @@
 import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Pressable, Text, View, type GestureResponderEvent } from 'react-native';
+import { Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useSelectionHaptic } from '@/components/selection-haptic';
+import { Tappable } from '@/components/tappable';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { rs } from '@/i18n/en';
@@ -51,9 +52,10 @@ function ArcFrame({ shape, handles, onDrag, onTap, big, sub, children, overlay }
   };
   return <View ref={node} onLayout={(event) => { setWidth(event.nativeEvent.layout.width || shape.width); measure(); }}
     onTouchStart={begin} onMoveShouldSetResponder={wants} onResponderGrant={() => true} onResponderMove={move} onResponderTerminationRequest={() => false}>
-    <Pressable testID="arc-surface" accessible={false} onPress={tap} disabled={!onTap}>
+    {/* A tap moves a time along the path; the path shows it, so the drawing itself does not dim. */}
+    <Tappable dim="none" testID="arc-surface" accessible={false} onPress={tap} disabled={!onTap}>
       <Svg width="100%" viewBox={`0 0 ${shape.width} ${shape.height}`} style={{ aspectRatio: shape.width / shape.height }} accessible={false}>{children}</Svg>
-    </Pressable>
+    </Tappable>
     <View pointerEvents="none" style={{ position: 'absolute', left: '16%', right: '16%', top: `${Math.round(((shape.hy - shape.ry * 0.62) / shape.height) * 100)}%`, alignItems: 'center' }}>
       {/* These two lines grow with Dynamic Type only as far as the space inside the path allows. */}
       <Text testID="arc-big" numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.3}

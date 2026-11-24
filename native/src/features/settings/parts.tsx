@@ -1,4 +1,6 @@
 import { Children, type PropsWithChildren } from 'react';
+import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
+import { useSelectionHaptic } from '@/components/selection-haptic';
 import { Pressable, Switch, View, type ColorValue } from 'react-native';
 import { Card } from '@/components/card';
 import { Icon, type IconName } from '@/components/icon';
@@ -34,7 +36,7 @@ export function NavRow({ label, value, icon, onPress, testID }: {
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label}
     accessibilityValue={value ? { text: value } : undefined} onPress={onPress}
     style={({ pressed }) => ({ minHeight: ROW_HEIGHT, paddingVertical: tokens.spacing[1], flexDirection: 'row', alignItems: 'center',
-      gap: tokens.spacing[2], opacity: pressed ? 0.6 : 1 })}>
+      gap: tokens.spacing[2], opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
     {icon && <View style={{ width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['accent-tint'] }}>
       <Icon name={icon} size={18} color={colors.accent} />
     </View>}
@@ -89,14 +91,15 @@ export function ChoiceChips<T extends string | number>({ options, value, onChang
   options: readonly { value: T; label: string; accessibilityLabel?: string }[]; value: T; onChange: (value: T) => void; disabled?: boolean; stacked?: boolean;
 }) {
   const { colors } = useTheme();
+  const haptic = useSelectionHaptic();
   return <View style={stacked ? { gap: tokens.spacing[1] } : { flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing[1] }}>
     {options.map(option => {
       const selected = option.value === value;
       return <Pressable key={String(option.value)} accessibilityRole="button" accessibilityLabel={option.accessibilityLabel ?? option.label}
-        accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => onChange(option.value)}
+        accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => { if (!selected) haptic(); onChange(option.value); }}
         style={({ pressed }) => ({ minHeight: touchTarget, minWidth: 52, paddingHorizontal: stacked ? tokens.spacing[3] : tokens.spacing[2], paddingVertical: tokens.spacing[1],
           borderRadius: stacked ? 14 : 99, alignItems: 'center', justifyContent: stacked ? 'flex-start' : 'center', flexDirection: 'row', gap: tokens.spacing[1],
-          backgroundColor: selected ? colors.accent : colors['surface-2'], opacity: disabled ? 0.5 : pressed ? 0.7 : 1 })}>
+          backgroundColor: selected ? colors.accent : colors['surface-2'], opacity: disabled ? 0.5 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
         <ThemedText numeric={typeof option.value === 'number'}
           style={[{ color: selected ? colors['on-accent'] : colors.text }, stacked && { flex: 1 }, selected && semibold]}>{option.label}</ThemedText>
         {stacked && selected && <ChipCheck color={colors['on-accent']} />}
