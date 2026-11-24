@@ -112,7 +112,6 @@ export function Line({
     | "summit"
     | "backspace"
     | "trend"
-    | "clock"
     | "cloud-off"
     | "barbell";
   color?: string;
@@ -125,7 +124,6 @@ export function Line({
     down: "chevron-down",
     close: "close",
     more: "more",
-    clock: "timer",
     barbell: "workouts",
   } as const;
   const paths = {
