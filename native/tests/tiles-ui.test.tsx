@@ -6,33 +6,7 @@ import { TileCustomizeSheet } from '../src/features/tiles/customize-sheet';
 import { TileTraySheet } from '../src/features/tiles/tray-sheet';
 import { TileGrid } from '../src/features/tiles/tile-grid';
 
-// A small stand-in for Reanimated: values settle at once, styles are computed once.
-jest.mock('react-native-reanimated', () => {
-  const RN = require('react-native');
-  const React = require('react');
-  const id = (v: unknown) => v;
-  const ease = Object.assign(() => 0, { bezier: () => id, inOut: () => id, ease: id, linear: id, out: () => id });
-  return {
-    __esModule: true,
-    default: { View: RN.View, ScrollView: RN.ScrollView, Text: RN.Text, createAnimatedComponent: id },
-    Easing: ease,
-    cancelAnimation: () => {}, interpolate: (_v: number, _i: number[], o: number[]) => o[o.length - 1],
-    measure: () => null, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f, scrollTo: () => {},
-    useAnimatedRef: () => React.useRef(null), useAnimatedStyle: (f: () => unknown) => f(),
-    useFrameCallback: () => ({ setActive: () => {}, isActive: false, callbackId: 0 }),
-    useScrollOffset: () => ({ value: 0 }), useSharedValue: (v: unknown) => React.useRef({ value: v }).current,
-    withDelay: (_d: number, v: unknown) => v, withRepeat: (v: unknown) => v, withSequence: (...v: unknown[]) => v[v.length - 1], withTiming: id,
-  };
-});
-// Gestures are exercised on a device; here the detectors just draw their child.
-jest.mock('react-native-gesture-handler', () => {
-  const RN = require('react-native');
-  const gesture = () => ({});
-  return { GestureDetector: ({ children }: { children: unknown }) => children, GestureHandlerRootView: RN.View,
-    usePanGesture: gesture, useTapGesture: gesture, useLongPressGesture: gesture };
-});
-// Skia draws the tile depth on a device; the tests only need the tile's contents.
-jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null }));
+// Reanimated, gesture-handler and the Skia tile surface use the shared stand-ins from tests/setup.ts.
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
 
 function fakeStorage(): TileStorage {
