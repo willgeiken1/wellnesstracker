@@ -50,7 +50,7 @@ export function SavedSheet({ repo, meal: asked, open: opened }: { repo: Reposito
           {open === c.name ? <SavedFoods combo={c} /> : null}
         </Fragment>;
       })}
-    </List> : <View style={{ marginTop: 8 }}><EmptyState icon="bookmark" color="food" title={t('foodNoSavedMatch')} description={t('foodNoSavedHint')} /></View>}
+    </List> : <View style={{ marginTop: 8 }}><EmptyState icon="bookmark" color="food" title={q.trim() ? t('foodNoSavedMatch') : t('foodNoSavedYet')} description={t('foodNoSavedHint')} /></View>}
   </FoodSheet>;
 }
 

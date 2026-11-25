@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Linking, Platform, View } from 'react-native';
-import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Button, Icon, KitText, SheetHeader, Tappable, TextField, useKit } from '@/components/kit';
+import { Button, Icon, KitText, SheetHeader, Tappable, TextField, mix, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
@@ -75,7 +75,7 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
         onBarcodeScanned={({ data, type }) => { if (lock.current || phase !== 'looking') return; try { void lookup(normalizeBarcode(data, type)); } catch { /* keeps looking */ } }} /> : null}
       {!live && (web || found || phase === 'busy') ? <Package code={code} /> : null}
       <Frame done={found} scanning={phase === 'looking'} />
-      <View style={{ position: 'absolute', top: 302 - 52, left: 0, right: 0, alignItems: 'center' }}>
+      <View style={{ position: 'absolute', top: 302, left: 0, right: 0, alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: k.tint(k.c.bg, 0.72) }}>
           {found ? <Icon name="check" size={16} color={k.c.success} /> : null}
           <KitText weight={600} size={13.5} color={found ? 'success' : 'text'} accessibilityLiveRegion="polite">{hint}</KitText>
@@ -172,21 +172,22 @@ function Backdrop({ torch }: { torch: boolean }) {
   </Svg>;
 }
 
-/** A still packet with a barcode, for the web and while a found product shows. */
+/** A still packet with a barcode, for the web and while a found product shows (`.fd-pkg`, `.fd-bc`, `.fd-bcn`). */
 function Package({ code }: { code: string }) {
   const k = useKit();
-  const bars = [2, 1, 3, 1, 1, 2, 1, 3, 2, 1, 1, 2, 3, 1, 2, 1, 1, 3, 1, 2, 2, 1, 3, 1, 1, 2, 1, 2, 3, 1, 1, 2];
-  let x = 0;
+  // The label's stripes repeat every 16 pt: dark at 0-2, 4-5, 8-11 and 12-13, across a 142 x 58 pt window.
+  const bars: [number, number][] = [];
+  for (let o = 0; o < 142; o += 16) for (const [x0, x1] of [[0, 2], [4, 5], [8, 11], [12, 13]]) if (o + x0 < 142) bars.push([o + x0, Math.min(142, o + x1) - (o + x0)]);
   return <View style={{ position: 'absolute', top: '50%', left: '50%', width: 250, height: 178, marginTop: -100, marginLeft: -125, borderRadius: 16, transform: [{ rotate: '-5deg' }],
     overflow: 'hidden', boxShadow: `0px 20px 40px ${k.tint(k.c.bg, 0.8)}` }}>
     <Svg width={250} height={178} style={{ position: 'absolute' }}>
-      <Defs><RadialGradient id="p" cx="20%" cy="0%" rx="120%" ry="120%"><Stop offset="0" stopColor={k.c.food} stopOpacity={0.3} /><Stop offset="1" stopColor={k.c.food} stopOpacity={0} /></RadialGradient></Defs>
-      <Rect width={250} height={178} fill={k.c['surface-2']} /><Rect width={250} height={178} fill="url(#p)" />
+      <Defs><LinearGradient id="p" x1="0.33" y1="0" x2="0.67" y2="1"><Stop offset="0" stopColor={mix(k.c.food, k.c['surface-2'], 0.3)} /><Stop offset="1" stopColor={k.c['surface-2']} /></LinearGradient></Defs>
+      <Rect width={250} height={178} fill="url(#p)" />
     </Svg>
-    <View style={{ position: 'absolute', left: 42, top: 40, width: 166, height: 98, borderRadius: 8, backgroundColor: '#E8E8E8', paddingTop: 12, paddingHorizontal: 12, transform: [{ rotate: '-4deg' }] }}>
-      <Svg width={142} height={54}>{bars.map((w, i) => { const r = i % 2 ? null : <Rect key={i} x={x} y={0} width={w * 1.5} height={54} fill="#111" />; x += w * 1.5 + 1.5; return r; })}</Svg>
-      <KitText weight={700} size={11} numeric style={{ color: '#111', textAlign: 'center', marginTop: 4 }}>{code || '0 85001 24318 6'}</KitText>
+    <View style={{ position: 'absolute', left: 40, right: 40, top: 34, height: 96, borderRadius: 8, backgroundColor: k.tint(k.c.text, 0.9), paddingTop: 12, paddingHorizontal: 14 }}>
+      <Svg width={142} height={58}>{bars.map(([x, w]) => <Rect key={x} x={x} y={0} width={w} height={58} fill={k.c.bg} />)}</Svg>
     </View>
+    <KitText weight={700} size={11} tracking={0.2} numeric style={{ position: 'absolute', left: 0, right: 0, top: 110, color: k.c.bg, textAlign: 'center' }}>{code || '0 85001 24318 6'}</KitText>
   </View>;
 }
 

@@ -86,10 +86,13 @@ function ContainerRow({ c, u, i, count, onEdit, onToggle, onMove }: {
   </View>;
 }
 
+/** The web build draws the on thumb in its own teal unless told; iOS ignores this. */
+const WEB_THUMB = { activeThumbColor: '#FFFFFF' } as object;
 function WaterSwitch({ value, onChange, label, disabled }: { value: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean }) {
   const k = useKit();
   return <RNSwitch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled}
-    trackColor={{ false: k.c['hair-2'], true: k.c.water }} thumbColor="#FFFFFF" ios_backgroundColor={k.c['hair-2']} style={disabled ? { opacity: 0.45 } : undefined} />;
+    trackColor={{ false: k.c['hair-2'], true: k.c.water }} thumbColor="#FFFFFF" ios_backgroundColor={k.c['hair-2']} style={disabled ? { opacity: 0.45 } : undefined}
+    {...WEB_THUMB} />;
 }
 
 function ContainerForm({ repo, id, onDone }: { repo: Repository; id: string; onDone: () => void }) {

@@ -20,7 +20,8 @@ import { capitals } from '@/components/kit-style';
 export function FoodPage({ back, title, right, children, testID }: { back: string; title?: string; right?: ReactNode; children: ReactNode; testID?: string }) {
   const k = useKit(), insets = useSafeAreaInsets();
   return <View testID={testID} style={{ flex: 1, backgroundColor: k.c.bg }}>
-    <NavBar back={back} title={title} right={right} />
+    {/* The bar pulls itself out to the edges by the page's 16 pt margin, so it sits in that margin here. */}
+    <View style={{ paddingHorizontal: 16, zIndex: 5 }}><NavBar back={back} title={title} right={right} /></View>
     <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom }}>{children}</ScrollView>
   </View>;
 }

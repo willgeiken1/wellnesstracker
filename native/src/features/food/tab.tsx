@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, type ComponentRef } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -89,8 +89,11 @@ function DayStrip({ repo, day, today, goal }: { repo: Repository; day: string; t
   const k = useKit(), haptic = useSelectionHaptic(), { width } = useWindowDimensions();
   const days = useMemo(() => stripDays(today), [today]);
   const sums = daySums(repo, days.map(d => d.day));
-  return <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} accessibilityRole="none" accessibilityLabel={t('foodStripLabel')}
-    contentOffset={{ x: width, y: 0 }} style={{ marginTop: -6, marginHorizontal: -16, marginBottom: 14 }}>
+  // contentOffset opens on this week on iOS; the web ignores it, so the first layout scrolls there too.
+  const strip = useRef<ComponentRef<typeof ScrollView>>(null);
+  return <ScrollView ref={strip} horizontal pagingEnabled showsHorizontalScrollIndicator={false} accessibilityRole="none" accessibilityLabel={t('foodStripLabel')}
+    contentOffset={{ x: width, y: 0 }} onLayout={() => strip.current?.scrollTo({ x: width, animated: false })}
+    style={{ flexGrow: 0, marginTop: -6, marginHorizontal: -16, marginBottom: 14 }}>
     {[0, 1].map(w => <View key={w} style={{ width, flexDirection: 'row', gap: 2, paddingHorizontal: 10 }}>
       {days.slice(w * 7, w * 7 + 7).map((d, i) => {
         const on = d.day === day, kcal = sums[w * 7 + i].kcal;

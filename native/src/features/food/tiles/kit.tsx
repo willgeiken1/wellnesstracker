@@ -1,8 +1,8 @@
-import { useContext, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import { Icon, KitText, PressScale, Tappable, alpha, mix, slopFor, useKit, type IconName } from '@/components/kit';
-import { AuthContext } from '@/auth/provider';
+import { useAuth } from '@/auth/provider';
 import type { Repository } from '@/data/repository';
 import { plate, raised, well } from '../../tiles/depth';
 import { TileSurface } from '../../tiles/tile-surface';
@@ -138,7 +138,8 @@ export const useShade = () => { const k = useKit(); return (i: number, color = '
 /** What every Food tile reads: the repository, the day picked in the strip, that day's food and water, and the next meal. */
 export function useTileDay(): Repository | null {
   // Read without useAuth, which throws outside the provider: a tile drawn on its own (a preview, a test) shows no food.
-  return useContext(AuthContext)?.repository ?? null;
+  // The phone-only build swaps in its own provider, which keeps its context private, so this goes through useAuth.
+  try { return useAuth().repository ?? null; } catch { return null; }
 }
 export function useDayData(repo: Repository) {
   useFoodRevision(repo);
