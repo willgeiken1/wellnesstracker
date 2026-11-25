@@ -41,6 +41,8 @@ function useThemeState(repository?: Repository | null) {
   const setSelectorLook = (selector: SelectorLook) => persist(override, { ...appearance, selector });
   const applyPreset = (preset: Preset) => persist(override, { ...appearance, ...PRESETS[preset] });
   useEffect(() => {
+    // react-native-web has no setColorScheme; the design-check web build skips it.
+    if (typeof Appearance.setColorScheme !== 'function') return;
     Appearance.setColorScheme(override === 'system' ? 'auto' : override);
     return () => Appearance.setColorScheme('auto');
   }, [override]);

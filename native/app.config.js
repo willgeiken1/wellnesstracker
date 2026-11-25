@@ -5,7 +5,12 @@ const safePlugins = new Set([
   'expo-build-properties', 'expo-dev-client', './plugins/withDevSchemeDebugOnly',
   'expo-camera', 'expo-font', 'expo-sqlite', 'expo-secure-store', 'expo-sharing', 'expo-status-bar',
 ]);
-module.exports = ({ config }) => {
+module.exports = (context) => {
+  const resolved = build(context);
+  // Design check only: a static web build (one HTML page) for side-by-side screenshots against the mockup.
+  return process.env.FIDELITY_WEB ? { ...resolved, web: { ...resolved.web, output: 'single' } } : resolved;
+};
+function build({ config }) {
   if (process.env.APP_VARIANT !== 'freeiphone') return config;
   // Rebuild from a known schema, rather than copying future capabilities or backend extras.
   return {
@@ -26,4 +31,4 @@ module.exports = ({ config }) => {
     extra: { appVariant: 'freeiphone', phoneOnly: true, capabilities: { health: false, widgets: false, push: false } },
     updates: { enabled: false },
   };
-};
+}
