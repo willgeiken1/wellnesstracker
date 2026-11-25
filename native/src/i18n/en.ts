@@ -1346,6 +1346,22 @@ export const en = {
   progressStepGoalA: 'Goal {goal} a day',
   progressNoFoodWeek: 'No full days logged yet',
   // P5 progress end
+  // P1 home hero
+  homeHeroToday: 'Today', homeHeroRestDay: 'Rest day', homeHeroAllMet: 'All goals met', homeHeroRest: 'Rest',
+  homeHeroTraining: 'Training', homeHeroFood: 'Food', homeHeroSleep: 'Sleep',
+  homeHeroNothing: 'Nothing logged yet', homeHeroNoSleep: 'No sleep recorded', homeHeroNoData: 'No data', homeHeroRecovery: 'Recovery day',
+  homeHeroSessionDone: 'Session done', homeHeroGoalMet: 'Goal met', homeHeroHidden: 'Hidden · tap a tile to show',
+  homeHeroMinLeft: '{n} min left · {pct}', homeHeroEnergyLeft: '{n} {u} left · {pct}', homeHeroSleepBelow: '{n} below goal · {pct}',
+  homeHeroOf: 'of ', homeHeroOfGoal: 'of {goal}', homeHeroClearSky: 'A clear sky', homeHeroQuietDay: 'A quiet day',
+  homeHeroThisWeek: 'This week', homeHeroWeekNote: 'Tap or slide across the days.', homeHeroWeekShowing: 'Showing {day}. Tap Today to come back.',
+  homeHeroDayScore: 'Day score {n}.', homeHeroShowDetails: 'Show details.', homeHeroTodaySuffix: ', today',
+  homeHeroMapLabel: 'Your day', homeHeroCouldNotLoad: 'Your map could not load', homeHeroCouldNotLoadSub: 'Your numbers and tiles are below.',
+  homeHeroGoalMetSpoken: 'goal met', homeHeroRestSpoken: 'rest day', homeHeroMinutes: '{n} of {goal} minutes', homeHeroSleepSpoken: '{n} of {goal} sleep',
+  homeHeroEnergySpoken: '{n} of {goal} {u}', homeHeroHiddenSpoken: 'hidden, of {goal} {u}',
+  homeMapStyleAurora: 'Aurora', homeMapStyleAuroraLine: 'Light curtains rising off the night side',
+  homeMapStyleRidge: 'Ridgeline', homeMapStyleRidgeLine: 'A layered horizon where three peaks climb to each goal',
+  homeMapStylePlain: 'Numbers only', homeMapStylePlainLine: 'The score and your three values, no map',
+  // P1 home hero end
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
