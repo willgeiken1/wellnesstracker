@@ -1,5 +1,6 @@
 import { localDay, toKg } from '../../core/workout/rules';
 import type { Repository } from '../../data/repository';
+import { rpeKey } from './logger/model';
 import { liveReads } from '../../data/read-cache';
 import { WorkoutStore } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
@@ -45,6 +46,7 @@ export function seedTrainingDemo(base: Repository, now = Date.now()) {
         const drafts = Array.from({ length: sets }, (_, i) => {
           const r = reps + (i === sets - 1 && week % 2 ? 1 : 0);
           const set = repo.save('sets', { entry_id: e.id, position: i, weight_kg: toKg(load, 'lb'), reps: r, entered_value: load, entered_unit: 'lb' });
+          repo.localSave(rpeKey(e.id, i), Math.min(10, 7 + Math.floor((i + 1) * 2 / sets)));
           return { weight: String(load), reps: String(r), setId: set.id };
         });
         repo.localSave(`draft:${e.id}`, drafts);
@@ -64,8 +66,11 @@ export function seedTrainingDemo(base: Repository, now = Date.now()) {
       const ex = DAYS[next][1].find(x => x[0] === e.data.exercise);
       if (!ex) continue;
       w.drafts(e.id).forEach((_, i) => {
+        if (left <= 0 || ex[3] <= 0) return;
         w.editDraft(e.id, i, { weight: String(ex[3]), reps: String(ex[2]) });
-        if (left > 0 && ex[3] > 0) { w.toggleDone(e.id, i, now - left * 150_000); left--; }
+        w.toggleDone(e.id, i, now - left * 150_000);
+        repo.localSave(rpeKey(e.id, i), 8);
+        left--;
       });
     }
     w.skipTimer();
