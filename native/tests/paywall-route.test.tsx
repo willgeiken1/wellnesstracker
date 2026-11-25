@@ -1,83 +1,38 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { router } from 'expo-router';
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { join } from 'path';
+import { render } from '@testing-library/react-native';
 import PaywallRoute from '../src/app/paywall';
-import { ThemeProvider } from '../src/design/theme-provider';
-import { mockPurchaseProvider } from '../src/features/paywall/purchase-provider';
-
 import { redirectSystemPath } from '../src/app/+native-intent';
 
 const mockRedirect = jest.fn();
-jest.mock('expo-router', () => ({ router: { canGoBack: jest.fn(), back: jest.fn(), replace: jest.fn() },
-  Redirect: ({ href }: { href: string }) => { mockRedirect(href); return null; } }));
-const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
+jest.mock('expo-router', () => ({ Redirect: ({ href }: { href: string }) => { mockRedirect(href); return null; } }));
 
-test('the route shows the provider prices in plain words, with purchases off and no network requests', async () => {
-  const http = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Network forbidden in preview'));
-  const purchase = jest.spyOn(mockPurchaseProvider, 'purchase'), restore = jest.spyOn(mockPurchaseProvider, 'restore');
-  try {
-    await render(<PaywallRoute />, { wrapper });
-    expect(screen.queryByText(/simulator|sample prices|purchases disabled|preview/i)).toBeNull();
-    expect(screen.getByText('Purchases are not available in this version of the app yet.')).toBeTruthy();
-    expect(mockPurchaseProvider.products.map(product => [product.period, product.priceString])).toEqual([
-      ['month', '$4.99'],
-      ['year', '$39.99'],
-    ]);
-    expect(screen.getByText('$4.99 per month')).toBeTruthy();
-    expect(screen.getByText('$39.99 per year')).toBeTruthy();
-    expect(screen.queryByText(/voice|recipe|menu/i)).toBeNull();
-    for (const product of mockPurchaseProvider.products) {
-      await fireEvent.press(screen.getByTestId(`paywall-product-${product.id}`));
-      const subscribe = screen.getByRole('button', { name: `Subscribe to ${product.title}` });
-      expect(subscribe).toBeDisabled();
-      await fireEvent.press(subscribe);
-    }
-    expect(screen.getByRole('button', { name: 'Restore purchases' })).toBeDisabled();
-    await fireEvent.press(screen.getByRole('button', { name: 'Restore purchases' }));
-    expect(purchase).not.toHaveBeenCalled();
-    expect(restore).not.toHaveBeenCalled();
-    expect(http).not.toHaveBeenCalled();
-    expect(screen.getByText('988 crisis card')).toBeTruthy();
-  } finally { http.mockRestore(); purchase.mockRestore(); restore.mockRestore(); }
+const files = (dir: string): string[] => readdirSync(dir).flatMap(name => {
+  const path = join(dir, name);
+  return statSync(path).isDirectory() ? files(path) : /\.(ts|tsx)$/.test(name) ? [path] : [];
 });
 
-test.each([true, false])('close dismisses the preview when history is %s', async (hasHistory) => {
-  jest.clearAllMocks();
-  (router.canGoBack as jest.Mock).mockReturnValue(hasHistory);
-  await render(<PaywallRoute />, { wrapper });
-  await fireEvent.press(screen.getByRole('button', { name: 'Close Insight Plus' }));
-  if (hasHistory) {
-    expect(router.back).toHaveBeenCalledTimes(1);
-    expect(router.replace).not.toHaveBeenCalled();
-  } else {
-    expect(router.replace).toHaveBeenCalledWith('/');
-    expect(router.back).not.toHaveBeenCalled();
-  }
-});
-
-test('release builds never show the preview: the route goes Home and links cannot reach it', async () => {
+test.each([true, false])('the old paywall path goes Home and shows nothing (dev %s)', async (dev) => {
   const global_ = global as unknown as { __DEV__: boolean };
-  const dev = global_.__DEV__;
-  global_.__DEV__ = false;
+  const was = global_.__DEV__;
+  global_.__DEV__ = dev;
   try {
     mockRedirect.mockClear();
-    await render(<PaywallRoute />, { wrapper });
+    const view = await render(<PaywallRoute />);
     expect(mockRedirect).toHaveBeenCalledWith('/');
-    expect(screen.queryByText('Insight Plus')).toBeNull();
-    expect(screen.queryByText(/\$\d/)).toBeNull();
-    for (const path of ['insight://paywall', 'insight:///paywall', 'INSIGHT://Paywall/']) expect(redirectSystemPath({ path, initial: true })).toBe('/');
-  } finally { global_.__DEV__ = dev; }
+    expect(view.toJSON()).toBeNull();
+  } finally { global_.__DEV__ = was; }
 });
 
-test('the legal links are the published pages, never placeholders', async () => {
-  const { Linking } = require('react-native') as typeof import('react-native');
-  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
-  try {
-    await render(<PaywallRoute />, { wrapper });
-    await fireEvent.press(screen.getByRole('link', { name: 'Terms of use' }));
-    await fireEvent.press(screen.getByRole('link', { name: 'Privacy policy' }));
-    expect(open.mock.calls.map(call => call[0])).toEqual([
-      'https://willgeiken1.github.io/wellnesstracker/insight-daily-terms',
-      'https://willgeiken1.github.io/wellnesstracker/insight-daily-privacy',
-    ]);
-  } finally { open.mockRestore(); }
+test('links to the paywall land Home', () => {
+  for (const path of ['insight://paywall', 'insight:///paywall', 'INSIGHT://Paywall/']) expect(redirectSystemPath({ path, initial: true })).toBe('/');
+});
+
+test('the app has no paywall or Plus code left, and nothing routes to them', () => {
+  const src = join(__dirname, '..', 'src');
+  const offenders = files(src).filter(file => /features\/(paywall|plus)\//.test(readFileSync(file, 'utf8'))
+    || /router\.(push|replace|navigate)\([^)]*paywall/i.test(readFileSync(file, 'utf8')));
+  expect(offenders).toEqual([]);
+  expect(() => statSync(join(src, 'features', 'paywall'))).toThrow();
+  expect(() => statSync(join(src, 'features', 'plus'))).toThrow();
 });

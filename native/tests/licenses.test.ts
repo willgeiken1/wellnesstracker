@@ -59,3 +59,20 @@ describe('reflow', () => {
     expect(reflow('\n\n   Indented\n   text\n\n\n')).toEqual(['Indented text']);
   });
 });
+
+describe('About › Licenses fonts', () => {
+  test('Plus Jakarta Sans, the app font, has its full OFL notice word for word from assets', () => {
+    const asset = readFileSync(join(root, 'assets/fonts/licenses/PlusJakartaSans-OFL.txt'), 'utf8').replace(/\r\n/g, '\n').trim();
+    expect(notices.jakarta.replace(/\r\n/g, '\n').trim()).toBe(asset);
+    expect(notices.jakarta).toMatch(/Plus Jakarta Sans Project Authors/);
+    expect(notices.jakarta).toMatch(/SIL OPEN FONT LICENSE Version 1\.1/);
+  });
+  test('the font list names Plus Jakarta Sans and Lexend, and each opens its notice', () => {
+    const { noticeTitle, JAKARTA_NOTICE, FONT_NOTICE } = jest.requireActual('../src/features/settings/licenses/screen');
+    expect(noticeTitle(JAKARTA_NOTICE)).toBe('Plus Jakarta Sans');
+    expect(noticeTitle(FONT_NOTICE)).toBe('Lexend');
+    const source = readFileSync(join(root, 'src/features/settings/licenses/screen.tsx'), 'utf8');
+    expect(source.indexOf('label="Plus Jakarta Sans"')).toBeGreaterThan(-1);
+    expect(source.indexOf('label="Plus Jakarta Sans"')).toBeLessThan(source.indexOf('label="Lexend"'));
+  });
+});
