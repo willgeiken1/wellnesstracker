@@ -13,3 +13,6 @@ jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null
 // Reanimated and gesture-handler need native code; tests share small stand-ins (tests/mocks/reanimated.ts). A test may mock them again.
 jest.mock('react-native-reanimated', () => require('./mocks/reanimated').reanimatedMock());
 jest.mock('react-native-gesture-handler', () => require('./mocks/reanimated').gestureHandlerMock());
+// expo-router/testing-library mocks Reanimated again with 'react-native-reanimated/mock' (which loads the real package and falls
+// back to an empty object here). Point that path at the same stand-in so screens rendered through renderRouter get it too.
+jest.mock('react-native-reanimated/mock', () => require('./mocks/reanimated').reanimatedMock());
