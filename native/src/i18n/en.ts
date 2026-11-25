@@ -1051,6 +1051,22 @@ export const en = {
   trainingLogSet: 'Log set', trainingLogWarm: 'Log warm-up', trainingAllChecked: 'Every set is checked off', trainingAllCheckedSub: 'Finish to see your summary.',
   trainingCloseWorkout: 'Close', trainingNoWorkout: 'This workout isn’t here anymore.',
   trainingSetCount_one: '1 set', trainingSetCount_other: '{n} sets', trainingJustTheBar: 'Just the {bar}', trainingEachSide: 'each side', trainingElapsedTime: 'Elapsed time',
+  trainingExercises: 'Exercises', trainingReplacedWith: 'Replaced with {name}', trainingAddedTo: '{n} added to {name}', trainingAddedOne: '{name} added', trainingAddedMany: '{n} exercises added',
+  trainingOther: 'Other', trainingAdded: 'Added', trainingAddN: 'Add ({n})', trainingAddShort: 'Add', trainingSearchExercises: 'Search exercises', trainingFilterMuscle: 'Filter by muscle',
+  trainingAll: 'All', trainingRecent: 'Recent', trainingResults_one: '1 result', trainingResults_other: '{n} results', trainingAllExercises: 'All exercises',
+  trainingCreate: 'Create “{name}”', trainingCreateSub: 'A custom exercise, added by name',
+  trainingClose: 'Close', trainingRestLeft: 'Rest time left', trainingReady: 'ready', trainingOfTime: 'of {time}', trainingDefaultRestFor: 'Default rest for {name}', trainingPickLength: 'Pick a length to start',
+  trainingSkipRest: 'Skip rest', trainingStartRest: 'Start rest', trainingRestForName: 'Rest for {name}', trainingLength: 'Length', trainingRestLength: 'Rest length', trainingRestChip: '{time} rest',
+  trainingRestFoot: 'The timer keeps running while you use other apps, with a gentle buzz at zero.',
+  trainingRestNext: 'Next: {name}',
+  trainingStartedRow: 'Started', trainingCardioSaved: '{name} saved · Training today {min} of {goal} min', trainingSave: 'Save', trainingType: 'Type', trainingCardioType: 'Cardio type',
+  trainingDuration: 'Duration', trainingDurationSub: 'Counts toward Training minutes', trainingDurationLabel: 'Duration in minutes', trainingDistance: 'Distance', trainingOptional: 'Optional',
+  trainingDistanceLabel: 'Distance in miles', trainingEffort: 'Effort', trainingNotes: 'Notes', trainingFromHealth: 'From Apple Health', trainingImported: 'Imported',
+  trainingHealthFoot: 'Workouts recorded in Apple Health are imported automatically and are read only. Edit them in the Health app.',
+  trainingMinShort: '{n} min', trainingNoHealthWorkouts: 'No workouts from Apple Health this week',
+  trainingEffort_easy: 'Easy: you could keep this up for hours.', trainingEffort_light: 'Light: breathing is steady and relaxed.', trainingEffort_moderate: 'Moderate: you can talk in short sentences.',
+  trainingEffort_hard: 'Hard: a few words at a time.', trainingEffort_max: 'Max: all out, no talking.',
+  trainingLess: 'Less: {what}', trainingMore: 'More: {what}',
   // P3 Training end
 } as const;
 export type MessageKey = keyof typeof en;
