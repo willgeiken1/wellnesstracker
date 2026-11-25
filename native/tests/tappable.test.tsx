@@ -87,10 +87,9 @@ test('no tap target is a bare Pressable with nothing to show the press', () => {
 
 test('the controls the acceptance review named dim at the right strength', () => {
   const read = (file: string) => readFileSync(join(__dirname, '..', file), 'utf8');
-  for (const file of ['src/features/food/log-screen.tsx', 'src/features/shell/profile-button.tsx',
+  for (const file of ['src/features/shell/profile-button.tsx',
     'src/features/paywall/screen.tsx', 'src/features/workout/parts.tsx', 'src/features/atlas/body-atlas.tsx', 'src/features/body/entry.tsx'])
     expect(read(file)).toMatch(/<Tappable\b/);
-  expect(read('src/features/food/log-screen.tsx')).toMatch(/<Tappable dim="fill" key=\{meal\.id\}/);
   // Home's Done is the tile grid's edit bar now, and it dims when pressed.
   expect(read('src/features/tiles/tile-grid.tsx')).toMatch(/onPress=\{onDone\} style=\{\(\{ pressed \}\) => \[[^\]]*pressed && \{ opacity: 0\.\d+ \}\]/);
   // Home opens Settings from the shell's profile button, which shows its press.

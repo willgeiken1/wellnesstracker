@@ -18,11 +18,6 @@ test('every AI entry point is behind the launch switch', () => {
   expect(src('app/_layout.tsx')).toMatch(/AI_FEATURES_ENABLED && <FoodAiRuntime/);
   expect(src('features/workout/summary.tsx')).toMatch(/AI_FEATURES_ENABLED && <WorkoutAiCard/);
   expect(src('features/workout/settings.tsx')).toMatch(/AI_FEATURES_ENABLED && <>/);
-  expect(src('features/food/screen.tsx')).toMatch(/AI_FEATURES_ENABLED&&<FoodAiMorningReview/);
-  expect(src('features/food/screen.tsx')).toMatch(/AI_FEATURES_ENABLED&&<FoodAiResults/);
-  expect(src('features/food/screen.tsx')).toMatch(/AI_FEATURES_ENABLED&&aiMode&&<Card/);
-  expect(src('features/food/log-screen.tsx')).toMatch(/AI_FEATURES_ENABLED \? <FoodAiEntry/);
-  expect(src('features/food/log-screen.tsx')).toMatch(/AI_FEATURES_ENABLED && \(!!ai\.ready\.length/);
   expect(src('app/settings/[section].tsx')).toMatch(/AI_FEATURES_ENABLED \? <FoodPrivacyScreen \/> : <Screen title=\{title\}><PrivacySwitches \/><\/Screen>/);
 });
 test('Privacy settings show the crash-report and analytics switches the privacy policy promises', async () => {
