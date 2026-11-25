@@ -8,9 +8,11 @@ import { touchTarget } from './button';
 import { useSelectionHaptic } from './selection-haptic';
 /** The kit's `.seg` (`ui.seg`): choices share one row on a surface-2 track (2 pt padding and gaps, 12 pt corners). The
  * chosen one is raised (the text 10 percent over surface 2 in dark, the surface in light) with a soft shadow; the others
- * are muted. Each choice is 34 pt tall, grown to 46 pt to touch. A tick plays when the choice changes. */
-export function SegmentedControl<T extends string>({ label, options, value, onChange, testID }: {
+ * are muted. Each choice is 34 pt tall, grown to 46 pt to touch. A tick plays when the choice changes. `compact` is the
+ * narrow form that sits at the end of a settings row (32 pt tall, 6 pt side padding, 13 pt text). */
+export function SegmentedControl<T extends string>({ label, options, value, onChange, testID, compact }: {
   label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void; testID?: string;
+  compact?: boolean;
 }) {
   const { selectorLook } = useTheme();
   const k = useKit();
@@ -23,11 +25,11 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
     {options.map(option => {
       const on = option.value === value;
       return <Tappable key={option.value} dim={on ? 'none' : 'seg'} accessibilityRole="tab" accessibilityLabel={option.label}
-        accessibilityState={{ selected: on }} onPress={() => choose(option.value)} hitSlop={{ top: 6, bottom: 6 }}
-        style={{ flex: 1, minHeight: 34, paddingHorizontal: 10, borderRadius: KIT.radius.segItem, alignItems: 'center', justifyContent: 'center',
+        accessibilityState={{ selected: on }} onPress={() => choose(option.value)} hitSlop={{ top: compact ? 7 : 6, bottom: compact ? 7 : 6 }}
+        style={{ flex: 1, minHeight: compact ? 32 : 34, paddingHorizontal: compact ? 6 : 10, borderRadius: KIT.radius.segItem, alignItems: 'center', justifyContent: 'center',
           backgroundColor: on ? k.segOn : 'transparent',
           boxShadow: on ? '0px 1px 3px rgba(0, 0, 0, 0.14), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.06)' : undefined }}>
-        <KitText weight={600} size={13.5} tracking={-0.005} color={on ? 'text' : 'text-muted'} style={{ textAlign: 'center' }}>{option.label}</KitText>
+        <KitText weight={600} size={compact ? 13 : 13.5} tracking={-0.005} color={on ? 'text' : 'text-muted'} style={{ textAlign: 'center' }}>{option.label}</KitText>
       </Tappable>;
     })}
   </View>;

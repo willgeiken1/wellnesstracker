@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import {
-  Badge, Button, Card, Chip, EmptyState, List, ListRow, NavBar, NavButton, PageHeader, ProgressBar, Ring, SearchField, Section, SectionHeader,
+  Badge, Button, Card, Chip, EmptyState, SegmentedControl, List, ListRow, NavBar, NavButton, PageHeader, ProgressBar, Ring, SearchField, Section, SectionHeader,
   Sheet, SheetHeader, Stat, Stepper, Switch, TextField, ToastProvider, useToast, StackGapContext, alpha, mix,
 } from '../src/components/kit';
 
@@ -102,6 +102,13 @@ describe('controls', () => {
     expect(on.props.hitSlop).toEqual({ top: 6, bottom: 6 });
     expect(textStyle('Recent')).toMatchObject({ color: dark['on-accent'], fontSize: 13.5 });
     expect(flat(screen.getByRole('button', { name: 'Saved' })).backgroundColor).toBe(dark.surface);
+  });
+  test('the compact segmented control fits a settings row and still reaches 44 pt', async () => {
+    await render(<SegmentedControl compact label="Time" options={[{ value: '12', label: '12-hour' }, { value: '24', label: '24-hour' }]} value="12" onChange={() => {}} />, { wrapper: inMode('dark') });
+    const on = screen.getByRole('tab', { name: '12-hour' });
+    expect(flat(on)).toMatchObject({ minHeight: 32, paddingHorizontal: 6 });
+    expect(32 + on.props.hitSlop.top + on.props.hitSlop.bottom).toBeGreaterThanOrEqual(44);
+    expect(textStyle('24-hour')).toMatchObject({ fontSize: 13, color: dark['text-muted'] });
   });
   test('the stepper steps within bounds and every button reaches 44 pt', async () => {
     const onChange = jest.fn();
