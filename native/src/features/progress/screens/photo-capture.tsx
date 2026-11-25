@@ -72,7 +72,7 @@ export function PhotoCaptureSheet() {
       style={{ height: 470, borderRadius: 22, overflow: 'hidden', backgroundColor: k.pill }}>
       {live ? <CameraView ref={cam} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }} facing={front ? 'front' : 'back'} mirror={front} animateShutter={false} />
         : <Svg style={{ position: 'absolute', left: 0, top: 0 }} width="100%" height="100%">
-            <Defs><RadialGradient id="cam" cx="50%" cy="30%" rx="60%" ry="40%"><Stop offset="0" stopColor={mix(k.pill, k.c.recovery, 0.8)} /><Stop offset="1" stopColor={k.pill} /></RadialGradient></Defs>
+            <Defs><RadialGradient id="cam" cx="50%" cy="30%" rx="120%" ry="80%"><Stop offset="0" stopColor={mix(k.pill, k.c.recovery, 0.8)} /><Stop offset="0.7" stopColor={k.pill} /><Stop offset="1" stopColor={k.pill} /></RadialGradient></Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#cam)" /></Svg>}
       {[33.3, 66.7].map(p => <View key={`v${p}`} pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: `${p}%`, width: 1, backgroundColor: mix(ink, 'transparent', 0.14) }} />)}
       {[33.3, 66.7].map(p => <View key={`h${p}`} pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: `${p}%`, height: 1, backgroundColor: mix(ink, 'transparent', 0.14) }} />)}
@@ -99,7 +99,7 @@ export function PhotoCaptureSheet() {
       </Pressable>
       <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
         <Pressable onPress={() => setTimer(!timer)} accessibilityRole="switch" accessibilityState={{ checked: timer }} accessibilityLabel={t('progressTimer3')}
-          style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: timer ? k.c.warning : k.cardBg, boxShadow: k.dark ? undefined : `0px 0px 0px 1px ${k.c['hair-2']}` }}>
+          style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: timer ? k.c.warning : k.dark ? k.c['surface-2'] : k.c.surface, boxShadow: k.dark ? undefined : `0px 0px 0px 1px ${k.c['hair-2']}` }}>
           <Text style={[font(700, 13), { color: timer ? k.tok('on-accent') : k.c.text }]}>3s</Text></Pressable>
       </View>
     </View>

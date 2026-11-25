@@ -12,7 +12,8 @@ export interface Scroller { scrollTo(o: { y: number; animated?: boolean }): void
 export function Page({ back, title, right, children, testID, scrollRef }: { back: string; title: string; right?: ReactNode; children: ReactNode; testID?: string; scrollRef?: RefObject<Scroller | null> }) {
   const k = useKit(), insets = useSafeAreaInsets();
   return <View testID={testID} style={{ flex: 1, backgroundColor: k.c.bg }}>
-    <NavBar back={back} title={title} right={right} />
+    {/* The bar reaches 16 pt past its parent's sides, as on a page with 16 pt margins. */}
+    <View style={{ paddingHorizontal: 16, zIndex: 5 }}><NavBar back={back} title={title} right={right} /></View>
     <ScrollView ref={scrollRef as never} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom, gap: 12 }}>
       <StackGapContext.Provider value={12}><SurfaceContext.Provider value="page">{children}</SurfaceContext.Provider></StackGapContext.Provider>
     </ScrollView>
@@ -34,11 +35,16 @@ export const CapB = ({ children }: { children: ReactNode }) => { const k = useKi
 /** A number in the screen styles: big 44, mid 30, small 21, with a small grey unit. */
 export function Big({ v, unit, size = 'big', color, units }: { v?: string | number; unit?: string; size?: 'big' | 'mid' | 'sm'; color?: string; units?: (readonly [string, string])[] }) {
   const k = useKit(), [fs, lh, tr, us] = size === 'big' ? [44, 1, -0.045, 15] : size === 'mid' ? [30, 1.05, -0.04, 15] : [21, 1.1, -0.03, 12.5];
-  /* the unit sits a small gap after its number (margin-left 3px); between h and m groups the gap is a full space */
-  const small = (s: string) => <Text style={[font(600, us, 1), { color: k.c['text-muted'], letterSpacing: 0 }]}>{' '}{s}</Text>;
-  return <Text numberOfLines={1} style={[font(700, fs, lh, tr), tab, { color: color ?? k.c.text }]}>
-    {units ? units.map(([n, u], i) => <Text key={i}>{i ? ' ' : ''}{n}{small(u)}</Text>) : <>{v}{unit ? small(unit) : null}</>}
-  </Text>;
+  // Number and unit sit on one baseline, the unit 3 pt after its number (.pg-big small { margin-left: 3px }); an hours and
+  // minutes value keeps a word space between its groups.
+  const groups: (readonly [string, string | undefined])[] = units ?? [[v == null ? '' : String(v), unit]];
+  const said = groups.map(([n, u]) => u ? `${n} ${u}` : n).join(' ');
+  return <View accessible accessibilityLabel={said} style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'nowrap' }}>
+    {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? fs * 0.25 : 0 }}>
+      <Text numberOfLines={1} style={[font(700, fs, lh, tr), tab, { color: color ?? k.c.text }]}>{n}</Text>
+      {u ? <Text numberOfLines={1} style={[font(600, us), { color: k.c['text-muted'], letterSpacing: 0, marginLeft: 3 }]}>{u}</Text> : null}
+    </View>)}
+  </View>;
 }
 export const Divider = ({ style }: { style?: StyleProp<ViewStyle> }) => { const k = useKit(); return <View style={[{ height: 1, backgroundColor: k.c.hair, marginTop: 16, marginBottom: 14 }, style]} />; };
 /** Two things on one line, pushed apart (.pg-split). */

@@ -42,7 +42,7 @@ export function MeasurementsSheet() {
   };
   const L = lenU(u);
   return <Sheet header={<SheetHeader title={t('progressMeasurements')} right={t('progressSave')} onRight={save} rightDisabled={!repo} testID="measurements" />}>
-    <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'] }]}>{t('progressMeasureLead')}</Text>
+    <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'], marginBottom: 4 }]}>{t('progressMeasureLead')}</Text>
     <List><ListRow title={t('progressDate')} value={t('progressTodayCap')} strong /></List>
     <List footer={t('progressMeasureFoot')}>
       {MEASURE_KEYS.map(key => { const last = lastCm(key);

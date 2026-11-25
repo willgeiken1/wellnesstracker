@@ -166,7 +166,8 @@ export function stats(v: Daily) {
 export function goalEta(d: ProgressData): string | null {
   const w = d.weight, list = d.days.weight.slice(-30), first = list.findIndex(finite), lastI = lastIndex(list);
   if (w.kg == null || w.goalKg == null || first < 0 || !finite(list[lastI]) || lastI <= first) return null;
-  const rate = ((list[first] as number) - (list[lastI] as number)) / (lastI - first);
+  // The 30-day pace: the change across the weigh-ins in the last 30 days, per day of that span.
+  const rate = ((list[first] as number) - (list[lastI] as number)) / (lastI - first + 1);
   const toGo = w.kg - w.goalKg;
   if (!(rate > 0) || toGo <= 0) return null;
   return addDays(d.today, Math.round(toGo / rate));

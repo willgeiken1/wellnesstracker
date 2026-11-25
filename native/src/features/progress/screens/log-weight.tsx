@@ -35,7 +35,7 @@ function Ruler({ v, unit, onChange }: { v: number; unit: 'kg' | 'lb'; onChange: 
   }
   const off = (v * 10 - Math.round(v * 10)) * PX, edge = k.sheetBg;
   return <View onLayout={e => setW(e.nativeEvent.layout.width)} {...pan.panHandlers} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
-    style={{ flex: 1, height: 56, borderRadius: 14, overflow: 'hidden', backgroundColor: k.cardBg }}>
+    style={{ width: '100%', height: 56, borderRadius: 14, overflow: 'hidden', backgroundColor: k.cardBg }}>
     <Svg width={720} height={56} viewBox="-360 0 720 56" style={{ position: 'absolute', top: 0, left: w / 2 - 360 - off }}>{ticks}</Svg>
     <View style={{ position: 'absolute', left: '50%', top: 6, bottom: 6, width: 3, marginLeft: -1.5, borderRadius: 2, backgroundColor: k.c.recovery }} />
     {w ? <Svg width={w} height={56} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
@@ -94,7 +94,9 @@ export function LogWeightSheet() {
             onBlur={() => { const n = Number(typing); if (Number.isFinite(n) && n > 0) set(n); setTyping(null); }}
             style={[font(700, 72, 1, -0.05), { color: k.c.text, textAlign: 'center', minWidth: 200, fontVariant: ['tabular-nums'] }]} />
         : <Pressable onPress={() => setTyping(fmt(v, 1).replace(/,/g, ''))} accessibilityRole="button" accessibilityHint={t('progressTapToType')} accessibilityLabel={`${fmt(v, 1)} ${unitWord}`}>
-            <Text accessibilityLiveRegion="polite" style={[font(700, 72, 1, -0.05), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{fmt(v, 1)}<Text style={[font(600, 22), { color: k.c['text-muted'], letterSpacing: 0 }]}>{' '}{u}</Text></Text>
+            <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <Text style={[font(700, 72, 1, -0.05), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{fmt(v, 1)}</Text>
+              <Text style={[font(600, 22), { color: k.c['text-muted'], letterSpacing: 0, marginLeft: 6 }]}>{u}</Text></View>
           </Pressable>}
       {goal != null && gap != null ? <Text style={[font(600, 13.5), { marginTop: 8, color: k.c['text-muted'] }]}>
         {gap > 0 ? fill(t('progressToGoalOf'), { v: `${fmt(gap, 1)} ${u}`, goal: wGoal(d.weight.goalKg!, u) }) : fill(t('progressAtGoalOf'), { goal: wGoal(d.weight.goalKg!, u) })}</Text> : null}

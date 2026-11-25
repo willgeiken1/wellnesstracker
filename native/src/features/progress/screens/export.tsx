@@ -41,7 +41,7 @@ export function ExportSheet() {
   };
   const summary = files.length ? fill(t(files.length === 1 ? 'progressOneCsv' : 'progressNCsv'), { n: files.length, kb: Math.max(1, Math.round(bytes / 1024)) }) : t('progressChooseOne');
   return <Sheet header={<SheetHeader title={t('progressExportData')} left={t('kitCancel')} testID="export" />}>
-    <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'] }]}>{t('progressExportLead')}</Text>
+    <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'], marginBottom: 4 }]}>{t('progressExportLead')}</Text>
     <SectionHeader title={t('progressExData')} />
     <List footer={t('progressExFoot')}>
       {EXPORT_KINDS.map(x => { const [l, icon, color] = KINDS[x];
@@ -51,8 +51,7 @@ export function ExportSheet() {
     <SectionHeader title={t('progressExRange')} />
     <SegmentedControl label={t('progressExRange')} value={range} onChange={setRange}
       options={[{ value: '30', label: t('progress30DaysCap') }, { value: '90', label: t('progress90Days') }, { value: 'all', label: t('progressAllTime') }]} />
-    <View style={{ height: 8 }} />
-    <View style={{ backgroundColor: k.cardBg, borderRadius: 20, paddingTop: 14, paddingBottom: 6, boxShadow: k.cardEdge }}>
+    <View style={{ marginTop: 8, backgroundColor: k.dark ? k.c['surface-2'] : k.c.surface, borderRadius: 20, paddingTop: 14, paddingBottom: 6, boxShadow: k.cardEdge }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: k.c.hair }}>
         <View style={{ width: 44, height: 52, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: mix(k.c.success, k.dark ? k.c.bg : k.c['surface-2'], 0.18) }}>
           <Text style={[font(700, 10, undefined, 0.04), { color: k.c.success }]}>CSV</Text></View>

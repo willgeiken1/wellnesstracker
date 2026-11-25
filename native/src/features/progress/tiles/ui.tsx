@@ -135,7 +135,7 @@ export function Figure({ pose, w = 15.5, ghost, style }: { pose: Pose; w?: numbe
     const L = 50 - w - 2.5, R = 50 + w + 2.5;
     body = <><Circle cx={50} cy={19} r={10.5} /><Path d={`M45 29L45 34Q34 35 28.5 39Q25 41 24.6 46L21.2 79Q21 83 23.4 83Q25.5 83 25.8 80L29.5 52Q30.5 62 ${f(L)} 72Q${f(L - 0.8)} 80 ${f(L - 0.6)} 88L35 136Q35 139 38 139L45 139Q47 139 47.2 136L50 100L52.8 136Q53 139 55 139L62 139Q65 139 65 136L${f(R + 0.6)} 88Q${f(R + 0.8)} 80 ${f(R)} 72Q69.5 62 70.5 52L74.2 80Q74.5 83 76.6 83Q79 83 78.8 79L75.4 46Q75 41 71.5 39Q66 35 55 34L55 29Z`} /></>;
   }
-  return <Svg viewBox="0 0 100 140" preserveAspectRatio="xMidYMax meet" style={style}><G fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round">{body}</G></Svg>;
+  return <View style={style} pointerEvents="none"><Svg width="100%" height="100%" viewBox="0 0 100 140" preserveAspectRatio="xMidYMax meet"><G fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round">{body}</G></Svg></View>;
 }
 /** The soft gradient behind a photo (.pg-ph). */
 export function PhotoBack({ id }: { id: string }) {

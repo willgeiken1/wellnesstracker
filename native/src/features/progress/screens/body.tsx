@@ -43,7 +43,7 @@ function GoalRuler({ d }: { d: ProgressData }) {
   const nx = x(w.kg);
   const aria = fill(t('progressGoalRulerAria'), { start: wtS(start, u), goal: wtS(goal, u), now: wtS(w.kg, u) }) + (eta ? ' ' + fill(t('progressGoalRulerEta'), { when: dShort(eta) }) : '');
   return <View accessible accessibilityRole="image" accessibilityLabel={aria} style={{ width: '100%', aspectRatio: W / H, marginTop: 10, marginBottom: 2 }}>
-    <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}>
+    <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
       {marks}
       <Line x1={L} x2={R} y1={y} y2={y} stroke={mix(k.c.recovery, k.c['surface-2'], 0.18)} strokeWidth={6} strokeLinecap="round" />
       <Line x1={L} x2={nx} y1={y} y2={y} stroke={k.c.recovery} strokeWidth={6} strokeLinecap="round" />

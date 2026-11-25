@@ -61,7 +61,7 @@ export function PhotosScreen() {
             {p.kg != null ? <Text style={[font(600, 13), { color: k.c['text-muted'], fontVariant: ['tabular-nums'] }]}>{wtS(p.kg, u)}</Text> : null}</View>
         </View>)}
       </View>
-      {delta ? <View style={{ alignItems: 'center', marginTop: 14 }}><Badge label={delta} color="recovery" /></View> : null}
+      {delta ? <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14 }}><Badge label={delta} color="recovery" /></View> : null}
     </Card> : null}
     <SectionHeader title={t('progressAllPhotos')} aside={fill(t('progressNPhotos'), { n: ph.length })} />
     <View accessibilityRole="none" accessibilityLabel={t('progressTapTwoAria')} style={{ gap: 8 }}>
