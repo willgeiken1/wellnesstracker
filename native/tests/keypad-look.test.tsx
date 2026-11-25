@@ -19,8 +19,12 @@ jest.mock('expo-router/native-tabs', () => {
   NativeTabs.Trigger = Trigger;
   return { NativeTabs };
 });
-// The floating bar is covered in floating-tabs.test; here only the system bar's looks are checked.
-jest.mock('expo-router', () => ({ Tabs: () => null }));
+// The floating bar itself is covered in floating-tabs.test; here only which bar each look draws is checked.
+jest.mock('expo-router', () => {
+  const Tabs = () => { (globalThis as any).__shellTabs = true; return null; };
+  Tabs.Screen = () => null;
+  return { Tabs };
+});
 const mockLiquid = jest.fn(() => false);
 jest.mock('expo-glass-effect', () => {
   const React = require('react');
@@ -93,17 +97,12 @@ test('a held plain key dims and shows no highlight', async () => {
   jest.useRealTimers();
 });
 
-test('the standard tab bar is tinted with the theme and stays solid at the scroll edge', async () => {
-  await render(<ThemeProvider repository={saved('seaGlassTide')}><AppTabs /></ThemeProvider>);
-  expect(tabsProps()).toMatchObject({ backgroundColor: dark.bg, disableTransparentOnScrollEdge: true });
-  expect(tabsProps().blurEffect).toBeUndefined();
-});
-
-test('the glass tab bar drops the tint and lets the screen show through', async () => {
-  await render(<ThemeProvider repository={saved('seaGlassTide;bar=glass')}><AppTabs /></ThemeProvider>);
-  const props = tabsProps();
-  expect(props.backgroundColor).toBeUndefined();
-  expect(props).toMatchObject({ blurEffect: 'systemUltraThinMaterial', disableTransparentOnScrollEdge: false, tintColor: dark.accent });
+// The mockup's shell has one bar: the floating one. The old Standard and Glass looks no longer swap in the system tab bar.
+test.each(['seaGlassTide', 'seaGlassTide;bar=glass', 'seaGlassTide;bar=floating'])('with the %s look the app draws the floating bar, not the system tab bar', async accent => {
+  (globalThis as any).__shellTabs = false;
+  await render(<ThemeProvider repository={saved(accent)}><AppTabs /></ThemeProvider>);
+  expect(tabsProps()).toBeUndefined();
+  expect((globalThis as any).__shellTabs).toBe(true);
 });
 
 test('the Hold to scroll and Next keys shrink or wrap to fit, so a label is never cut off', async () => {

@@ -93,6 +93,9 @@ test('the controls the acceptance review named dim at the right strength', () =>
   expect(read('src/features/food/log-screen.tsx')).toMatch(/<Tappable dim="fill" key=\{meal\.id\}/);
   expect(read('src/features/home/edit-sheet.tsx')).toMatch(/<Tappable dim="fill"[^>]*accessibilityLabel=\{t\('done'\)\}/);
   expect(read('src/features/home/screen.tsx')).toMatch(/<Tappable dim="fill"[^>]*accessibilityLabel=\{t\('openSettings'\)\}/);
-  // A bare dock icon dims like any icon; only the open tab's filled circle takes the lighter dim.
-  expect(read('src/components/floating-tabs.tsx')).toMatch(/dim=\{open \? 'fill' : 'row'\}/);
+  // The floating bar's tabs and + button show a press by shrinking, as the mockup's shell does, rather than by dimming.
+  const dock = read('src/features/shell/dock.tsx');
+  expect(dock).toMatch(/<Tappable dim="none" testID=\{`tab-\$\{page\.route\}`\}/);
+  expect(dock).toMatch(/<Tappable dim="none" testID="dock-plus"/);
+  expect(dock.match(/scale: pressed \? PRESS_SCALE/g)).toHaveLength(2);
 });
