@@ -70,9 +70,13 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
   d.bodyFat = demo ? [...d.bodyFat, ...fat] : fat.slice();
   if (!demo && health?.bodyFat?.length && health.bodyFatAt) {
     const day = dayKeyOf(health.bodyFatAt), pct = health.bodyFat[health.bodyFat.length - 1];
-    if (!d.bodyFat.some(b => b.day >= day)) d.bodyFat.push({ day, pct });
+    if (!d.bodyFat.some(b => b.day >= day)) d.bodyFat.push({ day, pct, health: true });
   }
-  d.photos = demo ? [...d.photos, ...photos] : photos;
+  // A photo keeps no weight of its own: it shows the weigh-in of its day (or the closest one in the week before), so a reading
+  // from Apple Health is never copied into what this phone backs up.
+  const weightOn = (day: string) => { const i = index.get(day); if (i == null) return null; for (let j = i; j >= Math.max(0, i - 7); j--) { const w = d.days.weight[j]; if (finite(w)) return w; } return null; };
+  const withKg = photos.map(p => ({ ...p, kg: p.kg ?? weightOn(p.day) }));
+  d.photos = demo ? [...d.photos, ...withKg] : withKg;
   if (demo) return d;
 
   /* health: steps and sleep from Apple Health and Oura (merged per day), HRV and resting heart rate from one source only */

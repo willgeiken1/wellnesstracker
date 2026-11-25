@@ -52,7 +52,8 @@ export interface ProgressData {
   sleepGoalMin: number; stepGoal: number;
   sources: { oura: boolean; apple: boolean; ouraSynced: string | null };
   weight: { kg: number | null; day: string | null; time: string | null; startKg: number | null; startDay: string | null; goalKg: number | null };
-  bodyFat: { day: string; pct: number }[];
+  /** Body fat readings, oldest first; `health` marks one from a smart scale through Apple Health. */
+  bodyFat: { day: string; pct: number; health?: boolean }[];
   measures: Measured[];
   photos: ProgressPhoto[];
   training: {

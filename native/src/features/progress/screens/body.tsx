@@ -1,14 +1,24 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg';
-import { Eyebrow, List, ListRow, NavButton, SectionHeader, SegmentedControl, font, mix, useKit } from '@/components/kit';
+import { Eyebrow, IconButton, List, ListRow, NavButton, SectionHeader, SegmentedControl, font, mix, useKit } from '@/components/kit';
+import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
+import { compareRows } from '@/data/rows';
+import { appleHealth } from '@/features/health/apple';
+import { refreshWeights } from '@/features/health/weights';
+import { deleteWeighIn } from '@/features/body/model';
+import { showToast } from '@/features/shell/toast';
+import { readWeightFromHealth } from '../local';
 import { MEASURE_KEYS, addDays, change30, dLong, dShort, finite, goalEta, lastIndex, series, type MeasureKey, type ProgressData, type Range } from '../model';
 import { fill, fmt, lenS, lenU, wGoal, wtN, wtS, wtV } from '../format';
 import { metricView, rangeLong } from '../metric';
 import { useProgress } from '../use-progress';
-import { measureName } from '../tiles/body';
+import { measureName as tileName } from '../tiles/body';
+
+/** A measure's name on the screens, where the arm is the upper arm. */
+export const measureName = (key: MeasureKey) => key === 'arm' ? t('progressMeasArmLong') : tileName(key);
 import { Chart, SVG_LABEL } from '../viz';
 import { Big, Cap, Card, Divider, Page, Split, Src } from './parts';
 
@@ -57,8 +67,39 @@ function Comp({ label, value, unit, sub, aria, onPress }: { label: string; value
   </Pressable>;
 }
 
+/** Weigh-ins typed here, newest first, each with a delete button that asks first. Apple Health readings are not listed:
+ * they are removed in Apple Health. */
+function Typed({ d }: { d: ProgressData }) {
+  const auth = useAuth(), repo = auth.repository, u = d.unit;
+  const [all, setAll] = useState(false);
+  if (!repo || d.demo) return null;
+  const rows = repo.list('weigh_ins').filter(r => r.deleted_at === null && r.data.source === 'app' && Number(r.data.weight_kg) > 0)
+    .sort((a, b) => String(b.data.day).localeCompare(String(a.data.day)) || compareRows(b, a) || b.id.localeCompare(a.id));
+  if (!rows.length) return null;
+  const shown = all ? rows : rows.slice(0, 5);
+  const ask = (id: string, label: string) => Alert.alert(fill(t('progressDeleteWeighInQ'), { what: label }), undefined, [
+    { text: t('cancel'), style: 'cancel' },
+    { text: t('progressDelete'), style: 'destructive', onPress: () => { if (!deleteWeighIn(repo, id)) showToast(t('progressDeleteFailed'), { color: 'warning' }); } },
+  ]);
+  return <>
+    <SectionHeader title={t('progressTypedWeighIns')} aside={rows.length > 5 ? t(all ? 'progressShowFewer' : 'progressShowAll') : undefined} onAside={() => setAll(!all)} />
+    <List footer={t('progressTypedFoot')}>
+      {shown.map(r => { const label = `${dLong(String(r.data.day))}, ${wtS(Number(r.data.weight_kg), u)}`;
+        return <ListRow key={r.id} title={dLong(String(r.data.day))} value={wtS(Number(r.data.weight_kg), u)}
+          right={<IconButton icon="trash" label={fill(t('progressDeleteWeighIn'), { what: label })} onPress={() => ask(r.id, label)} />} />; })}
+    </List>
+  </>;
+}
+
 export function BodyScreen() {
-  const d = useProgress(), k = useKit(), u = d.unit, w = d.weight;
+  const d = useProgress(), k = useKit(), u = d.unit, w = d.weight, auth = useAuth(), repo = auth.repository;
+  // Opening Body quietly picks up new Apple Health weigh-ins once Health is connected and the person has not turned it off.
+  // It never prompts, and does nothing in Look around first.
+  useEffect(() => {
+    if (!repo || auth.demo || !readWeightFromHealth(repo)) return;
+    let live = true; void refreshWeights(repo, appleHealth(), new Date(), () => live).catch(() => {});
+    return () => { live = false; };
+  }, [repo, auth.demo]);
   const [range, setRange] = useState<Range>('month');
   const se = series(d, 'weight', range), v = se.v, li = lastIndex(v), mv = metricView(d, 'weight');
   const [sel, setSel] = useState<number | null>(null), at = sel ?? li;
@@ -119,5 +160,6 @@ export function BodyScreen() {
       <ListRow icon="camera" color="sleep" title={t('progressProgressPhotos')} sub={lastPhoto ? fill(t('progressNPhotosLast'), { n: d.photos.length, day: dShort(lastPhoto.day) }) : t('progressNoPhotos')} onPress={() => router.push('/progress/photos')} />
       <ListRow icon="plus" color="sleep" title={t('progressTakeAPhoto')} sub={t('progressFrontSideBack')} onPress={() => router.push('/progress/photo-capture')} />
     </List>
+    <Typed d={d} />
   </Page>;
 }

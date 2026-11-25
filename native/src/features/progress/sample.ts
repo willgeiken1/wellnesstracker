@@ -67,7 +67,7 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
   d.hrvBand = [46, 62]; d.rhrBand = [54, 60];
   d.sources = { oura: true, apple: true, ouraSynced: '6:40 AM' };
   d.weight = { kg: kg(182.1), day: today, time: '6:52 AM', startKg: kg(186.4), startDay: back(49), goalKg: kg(178) };
-  d.bodyFat = [[63, 19.1], [49, 18.8], [35, 18.5], [21, 18.2], [7, 17.8]].map(([b, pct]) => ({ day: back(b), pct }));
+  d.bodyFat = [[63, 19.1], [49, 18.8], [35, 18.5], [21, 18.2], [7, 17.8]].map(([b, pct]) => ({ day: back(b), pct, health: true }));
   const inch = (o: Record<string, number>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * IN]));
   d.measures = [
     { day: back(63), cm: inch({ chest: 41.5, waist: 35.0, hips: 39.3, neck: 15.8, arm: 14.2, thigh: 23.5 }) },

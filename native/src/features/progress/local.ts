@@ -7,7 +7,7 @@ import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type P
  * neck measurement (the synced measurements table has no neck column) and body fat typed in by hand. All in the
  * repository's local, per-person storage, which is never part of the sync queue.
  */
-const PHOTOS = 'progressPhotos', NECK = 'progressNeck', FAT = 'progressBodyFat', REMIND = 'progressPhotoReminder';
+const PHOTOS = 'progressPhotos', NECK = 'progressNeck', FAT = 'progressBodyFat', REMIND = 'progressPhotoReminder', HEALTH_WEIGHT = 'progressWeightFromHealth';
 
 export interface StoredPhoto { id: string; day: string; kg: number | null; pose: Pose; uri: string }
 function list<T>(repo: Repository, key: string): T[] { try { const v = repo.localGet<T[]>(key); return Array.isArray(v) ? v : []; } catch { return []; } }
@@ -22,6 +22,10 @@ export function removePhoto(repo: Repository, id: string) { repo.localSave(PHOTO
 
 export function readReminder(repo: Repository): boolean { try { return repo.localGet<boolean>(REMIND) !== false; } catch { return true; } }
 export function saveReminder(repo: Repository, on: boolean) { repo.localSave(REMIND, on); }
+
+/** Whether new Apple Health weigh-ins fill in on their own when Body opens. On unless turned off in Log weight. */
+export function readWeightFromHealth(repo: Repository): boolean { try { return repo.localGet<boolean>(HEALTH_WEIGHT) !== false; } catch { return true; } }
+export function saveWeightFromHealth(repo: Repository, on: boolean) { repo.localSave(HEALTH_WEIGHT, on); }
 
 /** Tape measurements, oldest first: the synced rows (metres) joined with the neck readings kept here. */
 export function readMeasures(repo: Repository): Measured[] {
