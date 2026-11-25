@@ -14,7 +14,7 @@ const openRow=async(name:string)=>{const row=screen.getByRole('button',{name:new
 const openMeal=async(name:string)=>{const menu=screen.getByRole('button',{name:name+' options'});if(!menu.props.accessibilityState?.expanded)await fireEvent.press(menu);};
 test('four meals, manual entry names day, blank nutrients, edit portions, delete and Undo',async()=>{
  const repo=memoryRepository();await render(<FoodScreen repository={repo}/>,{wrapper});
- for(const meal of ['Breakfast','Lunch','Dinner','Snacks'])expect(screen.getByRole('button',{name:meal})).toBeTruthy();
+ for(const meal of ['Breakfast','Lunch','Snack','Dinner'])expect(screen.getByRole('button',{name:meal})).toBeTruthy();
  await fireEvent.press(screen.getByRole('button',{name:'Manual'}));
  await fireEvent.changeText(screen.getByLabelText('Food name'),'Synthetic oats');
  await fireEvent.changeText(screen.getByLabelText('Calories (kcal)'),'100');
