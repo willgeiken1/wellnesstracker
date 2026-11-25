@@ -121,8 +121,7 @@ function SaveButton({ on, onPress }: { on: boolean; onPress: () => void }) {
 
 /** The energy and how it splits between protein, carbs and fat (`.fd-ikc`). */
 export function EnergyCard({ kcal, p, c, f }: { kcal: number | null; p: number | null; c: number | null; f: number | null }) {
-  const k = useKit(), [pp, pcc, pf] = macroPercents(p ?? 0, c ?? 0, f ?? 0).pc, pc = { p: pp, c: pcc, f: pf };
-  const rows: [string, number | null, number, string][] = [[t('foodMacroProtein'), p, pc.p, MACRO_COLOR.p], [t('foodMacroCarbs'), c, pc.c, MACRO_COLOR.c], [t('foodMacroFat'), f, pc.f, MACRO_COLOR.f]];
+  const k = useKit();
   return <Card>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
       <View style={{ minWidth: 84 }}>
@@ -131,14 +130,7 @@ export function EnergyCard({ kcal, p, c, f }: { kcal: number | null; p: number |
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: (p ?? 0) * 4, color: k.c.food }, { v: (c ?? 0) * 4, color: k.c.accent }, { v: (f ?? 0) * 9, color: k.c.sleep }]} />
-        <View style={{ gap: 6, marginTop: 12 }} accessible accessibilityLabel={fill(t('foodSplitA11y'), { p: pc.p, c: pc.c, f: pc.f })}>
-          {rows.map(([label, g, pct, color]) => <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.tok(color) }} />
-            <KitText weight={500} size={13} color="text-muted" style={{ flex: 1 }}>{label}</KitText>
-            <KitText weight={700} size={13.5} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
-            <KitText weight={700} size={12.5} numeric color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
-          </View>)}
-        </View>
+        <EnergyLegend p={p} c={c} f={f} />
       </View>
     </View>
   </Card>;
@@ -177,5 +169,19 @@ function FactsPanel({ food, grams, servingText, barcode }: { food: Food; grams: 
     {row(b(t('foodMacroProtein')), n(food.protein_g), 'g', 50)}
     {bar(4, { marginTop: 2 })}
     <KitText weight={500} size={12} lineHeight={1.4} color="text-muted" style={{ marginTop: 8 }}>{`${t(barcode ? 'foodFactsOff' : 'foodFactsMine')} ${t('foodFactsDv')}`}</KitText>
+  </View>;
+}
+
+/** Protein, carbs and fat with their grams and share of the calories (`.fd-leg`). */
+export function EnergyLegend({ p, c, f }: { p: number | null; c: number | null; f: number | null }) {
+  const k = useKit(), [pp, pcc, pf] = macroPercents(p ?? 0, c ?? 0, f ?? 0).pc, pc = { p: pp, c: pcc, f: pf };
+  const rows: [string, number | null, number, string][] = [[t('foodMacroProtein'), p, pc.p, MACRO_COLOR.p], [t('foodMacroCarbs'), c, pc.c, MACRO_COLOR.c], [t('foodMacroFat'), f, pc.f, MACRO_COLOR.f]];
+  return <View style={{ gap: 6, marginTop: 12 }} accessible accessibilityLabel={fill(t('foodSplitA11y'), { p: pc.p, c: pc.c, f: pc.f })}>
+    {rows.map(([label, g, pct, color]) => <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.tok(color) }} />
+      <KitText weight={500} size={13} color="text-muted" style={{ flex: 1 }}>{label}</KitText>
+      <KitText weight={700} size={13.5} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
+      <KitText weight={700} size={12.5} numeric color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
+    </View>)}
   </View>;
 }

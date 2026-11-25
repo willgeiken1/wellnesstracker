@@ -1049,7 +1049,7 @@ export const en = {
  foodWater: 'Water', foodWaterOfToday: 'of {goal} today', foodWaterOf: 'of {goal}', foodWaterPctToGo: '{pct}% of your goal · {left} to go', foodWaterOver: '{v} over',
  foodAddADrink: 'Add a drink', foodEditContainers: 'Edit containers', foodContainersHint: 'Containers. Tap one to add it.', foodSteps1: '1 oz steps', foodSteps50: '50 mL steps',
  foodAddAmount: 'Add {v}', foodThatDayCap: 'That day', foodRemoveDrink: 'Remove {name}, {time}', foodNoWaterToday: 'No water logged yet today', foodNoWaterDay: 'No water logged that day',
- foodNoWaterHint: 'Tap a container above to add it.', foodWaterGoalNote: 'Goal {goal} a day. Change it in Settings, Goals and targets.',
+ foodNoWaterHint: 'Tap a container above to add it.', foodWaterGoalNote: 'Goal {goal} a day.',
  foodContainers: 'Containers', foodUnits: 'Units', foodFluidOunces: 'Fluid ounces', foodMilliliters: 'Milliliters', foodYourContainers: 'Your containers', foodNOnQuick: '{n} of 4 on quick add',
  foodQuickHolds4: 'Quick add holds 4. Turn one off first.', foodKeep2Quick: 'Keep at least 2 on quick add', foodMovedTo: '{name} moved to place {n}', foodOrderSaved: 'Order saved',
  foodAddContainerRow: 'Add a container', foodAddContainerSub: 'Your own bottle, by name and size',
@@ -1063,6 +1063,16 @@ export const en = {
  foodBarcodeFound: 'Barcode found', foodLineUp: 'Line up the barcode inside the frame', foodCameraA11y: 'Camera view. Line up the barcode inside the frame.',
  foodAllowCamera: 'Allow the camera', foodTypeNumber: 'Type the number', foodLookingFor: 'Looking for a barcode', foodScanAnother: 'Scan another',
  foodBarcodePrivacy: 'Only the barcode is sent to Open Food Facts. Foods you scanned before work offline.',
+ foodAddFood: 'Add food', foodEditBtn: 'Edit', foodDeleteBtn: 'Delete', foodDeleteNamed: 'Delete {name}', foodFoodsCap: 'Foods', foodItemWord: 'item', foodItemsWord: 'items',
+ foodJustCalories: 'Just the calories', foodMealEmpty: 'Nothing logged for {meal} yet', foodMealEmptyHint: 'Search for a food, scan a barcode, or reuse a meal you saved.',
+ foodSaveAsMeal: 'Save as a meal', foodSavedAsMeal: 'Saved as “{name}” in Saved meals', foodShareOfDay: '{pct}% of your {goal} kcal day',
+ foodSwipeHint: 'Swipe left on a food to delete it, or tap Edit.', foodTimeEaten: 'Time eaten, {time}',
+ foodNutrition: 'Nutrition', foodRange: 'Range', foodEatenToday: 'Eaten today', foodEatenOn: 'Eaten {day}', foodOfGoalKcal: 'of {goal} kcal', foodNBurned: '{v} burned',
+ foodOfGoalA11y: '{v} of {goal} kcal', foodEachSquare: 'Each square is 2%', foodMacrosTitle: 'Macros', foodMoreNutrients: 'More nutrients', foodMax: 'max',
+ foodNutritionFoot: 'Blank nutrients are unknown; totals include known values only. Burned calories come from Apple Health and are not added to your goal.',
+ foodTargets: 'Food targets', foodDailyAverage: 'Daily average', foodDaysOnTarget: 'Days on target', foodWithinOf: 'Within 10% of {v}', foodNoFullDays: 'No full days yet',
+ foodTo: 'to', foodTodaySoFar: 'Today so far', foodGoalWord: 'goal', foodByDay: 'By day', foodWaterLower: 'water', foodSoFarCap: 'So far', foodOnTarget: 'On target',
+ foodOverCap: 'Over', foodUnderCap: 'Under',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */

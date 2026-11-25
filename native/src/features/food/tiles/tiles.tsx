@@ -342,9 +342,9 @@ const Week: TileBody = ({ p, repo, d }) => {
 };
 
 /* 7. Nutrients */
-interface Nu { key: string; v: number | null; goal: number; u: string; limit?: boolean; color?: string }
-function nutrients(d: Data): { reach: Nu[]; limit: Nu[] } {
-  const v = d.view, known = (key: 'sugar' | 'sodium') => v.items.some(i => i[key] != null) ? v.items.reduce((a, i) => a + (i[key] ?? 0), 0) : null;
+export interface Nu { key: string; v: number | null; goal: number; u: string; limit?: boolean; color?: string }
+export function nutrients(v: DayView): { reach: Nu[]; limit: Nu[] } {
+  const known = (key: 'sugar' | 'sodium') => v.items.some(i => i[key] != null) ? v.items.reduce((a, i) => a + (i[key] ?? 0), 0) : null;
   return {
     reach: [{ key: t('foodMacroFiber'), v: Math.round(v.fib), goal: v.goals.fib, u: 'g', color: 'success' },
       ...(['foodPotassium', 'foodCalcium', 'foodIron', 'foodVitaminC', 'foodVitaminD'] as const).map((key, i) => ({ key: t(key), v: null, goal: [3400, 1000, 8, 90, 15][i], u: ['mg', 'mg', 'mg', 'mg', 'mcg'][i] }))],
@@ -367,7 +367,7 @@ function NuMeter({ x, h }: { x: Nu; h: number }) {
   return <WellBar frac={x.v / mx} h={h} color={x.v > x.goal ? k.c.warning : k.c.food} mark={x.goal / mx} />;
 }
 const Micros: TileBody = ({ p, d }) => {
-  const N = nutrients(d), lim = p.options.show === 'limit', list = lim ? N.limit : N.reach;
+  const N = nutrients(d.view), lim = p.options.show === 'limit', list = lim ? N.limit : N.reach;
   const valText = (x: Nu, slash: boolean) => x.v == null ? <KitText weight={700} size={13} color="text-muted">{t('foodUnknownVal')}</KitText>
     : <KitText weight={700} size={13} lineHeight={1} numeric>{num(x.v)}<KitText weight={600} size={10.5} color="text-muted">{slash ? `/${num(x.goal)} ${x.u}` : ` ${x.u}`}</KitText></KitText>;
   if (p.size === 'S') {
