@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { t } from '@/i18n/en';
 import { Icon } from './icon';
-import { useKit } from './kit-style';
+import { mix, useKit } from './kit-style';
 import { KitText } from './themed-text';
 import { Tappable } from './tappable';
 import { useSelectionHaptic } from './selection-haptic';
@@ -29,7 +29,8 @@ export function stepValue(current: number, direction: -1 | 1, { step = 1, min = 
 
 /**
  * The kit's `.stepper` (`ui.stepper`): minus and plus in 38 pt circles either side of the value in 700 17 pt tabular
- * figures, on a surface-2 pill. Each button grows to 44 pt to touch. VoiceOver reads it as one adjustable control too.
+ * figures, on a surface-2 pill. In a card or list on a dark sheet, which is surface 2 itself, the pill steps up 8 percent
+ * toward the text colour so it still reads. Each button grows to 44 pt to touch. VoiceOver reads it as one adjustable control too.
  */
 export function Stepper({ value, onChange, unit, label, testID, ...opts }: StepOptions & {
   value: number; onChange: (next: number) => void; unit?: string; /** Spoken name of the value. */ label?: string; testID?: string;
@@ -43,7 +44,8 @@ export function Stepper({ value, onChange, unit, label, testID, ...opts }: StepO
     style={({ pressed }) => ({ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? k.c['hair-2'] : 'transparent' })}>
     <Icon name={d < 0 ? 'minus' : 'plus'} size={18} color={k.c.text} />
   </Tappable>;
-  return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, padding: 3, borderRadius: 999, backgroundColor: k.c['surface-2'] }}>
+  return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, padding: 3, borderRadius: 999,
+    backgroundColor: k.dark && k.surface === 'sheet-inset' ? mix(k.c.text, k.c['surface-2'], 0.08) : k.c['surface-2'] }}>
     {button(-1)}
     <View accessible accessibilityRole="adjustable" accessibilityLabel={label} accessibilityValue={{ text }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}

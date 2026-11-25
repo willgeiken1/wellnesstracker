@@ -46,11 +46,11 @@ smaller); every control has a VoiceOver label; text grows with Dynamic Type (onl
 | `SegmentedControl` | `label`, `options`, `value`, `onChange`, `compact` (the narrow form at the end of a settings row) | `.seg` (`ui.seg`); keeps the Appearance "pills" selector look |
 | `Chip` / `Chips` | `label`, `selected`, `onPress`, `icon`, `color` / children | `.chip` (`ui.chip`) / `.chips` |
 | `Switch` | `value`, `onValueChange`, `label` | `.sw` (`ui.toggle`): 51 x 31, success green, knob on the switch spring |
-| `Stepper` | `value`, `onChange`, `step`, `min`, `max`, `dec`, `unit`, `snap`, `label` | `.stepper` (`ui.stepper`); `stepValue()` and `formatNumber()` are the mockup's logic |
-| `TextField` | `label`, `unit` + TextInput props | `.field` (`ui.field`) |
+| `Stepper` | `value`, `onChange`, `step`, `min`, `max`, `dec`, `unit`, `snap`, `label` | `.stepper` (`ui.stepper`); `stepValue()` and `formatNumber()` are the mockup's logic; in a card or list on a dark sheet the pill steps up 8% toward the text colour |
+| `TextField` | `label`, `unit` + TextInput props | `.field` (`ui.field`); the input can shrink (`minWidth: 0`), so the unit stays inside a narrow field |
 | `SearchField` | `placeholder` + TextInput props | `.search` (`ui.search`) |
 | `Badge` | `label`, `color` | `.badge` (`ui.badge`) |
-| `Stat` | `value`, `unit`, `label`, `sub`, `color`, `subColor` (the delta) | `.stat` (`ui.stat`) |
+| `Stat` | `value`, `unit`, `label`, `sub`, `color`, `subColor` (the delta) | `.stat` (`ui.stat`); the number line is 29.4 pt with or without a unit, so stats in a row keep their labels level |
 | `ProgressBar` | `value` 0..1, `color`, `label` | `.bar` (`ui.bar`) |
 | `Ring` | `value`, `size` (64), `stroke` (7), `color`, `track`, `label`, children | `ui.ring`. (`RingArc` stays for the Appearance ring looks.) |
 | `BarChart` | `values`, `labels`, `color`, `goal`, `hi`, `w`, `h`, `label` | `ui.bars` |

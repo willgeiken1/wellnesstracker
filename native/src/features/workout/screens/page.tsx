@@ -32,8 +32,7 @@ export function StatsCard({ min, sets, volume, unit, style }: { min: number; set
   return <Card style={style}>
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: KIT.gap3 }}>
       <Stat style={{ flex: 1 }} value={min} unit={tr('trainingUnitMin')} label={tr('trainingStatDuration')} />
-      {/* An empty unit keeps this number's line the same height as its neighbours'. */}
-      <Stat style={{ flex: 1 }} value={sets} unit={'\u2060'} label={tr('trainingStatSets')} />
+      <Stat style={{ flex: 1 }} value={sets} label={tr('trainingStatSets')} />
       <Stat style={{ flex: 1 }} value={fmt(volume)} unit={unit} label={tr('trainingVolume')} />
     </View>
   </Card>;

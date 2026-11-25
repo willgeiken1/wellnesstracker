@@ -6,7 +6,7 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import {
   Badge, Button, Card, Chip, EmptyState, SegmentedControl, List, ListRow, NavBar, NavButton, PageHeader, ProgressBar, Ring, SearchField, Section, SectionHeader,
-  Sheet, SheetHeader, Stat, Stepper, Switch, TextField, ToastProvider, useToast, StackGapContext, alpha, mix,
+  Sheet, SheetHeader, Stat, Stepper, Switch, TextField, ToastProvider, useToast, StackGapContext, SurfaceContext, alpha, mix,
 } from '../src/components/kit';
 
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn() } }));
@@ -122,6 +122,20 @@ describe('controls', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Less' }));
     expect(onChange).toHaveBeenLastCalledWith(2150);
   });
+  test('the stepper is a surface-2 pill, stepped up 8 percent in a list on a dark sheet so it still reads', async () => {
+    await render(<>
+      <Stepper value={3} onChange={() => {}} testID="page" />
+      <SurfaceContext.Provider value="sheet"><Stepper value={3} onChange={() => {}} testID="sheet" /></SurfaceContext.Provider>
+      <SurfaceContext.Provider value="sheet-inset"><Stepper value={3} onChange={() => {}} testID="inset" /></SurfaceContext.Provider>
+    </>, { wrapper: inMode('dark') });
+    expect(flat(screen.getByTestId('page')).backgroundColor).toBe(dark['surface-2']);
+    expect(flat(screen.getByTestId('sheet')).backgroundColor).toBe(dark['surface-2']);
+    expect(flat(screen.getByTestId('inset')).backgroundColor).toBe(mix(dark.text, dark['surface-2'], 0.08));
+  });
+  test('in light mode the stepper stays surface 2 on a sheet list', async () => {
+    await render(<SurfaceContext.Provider value="sheet-inset"><Stepper value={3} onChange={() => {}} testID="inset" /></SurfaceContext.Provider>, { wrapper: inMode('light') });
+    expect(flat(screen.getByTestId('inset')).backgroundColor).toBe(light['surface-2']);
+  });
   test('a badge is 11.5 pt bold on a 16 percent tint; no kit text goes under 11 pt', async () => {
     await render(<Badge label="New" color="success" />, { wrapper: inMode('light') });
     expect(textStyle('New')).toMatchObject({ fontSize: 11.5, color: light.success });
@@ -131,6 +145,9 @@ describe('controls', () => {
     expect(textStyle('Body weight')).toMatchObject({ fontSize: 12, color: dark['text-muted'] });
     expect(flat(screen.getByLabelText('Body weight'))).toMatchObject({ fontSize: 17, fontFamily: 'PlusJakartaSans_600SemiBold' });
     expect(flat(screen.getByLabelText('Search foods'))).toMatchObject({ fontSize: 16, minHeight: 44 });
+    // In a narrow box the input gives way, so its unit stays inside the field.
+    expect(flat(screen.getByLabelText('Body weight'))).toMatchObject({ flex: 1, minWidth: 0 });
+    expect(textStyle('lb')).toMatchObject({ flexShrink: 0 });
   });
 });
 
@@ -201,6 +218,13 @@ describe('numbers, progress and empty states', () => {
     expect(textStyle('Weight')).toMatchObject({ fontSize: 12.5, color: dark['text-muted'] });
     expect(textStyle('Down 1.2 this week').color).toBe(dark.success);
     expect(screen.getByLabelText('182.1 lb, Weight, Down 1.2 this week')).toBeTruthy();
+  });
+  test("a stat's number line is the same height with or without a unit, so side-by-side labels stay level", async () => {
+    await render(<><Stat value="42" unit="min" label="Duration" /><Stat value="18" label="Sets" /></>, { wrapper: inMode('dark') });
+    const line = (value: string) => flat(screen.getByText(value, { exact: false })).lineHeight;
+    expect(line('42')).toBe(29.4);
+    expect(line('18')).toBe(29.4);
+    expect(textStyle(' min'.replace(' ', '\u2009'))).toMatchObject({ fontSize: 14, lineHeight: 29.4 });
   });
   test('a progress bar and a ring report their value to VoiceOver', async () => {
     await render(<><ProgressBar value={0.62} color="water" label="Water" /><Ring value={0.5} label="Half way" /></>, { wrapper: inMode('dark') });

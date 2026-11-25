@@ -10,7 +10,7 @@ type InputProps = Omit<TextInputProps, 'style' | 'placeholderTextColor'>;
 /**
  * The kit's `.field` (`ui.field`): a labelled input on a surface with 14 pt corners, the label in 600 12 pt muted
  * above 600 17 pt text, and an optional unit after it. An accent ring shows while it has focus. On a dark sheet it
- * sits a step up.
+ * sits a step up. The input may shrink below its text's width, so the unit stays inside a narrow field.
  */
 export function TextField({ label, unit, testID, onFocus, onBlur, ...input }: InputProps & { label: string; unit?: string; testID?: string }) {
   const k = useKit();
@@ -22,8 +22,8 @@ export function TextField({ label, unit, testID, onFocus, onBlur, ...input }: In
       <TextInput accessibilityLabel={label} {...input} allowFontScaling maxFontSizeMultiplier={0}
         placeholderTextColor={k.tint(k.c['text-muted'], 0.78)} selectionColor={k.c.accent} cursorColor={k.c.accent}
         onFocus={e => { setFocused(true); onFocus?.(e); }} onBlur={e => { setFocused(false); onBlur?.(e); }}
-        style={[font(600, 17), { flex: 1, color: k.c.text, paddingTop: 2, paddingBottom: 0, paddingHorizontal: 0, minHeight: 26 }]} />
-      {unit ? <KitText weight={600} size={14} color="text-muted">{unit}</KitText> : null}
+        style={[font(600, 17), { flex: 1, minWidth: 0, color: k.c.text, paddingTop: 2, paddingBottom: 0, paddingHorizontal: 0, minHeight: 26 }]} />
+      {unit ? <KitText weight={600} size={14} color="text-muted" style={{ flexShrink: 0 }}>{unit}</KitText> : null}
     </View>
   </View>;
 }
