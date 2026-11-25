@@ -6,6 +6,7 @@ jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:nul
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
 import type { TestInstance } from 'test-renderer';
+import { DEFAULT_PALETTE, createTheme, paletteName } from '../src/design/tokens';
 import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
@@ -42,12 +43,12 @@ test('tab shell renders the five native tab labels', async () => {
 test('Appearance changes theme, accent, and restores system following', async () => {
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
   await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
-  expect(screen.getByTestId('theme')).toHaveTextContent('light/seaGlassTide/#F2F6F4');
+  expect(screen.getByTestId('theme')).toHaveTextContent(`light/${DEFAULT_PALETTE}/${createTheme('light').bg}`);
   await fireEvent.press(screen.getByRole('tab', { name: 'Dark' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Forest Ember' }));
-  expect(screen.getByTestId('theme')).toHaveTextContent('dark/forestEmber/#0C120E');
+  expect(screen.getByTestId('theme')).toHaveTextContent(`dark/forestEmber/${createTheme('dark', 'forestEmber').bg}`);
   expect(screen.getByRole('button', { name: 'Forest Ember' })).toBeSelected();
-  expect(screen.getByRole('button', { name: 'Sea Glass Tide' })).not.toBeSelected();
+  expect(screen.getByRole('button', { name: paletteName('seaGlassTide') })).not.toBeSelected();
   await fireEvent.press(screen.getByRole('tab', { name: 'System' }));
   expect(screen.getByRole('tab', { name: 'System' })).toBeSelected();
 });

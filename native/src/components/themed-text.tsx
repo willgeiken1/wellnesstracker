@@ -6,7 +6,7 @@ export function ThemedText({ variant = 'body', muted = false, numeric = false, s
   const { colors } = useTheme();
   return <Text {...props} allowFontScaling maxFontSizeMultiplier={0} style={[
     { color: muted ? colors['text-muted'] : colors.text, fontSize: tokens.type[variant],
-      fontFamily: numeric ? tokens.font.numeral : ['display', 'title', 'headline'].includes(variant) ? tokens.font.heading : undefined,
+      fontFamily: numeric ? tokens.font.numeral : ['display', 'title', 'headline'].includes(variant) ? tokens.font.heading : tokens.font.body,
       fontVariant: numeric ? ['tabular-nums'] : undefined }, style,
   ]} />;
 }

@@ -85,6 +85,7 @@ function repoKey(pkg) {
   return match ? match[1].toLowerCase() : null;
 }
 const repoTexts = new Map();
+const REPO_HOLDERS = { 'react/metro': 'Meta Platforms, Inc. and affiliates', 'facebook/metro': 'Meta Platforms, Inc. and affiliates' };
 function licenceText(dir, pkg) {
   const own = ownText(dir);
   if (own) return own;
@@ -92,7 +93,10 @@ function licenceText(dir, pkg) {
   if (shared && licenceName(pkg) === shared.license) return shared.text;
   if (licenceName(pkg) === 'Apache-2.0') return APACHE_2;
   const author = (typeof pkg.author === 'string' ? pkg.author : pkg.author?.name)?.replace(/\s*[<(][^>)]*[>)]/g, '').trim();
-  if (licenceName(pkg) === 'MIT' && author) return MIT.replace('{holder}', author);
+  // Packages whose repository's licence names a holder that package.json leaves out (metro's LICENSE file at the
+  // repository root: "Copyright (c) Meta Platforms, Inc. and affiliates"; its npm packages ship none).
+  const holder = author || REPO_HOLDERS[repoKey(pkg) ?? ''];
+  if (licenceName(pkg) === 'MIT' && holder) return MIT.replace('{holder}', holder);
   // Otherwise say what package.json says rather than invent a text.
   return `${pkg.name} is licensed under ${licenceName(pkg)}${author ? `, copyright ${author}` : ''}. The package ships no separate licence file.`;
 }
@@ -122,7 +126,8 @@ for (const [name, dir] of all) {
 }
 const packages = [...entries.values()].sort((a, b) => a.name.localeCompare(b.name));
 fs.mkdirSync(path.dirname(out), { recursive: true });
-// The font is credited on its own: its licence (OFL 1.1, with the reserved font name) lives in assets.
+// The fonts are credited on their own: their licences (OFL 1.1) live in assets.
 const lexend = fs.readFileSync(path.join(root, 'assets/fonts/licenses/Lexend-OFL.txt'), 'utf8').replace(/\r\n/g, '\n').trim();
-fs.writeFileSync(out, `${JSON.stringify({ lexend, apache: APACHE_2, packages, texts }, null, 1)}\n`);
+const jakarta = fs.readFileSync(path.join(root, 'assets/fonts/licenses/PlusJakartaSans-OFL.txt'), 'utf8').replace(/\r\n/g, '\n').trim();
+fs.writeFileSync(out, `${JSON.stringify({ lexend, jakarta, apache: APACHE_2, packages, texts }, null, 1)}\n`);
 console.log(`${packages.length} packages, ${texts.length} distinct licence texts → ${path.relative(root, out)}`);

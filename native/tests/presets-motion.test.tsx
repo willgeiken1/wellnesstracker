@@ -29,11 +29,11 @@ afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 
 describe('saved motion and strength', () => {
   test('older saved text reads with calm motion at medium strength', () => {
-    for (const saved of ['goldenHour', 'dusk', 'seaGlassTide;ring=liquid']) expect(parseAppearance(saved)).toMatchObject({ motion: 'calm', intensity: 2 });
+    for (const saved of ['goldenHour', 'dusk', 'orchidEvening;ring=liquid']) expect(parseAppearance(saved)).toMatchObject({ motion: 'calm', intensity: 2 });
   });
   test('round-trips and writes only what differs from the default', () => {
-    expect(formatAppearance({ ...DEFAULT_APPEARANCE, motion: 'lively', intensity: 3 })).toBe('seaGlassTide;motion=lively;strength=3');
-    expect(parseAppearance('seaGlassTide;ring=glass;motion=basic;strength=1')).toEqual({ ...DEFAULT_APPEARANCE, ring: 'glass', motion: 'basic', intensity: 1 });
+    expect(formatAppearance({ ...DEFAULT_APPEARANCE, motion: 'lively', intensity: 3 })).toBe('orchidEvening;motion=lively;strength=3');
+    expect(parseAppearance('orchidEvening;ring=glass;motion=basic;strength=1')).toEqual({ ...DEFAULT_APPEARANCE, ring: 'glass', motion: 'basic', intensity: 1 });
   });
   test('an unknown motion or strength falls back alone', () => {
     expect(parseAppearance('goldenHour;ring=liquid;motion=wild;strength=9')).toEqual({ ...DEFAULT_APPEARANCE, palette: 'goldenHour', ring: 'liquid' });
@@ -59,11 +59,11 @@ describe('presets', () => {
     expect(savedAccent(repository)).toBe('goldenHour;motion=basic;strength=3');
   });
   test('changing one part by hand shows it as your own mix, with no preset marked', async () => {
-    const repository = settingsRepository('seaGlassTide;ring=liquid;motion=lively');
+    const repository = settingsRepository('orchidEvening;ring=liquid;motion=lively');
     await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
     expect(screen.queryByText('Your own mix. Pick a style to go back to a starting point.')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Calm'));
-    expect(savedAccent(repository)).toBe('seaGlassTide;ring=liquid');
+    expect(savedAccent(repository)).toBe('orchidEvening;ring=liquid');
     expect(screen.getByText('Your own mix. Pick a style to go back to a starting point.')).toBeTruthy();
     for (const id of PRESET_IDS) expect(screen.getByTestId(`preset-${id}`).props.accessibilityState.selected).toBe(false);
   });
@@ -71,7 +71,7 @@ describe('presets', () => {
     const repository = settingsRepository();
     await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
     await fireEvent.press(screen.getByLabelText('Full'));
-    expect(savedAccent(repository)).toBe('seaGlassTide;strength=3');
+    expect(savedAccent(repository)).toBe('orchidEvening;strength=3');
     expect(screen.getByLabelText('Full').props.accessibilityState.selected).toBe(true);
   });
 });
@@ -115,7 +115,7 @@ describe('Reduce Motion', () => {
   const food = (accent: string) => <ThemeProvider repository={settingsRepository(accent)}><CalorieRing total={total} target={target} /></ThemeProvider>;
   test('with it on, a lively liquid ring is drawn still and at its value, and Appearance says why', async () => {
     reduceMotion(true);
-    await render(<ThemeProvider repository={settingsRepository('seaGlassTide;ring=liquid;motion=lively')}><Appearance /><CalorieRing total={total} target={target} /></ThemeProvider>);
+    await render(<ThemeProvider repository={settingsRepository('orchidEvening;ring=liquid;motion=lively')}><Appearance /><CalorieRing total={total} target={target} /></ThemeProvider>);
     expect(screen.getByTestId('motion-reduced')).toBeTruthy();
     expect(screen.queryAllByTestId('ring-drop-pulsing')).toHaveLength(0);
     expect(JSON.stringify(screen.toJSON())).toContain(arcPath(100, 100, 88, 0.7));
@@ -124,16 +124,16 @@ describe('Reduce Motion', () => {
   });
   test('with it off, the same ring has a breathing drop and no notice', async () => {
     reduceMotion(false);
-    await render(<ThemeProvider repository={settingsRepository('seaGlassTide;ring=liquid;motion=lively')}><Appearance /></ThemeProvider>);
+    await render(<ThemeProvider repository={settingsRepository('orchidEvening;ring=liquid;motion=lively')}><Appearance /></ThemeProvider>);
     expect(screen.queryByTestId('motion-reduced')).toBeNull();
-    const view = await render(food('seaGlassTide;ring=liquid;motion=lively'));
+    const view = await render(food('orchidEvening;ring=liquid;motion=lively'));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 1100)); });
     expect(screen.queryAllByTestId('ring-drop-pulsing').length).toBeGreaterThan(0);
     view.unmount();
   });
   test('calm motion never adds the breathing drop', async () => {
     reduceMotion(false);
-    await render(food('seaGlassTide;ring=liquid'));
+    await render(food('orchidEvening;ring=liquid'));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 900)); });
     expect(screen.queryAllByTestId('ring-drop-pulsing')).toHaveLength(0);
     expect(screen.queryAllByTestId('ring-drop').length).toBeGreaterThan(0);
@@ -147,10 +147,10 @@ describe('tab bar and keypad looks', () => {
     const repository = settingsRepository();
     await render(<ThemeProvider repository={repository}><Appearance /></ThemeProvider>);
     await fireEvent.press(screen.getAllByLabelText('Glass').find(node => node.props.accessibilityRole === 'tab')!);
-    expect(savedAccent(repository)).toBe('seaGlassTide;bar=glass');
+    expect(savedAccent(repository)).toBe('orchidEvening;bar=glass');
     expect(parseAppearance(savedAccent(repository))).toMatchObject({ bar: 'glass', keypad: 'plain' });    // Floating is the third choice: the open tab stands apart in the accent colour.
     await fireEvent.press(screen.getByRole('tab', { name: 'Floating' }));
-    expect(savedAccent(repository)).toBe('seaGlassTide;bar=floating');
+    expect(savedAccent(repository)).toBe('orchidEvening;bar=floating');
     expect(parseAppearance('goldenHour;bar=floating').bar).toBe('floating');
   });
   test('the Glass preset turns on glass rings, bar and keys together, and Calm turns them all back', async () => {

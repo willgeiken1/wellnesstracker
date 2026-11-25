@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { memoryRepository } from './workout-repository';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { createTheme, palettes } from '../src/design/tokens';
+import { DEFAULT_PALETTE, createTheme, paletteName, palettes } from '../src/design/tokens';
 import { WorkoutStore } from '../src/data/workout/store';
 import { AuthContext, type AuthState } from '../src/auth/provider';
 import Settings from '../src/app/settings/index';
@@ -99,7 +99,7 @@ describe('Settings home', () => {
   });
   test('the appearance row shows the current theme name', async () => {
     await show(<Settings />);
-    expect(screen.getByTestId('settings-row-appearance')).toHaveProp('accessibilityValue', { text: 'Sea Glass Tide' });
+    expect(screen.getByTestId('settings-row-appearance')).toHaveProp('accessibilityValue', { text: paletteName(DEFAULT_PALETTE) });
   });
 });
 

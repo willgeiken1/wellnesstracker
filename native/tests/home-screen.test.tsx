@@ -156,17 +156,17 @@ test('greeting follows the time of day, the header keeps settings, and demo mode
 describe('add button and the tab bar', () => {
   const { SafeAreaProvider } = jest.requireActual('react-native-safe-area-context');
   const addColour = () => jest.requireActual('react-native').StyleSheet.flatten(screen.getByRole('button', { name: 'Add' }).props.style).backgroundColor;
-  const palette = () => jest.requireActual('../src/design/tokens').createTheme('dark', 'seaGlassTide');
+  const palette = () => jest.requireActual('../src/design/tokens').createTheme('dark');
   test('the + is the accent colour with the standard bar', async () => {
     open();
     await render(<ThemeProvider><Home /></ThemeProvider>);
-    expect([palette().accent, jest.requireActual('../src/design/tokens').createTheme('light', 'seaGlassTide').accent]).toContain(addColour());
+    expect([palette().accent, jest.requireActual('../src/design/tokens').createTheme('light').accent]).toContain(addColour());
   });
   test('with the floating bar the + rides beside the tabs, neutral, and still opens the quick actions', async () => {
     const { DockButton, useDockAction } = jest.requireActual('../src/components/floating-tabs') as typeof import('../src/components/floating-tabs');
     const Beside = () => { const action = useDockAction(); return action ? <DockButton action={action} /> : null; };
     const repo = open();
-    repo.save('settings', { theme_override: 'dark', accent: 'seaGlassTide;bar=floating' });
+    repo.save('settings', { theme_override: 'dark', accent: 'orchidEvening;bar=floating' });
     const view = await render(<ThemeProvider repository={repo}><Home /><Beside /></ThemeProvider>);
     // One + only, and it is the one beside the bar, not a button over the page's cards.
     expect(screen.getAllByRole('button', { name: 'Add' })).toHaveLength(1);
