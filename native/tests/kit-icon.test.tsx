@@ -39,7 +39,7 @@ test('every icon draws on the 24 pt grid with the 1.75 stroke and round ends', a
 test('the kit draws a stroked line where the mockup does and fills only its dots', () => {
   const more = ICONS.more;
   expect(more.every(el => el.t === 'circle' && el.f === 1 && el.s === 1)).toBe(true);
-  expect(ICONS.score.map(el => el.t !== 'g' && [el.f, el.s])).toEqual([[0, 1], [0, 1], [1, 0]]);
+  expect((ICONS.score as { f: number; s: number }[]).map(el => [el.f, el.s])).toEqual([[0, 1], [0, 1], [1, 0]]);
   expect(ICONS.back).toEqual([{ t: 'path', d: 'M15 5.5 8.5 12l6.5 6.5', f: 0, s: 1 }]);
 });
 

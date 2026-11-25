@@ -2,33 +2,34 @@ import { View, Pressable, ScrollView } from 'react-native';
 import { PRESSED_FILL_OPACITY, Tappable } from './tappable';
 import { tokens } from '@/design/tokens';
 import { useTheme } from '@/design/theme-provider';
-import { ThemedText } from './themed-text';
+import { KitText, ThemedText } from './themed-text';
+import { KIT, useKit } from './kit-style';
 import { touchTarget } from './button';
 import { useSelectionHaptic } from './selection-haptic';
-/** Space between the track's edge and the choices, and between the choices. */
-const TRACK_GAP = 3;
-export function SegmentedControl<T extends string>({ label, options, value, onChange }: {
-  label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void;
+/** The kit's `.seg` (`ui.seg`): choices share one row on a surface-2 track (2 pt padding and gaps, 12 pt corners). The
+ * chosen one is raised (the text 10 percent over surface 2 in dark, the surface in light) with a soft shadow; the others
+ * are muted. Each choice is 34 pt tall, grown to 46 pt to touch. A tick plays when the choice changes. */
+export function SegmentedControl<T extends string>({ label, options, value, onChange, testID }: {
+  label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void; testID?: string;
 }) {
-  const { colors, selectorLook } = useTheme();
+  const { selectorLook } = useTheme();
+  const k = useKit();
   const haptic = useSelectionHaptic();
   // A tick only when the choice really changes, so tapping the chosen one again stays quiet.
   const choose = (next: T) => { if (next !== value) haptic(); onChange(next); };
   if (selectorLook === 'pills') return <Pills label={label} options={options} value={value} onChange={choose} />;
-  // Four choices sit two by two, so no label is cut short at large text sizes. Three stay in one row.
-  const four = options.length === 4;
-  // One track holds the choices, so the ones not chosen still read as part of a control on any background:
-  // the fill shows on a card, the hairline on the page.
-  return <View accessibilityRole="tablist" accessibilityLabel={label}
-    style={{ flexDirection: 'row', flexWrap: 'wrap', gap: TRACK_GAP, padding: TRACK_GAP, borderRadius: tokens.radii.card,
-      backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
-    {options.map(option => <Tappable key={option.value} dim="fill" accessibilityRole="tab" accessibilityLabel={option.label}
-      accessibilityState={{ selected: option.value === value }} onPress={() => choose(option.value)}
-      style={{ flexGrow: 1, flexBasis: four ? '45%' : '28%', minHeight: touchTarget, minWidth: touchTarget, justifyContent: 'center',
-        padding: tokens.spacing[1], borderRadius: tokens.radii.card - TRACK_GAP,
-        backgroundColor: option.value === value ? colors.accent : 'transparent' }}>
-      <ThemedText style={{ color: option.value === value ? colors['on-accent'] : colors.text, textAlign: 'center', fontWeight: option.value === value ? '600' : '400' }}>{option.label}</ThemedText>
-    </Tappable>)}
+  return <View testID={testID} accessibilityRole="tablist" accessibilityLabel={label}
+    style={{ flexDirection: 'row', gap: 2, padding: 2, borderRadius: KIT.radius.seg, backgroundColor: k.dark ? k.c['surface-2'] : k.fill }}>
+    {options.map(option => {
+      const on = option.value === value;
+      return <Tappable key={option.value} dim={on ? 'none' : 'seg'} accessibilityRole="tab" accessibilityLabel={option.label}
+        accessibilityState={{ selected: on }} onPress={() => choose(option.value)} hitSlop={{ top: 6, bottom: 6 }}
+        style={{ flex: 1, minHeight: 34, paddingHorizontal: 10, borderRadius: KIT.radius.segItem, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: on ? k.segOn : 'transparent',
+          boxShadow: on ? '0px 1px 3px rgba(0, 0, 0, 0.14), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.06)' : undefined }}>
+        <KitText weight={600} size={13.5} tracking={-0.005} color={on ? 'text' : 'text-muted'} style={{ textAlign: 'center' }}>{option.label}</KitText>
+      </Tappable>;
+    })}
   </View>;
 }
 

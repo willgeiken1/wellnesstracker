@@ -15,7 +15,11 @@ import { tokens } from "../src/design/tokens";
  *
  * Allowlist policy: only true acronyms if needed, documented with rationale.
  */
-const ALLOWLIST: { file: string; line: number; reason: string }[] = [];
+const ALLOWLIST: { file: string; line: number; reason: string }[] = [
+  // The final mockup Will approved on Nov 25 2026 replaces INS-03 for eyebrows: `.eyebrow` and `.ph .eb` are tracked small
+  // capitals (the "RECENT" label in Log food, a tab's date line). The kit keeps that one style in this single constant.
+  { file: "components/kit-style.ts", line: 35, reason: "final mockup eyebrow capitals, kept in one kit constant" },
+];
 
 function findSourceFiles(dir: string, extensions = /\.(tsx?|jsx?)$/): string[] {
   const results: string[] = [];

@@ -925,6 +925,10 @@ export const en = {
   licensesFont: 'Font', licensesCredits: 'Data and colours', licensesSoftware: 'Open-source software ({n} packages)',
   licenseOfl: 'Open Font License', licenseFontHint: 'SIL Open Font License 1.1, by the Lexend Project Authors',
   licensesRepdb: 'Exercise data by RepDB', licensesColours: 'Body map colours',
+  // Shared kit (nav bars, sheet headers, steppers, search, toast).
+  kitBack: 'Back', kitBackTo: 'Back to {name}', kitBackPrevious: 'previous', kitCancel: 'Cancel', kitDone: 'Done', kitClose: 'Close',
+  kitLess: 'Less', kitMore: 'More', kitSearch: 'Search', kitClearSearch: 'Clear search', kitChoose: 'Choose',
+  kitUnavailable: 'This isn\u2019t available yet', kitProgress: '{percent}%',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
