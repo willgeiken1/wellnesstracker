@@ -21,6 +21,7 @@ import { TileIcon } from './tile-icon';
 import type { LayoutEntry, TileDef, TilePageConfig, TilePageId, TilePos, TileSize } from './types';
 import { EmptyBlock, fill, liftShadow } from './ui';
 import { useTileEdit, useTileRepository, useTileStore } from './use-tiles';
+import { Tappable } from '@/components/tappable';
 
 /* Motion from the design: reflow glides with a slight overshoot, other moves ease out. */
 const SPRING = Easing.bezier(0.3, 1.28, 0.5, 1);
@@ -377,7 +378,7 @@ const GridTile = memo(function GridTile(p: GridTileProps) {
   const hideCtl = isLifted || !!lifted;
   return <GestureDetector gesture={pan}>
     <Animated.View style={[styles.tile, { width: f.w, height: f.h }, style]} pointerEvents={leaving ? 'none' : 'auto'}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${editing ? t('tilesCustomize') : def.label ?? t('tilesOpen')}`}
+      <Tappable dim="none" accessibilityRole="button" accessibilityLabel={`${title}. ${editing ? t('tilesCustomize') : def.label ?? t('tilesOpen')}`}
         accessibilityActions={actions} onAccessibilityAction={onAction}
         onPressIn={() => { if (!editing && !rm) press.value = withTiming(1, { duration: 300, easing: EASE }); }}
         onPressOut={() => { press.value = rm ? 0 : withTiming(0, { duration: 300, easing: EASE }); }}
@@ -386,13 +387,13 @@ const GridTile = memo(function GridTile(p: GridTileProps) {
           <TileFrame cfg={cfg} def={def} entry={entry} colors={colors} mode={mode} reduceMotion={rm} editing={editing}
             lift={isLifted ? liftShadows(colors, mode) : undefined} />
         </Animated.View>
-      </Pressable>
+      </Tappable>
       {cz ? <View pointerEvents="none" style={[styles.cz, { borderColor: colors.accent }]} /> : null}
       {editing ? <>
-        <Pressable accessibilityRole="button" accessibilityLabel={fill(t('tilesRemoveTile'), { title })} hitSlop={8} onPress={() => p.onRemove(id)}
+        <Tappable accessibilityRole="button" accessibilityLabel={fill(t('tilesRemoveTile'), { title })} hitSlop={8} onPress={() => p.onRemove(id)}
           style={[styles.rm, { backgroundColor: colors['surface-2'], boxShadow: `0 0 0 2px ${colors.bg}, 0 2px 6px rgba(0,0,0,0.3)`, opacity: isLifted ? 0 : 1 }]}>
           <TileIcon name="x" size={14} color={colors.text} />
-        </Pressable>
+        </Tappable>
         <GestureDetector gesture={rzPan}>
           <GestureDetector gesture={rzTap}>
             <View accessible accessibilityRole="button" accessibilityLabel={rzLabel} onAccessibilityTap={() => onCycle(id)}

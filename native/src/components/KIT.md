@@ -58,7 +58,7 @@ smaller); every control has a VoiceOver label; text grows with Dynamic Type (onl
 | `EmptyState` | `title`, `description`, `icon`, `color`, `action` | `.empty` (`ui.empty`) |
 | `ToastProvider` / `useToast()` | `show(text, { color, action, onAction, ms })` | `.ins-toast` (`INS.toast`). Mount `ToastProvider` once near the root (not yet done; see below). |
 | `Screen` | `title`, `tabHeader`, `topInset` | The page scroll: 16 pt gutter, 12 pt gap, `.ph` title |
-| `Tappable` | Pressable props + `dim` (`row`, `fill`, `text` .45, `seg` .5, `none`) | The pressed dims |
+| `Tappable` | Pressable props + `dim` (`row` .6, `fill` .75, `text` .45, `seg` .5, `tile` .7 for rows inside a tile, `none`) | The pressed dims |
 | `PressScale` | Pressable props | `.press` (scale .97, spring back) |
 
 ## Motion (`kit-motion.ts`, `kit-motion-reanimated.ts`)

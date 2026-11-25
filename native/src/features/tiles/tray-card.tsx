@@ -9,6 +9,7 @@ import { TileFrame } from './tile-frame';
 import { TileIcon } from './tile-icon';
 import type { TileDef, TileOptionValues, TilePageConfig, TileSize } from './types';
 import { fill, sheetCard } from './ui';
+import { Tappable } from '@/components/tappable';
 
 export interface TrayPick { style: string; size: TileSize; options: TileOptionValues }
 const SIZES: TileSize[] = ['S', 'M', 'L'];
@@ -94,18 +95,18 @@ export const TrayCard = memo(function TrayCard({ cfg, def, tint, pick, onStyle, 
     </View> : null}
     {opts.map(op => <View key={op.id}>{seg(op.label, op.choices.map(c => {
       const on = String(cur[op.id]) === String(c[0]);
-      return <Pressable key={String(c[0])} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={c[1]}
+      return <Tappable dim={on ? 'none' : 'row'} key={String(c[0])} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={c[1]}
         onPress={() => onOption(op.id, String(c[0]))} style={[s.segBtn, home ? s.opBtnHome : s.opBtn, on && segOn]}>
         <Text style={[home ? s.szText : s.opText, { color: on ? colors.text : colors['text-muted'] }]}>{c[2] ?? c[1]}</Text>
-      </Pressable>;
+      </Tappable>;
     }))}</View>)}
     {seg(t('tilesSize'), SIZES.map(z => {
       const can = ok.includes(z), on = z === pick.size;
-      return <Pressable key={z} accessibilityRole="radio" disabled={!can} accessibilityState={{ selected: on, disabled: !can }}
+      return <Tappable dim={on ? 'none' : 'row'} key={z} accessibilityRole="radio" disabled={!can} accessibilityState={{ selected: on, disabled: !can }}
         accessibilityLabel={can ? SIZE_WORD[z] : fill(t(home ? 'tilesSizeOffHome' : 'tilesSizeOff'), { size: SIZE_WORD[z] })}
         onPress={() => onSize(z)} style={[s.segBtn, s.szBtn, on && segOn, !can && { opacity: 0.3 }]}>
         <Text style={[s.szText, { color: on ? colors.text : colors['text-muted'] }, !can && { textDecorationLine: 'line-through' }]}>{z}</Text>
-      </Pressable>;
+      </Tappable>;
     }))}
   </View>;
 });

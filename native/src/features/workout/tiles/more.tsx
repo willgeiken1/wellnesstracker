@@ -1,6 +1,7 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import { alpha, mix } from '@/components/kit-style';
+import { Tappable } from '@/components/tappable';
 import type { TileRenderProps } from '@/features/tiles';
 import { t } from '@/i18n/en';
 import { DAY_LETTERS, dayLabel, fmt, monthDay } from '../training-data';
@@ -123,16 +124,16 @@ export function RecentTile(p: TileRenderProps) {
   const shown = (w: typeof R[number]) => options.value === 'lb' || !options.value ? fmt(w.volume) : String(num(w));
   const aria = (w: typeof R[number]) => tr('trainingRecentLabel', { name: w.name, day: dayLabel(w.day), min: w.min, sets: w.sets, v: fmt(w.volume), u }) + (w.pr ? t('trainingNewRecordSuffix') : '');
   if (size === 'S') { const w = R[0];
-    return <Pressable style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={aria(w)} onPress={() => trainingNav.detail(w.id)}>
+    return <Tappable dim="tile" style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={aria(w)} onPress={() => trainingNav.detail(w.id)}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><T w={600} s={15} c={colors.text} style={{ flexShrink: 1 }}>{w.name}</T>{w.pr ? <PrBadge colors={colors} /> : null}</View>
       <S colors={colors} style={{ marginTop: 2 }}>{dayLabel(w.day)}</S>
       <N v={shown(w)} unit={unit} size={26} colors={colors} style={{ marginTop: 'auto' }} />
       <S colors={colors} style={{ marginTop: 4 }}>{options.value === 'lb' || !options.value ? `${w.min} min · ${w.sets} ${t('trainingUnitSets')}` : `${fmt(w.volume)} ${u}`}</S>
-    </Pressable>; }
+    </Tappable>; }
   const mx = Math.max(1, ...R.map(num));
   return <View style={{ flex: 1, justifyContent: size === 'M' ? 'flex-end' : 'flex-start' }}>
-    {R.map((w, i) => <Pressable key={w.id} accessibilityRole="button" accessibilityLabel={aria(w)} onPress={() => trainingNav.detail(w.id)}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair, ...(size === 'M' ? { height: 38, flexDirection: 'row', alignItems: 'center', gap: 10 } : { paddingVertical: 9, gap: 6 }) })}>
+    {R.map((w, i) => <Tappable dim="tile" key={w.id} accessibilityRole="button" accessibilityLabel={aria(w)} onPress={() => trainingNav.detail(w.id)}
+      style={{ borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair, ...(size === 'M' ? { height: 38, flexDirection: 'row', alignItems: 'center', gap: 10 } : { paddingVertical: 9, gap: 6 }) }}>
       {size === 'M' ? <>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><T w={600} s={14} c={colors.text} style={{ flexShrink: 1 }}>{w.name}</T>{w.pr ? <PrBadge colors={colors} /> : null}</View>
@@ -147,7 +148,7 @@ export function RecentTile(p: TileRenderProps) {
         <WellBar frac={num(w) / mx} h={6} w={body.w} colors={colors} mode={mode} tint={colors.training} />
         {w.pr ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><PrBadge colors={colors} /><S colors={colors} size={11.5}>{w.pr}</S></View> : null}
       </>}
-    </Pressable>)}
+    </Tappable>)}
   </View>;
 }
 
@@ -161,17 +162,17 @@ export function RecordsTile(p: TileRenderProps) {
   const top = options.show === 'top';
   const est = (r: typeof list[number]) => fmt(r.e1rm);
   if (size === 'S') { const r = list[0];
-    return <Pressable style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={`${r.exercise}, ${setText(r.weight, r.reps, u)}`} onPress={() => trainingNav.exercise(r.exercise)}>
+    return <Tappable dim="tile" style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={`${r.exercise}, ${setText(r.weight, r.reps, u)}`} onPress={() => trainingNav.exercise(r.exercise)}>
       <T w={600} s={15} c={colors.text}>{r.exercise}</T>
       <S colors={colors}>{dayLabel(r.day)}</S>
       <View style={{ marginTop: 'auto' }}>{top ? <N v={weightText(r.weight)} unit={`${u} × ${r.reps}`} size={28} colors={colors} /> : <N v={est(r)} unit={u} size={30} colors={colors} />}</View>
       <S colors={colors} style={{ marginTop: 4 }}>{top ? tr('trainingEstShort', { v: est(r), u }) : tr('trainingEstFrom', { set: setText(r.weight, r.reps, u) })}</S>
-    </Pressable>; }
+    </Tappable>; }
   const L = size === 'L';
   return <View style={{ flex: 1 }}>
     <View style={{ marginTop: L ? 0 : 'auto' }}>
-      {list.map((r, i) => <Pressable key={r.exercise} accessibilityRole="button" accessibilityLabel={`${r.exercise}, ${setText(r.weight, r.reps, u)}, ${dayLabel(r.day)}`} onPress={() => trainingNav.exercise(r.exercise)}
-        style={({ pressed }) => ({ height: L ? 74 : 38, flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.7 : 1, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair })}>
+      {list.map((r, i) => <Tappable dim="tile" key={r.exercise} accessibilityRole="button" accessibilityLabel={`${r.exercise}, ${setText(r.weight, r.reps, u)}, ${dayLabel(r.day)}`} onPress={() => trainingNav.exercise(r.exercise)}
+        style={{ height: L ? 74 : 38, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair }}>
         {L ? <IconChip name="trophy" color={warn} icon={18} /> : null}
         <View style={{ flex: 1, minWidth: 0 }}>
           <T w={600} s={14} c={colors.text}>{r.exercise}</T>
@@ -180,7 +181,7 @@ export function RecordsTile(p: TileRenderProps) {
         {L ? <DashLine vals={data.liftHistory(r.exercise).map(x => x.est)} w={74} h={30} color={warn} colors={colors} dots={false} id={`${id}${i}`} label={r.exercise} /> : null}
         {top ? <T w={700} s={15} c={colors.text} num style={{ minWidth: 86, textAlign: 'right' }}>{setText(r.weight, r.reps, u)}</T>
           : <N v={est(r)} unit={u} size={15} colors={colors} style={{ minWidth: 56, justifyContent: 'flex-end' }} />}
-      </Pressable>)}
+      </Tappable>)}
     </View>
     {L ? <S colors={colors} lines={2} style={{ marginTop: 'auto' }}>{t('trainingEpleyFoot')}</S> : null}
   </View>;

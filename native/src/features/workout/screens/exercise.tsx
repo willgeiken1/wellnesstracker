@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { Badge } from '@/components/badge';
@@ -24,6 +24,7 @@ import { exLabel } from '../logger/model';
 import { trainingNav } from '../nav';
 import { axisLabel, chartScale, exerciseHistory, type LiftSession } from './model';
 import { ColorEyebrow, Page } from './page';
+import { Tappable } from '@/components/tappable';
 
 const RESTS = [60, 90, 120, 150, 180];
 type Mode = 'top' | 'vol';
@@ -120,7 +121,7 @@ function LiftChart({ hist, mode, unit }: { hist: LiftSession[]; mode: Mode; unit
   const press = (x: number) => { let best = 0; hist.forEach((_, i) => { if (Math.abs(X(i) - x) < Math.abs(X(best) - x)) best = i; }); setPick(best); };
   const p = pick != null ? hist[pick] : null;
   return <View onLayout={e => setW(Math.round(e.nativeEvent.layout.width))}>
-    <Pressable accessibilityRole="image" accessibilityLabel={tr(vol ? 'trainingChartVolLabel' : 'trainingChartTopLabel', { n })} onPress={e => press(e.nativeEvent.locationX)}>
+    <Tappable dim="none" accessibilityRole="image" accessibilityLabel={tr(vol ? 'trainingChartVolLabel' : 'trainingChartTopLabel', { n })} onPress={e => press(e.nativeEvent.locationX)}>
       <Svg width={W} height={H + 18}>
         {lines.map(g => <Line key={`g${g}`} x1={0} x2={W - PR + 4} y1={Y(g)} y2={Y(g)} stroke={k.c.hair} />)}
         {lines.map(g => <SvgText key={`t${g}`} x={W} y={Y(g) + 3.5} textAnchor="end" fill={muted} {...small}>{axisLabel(g)}</SvgText>)}
@@ -143,7 +144,7 @@ function LiftChart({ hist, mode, unit }: { hist: LiftSession[]; mode: Mode; unit
           textAnchor={i === 0 && n > 1 ? 'start' : i === n - 1 && n > 1 ? 'end' : 'middle'}>{monthDay(hist[i].day)}</SvgText>)}
         {pick != null ? <Line x1={X(pick)} x2={X(pick)} y1={4} y2={H} stroke={muted} strokeWidth={1} opacity={0.5} /> : null}
       </Svg>
-    </Pressable>
+    </Tappable>
     {p ? <View pointerEvents="none" style={{ position: 'absolute', top: -6, left: Math.max(60, Math.min(W - 60, X(pick!))), transform: [{ translateX: '-50%' }],
       paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: k.pill, boxShadow: k.lift, alignItems: 'center' }}>
       <KitText weight={600} size={12} lineHeight={1.3} style={{ color: k.pillInk }}>{monthDay(p.day)}</KitText>

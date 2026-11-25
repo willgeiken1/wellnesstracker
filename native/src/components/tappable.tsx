@@ -9,12 +9,14 @@ export const PRESSED_FILL_OPACITY = 0.75;
 export const PRESSED_TEXT_OPACITY = 0.45;
 /** How far a choice in a segmented control that is not chosen dims while held (kit.css: .5). */
 export const PRESSED_SEG_OPACITY = 0.5;
+/** How far a row inside a tile dims while held, such as a workout or a record in a list tile (the page tiles' rows: .7). */
+export const PRESSED_TILE_ROW_OPACITY = 0.7;
 
 /** Which dim a control takes: `row` for rows and text-only targets, `fill` for filled buttons and keys,
- * `text` for the kit's accent text buttons, `seg` for a segment not chosen,
+ * `text` for the kit's accent text buttons, `seg` for a segment not chosen, `tile` for a row inside a tile,
  * `none` for one that shows its press another way or has nothing to do on a tap. */
-export type Dim = 'row' | 'fill' | 'text' | 'seg' | 'none';
-const DIMS = { row: PRESSED_ROW_OPACITY, fill: PRESSED_FILL_OPACITY, text: PRESSED_TEXT_OPACITY, seg: PRESSED_SEG_OPACITY } as const;
+export type Dim = 'row' | 'fill' | 'text' | 'seg' | 'tile' | 'none';
+const DIMS = { row: PRESSED_ROW_OPACITY, fill: PRESSED_FILL_OPACITY, text: PRESSED_TEXT_OPACITY, seg: PRESSED_SEG_OPACITY, tile: PRESSED_TILE_ROW_OPACITY } as const;
 
 type Props = ComponentProps<typeof Pressable> & { dim?: Dim };
 

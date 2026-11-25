@@ -11,6 +11,7 @@ import { useSections } from './sections';
 import type { TileStorage } from './store';
 import { TileIcon } from './tile-icon';
 import { EmptyBlock, SheetHeader, sheetBg, sheetCard } from './ui';
+import { Tappable } from '@/components/tappable';
 
 /** Customize one page section: a row per option, then Hide this section. Changes show on the page as they are picked. */
 export function PageSectionSheet({ page, id, storage }: { page: unknown; id: unknown; storage?: TileStorage | null }) {
@@ -41,10 +42,10 @@ export function PageSectionSheet({ page, id, storage }: { page: unknown; id: unk
           <View accessibilityRole="radiogroup" accessibilityLabel={op.label} style={[s.seg, { backgroundColor: segBg }, wide && s.segWide]}>
             {op.choices.map(c => {
               const on = String(v[op.id]) === String(c[0]);
-              return <Pressable key={String(c[0])} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => store.setOption(x.id, op.id, String(c[0]))}
+              return <Tappable dim={on ? 'none' : 'row'} key={String(c[0])} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => store.setOption(x.id, op.id, String(c[0]))}
                 style={[s.btn, wide && s.btnWide, on && segOn]}>
                 <Text numberOfLines={1} style={[s.btnText, { color: on ? colors.text : colors['text-muted'] }]}>{c[1]}</Text>
-              </Pressable>;
+              </Tappable>;
             })}
           </View>
         </View>;

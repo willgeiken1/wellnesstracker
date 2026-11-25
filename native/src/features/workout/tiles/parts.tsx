@@ -53,6 +53,9 @@ export function WellBar({ frac, h, w, colors, mode, tint }: { frac: number; h: n
   </Material>;
 }
 
+/** The tiles' button shrinks a little while held (`.trt-btn:active`). */
+const BUTTON_PRESS_SCALE = 0.97;
+
 /** The tiles' button (`.trt-btn`): a raised fill in the tile colour, or a ghost tint. */
 export function TileButton({ label, icon, onPress, w, h = 40, small, ghost, tint, colors, mode, a11y }: {
   label: string; icon?: IconName; onPress?: () => void; w: number; h?: number; small?: boolean; ghost?: boolean; tint: string; colors: ThemeColors; mode: ThemeMode; a11y?: string;
@@ -60,7 +63,7 @@ export function TileButton({ label, icon, onPress, w, h = 40, small, ghost, tint
   const hh = small ? 34 : h, r = small ? 11 : 13;
   const ink = ghost ? tint : colors['on-accent'];
   return <Pressable accessibilityRole="button" accessibilityLabel={a11y ?? label} onPress={onPress} hitSlop={hh < 44 ? { top: (44 - hh) / 2, bottom: (44 - hh) / 2 } : undefined}
-    style={({ pressed }) => [{ width: w, height: hh, borderRadius: r, transform: [{ scale: pressed ? 0.97 : 1 }] }, ghost && { backgroundColor: alpha(tint, 0.15) }]}>
+    style={({ pressed }) => [{ width: w, height: hh, borderRadius: r, transform: [{ scale: pressed ? BUTTON_PRESS_SCALE : 1 }] }, ghost && { backgroundColor: alpha(tint, 0.15) }]}>
     {ghost ? null : <TileSurface spec={raised(tint, mode, r)} width={w} height={hh} />}
     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: small ? 13 : 16 }}>
       {icon ? <Icon name={icon} size={17} color={ink} /> : null}

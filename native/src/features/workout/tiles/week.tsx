@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 import Svg, { Path, Text as SvgText } from 'react-native-svg';
 import { useAuth } from '@/auth/provider';
 import { alpha, mix } from '@/components/kit-style';
+import { Tappable } from '@/components/tappable';
 import { tokens } from '@/design/tokens';
 import { plate } from '@/features/tiles/depth';
 import { TileSurface } from '@/features/tiles/tile-surface';
@@ -13,6 +14,9 @@ import { trainingNav } from '../nav';
 import { setText } from '../set-text';
 import { tr } from '../tr';
 import { B, IconChip, K, Material, N, Pips, S, T, TileButton, WellBar, useTrainingData } from './parts';
+
+/** A plan day's card shrinks a little while held (`.trt-day:active`). */
+const DAY_PRESS_SCALE = 0.98;
 
 const signed = (v: number, u: string) => `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v))} ${u}`;
 
@@ -144,13 +148,13 @@ export function NextTile(p: TileRenderProps) {
       </View>
     </View>
     <View style={{ marginTop: 10 }}>
-      {next.exercises.slice(0, 7).map((e, i) => <Pressable key={i} accessibilityRole="button" accessibilityLabel={e.name} onPress={() => trainingNav.exercise(e.name)}
-        style={({ pressed }) => ({ height: 25, flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.7 : 1, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair })}>
+      {next.exercises.slice(0, 7).map((e, i) => <Tappable dim="tile" key={i} accessibilityRole="button" accessibilityLabel={e.name} onPress={() => trainingNav.exercise(e.name)}
+        style={{ height: 25, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair }}>
         <K colors={colors} size={11} track={0} style={{ width: 14 }}>{String(i + 1)}</K>
         <T w={600} s={13} c={colors.text} style={{ flex: 1 }}>{e.name}</T>
         <S colors={colors} size={11.5}>{muscleName(prefs.exercise(e.name).main)}</S>
         <T w={700} s={13} c={colors.text} num style={{ minWidth: 72, textAlign: 'right' }}>{line(e)}</T>
-      </Pressable>)}
+      </Tappable>)}
     </View>
     <View style={{ marginTop: 'auto' }}>{start(false, body.w)}</View>
   </View>;
@@ -194,7 +198,7 @@ export function PlanTile(p: TileRenderProps) {
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap, marginTop: L ? 0 : 'auto' }}>
       {list.slice(0, L ? 6 : 6).map(d => <Pressable key={d.routineId} accessibilityRole="button" accessibilityLabel={`${d.name}, ${kl(d)}${d.last && d.kind !== 'live' ? `, ${tr('trainingLastOn', { day: dayLabel(d.last) })}` : ''}`}
         onPress={() => repository && (d.kind === 'live' ? trainingNav.logger() : startTraining(repository, d.routineId))}
-        style={({ pressed }) => ({ width: cw, height: ch, borderRadius: 14, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        style={({ pressed }) => ({ width: cw, height: ch, borderRadius: 14, transform: [{ scale: pressed ? DAY_PRESS_SCALE : 1 }] })}>
         <TileSurface spec={plate(colors, mode, 14)} width={cw} height={ch} />
         <View style={{ flex: 1, justifyContent: 'center', gap: 3, paddingHorizontal: 11, borderRadius: 14,
           backgroundColor: d.kind === 'next' ? alpha(tint, mode === 'light' ? 0.1 : 0.14) : undefined, borderWidth: d.kind === 'live' ? 1.5 : 0, borderColor: tint }}>

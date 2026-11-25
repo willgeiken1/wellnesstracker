@@ -13,6 +13,7 @@ import type { TileStorage } from './store';
 import { TileIcon } from './tile-icon';
 import { fill, liftShadow } from './ui';
 import { useTileRepository } from './use-tiles';
+import { Tappable } from '@/components/tappable';
 
 /* Page sections on the page: Edit page (or a hold on a section) folds each section into a card to drag, hide with
    minus, bring back with plus, or tap to customize. The saved choices live in section-store.ts. */
@@ -171,14 +172,14 @@ function SectionCard({ x, hid, line, opts, lifted, colors, mode, rm, index, onTo
   const actions = hid ? [] : [{ name: 'earlier', label: t('tilesMoveEarlier') }, { name: 'later', label: t('tilesMoveLater') }];
   const onAction = (e: AccessibilityActionEvent) => { if (e.nativeEvent.actionName === 'earlier') onMove?.(-1); if (e.nativeEvent.actionName === 'later') onMove?.(1); };
   return <Animated.View style={inStyle}>
-    <Pressable accessibilityRole={onPress ? 'button' : undefined} accessibilityLabel={label} accessibilityActions={actions} onAccessibilityAction={onAction} onPress={onPress} disabled={!onPress}
+    <Tappable dim="none" accessibilityRole={onPress ? 'button' : undefined} accessibilityLabel={label} accessibilityActions={actions} onAccessibilityAction={onAction} onPress={onPress} disabled={!onPress}
       style={[s.card, hid ? { backgroundColor: 'transparent', boxShadow: `inset 0 0 0 1px ${colors['hair-2']}` }
         : lifted ? { backgroundColor: colors['surface-2'], boxShadow: mode === 'dark' ? '0 22px 40px -14px rgba(0,0,0,0.55), 0 8px 16px -8px rgba(0,0,0,0.35)' : `0 22px 40px -14px ${rgba(colors.text, 0.3)}, 0 8px 16px -8px ${rgba(colors.text, 0.2)}` }
         : { backgroundColor: colors.surface, boxShadow: mode === 'dark' ? undefined : `0 0 0 1px ${colors.hair}` }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={fill(t(hid ? 'sectionsShow' : 'sectionsHide'), { title: x.title })} hitSlop={8} onPress={onToggle}
+      <Tappable accessibilityRole="button" accessibilityLabel={fill(t(hid ? 'sectionsShow' : 'sectionsHide'), { title: x.title })} hitSlop={8} onPress={onToggle}
         style={[s.b, { backgroundColor: rgba(hid ? colors.success : colors.danger, hid ? 0.18 : 0.16) }]}>
         <TileIcon name={hid ? 'plus' : 'minus'} size={15} color={hid ? colors.success : colors.danger} />
-      </Pressable>
+      </Tappable>
       <View style={[s.ic, { backgroundColor: rgba(c, 0.15) }, hid && s.dim]}><TileIcon name={x.icon} size={18} color={c} /></View>
       <View style={[s.tx, hid && s.dim]}>
         <Text numberOfLines={1} style={[s.title, { color: colors.text }]}>{x.title}</Text>
@@ -186,7 +187,7 @@ function SectionCard({ x, hid, line, opts, lifted, colors, mode, rm, index, onTo
       </View>
       {opts && !hid ? <View style={s.side}><TileIcon name="sliders" size={17} color={colors['text-muted']} /></View> : null}
       {!hid ? <View style={[s.side, { opacity: 0.7 }]}><TileIcon name="reorder" size={17} color={colors['text-muted']} /></View> : null}
-    </Pressable>
+    </Tappable>
   </Animated.View>;
 }
 

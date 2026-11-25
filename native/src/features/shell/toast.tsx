@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Animated, Easing, Pressable, View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
+import { Tappable } from '@/components/tappable';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
@@ -42,10 +43,10 @@ export function ShellToast({ bottom }: { bottom: number }) {
       opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
     <ThemedText style={{ flex: 1, color: shell.pillInk, fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 18, letterSpacing: -0.07 }}>{shown.text}</ThemedText>
-    {shown.action && <Pressable accessibilityRole="button" accessibilityLabel={shown.action.label} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+    {shown.action && <Tappable dim="text" accessibilityRole="button" accessibilityLabel={shown.action.label} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
       onPress={() => { const act = shown.action; setGoneId(shown.id); act?.onAction(); }}
-      style={({ pressed }) => ({ minHeight: 44, marginVertical: -6, marginRight: -8, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center', opacity: pressed ? 0.45 : 1 })}>
+      style={{ minHeight: 44, marginVertical: -6, marginRight: -8, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center' }}>
       <ThemedText style={{ color: shell.dark ? colors.accent : mix(colors.accent, 0.45, shell.pillInk), fontFamily: tokens.font.heading, fontSize: 14, lineHeight: 18 }}>{shown.action.label}</ThemedText>
-    </Pressable>}
+    </Tappable>}
   </Animated.View>;
 }
