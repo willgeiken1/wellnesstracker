@@ -1013,7 +1013,7 @@ export const en = {
   trainingNoLiftYet: 'No {lift} sets in this range yet.', trainingE1rmLabel: '{lift} estimated one rep max {v} {u}, {d} over {wk} weeks', trainingUp: 'up', trainingDown: 'down',
   trainingInWk: ' in {wk} wk', trainingInWeeks: 'in {wk} weeks', trainingTopSet: 'Top set', trainingInWeeksEstimate: ' in {wk} weeks · dashed line is an estimate',
   trainingNoWorkoutsYet: 'Finished workouts show here.', trainingRecentLabel: '{name}, {day}, {min} minutes, {sets} sets, {v} {u}', trainingNewRecordSuffix: ', new record',
-  trainingPr: 'PR', trainingLast: 'Last', trainingNoRecordsYet: 'Records show here once you beat a best set.', trainingEstShort: 'Est. 1RM {v} {u}', trainingEstFrom: 'Est. 1RM from {set}',
+  trainingLast: 'Last', trainingNoRecordsYet: 'Records show here once you beat a best set.', trainingEstShort: 'Est. 1RM {v} {u}', trainingEstFrom: 'Est. 1RM from {set}',
   trainingEpleyFoot: 'Estimated 1RM uses your best set: weight × (1 + reps ÷ 30).',
   trainingNow: 'Now', trainingDaysLabel: '{n} training days in the last 4 weeks', trainingStreakLabel: '{n} weeks on plan in a row', trainingTrainedIn4: 'trained in 4 weeks',
   trainingOnPlanInARow: 'on plan in a row', trainingTrainedInLast4: 'trained in the last 4 weeks', trainingAWeek: ' a week', trainingTrainedMin: 'trained in the last 4 weeks, {min} min',
@@ -1067,6 +1067,19 @@ export const en = {
   trainingEffort_easy: 'Easy: you could keep this up for hours.', trainingEffort_light: 'Light: breathing is steady and relaxed.', trainingEffort_moderate: 'Moderate: you can talk in short sentences.',
   trainingEffort_hard: 'Hard: a few words at a time.', trainingEffort_max: 'Max: all out, no talking.',
   trainingLess: 'Less: {what}', trainingMore: 'More: {what}',
+  trainingSummary: 'Summary', trainingWorkoutComplete: 'Workout complete', trainingDayTimes: '{date} · {a} to {b}', trainingStatDuration: 'Duration', trainingStatSets: 'Sets',
+  trainingGoalTitle: 'Training goal', trainingGoalMet: 'Goal met', trainingMinToGo: '{n} min to go', trainingOfGoalMin: 'of {goal} min',
+  trainingGoalMoved: 'Training today moved from {a} to {b} of {goal} minutes', trainingBeforeMin: '{n} min', trainingBeforeWorkout: ' before this workout',
+  trainingFromName: ' from {name}', trainingPlusMin: '+{n} min', trainingPlanDaysWeek: '{done} of {per} plan days this week',
+  trainingRecords: 'Personal records', trainingNewCount: '{n} new', trainingPreviousBest: 'Previous best {set}', trainingMusclesWorked: 'Muscles worked',
+  trainingWorkingSets: 'Working sets', trainingMuscleSets: '{m}, {n} working sets', trainingAlsoWorked: 'Also worked: {list}',
+  trainingExSub: '{sets} · top {set}', trainingExSubWarm: '{sets} + {warm} warm-up · top {set}', trainingNotesPlaceholder: 'How did it feel? Anything to remember next time',
+  trainingWorkoutNotes: 'Workout notes', trainingSavedHistory: 'Saved to History', trainingWorkoutNotFound: 'Workout not found', trainingNotFoundSub: 'It may have been deleted on another device.',
+  trainingEdit: 'Edit', trainingDayMin: '{day} · {min} min', trainingDayTimeMin: '{day} · {time} · {min} min', trainingNewRecord: 'New personal record',
+  trainingExercisesCount_one: '1 exercise', trainingExercisesCount_other: '{n} exercises', trainingActions: 'Actions', trainingStartAgain: 'Start {name} again',
+  trainingUpdateTemplate: 'Update {name} template', trainingSaveAsTemplate: 'Save as template', trainingTemplateUpdated: '{name} template updated', trainingTemplateSaved: 'Saved as a template',
+  trainingDeleteWorkout: 'Delete workout', trainingDeleteTitle: 'Delete {name}?', trainingDeleteBody: 'This removes it from your history and your Training minutes.', trainingWorkoutDeleted: 'Workout deleted',
+  trainingSetLine: 'Set {n}, {set}', trainingSetLinePr: 'Set {n}, {set}, personal record', trainingOpenExercise: '{name}, open history',
   // P3 Training end
 } as const;
 export type MessageKey = keyof typeof en;

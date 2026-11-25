@@ -23,3 +23,17 @@ export function startTraining(repo: Repository, routineId?: string, go: (session
   go(session.id);
   return session;
 }
+
+/** Start a finished workout again: from its template when it had one, otherwise with the same exercises and set counts. */
+export function repeatSession(repo: Repository, sessionId: string) {
+  const w = new WorkoutStore(repo), last = repo.get('sessions', sessionId);
+  if (!last) return startTraining(repo);
+  const routine = last.data.routine_id ? String(last.data.routine_id) : undefined;
+  if (routine && repo.get('routines', routine)?.deleted_at === null) return startTraining(repo, routine);
+  const s = startTraining(repo, undefined, () => {});
+  if (s) {
+    for (const e of w.entries(sessionId)) w.addExercise(s.id, String(e.data.exercise), w.drafts(e.id).length || 3);
+    trainingNav.logger();
+  }
+  return s;
+}

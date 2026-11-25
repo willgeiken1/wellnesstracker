@@ -1,1 +1,1 @@
-export { Summary as default } from '@/features/workout/summary';
+export { WorkoutSummary as default } from '@/features/workout/screens/summary';

@@ -12,7 +12,7 @@ import { useQuickActions, useShellEditMode } from '@/features/shell/registry';
 import { WorkoutStore } from '@/data/workout/store';
 import { t } from '@/i18n/en';
 import { trainingNav } from './nav';
-import { startTraining } from './start-workout';
+import { repeatSession, startTraining } from './start-workout';
 import { seedTrainingDemo } from './training-demo';
 import { useTrainingData } from './tiles/parts';
 import './tiles';
@@ -34,12 +34,8 @@ export function TrainingScreen() {
   const start = useCallback((routineId?: string) => { if (repository) startTraining(repository, routineId); }, [repository]);
   const repeat = useCallback(() => {
     if (!repository) return;
-    const w = new WorkoutStore(repository), last = w.history()[0];
-    if (!last) return start();
-    const routine = last.data.routine_id ? String(last.data.routine_id) : undefined;
-    if (routine && repository.get('routines', routine)?.deleted_at === null) return start(routine);
-    const s = startTraining(repository, undefined, () => {});
-    if (s) { for (const e of w.entries(last.id)) w.addExercise(s.id, String(e.data.exercise), w.drafts(e.id).length || 3); trainingNav.logger(); }
+    const last = new WorkoutStore(repository).history()[0];
+    if (last) repeatSession(repository, last.id); else start();
   }, [repository, start]);
   const next = data?.plan().next ?? null, last = data?.history()[0];
   useQuickActions('training', {
