@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
 import { PrivacySwitches } from '@/features/settings/privacy-switches';
@@ -12,7 +12,7 @@ import { Profile } from '@/features/onboarding/profile';
 import { WorkoutSettings } from '@/features/workout/settings';
 import { t } from '@/i18n/en';
 import { ImportScreen } from '@/features/importer/screen';
-import { AuthContext } from '@/auth/provider';
+import { useAuth } from '@/auth/provider';
 import { ConnectedServices } from '@/features/connections/screen';
 import { useAppleHealth } from '@/features/health/use-apple-health';
 import { useOura } from '@/features/health/use-oura';
@@ -21,13 +21,13 @@ import { LicenseNotice, Licenses, noticeTitle } from '@/features/settings/licens
 import { LEGAL_LINKS, openPage } from '@/features/settings/links';
 function HealthAndDevices() {
   // Settings also opens with no account provider around it; Apple Health is simply not offered there.
-  const repository = useContext(AuthContext)?.repository;
+  const repository = useAuth().repository;
   const apple = useAppleHealth(repository), ring = useOura(repository);
   return <ConnectedServices apple={apple} oura={ring} />;
 }
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
-  const repository = useContext(AuthContext)?.repository;
+  const repository = useAuth().repository;
   const [on, setOn] = useState(() => scoreOn(repository));
   if (!repository) return <QuietCard title={t('notInVersion')} />;
   return <Group testID="settings-score">
