@@ -1,29 +1,27 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { PRESSED_FILL_OPACITY, Tappable } from './tappable';
-import { Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
-import { tabs } from '@/features/shell/tabs';
-import { t } from '@/i18n/en';
-import { Icon, type IconName } from './icon';
-import { useSelectionHaptic } from './selection-haptic';
+import { ShellChrome } from '@/features/shell/shell';
+import { DOCK, dockBottom as shellDockBottom, pageEndSpace } from '@/features/shell/geometry';
+import { PAGES, pageLabel, type PageKey } from '@/features/shell/pages';
+import { PRESSED_FILL_OPACITY } from './tappable';
 
-/** The open tab's circle, the other tabs' circles, and the room around them. */
-export const DOCK_ACTIVE = 56, DOCK_ITEM = 46, DOCK_PAD = 5, DOCK_GAP = 8;
-/** How far the dock sits above the bottom of the screen, and how much room a screen leaves for it. */
-export const dockBottom = (inset: number) => Math.max(inset - 10, 12);
-export const dockSpace = (inset: number) => dockBottom(inset) + DOCK_ACTIVE + 2 * DOCK_GAP;
-/** The pill in dark themes: darker than any card, so the bar stands off the page as it does in light themes. */
-export const DOCK_NIGHT = '#08090B';
-/** How far the fade behind the bar reaches above the room left for it. Screens leave this much more at their end,
- * so a last button can rest clear of the fade, not only clear of the bar. */
+/** The open tab's circle, the other tabs, the room inside a pill and the gap between pieces of the bar. */
+export const DOCK_ACTIVE = DOCK.ACTIVE, DOCK_ITEM = DOCK.ITEM, DOCK_PAD = DOCK.PAD, DOCK_GAP = DOCK.GAP;
+/** How far the bar sits above the bottom of the screen. */
+export const dockBottom = shellDockBottom;
+/** The bottom inset a tab page sees: with the Screen's own end padding it leaves the mockup's 116 points above the bar's offset,
+ * so the last row scrolls clear of the bar and its fade. */
+export const dockSpace = (inset: number) => pageEndSpace(inset) - tokens.spacing[3];
+/** Kept for screens that add room for an older bar's fade; the shell's page end space already includes the fade. */
 export const DOCK_FADE = 24;
 
-/** A screen's own round button that rides beside the floating bar while that screen is open, like Home's +.
- * It sits in line with the tabs, so it never covers a card the way a button floating over the page does. */
+/** Older API: a screen's own round button beside the bar. The shell's + button and its quick actions replace it (see
+ * features/shell/registry.ts); these stay only until Home stops calling them, and the bar no longer draws the button. */
 export interface DockAction { label: string; expanded: boolean; onPress: () => void }
 let dockAction: DockAction | null = null;
 const dockListeners = new Set<() => void>();
@@ -35,8 +33,6 @@ export function setDockAction(next: DockAction | null) {
 }
 const subscribeDock = (listener: () => void) => { dockListeners.add(listener); return () => { dockListeners.delete(listener); }; };
 export const useDockAction = () => useSyncExternalStore(subscribeDock, () => dockAction, () => dockAction);
-
-/** The button beside the bar: the size of the other tabs, neutral, so the open tab stays the only accent circle. */
 export function DockButton({ action }: { action: DockAction }) {
   const { colors } = useTheme();
   return <Pressable testID="dock-action" accessibilityRole="button" accessibilityLabel={action.label} accessibilityState={{ expanded: action.expanded }}
@@ -47,56 +43,8 @@ export function DockButton({ action }: { action: DockAction }) {
     </Svg>
   </Pressable>;
 }
-function DockRow({ children }: { children: ReactNode }) {
-  const action = useDockAction();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: DOCK_GAP }}>{children}{action && <DockButton action={action} />}</View>;
-}
 
-export interface DockItem { key: string; label: string; icon: IconName }
-
-/** The floating tab bar: the open tab stands on its own as an accent circle, and the tabs on either side of it
- * sit in dark pills. Icons only; each carries its name for VoiceOver. */
-export function TabDock({ items, active, onPress }: { items: readonly DockItem[]; active: number; onPress: (index: number) => void }) {
-  const { colors, mode } = useTheme();
-  // The pill is the theme's ink in light mode and near-black in dark mode, so it reads on every theme.
-  const dark = mode === 'dark';
-  const pill = dark ? DOCK_NIGHT : colors.text, ink = dark ? colors.text : colors.bg;
-  const button = (item: DockItem, index: number) => {
-    const open = index === active, size = open ? DOCK_ACTIVE : DOCK_ITEM;
-    // The open tab is a filled circle; the others are bare icons, so they dim as far as any icon does.
-    return <Tappable key={item.key} dim={open ? 'fill' : 'row'} testID={`tab-${item.key}`} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: open }}
-      onPress={() => onPress(index)} hitSlop={open ? 0 : { top: 6, bottom: 6 }}
-      style={[{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: open ? colors.accent : 'transparent' }, open && tokens.elevation.ios]}>
-      <Icon name={item.icon} size={open ? 24 : 22} color={open ? colors['on-accent'] : ink} />
-    </Tappable>;
-  };
-  const group = (from: number, to: number) => to > from && <View key={from} testID="tab-pill"
-    style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: DOCK_PAD, borderRadius: (DOCK_ITEM + 2 * DOCK_PAD) / 2, backgroundColor: pill,
-      borderWidth: dark ? 1 : 0, borderColor: colors['hair-2'] }, tokens.elevation.ios]}>
-    {items.slice(from, to).map((item, i) => button(item, from + i))}
-  </View>;
-  return <View accessibilityRole="tablist" style={{ flexDirection: 'row', alignItems: 'center', gap: DOCK_GAP }}>
-    {group(0, active)}
-    {items[active] && button(items[active], active)}
-    {group(active + 1, items.length)}
-  </View>;
-}
-
-/** A soft fade of the page colour behind the bar, so rows scrolling under it melt away instead of showing between the pills. */
-export function DockFade({ height }: { height: number }) {
-  const { colors } = useTheme();
-  return <View pointerEvents="none" testID="tab-fade" accessible={false} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}>
-    <Svg width="100%" height={height}>
-      <Defs><LinearGradient id="dock-fade" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor={colors.bg} stopOpacity={0} />
-        <Stop offset="0.55" stopColor={colors.bg} stopOpacity={0.92} />
-        <Stop offset="1" stopColor={colors.bg} stopOpacity={1} />
-      </LinearGradient></Defs>
-      <Rect width="100%" height={height} fill="url(#dock-fade)" />
-    </Svg>
-  </View>;
-}
+export { DockFade } from '@/features/shell/fade';
 
 /** Inside the tabs the bottom inset includes the floating bar, so screens keep their last rows and buttons clear of it. */
 function DockInsets({ children }: { children: ReactNode }) {
@@ -104,20 +52,20 @@ function DockInsets({ children }: { children: ReactNode }) {
   return <SafeAreaInsetsContext.Provider value={{ ...insets, bottom: dockSpace(insets.bottom) }}>{children}</SafeAreaInsetsContext.Provider>;
 }
 
-/** The five tabs behind the floating bar. Tabs never slide; the bar floats over the screen. */
+/** The tab pages behind the shell: Home, Training, Food, Progress and Routines on the floating bar. Insights has folded into
+ * Progress; its route stays so old links land on Progress. */
 export function FloatingTabs() {
-  const insets = useSafeAreaInsets();
-  const haptic = useSelectionHaptic();
-  const items: DockItem[] = tabs.map(tab => ({ key: tab.route, label: t(tab.label), icon: tab.label }));
-  return <Tabs screenOptions={{ headerShown: false, animation: 'none' }} screenLayout={({ children }) => <DockInsets>{children}</DockInsets>}
-    tabBar={({ state, emitter, navigateToTab }) => <><DockFade height={dockSpace(insets.bottom) + DOCK_FADE} /><View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: dockBottom(insets.bottom), alignItems: 'center' }}>
-      <DockRow><TabDock items={items} active={state.index} onPress={index => {
-        const route = state.routes[index];
+  const { reduceMotion } = useTheme();
+  return <Tabs screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'fade' }} screenLayout={({ children }) => <DockInsets>{children}</DockInsets>}
+    tabBar={({ state, emitter, navigateToTab }) => <ShellChrome route={state.routes[state.index]?.name}
+      goTo={(page: PageKey) => {
+        const name = PAGES.find(p => p.key === page)!.route, route = state.routes.find(r => r.name === name);
         if (!route) return;
         const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-        if (state.index !== index && !event.defaultPrevented) { haptic(); navigateToTab(route.key); }
-      }} /></DockRow>
-    </View></>}>
-    {tabs.map(tab => <Tabs.Screen key={tab.route} name={tab.route} options={{ title: t(tab.label) }} />)}
+        if (state.routes[state.index]?.key !== route.key && !event.defaultPrevented) navigateToTab(route.key);
+      }} />}>
+    {PAGES.map(page => <Tabs.Screen key={page.route} name={page.route} options={{ title: pageLabel(page.key) }} />)}
+    {/* Not on the bar (the bar draws PAGES only). No href: null here, which would now send its address to Home instead. */}
+    <Tabs.Screen name="insights" options={{ title: pageLabel('progress') }} />
   </Tabs>;
 }
