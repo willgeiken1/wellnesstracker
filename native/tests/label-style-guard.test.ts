@@ -194,8 +194,9 @@ describe("label style guard (INS-03)", () => {
   });
 
   test("ALL-CAPS sweep test of en.ts strings", () => {
-    // True acronyms are preserved (e.g. PR for Personal Record; REM, the sleep stage, as Apple Health names it)
-    const ALLOWLIST_KEYS = new Set(["prs", "recoveryRem"]);
+    // True acronyms are preserved (e.g. PR for Personal Record; REM, the sleep stage, as Apple Health names it;
+    // RPE, rate of perceived exertion, the effort scale a set is logged on)
+    const ALLOWLIST_KEYS = new Set(["prs", "recoveryRem", "trainingRpe"]);
     const violations: { key: string; value: string }[] = [];
 
     for (const [key, value] of Object.entries(en)) {
