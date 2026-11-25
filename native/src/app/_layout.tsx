@@ -12,6 +12,10 @@ import { PlusJakartaSans_500Medium } from '@expo-google-fonts/plus-jakarta-sans/
 import { PlusJakartaSans_600SemiBold } from '@expo-google-fonts/plus-jakarta-sans/600SemiBold';
 import { PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans/700Bold';
 import * as SplashScreen from 'expo-splash-screen';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { configureTileToast } from '@/features/tiles/store';
+import { tileSheetOptions } from '@/features/tiles/nav';
+import { showToast } from '@/features/shell/toast';
 import { ThemeProvider, useTheme } from '@/design/theme-provider';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
@@ -24,6 +28,8 @@ import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/scre
 void SplashScreen.preventAutoHideAsync();
 // Android has no Apple Health in v1, so its copy names only Oura.
 setAndroidCopy(Platform.OS === 'android');
+// The tile grid's removes and resets use the shell's toast, with Undo.
+configureTileToast((message, action) => showToast(message, { color: 'accent', action }));
 export function NavigationShell({ access = false, signedIn = false }: {access?: boolean;signedIn?:boolean}) {
   const { colors, mode, reduceMotion, motion } = useTheme();
   const base = mode === 'dark' ? DarkTheme : DefaultTheme;
@@ -46,6 +52,10 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       <Stack.Screen name="food/log" options={{ title: t('foodLog') }} />
       <Stack.Screen name="score" options={{ title: t('scoreTitle'), headerTitle: '', headerShadowVisible: false, headerStyle: { backgroundColor: colors.bg } }} />
       <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="tab-bar" options={{ headerShown: false, presentation: 'formSheet', sheetAllowedDetents: 'fitToContents', sheetGrabberVisible: true, sheetCornerRadius: 24 }} />
+      <Stack.Screen name="tiles/tray" options={tileSheetOptions.tray} />
+      <Stack.Screen name="tiles/edit" options={tileSheetOptions.edit} />
+      <Stack.Screen name="tiles/section" options={tileSheetOptions.section} />
       </Stack.Protected>
       <Stack.Screen name="import" options={{ title: t('importTitle') }} />
       <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" options={{ headerShown: false }} /></Stack.Protected>
@@ -74,5 +84,5 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({ Lexend_300Light, Lexend_500Medium, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
   useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
   if (!loaded && !error) return null;
-  return <OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider>;
+  return <GestureHandlerRootView style={{ flex: 1 }}><OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider></GestureHandlerRootView>;
 }

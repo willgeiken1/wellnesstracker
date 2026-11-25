@@ -1,4 +1,4 @@
-import { router, type Href } from 'expo-router';
+import { router, type Href, type NativeStackNavigationOptions } from 'expo-router';
 import type { TilePageId } from './types';
 
 /**
@@ -23,8 +23,8 @@ export function configureTileRoutes(next: Partial<TileRoutes>) { routes = { ...r
 export const tileRoutes = (): TileRoutes => routes;
 
 /** Stack options for the three sheet routes (tray full height, the other two at half height, like the design). */
-export const tileSheetOptions = {
+export const tileSheetOptions: Record<'tray' | 'edit' | 'section', NativeStackNavigationOptions> = {
   tray: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
   edit: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [0.56, 1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
   section: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [0.56, 1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
-} as const;
+};
