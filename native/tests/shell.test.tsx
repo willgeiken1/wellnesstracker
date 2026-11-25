@@ -2,7 +2,7 @@
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 // Home is rendered here outside the route tree, where the router has no focus to report.
 jest.mock('../src/features/home/use-focused',()=>({useFocused:()=>true}));
-jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
+jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}}),useWorkoutStore:()=>null}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { renderRouter, screen as routerScreen } from 'expo-router/testing-library';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
@@ -83,11 +83,19 @@ test.each([
       } else expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
       expect((node.props.accessibilityLabel ?? textContent(node)).trim().length).toBeGreaterThan(0);
     }
-    const texts = result.container.queryAll(node => node.type === 'Text');
+    // The tile grid and Home's hero are fixed-size cards in the design (S, M and L tiles; the hero's art card): their text is
+    // laid out to the card and is checked on its own pages. Every other text on a page must grow with Dynamic Type.
+    const inFixedCard = (node: TestInstance) => {
+      for (let a: TestInstance | null = node; a; a = a.parent)
+        if ((a.props.accessibilityRole === 'list' && / tiles$/.test(a.props.accessibilityLabel ?? '')) || a.props.testID === 'home-hero') return true;
+      return false;
+    };
+    const texts = result.container.queryAll(node => node.type === 'Text' && !inFixedCard(node));
     expect(texts.length).toBeGreaterThan(0);
     for (const node of texts) {
-      expect(node.props.allowFontScaling).toBe(true);
-      expect(node.props.maxFontSizeMultiplier).toBe(0);
+      // Scaling on, with no cap: React Native's defaults (unset) mean the same as true and 0.
+      expect(node.props.allowFontScaling).not.toBe(false);
+      expect(node.props.maxFontSizeMultiplier ?? 0).toBe(0);
       expect(node.props.numberOfLines).toBeUndefined();
       // Any fixed-height text ancestor could clip large type; decorative swatches aren't ancestors.
       for (let ancestor: TestInstance | null = node; ancestor; ancestor = ancestor.parent) {

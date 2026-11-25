@@ -1,6 +1,6 @@
 // Shell-only fixtures have no signed-in repository; feature behavior is covered by body-ui.
 jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
-jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
+jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}}),useWorkoutStore:()=>null}));
 import type { TestInstance } from 'test-renderer';
 import { renderRouter, screen, fireEvent, act } from 'expo-router/testing-library';
 import { router } from 'expo-router';
@@ -37,16 +37,19 @@ const routes = {
   'food/log': FoodLog, 'muscle/[key]': MusclePage,
 };
 
-test('Home opens the workout modal and provides a working exit', async () => {
+// Workouts start from Training now (its header, tiles and + actions), which need a signed-in repository; this shell-only
+// fixture has none, so the modal is opened by route, as Training's start does once a workout exists.
+test('the workout modal opened from Training provides a working exit back to Training', async () => {
   const result = await renderRouter(routes);
-  await fireEvent.press(screen.getByRole('button', { name: 'Start freestyle' }));
+  await fireEvent.press(screen.getByTestId('tab-workouts'));
+  await act(() => router.push('/workout'));
   expect(result.getPathname()).toBe('/workout');
-  await fireEvent.press(screen.getByRole('button', { name: 'Close workout' }));
-  expect(result.getPathname()).toBe('/');
+  await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+  expect(result.getPathname()).toBe('/workouts');
 });
 test('avatar opens Settings and Appearance in the stack', async () => {
   const result = await renderRouter(routes);
-  await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Profile and settings' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Appearance' }));
   expect(result.getPathname()).toBe('/settings/appearance');
   await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
@@ -55,7 +58,8 @@ test('avatar opens Settings and Appearance in the stack', async () => {
 test.each([
   // A cold food link has nothing to go back to, so its header offers Close, which lands on the Food tab.
   ['insight://food/log', '/food/log', 'Close', '/food'],
-  ['insight://workout/start', '/workout', 'Close workout', '/'],
+  // A cold workout link has nothing behind it either; its Close lands on Training.
+  ['insight://workout/start', '/workout', 'Close', '/workouts'],
 ])('cold link %s resolves and has an exit', async (initialUrl, expected, exit, landing) => {
   // renderRouter's location bypasses native getInitialURL; apply the actual native intent hook.
   const result = await renderRouter(routes, { initialUrl: redirectSystemPath({ path: initialUrl, initial: true }) });
@@ -64,13 +68,14 @@ test.each([
   expect(result.getPathname()).toBe(landing);
 });
 
-// The shell's bar is a row of tabs; Routines is also a tab there, so a page's own segment of that name is told apart by the bar's id.
+// The shell's bar is a row of tabs, so a page's own tab-like control is told apart from the bar by the bar's ids.
 const segmentTab = (name: string) => screen.getAllByRole('tab', { name }).find(node => !String(node.props.testID ?? '').startsWith('tab-'))!;
 test.each([
-  ['workouts', '/workouts', ['Routines', 'History', 'Cardio']],
-  // Goals & PRs is a real screen now; Photos is the one still waiting, so it is the one that says so.
-  ['progress', '/progress', ['Body', 'Goals & PRs', 'Photos']],
-] as const)('%s segments stay within their tab, with no Back to Home button: the tab bar goes Home', async (route, path, segments) => {
+  // Training is one page of tiles now, with no segments of its own.
+  ['workouts', '/workouts', []],
+  // Progress keeps its range control (Week, Month, Year) on the page; Body, Goals and Photos open as their own screens.
+  ['progress', '/progress', ['Week', 'Month', 'Year']],
+] as const)('%s controls stay within their tab, with no Back to Home button: the tab bar goes Home', async (route, path, segments) => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByTestId(`tab-${route}`));
   expect(screen.getByTestId(`tab-${route}`)).toBeSelected();
