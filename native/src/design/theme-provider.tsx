@@ -10,6 +10,8 @@ function useThemeState(repository?: Repository | null) {
   const [appearance, updateAppearance] = useState<Looks>(DEFAULT_APPEARANCE);
   const palette = appearance.palette;
   const [persistenceError, setPersistenceError] = useState(false);
+  // True black rides along in the `accent` setting as `;black=1`, beside the palette and looks.
+  const [trueBlack, updateTrueBlack] = useState(false);
   useEffect(() => {
     const hydrate = () => {
       try {
@@ -18,19 +20,21 @@ function useThemeState(repository?: Repository | null) {
         updateOverride(theme === 'light' || theme === 'dark' ? theme : 'system');
         // Palette and looks live in the existing `accent` setting, so older saved accents still resolve.
         updateAppearance(parseAppearance(color));
+        updateTrueBlack(typeof color === 'string' && color.split(';').includes('black=1'));
         setPersistenceError(false);
       } catch { setPersistenceError(true); }
     };
     hydrate();
     return repository?.subscribe(hydrate);
   }, [repository]);
-  const persist = (theme: ThemeOverride, next: Looks) => {
+  const persist = (theme: ThemeOverride, next: Looks, black = trueBlack) => {
     try {
       const current = repository?.list('settings').sort(compareRows).at(-1);
-      repository?.save('settings', { ...current?.data, theme_override: theme, accent: formatAppearance(next) }, current?.id);
-      updateOverride(theme); updateAppearance(next); setPersistenceError(false);
+      repository?.save('settings', { ...current?.data, theme_override: theme, accent: formatAppearance(next) + (black ? ';black=1' : '') }, current?.id);
+      updateOverride(theme); updateAppearance(next); updateTrueBlack(black); setPersistenceError(false);
     } catch { setPersistenceError(true); }
   };
+  const setTrueBlack = (black: boolean) => persist(override, appearance, black);
   const setOverride = (theme: ThemeOverride) => persist(theme, appearance);
   const setPalette = (color: Palette) => { if (!paletteLocked(color)) persist(override, { ...appearance, palette: color }); };
   const setRingLook = (ring: RingLook) => persist(override, { ...appearance, ring });
@@ -66,7 +70,7 @@ function useThemeState(repository?: Repository | null) {
   return { persistenceError, override, setOverride, palette, setPalette, ringLook: appearance.ring, setRingLook,
     // The saved choice, and what actually plays: iOS Reduce Motion always wins.
     motionStyle: appearance.motion, setMotionStyle, ringMotion: (reduceMotion ? 'basic' : appearance.motion) as Motion,
-    intensity: appearance.intensity, setIntensity, barLook: appearance.bar, setBarLook, keypadLook: appearance.keypad, setKeypadLook, selectorLook: appearance.selector, setSelectorLook, preset: presetOf(appearance), applyPreset, mode, colors: createTheme(mode, palette),
+    intensity: appearance.intensity, setIntensity, barLook: appearance.bar, setBarLook, keypadLook: appearance.keypad, setKeypadLook, selectorLook: appearance.selector, setSelectorLook, preset: presetOf(appearance), applyPreset, mode, trueBlack, setTrueBlack, colors: createTheme(mode, palette, trueBlack),
     reduceMotion, reduceMotionReady, motion: reduceMotion ? { micro: 0, sheet: 0 } : tokens.motion };
 }
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);
