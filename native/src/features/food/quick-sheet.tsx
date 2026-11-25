@@ -13,6 +13,7 @@ import { closeSheet, FoodSheet } from './sheet';
 import { Caption, MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { showToast } from '../shell/toast';
+import { capitals } from '@/components/kit-style';
 
 /** A typed number, or null when the box is blank or not a number. Blank stays unknown, never zero. */
 export function parseAmount(text: string): number | null {
@@ -51,7 +52,7 @@ export function QuickSheet({ repo, meal: asked, name: given, mine }: { repo: Rep
     header={<SheetHeader title={t('foodTileQuick')} left={t('cancel')} onLeft={() => closeSheet()} right={t('foodAddWord')} onRight={add} rightDisabled={!ok} />}>
     <Tappable dim="none" accessible={false} onPress={() => big.current?.focus()}
       style={{ alignItems: 'center', gap: 4, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 14, borderRadius: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
-      <KitText weight={700} size={12} tracking={0.1} color="text-muted" style={{ textTransform: 'uppercase' }}>{t('foodCaloriesCap')}</KitText>
+      <KitText weight={700} size={12} tracking={0.1} color="text-muted" style={capitals}>{t('foodCaloriesCap')}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8 }}>
         <TextInput ref={big} value={kcalText} onChangeText={setKcal} keyboardType="number-pad" placeholder="0" testID="food-quick-kcal"
           accessibilityLabel={t('foodCaloriesInKcal')} autoComplete="off" placeholderTextColor={k.c.ghost} selectionColor={k.c.food} cursorColor={k.c.food}

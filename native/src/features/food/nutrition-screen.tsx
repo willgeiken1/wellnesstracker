@@ -15,6 +15,7 @@ import { nuNote, nutrients, type Nu } from './tiles/tiles';
 import { Cells, MACRO_COLOR, SectionLabel, macroPercents, meter } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { litresOn, readWater, waterAmt } from './water';
+import { capitals } from '@/components/kit-style';
 
 /** Fifty squares, each a fiftieth of the calories, coloured by where they came from. */
 export function waffleCells(p: number, c: number, f: number) {
@@ -52,7 +53,7 @@ function DayPart({ repo }: { repo: Repository }) {
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
         <View>
-          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{isToday ? t('foodEatenToday') : fill(t('foodEatenOn'), { day: weekdayName(day) })}</KitText>
+          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{isToday ? t('foodEatenToday') : fill(t('foodEatenOn'), { day: weekdayName(day) })}</KitText>
           <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6 }}>{num(v.eaten)}
             <KitText weight={600} size={13} color="text-muted">{` ${fill(t('foodOfGoalKcal'), { goal: num(v.goal) })}`}</KitText></KitText>
         </View>
@@ -123,7 +124,7 @@ function WeekPart({ repo }: { repo: Repository }) {
     </View>
     <SectionHeader title={t('foodCaloriesCap')} />
     <Card>
-      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{label(hi)}</KitText>
+      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{label(hi)}</KitText>
       <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6, marginBottom: 12 }}>{kc[hi] == null ? '–' : num(kc[hi]!)}<KitText weight={600} size={13} color="text-muted">{` ${t('foodKcal')}`}</KitText></KitText>
       <DevChart vals={kc} days={days} today={today} hi={hi} onPick={setHi} goal={goal} unit="" goalText={`${num(goal)} ${t('foodKcal')} ${t('foodGoalWord')}`} label={t('foodCaloriesByDay')} />
     </Card>
@@ -131,11 +132,11 @@ function WeekPart({ repo }: { repo: Repository }) {
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <View>
-          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{label(phi)}</KitText>
+          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{label(phi)}</KitText>
           <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6 }}>{pr[phi] == null ? '–' : num(pr[phi]!)}<KitText weight={600} size={13} color="text-muted"> g</KitText></KitText>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{t('foodDailyAverage')}</KitText>
+          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{t('foodDailyAverage')}</KitText>
           <KitText weight={700} size={16} numeric style={{ marginTop: 6 }}>{avg(fullP) == null ? '–' : num(avg(fullP)!)}<KitText weight={600} size={12} color="text-muted"> g</KitText></KitText>
         </View>
       </View>

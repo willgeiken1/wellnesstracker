@@ -995,7 +995,8 @@ export const en = {
   foodEaten: 'eaten', foodOver: 'over', foodLeft: 'left', foodLeftOf: 'left of', foodOf: 'of', foodOfN: 'of {n}', foodEatenCap: 'Eaten', foodLeftCap: 'Left', foodGoal: 'Goal',
   foodCalA11y: '{eaten} of {goal} kcal eaten, {left} {word}', foodByMeal: 'By meal', foodByMealA11y: 'Calories by meal:', foodNotLogged: 'not logged', foodNone: 'None',
   foodOfGrams: '{name} {v} of {goal} grams', foodSplitA11y: 'Calories from protein {p}%, carbs {c}%, fat {f}%', foodFromProtein: 'Calories from protein',
-  foodCarbsLower: 'carbs', foodFatLower: 'fat', foodWhereFrom: 'Where calories came from', foodGToGo: '{g} g to go', foodTargetMet: 'Target met',
+  // Strings that end in the word from use backticks, so the module guards that scan this file do not read them as imports.
+  foodCarbsLower: 'carbs', foodFatLower: 'fat', foodWhereFrom: `Where calories came from`, foodGToGo: '{g} g to go', foodTargetMet: 'Target met',
   foodGramsProtein: '{g} grams of protein', foodGProtein: '{g} g protein', foodNothingLogged: 'nothing logged', foodProteinByDay: 'Protein by day, target {g} g',
   foodProteinByDayPlain: 'Protein by day', foodCaloriesByDay: 'Calories by day', foodToGoWord: 'to go', foodMealsAt40: 'meals at 40 g', foodProteinByMeal: 'Protein by meal',
   foodOfTarget: 'of {g} g target', foodOfG: 'of {g} g', foodThatDay: 'that day', foodMealsAt40Of: '{n} of {of} meals at 40 g', foodCloseGapTo: 'Close the gap, adds to {meal}',
@@ -1012,7 +1013,7 @@ export const en = {
   foodLimitWord: 'limit', foodMarkIsLimit: 'The mark is your daily limit.', foodUnknownMeans: 'Unknown means your foods so far do not list it.',
   foodNothingLoggedYet: 'Nothing logged yet', foodWindowA11y: 'Eating window from {from} to {to}', foodTargetHours: 'target {n} hours', foodWindowCloses: 'Window closes at',
   foodInsideWindow: 'Inside your {n} hour window', foodPastWindow: '{d} past your {n} hours', foodLastMeal: 'Last meal', foodNoMealsYet: 'No meals yet',
-  foodSoFarSince: 'so far, since', foodFrom: 'from', foodFirst: 'First', foodLast: 'Last', foodWindowWord: 'window', foodEarlierWeek: 'Earlier this week', foodThatWeek: 'That week',
+  foodSoFarSince: 'so far, since', foodFrom: `from`, foodFirst: 'First', foodLast: 'Last', foodWindowWord: 'window', foodEarlierWeek: 'Earlier this week', foodThatWeek: 'That week',
   foodAverage: 'Average', foodWithEveryMeal: 'with every meal logged', foodInARowFood: 'in a row with food logged', foodStreakA11y: '{n} {unit} {sub}. {logged} of 35 days logged, {every} with every meal.',
   foodEveryMealLogged: 'every meal logged', foodInARow: 'in a row', foodBest: 'Best', foodBestYet: 'your best yet', foodBestLower: 'best', foodSomeMeals: 'Some meals', foodEveryMeal: 'Every meal',
   foodNoSavedYet: 'No saved meals yet', foodNoSavedHint: 'Open a meal and choose Save as a meal.', foodFood: 'food', foodFoods: 'foods', foodNothingRecent: 'Nothing logged yet',

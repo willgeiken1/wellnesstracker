@@ -14,6 +14,7 @@ import { RowLine, useLatest } from './sheet';
 import { MACRO_COLOR, SplitBar } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
+import { capitals } from '@/components/kit-style';
 
 /** A pushed Food screen: the kit's bar, then the page scrolling under it. */
 export function FoodPage({ back, title, right, children, testID }: { back: string; title?: string; right?: ReactNode; children: ReactNode; testID?: string }) {
@@ -41,7 +42,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
   const header = <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, marginBottom: 18 }}>
     <View style={{ width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: k.tint(k.c.food, 0.16) }}><Icon name={m.icon} size={22} color={k.c.food} /></View>
     <View style={{ flex: 1, minWidth: 0 }}>
-      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{shortDate(day)}</KitText>
+      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{shortDate(day)}</KitText>
       <KitText accessibilityRole="header" weight={700} size={30} lineHeight={1.05} tracking={-0.035} style={{ marginTop: 6 }}>{m.name}</KitText>
     </View>
     {m.time != null ? <View accessible accessibilityLabel={fill(t('foodTimeEaten'), { time: clock(m.time) })}

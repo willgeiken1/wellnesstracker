@@ -10,6 +10,7 @@ import { dayView, nextMealId } from '../day';
 import { useFoodDay } from '../selection';
 import { useFoodRevision } from '../use-food-revision';
 import { readWater } from '../water';
+import { capitals } from '@/components/kit-style';
 
 /* The Food tiles' own type and parts (pagetiles-food.js: fdt-n, fdt-s, fdt-t, fdt-k, fdt-plus, fdt-btn, fdt-ic, cols). */
 
@@ -30,7 +31,7 @@ export function Title({ children, size = 15, style }: { children: ReactNode; siz
 }
 /** Small capitals (`.fdt-k`). */
 export function Kick({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
-  return <KitText weight={700} size={10.5} lineHeight={1} tracking={0.1} color="text-muted" numberOfLines={1} style={[{ textTransform: 'uppercase' }, style]}>{children}</KitText>;
+  return <KitText weight={700} size={10.5} lineHeight={1} tracking={0.1} color="text-muted" numberOfLines={1} style={[capitals, style]}>{children}</KitText>;
 }
 export const Hair = () => { const k = useKit(); return <View style={{ height: 1, backgroundColor: k.c.hair }} />; };
 
