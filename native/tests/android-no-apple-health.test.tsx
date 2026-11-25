@@ -1,11 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Platform } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
-import type { PropsWithChildren } from 'react';
-import { ThemeProvider } from '../src/design/theme-provider';
-import { EditHome } from '../src/features/home/edit-sheet';
-import { RING_TILES, addHealthTiles, defaultTiles, loadTiles } from '../src/features/home/tiles';
+import { RING_TILES, addHealthTiles, homeLayout } from '../src/features/home/tiles';
 import { appleHealth } from '../src/features/health/apple';
 import { oura } from '../src/features/health/oura-client';
 import { android, en, setAndroidCopy, t } from '../src/i18n/en';
@@ -13,7 +9,6 @@ import { android, en, setAndroidCopy, t } from '../src/i18n/en';
 // Android has no Apple Health in v1 (Health Connect comes later): nothing there may name it or offer what only it fills.
 jest.mock('../src/features/health/apple', () => ({ appleHealth: jest.fn(() => null) }));
 jest.mock('../src/features/health/oura-client', () => ({ oura: jest.fn(() => null) }));
-const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 
 beforeEach(() => jest.replaceProperty(Platform, 'OS', 'android'));
 afterEach(() => setAndroidCopy(false));
@@ -36,19 +31,24 @@ test('Connections lists only Oura on Android', () => {
   });
 });
 
-test('with only Oura, Edit Home offers Steps and Sleep but none of the Apple Health tiles', async () => {
-  jest.mocked(appleHealth).mockReturnValue(null);
-  jest.mocked(oura).mockReturnValue({} as never);
-  await render(<EditHome visible tiles={defaultTiles()} onChange={() => {}} onClose={() => {}} />, { wrapper });
-  for (const id of RING_TILES) expect(screen.getByTestId(`edit-off-${id}`)).toBeTruthy();
-  for (const id of ['active', 'exercise', 'bodyFat', 'water', 'mindful']) expect(screen.queryByTestId(`edit-off-${id}`)).toBeNull();
+test('on Android the tile tray offers Steps and Sleep but none of the Apple Health tiles, and Home does not start with them', () => {
+  jest.isolateModules(() => {
+    jest.replaceProperty((require('react-native') as typeof import('react-native')).Platform, 'OS', 'android');
+    const { tilePage } = require('../src/features/tiles/registry') as typeof import('../src/features/tiles/registry');
+    const home = tilePage('home'), offered = home.tiles.map(d => d.id), starts = home.defaults.map(([id]) => id);
+    for (const id of RING_TILES) expect(offered).toContain(id);
+    for (const id of ['active', 'exercise', 'bodyFat', 'water', 'mindful']) {
+      expect(offered).not.toContain(id);
+      expect(starts).not.toContain(id);
+    }
+  });
 });
 
 test('addHealthTiles adds only the tiles it is given', () => {
   let saved: unknown = null;
-  const storage = { localGet: () => saved, localSave: (_key: string, value: unknown) => { saved = value; } };
+  const storage = { owner: 'android-owner', localGet: () => saved, localSave: (_key: string, value: unknown) => { saved = value; } };
   addHealthTiles(storage as never, RING_TILES);
-  const order = loadTiles(storage as never).order;
+  const order = homeLayout(storage as never).map(e => e.id);
   expect(order).toEqual(expect.arrayContaining(['steps', 'sleep']));
   expect(order).not.toContain('active');
 });

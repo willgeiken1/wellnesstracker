@@ -1,33 +1,30 @@
-import { render, screen } from '@testing-library/react-native';
-import type { PropsWithChildren } from 'react';
-import { ThemeProvider } from '../src/design/theme-provider';
-import { EditHome } from '../src/features/home/edit-sheet';
-import { defaultTiles } from '../src/features/home/tiles';
-import { appleHealth } from '../src/features/health/apple';
-import { oura } from '../src/features/health/oura-client';
+import { buildState, tileView } from '../src/features/home/tiles/state';
+import { DAYS, type HomeInput } from '../src/features/home/tiles/data';
+import { DEFAULT_UNITS } from '../src/features/home/tiles/studio';
+import { tilePage } from '../src/features/tiles/registry';
 
-jest.mock('../src/features/health/apple', () => ({ appleHealth: jest.fn(() => null) }));
-jest.mock('../src/features/health/oura-client', () => ({ oura: jest.fn(() => null) }));
-const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
-const present = {} as never;
-const open = () => render(<EditHome visible tiles={defaultTiles()} onChange={() => {}} onClose={() => {}} />, { wrapper });
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 
-test.each([
-  ['Apple Health', true, false],
-  ['an Oura account', false, true],
-  ['both', true, true],
-])('Edit Home offers Steps and Sleep where %s can exist', async (_name, apple, ring) => {
-  jest.mocked(appleHealth).mockReturnValue(apple ? present : null);
-  jest.mocked(oura).mockReturnValue(ring ? present : null);
-  await open();
-  expect(screen.getByTestId('edit-off-steps')).toBeTruthy();
-  expect(screen.getByTestId('edit-off-sleep')).toBeTruthy();
+// The tile tray lists every Home tile; Steps and Sleep are always there. Without a health source they say how to fill them.
+const days = Array.from({ length: DAYS }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`);
+const empty = { kcal: null, protein: null, carbs: null, fat: null, goalKcal: null, goalProtein: null, meals: [] };
+const input = (over: Partial<HomeInput>): HomeInput => ({
+  now: new Date(2026, 9, 30, 15), days, weightUnit: 'lb', waterUnit: 'oz', food: days.map(() => empty), nextMeal: null, recentFoods: [], weighIns: [],
+  weightGoalKg: null, volumeKg: days.map(() => 0), volumeByGroupKg: {}, volumeLastWeekKg: 0, workoutsThisWeek: 0, active: null, upNext: null,
+  health: null, detail: null, recovery: null, score: null, sources: { activity: 'Apple Health', sleep: 'Apple Health', body: 'Apple Health' },
+  goals: { water: 2.5, steps: 8000, exercise: 30, active: 500, sleepHours: 8, mindful: 10 }, ...over,
 });
 
-test('with neither, Steps and Sleep are not offered', async () => {
-  jest.mocked(appleHealth).mockReturnValue(null);
-  jest.mocked(oura).mockReturnValue(null);
-  await open();
-  expect(screen.queryByTestId('edit-off-steps')).toBeNull();
-  expect(screen.queryByTestId('edit-off-sleep')).toBeNull();
+test('the tray offers Steps and Sleep with their styles', () => {
+  const home = tilePage('home');
+  for (const id of ['steps', 'sleep']) expect(home.tiles.find(d => d.id === id)?.versions?.length).toBe(4);
+});
+
+test.each([
+  ['no health source', null, 'connect'],
+  ['a source with nothing yet today', { steps: [null], activeKcal: null, exerciseMinutes: null, sleepHours: [null], waterMl: null, mindfulMinutes: null }, 'today'],
+] as const)('with %s, Steps says how it fills in rather than showing 0', (_name, health, why) => {
+  const s = buildState(input({ health: health ? { ...health, steps: [...health.steps], sleepHours: [...health.sleepHours] } : null }), DEFAULT_UNITS, () => {});
+  expect(tileView(s, 'steps', 'C', 'S', {})).toEqual({ empty: why });
+  expect(tileView(s, 'sleep', 'A', 'S', {})).toEqual({ empty: health ? 'night' : 'connect' });
 });

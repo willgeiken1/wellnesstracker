@@ -1,10 +1,11 @@
+import { Platform } from 'react-native';
 import { pendingTile } from '../pending';
 import type { TilePageConfig } from '../types';
 
 /** Home's tiles: every tile in its styles, the tray sections and Home's starting layout.
  * Each tile draws its own header and frame depth in the final design (head: false). Every renderer is a pending stub;
  * the Home packet replaces each style's `render` and adds `open`. Only options the tray offers are listed. */
-export const homeTiles: TilePageConfig = {
+const allHomeTiles: TilePageConfig = {
   id: 'home', label: 'Home', color: 'accent', variant: 'home',
   groups: [['Today', 'accent'], ['Training', 'training'], ['Food', 'food'], ['Body', 'accent-2'], ['Recovery & Sleep', 'sleep'], ['Routines', 'sleep']],
   defaults: [['next', 'M', 'B'], ['protein', 'S', 'A'], ['water', 'S', 'E'], ['steps', 'S', 'A'], ['weight', 'S', 'A']],
@@ -36,7 +37,7 @@ export const homeTiles: TilePageConfig = {
     {
       id: 'next', title: 'Next', sub: 'What to do now',
       icon: 'up-next', color: 'accent', group: 'Today', sizes: ['S', 'M', 'L'], size: 'S', head: false, style: 'B',
-      label: 'Resume Legs A',
+      label: 'Open what is next',
       render: pendingTile('home', 'next'),
       versions: [
         { key: 'A', name: 'Gauge', sizes: ['S', 'M', 'L'], render: pendingTile('home', 'next', 'A') },
@@ -278,3 +279,12 @@ export const homeTiles: TilePageConfig = {
     },
   ],
 };
+
+/** Tiles only Apple Health fills. Android has no Apple Health in v1, so there Home neither offers nor starts with them. */
+export const APPLE_ONLY_TILES: readonly string[] = ['active', 'exercise', 'bodyFat', 'water', 'mindful'];
+const withoutAppleOnly = (cfg: TilePageConfig): TilePageConfig => ({
+  ...cfg,
+  defaults: cfg.defaults.filter(([id]) => !APPLE_ONLY_TILES.includes(id)),
+  tiles: cfg.tiles.filter(d => !APPLE_ONLY_TILES.includes(d.id)),
+});
+export const homeTiles: TilePageConfig = Platform.OS === 'android' ? withoutAppleOnly(allHomeTiles) : allHomeTiles;

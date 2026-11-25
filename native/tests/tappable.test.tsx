@@ -68,8 +68,8 @@ const pressables = (source: string) => {
 
 test('no tap target is a bare Pressable with nothing to show the press', () => {
   // A plain Pressable is fine when it draws its own pressed look; one that takes a tap and shows nothing must be a Tappable.
-  // These two are not controls with a look of their own: a chart you scrub and the see-through backdrop behind the add menu.
-  const allowed = ['src/features/body/chart.tsx', 'src/features/home/screen.tsx'];
+  // This one is not a control with a look of its own: a chart you scrub. Home has no add menu or backdrop of its own any more.
+  const allowed = ['src/features/body/chart.tsx'];
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((name: string) => {
     const path = join(dir, name);
     return statSync(path).isDirectory() ? walk(path) : /\.tsx$/.test(name) ? [path] : [];
@@ -81,18 +81,21 @@ test('no tap target is a bare Pressable with nothing to show the press', () => {
     return pressables(source).filter(({ tag }) => /onPress=/.test(tag) && !/pressed/.test(tag)).map(({ line }) => `${file}:${line}`);
   });
   expect(bare.filter(at => !allowed.some(file => at.startsWith(file + ':')))).toEqual([]);
-  expect(bare.filter(at => at.startsWith('src/features/home/screen.tsx:'))).toHaveLength(1);
+  expect(bare.filter(at => at.startsWith('src/features/home/'))).toEqual([]);
   expect(bare.filter(at => at.startsWith('src/features/body/chart.tsx:'))).toHaveLength(1);
 });
 
 test('the controls the acceptance review named dim at the right strength', () => {
   const read = (file: string) => readFileSync(join(__dirname, '..', file), 'utf8');
-  for (const file of ['src/features/food/log-screen.tsx', 'src/features/home/screen.tsx', 'src/features/home/edit-sheet.tsx',
+  for (const file of ['src/features/food/log-screen.tsx', 'src/features/shell/profile-button.tsx',
     'src/features/paywall/screen.tsx', 'src/features/workout/parts.tsx', 'src/features/atlas/body-atlas.tsx', 'src/features/body/entry.tsx'])
     expect(read(file)).toMatch(/<Tappable\b/);
   expect(read('src/features/food/log-screen.tsx')).toMatch(/<Tappable dim="fill" key=\{meal\.id\}/);
-  expect(read('src/features/home/edit-sheet.tsx')).toMatch(/<Tappable dim="fill"[^>]*accessibilityLabel=\{t\('done'\)\}/);
-  expect(read('src/features/home/screen.tsx')).toMatch(/<Tappable dim="fill"[^>]*accessibilityLabel=\{t\('openSettings'\)\}/);
+  // Home's Done is the tile grid's edit bar now, and it dims when pressed.
+  expect(read('src/features/tiles/tile-grid.tsx')).toMatch(/onPress=\{onDone\} style=\{\(\{ pressed \}\) => \[[^\]]*pressed && \{ opacity: 0\.\d+ \}\]/);
+  // Home opens Settings from the shell's profile button, which shows its press.
+  expect(read('src/features/home/screen.tsx')).toMatch(/<ProfileButton\b/);
+  expect(read('src/features/shell/profile-button.tsx')).toMatch(/<Tappable dim="none"[^>]*accessibilityLabel=\{t\('shellProfile'\)\}/);
   // The floating bar's tabs and + button show a press by shrinking, as the mockup's shell does, rather than by dimming.
   const dock = read('src/features/shell/dock.tsx');
   expect(dock).toMatch(/<Tappable dim="none" testID=\{`tab-\$\{page\.route\}`\}/);
