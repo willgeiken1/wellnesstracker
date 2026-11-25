@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Redirect } from 'expo-router';
 import { AppState } from 'react-native';
 import { SegmentedControl } from '@/components/segmented-control';
 import { Screen } from '@/components/screen';
@@ -12,7 +13,11 @@ import { useRecovery } from '@/features/health/use-recovery';
 import { useOuraRecovery } from '@/features/health/use-oura-recovery';
 import { useFocused } from '@/features/home/use-focused';
 const SECTIONS = ['trends', 'recovery', 'muscles', 'weekly'] as const;
-export default function Page() {
+/** Insights folded into Progress: its old route opens Progress. */
+export default function InsightsRoute() { return <Redirect href="/progress" />; }
+
+/** The Insights page as it was, kept for the Progress page to take its sections from. It is no longer on the bar. */
+export function InsightsPage() {
  const {store}=useWorkout();
  const [now,setNow]=useState(Date.now);
  const [section,setSection]=useState<(typeof SECTIONS)[number]>('trends');
