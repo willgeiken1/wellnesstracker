@@ -1,16 +1,17 @@
 import { router, type NativeStackNavigationOptions } from 'expo-router';
 
-/** Every Training route in one place, so they can move together (see the packet report: detail, exercise and plan
- * would push as cards, and the sheets opened from the tab would sit at the app root). */
+/** Every Training route in one place. The logger and its summary live in the workout modal; workout detail, exercise
+ * detail and the plan push as cards at the app root, and the picker, rest timer and cardio log open as sheets there,
+ * so they open the same way from the Training tab and from inside a workout (registered in app/_layout.tsx). */
 export const trainingRoutes = {
   logger: '/workout',
   summary: '/workout/summary',
-  detail: '/workout/detail',
-  exercise: '/workout/exercise',
-  plan: '/workout/plan',
-  picker: '/workout/picker',
-  rest: '/workout/rest',
-  cardio: '/workout/cardio',
+  detail: '/training/detail',
+  exercise: '/training/exercise',
+  plan: '/training/plan',
+  picker: '/training/picker',
+  rest: '/training/rest',
+  cardio: '/training/cardio',
 } as const;
 
 export const trainingNav = {

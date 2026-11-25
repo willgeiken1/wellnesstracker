@@ -16,6 +16,7 @@ import { MUSCLE_GROUPS, equipmentName, muscleGroup, type MuscleGroup } from '../
 import { tr } from '../tr';
 import { useWorkout } from '../use-workout';
 import { exLabel } from '../logger/model';
+import { trainingRoutes } from '../nav';
 
 export type PickerMode = 'add' | 'replace' | 'routine' | 'browse';
 const groupsOf = (e: Exercise) => [e.main, ...e.helpers].map(m => muscleGroup(m)).filter(Boolean) as MuscleGroup[];
@@ -40,7 +41,7 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
   const commit = (picked: string[]) => {
     if (!store || !picked.length) return;
     try {
-      if (mode === 'browse') { router.back(); router.push({ pathname: '/workout/exercise', params: { name: picked[0] } }); return; }
+      if (mode === 'browse') { router.back(); router.push({ pathname: trainingRoutes.exercise, params: { name: picked[0] } }); return; }
       if (mode === 'replace' && entry) { store.replaceExercise(entry, picked[0], 'replace'); showToast(tr('trainingReplacedWith', { name: exLabel(picked[0]) }), { color: 'training' }); }
       else if (mode === 'routine' && routine) {
         const row = store.repo.get('routines', routine), current = store.templateExercises(routine);
