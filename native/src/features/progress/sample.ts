@@ -59,6 +59,7 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
   const dp: [number, number, number][] = [[80, 70, 84], [70, 60, 92], [100, 94, 82], [82, 75, 86], [70, 100, 94], [95, 70, 90], [40, 62, 86]];
   d.weekPillars = dp.map(([training, food, sleep]) => ({ training, food, sleep }));
   d.pillars = { training: 40, food: 62, sleep: 86 };
+  d.yesterdayScore = 71;
   d.baseline = { score: 76, training: 70, food: 74, sleep: 84 };
   d.dayNotes = [0, 1, 2, 3, 4, 5, 6].map(i => fill(t(`progressSampleNote${i}` as 'progressSampleNote0'), { squat: wtS(kg(245), unit, 0) }));
   d.night = { min: 413, bed: -32, wake: 381, deep: 72, rem: 94, core: 221, awake: 26, source: 'Oura', segments: HYP };

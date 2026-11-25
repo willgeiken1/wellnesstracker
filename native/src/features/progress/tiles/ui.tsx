@@ -11,10 +11,11 @@ const tab = { fontVariant: ['tabular-nums'] as TextStyle['fontVariant'] };
 /** A big number with its unit after it in small grey type (.prt-n). */
 export function Num({ v, unit, fs = 32, color, units }: { v: string | number; unit?: string; fs?: number; color?: string; units?: (readonly [string, string])[] }) {
   const k = useKit(), us = fs <= 22 ? Math.max(11, fs * 0.52) : 13;
-  const small = (s: string, key?: string, ml = fs <= 22 ? 2 : 3, mr = 0) =>
-    <Text key={key} style={[font(600, us), { color: k.c['text-muted'], letterSpacing: 0, marginLeft: ml, marginRight: mr }]}>{s === '' ? '' : (ml ? ' ' : '') + s}</Text>;
+  // Inline text takes no margins, so the mockup's 1 to 4 pt gaps around a unit are thin spaces.
+  const small = (s: string, key?: string, before = '\u200A', after = '') =>
+    <Text key={key} style={[font(600, us, 1), { color: k.c['text-muted'], letterSpacing: 0 }]}>{before}{s}{after}</Text>;
   return <Text numberOfLines={1} style={[font(700, fs, 1, -0.03), tab, { color: color ?? k.c.text }]}>
-    {units ? units.map(([n, u], i) => <Text key={i}>{n}{small(u, `u${i}`, 1, i < units.length - 1 ? 4 : 0)}{i < units.length - 1 ? ' ' : ''}</Text>) : <>{v}{unit ? small(unit) : null}</>}
+    {units ? units.map(([n, u], i) => <Text key={i}>{n}{small(u, `u${i}`, '', i < units.length - 1 ? '\u2009' : '')}</Text>) : <>{v}{unit ? small(unit) : null}</>}
   </Text>;
 }
 /** Hours and minutes as "6h 53m" in the big number style. */
@@ -42,7 +43,7 @@ export const K = ({ children, color }: { children: ReactNode; color?: string }) 
 /** A small value (.prt-v). */
 export function V({ v, unit, fs = 18 }: { v: string; unit?: string; fs?: number }) {
   const k = useKit();
-  return <Text numberOfLines={1} style={[font(700, fs, 1.1, -0.01), tab, { color: k.c.text }]}>{v}{unit ? <Text style={[font(600, 11), { color: k.c['text-muted'] }]}> {unit}</Text> : null}</Text>;
+  return <Text numberOfLines={1} style={[font(700, fs, 1.1, -0.01), tab, { color: k.c.text }]}>{v}{unit ? <Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{unit}</Text> : null}</Text>;
 }
 export const Hair = ({ style }: { style?: StyleProp<ViewStyle> }) => { const k = useKit(); return <View style={[{ height: 1, backgroundColor: k.c.hair }, style]} />; };
 export const Spacer = () => <View style={{ flex: 1, minWidth: 0 }} />;

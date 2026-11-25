@@ -103,7 +103,7 @@ function MeasureTile({ size, options }: TileRenderProps) {
       <Sub style={{ marginTop: 4 }}>{top.name}, {sd(top.dd)} {L}</Sub><Sub>{t('progressSince')} {dShort(at.day)}</Sub>
       <View style={{ marginTop: 'auto' }}>{rows.slice(1, 3).map((x, i) => <Row key={x.key} style={{ height: 22, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
         <Text style={[font(600, 12), { color: k.c.text, flex: 1 }]}>{x.name}</Text>
-        <Text style={[font(700, 13, 1), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{sl(x.v)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}> {L}</Text></Text></Row>)}</View></View>;
+        <Text style={[font(700, 13, 1), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{sl(x.v)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{L}</Text></Text></Row>)}</View></View>;
   }
   const max = Math.max(...rows.map(x => Math.abs(x.dd))) || 1;
   const diverge = (dd: number) => <View style={{ height: 8, width: 96 }}>
@@ -114,7 +114,7 @@ function MeasureTile({ size, options }: TileRenderProps) {
   return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>
     {list.map((x, i) => <Row key={x.key} style={{ height: rh, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
       <T size={13.5} style={{ flex: 1 }}>{x.name}</T>{size === 'L' ? diverge(x.dd) : null}<Chip text={sd(x.dd)} />
-      <Text style={[font(700, 14.5, 1), { width: 62, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{sl(x.v)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}> {L}</Text></Text>
+      <Text style={[font(700, 14.5, 1), { width: 62, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{sl(x.v)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{L}</Text></Text>
     </Row>)}
     {size === 'L' ? <Sub style={{ marginTop: 'auto' }}>{fill(t(L === 'cm' ? 'progressTapeCm' : 'progressTapeIn'), { since: dShort(at.day) })}</Sub> : null}
   </View>;

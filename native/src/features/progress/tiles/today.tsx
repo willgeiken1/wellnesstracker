@@ -33,7 +33,7 @@ export function scoreLine(today: number | null, ref: number | null, usual: boole
 
 /* ---------- 1. day score with its pillars ---------- */
 function ScoreTile({ size, options }: TileRenderProps) {
-  const d = useProgressData(), k = useKit(), sc = d.days.score, today = sc[sc.length - 1], yest = sc[sc.length - 2];
+  const d = useProgressData(), k = useKit(), sc = d.days.score, today = sc[sc.length - 1], yest = d.yesterdayScore;
   const p: Pillars = d.pillars, Bs = d.baseline, usual = options.cmp === 'usual', ref = usual ? Bs.score : yest;
   const line = scoreLine(today, ref, usual);
   const pv = (x: number | null) => x == null ? t('progressNoData') : String(Math.round(x));

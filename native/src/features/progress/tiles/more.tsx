@@ -40,7 +40,7 @@ function TrainingTile({ size, options, body }: TileRenderProps) {
       <View key={l} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Sub style={{ width: 72 }} color={k.c.text}>{l}</Sub>
         <View style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: mix(k.c.training, k.c['surface-2'], 0.14) }}><View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 4, width: `${x / mx * 100}%`, backgroundColor: on ? k.c.training : mix(k.c.training, k.c['surface-2'], 0.4) }} /></View>
-        <Text style={[font(700, 13.5, 1), { width: 72, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{fmt(x)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}> {u}</Text></Text>
+        <Text style={[font(700, 13.5, 1), { width: 72, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{fmt(x)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{u}</Text></Text>
       </View>)}</View>
   </View>;
 }
@@ -141,7 +141,7 @@ function RecordsTile({ size, options, preview, editing }: TileRenderProps) {
       {size === 'L' ? <IconTile icon={x.icon} color={x.c} /> : null}
       <View style={{ flex: 1, minWidth: 0 }}><T size={13.5}>{x.t}</T>{size === 'L' ? <Sub size={11.5}>{x.s}</Sub> : null}</View>
       {size === 'M' ? <Sub>{x.s.replace(/^\w+, /, '')}</Sub> : null}
-      <Text style={[font(700, 14.5, 1), { minWidth: 64, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{x.v}{x.unit ? <Text style={[font(600, 11), { color: k.c['text-muted'] }]}> {x.unit}</Text> : null}</Text>
+      <Text style={[font(700, 14.5, 1), { minWidth: 64, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{x.v}{x.unit ? <Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{x.unit}</Text> : null}</Text>
     </Pressable>)}</View>;
 }
 

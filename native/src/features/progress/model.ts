@@ -38,6 +38,8 @@ export interface ProgressData {
   days: Record<MetricKey, Daily>;
   /** Today's pillars and the last 7 days' (oldest first, today last). */
   pillars: Pillars;
+  /** Yesterday's day score, the gauge's comparison mark. */
+  yesterdayScore: number | null;
   weekPillars: Pillars[];
   /** The usual from the 28 days before today. */
   baseline: { score: number | null; training: number | null; food: number | null; sleep: number | null };
@@ -211,7 +213,7 @@ export function emptyProgress(today: string, unit: Unit, now = Date.now()): Prog
   return {
     today, now, demo: false, unit,
     days: { weight: blank(), sleep: blank(), hrv: blank(), rhr: blank(), steps: blank(), kcal: blank(), training: blank(), score: blank() },
-    pillars: { training: null, food: null, sleep: null }, weekPillars: Array.from({ length: 7 }, () => ({ training: null, food: null, sleep: null })),
+    pillars: { training: null, food: null, sleep: null }, yesterdayScore: null, weekPillars: Array.from({ length: 7 }, () => ({ training: null, food: null, sleep: null })),
     baseline: { score: null, training: null, food: null, sleep: null }, dayNotes: Array(7).fill(''),
     night: null, wake: Array(7).fill(null), hrvBand: null, rhrBand: null, sleepGoalMin: 480, stepGoal: 8000,
     sources: { oura: false, apple: false, ouraSynced: null },

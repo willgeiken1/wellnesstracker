@@ -158,6 +158,7 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
   const all = days.map((_, i) => pillarsAt(i));
   d.days.score = all.map(dayScore);
   d.pillars = all[HISTORY - 1];
+  { const y = d.days.score[HISTORY - 2]; d.yesterdayScore = finite(y) ? y : null; }
   d.weekPillars = all.slice(-7);
   const prior = all.slice(-29, -1);
   d.baseline = {

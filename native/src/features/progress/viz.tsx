@@ -187,7 +187,8 @@ export function Chart(o: ChartProps) {
   }
   if (o.ticks) o.ticks.forEach((tk, i) => {
     if (!tk) return;
-    const tx = X(i), an = !bar && o.kind === 'line' && tx < 18 ? 'start' : (!bar && o.kind === 'line' && tx > hx - 18 ? 'end' : 'middle');
+    /* ticks sit on the line positions for every kind but bars, so the end labels hug the edges */
+    const n = v.length, tx = bar ? X(i) : n < 2 ? hx / 2 : 8 + (hx - 16) * i / (n - 1), an = !bar && tx < 18 ? 'start' : (!bar && tx > hx - 18 ? 'end' : 'middle');
     els.push(text(`t${i}`, tx, H - 4, tk, an, i === (mini ? nowI : -1) ? k.c.text : k.c['text-muted']));
   });
   if (o.project?.tick && o.ticks) els.push(text('ptk', PW - 2, H - 4, o.project.tick, 'end'));
