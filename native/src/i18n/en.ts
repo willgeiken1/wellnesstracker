@@ -1089,6 +1089,15 @@ export const en = {
   trainingBackToWorkout: 'Back to workout', trainingLastRest: 'Last time {set} · rest {rest}', trainingEstTag: '{v} est.', trainingTipTop: '{set} · est. {v}',
   trainingNoHistory: 'No sets of {name} yet', trainingNoHistorySub: 'Finished workouts with this exercise show here.', trainingRestSet: 'Rest for {name} set to {rest}',
   trainingWeightUnit: '{v} {u}',
+  trainingPlanTitle: 'Plan', trainingPlanSub: '{n} days in {mode} · {per} per week', trainingPlanSubOne: '1 day in {mode} · {per} per week', trainingModeRotationLower: 'rotation', trainingModeFixedLower: 'fixed weekdays',
+  trainingPlanMode: 'Plan mode', trainingRotation: 'Rotation', trainingFixedWeekdays: 'Fixed weekdays', trainingDaysPerWeek: 'Days per week', trainingWeeklyTarget: 'Your weekly target',
+  trainingRotationFoot: 'Rotation spreads your target through the week. Only finishing a plan workout moves to the next day.',
+  trainingFixedFoot: 'Fixed weekdays repeat each week. Your weekly target does not change the selected weekdays.',
+  trainingDays: 'Days', trainingUpNextName: 'Up next: {name}', trainingDaySub: '{ex} · {sets}', trainingDaySubFixed: '{ex} · {sets} · {day}', trainingNotScheduled: 'Not scheduled',
+  trainingWeekdayNames: 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', trainingRemoveName: 'Remove {name}', trainingSetsFor: 'Sets for {name}', trainingFewestReps: '{name} fewest reps',
+  trainingMostReps: '{name} most reps', trainingRepsLabel: 'Reps', trainingAddDay: 'Add a day', trainingPlanFootTemplates: 'Each day is a workout template, so a change here shows wherever you use it.',
+  trainingPlanSaved: 'Plan saved', trainingNewDay: 'Day {n}', trainingDayToggle: '{name}, {sub}', trainingPlanTooMany: 'Fixed weekdays fit up to 7 days.', trainingStartDay: 'Start {name}',
+  trainingNoDaysYet: 'No days yet', trainingNoDaysSub: 'Add a day, then add its exercises.',
   // P3 Training end
 } as const;
 export type MessageKey = keyof typeof en;
