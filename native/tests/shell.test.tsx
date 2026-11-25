@@ -4,6 +4,7 @@ jest.mock('../src/auth/provider',()=>({useAuth:()=>({repository:null})}));
 jest.mock('../src/features/home/use-focused',()=>({useFocused:()=>true}));
 jest.mock('../src/features/workout/use-workout',()=>({useWorkout:()=>({store:null,auth:{pending:0,syncStatus:'idle'}})}));
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { renderRouter, screen as routerScreen } from 'expo-router/testing-library';
 import { Dimensions, PixelRatio, StyleSheet, Text } from 'react-native';
 import type { TestInstance } from 'test-renderer';
 import { DEFAULT_PALETTE, createTheme, paletteName } from '../src/design/tokens';
@@ -11,34 +12,29 @@ import Home from '../src/app/(tabs)/index';
 import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
-import Insights from '../src/app/(tabs)/insights';
+import { InsightsPage } from '../src/app/(tabs)/insights';
+import Routines from '../src/app/(tabs)/routines';
 import Settings from '../src/app/settings/index';
 import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import Appearance from '../src/features/settings/appearance';
 import AppTabs from '../src/components/app-tabs';
 
-// The native host is unavailable in Jest. Keep the real tab declarations and labels.
-jest.mock('expo-router/native-tabs', () => {
-  const React = require('react');
-  const { View, Text } = require('react-native');
-  // Keep mock factories self-contained under Jest hoisting and React Compiler.
-  const NativeTabs = ({ children }: any) => React.createElement(View, null, children);
-  const Trigger = ({ children, accessibilityLabel }: any) => React.createElement(View, { accessibilityLabel }, children);
-  Trigger.Label = ({ children }: any) => React.createElement(Text, null, children);
-  Trigger.Icon = () => null;
-  NativeTabs.Trigger = Trigger;
-  return { NativeTabs };
-});
 function ThemeProbe() {
   const { mode, palette, colors } = useTheme();
   return <Text testID="theme">{`${mode}/${palette}/${colors.bg}`}</Text>;
 }
-test('tab shell renders the five native tab labels', async () => {
-  await render(<ThemeProvider><AppTabs /></ThemeProvider>);
-  for (const label of ['Home', 'Workouts', 'Food', 'Progress', 'Insights']) {
-    expect(screen.getByText(label)).toBeTruthy();
-    expect(screen.getByLabelText(label)).toBeTruthy();
-  }
+// The mockup's shell replaces the system tab bar: one floating bar on every look, with Routines on it and Insights folded into Progress.
+test('tab shell shows Home, Training, Food, Progress and Routines as labelled tabs, and no Insights tab', async () => {
+  const page = () => null;
+  await renderRouter({
+    _layout: () => <ThemeProvider><AppTabs /></ThemeProvider>,
+    index: page, workouts: page, food: page, progress: page, routines: page, insights: page,
+  });
+  const tabs = routerScreen.getAllByRole('tab');
+  expect(tabs.map(tab => tab.props.accessibilityLabel)).toEqual(['Home', 'Training', 'Food', 'Progress', 'Routines']);
+  expect(routerScreen.getByRole('tab', { name: 'Home' })).toBeSelected();
+  expect(routerScreen.queryByRole('tab', { name: 'Insights' })).toBeNull();
+  expect(routerScreen.getByRole('button', { name: 'Home quick actions' })).toBeTruthy();
 });
 test('Appearance changes theme, accent, and restores system following', async () => {
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
@@ -59,7 +55,7 @@ function textContent(node: TestInstance): string {
 
 test.each([
   ['Home tab', Home], ['Workouts tab', Workouts], ['Food tab', Food],
-  ['Progress tab', Progress], ['Insights tab', Insights], ['Settings list', Settings], ['Appearance', Appearance],
+  ['Progress tab', Progress], ['Routines tab', Routines], ['Insights page, kept for Progress', InsightsPage], ['Settings list', Settings], ['Appearance', Appearance],
 ] as const)('%s pressables are labeled and text can grow at fontScale 2', async (_name, Component) => {
   const getDimensions = Dimensions.get;
   const dimensions = jest.spyOn(Dimensions, 'get').mockImplementation(key => ({ ...getDimensions(key), fontScale: 2 }));

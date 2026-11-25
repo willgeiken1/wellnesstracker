@@ -13,6 +13,7 @@ import Workouts from '../src/app/(tabs)/workouts';
 import Food from '../src/app/(tabs)/food';
 import Progress from '../src/app/(tabs)/progress';
 import Insights from '../src/app/(tabs)/insights';
+import Routines from '../src/app/(tabs)/routines';
 import SettingsLayout from '../src/app/settings/_layout';
 import Settings from '../src/app/settings/index';
 import Appearance from '../src/app/settings/appearance';
@@ -29,6 +30,7 @@ const routes = {
   _layout: () => <ThemeProvider><NavigationShell access /></ThemeProvider>,
   '(tabs)/_layout': WebTabs, '(tabs)/index': Home, '(tabs)/workouts': Workouts,
   '(tabs)/food': Food, '(tabs)/progress': Progress, '(tabs)/insights': Insights,
+  '(tabs)/routines': Routines,
   'settings/_layout': SettingsLayout, 'settings/index': Settings,
   'settings/appearance': Appearance, 'settings/[section]': Section,
   'workout/_layout': WorkoutLayout, 'workout/index': Workout, 'workout/start': Start,
@@ -62,27 +64,35 @@ test.each([
   expect(result.getPathname()).toBe(landing);
 });
 
+// The shell's bar is a row of tabs; Routines is also a tab there, so a page's own segment of that name is told apart by the bar's id.
+const segmentTab = (name: string) => screen.getAllByRole('tab', { name }).find(node => !String(node.props.testID ?? '').startsWith('tab-'))!;
 test.each([
-  ['Workouts', '/workouts', ['Routines', 'History', 'Cardio']],
+  ['workouts', '/workouts', ['Routines', 'History', 'Cardio']],
   // Goals & PRs is a real screen now; Photos is the one still waiting, so it is the one that says so.
-  ['Progress', '/progress', ['Body', 'Goals & PRs', 'Photos']],
-  // Trends, Muscles and Weekly are real screens now; Recovery is the one still waiting, so it is the one that says so.
-  ['Insights', '/insights', ['Trends', 'Muscles', 'Weekly', 'Recovery']],
-] as const)('%s segments stay within their tab, with no Back to Home button: the tab bar goes Home', async (label, path, segments) => {
+  ['progress', '/progress', ['Body', 'Goals & PRs', 'Photos']],
+] as const)('%s segments stay within their tab, with no Back to Home button: the tab bar goes Home', async (route, path, segments) => {
   const result = await renderRouter(routes);
-  await fireEvent.press(screen.getByRole('button', { name: label }));
+  await fireEvent.press(screen.getByTestId(`tab-${route}`));
+  expect(screen.getByTestId(`tab-${route}`)).toBeSelected();
   for (const segment of segments) {
-    await fireEvent.press(screen.getByRole('tab', { name: segment }));
+    await fireEvent.press(segmentTab(segment));
     expect(result.getPathname()).toBe(path);
-    expect(screen.getByRole('tab', { name: segment })).toBeSelected();
+    expect(segmentTab(segment)).toBeSelected();
   }
   expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
-  await fireEvent.press(screen.getByRole('button', { name: 'Home' }));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
   expect(result.getPathname()).toBe('/');
+});
+// Insights has folded into Progress: its old address lands on the Progress tab, and the bar has no Insights tab.
+test('an Insights link opens Progress, and the bar shows no Insights tab', async () => {
+  const result = await renderRouter(routes, { initialUrl: '/insights' });
+  expect(result.getPathname()).toBe('/progress');
+  expect(screen.getByTestId('tab-progress')).toBeSelected();
+  expect(screen.queryByRole('tab', { name: 'Insights' })).toBeNull();
 });
 test('Food without a repository opens logging, says so plainly, and the normal back returns to Food', async () => {
   const result = await renderRouter(routes);
-  await fireEvent.press(screen.getByRole('button', { name: 'Food' }));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Food' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
   expect(result.getPathname()).toBe('/food/log');
   expect(screen.getByText('Food log unavailable')).toBeTruthy();

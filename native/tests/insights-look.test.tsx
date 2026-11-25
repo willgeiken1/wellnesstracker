@@ -5,7 +5,8 @@ import { saveFood, setTargets, meals } from '../src/features/food/model';
 import { dayPoints, hasAny, lastDays, onTarget, weekDays, weekReport } from '../src/features/insights/model';
 import { linePath, MiniChart } from '../src/features/insights/mini-chart';
 import { Trends, Weekly } from '../src/features/insights/trends';
-import Insights from '../src/app/(tabs)/insights';
+// The page moved off the bar into Progress; its code stays as a named export until Progress takes its sections.
+import { InsightsPage as Insights } from '../src/app/(tabs)/insights';
 import { useAuth } from '../src/auth/provider';
 import { memoryRepository } from './workout-repository';
 
