@@ -985,6 +985,27 @@ export const en = {
   sectionsHide: 'Hide {title}', sectionsShow: 'Show {title}', sectionsHideThis: 'Hide this section',
   sectionsCustomizeTitle: 'Customize section', sectionsOpenFirst: 'Open the page first', sectionsOpenFirstBody: 'Then tap Edit page.',
   sectionsCardHidden: '{title}, hidden', sectionsCardCustomize: '{title}, {line}. Activate to customize',
+  // P2 Home
+  homeDateLine: '{weekday}, {month} {day}',
+  homeEmptyConnect: 'Connect a health source in Settings to see this here.',
+  homeEmptyToday: 'Nothing recorded yet today.',
+  homeEmptyNight: 'Nothing recorded for last night.',
+  homeEmptyTargets: 'Set your food targets in Food to see this.',
+  homeEmptyNext: 'Set your food targets in Food, or start a workout.',
+  homeEmptyScore: 'Your score starts once you have logged for a week.',
+  homeEmptyWeigh: 'Weigh in to see your trend.',
+  homeEmptyBodyFat: 'No body fat reading in the last 30 days.',
+  homeEmptyRoutines: 'Routine items show here once you add some.',
+  homeEmptyDetail: 'Your health source does not share the detail this style needs. Pick another style.',
+  homeEmptyGoalWeight: 'This style needs a goal weight. Pick another style.',
+  homeEmptySleepStages: 'Your Oura sleep is in Insights. This tile can\'t draw its stages yet.',
+  homeEmptyNoStages: 'Last night was recorded without sleep stages, so there is nothing to draw here.',
+  homeFoodAdded: 'Added {name} to {meal}',
+  homeFoodRemoved: 'Removed from {meal}',
+  homeFoodNotSaved: 'That food could not be added. Try again.',
+  homeUndo: 'Undo',
+  homeWaterFromHealth: 'Water comes from your health app for now',
+  homeMindfulFromHealth: 'Mindful minutes come from your health app',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
