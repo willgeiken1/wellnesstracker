@@ -52,7 +52,8 @@ export function TrainingLogger() {
   const session = id ? store?.repo.get('sessions', id) : day ? (pastId ? store?.repo.get('sessions', pastId) : undefined) : store?.active();
   if (store && session && session.deleted_at === null) return <Logger key={session.id} store={store} session={session} />;
   return <View style={{ flex: 1, backgroundColor: col.c.bg, justifyContent: 'center', padding: 16 }}>
-    {error && <EmptyState icon="workouts" color="training" title={tr('trainingNoWorkout')} action={{ label: tr('trainingCloseWorkout'), onPress: leaveLogger }} />}
+    {/* With nothing to log into (no workout store, or the workout could not start) the page still offers a way out. */}
+    {(error || !store) && <EmptyState icon="workouts" color="training" title={tr('trainingNoWorkout')} action={{ label: tr('trainingCloseWorkout'), onPress: leaveLogger }} />}
   </View>;
 }
 
