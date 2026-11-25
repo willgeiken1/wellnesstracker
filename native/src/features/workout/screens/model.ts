@@ -1,7 +1,7 @@
 import type { Unit, WorkingSet } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
 import { exLabel } from '../logger/model';
-import { epley, muscleGroup, type MuscleGroup, type TrainingData } from '../training-data';
+import { epley, liftNames, muscleGroup, type MuscleGroup, type TrainingData } from '../training-data';
 
 export interface ResultSet { w: number; r: number; pr: boolean }
 export interface ResultExercise { name: string; sets: ResultSet[]; warm: number; top: { w: number; r: number }; volume: number }
@@ -69,3 +69,30 @@ export function alsoText(also: MuscleGroup[]) {
   const s = also.join(', ').toLowerCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+export interface LiftSession { id: string; day: string; sets: { w: number; r: number }[]; top: { w: number; r: number }; best: { w: number; r: number }; est: number; volume: number }
+/** One exercise's working sets in each finished workout, oldest first: the heaviest set, the set with the best estimated 1RM, and the volume. */
+export function exerciseHistory(data: TrainingData, name: string): LiftSession[] {
+  const names = liftNames(name), out: LiftSession[] = [];
+  for (const s of data.history().slice().reverse()) {
+    const sets = data.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase()))
+      .flatMap(e => doneWorking(data.workout.working(e))).map(x => ({ w: data.kg(x.weight), r: x.reps }));
+    if (!sets.length) continue;
+    const top = sets.reduce((p, x) => x.w > p.w || (x.w === p.w && x.r > p.r) ? x : p), b = best(sets)!;
+    out.push({ id: s.id, day: String(s.data.day), sets, top, best: b, est: epley(b.w, b.r), volume: sets.reduce((n, x) => n + x.w * x.r, 0) });
+  }
+  return out;
+}
+
+/** The chart's scale (`chart()` in the mockup): padded range and a round gridline step in the display unit. */
+export function chartScale(values: number[], fromZero: boolean) {
+  let lo = Math.min(...values), hi = Math.max(...values), sp = (hi - lo) || 1;
+  if (fromZero) { lo = 0; hi = hi * 1.16; } else { lo -= sp * 0.16; hi += sp * 0.16; }
+  sp = (hi - lo) || 1;
+  const step = [5, 10, 20, 25, 50, 100, 250, 500, 1000, 2000, 2500, 5000].find(k => sp / k <= 4) ?? 5000;
+  const lines: number[] = [];
+  for (let g = Math.ceil(lo / step) * step; g <= hi; g += step) lines.push(g);
+  return { lo, hi, sp, step, lines };
+}
+/** A gridline label: 250, or 1k and up in thousands. */
+export const axisLabel = (g: number) => g >= 1000 ? `${Math.round(g / 100) / 10}k` : String(Math.round(g));

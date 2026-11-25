@@ -1080,6 +1080,15 @@ export const en = {
   trainingUpdateTemplate: 'Update {name} template', trainingSaveAsTemplate: 'Save as template', trainingTemplateUpdated: '{name} template updated', trainingTemplateSaved: 'Saved as a template',
   trainingDeleteWorkout: 'Delete workout', trainingDeleteTitle: 'Delete {name}?', trainingDeleteBody: 'This removes it from your history and your Training minutes.', trainingWorkoutDeleted: 'Workout deleted',
   trainingSetLine: 'Set {n}, {set}', trainingSetLinePr: 'Set {n}, {set}, personal record', trainingOpenExercise: '{name}, open history',
+  trainingEst1rm: 'Est. 1RM', trainingEstimate: 'Estimate', trainingFromOn: 'From {set} on {day}', trainingChartMode: 'Chart', trainingTopAnd1rm: 'Top set and 1RM',
+  trainingChartTopLabel: 'Top set and estimated one rep max over the last {n} sessions. Tap to read a value.',
+  trainingChartVolLabel: 'Session volume, set by set, over the last {n} sessions. Tap to read a value.',
+  trainingLegendBlocks: 'One block per set, weight × reps', trainingEstChartFoot: 'Est. 1RM is an estimate from your best set (Epley formula). Dashed lines are estimates. Tap the chart to read a session.',
+  trainingBestSets: 'Best sets', trainingHeaviest: 'Heaviest set', trainingBestEst: 'Best est. 1RM', trainingBestVolume: 'Best session volume',
+  trainingDayFrom: '{day} · from {set}', trainingDayDot: '{day} · {rest}', trainingHistory: 'History', trainingHistSub: '{sets} · est. 1RM {v}',
+  trainingBackToWorkout: 'Back to workout', trainingLastRest: 'Last time {set} · rest {rest}', trainingEstTag: '{v} est.', trainingTipTop: '{set} · est. {v}',
+  trainingNoHistory: 'No sets of {name} yet', trainingNoHistorySub: 'Finished workouts with this exercise show here.', trainingRestSet: 'Rest for {name} set to {rest}',
+  trainingWeightUnit: '{v} {u}',
   // P3 Training end
 } as const;
 export type MessageKey = keyof typeof en;
