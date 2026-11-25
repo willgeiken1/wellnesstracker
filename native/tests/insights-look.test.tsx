@@ -5,13 +5,18 @@ import { saveFood, setTargets, meals } from '../src/features/food/model';
 import { dayPoints, hasAny, lastDays, onTarget, weekDays, weekReport } from '../src/features/insights/model';
 import { linePath, MiniChart } from '../src/features/insights/mini-chart';
 import { Trends, Weekly } from '../src/features/insights/trends';
-// The page moved off the bar into Progress; its code stays as a named export until Progress takes its sections.
+// Insights folded into Progress: the old page export is the Progress tab now.
 import { InsightsPage as Insights } from '../src/app/(tabs)/insights';
 import { useAuth } from '../src/auth/provider';
+import { router } from 'expo-router';
 import { memoryRepository } from './workout-repository';
 
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
-jest.mock('expo-router', () => ({ router: { navigate: jest.fn(), push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { navigate: jest.fn(), push: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
+// The page is a tile grid now. Reanimated values settle at once, gestures just draw their child, and the Skia depth is left out.
+jest.mock('react-native-reanimated', () => require('./progress-mocks').reanimatedMock());
+jest.mock('react-native-gesture-handler', () => require('./progress-mocks').gestureMock());
+jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn().mockResolvedValue(undefined), ImpactFeedbackStyle: { Light: 'light' } }));
 const wrap = (node: React.ReactNode) => <ThemeProvider>{node}</ThemeProvider>;
 // A fixed Wednesday at noon, so the week has Monday, Tuesday and Wednesday in it.
@@ -157,17 +162,31 @@ describe('Weekly', () => {
   });
 });
 
-test('the tab has four sections; Muscles holds the body map and Recovery says plainly it is not built', async () => {
-  const { repo } = sample();
-  jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>);
-  await render(wrap(<Insights />));
-  expect(screen.getAllByRole('tab').map(tab => tab.props.accessibilityLabel)).toEqual(['Trends', 'Recovery', 'Muscles', 'Weekly']);
-  expect(screen.getByTestId('trend-calories')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('tab', { name: 'Muscles' }));
-  expect(screen.getByText('Front')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('tab', { name: 'Recovery' }));
-  expect(screen.getByRole('header', { name: 'Recovery is not in this version yet' })).toBeTruthy();
-  expect(screen.queryByText('M2/M3 placeholder')).toBeNull();
-  await fireEvent.press(screen.getByRole('tab', { name: 'Weekly' }));
-  expect(screen.getByTestId('weekly-report')).toBeTruthy();
+test('Insights opens as the Progress page: dated by the clock, with Week, Month and Year, and the fixtures in its tiles', async () => {
+  // The fixtures are dated November 2026, so the page reads them on that day, not on the real one.
+  jest.useFakeTimers({ now: NOW });
+  try {
+    const { repo } = sample();
+    jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle' } as ReturnType<typeof useAuth>);
+    await render(wrap(<Insights />));
+    expect(screen.getByText('Wednesday, November 11')).toBeTruthy();
+    expect(screen.getAllByRole('tab').map(tab => tab.props.accessibilityLabel)).toEqual(['Week', 'Month', 'Year']);
+    expect(screen.getByRole('tab', { name: 'Week' })).toBeSelected();
+    // Training reads this week's one workout and compares its volume with last week's.
+    expect(screen.getByLabelText('Training, This week. 60 minutes, 1 session. Volume this week 1,000 kg. +25 percent on last week.')).toBeTruthy();
+    // The weekly report covers the last seven days, with the new bench press best.
+    expect(screen.getByLabelText(/^Weekly report, Nov 5 to Nov 11\. .*1 workout, volume \+25% on last week\. 1 new record: bench press\.$/)).toBeTruthy();
+    // Food logged on three days gives a day score; sleep was never read, so it says No data rather than 0.
+    expect(screen.getByLabelText(/^Day score \d+\..*Food \d+, Sleep No data\./)).toBeTruthy();
+    expect(screen.queryByText('Sleep 0')).toBeNull();
+    // The range at the top moves the tiles that follow it.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Month' }));
+    expect(screen.getByRole('tab', { name: 'Month' })).toBeSelected();
+    // Thirty days take in both workouts, the one on Nov 3 as well.
+    expect(screen.getByLabelText(/^Training, 30 days\. 120 minutes, 2 sessions\./)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Week' }));
+    // The weekly report tile opens the full report.
+    await fireEvent.press(screen.getByLabelText('Weekly report. Read the weekly report'));
+    expect(router.push).toHaveBeenCalledWith('/progress/weekly');
+  } finally { jest.useRealTimers(); }
 });

@@ -3,6 +3,8 @@ import { StyleSheet } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { createTheme } from '../src/design/tokens';
 import Progress from '../src/app/(tabs)/progress';
+import { PhotosScreen } from '../src/features/progress/screens/photos';
+import { router } from 'expo-router';
 import { Body } from '../src/features/body/screen';
 import { Records } from '../src/features/progress/records-screen';
 import { lifetime, liftRecords } from '../src/features/progress/records';
@@ -13,7 +15,10 @@ import { memoryRepository } from './workout-repository';
 
 const mockRepository = memoryRepository();
 jest.mock('../src/auth/provider', () => ({ useAuth: () => ({ repository: mockRepository }) }));
-jest.mock('expo-router', () => ({ router: { navigate: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { navigate: jest.fn(), push: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
+jest.mock('react-native-reanimated', () => require('./progress-mocks').reanimatedMock());
+jest.mock('react-native-gesture-handler', () => require('./progress-mocks').gestureMock());
+jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null }));
 const wrap = (node: React.ReactNode) => <ThemeProvider>{node}</ThemeProvider>;
 const daysAgo = (n: number) => new Date(Date.parse(`${today()}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
 
@@ -132,13 +137,23 @@ describe('Goals & PRs', () => {
   });
 });
 
-test('Photos says plainly that it is not built, with no placeholder badge', async () => {
-  await render(wrap(<Progress />));
-  await fireEvent.press(screen.getByRole('tab', { name: 'Photos' }));
-  expect(screen.getByRole('header', { name: 'Progress photos are not in this version yet' })).toBeTruthy();
+test('Photos is built: with none taken it offers the camera, says they stay on this phone, and shows no placeholder', async () => {
+  await render(wrap(<PhotosScreen />));
+  expect(screen.getByText('0 photos')).toBeTruthy();
+  expect(screen.getByText('Photos stay on this phone.')).toBeTruthy();
   expect(screen.queryByText('M2/M3 placeholder')).toBeNull();
-  await fireEvent.press(screen.getByRole('tab', { name: 'Goals & PRs' }));
-  expect(screen.getByRole('header', { name: 'Lifetime' })).toBeTruthy();
+  expect(screen.queryByText(/not in this version/)).toBeNull();
+  // Both the camera in the bar and the Add photo tile open the camera.
+  const take = screen.getAllByRole('button', { name: 'Take a progress photo' });
+  expect(take).toHaveLength(2);
+  for (const button of take) { jest.mocked(router.push).mockClear(); await fireEvent.press(button); expect(router.push).toHaveBeenCalledWith('/progress/photo-capture'); }
+});
+
+test('Records sits on the Progress page and, with no workouts, says how bests appear instead of showing zeros', async () => {
+  await render(wrap(<Progress />));
+  expect(screen.getByLabelText('Records. Open the newest record')).toBeTruthy();
+  expect(screen.getByText('None yet')).toBeTruthy();
+  expect(screen.getByText('New lifting bests and your best days show here.')).toBeTruthy();
   expect(screen.queryByText('M2/M3 placeholder')).toBeNull();
 });
 
