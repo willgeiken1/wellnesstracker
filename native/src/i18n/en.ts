@@ -1346,6 +1346,9 @@ export const en = {
   progressStepGoalA: 'Goal {goal} a day',
   progressNoFoodWeek: 'No full days logged yet',
   // P5 progress end
+  // P7 settings
+  settingsLicensesFonts: 'Fonts', settingsLicenseJakartaHint: 'SIL Open Font License 1.1, by the Plus Jakarta Sans Project Authors',
+  // P7 settings end
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
@@ -1359,8 +1362,6 @@ export const android: Partial<Record<MessageKey, string>> = {
   recoveryFootnoteOura: 'Readiness, sleep score, last night and heart readings come from Oura and are kept with your account. For fitness use, not medical advice.',
   ouraOn: 'Connected. Sleep and steps from your ring show on Home. Your Oura days are kept in your Insight account, not on this phone.',
   connectPrivacyOura: 'Oura days are kept in your Insight account. They are never sent to AI or analytics.',
-  // P7 settings
-  settingsLicensesFonts: 'Fonts', settingsLicenseJakartaHint: 'SIL Open Font License 1.1, by the Plus Jakarta Sans Project Authors',
 };
 
 let androidCopy = false;
