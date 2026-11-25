@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Linking, Platform, View } from 'react-native';
 import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router } from 'expo-router';
 import { Button, Icon, KitText, SheetHeader, Tappable, TextField, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -14,7 +13,7 @@ import { dayView, kcalOf, nextMealId, num } from './day';
 import type { Food } from './model';
 import { foodRoutes } from './nav';
 import { useFoodDay } from './selection';
-import { FoodSheet, foodKey } from './sheet';
+import { closeSheet, foodKey, FoodSheet } from './sheet';
 import { Caption } from './ui';
 import { showToast } from '../shell/toast';
 
@@ -60,14 +59,14 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
   const food = product ? scannedFood(product, code) : null, kcal = food ? kcalOf(food.energy_kj) : null, mn = mealName(repo, meal).toLowerCase();
   const add = () => {
     if (!food) return;
-    if (currentCart()) { addToCart([cartItem(foodKey(food), food)]); router.back(); showToast(t('foodAddedToYourList'), { color: 'food' }); return; }
-    router.back(); quickAdd(repo, day, meal, food);
+    if (currentCart()) { addToCart([cartItem(foodKey(food), food)]); closeSheet(); showToast(t('foodAddedToYourList'), { color: 'food' }); return; }
+    closeSheet(); quickAdd(repo, day, meal, food);
   };
   const granted = !!permission?.granted, live = !web && granted && phase === 'looking';
   const found = phase === 'found';
   const hint = found ? t('foodBarcodeFound') : phase === 'busy' ? t('barcodeLoading') : t('foodLineUp');
 
-  return <FoodSheet testID="food-barcode-sheet" bg="bg" header={<SheetHeader title={t('foodTileScan')} left={t('cancel')} onLeft={() => router.back()} />}>
+  return <FoodSheet testID="food-barcode-sheet" bg="bg" header={<SheetHeader title={t('foodTileScan')} left={t('cancel')} onLeft={() => closeSheet()} />}>
     <View accessible accessibilityRole="image" accessibilityLabel={found ? t('foodBarcodeFound') : t('foodCameraA11y')}
       style={{ height: CAM_H, marginHorizontal: -16, overflow: 'hidden', backgroundColor: k.c.bg }}>
       <Backdrop torch={torch} />

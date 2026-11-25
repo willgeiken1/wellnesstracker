@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { Button, Card, EmptyState, Icon, KitText, List, ListFooter, ListRow, NavBar, NavButton, SectionHeader, Tappable, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -11,7 +10,7 @@ import { clock, dayView, monthDay, num, plural, shortDate, weekdayName, type Foo
 import { combos, saveCombo, shiftDay } from './model';
 import { foodRoutes } from './nav';
 import { useFoodDay } from './selection';
-import { RowLine } from './sheet';
+import { RowLine, useLatest } from './sheet';
 import { MACRO_COLOR, SplitBar } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
@@ -102,15 +101,17 @@ function SwipeRow({ item, first, editing, open, onOpen, onEdit, onDelete }: {
 }) {
   const k = useKit();
   const [x] = useState(() => new Animated.Value(0));
-  const live = useRef({ open, onOpen }); live.current = { open, onOpen };
-  const settle = (on: boolean) => { Animated.timing(x, { toValue: on ? -DEL : 0, duration: k.reduceMotion ? 0 : 280, useNativeDriver: true }).start(); };
+  const live = useLatest({ open, onOpen, reduce: !!k.reduceMotion });
   useEffect(() => { Animated.timing(x, { toValue: open ? -DEL : 0, duration: k.reduceMotion ? 0 : 280, useNativeDriver: true }).start(); }, [open, x, k.reduceMotion]);
-  const pan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, s) => Math.abs(s.dx) > 8 && Math.abs(s.dx) > Math.abs(s.dy),
-    onPanResponderMove: (_, s) => x.setValue(Math.max(-120, Math.min(0, (live.current.open ? -DEL : 0) + s.dx))),
-    onPanResponderRelease: (_, s) => { const on = (live.current.open ? -DEL : 0) + s.dx < -44; settle(on); live.current.onOpen(on); },
-    onPanResponderTerminate: () => settle(live.current.open),
-  })).current;
+  const [pan] = useState(() => {
+    const settle = (on: boolean) => { Animated.timing(x, { toValue: on ? -DEL : 0, duration: live().reduce ? 0 : 280, useNativeDriver: true }).start(); };
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, s) => Math.abs(s.dx) > 8 && Math.abs(s.dx) > Math.abs(s.dy),
+      onPanResponderMove: (_, s) => x.setValue(Math.max(-120, Math.min(0, (live().open ? -DEL : 0) + s.dx))),
+      onPanResponderRelease: (_, s) => { const on = (live().open ? -DEL : 0) + s.dx < -44; settle(on); live().onOpen(on); },
+      onPanResponderTerminate: () => settle(live().open),
+    });
+  });
   const p = item.p == null ? null : `${num(item.p)} g ${t('foodProteinLower')}`;
   const sub = [item.grams != null ? `${num(item.grams)} g` : null, p].filter(Boolean).join(' · ');
   return <View style={{ overflow: 'hidden' }}>

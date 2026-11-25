@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { EmptyState, Icon, KitText, List, PressScale, Ring, SheetHeader, Tappable, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -9,13 +8,14 @@ import { addWater, dropWater } from './actions';
 import { clock, plural } from './day';
 import { foodRoutes } from './nav';
 import { useFoodDay } from './selection';
-import { FoodSheet, RowLine } from './sheet';
+import { closeSheet, FoodSheet, RowLine } from './sheet';
 import { Caption, PillStepper, SectionLabel, WaterIcon } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { FLOZ, drinksOn, litresOn, readWater, sizeNum, sizeSpoken, sizeText, unitLabel, waterAmt, waterNum, type Container, type WaterUnit } from './water';
 
 /** The other amount, kept in ounces while the app runs so it stays put between visits. */
-let otherOz = 12;
+const other = { oz: 12 };
+const rememberOther = (oz: number) => { other.oz = oz; };
 /** One step of the other amount: 1 oz, or 50 mL. */
 export function stepOther(oz: number, unit: WaterUnit, up: boolean) {
   if (unit === 'ml') { const ml = Math.round(oz / FLOZ * 1000 / 10) * 10; return Math.max(50, Math.min(2000, ml + (up ? 50 : -50))) / 1000 * FLOZ; }
@@ -31,13 +31,13 @@ export function WaterSheet({ repo }: { repo: Repository }) {
   const k = useKit();
   const { day, isToday } = useFoodDay();
   const s = readWater(repo), u = s.unit, l = litresOn(s, day), g = s.goal, left = g - l, log = [...drinksOn(s, day)].reverse();
-  const [other, setOther] = useState(otherOz);
+  const [otherOz, setOther] = useState(other.oz);
   const pct = Math.round(l / g * 100);
   const cap = left > 0.005 ? fill(t('foodWaterPctToGo'), { pct, left: waterAmt(left, u) }) : t('foodGoalReached') + (left < -0.03 ? ` · ${fill(t('foodWaterOver'), { v: waterAmt(-left, u) })}` : '');
   const ofLine = fill(isToday ? t('foodWaterOfToday') : t('foodWaterOf'), { goal: waterAmt(g, u) });
-  const setO = (oz: number) => { otherOz = oz; setOther(oz); };
-  const shown = u === 'ml' ? Math.round(other / FLOZ * 1000 / 10) * 10 : Math.round(other);
-  return <FoodSheet testID="food-water-sheet" header={<SheetHeader title={t('foodWater')} left={t('shellDone')} onLeft={() => router.back()} />}>
+  const setO = (oz: number) => { rememberOther(oz); setOther(oz); };
+  const shown = u === 'ml' ? Math.round(otherOz / FLOZ * 1000 / 10) * 10 : Math.round(otherOz);
+  return <FoodSheet testID="food-water-sheet" header={<SheetHeader title={t('foodWater')} left={t('shellDone')} onLeft={() => closeSheet()} />}>
     <View style={{ alignItems: 'center', marginTop: 6, marginBottom: 4 }}>
       <Ring value={l / g} size={168} stroke={14} color="water" label={`${waterNum(l, u)} ${ofLine}`}>
         <View style={{ alignItems: 'center' }}>
@@ -58,8 +58,8 @@ export function WaterSheet({ repo }: { repo: Repository }) {
           <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 2 }}>{t(u === 'ml' ? 'foodSteps50' : 'foodSteps1')}</KitText>
         </View>
         <PillStepper label={t('foodWaterOther')} value={shown} step={u === 'ml' ? 50 : 1} min={u === 'ml' ? 50 : 1} max={u === 'ml' ? 2000 : 64} color="water" tint="water"
-          format={() => `${shown} ${unitLabel(u)}`} onChange={() => {}} onStep={d => setO(stepOther(other, u, d > 0))} />
-        <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={fill(t('foodAddAmount'), { v: sizeSpoken(other, u) })} onPress={() => addWater(repo, day, { oz: other })}
+          format={() => `${shown} ${unitLabel(u)}`} onChange={() => {}} onStep={d => setO(stepOther(otherOz, u, d > 0))} />
+        <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={fill(t('foodAddAmount'), { v: sizeSpoken(otherOz, u) })} onPress={() => addWater(repo, day, { oz: otherOz })}
           style={{ minHeight: 44, minWidth: 56, paddingHorizontal: 14, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: k.tint(k.c.water, 0.15) }}>
           <KitText weight={700} size={15} color="water">{t('foodAddWord')}</KitText>
         </Tappable>

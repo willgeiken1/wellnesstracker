@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import { Badge, Button, EmptyState, KitText, List, SheetHeader, Tappable, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -10,7 +9,7 @@ import { kcalTail, logFoods } from './actions';
 import { dayView, foodsLine, fullDate, num, plural } from './day';
 import { shiftDay } from './model';
 import { useFoodDay } from './selection';
-import { FoodSheet, KcalValue, RowLine } from './sheet';
+import { closeSheet, FoodSheet, KcalValue, RowLine } from './sheet';
 import { Caption, CheckCircle } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
@@ -34,11 +33,11 @@ export function CopySheet({ repo }: { repo: Repository }) {
   const copy = () => {
     if (!sel.length) return;
     const undos = sel.map(m => logFoods(repo, day, m.id, m.items.map(i => ({ food: i.data }))));
-    router.back(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    closeSheet(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     showToast(sel.length === 1 ? fill(t('foodCopiedOne'), { meal: sel[0].name.toLowerCase() }) : fill(t('foodCopiedMany'), { n: sel.length }), {
       color: 'food', ms: 4200, action: { label: t('foodUndoBtn'), onAction: () => { [...undos].reverse().forEach(u => u()); showToast(t('foodCopyUndone'), { color: 'food' }); } } });
   };
-  const header = <SheetHeader title={t('foodCopyYesterday')} left={t('cancel')} onLeft={() => router.back()} />;
+  const header = <SheetHeader title={t('foodCopyYesterday')} left={t('cancel')} onLeft={() => closeSheet()} />;
   if (!list.length) return <FoodSheet testID="food-copy-sheet" header={header}>
     <View style={{ marginTop: 24 }}><EmptyState icon="copy" color="food" title={t('foodNothingYesterday')} description={t('foodNothingYesterdayHint')} /></View>
   </FoodSheet>;

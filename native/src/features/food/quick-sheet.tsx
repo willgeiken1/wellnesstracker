@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { router } from 'expo-router';
 import { Button, KitText, SheetHeader, Tappable, TextField, font, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -10,7 +9,7 @@ import { addToCart, cartItem, currentCart } from './cart';
 import { KJ, dayView, nextMealId, num } from './day';
 import { meals, saveReusable, type Food } from './model';
 import { useFoodDay } from './selection';
-import { FoodSheet } from './sheet';
+import { closeSheet, FoodSheet } from './sheet';
 import { Caption, MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { showToast } from '../shell/toast';
@@ -45,11 +44,11 @@ export function QuickSheet({ repo, meal: asked, name: given, mine }: { repo: Rep
     if (!ok) return;
     const food = quickFood(name, kcal, p, c, f);
     if (mine) { try { saveReusable(repo, food); } catch { /* still logs */ } }
-    if (inTray) { addToCart([cartItem(food.name as string, food)]); router.back(); if (mine) showToast(t('foodSavedMine'), { color: 'food' }); return; }
-    router.back(); quickAdd(repo, day, meal, food);
+    if (inTray) { addToCart([cartItem(food.name as string, food)]); closeSheet(); if (mine) showToast(t('foodSavedMine'), { color: 'food' }); return; }
+    closeSheet(); quickAdd(repo, day, meal, food);
   };
   return <FoodSheet testID="food-quick-sheet"
-    header={<SheetHeader title={t('foodTileQuick')} left={t('cancel')} onLeft={() => router.back()} right={t('foodAddWord')} onRight={add} rightDisabled={!ok} />}>
+    header={<SheetHeader title={t('foodTileQuick')} left={t('cancel')} onLeft={() => closeSheet()} right={t('foodAddWord')} onRight={add} rightDisabled={!ok} />}>
     <Tappable dim="none" accessible={false} onPress={() => big.current?.focus()}
       style={{ alignItems: 'center', gap: 4, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 14, borderRadius: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
       <KitText weight={700} size={12} tracking={0.1} color="text-muted" style={{ textTransform: 'uppercase' }}>{t('foodCaloriesCap')}</KitText>

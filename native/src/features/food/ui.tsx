@@ -1,9 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, G, Line, Path } from 'react-native-svg';
 import { Icon, KitText, SegmentedControl, Tappable, alpha, mix, slopFor, useKit, useSelectionHaptic } from '@/components/kit';
-import { raised, well } from '../tiles/depth';
-import { TileSurface } from '../tiles/tile-surface';
 import type { WaterIconName } from './water';
 
 /* Building blocks shared by the Food tab, its tiles and its sheets, drawn to the final design (pages/food.js, pagetiles-food.js). */
@@ -63,21 +61,6 @@ export function Cells({ states, color, h = 8, gap = 3, r = 2.5, style }: { state
     {states.map((v, i) => <View key={i} style={{ flex: 1, minWidth: 0, height: h, borderRadius: r, overflow: 'hidden', backgroundColor: v >= 1 ? color : off }}>
       {v > 0 && v < 1 ? <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.round(v * 100)}%`, backgroundColor: color }} /> : null}
     </View>)}
-  </View>;
-}
-
-/** A recessed track with a raised fill (the tiles' `bar`): a well the full width, the fill to `frac`, an optional mark. */
-export function WellBar({ frac, h, color, mark, dim, width: given }: { frac: number; h: number; color: string; mark?: number | null; dim?: boolean; width?: number }) {
-  const k = useKit();
-  const [measured, setW] = useState(0);
-  const width = given ?? measured;
-  const f = Math.max(0, Math.min(1, frac)), fw = f > 0 ? Math.max(h, f * width) : 0;
-  return <View onLayout={given ? undefined : e => setW(e.nativeEvent.layout.width)} style={{ height: h, width: given, flex: given ? undefined : 1 }}>
-    {width ? <TileSurface spec={well(k.c as never, k.mode)} width={width} height={h} /> : null}
-    {fw ? <View style={{ position: 'absolute', left: 0, top: 0, width: fw, height: h, opacity: dim ? 0.5 : 1 }}>
-      <TileSurface spec={raised(color, k.mode)} width={fw} height={h} />
-    </View> : null}
-    {mark != null && width ? <View style={{ position: 'absolute', top: -3, bottom: -3, left: mark * width - 1, width: 2, borderRadius: 1, backgroundColor: k.c.text, opacity: 0.6 }} /> : null}
   </View>;
 }
 

@@ -1,11 +1,10 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { PanResponder, Switch as RNSwitch, View } from 'react-native';
-import { router } from 'expo-router';
 import { Button, Chip, Chips, Icon, KitText, List, SegmentedControl, SheetHeader, Tappable, TextField, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
-import { FoodSheet, LinkRow, RowLine } from './sheet';
+import { closeSheet, FoodSheet, LinkRow, RowLine, useLatest } from './sheet';
 import { Caption, SectionLabel, WaterIcon } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
@@ -38,7 +37,7 @@ export function ContainersSheet({ repo }: { repo: Repository }) {
     setContainers(repo, cs.map(x => x.id === c.id ? { ...x, quick: on } : x));
   };
   const move = (from: number, to: number) => { if (from === to) return; setContainers(repo, moveContainer(cs, from, to)); };
-  return <FoodSheet testID="food-containers-sheet" header={<SheetHeader title={t('foodContainers')} left={t('shellDone')} onLeft={() => router.back()} />}>
+  return <FoodSheet testID="food-containers-sheet" header={<SheetHeader title={t('foodContainers')} left={t('shellDone')} onLeft={() => closeSheet()} />}>
     <SectionLabel title={t('foodUnits')} inset first />
     <SegmentedControl label={t('foodUnits')} value={u} onChange={(v: WaterUnit) => setWaterUnit(repo, v)}
       options={[{ value: 'oz', label: t('foodFluidOunces') }, { value: 'ml', label: t('foodMilliliters') }]} />
@@ -57,14 +56,14 @@ function ContainerRow({ c, u, i, count, onEdit, onToggle, onMove }: {
 }) {
   const k = useKit();
   const [dy, setDy] = useState(0), [drag, setDrag] = useState(false);
-  const live = useRef({ i, count, onMove }); live.current = { i, count, onMove };
-  const pan = useRef(PanResponder.create({
+  const live = useLatest({ i, count, onMove });
+  const [pan] = useState(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true, onMoveShouldSetPanResponder: () => true, onPanResponderTerminationRequest: () => false,
     onPanResponderGrant: () => { setDrag(true); setDy(0); },
     onPanResponderMove: (_, g) => setDy(g.dy),
-    onPanResponderRelease: (_, g) => { setDrag(false); setDy(0); const { i: at, count: n, onMove: mv } = live.current; const to = Math.max(0, Math.min(n - 1, at + Math.round(g.dy / ROW))); if (to !== at) mv(to, false); },
+    onPanResponderRelease: (_, g) => { setDrag(false); setDy(0); const { i: at, count: n, onMove: mv } = live(); const to = Math.max(0, Math.min(n - 1, at + Math.round(g.dy / ROW))); if (to !== at) mv(to, false); },
     onPanResponderTerminate: () => { setDrag(false); setDy(0); },
-  })).current;
+  }));
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: ROW, paddingLeft: 2, paddingRight: 8, backgroundColor: drag ? k.cardBg : 'transparent',
     zIndex: drag ? 2 : 0, transform: [{ translateY: dy }, { scale: drag && !k.reduceMotion ? 1.02 : 1 }], boxShadow: drag ? '0px 10px 24px -10px rgba(0,0,0,0.6)' : undefined }}>
     {i > 0 && !drag && <RowLine inset={0} />}

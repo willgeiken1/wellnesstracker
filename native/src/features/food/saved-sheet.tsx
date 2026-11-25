@@ -1,6 +1,5 @@
 import { Fragment, useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { EmptyState, KitText, List, SearchField, SheetHeader, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -10,7 +9,7 @@ import { addToCart, cartItem, currentCart } from './cart';
 import { dayView, kcalOf, nextMealId, num, plural } from './day';
 import { combos, meals, type Combo } from './model';
 import { useFoodDay } from './selection';
-import { FoodRow, FoodSheet, RowLine } from './sheet';
+import { closeSheet, FoodRow, FoodSheet, RowLine } from './sheet';
 import { MealSeg, SectionLabel } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
@@ -34,10 +33,10 @@ export function SavedSheet({ repo, meal: asked, open: opened }: { repo: Reposito
   const [q, setQ] = useState(''), [open, setOpen] = useState<string | null>(opened ?? null);
   const list = matchSaved(combos(repo), q);
   const add = (c: Combo) => {
-    if (inTray) { addToCart(c.foods.map(f => cartItem(`meal:${c.name}`, f))); router.back(); showToast(fill(t('foodAddedToList'), { name: c.name }), { color: 'food' }); return; }
-    router.back(); addSaved(repo, day, meal, c);
+    if (inTray) { addToCart(c.foods.map(f => cartItem(`meal:${c.name}`, f))); closeSheet(); showToast(fill(t('foodAddedToList'), { name: c.name }), { color: 'food' }); return; }
+    closeSheet(); addSaved(repo, day, meal, c);
   };
-  return <FoodSheet testID="food-saved-sheet" header={<SheetHeader title={t('foodSavedMeals')} left={t('cancel')} onLeft={() => router.back()} />}>
+  return <FoodSheet testID="food-saved-sheet" header={<SheetHeader title={t('foodSavedMeals')} left={t('cancel')} onLeft={() => closeSheet()} />}>
     {inTray ? null : <View style={{ marginBottom: 12 }}><MealSeg label={t('foodMealLabel')} meals={meals(repo)} value={meal} onChange={setMeal} /></View>}
     <SearchField placeholder={t('foodSearchSaved')} accessibilityLabel={t('foodSearchSaved')} value={q} onChangeText={setQ} returnKeyType="search" />
     <SectionLabel title={plural(list.length, t('foodSavedMealOne'), t('foodSavedMealMany'))} aside={t('foodTapToSee')} />

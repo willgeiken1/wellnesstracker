@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { router } from 'expo-router';
 import { Button, Chip, Chips, EmptyState, Icon, KitText, List, SearchField, SheetHeader, Tappable, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -12,7 +11,7 @@ import { combos, meals, recentFoods, type Combo, type Food } from './model';
 import { foodRoutes } from './nav';
 import { searchableFoods } from './search';
 import { useFoodDay } from './selection';
-import { ActionTile, FoodRow, FoodSheet, LinkRow, foodKcal, foodKey, foodSub } from './sheet';
+import { ActionTile, closeSheet, foodKcal, foodKey, FoodRow, FoodSheet, foodSub, LinkRow } from './sheet';
 import { MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 
@@ -89,11 +88,11 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
       </View>
       <Button color="food" label={fill(t('foodLogInto'), { meal: lower(mealName(repo, meal)) })}
         accessibilityLabel={fill(t('foodLogNTo'), { n: plural(items.length, t('foodFood'), t('foodFoods')), meal: mealName(repo, meal) })}
-        onPress={() => { const list = items.map(i => ({ food: i.food, servings: i.servings })); router.back(); addMany(repo, day, meal, list); }} />
+        onPress={() => { const list = items.map(i => ({ food: i.food, servings: i.servings })); closeSheet(); addMany(repo, day, meal, list); }} />
     </View>
   </> : null;
 
-  return <FoodSheet testID="food-log-sheet" header={<SheetHeader title={t('foodLogFood')} left={t('cancel')} onLeft={() => router.back()} />} footer={tray}>
+  return <FoodSheet testID="food-log-sheet" header={<SheetHeader title={t('foodLogFood')} left={t('cancel')} onLeft={() => closeSheet()} />} footer={tray}>
     <View style={{ marginBottom: 12 }}><MealSeg label={t('foodMealLabel')} meals={mealList} value={meal} onChange={setCartMeal} /></View>
     <View style={{ marginBottom: 12 }}><SearchField placeholder={t('foodSearchFoods')} accessibilityLabel={t('foodSearchFoods')} value={q}
       onChangeText={v => { setQ(v); setTab(v.trim() ? 'results' : 'recent'); }} returnKeyType="search" testID="food-log-search" /></View>

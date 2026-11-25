@@ -11,7 +11,8 @@ import { clock, daySums, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods
 import { combos, recentFoods, shiftDay, type Food } from '../model';
 import { foodRoutes } from '../nav';
 import { burnedOn, pickFoodDay } from '../selection';
-import { Cells, Gauge, MACRO_COLOR, MacroRings, SplitBar, WaterIcon, WellBar, macroPercents, meter } from '../ui';
+import { Cells, Gauge, MACRO_COLOR, MacroRings, SplitBar, WaterIcon, macroPercents, meter } from '../ui';
+import { WellBar } from './well-bar';
 import { litresOn, quickContainers, sizeNum, sizeSpoken, sizeText, unitLabel, waterAmt, waterNum, type Container } from '../water';
 import { B, Cols, Dot, Hair, Ic, KV, Kick, Num, Plate, Plus, Stripes, Sub, TileButton, Title, useDayData, useShade, useTileDay } from './kit';
 
@@ -31,7 +32,11 @@ function Inner({ p, repo, Body }: { p: TileRenderProps; repo: Repository; Body: 
   return <Body p={p} repo={repo} d={d} />;
 }
 /** Wraps a tile body so it reads the day, the food and the water it shows. */
-export const tile = (Body: TileBody) => (p: TileRenderProps) => <Host p={p} Body={Body} />;
+export const tile = (Body: TileBody) => {
+  const Tile = (p: TileRenderProps) => <Host p={p} Body={Body} />;
+  Tile.displayName = `FoodTile(${Body.displayName ?? Body.name ?? 'body'})`;
+  return Tile;
+};
 
 const col = { flex: 1, flexDirection: 'column' } as const;
 const live = (p: TileRenderProps) => !p.editing && !p.preview;
@@ -302,6 +307,7 @@ const Water: TileBody = ({ p, repo, d }) => {
 
 /* 6. This week */
 const Week: TileBody = ({ p, repo, d }) => {
+  const k = useKit();
   const pv = p.options.measure === 'p', lastMode = p.options.compare === 'last', u = pv ? 'g' : KC(), goal = pv ? d.view.goals.p : d.view.goal;
   const days = weekDays(d.day), cur = daySums(repo, days), prevS = daySums(repo, days.map(x => shiftDay(x, -7)));
   const vals = cur.map((x, i) => days[i] > d.today ? null : pv ? x.p : x.kcal), prev = prevS.map(x => pv ? x.p : x.kcal);
@@ -326,7 +332,6 @@ const Week: TileBody = ({ p, repo, d }) => {
       <Sub lines={3} style={{ marginTop: 'auto', lineHeight: 16 }}>{lastMode ? <><B>{num(Math.abs(dlt))} {u}</B> {t(dlt >= 0 ? 'foodMoreThanLast' : 'foodLessThanLast')}</> : <><B>{tx('foodNOfM', { n: onT, m: full })}</B> {t('foodWithin10')}</>}</Sub></View>
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>{C(76, 18)}</View>
   </View>;
-  const k = useKit();
   return <View style={col}>
     <Num v={VF(avg)} unit={`${u} ${t('foodADay')}`} fs={30} />
     <Sub style={{ marginTop: 5 }}>{lastMode ? cmp : tx('foodDaysWithin', { n: onT, m: full })}</Sub>

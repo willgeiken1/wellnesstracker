@@ -1,11 +1,19 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { router, useNavigation } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EmptyState, Icon, type IconName, KitText, SurfaceContext, Tappable, alpha, useKit } from '@/components/kit';
+import { EmptyState, Icon, type IconName, KitText, SheetHeader, SurfaceContext, Tappable, alpha, useKit } from '@/components/kit';
 import { t } from '@/i18n/en';
 import { kcalOf, num } from './day';
 import type { Food } from './model';
 import { AddButton } from './ui';
+
+/** A stable getter for the newest value, for gesture handlers that are made once. */
+export function useLatest<T>(value: T): () => T {
+  const ref = useRef(value);
+  useEffect(() => { ref.current = value; });
+  return useCallback(() => ref.current, []);
+}
 
 /* The frame every Food sheet shares, and the food rows its lists are made of (`.fd-frow`). */
 
@@ -35,11 +43,28 @@ export function FoodSheet({ header, children, footer, testID, bg }: { header: Re
   </View>;
 }
 
-/** Shown in a sheet when there is no account or demo to read from. */
+/** Whether this screen was opened cold (a link or a widget), with nothing under it to go back to. */
+export function useCold() {
+  // Asked after mount and on every stack change: at the first render of a pushed screen the stack has not yet recorded the push.
+  const navigation = useNavigation(), [cold, setCold] = useState(false);
+  useEffect(() => {
+    const check = () => setCold(!navigation.canGoBack());
+    check();
+    return navigation.addListener('state', check);
+  }, [navigation]);
+  return cold;
+}
+/** Puts a sheet away: back to what opened it, or to the Food tab when it was opened cold. */
+export function closeSheet() { if (router.canGoBack()) router.back(); else router.replace('/food'); }
+
+/** Shown in a sheet when there is no account or demo to read from. Opened cold, it offers Close. */
 export function NoFood() {
-  const k = useKit();
-  return <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: k.sheetBg }}>
-    <EmptyState icon="meal" color="food" title={t('foodLogUnavailable')} description={t('foodLogUnavailableBody')} />
+  const k = useKit(), cold = useCold();
+  return <View style={{ flex: 1, backgroundColor: k.sheetBg }}>
+    {cold ? <View style={{ paddingHorizontal: 16 }}><SheetHeader left={t('foodLogClose')} onLeft={() => router.replace('/food')} /></View> : null}
+    <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
+      <EmptyState icon="meal" color="food" title={t('foodLogUnavailable')} description={t('foodLogUnavailableBody')} />
+    </View>
   </View>;
 }
 

@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useContext, useState, type ReactNode } from 'react';
 import { View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import { Icon, KitText, PressScale, Tappable, alpha, mix, slopFor, useKit, type IconName } from '@/components/kit';
-import { useAuth } from '@/auth/provider';
+import { AuthContext } from '@/auth/provider';
 import type { Repository } from '@/data/repository';
 import { plate, raised, well } from '../../tiles/depth';
 import { TileSurface } from '../../tiles/tile-surface';
@@ -135,10 +135,9 @@ const RAMP = [1, 0.74, 0.52, 0.36];
 export const useShade = () => { const k = useKit(); return (i: number, color = 'food') => { const c = k.tok(color), w = RAMP[Math.min(3, i)]; return w === 1 ? c : mix(c, k.c['surface-2'], w); }; };
 
 /** What every Food tile reads: the repository, the day picked in the strip, that day's food and water, and the next meal. */
-export function useTileDay() {
-  let repo: Repository | null = null;
-  try { repo = useAuth().repository ?? null; } catch { repo = null; }
-  return repo;
+export function useTileDay(): Repository | null {
+  // Read without useAuth, which throws outside the provider: a tile drawn on its own (a preview, a test) shows no food.
+  return useContext(AuthContext)?.repository ?? null;
 }
 export function useDayData(repo: Repository) {
   useFoodRevision(repo);

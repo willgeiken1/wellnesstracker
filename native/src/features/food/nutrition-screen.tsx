@@ -105,7 +105,6 @@ function NuRow({ x, first }: { x: Nu; first: boolean }) {
 }
 
 function WeekPart({ repo }: { repo: Repository }) {
-  const k = useKit();
   const { day, today } = useFoodDay();
   const days = weekDays(day), sums = daySums(repo, days), goal = dayView(repo, day, { today }).goal, pGoal = Math.round(dayView(repo, day, { today }).goals.p);
   const water = readWater(repo);

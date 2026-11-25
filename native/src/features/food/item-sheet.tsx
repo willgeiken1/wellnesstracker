@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { Badge, Button, Card, Chip, Chips, Icon, KitText, List, SheetHeader, Tappable, useKit } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
@@ -10,7 +9,7 @@ import { addToCart, cartItem, currentCart } from './cart';
 import { dayView, kcalOf, nextMealId, num } from './day';
 import { meals, portion, saveFood, saveReusable, type Food } from './model';
 import { itemTarget, type ItemTarget } from './nav';
-import { FoodSheet, foodKey } from './sheet';
+import { closeSheet, foodKey, FoodSheet } from './sheet';
 import { useFoodDay } from './selection';
 import { MACRO_COLOR, MealSeg, PillStepper, SectionLabel, SplitBar, macroPercents } from './ui';
 import { useFoodRevision } from './use-food-revision';
@@ -41,7 +40,7 @@ export function multipleFor(food: Food, grams: number | null, amount: number) {
 export function ItemSheet({ repo }: { repo: Repository }) {
   useFoodRevision(repo);
   const [target] = useState<ItemTarget | null>(() => itemTarget());
-  if (!target) return <FoodSheet header={<SheetHeader title={t('foodDetails')} left={t('cancel')} onLeft={() => router.back()} />}><View /></FoodSheet>;
+  if (!target) return <FoodSheet header={<SheetHeader title={t('foodDetails')} left={t('cancel')} onLeft={() => closeSheet()} />}><View /></FoodSheet>;
   return <ItemBody repo={repo} target={target} />;
 }
 
@@ -67,18 +66,18 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
   const commit = () => {
     if (editing) {
       const before = repo.get('food_entries', target.entryId!)?.data;
-      saveFood(repo, day, meal, food, mult, target.entryId); router.back();
+      saveFood(repo, day, meal, food, mult, target.entryId); closeSheet();
       showToast(fill(t('foodSavedNamed'), { name }), { color: 'food', ms: 4200, action: { label: t('foodUndoBtn'), onAction: () => { if (before) { repo.save('food_entries', before, target.entryId); showToast(t('foodChangeUndone'), { color: 'food' }); } } } });
       return;
     }
-    if (inTray) { addToCart([cartItem(foodKey(food), food, mult)]); router.back(); return; }
-    router.back(); quickAdd(repo, day, meal, food, mult);
+    if (inTray) { addToCart([cartItem(foodKey(food), food, mult)]); closeSheet(); return; }
+    closeSheet(); quickAdd(repo, day, meal, food, mult);
   };
   const mn = lower(mealName(repo, meal));
   const footer = <Button full color="food" label={editing ? t('foodSaveChanges') : fill(t('foodAddToMeal'), { meal: mn }) + kcalTail(kcal)} onPress={commit} testID="food-item-add" />;
 
   return <FoodSheet testID="food-item-sheet" footer={footer}
-    header={<SheetHeader title={editing ? t('foodEditFood') : t('foodDetails')} left={t('cancel')} onLeft={() => router.back()} />}>
+    header={<SheetHeader title={editing ? t('foodEditFood') : t('foodDetails')} left={t('cancel')} onLeft={() => closeSheet()} />}>
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginTop: 4, marginBottom: 16 }}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <KitText accessibilityRole="header" weight={700} size={25} lineHeight={1.15} tracking={-0.03}>{name}</KitText>
@@ -106,7 +105,7 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
     {inTray || editing ? null : <><SectionLabel title={t('foodAddToCap')} /><MealSeg label={t('foodMealLabel')} meals={meals(repo)} value={meal} onChange={setMeal} /></>}
     <FactsPanel food={p} grams={grams} servingText={servingText} barcode={target.source === 'barcode'} />
     {editing ? <View style={{ marginTop: 16 }}>
-      <Button full variant="danger" icon="trash" label={fill(t('foodRemoveFromMeal'), { meal: mn })} onPress={() => { router.back(); removeFood(repo, target.entryId!, meal); }} />
+      <Button full variant="danger" icon="trash" label={fill(t('foodRemoveFromMeal'), { meal: mn })} onPress={() => { closeSheet(); removeFood(repo, target.entryId!, meal); }} />
     </View> : null}
   </FoodSheet>;
 }
