@@ -124,12 +124,14 @@ export function AddButton({ on, onPress, label, color = 'food', size = 44 }: { o
 }
 
 /** The pill stepper for servings (`.fd-stp`): minus, the amount, plus. */
-export function PillStepper({ value, onChange, step, min, max, format, label, color }: {
+export function PillStepper({ value, onChange, step, min, max, format, label, color, tint, onStep }: {
   value: number; onChange: (v: number) => void; step: number; min: number; max: number; format: (v: number) => string; label: string; color?: string;
+  /** A colour token for a soft tinted pill (the water sheet), in place of the plain one. */ tint?: string;
+  /** Steps that are not a plain add (millilitres in 50s): called in place of onChange. */ onStep?: (d: -1 | 1) => void;
 }) {
   const k = useKit(), haptic = useSelectionHaptic();
-  const bg = k.dark && k.surface !== 'page' ? k.c['accent-tint'] ?? k.c['surface-2'] : k.c['surface-2'];
-  const go = (d: -1 | 1) => { const next = Math.round(Math.max(min, Math.min(max, value + d * step)) * 100) / 100; if (next !== value) { haptic(); onChange(next); } };
+  const bg = tint ? k.tint(k.tok(tint), 0.14) : k.dark && k.surface !== 'page' ? k.c['accent-tint'] ?? k.c['surface-2'] : k.c['surface-2'];
+  const go = (d: -1 | 1) => { if (onStep) { haptic(); onStep(d); return; } const next = Math.round(Math.max(min, Math.min(max, value + d * step)) * 100) / 100; if (next !== value) { haptic(); onChange(next); } };
   const btn = (d: -1 | 1) => <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={`${d < 0 ? 'Less' : 'More'}, ${label}`} disabled={d < 0 ? value <= min : value >= max}
     onPress={() => go(d)} hitSlop={slopFor(40, 40)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', opacity: (d < 0 ? value <= min : value >= max) ? 0.4 : 1 }}>
     <Icon name={d < 0 ? 'minus' : 'plus'} size={18} color={color ? k.tok(color) : k.c.text} />
