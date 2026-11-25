@@ -6,7 +6,7 @@ import { implementTile, type TileRenderProps } from '@/features/tiles';
 import { t } from '@/i18n/en';
 import { finite, lastIndex, series, stats, weekday, type Pillars } from '../model';
 import { clock, fill, hm } from '../format';
-import { rangeShort, shortTicks } from '../metric';
+import { HRV_NAME, rangeShort, shortTicks } from '../metric';
 import { rangeOf, usePageRange, useProgressData, pageRange } from '../store';
 import { Cells, Chart, Gauge, meter } from '../viz';
 import { B, Bar, Cols, HM, Hair, K, Legend, Num, NoData, Row, Scale, Spacer, Stack, Sub, T } from './ui';
@@ -74,7 +74,7 @@ function HistoryTile({ size, options, body }: TileRenderProps) {
   if (S0.n === 0) return <View style={{ flex: 1 }}><NoData fs={size === 'S' ? 24 : 28} text={t('progressNoData')} /><Sub wrap style={{ marginTop: 6 }}>{t('progressHistoryEmpty')}</Sub></View>;
   const bi = se.v.indexOf(S0.max), lo = se.v.indexOf(S0.min), li = lastIndex(se.v);
   const above = B0 == null ? null : se.v.filter(x => finite(x) && x >= B0).length;
-  const aria = fill(t('progressHistoryAria'), { range: rangeShort(r), avg: Math.round(S0.avg!), best: S0.max!, when: se.labels[bi] });
+  const aria = fill(t('progressHistoryAria'), { range: rangeShort(r), avg: Math.round(S0.avg!), best: S0.max!, when: se.labels[bi] === 'Today' ? 'today' : se.labels[bi] });
   const form = options.form === 'pillars' && r !== 'week' ? 'cols' : options.form ?? 'heat';
   const viz = (W: number, H: number, labels: boolean) => {
     if (form === 'pillars') {
@@ -130,7 +130,7 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
   const nd = (fs: number) => <NoData fs={fs * 0.8} text={t('progressNoData')} />;
   const cols = {
     sleep: (fs: number) => col(S ? <HM min={S.min} fs={fs} /> : nd(fs), t('progressPSleep'), fill(t('progressGoalLower'), { v: `${goal / 60}h` }), sleepCells()),
-    hrv: (fs: number) => col(h != null ? <Num v={h} unit="ms" fs={fs} /> : nd(fs), t('progressMHrv'), usual(hb), scaleH()),
+    hrv: (fs: number) => col(h != null ? <Num v={h} unit="ms" fs={fs} /> : nd(fs), HRV_NAME, usual(hb), scaleH()),
     rhr: (fs: number) => col(rh != null ? <Num v={rh} unit="bpm" fs={fs} /> : nd(fs), t('progressRhrShort'), usual(rb), scaleR()),
   };
   const aria = fill(t('progressRecoveryAria'), { src, sleep: S ? hm(S.min / 60) : t('progressNoData'), hrv: h ?? t('progressNoData'), rhr: rh ?? t('progressNoData') });
@@ -140,7 +140,7 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
     const short = S ? goal - S.min : 0;
     const note = lead === 'sleep' ? (!S ? '' : short > 0 ? fill(t('progressMinShort'), { n: short, goal: `${goal / 60}h` }) : t('progressGoalMet')) : usual(lead === 'hrv' ? hb : rb);
     return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{num}
-      <Sub style={{ marginTop: 4 }}>{lead === 'sleep' ? t('progressPSleep') : lead === 'hrv' ? t('progressMHrv') : t('progressMRhr')}</Sub><Sub>{note}</Sub>
+      <Sub style={{ marginTop: 4 }}>{lead === 'sleep' ? t('progressPSleep') : lead === 'hrv' ? HRV_NAME : t('progressMRhr')}</Sub><Sub>{note}</Sub>
       <View style={{ marginTop: 'auto' }}>{lead === 'sleep' ? sleepCells(8) : lead === 'hrv' ? scaleH() : scaleR()}</View></View>;
   }
   const order = [lead, ...(['sleep', 'hrv', 'rhr'] as const).filter(x => x !== lead)];
@@ -148,7 +148,7 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
   const bedWake = S && S.bed != null && S.wake != null ? [clock(S.bed), clock(S.wake)] : null;
   if (size === 'M') return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{top}<Hair style={{ marginTop: 'auto' }} />
     <Sub style={{ marginTop: 9 }}>{bedWake ? <>{t('progressInBed')} <B>{bedWake[0]}</B> {t('progressTo')} <B>{bedWake[1]}</B>, {fill(t('progressFromSrc'), { src })}</> : fill(t('progressFromSrcCap'), { src })}</Sub></View>;
-  const ST = [['deep', 'progressDeep', 'sleep'], ['rem', 'progressRem', 'recovery'], ['core', 'progressCore', 'accent'], ['awake', 'progressAwake', 'food']] as const;
+  const ST = [['deep', 'progressDeep', 'sleep'], ['rem', 'recoveryRem', 'recovery'], ['core', 'progressCore', 'accent'], ['awake', 'progressAwake', 'food']] as const;
   const se = series(d, 'sleep', 'week');
   return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{top}
     <Hair style={{ marginTop: 12, marginBottom: 10 }} />

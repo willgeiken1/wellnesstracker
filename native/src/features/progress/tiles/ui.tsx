@@ -2,21 +2,24 @@ import type { ReactNode } from 'react';
 import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Icon, font, mix, useKit, type IconName } from '@/components/kit';
+import { capitals } from '@/components/kit-style';
 import type { Pose } from '../model';
 
 /* The small pieces the Progress tiles and screens are drawn from (the mockup's .prt-* classes). */
 
 const tab = { fontVariant: ['tabular-nums'] as TextStyle['fontVariant'] };
 
-/** A big number with its unit after it in small grey type (.prt-n). */
+/** A big number with its unit after it in small grey type (.prt-n). The unit is a sibling on the number's baseline, not
+ * nested in it, so it keeps its own (untracked) spacing as `.prt-n small { letter-spacing: 0 }` asks. */
 export function Num({ v, unit, fs = 32, color, units }: { v: string | number; unit?: string; fs?: number; color?: string; units?: (readonly [string, string])[] }) {
-  const k = useKit(), us = fs <= 22 ? Math.max(11, fs * 0.52) : 13;
-  // Inline text takes no margins, so the mockup's 1 to 4 pt gaps around a unit are thin spaces.
-  const small = (s: string, key?: string, before = '\u200A', after = '') =>
-    <Text key={key} style={[font(600, us, 1), { color: k.c['text-muted'], letterSpacing: 0 }]}>{before}{s}{after}</Text>;
-  return <Text numberOfLines={1} style={[font(700, fs, 1, -0.03), tab, { color: color ?? k.c.text }]}>
-    {units ? units.map(([n, u], i) => <Text key={i}>{n}{small(u, `u${i}`, '', i < units.length - 1 ? '\u2009' : '')}</Text>) : <>{v}{unit ? small(unit) : null}</>}
-  </Text>;
+  const k = useKit(), us = fs <= 22 ? Math.max(11, fs * 0.52) : 13, gap = fs <= 22 ? 2 : 3;
+  const groups: (readonly [string | number, string | undefined])[] = units ?? [[v, unit]];
+  return <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'nowrap' }}>
+    {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? 4 : 0 }}>
+      <Text numberOfLines={1} style={[font(700, fs, 1, -0.03), tab, { color: color ?? k.c.text }]}>{n}</Text>
+      {u ? <Text numberOfLines={1} style={[font(600, us, 1), { color: k.c['text-muted'], marginLeft: units ? 1 : gap }]}>{u}</Text> : null}
+    </View>)}
+  </View>;
 }
 /** Hours and minutes as "6h 53m" in the big number style. */
 export const HM = ({ min, fs = 32 }: { min: number; fs?: number }) => {
@@ -39,7 +42,7 @@ export function T({ children, style, size = 14, wrap }: { children: ReactNode; s
   return <Text numberOfLines={wrap ? undefined : 1} style={[font(600, size, 1.25), { color: k.c.text }, style]}>{children}</Text>;
 }
 /** A small caps label (.prt-k). */
-export const K = ({ children, color }: { children: ReactNode; color?: string }) => { const k = useKit(); return <Text numberOfLines={1} style={[font(700, 11, 1, 0.1), { color: color ?? k.c['text-muted'], textTransform: 'uppercase' }]}>{children}</Text>; };
+export const K = ({ children, color }: { children: ReactNode; color?: string }) => { const k = useKit(); return <Text numberOfLines={1} style={[font(700, 11, 1, 0.1), { color: color ?? k.c['text-muted'], ...capitals }]}>{children}</Text>; };
 /** A small value (.prt-v). */
 export function V({ v, unit, fs = 18 }: { v: string; unit?: string; fs?: number }) {
   const k = useKit();

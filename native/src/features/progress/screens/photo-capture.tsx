@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { randomUUID } from 'expo-crypto';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { Icon, SegmentedControl, Sheet, font, mix, useKit } from '@/components/kit';
+import { Icon, SegmentedControl, Sheet, font, mix, useKit, Tappable } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -61,14 +61,14 @@ export function PhotoCaptureSheet() {
   return <Sheet scroll={false} gap={0}>
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 4 }}>
       <View style={{ flex: 1, alignItems: 'flex-start' }}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('kitCancel')} style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 8, marginLeft: -8 }}>
-          <Text style={[font(500, 17, undefined, -0.01), { color: k.c.accent }]}>{t('kitCancel')}</Text></Pressable></View>
+        <Tappable dim="text" onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('kitCancel')} style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 8, marginLeft: -8 }}>
+          <Text style={[font(500, 17, undefined, -0.01), { color: k.c.accent }]}>{t('kitCancel')}</Text></Tappable></View>
       <Text accessibilityRole="header" style={[font(700, 17, undefined, -0.02), { color: k.c.text }]}>{t('progressPhotoTitle')}</Text>
       <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Pressable onPress={() => { setFront(!front); showToast(t(front ? 'progressBackCamera' : 'progressFrontCamera'), { color: 'sleep' }); }} accessibilityRole="button" accessibilityLabel={t('progressSwitchCamera')}
-          style={{ minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="flip" size={24} color={k.c.accent} /></Pressable></View>
+        <Tappable dim="text" onPress={() => { setFront(!front); showToast(t(front ? 'progressBackCamera' : 'progressFrontCamera'), { color: 'sleep' }); }} accessibilityRole="button" accessibilityLabel={t('progressSwitchCamera')}
+          style={{ minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="flip" size={24} color={k.c.accent} /></Tappable></View>
     </View>
-    <Pressable onPress={live ? undefined : () => { if (permission?.canAskAgain) void ask(); }} accessible accessibilityRole="image" accessibilityLabel={t('progressCameraAria')}
+    <Tappable dim="none" onPress={live ? undefined : () => { if (permission?.canAskAgain) void ask(); }} accessible accessibilityRole="image" accessibilityLabel={t('progressCameraAria')}
       style={{ height: 470, borderRadius: 22, overflow: 'hidden', backgroundColor: k.pill }}>
       {live ? <CameraView ref={cam} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }} facing={front ? 'front' : 'back'} mirror={front} animateShutter={false} />
         : <Svg style={{ position: 'absolute', left: 0, top: 0 }} width="100%" height="100%">
@@ -84,23 +84,23 @@ export function PhotoCaptureSheet() {
             : last ? fill(t('progressLineUp'), { day: dShort(last.day), pose: poseWord(pose).toLowerCase() }) : t('progressLineUpFirst')}</Text></View>
       </View>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: ink, opacity: flash }} />
-    </Pressable>
+    </Tappable>
     <View style={{ marginTop: 14 }}>
       <SegmentedControl label={t('progressPose')} value={pose} onChange={setPose} options={POSES.map(p => ({ value: p, label: poseWord(p) }))} />
     </View>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingHorizontal: 8 }}>
       <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
-        {last ? <Pressable onPress={() => router.push('/progress/photos')} accessibilityRole="button" accessibilityLabel={t('progressSeeAllPhotos')}>
-          <PhotoBox p={last} w={48} h={60} date={false} radius={10} /></Pressable> : null}
+        {last ? <Tappable dim="row" onPress={() => router.push('/progress/photos')} accessibilityRole="button" accessibilityLabel={t('progressSeeAllPhotos')}>
+          <PhotoBox p={last} w={48} h={60} date={false} radius={10} /></Tappable> : null}
       </View>
-      <Pressable onPress={() => { void shoot(); }} disabled={busy} accessibilityRole="button" accessibilityLabel={t('progressTakePhotoBtn')} accessibilityState={{ disabled: busy, busy }}
+      <Tappable dim="fill" onPress={() => { void shoot(); }} disabled={busy} accessibilityRole="button" accessibilityLabel={t('progressTakePhotoBtn')} accessibilityState={{ disabled: busy, busy }}
         style={{ width: 78, height: 78, borderRadius: 39, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: k.c.text }}>
-        {({ pressed }) => <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: k.c.text, transform: [{ scale: pressed ? 0.9 : 1 }] }} />}
-      </Pressable>
+        <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: k.c.text }} />
+      </Tappable>
       <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
-        <Pressable onPress={() => setTimer(!timer)} accessibilityRole="switch" accessibilityState={{ checked: timer }} accessibilityLabel={t('progressTimer3')}
+        <Tappable dim="fill" onPress={() => setTimer(!timer)} accessibilityRole="switch" accessibilityState={{ checked: timer }} accessibilityLabel={t('progressTimer3')}
           style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: timer ? k.c.warning : k.dark ? k.c['surface-2'] : k.c.surface, boxShadow: k.dark ? undefined : `0px 0px 0px 1px ${k.c['hair-2']}` }}>
-          <Text style={[font(700, 13), { color: timer ? k.tok('on-accent') : k.c.text }]}>3s</Text></Pressable>
+          <Text style={[font(700, 13), { color: timer ? k.tok('on-accent') : k.c.text }]}>3s</Text></Tappable>
       </View>
     </View>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14 }}>

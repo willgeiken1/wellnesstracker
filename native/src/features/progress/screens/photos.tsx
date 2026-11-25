@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Badge, Icon, List, ListRow, NavButton, SectionHeader, font, useKit } from '@/components/kit';
+import { Badge, Icon, List, ListRow, NavButton, SectionHeader, font, useKit, Tappable } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -19,13 +19,13 @@ const photoName = (p: ProgressPhoto, unit: 'kg' | 'lb') => fill(t('progressPhoto
 /** One photo in the grid: tap to put it in the comparison; the number says which side it is on. */
 function Pick({ p, n, unit, onPress }: { p: ProgressPhoto; n: number; unit: 'kg' | 'lb'; onPress: () => void }) {
   const k = useKit();
-  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: n > 0 }}
+  return <Tappable dim="fill" onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: n > 0 }}
     accessibilityLabel={photoName(p, unit) + (n ? `, ${fill(t('progressSelectedN'), { n })}` : '')}
-    style={({ pressed }) => ({ flex: 1, borderRadius: 14, transform: [{ scale: pressed ? 0.97 : 1 }], boxShadow: n ? `0px 0px 0px 3px ${k.c.accent}` : undefined })}>
+    style={{ flex: 1, borderRadius: 14, boxShadow: n ? `0px 0px 0px 3px ${k.c.accent}` : undefined }}>
     <PhotoBox p={p} w="100%" radius={14} />
     {n ? <View style={{ position: 'absolute', right: 6, top: 6, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: k.c.accent }}>
       <Text style={[font(700, 12), { color: k.tok('on-accent') }]}>{n}</Text></View> : null}
-  </Pressable>;
+  </Tappable>;
 }
 
 export function PhotosScreen() {
@@ -68,9 +68,9 @@ export function PhotosScreen() {
       {Array.from({ length: Math.ceil(rows.length / 3) }, (_, r) => <View key={r} style={{ flexDirection: 'row', gap: 8 }}>
         {[0, 1, 2].map(c => { const i = r * 3 + c, x = rows[i];
           if (x == null) return <View key={c} style={{ flex: 1 }} />;
-          if (x === 'add') return <Pressable key="add" onPress={() => router.push('/progress/photo-capture')} accessibilityRole="button" accessibilityLabel={t('progressTakePhoto')}
-            style={({ pressed }) => ({ flex: 1, aspectRatio: 3 / 4, borderRadius: 14, gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: k.c.surface, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
-            <Icon name="camera" size={24} color={k.c.sleep} /><Text style={[font(600, 12.5), { color: k.c.sleep }]}>{t('progressAddPhoto')}</Text></Pressable>;
+          if (x === 'add') return <Tappable dim="fill" key="add" onPress={() => router.push('/progress/photo-capture')} accessibilityRole="button" accessibilityLabel={t('progressTakePhoto')}
+            style={{ flex: 1, aspectRatio: 3 / 4, borderRadius: 14, gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: k.c.surface }}>
+            <Icon name="camera" size={24} color={k.c.sleep} /><Text style={[font(600, 12.5), { color: k.c.sleep }]}>{t('progressAddPhoto')}</Text></Tappable>;
           const n = cmp.indexOf(i) >= 0 ? [...cmp].sort((a, b) => a - b).indexOf(i) + 1 : 0;
           return <Pick key={x.id} p={x} n={n} unit={u} onPress={() => pick(i)} />; })}
       </View>)}

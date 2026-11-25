@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, PanResponder, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, PanResponder, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Defs, Line, LinearGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
-import { Icon, List, ListRow, SegmentedControl, Sheet, SheetHeader, font, mix, useKit, useSelectionHaptic } from '@/components/kit';
+import { Icon, List, ListRow, SegmentedControl, Sheet, SheetHeader, font, mix, useKit, useSelectionHaptic , Tappable } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -52,9 +52,9 @@ function Ruler({ v, unit, onChange }: { v: number; unit: 'kg' | 'lb'; onChange: 
 /** A round 56 pt button either side of the ruler. */
 const Round = ({ icon, label, onPress }: { icon: 'minus' | 'plus'; label: string; onPress: () => void }) => {
   const k = useKit();
-  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
-    style={({ pressed }) => ({ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: k.cardBg, boxShadow: k.cardEdge, transform: [{ scale: pressed ? 0.94 : 1 }] })}>
-    <Icon name={icon} size={22} color={k.c.text} /></Pressable>;
+  return <Tappable dim="fill" onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
+    style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
+    <Icon name={icon} size={22} color={k.c.text} /></Tappable>;
 };
 
 /**
@@ -93,11 +93,11 @@ export function LogWeightSheet() {
         ? <TextInput autoFocus value={typing} onChangeText={setTyping} keyboardType="decimal-pad" accessibilityLabel={fill(t('progressWeightIn'), { unit: unitWord })}
             onBlur={() => { const n = Number(typing); if (Number.isFinite(n) && n > 0) set(n); setTyping(null); }}
             style={[font(700, 72, 1, -0.05), { color: k.c.text, textAlign: 'center', minWidth: 200, fontVariant: ['tabular-nums'] }]} />
-        : <Pressable onPress={() => setTyping(fmt(v, 1).replace(/,/g, ''))} accessibilityRole="button" accessibilityHint={t('progressTapToType')} accessibilityLabel={`${fmt(v, 1)} ${unitWord}`}>
+        : <Tappable dim="row" onPress={() => setTyping(fmt(v, 1).replace(/,/g, ''))} accessibilityRole="button" accessibilityHint={t('progressTapToType')} accessibilityLabel={`${fmt(v, 1)} ${unitWord}`}>
             <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'baseline' }}>
               <Text style={[font(700, 72, 1, -0.05), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{fmt(v, 1)}</Text>
-              <Text style={[font(600, 22), { color: k.c['text-muted'], letterSpacing: 0, marginLeft: 6 }]}>{u}</Text></View>
-          </Pressable>}
+              <Text style={[font(600, 22), { color: k.c['text-muted'], marginLeft: 6 }]}>{u}</Text></View>
+          </Tappable>}
       {goal != null && gap != null ? <Text style={[font(600, 13.5), { marginTop: 8, color: k.c['text-muted'] }]}>
         {gap > 0 ? fill(t('progressToGoalOf'), { v: `${fmt(gap, 1)} ${u}`, goal: wGoal(d.weight.goalKg!, u) }) : fill(t('progressAtGoalOf'), { goal: wGoal(d.weight.goalKg!, u) })}</Text> : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 18, alignSelf: 'stretch' }}>

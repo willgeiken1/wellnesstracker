@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
-import { mix, useKit, useSelectionHaptic } from '@/components/kit';
+import { MIN_TEXT, mix, useKit, useSelectionHaptic } from '@/components/kit';
 import { tokens } from '@/design/tokens';
 import { finite } from './model';
 import { fmt } from './format';
@@ -12,7 +12,8 @@ import { fmt } from './format';
    goals are solid hairlines. */
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-export const SVG_LABEL = { fontFamily: tokens.font.bodyStrong, fontSize: 10.5 } as const;
+/** Chart labels: the design's 10.5 pt, held to the kit's smallest text size like every other label. */
+export const SVG_LABEL = { fontFamily: tokens.font.bodyStrong, fontSize: MIN_TEXT } as const;
 
 /* ---------- gauge ---------- */
 export function Gauge({ frac, size = 96, sw: swIn, color = 'accent', notch, from, label, children }: {

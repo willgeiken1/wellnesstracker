@@ -38,7 +38,16 @@ export function clock(min: number) {
 /** A moment as a clock time. */
 export const clockAt = (ms: number) => { const d = new Date(ms); return clock(d.getHours() * 60 + d.getMinutes()); };
 export const kcalS = (kcal: number) => `${fmt(kcal)} kcal`;
-/** Fill `{name}` slots in a string. */
+const ONE = /^(\s(?:new |CSV |full )?)(sessions|workouts|photos|records|days|weeks|months|exercises|files|hours|nights|weigh-ins)\b/;
+/** Fill `{name}` slots in a string. A count of 1 takes the singular of the noun right after it, so "1 sessions" reads "1 session". */
 export function fill(text: string, values: Record<string, string | number>) {
-  return text.replace(/\{(\w+)\}/g, (_, k: string) => values[k] != null ? String(values[k]) : '');
+  const parts = text.split(/(\{\w+\})/);
+  return parts.map((part, i) => {
+    const m = /^\{(\w+)\}$/.exec(part);
+    if (!m) return part;
+    const v = values[m[1]];
+    if (v == null) return '';
+    if (String(v) === '1' && parts[i + 1]) parts[i + 1] = parts[i + 1].replace(ONE, (_, pre: string, noun: string) => pre + noun.slice(0, -1));
+    return String(v);
+  }).join('');
 }

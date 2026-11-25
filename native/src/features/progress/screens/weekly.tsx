@@ -59,10 +59,10 @@ export function WeeklyScreen() {
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
       {stat(t('progressWorkouts'), <Big size="sm" v={R.workouts} unit={T0.active ? t('progressPlusGoing') : undefined} color={k.c.training} />, fill(t('progressMinInAll'), { n: fmt(R.minutes) }))}
       {stat(t('progressVolume'), <Big size="sm" v={fmt(wtV(T0.weekVolumeKg, u))} unit={u} color={k.c.training} />, R.volPct != null ? fill(t('progressOnLastWeek'), { pct: signed(R.volPct) }) : t('progressThisWeek'))}
-      {stat(t('progressMKcal'), R.kcalAvg != null ? <Big size="sm" v={fmt(R.kcalAvg)} unit="kcal" color={k.c.food} /> : nd, fill(t('progressADayLogged'), { n: R.logged }))}
+      {stat(t('progressMKcal'), R.kcalAvg != null ? <Big size="sm" v={fmt(R.kcalAvg)} unit="kcal" color={k.c.food} /> : nd, R.logged ? fill(t('progressADayLogged'), { n: R.logged }) : t('progressNoFoodWeek'))}
       {stat(t('progressMSleep'), R.sleepAvg != null ? <Big size="sm" units={hmUnits(R.sleepAvg * 60)} color={k.c.sleep} /> : nd, fill(t('progressANightGoal'), { goal: `${d.sleepGoalMin / 60}h` }))}
       {stat(t('progressMWeight'), R.wDeltaKg != null ? <Big size="sm" v={signed(wtV(R.wDeltaKg, u), 1)} unit={u} color={k.c.recovery} /> : nd, d.weight.kg != null ? `${t('progressNowLower')} ${wtS(d.weight.kg, u)}` : t('progressNoWeighIns'))}
-      {stat(t('progressMSteps'), R.stepsAvg != null ? <Big size="sm" v={fmt(Math.round(R.stepsAvg))} unit={t('progressAvgLower')} color={k.c.training} /> : nd, fill(t('progressDaysUnder'), { n: R.lowSteps }))}
+      {stat(t('progressMSteps'), R.stepsAvg != null ? <Big size="sm" v={fmt(Math.round(R.stepsAvg))} unit={t('progressAvgLower')} color={k.c.training} /> : nd, R.stepsAvg != null ? fill(t('progressDaysUnder'), { n: R.lowSteps }) : fill(t('progressStepGoalA'), { goal: fmt(d.stepGoal) }))}
     </View>
     <SectionHeader title={t('progressWins')} />{rows(wins, 'check', 'success')}
     <SectionHeader title={t('progressSlipped')} />{rows(slips, 'alert', 'warning')}

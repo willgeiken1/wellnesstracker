@@ -42,7 +42,7 @@ export function Big({ v, unit, size = 'big', color, units }: { v?: string | numb
   return <View accessible accessibilityLabel={said} style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'nowrap' }}>
     {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? fs * 0.25 : 0 }}>
       <Text numberOfLines={1} style={[font(700, fs, lh, tr), tab, { color: color ?? k.c.text }]}>{n}</Text>
-      {u ? <Text numberOfLines={1} style={[font(600, us), { color: k.c['text-muted'], letterSpacing: 0, marginLeft: 3 }]}>{u}</Text> : null}
+      {u ? <Text numberOfLines={1} style={[font(600, us), { color: k.c['text-muted'], marginLeft: 3 }]}>{u}</Text> : null}
     </View>)}
   </View>;
 }
@@ -69,7 +69,11 @@ export function Stats({ items }: { items: { l: string; v: ReactNode; s?: string 
 /** A stat value (.pg-stats .v). */
 export function StatV({ v, unit }: { v: string; unit?: string }) {
   const k = useKit();
-  return <Text numberOfLines={1} style={[font(700, 19, 1.2, -0.025), tab, { color: k.c.text }]}>{v}{unit ? <Text style={[font(600, 12), { color: k.c['text-muted'], letterSpacing: 0 }]}>{' '}{unit}</Text> : null}</Text>;
+  // The unit sits beside the number, not inside it, so it keeps its own untracked spacing (.pg-stats .v small).
+  return <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+    <Text numberOfLines={1} style={[font(700, 19, 1.2, -0.025), tab, { color: k.c.text }]}>{v}</Text>
+    {unit ? <Text numberOfLines={1} style={[font(600, 12), { color: k.c['text-muted'], marginLeft: 2 }]}>{unit}</Text> : null}
+  </View>;
 }
 /** The small icon square (.pg-ic). */
 export const Ic = ({ icon, color, size = 28 }: { icon: string; color: string; size?: number }) => {

@@ -1,16 +1,17 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { G, Line, Rect, Text as SvgText } from 'react-native-svg';
-import { Eyebrow, List, ListRow, SectionHeader, font, mix, useKit } from '@/components/kit';
+import { Eyebrow, List, ListRow, SectionHeader, font, mix, useKit, Tappable } from '@/components/kit';
 import { t } from '@/i18n/en';
 import { addDays, avg, finite, weekday, type Night, type Stage } from '../model';
 import { clock, fill, hm } from '../format';
 import { useProgress } from '../use-progress';
 import { SVG_LABEL } from '../viz';
+import { HRV_NAME } from '../metric';
 import { Big, Cap, Card, Page, Src, hmUnits } from './parts';
 
-const STAGES: Record<Stage, [name: Parameters<typeof t>[0], color: string]> = { awake: ['progressAwake', 'food'], rem: ['progressRem', 'recovery'], core: ['progressCore', 'accent'], deep: ['progressDeep', 'sleep'] };
+const STAGES: Record<Stage, [name: Parameters<typeof t>[0], color: string]> = { awake: ['progressAwake', 'food'], rem: ['recoveryRem', 'recovery'], core: ['progressCore', 'accent'], deep: ['progressDeep', 'sleep'] };
 const ORDER: Stage[] = ['deep', 'rem', 'core', 'awake'];
 
 /** The night as blocks on four lanes; tap a block to read it. */
@@ -28,14 +29,14 @@ function Hypnogram({ night, sel, onSel }: { night: Night; sel: number | null; on
   for (let m = Math.ceil(start / 120) * 120; m < start + tot && inner.length < 2; m += 120) { const f = (m - start) / tot; if (f >= 0.2 && f <= 0.8) inner.push([m - start, clock(m)]); }
   const ticks: [number, string][] = [[0, clock(start)], ...inner, [tot, clock(start + tot)]];
   const pick = (px: number) => { const tm = ((px * W / w) - x0) / PW * tot; if (tm < 0) return; let a = 0; for (let i = 0; i < segs.length; i++) { a += segs[i][1]; if (a >= tm) return onSel(i); } onSel(segs.length - 1); };
-  return <Pressable onLayout={e => setW(e.nativeEvent.layout.width)} onPress={e => pick(e.nativeEvent.locationX)} accessibilityRole="image"
+  return <Tappable dim="none" onLayout={e => setW(e.nativeEvent.layout.width)} onPress={e => pick(e.nativeEvent.locationX)} accessibilityRole="image"
     accessibilityLabel={fill(t('progressHypAria'), { from: clock(start), to: clock(start + tot), deep: night.deep, rem: night.rem, core: night.core, awake: night.awake })} style={{ width: '100%', aspectRatio: W / H }}>
     <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}>
       {lanes.map((l, i) => <G key={l}><SvgText x={0} y={i * lh + 19} {...SVG_LABEL} fill={k.c['text-muted']}>{t(STAGES[l][0])}</SvgText><Line x1={x0} x2={W} y1={i * lh + 15} y2={i * lh + 15} stroke={k.c.hair} /></G>)}
       {blocks}
       {ticks.map(([m, l], i) => <SvgText key={`t${i}`} x={x0 + PW * m / tot} y={H - 2} textAnchor={i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle'} {...SVG_LABEL} fill={k.c['text-muted']}>{l}</SvgText>)}
     </Svg>
-  </Pressable>;
+  </Tappable>;
 }
 
 /** Sleep and recovery: last night's stages, the last 7 nights on one clock, heart readings and where they come from. */
@@ -59,7 +60,7 @@ export function SleepScreen() {
   const hrRow = (key: 'hrv' | 'rhr', v: number | null, band: readonly [number, number] | null, unit: string) => {
     const inside = v != null && band ? v >= band[0] && v <= band[1] : null;
     const sub = band ? fill(t(inside == null ? 'progressUsualUnit' : inside ? 'progressUsualInside' : 'progressUsualOutside'), { a: band[0], b: band[1], u: unit }) : t('progressNoUsualYetCap');
-    return <ListRow key={key} title={t(key === 'hrv' ? 'progressMHrv' : 'progressMRhr')} sub={sub} icon="heart" color="recovery" chevron
+    return <ListRow key={key} title={key === 'hrv' ? HRV_NAME : t('progressMRhr')} sub={sub} icon="heart" color="recovery" chevron
       right={<Text style={[font(700, 15), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{v ?? t('progressNoData')} <Text style={[font(600, 12.5), { color: k.c['text-muted'] }]}>{v != null ? unit : ''}</Text></Text>}
       onPress={() => router.push(`/progress/trend?metric=${key}&range=week`)} />;
   };
@@ -83,7 +84,7 @@ export function SleepScreen() {
       {readLine(<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{dot('sleep')}<Text style={[font(600, 14), { color: k.c.text }]}>{dayName(night)}, {nx ? hm(nx.h) : t('progressNoData')}</Text></View>,
         nx?.bed != null && nx.wake != null ? `${clock(nx.bed)} ${t('progressTo')} ${clock(nx.wake)}` : undefined)}
       <View style={{ gap: 2, marginTop: 10 }}>
-        {win.map((x, i) => { const on = i === night; return <Pressable key={i} onPress={() => setNight(i)} accessibilityRole="button" accessibilityState={{ selected: on }}
+        {win.map((x, i) => { const on = i === night; return <Tappable dim="fill" key={i} onPress={() => setNight(i)} accessibilityRole="button" accessibilityState={{ selected: on }}
           accessibilityLabel={`${dayName(i)}, ${x?.bed != null && x.wake != null ? `${clock(x.bed)} ${t('progressTo')} ${clock(x.wake)}, ` : ''}${x ? hm(x.h) : t('progressNoData')}`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 30, borderRadius: 8 }}>
           <Text style={[font(600, 12), { width: 34, color: on ? k.c.text : k.c['text-muted'] }]}>{weekday(days[i])}</Text>
@@ -95,7 +96,7 @@ export function SleepScreen() {
             </> : null}
           </View>
           <Text style={[font(700, 12.5), { width: 52, textAlign: 'right', color: on ? k.c.text : k.c['text-muted'] }]}>{x ? hm(x.h) : ''}</Text>
-        </Pressable>; })}
+        </Tappable>; })}
         <View style={{ flexDirection: 'row', gap: 8, minHeight: 18 }} importantForAccessibility="no-hide-descendants"><View style={{ width: 34 }} />
           <View style={{ flex: 1 }}>{[-120, 0, 120, 240, 360, 480].map(m => <Text key={m} style={[font(600, 11), { position: 'absolute', top: 0, left: pos(m), transform: [{ translateX: -10 }], color: k.c['text-muted'] }]}>{m === 0 ? '12a' : m < 0 ? `${12 + m / 60}p` : `${m / 60}a`}</Text>)}</View><View style={{ width: 52 }} /></View>
       </View>

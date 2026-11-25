@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Icon, font, mix, useKit } from '@/components/kit';
+import { Icon, font, mix, useKit, Tappable } from '@/components/kit';
 import { implementTile, type TileRenderProps } from '@/features/tiles';
 import { t } from '@/i18n/en';
 import { METRICS, addDays, daysBetween, dLong, dShort, finite, lastIndex, r1, series, stats, sum, weekReport, type MetricKey, type ProgressData, type ProgressPhoto } from '../model';
@@ -136,13 +136,13 @@ function RecordsTile({ size, options, preview, editing }: TileRenderProps) {
   }
   const n = size === 'M' ? 3 : 5, rh = size === 'M' ? 39 : 52, live = !preview && !editing;
   return <View style={{ flex: 1 }} accessibilityLabel={aria} accessibilityRole="list">{list.slice(0, n).map((x, i) =>
-    <Pressable key={x.t} disabled={!live} onPress={() => router.push(x.go as never)} accessibilityRole="button" accessibilityLabel={`${x.t}, ${x.v}${x.unit ? ` ${x.unit}` : ''}, ${x.s}`}
-      style={({ pressed }) => ({ height: rh, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair, opacity: pressed ? 0.7 : 1 })}>
+    <Tappable dim="row" key={x.t} disabled={!live} onPress={() => router.push(x.go as never)} accessibilityRole="button" accessibilityLabel={`${x.t}, ${x.v}${x.unit ? ` ${x.unit}` : ''}, ${x.s}`}
+      style={{ height: rh, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
       {size === 'L' ? <IconTile icon={x.icon} color={x.c} /> : null}
       <View style={{ flex: 1, minWidth: 0 }}><T size={13.5}>{x.t}</T>{size === 'L' ? <Sub size={11.5}>{x.s}</Sub> : null}</View>
       {size === 'M' ? <Sub>{x.s.replace(/^\w+, /, '')}</Sub> : null}
       <Text style={[font(700, 14.5, 1), { minWidth: 64, textAlign: 'right', color: k.c.text, fontVariant: ['tabular-nums'] }]}>{x.v}{x.unit ? <Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{x.unit}</Text> : null}</Text>
-    </Pressable>)}</View>;
+    </Tappable>)}</View>;
 }
 
 /* ---------- 12. progress photos ---------- */
@@ -158,9 +158,9 @@ export function PhotoBox({ p, w, h, pose, date = true, radius = 12 }: { p: Progr
 }
 function AddPhoto({ w, h, live }: { w: number; h: number; live: boolean }) {
   const k = useKit(), c = k.c.sleep;
-  return <Pressable disabled={!live} onPress={() => router.push('/progress/photo-capture')} accessibilityRole="button" accessibilityLabel={t('progressTakePhoto')}
-    style={({ pressed }) => ({ width: w, height: h, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: mix(c, k.dark ? k.c['surface-2'] : k.c.bg, k.dark ? 0.12 : 0.1), transform: [{ scale: pressed ? 0.97 : 1 }] })}>
-    <Icon name="camera" size={22} color={c} /></Pressable>;
+  return <Tappable dim="fill" disabled={!live} onPress={() => router.push('/progress/photo-capture')} accessibilityRole="button" accessibilityLabel={t('progressTakePhoto')}
+    style={{ width: w, height: h, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: mix(c, k.dark ? k.c['surface-2'] : k.c.bg, k.dark ? 0.12 : 0.1) }}>
+    <Icon name="camera" size={22} color={c} /></Tappable>;
 }
 function PhotosTile({ size, options, body, preview, editing }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), all = d.photos, pose = (options.pose ?? 'Front'), live = !preview && !editing, u = d.unit;

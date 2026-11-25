@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, Icon, List, ListRow, SectionHeader, SegmentedControl, Sheet, SheetHeader, font, mix, useKit, type IconName } from '@/components/kit';
+import { Button, Icon, List, ListRow, SectionHeader, SegmentedControl, Sheet, SheetHeader, font, mix, useKit, Tappable, type IconName } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -61,11 +61,11 @@ export function ExportSheet() {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 14, paddingHorizontal: 12, paddingBottom: 6 }} accessibilityLabel={t('progressShareTo')}>
         {APPS.map(([l, icon, color]) => { const c = k.tok(color);
-          return <Pressable key={l} onPress={() => { void go(); }} disabled={!files.length || busy} accessibilityRole="button" accessibilityLabel={t(l)} accessibilityHint={t('progressOpensShare')}
-            style={({ pressed }) => ({ width: 70, minHeight: 44, alignItems: 'center', gap: 6, opacity: files.length ? 1 : 0.4, transform: [{ scale: pressed ? 0.95 : 1 }] })}>
+          return <Tappable dim="row" key={l} onPress={() => { void go(); }} disabled={!files.length || busy} accessibilityRole="button" accessibilityLabel={t(l)} accessibilityHint={t('progressOpensShare')}
+            style={{ width: 70, minHeight: 44, alignItems: 'center', gap: 6, opacity: files.length ? 1 : 0.4 }}>
             <View style={{ width: 56, height: 56, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: mix(c, k.c['surface-2'], 0.18) }}><Icon name={icon as IconName} size={26} color={c} /></View>
             <Text numberOfLines={1} style={[font(600, 11.5), { color: k.c.text }]}>{t(l)}</Text>
-          </Pressable>; })}
+          </Tappable>; })}
       </ScrollView>
     </View>
     <View style={{ marginTop: 4 }}><Button label={t('progressExport')} icon="export" full onPress={() => { void go(); }} disabled={!files.length || busy} /></View>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg';
-import { Eyebrow, IconButton, List, ListRow, NavButton, SectionHeader, SegmentedControl, font, mix, useKit } from '@/components/kit';
+import { Eyebrow, IconButton, List, ListRow, NavButton, SectionHeader, SegmentedControl, font, mix, useKit, Tappable } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { compareRows } from '@/data/rows';
@@ -59,12 +59,12 @@ function GoalRuler({ d }: { d: ProgressData }) {
 /** A small card in the two-up grid: a caption, a number and when it was measured. */
 function Comp({ label, value, unit, sub, aria, onPress }: { label: string; value: string | null; unit?: string; sub: string; aria: string; onPress: () => void }) {
   const k = useKit();
-  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={aria}
-    style={({ pressed }) => ({ flex: 1, minWidth: 0, padding: 16, borderRadius: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge, opacity: pressed ? 0.7 : 1 })}>
+  return <Tappable dim="fill" onPress={onPress} accessibilityRole="button" accessibilityLabel={aria}
+    style={{ flex: 1, minWidth: 0, padding: 16, borderRadius: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
     <Cap>{label}</Cap>
     <View style={{ marginTop: 6 }}>{value == null ? <Big size="mid" v={t('progressNoData')} color={k.c['text-muted']} /> : <Big size="mid" v={value} unit={unit} />}</View>
     <Cap style={[font(500, 12.5, 1.35), { marginTop: 4 }]}>{sub}</Cap>
-  </Pressable>;
+  </Tappable>;
 }
 
 /** Weigh-ins typed here, newest first, each with a delete button that asks first. Apple Health readings are not listed:

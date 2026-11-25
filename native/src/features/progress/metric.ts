@@ -11,9 +11,14 @@ export interface MetricView {
 }
 const cap = (k: MetricKey) => k.charAt(0).toUpperCase() + k.slice(1);
 const msg = (k: string) => t(k as MessageKey);
+/** HRV is a true acronym and its name in every language, so it is kept here like the tile catalogue's own 'HRV' rather
+ * than as an all-capitals string in the copy. */
+export const HRV_NAME = 'HRV';
+/** A metric's name, as Progress shows it. */
+export const metricName = (key: MetricKey) => key === 'hrv' ? HRV_NAME : msg(`progressM${cap(key)}`);
 
 export function metricView(d: ProgressData, key: MetricKey): MetricView {
-  const name = msg(`progressM${cap(key)}`), short = key === 'rhr' ? t('progressRhrShort') : name;
+  const name = metricName(key), short = key === 'rhr' ? t('progressRhrShort') : name;
   const ouraOrApple = d.sources.oura || d.demo ? t('progressSrcOura') : t('progressSrcApple');
   switch (key) {
     case 'weight': {

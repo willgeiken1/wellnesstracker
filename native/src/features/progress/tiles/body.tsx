@@ -88,7 +88,8 @@ function BodyFatTile({ size, options, body }: TileRenderProps) {
 
 /* ---------- 6. tape measurements ---------- */
 const MEAS_ORDER: MeasureKey[] = ['waist', 'chest', 'arm', 'hips', 'thigh', 'neck'];
-export const measureName = (key: MeasureKey) => t(`progressMeas${key.charAt(0).toUpperCase()}${key.slice(1)}` as 'progressMeasWaist');
+const MEAS_NAME = { chest: 'progressMeasChest', waist: 'progressMeasWaist', hips: 'progressMeasHips', neck: 'progressMeasNeck', arm: 'progressMeasArm', thigh: 'progressMeasThigh' } as const;
+export const measureName = (key: MeasureKey) => t(MEAS_NAME[key]);
 function MeasureTile({ size, options }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), u = d.unit, L = lenU(u), ms = d.measures;
   if (!ms.length) return <Empty size={size} text={t('progressMeasureEmpty')} />;

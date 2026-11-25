@@ -988,7 +988,7 @@ export const en = {
   // P5 progress
   progressNoData: 'No data', progressThisWeek: 'This week', progressThisWeekLower: 'this week', progress30Days: '30 days', progress12Months: '12 months',
   progressLast30: 'Last 30 days', progressLast12: 'Last 12 months', progressIn30: 'in 30 days', progressIn12: 'in 12 months',
-  progressMWeight: 'Weight', progressMSleep: 'Sleep', progressMHrv: 'HRV', progressMRhr: 'Resting heart rate', progressMSteps: 'Steps', progressMKcal: 'Calories', progressMTraining: 'Training', progressMScore: 'Day score',
+  progressMWeight: 'Weight', progressMSleep: 'Sleep', progressMRhr: 'Resting heart rate', progressMSteps: 'Steps', progressMKcal: 'Calories', progressMTraining: 'Training', progressMScore: 'Day score',
   progressRhrShort: 'Resting HR', progressGoalIs: 'Goal {v}', progressGoalLower: 'goal {v}', progressGoal: 'Goal', progressGoalMet: 'Goal met',
   progressSrcOura: 'Oura', progressSrcApple: 'Apple Health', progressSrcInsight: 'Logged in Insight',
   progressAboutWeight: 'Weigh-ins from your scale arrive through Apple Health, or you can log one here. The line marks the goal you set.',
@@ -1005,14 +1005,14 @@ export const en = {
   progressScoreAria: 'Day score {score}. {line}. Training {tr}, Food {food}, Sleep {sleep}. The mark on each bar is your usual from the last 28 days.',
   progressTodayLower: 'today', progressUsualN: 'usual {n}', progressTodaySoFar: 'Today, so far',
   progressScoreWhy: '{name} is lowest at {n}.', progressScoreWhyGoing: 'Training is lowest at {n}. {name} is still going, so it can still rise.', progressScoreWhyNone: 'Log a workout, a meal or a night of sleep to start your score.',
-  progressHistoryEmpty: 'Your day score shows here once you log a day.', progressHistoryAria: 'Day score, {range}. Average {avg}, best {best} on {when}.',
+  progressHistoryEmpty: 'Your day score shows here once you log a day.', progressHistoryAria: 'Day score, {range}. Average {avg}, best {best}, {when}.',
   progressAverageBest: 'average, best', progressAverageLower: 'average', progressAverage: 'Average', progressBest: 'Best', progressLowest: 'Lowest', progressHighest: 'Highest',
   progressLineUsual: 'The line is your usual {n}.', progressBrighter: 'Brighter is a higher score.', progressTodayGoing: 'Today is still going.',
   progressAboveUsual: 'At or above your usual on', progressOfDays: 'of {n} days', progressOfMonths: 'of {n} months',
   progressRecoveryEmpty: 'Sleep, HRV and resting heart rate show here from Apple Health or Oura.', progressUsualRange: 'usual {a} to {b}', progressUsualRangeCap: 'Usual {a} to {b}', progressNoUsualYet: 'usual after a week',
   progressRecoveryAria: 'Recovery last night, from {src}. Sleep {sleep}. HRV {hrv}. Resting heart rate {rhr}.',
   progressMinShort: '{n} min short of {goal}', progressInBed: 'In bed', progressTo: 'to', progressFromSrc: 'from {src}', progressFromSrcCap: 'From {src}',
-  progressDeep: 'Deep', progressRem: 'REM', progressCore: 'Core', progressAwake: 'Awake', progressMinUnit: 'min', progressStages: 'Stages',
+  progressDeep: 'Deep', progressCore: 'Core', progressAwake: 'Awake', progressMinUnit: 'min', progressStages: 'Stages',
   progressNoStages: 'Sleep stages show when your ring sends them.', progressNightsWeek: 'Nights this week', progressLineAt: 'Line at {v}', progressLastNight: 'Last night',
   progressWeightEmpty: 'Log a weigh-in, or connect a scale through Apple Health.', progressWeightAria: 'Weight {w}, {ch}.', progressWeightAriaGoal: 'Goal {goal}, {toGo} to go.', progressWeightAriaEta: 'At this pace you reach it around {when}.',
   progressToLower: 'to', progressAround: 'Around {when}', progressToGo: 'to go', progressNoGoal: 'Set a weight goal in Goals to see your pace.', progressNoGoalShort: 'No goal yet', progressToYourGoal: 'to your goal',
@@ -1119,6 +1119,8 @@ export const en = {
   progressExFoot: 'The day score is not included. It is worked out on this phone and never exported. Photos are never exported.',
   progress30DaysCap: '30 days', progress90Days: '90 days', progressAllTime: 'All time', progressExport: 'Export', progressYourAccount: 'Your account',
   progressBackup: 'Backup and restore', progressBackupSub: 'Your account keeps your logs in sync. Restore them on a new phone.', progressBackupHint: 'Backup and restore opens in Settings',
+  progressStepGoalA: 'Goal {goal} a day',
+  progressNoFoodWeek: 'No full days logged yet',
   // P5 progress end
 } as const;
 export type MessageKey = keyof typeof en;

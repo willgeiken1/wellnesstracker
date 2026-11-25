@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Badge, Eyebrow, NavButton, SectionHeader, font, mix, useKit } from '@/components/kit';
+import { Text, View } from 'react-native';
+import { Badge, Eyebrow, NavButton, SectionHeader, font, mix, useKit, Tappable } from '@/components/kit';
 import { t } from '@/i18n/en';
 import { addDays, dLong, dShort, finite, weekday, type Pillars } from '../model';
 import { fill, fmt, hm } from '../format';
@@ -25,8 +25,10 @@ export function DayScoreScreen() {
   };
   const line = scoreLine(today, d.yesterdayScore, false);
   const known = PIL.filter(([key]) => p[key] != null);
-  // Each square is one point: a pillar adds a third of its score.
-  let cum = 0; const cuts = PIL.map(([key, , c]) => { cum += (p[key] ?? 0) / 3; return [Math.round(cum), c] as const; });
+  // Each square is one point: the score is the average of the pillars that have data, so each adds its share of that average.
+  const share = known.length || 1;
+  let cum = 0; const cuts = PIL.map(([key, , c]) => { cum += (p[key] ?? 0) / share; return [Math.round(cum), c] as const; });
+  const adds = (key: keyof typeof p) => p[key] == null ? t('progressNoData') : fmt(p[key]! / share, 1);
   const cell = (i: number) => { const hit = cuts.find(c => i < c[0]); return hit ? k.tok(hit[1]) : mix(k.c.text, k.c['surface-2'], 0.08); };
   const W = 329, cw = (W - 19 * 3) / 20;
   return <Page scrollRef={scroll} back={t('progress')} title={t('progressMScore')}
@@ -43,7 +45,7 @@ export function DayScoreScreen() {
     <Card onLayout={e => { aboutY.current = e.nativeEvent.layout.y; }}><Txt><Bold>{t('progressScoreWhatTitle')}</Bold> {t('progressScoreWhat')}</Txt></Card>
     <SectionHeader title={t('progressHowAdds')} />
     <Card>
-      <View accessible accessibilityRole="image" accessibilityLabel={fill(t('progressAddsAria'), { tr: fmt((p.training ?? 0) / 3, 1), food: fmt((p.food ?? 0) / 3, 1), sleep: fmt((p.sleep ?? 0) / 3, 1), total: today == null ? 0 : Math.round(today) })}
+      <View accessible accessibilityRole="image" accessibilityLabel={fill(t('progressAddsAria'), { tr: adds('training'), food: adds('food'), sleep: adds('sleep'), total: today == null ? t('progressNoData') : Math.round(today) })}
         style={{ flexDirection: 'row', gap: 3 }}>
         {Array.from({ length: 20 }, (_, c) => <View key={c} style={{ flex: 1, gap: 3 }}>{Array.from({ length: 5 }, (_, r) => <View key={r} style={{ aspectRatio: 1, width: '100%', maxWidth: cw + 4, borderRadius: 3, backgroundColor: cell(c * 5 + r) }} />)}</View>)}
       </View>
@@ -52,7 +54,7 @@ export function DayScoreScreen() {
         <View style={{ marginLeft: i ? -44 : 0 }}><Ic icon={ICON[key]} color={c} size={32} /></View>
         <View style={{ flex: 1 }}><Text style={[font(600, 16), { color: k.c.text }]}>{t(label)} <Text style={{ color: k.c['text-muted'] }}>{p[key] == null ? t('progressNoData') : Math.round(p[key]!)}</Text></Text>
           <Text style={[font(500, 13.5, 1.35), { color: k.c['text-muted'], marginTop: 2 }]}>{sub[key]}</Text></View>
-        <Text style={[font(700, 15), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{p[key] == null ? '' : `+${fmt(p[key]! / 3, 1)}`}</Text>
+        <Text style={[font(700, 15), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{p[key] == null ? '' : `+${adds(key)}`}</Text>
       </View>)}</View>
       <Divider style={{ marginTop: 6, marginBottom: 12 }} />
       <Split style={{ marginBottom: 0 }}><Cap>{known.length ? fill(t('progressDividedBy'), { sum: known.map(([key]) => Math.round(p[key]!)).join(' + '), n: known.length }) : t('progressScoreWhyNone')}</Cap>
@@ -74,13 +76,13 @@ export function DayScoreScreen() {
     <SectionHeader title={t('progressThisWeek')} aside={t('progressTapDay')} />
     <Card>
       <View accessibilityRole="radiogroup" accessibilityLabel={t('progressWeekTapAria')} style={{ flexDirection: 'row', gap: 4, alignItems: 'flex-end' }}>
-        {days.map((day, i) => { const v = sc[sc.length - 7 + i], on = i === sel; return <Pressable key={day} onPress={() => setSel(i)} accessibilityRole="radio" accessibilityState={{ selected: on }}
+        {days.map((day, i) => { const v = sc[sc.length - 7 + i], on = i === sel; return <Tappable dim="fill" key={day} onPress={() => setSel(i)} accessibilityRole="radio" accessibilityState={{ selected: on }}
           accessibilityLabel={fill(t('progressDayAria'), { day: dLong(day), v: v == null ? t('progressNoData') : Math.round(v) })}
           style={{ flex: 1, alignItems: 'center', gap: 6, minHeight: 44, paddingTop: 6, paddingBottom: 4, borderRadius: 12, backgroundColor: on ? mix(k.c.accent, 'transparent', 0.14) : 'transparent' }}>
           <Text style={[font(700, 13), { color: on ? k.c.text : k.c['text-muted'], fontVariant: ['tabular-nums'] }]}>{v == null ? '' : Math.round(v)}</Text>
           <View style={{ width: 26, height: 96, borderRadius: 8, backgroundColor: k.c['surface-2'], overflow: 'hidden' }}><View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, borderRadius: 8, height: `${v ?? 0}%`, backgroundColor: k.c.accent, opacity: on ? 1 : 0.5 }} /></View>
           <Text style={[font(600, 11.5), { color: on ? k.c.text : k.c['text-muted'] }]}>{weekday(day).charAt(0)}</Text>
-        </Pressable>; })}
+        </Tappable>; })}
       </View>
       <Divider />
       <DayRead i={sel} day={days[sel]} v={sc[sc.length - 7 + sel]} dp={d.weekPillars[sel]} usual={B.score} note={d.dayNotes[sel] ?? ''} />
