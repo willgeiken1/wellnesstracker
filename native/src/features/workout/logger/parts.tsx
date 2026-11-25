@@ -1,3 +1,4 @@
+import { t } from '@/i18n/en';
 import { useState } from 'react';
 import { Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { Icon } from '@/components/icon';
@@ -149,7 +150,7 @@ export function SetCard({ e, s, ei, current, open, plates, col, h }: {
 export function PrBadge({ col }: { col: LoggerColors }) {
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 20, paddingHorizontal: 6, borderRadius: 999, backgroundColor: alpha(col.c.warning, 0.16) }}>
     <Icon name="trophy" size={12} color={col.c.warning} />
-    <LT w={700} s={11} color={col.c.warning}>{tr('trainingPr')}</LT>
+    <LT w={700} s={11} color={col.c.warning}>{t('prs')}</LT>
   </View>;
 }
 

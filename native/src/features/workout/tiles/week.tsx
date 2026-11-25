@@ -146,7 +146,7 @@ export function NextTile(p: TileRenderProps) {
     <View style={{ marginTop: 10 }}>
       {next.exercises.slice(0, 7).map((e, i) => <Pressable key={i} accessibilityRole="button" accessibilityLabel={e.name} onPress={() => trainingNav.exercise(e.name)}
         style={({ pressed }) => ({ height: 25, flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.7 : 1, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair })}>
-        <K colors={colors} size={11} style={{ width: 14, letterSpacing: 0 }}>{String(i + 1)}</K>
+        <K colors={colors} size={11} track={0} style={{ width: 14 }}>{String(i + 1)}</K>
         <T w={600} s={13} c={colors.text} style={{ flex: 1 }}>{e.name}</T>
         <S colors={colors} size={11.5}>{muscleName(prefs.exercise(e.name).main)}</S>
         <T w={700} s={13} c={colors.text} num style={{ minWidth: 72, textAlign: 'right' }}>{line(e)}</T>

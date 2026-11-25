@@ -70,7 +70,7 @@ export function E1rmTile(p: TileRenderProps) {
   const data = useTrainingData();
   if (!data) return null;
   const lift = options.lift || 'Back squat', wk = options.range === '4' ? 4 : 8, u = data.unit, tint = colors.training;
-  const cutoff = new Date(Date.now() - wk * 7 * 86400000);
+  const cutoff = new Date(data.now - wk * 7 * 86400000);
   const h = data.liftHistory(lift).filter(x => new Date(`${x.day}T12:00:00`) >= cutoff);
   if (!h.length) return <View style={{ flex: 1 }}>
     <T w={600} s={15} c={colors.text}>{size === 'S' ? liftShort(lift) : lift}</T>
@@ -105,7 +105,7 @@ export function E1rmTile(p: TileRenderProps) {
       {h.slice(-3).reverse().map((x, i) => <View key={x.day + i} style={{ height: 26, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: i ? 1 : 0, borderTopColor: colors.hair }}>
         <S colors={colors} style={{ flex: 1 }}>{dayLabel(x.day)}</S>
         <T w={600} s={12.5} c={colors.text} num>{setText(x.weight, x.reps, u)}</T>
-        <N v={fmt(x.est)} unit={u} size={13.5} colors={colors} style={{ minWidth: 70, textAlign: 'right' }} />
+        <N v={fmt(x.est)} unit={u} size={13.5} colors={colors} style={{ minWidth: 70, justifyContent: 'flex-end' }} />
       </View>)}
     </View>
   </View>;
@@ -153,7 +153,7 @@ export function RecentTile(p: TileRenderProps) {
 
 /** 9. Records, newest first. */
 export function RecordsTile(p: TileRenderProps) {
-  const { colors, size, options, body, id } = p;
+  const { colors, size, options, id } = p;
   const data = useTrainingData();
   if (!data) return null;
   const list = data.records().slice(0, 3), u = data.unit, warn = colors.warning;
@@ -179,7 +179,7 @@ export function RecordsTile(p: TileRenderProps) {
         </View>
         {L ? <DashLine vals={data.liftHistory(r.exercise).map(x => x.est)} w={74} h={30} color={warn} colors={colors} dots={false} id={`${id}${i}`} label={r.exercise} /> : null}
         {top ? <T w={700} s={15} c={colors.text} num style={{ minWidth: 86, textAlign: 'right' }}>{setText(r.weight, r.reps, u)}</T>
-          : <N v={est(r)} unit={u} size={15} colors={colors} style={{ minWidth: 56, textAlign: 'right' }} />}
+          : <N v={est(r)} unit={u} size={15} colors={colors} style={{ minWidth: 56, justifyContent: 'flex-end' }} />}
       </Pressable>)}
     </View>
     {L ? <S colors={colors} lines={2} style={{ marginTop: 'auto' }}>{t('trainingEpleyFoot')}</S> : null}
@@ -205,7 +205,7 @@ export function StreakTile(p: TileRenderProps) {
             ? <Material key={j} kind="fill" fill={tint} mode={mode} colors={colors} w={cw} h={ch} radius={3} />
             : <View key={j} style={{ width: cw, height: ch, borderRadius: 3, backgroundColor: cur ? 'transparent' : off, borderWidth: cur ? 1.5 : 0, borderColor: tint }} />)}
         </View>
-        {labels ? <K colors={colors} size={9} color={cur ? tint : undefined} style={{ letterSpacing: 0 }}>{cur ? t('trainingNow') : w[0].split(' ')[1]}</K> : null}
+        {labels ? <K colors={colors} size={9} track={0} color={cur ? tint : undefined}>{cur ? t('trainingNow') : w[0].split(' ')[1]}</K> : null}
       </View>; })}
   </View>;
   const cal = (cell: number, gap: number, nums?: boolean, align?: boolean) => {
@@ -238,7 +238,7 @@ export function StreakTile(p: TileRenderProps) {
     {byDays ? <><N v={trained} unit={t('trainingUnitDays')} size={34} colors={colors} /><S colors={colors} style={{ marginTop: 5 }}>{tr('trainingTrainedMin', { min: fmt(total) })}</S></>
       : <><N v={streak} unit={t('trainingUnitWeeks')} size={34} colors={colors} /><S colors={colors} style={{ marginTop: 5 }}>{tr('trainingAvgLine', { avg })}</S></>}
     <View style={{ marginTop: 'auto' }}>
-      {byDays ? <View style={{ flexDirection: 'row', gap: 5, marginBottom: 6 }}>{DAY_LETTERS.map((l, i) => <K key={i} colors={colors} size={9.5} style={{ flex: 1, textAlign: 'center', letterSpacing: 0.4 }}>{l}</K>)}</View> : null}
+      {byDays ? <View style={{ flexDirection: 'row', gap: 5, marginBottom: 6 }}>{DAY_LETTERS.map((l, i) => <K key={i} colors={colors} size={9.5} track={0.04} style={{ flex: 1, textAlign: 'center' }}>{l}</K>)}</View> : null}
       {byDays ? cal(32, 5, true, true) : weekCols(28, 22, 4, true)}
     </View>
     {byDays ? null : <S colors={colors} style={{ marginTop: 10 }}>{tr('trainingThisWeekHits', { n: W[W.length - 1][1], per, name: data.plan().next?.name ?? '' })}</S>}

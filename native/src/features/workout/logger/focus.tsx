@@ -31,7 +31,7 @@ export function FocusMode({ store, view, sessionId, startedAt, col, plates, onCl
       {stepper(less, 'minus', () => step(-1))}
       <View style={{ flex: 1, alignItems: 'center' }} accessible accessibilityLabel={`${value} ${unit}`}>
         <LT w={700} s={76} lh={1} tr={-0.05} num color={hint ? col.ghost : c.text}>{value}</LT>
-        <LT w={600} s={13} tr={0.08} color={c['text-muted']} style={{ textTransform: 'uppercase' }}>{unit}</LT>
+        <LT w={600} s={13} tr={0.08} color={c['text-muted']} style={capitals}>{unit}</LT>
       </View>
       {stepper(more, 'plus', () => step(1))}
     </View>;

@@ -59,11 +59,12 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
 
   const row = (e: Exercise, i: number, list: string) => {
     const on = sel.includes(e.name), label = exLabel(e.name), group = groupsOf(e)[0];
+    const initial = label.charAt(0).toUpperCase();
     return <Tappable key={`${list}-${e.name}`} dim="row" accessibilityRole="button" accessibilityState={single ? undefined : { selected: on }}
       accessibilityLabel={`${label}, ${group ?? tr('trainingOther')}, ${equipmentName(e.equipment)}${inNow.has(e.name) ? `, ${tr('trainingAdded')}` : ''}`}
       onPress={() => press(e.name)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 59, paddingLeft: 16, paddingRight: 16 }}>
       <View style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? k.c.training : alpha(k.c.training, 0.14) }}>
-        <KitText weight={700} size={14} color={on ? 'on-accent' : 'training'}>{label.charAt(0).toUpperCase()}</KitText>
+        <KitText weight={700} size={14} color={on ? 'on-accent' : 'training'}>{initial}</KitText>
       </View>
       <View style={{ flex: 1, minWidth: 0, paddingVertical: 8, borderTopWidth: 0 }}>
         <KitText weight={600} size={16} color="text" numberOfLines={1}>{label}</KitText>
@@ -77,7 +78,7 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
     </Tappable>;
   };
   const list = (items: Exercise[], key: string) => <View style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: cardBg, boxShadow: k.cardEdge }}>{items.map((e, i) => row(e, i, key))}</View>;
-  const group = (label: string) => <Text style={[font(700, 11), capitals, { letterSpacing: 1.32, color: k.c['text-muted'], marginTop: 20, marginHorizontal: 4, marginBottom: 8 }]}>{label}</Text>;
+  const group = (label: string) => <Text style={[font(700, 11, undefined, 0.12), capitals, { color: k.c['text-muted'], marginTop: 20, marginHorizontal: 4, marginBottom: 8 }]}>{label}</Text>;
   const custom = q.trim().replace(/^./, c => c.toUpperCase());
 
   return <SurfaceContext.Provider value="sheet"><View style={{ flex: 1, backgroundColor: k.sheetBg }}>
