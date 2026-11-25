@@ -85,14 +85,16 @@ test('fixture previous values win over newer unrelated demo history without modi
   expect(store.sets(entry.id)[0].data.reps).toBe(5);
 });
 
-
-test('opening a fixture while the normal logger keypad is open removes its native presenter', async () => {
+// The logger no longer has a keypad sheet: weights and reps are typed straight into the set card. Typing into
+// one and then opening a fixture link must still leave no keypad or rest presenter behind.
+test('opening a fixture while a logger field is being edited leaves no presenter behind', async () => {
  const repo=memoryRepository(), store=new WorkoutStore(repo);
  createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},'logger');
  jest.mocked(useAuth).mockReturnValue({repository:repo,ready:true,demo:true,session:null,pending:0,syncStatus:'idle'} as ReturnType<typeof useAuth>);
  await renderRouter(routes,{initialUrl:'/workout'});
- await fireEvent.press(screen.getByTestId('set-2-2-weight'));
- expect(screen.getByTestId('keypad-sheet')).toBeTruthy();
+ const field=screen.getAllByTestId(/^set-\d+-\d+-weight$/)[0];
+ await fireEvent(field,'focus');
+ expect(screen.queryByTestId('keypad-sheet',{includeHiddenElements:true})).toBeNull();
  const path=redirectSystemPath({path:'insight://dev/logger-fixture?state=summary',initial:false});
  await act(() => router.push(path as '/'));
  await waitFor(() => expect(screen.getByText('Saved to History')).toBeTruthy());

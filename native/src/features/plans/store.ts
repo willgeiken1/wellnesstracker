@@ -54,5 +54,8 @@ export class PlanStore {
       return session;
     });
   }
+  /** The plan's own name ("Push Pull Legs"), kept on this phone. */
+  name() { return this.repo.localGet<string>('plans:name') ?? ''; }
+  setName(name:string) { this.repo.localSave('plans:name', name.trim().slice(0,60)); }
   week(monday:string) { return plannedWeek(monday,this.read(),this.nextIndex()); }
 }
