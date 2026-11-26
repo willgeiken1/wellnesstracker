@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Platform, ScrollView, Share, TextInput, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -6,6 +6,7 @@ import { Chip, Icon, type IconName, KitText, List, ListRow, SegmentedControl, Sh
 import { tokens } from '@/design/tokens';
 import { showToast } from '@/features/shell/toast';
 import { t } from '@/i18n/en';
+import { fill } from '../tiles/ui';
 import {
   addDays, convert, CONVERT_UNITS, dateOf, fnum, h12, hax, IU_FOR, ITEM_TYPES, needsVitamin, pretty, rById, rItems, rng, ROUTINE_COLORS, shortDate, UNITS,
   type ConvertUnit, type ItemKind, type ItemType, type RoutineColor, type Vitamin,
@@ -67,11 +68,11 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
   let big: string, sm: string;
   if (d.time != null) {
     const inr = RL.find(r => d.time! >= r.from && d.time! <= r.to);
-    big = h12(d.time); sm = inr ? t('routinesInName', { name: inr.name }) : t('routinesOwnTime');
-  } else if (picked.length === 1) { big = picked[0].name; sm = t('routinesAtStart', { time: h12(picked[0].from) }); }
-  else if (picked.length > 1) { big = t('routinesNRoutines', { n: picked.length }); sm = t('routinesEachStart'); }
+    big = h12(d.time); sm = inr ? fill(t('routinesInName'), { name: inr.name }) : t('routinesOwnTime');
+  } else if (picked.length === 1) { big = picked[0].name; sm = fill(t('routinesAtStart'), { time: h12(picked[0].from) }); }
+  else if (picked.length > 1) { big = fill(t('routinesNRoutines'), { n: picked.length }); sm = t('routinesEachStart'); }
   else { big = t('routinesNoRoutine'); sm = t('routinesPickBelow'); }
-  const summary = d.amt != null && d.unit ? t('routinesLogsEach', { amt: pretty(d.amt), unit: d.unit }) : d.amt != null ? t('routinesPickUnit') : t('routinesTypeAmount');
+  const summary = d.amt != null && d.unit ? fill(t('routinesLogsEach'), { amt: pretty(d.amt), unit: d.unit }) : d.amt != null ? t('routinesPickUnit') : t('routinesTypeAmount');
 
   const save = () => {
     const ok = d.name.trim() && (!dose || (d.amt != null && d.unit));
@@ -139,7 +140,7 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
       </View>
       <Help>{t('routinesDoseHelp')}</Help>
       <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={t('routinesUnitConverter')}
-        onPress={() => router.push(routinesRoutes.converter({ from: 'add-item', amt: d.amt ?? undefined, unit: d.unit || undefined }))}
+        onPress={() => routinesRoutes.converter({ from: 'add-item', amt: d.amt != null ? String(d.amt) : undefined, unit: d.unit || undefined })}
         style={{ backgroundColor: rt.well, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, boxShadow: rt.edge }}>
         <Icon name="rt-calc" size={20} color={c.sleep} />
         <View style={{ flex: 1, gap: 1 }}>
@@ -237,7 +238,7 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
   const copy = async () => {
     if (!r.ok) { showToast(t('routinesNothingToCopy'), { color: 'warning' }); return; }
     const nav = (globalThis as { navigator?: { clipboard?: { writeText(s: string): Promise<void> } } }).navigator;
-    if (Platform.OS === 'web' && nav?.clipboard) { await nav.clipboard.writeText(result); showToast(t('routinesCopied', { v: result }), { color: 'sleep' }); return; }
+    if (Platform.OS === 'web' && nav?.clipboard) { await nav.clipboard.writeText(result); showToast(fill(t('routinesCopied'), { v: result }), { color: 'sleep' }); return; }
     await Share.share({ message: result });
   };
   const saveNote = () => {
@@ -314,7 +315,7 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
   const k = useKit(), c = k.c, rt = useRt(), { s, n } = useRoutines(store);
   const [rid, setRid] = useState(() => (routine && rById(s, routine) ? routine : (rById(s, 'night') ? 'night' : s.routines[0]?.id ?? '')));
   const [why, setWhy] = useState<string | null>(WHY[0]), [days, setDays] = useState(7), [remind, setRemind] = useState(true);
-  const strip = useRef<ScrollView>(null);
+  const strip = useRef<ComponentRef<typeof ScrollView>>(null);
   const r = rById(s, rid);
   const back = addDays(n.day, days), backLabel = shortDate(back);
   useEffect(() => { strip.current?.scrollTo({ x: Math.max(0, (days - 4) * 54), animated: true }); }, [days]);
@@ -322,7 +323,7 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
   const go = () => {
     const undo = store.pause(r.id, back, why);
     closeRoutines();
-    showToast(t('routinesPausedToast', { name: r.name, date: backLabel }), { color: 'sleep', action: { label: t('routinesUndo'), onAction: undo } });
+    showToast(fill(t('routinesPausedToast'), { name: r.name, date: backLabel }), { color: 'sleep', action: { label: t('routinesUndo'), onAction: undo } });
   };
   const nItems = rItems(s, r.id, n, true).length;
   return <RtSheet testID="routines-pause" header={<SheetHeader title={t('routinesPauseRoutine')} left={t('routinesCancel')} onLeft={closeRoutines} right={t('routinesPause')} onRight={go} />}>
@@ -346,7 +347,7 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
         style={{ marginHorizontal: -16, flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 16, paddingVertical: 2 }}>
         {Array.from({ length: 14 }, (_, i) => {
           const d = i + 1, day = addDays(n.day, d), on = d === days, inside = d < days, dt = dateOf(day);
-          return <Tappable key={d} dim="fill" accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={t('routinesBackOnDay', { date: shortDate(day) })}
+          return <Tappable key={d} dim="fill" accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={fill(t('routinesBackOnDay'), { date: shortDate(day) })}
             onPress={() => setDays(d)} style={{ width: 48, minHeight: 62, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 2,
               backgroundColor: on ? c.sleep : inside ? mix(rt.raised, c.sleep, 0.22) : rt.raised, boxShadow: on ? undefined : `0 0 0 1px ${c.hair}` }}>
             <KitText weight={700} size={10.5} tracking={0.06} color={on ? rt.inkm : 'text-muted'} style={{ textTransform: 'uppercase' }}>{dt.toLocaleDateString('en-US', { weekday: 'short' })}</KitText>
@@ -360,13 +361,13 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
         <Icon name="pause" size={18} color={c.sleep} />
       </View>
       <KitText weight={500} size={14} lineHeight={1.4} style={{ flex: 1 }}>
-        <KitText weight={700} size={14}>{t('routinesPausesTonight', { name: r.name })}</KitText>{t('routinesBackOnRest', { date: backLabel, n: nItems })}
+        <KitText weight={700} size={14}>{fill(t('routinesPausesTonight'), { name: r.name })}</KitText>{fill(t('routinesBackOnRest'), { date: backLabel, n: nItems })}
       </KitText>
     </View>
     <List>
       <ListRow title={t('routinesRemOff')} sub={t('routinesRemOffSub')} toggle={remind} onToggle={setRemind} />
     </List>
-    <Cta testID="routines-pause-go" label={t('routinesPauseUntil', { name: r.name, date: backLabel })} color={c.sleep} ink={rt.ink} onPress={go} />
+    <Cta testID="routines-pause-go" label={fill(t('routinesPauseUntil'), { name: r.name, date: backLabel })} color={c.sleep} ink={rt.ink} onPress={go} />
   </RtSheet>;
 }
 
@@ -398,7 +399,7 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
     if (!nm) { showToast(t('routinesNeedName'), { color: 'warning' }); return; }
     store.addRoutine({ name: nm, from, to, color, days: days.flatMap((on, i) => (on ? [(i + 1) % 7] : [])), items });
     closeRoutines();
-    showToast(t('routinesSaved', { name: nm }), { color: 'sleep' });
+    showToast(fill(t('routinesSaved'), { name: nm }), { color: 'sleep' });
   };
   const h = (aw * 132) / 260;
   return <RtSheet testID="routines-new" header={<SheetTitle title={t('routinesNewRoutine')} onClose={closeRoutines} closeLabel={t('routinesCancel')} />}>

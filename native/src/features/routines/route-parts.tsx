@@ -6,6 +6,7 @@ import { EmptyState, Icon, KitText, Sheet, SheetHeader, Tappable, alpha, font, u
 import { capitals } from '@/components/kit-style';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
+import { fill } from '../tiles/ui';
 import { nudge, pretty, parseAmt, smallSteps, stepsFor } from './model';
 
 /* The frame and the small parts the Routines sheets share (`.rt-sheet` and friends in the mockup). */
@@ -68,7 +69,7 @@ export function SheetTitle({ title, onClose, back, onBack, size = 24, closeLabel
       </Tappable> : null}
       <KitText weight={700} size={size} tracking={-0.03} accessibilityRole="header" style={{ marginTop: back ? 4 : 0 }}>{title}</KitText>
     </View>
-    <Tappable dim="icon" accessibilityRole="button" accessibilityLabel={closeLabel ?? t('routinesClose')} onPress={onClose} hitSlop={6}
+    <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={closeLabel ?? t('routinesClose')} onPress={onClose} hitSlop={6}
       style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: rt.raised, alignItems: 'center', justifyContent: 'center',
         boxShadow: `0 0 0 1px ${k.c.hair}` }}>
       <Icon name="close" size={16} color={k.c['text-muted']} />
@@ -172,7 +173,7 @@ export function Nudges({ value, onChange, cardColor, caps }: { value: number | n
   const btn = (d: number) => {
     const add = d > 0, off = !add && cur + d < -1e-9, mag = pretty(Math.abs(d));
     return <Tappable key={d} dim="fill" accessibilityRole="button" disabled={off} accessibilityState={{ disabled: off }}
-      accessibilityLabel={add ? t('routinesAddAmt', { n: mag }) : t('routinesTakeAway', { n: mag })} onPress={() => onChange(nudge(value, d))}
+      accessibilityLabel={add ? fill(t('routinesAddAmt'), { n: mag }) : fill(t('routinesTakeAway'), { n: mag })} onPress={() => onChange(nudge(value, d))}
       style={{ flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', opacity: off ? 0.3 : 1,
         backgroundColor: add ? rt.ink : rt.glass }}>
       <KitText weight={700} size={15} numeric color={add ? (rt.dark ? '#ffffff' : cardColor) : rt.ink}>{`${add ? '+' : '−'}${mag}`}</KitText>
