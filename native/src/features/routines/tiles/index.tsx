@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, TSpan, Text as SvgText } from 'react-native-svg';
 import { Icon, KitText, Tappable, alpha, useKit, type IconName } from '@/components/kit';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
@@ -186,7 +186,7 @@ const Overview: Body = ({ p, c }) => {
           f > 0 ? <Circle key={`${r.id}f`} cx={sz / 2} cy={sz / 2} r={rad} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" rotation={-90} origin={`${sz / 2}, ${sz / 2}`} strokeDasharray={`${(C * f).toFixed(1)} ${C.toFixed(1)}`} /> : null];
       })}
       <SvgText x={sz / 2} y={sz / 2 + 6} textAnchor="middle" fill={k.c.text} fontFamily={tokens.font.heading} fontSize={sz > 108 ? 19 : 17}>
-        {String(done)}<SvgText fill={k.c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10.5}>{` /${today.length}`}</SvgText>
+        {String(done)}<TSpan fill={k.c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10.5}>{` /${today.length}`}</TSpan>
       </SvgText>
     </Svg>
   </View>;
