@@ -1,5 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { DISTANCES, FADES, SPRINGS } from '@/components/kit-motion';
 import { Tappable } from '@/components/tappable';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
@@ -19,6 +21,17 @@ export function showToast(text: string, options: ToastOptions = {}) {
 }
 const useToast = () => useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb); }; }, () => current, () => current);
 
+/** How the toast moves (motion.css): it springs up 16 pt from 96 percent on the toast spring while it fades in over 180 ms, and
+ * leaves quickly, a 160 ms fade as it drops back in 220 ms. Under Reduce Motion it only fades, 200 ms each way. */
+export function toastMotion(reduced: boolean) {
+  const lin = (duration: number) => ({ duration, easing: Easing.linear });
+  if (reduced) return { in: { fade: lin(FADES.reduced), move: null }, out: { fade: lin(FADES.reduced), move: null, ms: FADES.reduced } };
+  return {
+    in: { fade: lin(180), move: { mass: 1, stiffness: SPRINGS.toast.stiffness, damping: SPRINGS.toast.damping } },
+    out: { fade: lin(160), move: { duration: 220, easing: Easing.bezier(0.4, 0, 1, 1) }, ms: 220 },
+  };
+}
+
 /** Where the toast shows: 92 points above the bar's bottom edge. */
 export function ShellToast({ bottom }: { bottom: number }) {
   const toast = useToast();
@@ -27,20 +40,27 @@ export function ShellToast({ bottom }: { bottom: number }) {
   // The toast on screen is the latest one until its own fade-out ends.
   const [goneId, setGoneId] = useState(0);
   const shown = toast && toast.id !== goneId ? toast : null;
-  const appear = useState(() => new Animated.Value(0))[0];
+  const o = useSharedValue(0), m = useSharedValue(0);
   useEffect(() => {
     if (!toast) return;
-    Animated.timing(appear, { toValue: 1, duration: reduceMotion ? 0 : 300, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: false }).start();
-    const timer = setTimeout(() => Animated.timing(appear, { toValue: 0, duration: reduceMotion ? 0 : 200, useNativeDriver: false }).start(() => setGoneId(toast.id)), toast.ms);
-    return () => clearTimeout(timer);
-  }, [toast, appear, reduceMotion]);
+    const t = toastMotion(reduceMotion);
+    o.value = withTiming(1, t.in.fade);
+    m.value = t.in.move ? withSpring(1, t.in.move) : 1;
+    let gone: ReturnType<typeof setTimeout> | undefined;
+    const timer = setTimeout(() => {
+      o.value = withTiming(0, t.out.fade);
+      if (t.out.move) m.value = withTiming(0, t.out.move);
+      gone = setTimeout(() => setGoneId(toast.id), t.out.ms);
+    }, toast.ms);
+    return () => { clearTimeout(timer); if (gone) clearTimeout(gone); };
+  }, [toast, o, m, reduceMotion]);
+  const motion = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: DISTANCES.toastRise * (1 - m.value) }, { scale: DISTANCES.toastScale + (1 - DISTANCES.toastScale) * m.value }] }));
   if (!shown) return null;
   const dot = shell.dark ? colors[shown.color] : mix(colors[shown.color], 0.6, shell.pillInk);
   return <Animated.View pointerEvents={shown.action ? 'box-none' : 'none'} accessibilityLiveRegion="polite" accessibilityRole="alert" testID="shell-toast"
-    style={{ position: 'absolute', left: 16, right: 16, bottom: 92 + bottom, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10,
+    style={[{ position: 'absolute', left: 16, right: 16, bottom: 92 + bottom, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10,
       paddingVertical: 10, paddingHorizontal: 16, borderRadius: 18, backgroundColor: mix(shell.pillInk, 0.06, shell.pill),
-      boxShadow: `${shell.lift}, inset 0px 0px 0px 1px ${alpha(shell.pillInk, 0.12)}`,
-      opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+      boxShadow: `${shell.lift}, inset 0px 0px 0px 1px ${alpha(shell.pillInk, 0.12)}` }, motion]}>
     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
     <ThemedText style={{ flex: 1, color: shell.pillInk, fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 18, letterSpacing: -0.07 }}>{shown.text}</ThemedText>
     {shown.action && <Tappable dim="text" accessibilityRole="button" accessibilityLabel={shown.action.label} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}

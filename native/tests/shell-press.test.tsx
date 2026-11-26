@@ -52,3 +52,15 @@ test('under Reduce Motion nothing shrinks: the control dims to 70 percent while 
   expect(dim.value).toBe(1);
   expect(scale.value).toBe(1);
 });
+
+test('a toast springs up on the toast spring and leaves quickly; under Reduce Motion it only fades', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { toastMotion } = require('../src/features/shell/toast') as typeof import('../src/features/shell/toast');
+  const t = toastMotion(false);
+  expect(t.in.fade).toEqual({ duration: 180, easing: 'linear' });
+  expect(t.in.move).toEqual({ mass: 1, stiffness: 400, damping: 28 });
+  expect(t.out).toEqual({ fade: { duration: 160, easing: 'linear' }, move: { duration: 220, easing: 'bezier(0.4,0,1,1)' }, ms: 220 });
+  const r = toastMotion(true);
+  expect(r.in).toEqual({ fade: { duration: 200, easing: 'linear' }, move: null });
+  expect(r.out.move).toBeNull();
+});
