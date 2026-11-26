@@ -2,6 +2,7 @@ import { localDay, toKg } from '../../core/workout/rules';
 import type { Repository } from '../../data/repository';
 import { rpeKey } from './logger/model';
 import { liveReads } from '../../data/read-cache';
+import { syncedTables } from '../../data/rows';
 import { WorkoutStore } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
 
@@ -25,6 +26,7 @@ export function seedTrainingDemo(base: Repository, now = Date.now()) {
   const repo = liveReads(base);
   const w = new WorkoutStore(repo), plans = new PlanStore(repo);
   repo.atomic(() => {
+    const before = new Set(syncedTables.flatMap(table => base.list(table, true)).map(row => row.id));
     const ids = DAYS.map(([name, ex]) => w.saveTemplate(name, ex.map(([exercise, target_sets, target_reps]) => ({ exercise, target_sets, target_reps, rep_min: Math.max(1, target_reps - 2), rep_max: target_reps }))).id);
     plans.save({ mode: 'rotation', daysPerWeek: 5, days: ids.map(routineId => ({ routineId, weekdays: [] })) });
     repo.localSave('plans:name', 'Push Pull Legs');
@@ -74,6 +76,13 @@ export function seedTrainingDemo(base: Repository, now = Date.now()) {
       });
     }
     w.skipTimer();
+    // Every row here is a sample and must never reach an account. A namespace with no sample list holds rows of
+    // unknown origin, so it stays without one and promotion keeps refusing it.
+    const samples = base.localGet<string[]>('demoSamples');
+    if (samples) {
+      const made = syncedTables.flatMap(table => base.list(table, true)).filter(row => !before.has(row.id)).map(row => row.id);
+      repo.localSave('demoSamples', [...new Set([...samples, ...made])]);
+    }
     repo.localSave('trainingDemo', true);
   });
 }
