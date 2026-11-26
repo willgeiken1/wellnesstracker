@@ -22,7 +22,7 @@ import { discardSession, exLabel } from '../logger/model';
 import { trainingNav, trainingRoutes } from '../nav';
 import { repeatSession } from '../start-workout';
 import { sessionResult, type ResultExercise } from './model';
-import { ColorEyebrow, Page, StatsCard } from './page';
+import { EyebrowLine, Page, StatsCard } from './page';
 
 /** A finished workout as a template: its exercises in order with the sets done, keeping a plan day's rows and rep ranges. */
 export function templateFrom(store: WorkoutStore, sessionId: string, routineId?: string | null) {
@@ -66,7 +66,7 @@ export function WorkoutDetail() {
     <StatsCard min={res.min} sets={res.sets} volume={res.volume} unit={u} />
     {pr ? <List><ListRow icon="trophy" color="warning" title={tr('trainingNewRecord')} sub={`${pr.name} ${setText(pr.w, pr.r, u)}`} onPress={() => trainingNav.exercise(pr.name)} /></List> : null}
     {res.notes ? <Card>
-      <ColorEyebrow color={k.c['text-muted']}>{tr('trainingNotes')}</ColorEyebrow>
+      <EyebrowLine color={k.c['text-muted']}>{tr('trainingNotes')}</EyebrowLine>
       <KitText weight={500} size={15} lineHeight={1.4} style={{ marginTop: 8 }}>{res.notes}</KitText>
     </Card> : null}
     <SectionHeader title={tr('trainingExercises')} aside={trCount('trainingExercisesCount', res.exercises.length)} />

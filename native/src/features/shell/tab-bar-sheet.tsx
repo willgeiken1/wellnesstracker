@@ -1,6 +1,7 @@
 import { ScrollView, Switch, View } from 'react-native';
 import { GRABBER_ROOM } from '@/components/sheet';
 import { Tappable } from '@/components/tappable';
+import { font } from '@/components/kit-style';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
@@ -54,7 +55,7 @@ export function TabBarSheet({ current, onDone, onOpen }: { current: PageKey | nu
           </View>;
         })}
       </View>
-      <ThemedText style={[body, { marginTop: 8, marginHorizontal: 16, fontSize: tokens.type.caption, lineHeight: 18.5, textAlign: 'center' }]}>{t('shellTabBarFoot')}</ThemedText>
+      <ThemedText style={[body, { marginTop: 8, marginHorizontal: 16, ...font(500, 12.5, 1.45), textAlign: 'center' }]}>{t('shellTabBarFoot')}</ThemedText>
     </ScrollView>
   </View>;
 }

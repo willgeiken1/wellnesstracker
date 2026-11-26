@@ -94,8 +94,8 @@ export function PlanBuilder() {
     <List>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 64, paddingVertical: 8, paddingLeft: 16, paddingRight: 8 }}>
         <KitText weight={600} size={15.5}>{tr('trainingPlanMode')}</KitText>
-        <View style={{ width: 232 }}>
-          <SegmentedControl compact label={tr('trainingPlanMode')} value={plan.mode} onChange={setMode}
+        <View style={{ width: 210 }}>
+          <SegmentedControl hug={['fixed']} label={tr('trainingPlanMode')} value={plan.mode} onChange={setMode}
             options={[{ value: 'rotation', label: tr('trainingRotation') }, { value: 'fixed', label: tr('trainingFixedWeekdays') }]} />
         </View>
       </View>

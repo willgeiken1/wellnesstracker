@@ -48,7 +48,7 @@ function SummaryBody({ res, perWeek, weekDone, planName, onDone }: { res: Sessio
   const u = res.unit, g = res.goal, gained = Math.max(0, res.after - res.before), planDone = Math.min(perWeek, weekDone);
   const maxSets = Math.max(1, ...res.muscles.map(m => m.sets)), cellsW = Math.max(40, Math.min(width, 430) - 64 - 92 - 52 - 24);
   return <Page testID="workout-summary" nav={<NavBar title={tr('trainingSummary')} right={<NavButton label={tr('trainingDone')} onPress={() => onDone(notes)} testID="summary-done" />} />}>
-    <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+    <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8, marginTop: -4 }}>
       <View style={{ width: 84, height: 84, borderRadius: 42, marginBottom: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(k.c.training, 0.18) }}>
         <Icon name="check" size={40} color={k.c.training} />
       </View>
@@ -119,8 +119,8 @@ function SummaryBody({ res, perWeek, weekDone, planName, onDone }: { res: Sessio
 function Legend({ color, strong, rest }: { color: string; strong: string; rest: string }) {
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
     <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: color }} />
-    <KitText weight={500} size={13} lineHeight={1.3} color="text-muted" numeric style={{ flexShrink: 1 }}>
-      <KitText weight={600} size={13} color="text">{strong}</KitText>{rest}
+    <KitText weight={500} size={13} lineHeight={1.3} tracking={-0.02} color="text-muted" numeric style={{ flexShrink: 1 }}>
+      <KitText weight={600} size={13} tracking={-0.02} color="text">{strong}</KitText>{rest}
     </KitText>
   </View>;
 }

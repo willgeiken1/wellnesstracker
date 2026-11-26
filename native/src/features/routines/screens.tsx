@@ -38,7 +38,7 @@ function Stats3({ items, top = 6 }: { items: [string, string, string][]; top?: n
   return <View style={{ flexDirection: 'row', gap: 8, paddingTop: top, paddingHorizontal: 8 }}>
     {items.map(([label, v, small]) => <View key={label} style={{ flex: 1, gap: 2 }} accessible accessibilityLabel={`${label} ${v} ${small}`}>
       <KitText weight={700} size={11} tracking={0.1} color="text-muted" style={capitals}>{label}</KitText>
-      <KitText weight={700} size={22} tracking={-0.03} numeric>{v}<KitText weight={600} size={12.5} color="text-muted">{` ${small}`}</KitText></KitText>
+      <KitText weight={700} size={22} tracking={-0.03} numeric>{v}<KitText weight={600} size={12.5} tracking={0} color="text-muted">{` ${small}`}</KitText></KitText>
     </View>)}
   </View>;
 }

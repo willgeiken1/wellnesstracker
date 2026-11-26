@@ -68,11 +68,11 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
         <KitText weight={700} size={14} color={on ? 'on-accent' : 'training'}>{initial}</KitText>
       </View>
       <View style={{ flex: 1, minWidth: 0, paddingVertical: 8, borderTopWidth: 0 }}>
-        <KitText weight={600} size={16} color="text" numberOfLines={1}>{label}</KitText>
-        <KitText weight={500} size={13} color="text-muted" numberOfLines={1}>{`${group ?? tr('trainingOther')} · ${equipmentName(e.equipment)}`}</KitText>
+        <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01} color="text" numberOfLines={1}>{label}</KitText>
+        <KitText weight={500} size={13} lineHeight={1.35} color="text-muted" numberOfLines={1} style={{ marginTop: 2 }}>{`${group ?? tr('trainingOther')} · ${equipmentName(e.equipment)}`}</KitText>
       </View>
       {inNow.has(e.name) && <View style={{ alignSelf: 'center' }}><Badge label={tr('trainingAdded')} color="training" /></View>}
-      {single ? <Icon name="chevron-right" size={16} color={k.c['text-muted']} />
+      {single ? <View style={{ marginHorizontal: -4 }}><Icon name="chevron-right" size={16} color={k.c.ghost} /></View>
         : <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? k.c.training : 'transparent',
           boxShadow: on ? undefined : `inset 0px 0px 0px 2px ${k.c['hair-2']}` }}>{on && <Icon name="check" size={15} color={k.c['on-accent']} />}</View>}
       {i > 0 && <View style={{ position: 'absolute', top: 0, left: 64, right: 0, height: 1, backgroundColor: k.c.hair }} />}
@@ -86,9 +86,11 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
     <View style={{ paddingHorizontal: 16 }}>
       <SheetHeader title={title} right={single ? undefined : sel.length ? tr('trainingAddN', { n: sel.length }) : tr('trainingAddShort')} rightDisabled={!sel.length}
         onRight={() => commit(sel)} />
-      <SearchField placeholder={tr('trainingSearchExercises')} value={q} onChangeText={setQ} testID="exercise-picker-search" />
     </View>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
+      <View style={{ paddingHorizontal: 16 }}>
+        <SearchField placeholder={tr('trainingSearchExercises')} value={q} onChangeText={setQ} testID="exercise-picker-search" />
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 12 }}
         accessibilityLabel={tr('trainingFilterMuscle')}>
         {(['All', ...MUSCLE_GROUPS] as const).map(m => <Chip key={m} label={m === 'All' ? tr('trainingAll') : m} selected={muscle === m} color="training" onPress={() => setMuscle(m)} />)}
@@ -98,11 +100,11 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
         {group(filtered ? tr(names.length === 1 ? 'trainingResults_one' : 'trainingResults_other', { n: names.length }) : tr('trainingAllExercises'))}
         {names.length ? list(names, 'a') : custom ? <View style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: cardBg, boxShadow: k.cardEdge }}>
           <Tappable dim="row" accessibilityRole="button" accessibilityLabel={tr('trainingCreate', { name: custom })} onPress={() => commit([custom])}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 59, paddingHorizontal: 16 }}>
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, paddingHorizontal: 16 }}>
             <View style={{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(k.c.training, 0.16) }}><Icon name="plus" size={18} color={k.c.training} /></View>
             <View style={{ flex: 1 }}>
-              <KitText weight={600} size={16} color="text">{tr('trainingCreate', { name: custom })}</KitText>
-              <KitText weight={500} size={13} color="text-muted">{tr('trainingCreateSub')}</KitText>
+              <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01} color="text">{tr('trainingCreate', { name: custom })}</KitText>
+              <KitText weight={500} size={13} lineHeight={1.35} color="text-muted" style={{ marginTop: 2 }}>{tr('trainingCreateSub')}</KitText>
             </View>
           </Tappable>
         </View> : null}

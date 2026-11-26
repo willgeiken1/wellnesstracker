@@ -10,6 +10,7 @@ import { TileIcon } from './tile-icon';
 import type { TileDef, TileOptionValues, TilePageConfig, TileSize } from './types';
 import { fill, sheetCard } from './ui';
 import { Tappable } from '@/components/tappable';
+import { font } from '@/components/kit-style';
 
 export interface TrayPick { style: string; size: TileSize; options: TileOptionValues }
 const SIZES: TileSize[] = ['S', 'M', 'L'];
@@ -126,17 +127,16 @@ const s = StyleSheet.create({
   ic: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   headText: { flex: 1, minWidth: 0 },
   title: { fontFamily: tokens.font.heading, fontSize: 16, lineHeight: 19.2, letterSpacing: -0.16 },
-  // The design's 12.5 pt line is drawn at 13 pt, the app's smallest text size.
-  sub: { marginTop: 2, fontFamily: tokens.font.body, fontSize: 13, lineHeight: 16.9 },
+  sub: { marginTop: 2, ...font(500, 12.5, 1.3) },
   go: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 36, paddingHorizontal: 15, borderRadius: 999 },
   goText: { fontFamily: tokens.font.heading, fontSize: 13.5 },
   pv: { alignItems: 'center', overflow: 'hidden', borderRadius: 20 },
   sts: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   st: { minHeight: 40, paddingHorizontal: 8, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  stText: { fontFamily: tokens.font.bodyStrong, fontSize: 13 },
+  stText: font(600, 12.5),
   deepHead: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6, marginHorizontal: 4 },
-  deepT: { fontFamily: tokens.font.bodyStrong, fontSize: 13 },
-  deepN: { fontFamily: tokens.font.body, fontSize: 13, opacity: 0.8 },
+  deepT: font(600, 12, undefined, 0.02),
+  deepN: { ...font(500, 12, undefined, 0.02), opacity: 0.8 },
   ctl: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, paddingLeft: 4, paddingRight: 2 },
   ctlLabel: { flexShrink: 0, fontFamily: tokens.font.bodyStrong, fontSize: 13 },
   segScroll: { flexGrow: 0, flexShrink: 1 },
@@ -146,5 +146,5 @@ const s = StyleSheet.create({
   szText: { fontFamily: tokens.font.heading, fontSize: 13 },
   opBtn: { minWidth: 48, paddingHorizontal: 11 },
   opBtnHome: { minWidth: 52, paddingHorizontal: 12 },
-  opText: { fontFamily: tokens.font.bodyStrong, fontSize: 13 },
+  opText: font(600, 12.5),
 });

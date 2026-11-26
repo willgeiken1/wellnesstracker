@@ -17,7 +17,7 @@ export function Stat({ value, unit, label, sub, color, subColor, style, testID }
   return <View testID={testID} style={style} accessible accessibilityLabel={[`${typeof value === 'string' || typeof value === 'number' ? value : ''}${unit ? ' ' + unit : ''}`, label, sub].filter(Boolean).join(', ')}>
     <KitText weight={700} size={28} lineHeight={NUMBER_LINE / 28} tracking={-0.035} numeric color={color ?? 'text'}>
       {value}
-      {unit ? <KitText weight={600} size={14} lineHeight={NUMBER_LINE / 14} color="text-muted">{' ' + unit}</KitText> : null}
+      {unit ? <KitText weight={600} size={14} lineHeight={NUMBER_LINE / 14} tracking={0} color="text-muted">{' ' + unit}</KitText> : null}
     </KitText>
     {label ? <KitText weight={600} size={12.5} color="text-muted" style={{ marginTop: 4 }}>{label}</KitText> : null}
     {sub ? <KitText weight={500} size={12.5} color={subColor ?? 'text-muted'} style={{ marginTop: 2 }}>{sub}</KitText> : null}

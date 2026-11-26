@@ -274,7 +274,7 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
           <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={capitals}>{t('routinesConverted')}</KitText>
           <KitText testID="routines-conv-result" weight={700} size={30} tracking={-0.03} numeric numberOfLines={1} color={r.ok ? 'text' : 'ghost'}>
-            {r.ok && r.v != null ? fnum(r.v) : '–'}{r.ok ? <KitText weight={600} size={15} color="text-muted">{` ${C.to}`}</KitText> : null}
+            {r.ok && r.v != null ? fnum(r.v) : '–'}{r.ok ? <KitText weight={600} size={15} tracking={0} color="text-muted">{` ${C.to}`}</KitText> : null}
           </KitText>
         </View>
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
