@@ -87,8 +87,9 @@ test('no tap target is a bare Pressable with nothing to show the press', () => {
 
 test('the controls the acceptance review named dim at the right strength', () => {
   const read = (file: string) => readFileSync(join(__dirname, '..', file), 'utf8');
+  // The paywall screen is gone: Insight has no paid plan (tests/paywall-route.test.tsx).
   for (const file of ['src/features/shell/profile-button.tsx',
-    'src/features/paywall/screen.tsx', 'src/features/workout/parts.tsx', 'src/features/atlas/body-atlas.tsx', 'src/features/body/entry.tsx'])
+    'src/features/workout/parts.tsx', 'src/features/atlas/body-atlas.tsx', 'src/features/body/entry.tsx'])
     expect(read(file)).toMatch(/<Tappable\b/);
   // Home's Done is the tile grid's edit bar now, and it dims when pressed.
   expect(read('src/features/tiles/tile-grid.tsx')).toMatch(/onPress=\{onDone\} style=\{\(\{ pressed \}\) => \[[^\]]*pressed && \{ opacity: 0\.\d+ \}\]/);
