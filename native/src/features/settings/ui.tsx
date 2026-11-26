@@ -1,6 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { stepValue } from '@/components/stepper';
+import { useSelectionHaptic } from '@/components/selection-haptic';
+import { t } from '@/i18n/en';
 import { Icon, KitText, ListRow, NavBar, StackGapContext, SurfaceContext, Tappable, alpha, mix, useKit, type IconName } from '@/components/kit';
 
 /* The pieces every Settings screen shares (the mockup's .st-* classes in pages/settings.js). */
@@ -110,3 +113,24 @@ export function Menu<T extends string | number>({ at, title, options, value, onP
 
 /** `.st-ud` and friends need these icons; the kit's set has them under these names. */
 export const settingsIcons = { updown: 'updown', ext: 'ext' } as const;
+
+/** The kit stepper with the value shown as a clock ("2:00"), as the mockup's Default rest shows it. The kit's Stepper has no format option yet. */
+export function TimeStepper({ value, onChange, label, step = 15, min = 30, max = 300 }: { value: number; onChange: (v: number) => void; label: string; step?: number; min?: number; max?: number }) {
+  const k = useKit();
+  const haptic = useSelectionHaptic();
+  const text = `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  const go = (d: -1 | 1) => { const v = stepValue(value, d, { step, min, max }); if (v !== value) haptic(); onChange(v); };
+  const button = (d: -1 | 1) => <Tappable dim="none" accessibilityRole="button" accessibilityLabel={d < 0 ? t('kitLess') : t('kitMore')} onPress={() => go(d)}
+    hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }}
+    style={({ pressed }) => ({ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? k.c['hair-2'] : 'transparent' })}>
+    <Icon name={d < 0 ? 'minus' : 'plus'} size={18} color={k.c.text} />
+  </Tappable>;
+  return <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, padding: 3, borderRadius: 999, backgroundColor: k.c['surface-2'] }}>
+    {button(-1)}
+    <View accessible accessibilityRole="adjustable" accessibilityLabel={label} accessibilityValue={{ text }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={e => go(e.nativeEvent.actionName === 'increment' ? 1 : -1)} style={{ minWidth: 64 }}>
+      <KitText weight={700} size={17} tracking={-0.015} numeric style={{ textAlign: 'center' }}>{text}</KitText>
+    </View>
+    {button(1)}
+  </View>;
+}

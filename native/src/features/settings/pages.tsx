@@ -1,11 +1,17 @@
 import { useState, type ReactNode } from 'react';
-import { Image, Linking, View } from 'react-native';
+import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Badge, Chip, Icon, KitText, List, ListFooter, ListRow, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
+import { Badge, Chip, Eyebrow, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
+import { formatNumber } from '@/components/stepper';
+import { useAuth } from '@/auth/provider';
+import { FLOZ } from '@/features/food/water';
+import { lastWeight } from '@/features/body/model';
+import { readGoalsData, saveFoodTarget, saveGoalWeight, saveWaterGoal, type GoalsData } from './goals-data';
 import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { useAppleHealth } from '@/features/health/use-apple-health';
 import { useOura } from '@/features/health/use-oura';
+import { readProfile, saveProfile } from '@/features/onboarding/model';
 import { devicePreferencesUnsaved, saveDevicePreferences, useDevicePreferences } from '@/features/onboarding/device-preferences';
 import { LEGAL_LINKS, openPage } from './links';
 import { iconArt, iconId } from './app-icon';
@@ -13,7 +19,8 @@ import { st } from './copy';
 import { APP_VERSION, Avatar, useWho } from './home';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
-import { Cl, Gap, H, Hero, Panel, PickRow, SetPage } from './ui';
+import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper } from './ui';
+import { backupWhen } from './data-actions';
 
 const KG = 2.20462;
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h} h${m ? ` ${m} m` : ''}`; };
@@ -36,27 +43,64 @@ function SegRow<T extends string>({ title, sub, value, options, onChange }: { ti
 const Ext = () => { const k = useKit(); return <Icon name="ext" size={16} color={k.c.ghost} />; };
 
 /* ---------- Goals and targets ---------- */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 export function GoalsPage() {
+  const repo = useAuth().repository;
   const [p, set] = useSettingsPrefs();
-  const kj = p.units.energy === 'kJ', kg = p.units.weight === 'kg';
+  const [, bump] = useState(0);
+  const kj = p.units.energy === 'kJ', kg = p.units.weight === 'kg', ml = p.units.water === 'ml';
+  let g: GoalsData | null = null;
+  try { g = repo ? readGoalsData(repo) : null; } catch { g = null; }
+  const save = (fn: () => void) => { try { fn(); } catch { /* left as last saved */ } bump(n => n + 1); };
+  const kcal = g?.kcal ?? p.goals.kcal, protein = g?.protein ?? p.goals.protein;
+  const goalLb = g?.goalKg != null ? g.goalKg * KG : p.goals.weight;
   const sleep = Array.from({ length: 7 }, (_, i) => 390 + i * 30).map(v => ({ v, l: hm(v) }));
   const pace = (kg ? [0.1, 0.25, 0.5, 0.75].map(k => +(k * KG).toFixed(4)) : [0.25, 0.5, 1, 1.5]).map(v => ({ v, l: paceLabel(v, p) }));
+  const nowLb = g?.currentKg != null ? g.currentKg * KG : null, startLb = g?.startKg != null ? g.startKg * KG : null;
+  const left = nowLb != null ? Math.max(0, nowLb - goalLb) : null;
+  const eta = left ? new Date(Date.now() + Math.round(left / p.goals.pace * 7) * 86400000) : null;
+  const foot = nowLb == null ? st('settingsPaceFootNoWeight') : !left ? st('settingsAtGoal')
+    : st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(goalLb, p), date: `${MONTHS[eta!.getMonth()]} ${eta!.getDate()}` });
+  const lost = nowLb != null && startLb != null ? startLb - nowLb : null, total = startLb != null ? startLb - goalLb : null;
+  const waterV = g ? (ml ? Math.round(g.waterL * 10) * 100 : Math.round(g.waterL * FLOZ)) : null;
   return <SetPage back={st('settings')} title={st('settingsGoalsTitle')} testID="settings-goals">
     <H first>{st('settingsDailyTargets')}</H>
     <List footer={st('settingsTargetsFoot')}>
-      <ListRow title={st('settingsCalories')} right={<Stepper label={st('settingsDailyCalories')} value={kj ? Math.round(p.goals.kcal * 4.184 / 10) * 10 : p.goals.kcal}
-        step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''} onChange={v => set('goals.kcal', kj ? Math.round(v / 4.184) : v)} />} />
-      <ListRow title={st('settingsProtein')} right={<Stepper label={st('settingsDailyProtein')} value={p.goals.protein} step={5} min={40} max={300} unit="g" onChange={v => set('goals.protein', v)} />} />
+      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: kj ? `${formatNumber(g.eaten * 4.184)} kJ` : formatNumber(g.eaten) }) : undefined}
+        right={<Stepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
+        step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''}
+        onChange={v => { const next = kj ? Math.round(v / 4.184) : v; if (repo) save(() => saveFoodTarget(repo, 'kcal', next)); else set('goals.kcal', next); }} />} />
+      <ListRow title={st('settingsProtein')} sub={g ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
+        right={<Stepper label={st('settingsDailyProtein')} value={protein} step={5} min={40} max={300} unit="g"
+        onChange={v => { if (repo) save(() => saveFoodTarget(repo, 'protein', v)); else set('goals.protein', v); }} />} />
       <ListRow title={st('settingsTraining')} right={<Stepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />
       <PickRow title={st('settingsSleep')} value={p.goals.sleep} options={sleep} onPick={v => set('goals.sleep', v)} />
+      {g && waterV != null ? <ListRow title={st('settingsWater')} sub={st('settingsSoFar', { v: ml ? `${formatNumber(Math.round(g.drankL * 1000))} mL` : `${Math.round(g.drankL * FLOZ)} oz` })}
+        right={<Stepper label={st(ml ? 'settingsDailyWaterMl' : 'settingsDailyWaterOz')} value={waterV} step={ml ? 100 : 4} min={ml ? 1000 : 32} max={ml ? 6000 : 200} unit={ml ? 'mL' : 'oz'}
+          onChange={v => save(() => saveWaterGoal(repo!, ml ? v / 1000 : v / FLOZ))} />} /> : null}
     </List>
     <H>{st('settingsWeightGoal')}</H>
     <Panel>
-      <Cl><ListRow title={st('settingsGoalWeight')} right={<Stepper label={st('settingsGoalWeight')} value={kg ? Number((p.goals.weight / KG).toFixed(1)) : p.goals.weight}
-        step={0.5} dec={1} min={80} max={400} unit={kg ? 'kg' : 'lb'} onChange={v => set('goals.weight', kg ? Math.round(v * KG * 2) / 2 : v)} />} /></Cl>
+      {lost != null && total != null && total > 0 ? <View style={{ padding: 16 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Eyebrow>{st('settingsProgress')}</Eyebrow>
+          <KitText weight={700} size={14} numeric color="text-muted">{st('settingsLostOf', { a: wt(Math.max(0, lost), p), b: wt(total, p) })}</KitText>
+        </View>
+        <View style={{ marginTop: 10, marginBottom: 8 }}><ProgressBar value={Math.max(0, Math.min(1, lost / total))} color="accent" label={st('settingsProgress')} /></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <KitText weight={600} size={12.5} color="text-muted">{st('settingsStartW', { v: wt(startLb!, p) })}</KitText>
+          <KitText weight={600} size={12.5} color="text-muted">{st('settingsGoalW', { v: wt(goalLb, p) })}</KitText>
+        </View>
+      </View> : null}
+      <Cl><ListRow title={st('settingsGoalWeight')} right={<Stepper label={st('settingsGoalWeight')} value={kg ? Number((goalLb / KG).toFixed(1)) : Number(goalLb.toFixed(1))}
+        step={0.5} dec={1} min={kg ? 36 : 80} max={kg ? 180 : 400} unit={kg ? 'kg' : 'lb'}
+        onChange={v => { set('goals.weight', kg ? Math.round(v * KG * 2) / 2 : v); if (repo) save(() => saveGoalWeight(repo, v, kg ? 'kg' : 'lb')); }} />} /></Cl>
+      {nowLb != null && g?.currentDay ? <Cl><ListRow title={st('settingsCurrentWeight')} sub={shortDay(g.currentDay)} value={wt(nowLb, p)}
+        onPress={() => router.push('/progress' as never)} /></Cl> : null}
       <Cl><PickRow title={st('settingsWeeklyPace')} value={p.goals.pace} options={pace} short={v => paceLabel(v, p)} onPick={v => set('goals.pace', v)} /></Cl>
     </Panel>
-    <ListFooter>{st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(p.goals.weight, p) })}</ListFooter>
+    <ListFooter>{foot}</ListFooter>
   </SetPage>;
 }
 
@@ -132,39 +176,58 @@ export function ConnectionsPage() {
 }
 
 /* ---------- Account and sync ---------- */
+/** `.st-field`: a label and a right-aligned text field in one 56 pt row. */
+function NameField({ repo }: { repo: NonNullable<ReturnType<typeof useAuth>['repository']> }) {
+  const k = useKit();
+  const [name, setName] = useState(() => { try { return readProfile(repo).name; } catch { return ''; } });
+  const commit = () => { try { saveProfile(repo, { ...readProfile(repo), name: name.trim() }); } catch { /* the profile keeps its last saved name */ } };
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16 }}>
+    <KitText weight={600} size={15.5} style={{ width: 96 }}>{st('settingsName')}</KitText>
+    <TextInput testID="settings-name" value={name} onChangeText={setName} onBlur={commit} onSubmitEditing={commit} returnKeyType="done" autoComplete="given-name"
+      accessibilityLabel={st('settingsName')} style={{ flex: 1, minWidth: 0, minHeight: 44, textAlign: 'right', fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15.5, color: k.c.text }} />
+  </View>;
+}
 export function AccountPage() {
   const k = useKit();
   const who = useWho();
   const [p, set] = useSettingsPrefs();
   const auth = who.auth;
   const syncs = !!auth.session && !auth.phoneOnly;
+  const relay = /privaterelay\.appleid\.com$/i.test(who.email);
   return <SetPage back={st('settings')} title={st('settingsAccountTitle')} testID="settings-account">
     <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-      <Avatar name={who.name || who.email || 'Insight'} size={92} />
+      <Avatar name={who.name || who.email} size={92} />
       <KitText weight={700} size={24} tracking={-0.03} style={{ marginTop: 12 }}>{who.name || who.signIn}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
         {auth.session ? <Icon name="apple-fill" size={14} color={k.c['text-muted']} /> : null}
-        <KitText weight={600} size={13.5} color="text-muted">{who.signIn}</KitText>
+        <KitText weight={600} size={13.5} color="text-muted">{who.name ? who.signIn : who.detail}</KitText>
       </View>
     </View>
+    {auth.repository && !auth.demo ? <>
+      <H>{st('settingsProfileH')}</H>
+      <Panel>
+        <NameField repo={auth.repository} />
+        {auth.session ? <Cl><ListRow title={st('settingsSignIn')} sub={relay ? st('settingsHideMyEmail') : who.email || undefined} value="Apple"
+          onPress={() => actionSheet({ title: st('settingsSignedInApple'), message: st('settingsSignInMsg'), acts: [{ label: st('settingsOpenIosSettings'), onPress: () => { void Linking.openSettings().catch(() => {}); } }] })} /></Cl> : null}
+      </Panel>
+    </> : null}
     {syncs ? <>
       <H>{st('settingsSync')}</H>
       <List>
         <ListRow title={st('settingsSyncAcross')} sub={p.sync.on ? st('settingsSyncAcrossOn') : st('settingsSyncAcrossOff')} toggle={p.sync.on}
           onToggle={v => { set('sync.on', v); showToast(v ? st('settingsSyncOnToast') : st('settingsSyncOffToast'), { color: v ? 'success' : 'warning' }); }} />
-        <ListRow title={st('settingsSyncNow')} chevron={false} disabled={!p.sync.on} onPress={() => { void auth.syncNow?.(); showToast(st('settingsSyncedNow')); }} />
+        <ListRow title={st('settingsSyncNow')} chevron={false} onPress={() => { if (!p.sync.on) { showToast(st('settingsSyncFirst'), { color: 'warning' }); return; } void auth.syncNow?.(); showToast(st('settingsSyncedNow')); }} />
       </List>
-    </> : <>
-      <H>{st('settingsYourLog')}</H>
-      <List footer={auth.demo ? st('settingsExampleFoot') : st('settingsPhoneOnlyFoot')}>
-        <ListRow icon="iphone" color="accent" title={st('settingsThisIphone')} sub={st('settingsActiveNow')} right={<Badge label={st('settingsThisDevice')} color="accent" />} />
-        <ListRow icon="layers" color="warning" title={st('settingsDataTitle')} sub={st('settingsDataSub')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'data' } })} />
-      </List>
-    </>}
+    </> : null}
+    <H>{st('settingsDevices')}</H>
+    <List footer={auth.demo ? st('settingsExampleFoot') : auth.phoneOnly || !auth.session ? st('settingsPhoneOnlyFoot') : undefined}>
+      <ListRow icon="iphone" color="accent" title={st('settingsThisIphone')} sub={st('settingsActiveNow')} chevron={false}
+        onPress={() => showToast(st('settingsUsingIphone'))} right={<Badge label={st('settingsThisDevice')} color="accent" />} />
+    </List>
     <Gap />
     {auth.demo ? <List><ListRow title={st('settingsBackToLog')} chevron={false} onPress={() => { void auth.signOut(); router.replace('/'); }} /></List>
       : auth.session ? <List><ListRow title={st('settingsSignOut')} danger chevron={false} onPress={() => actionSheet({ title: st('settingsSignOutQ'), message: st('settingsSignOutMsg'),
-        acts: [{ label: st('settingsSignOut'), destructive: true, onPress: () => { void auth.signOut(); } }] })} /></List>
+        acts: [{ label: st('settingsSignOut'), destructive: true, onPress: () => { void auth.signOut(); showToast(st('settingsSignedOut')); } }] })} /></List>
       : <List><ListRow title={st('settingsLookAround')} sub={st('settingsLookAroundSub')} onPress={() => { auth.lookAround(); router.replace('/'); }} /></List>}
   </SetPage>;
 }
@@ -201,14 +264,16 @@ export function RemindersPage() {
     <List footer={st('settingsIosNotifFoot')}>
       <ListRow title={st('settingsIosNotifications')} chevron={false} right={<Ext />} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
     </List>
-    <ListFooter>{st('settingsRemindersLocalNote')}</ListFooter>
   </SetPage>;
 }
 
 /* ---------- Privacy and security ---------- */
 export function PrivacyPage({ crash, analytics }: { crash?: ReactNode; analytics?: ReactNode }) {
   const [p, set] = useSettingsPrefs();
-  const after = [{ v: '0', l: 'Immediately' }, { v: '1', l: 'After 1 minute' }, { v: '5', l: 'After 5 minutes' }, { v: '15', l: 'After 15 minutes' }];
+  const after = [{ v: '0', l: st('settingsImmediately') }, { v: '1', l: st('settingsAfter1') }, { v: '5', l: st('settingsAfter5') }, { v: '15', l: st('settingsAfter15') }];
+  const repo = useAuth().repository;
+  let lastKg: number | null = null;
+  try { lastKg = repo ? lastWeight(repo.list('weigh_ins')) : null; } catch { lastKg = null; }
   return <SetPage back={st('settings')} title={st('settingsPrivacyTitle')} testID="settings-privacy">
     <View style={{ height: 8 }} />
     <List>
@@ -218,6 +283,7 @@ export function PrivacyPage({ crash, analytics }: { crash?: ReactNode; analytics
         onToggle={v => { set('priv.blur', v); showToast(v ? st('settingsBlurOnToast') : st('settingsBlurOffToast')); }} />
       <ListRow icon="eyeoff" color="accent-2" title={st('settingsHideNumbers')} sub={st('settingsHideNumbersSub')} toggle={p.priv.hide} onToggle={v => set('priv.hide', v)} />
     </List>
+    {lastKg != null ? <Panel style={{ marginTop: 12 }}><HidePreview text={p.priv.hide ? `••• ${p.units.weight}` : wt(lastKg * KG, p)} /></Panel> : null}
     <H>{st('settingsDiagnostics')}</H>
     {crash ?? null}{analytics ?? null}
     <ListFooter>{st('settingsDiagnosticsFoot')}</ListFooter>
@@ -226,8 +292,14 @@ export function PrivacyPage({ crash, analytics }: { crash?: ReactNode; analytics
       <ListRow icon="shield" color="success" title={st('settingsPrivacyCenter')} sub={st('settingsPrivacyCenterSub')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'privacy-center' } })} />
       <ListRow icon="trash" color="danger" title={st('settingsDeleteRange')} sub={st('settingsDeleteRangeSub')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'delete-range' } })} />
     </List>
-    <ListFooter>{st('settingsPrivacyLocalNote')}</ListFooter>
   </SetPage>;
+}
+
+function HidePreview({ text }: { text: string }) {
+  return <View accessible style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16 }}>
+    <KitText weight={600} size={13.5} color="text-muted">{st('settingsPreviewOnHome')}</KitText>
+    <KitText weight={700} size={17} numeric>{text}</KitText>
+  </View>;
 }
 
 /* ---------- Units and formats ---------- */
@@ -277,12 +349,10 @@ export function WorkoutPage() {
   return <SetPage back={st('settings')} title={st('settingsWorkoutTitle')} testID="settings-workout">
     <H first>{st('settingsRestTimer')}</H>
     <List>
-      <ListRow title={st('settingsDefaultRest')} sub={st('settingsDefaultRestSub')} right={<Stepper label={st('settingsDefaultRestA11y')} value={w.rest} step={15} min={30} max={300}
-        unit="" onChange={v => set('work.rest', v)} />} />
+      <ListRow title={st('settingsDefaultRest')} sub={st('settingsDefaultRestSub')} right={<TimeStepper label={st('settingsDefaultRestA11y')} value={w.rest} onChange={v => set('work.rest', v)} />} />
       <ListRow title={st('settingsStartAuto')} sub={st('settingsStartAutoSub')} toggle={w.auto} onToggle={v => set('work.auto', v)} />
       <ListRow title={st('settingsRestAlert')} value={st(p.rem.rest ? 'settingsOn' : 'settingsOff')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'reminders', focus: 'Rest timer alert' } })} />
     </List>
-    <KitText weight={500} size={12.5} color="text-muted" style={{ marginTop: 6, marginHorizontal: 16 }}>{st('settingsRestShown', { v: mss(w.rest) })}</KitText>
     <H>{st('settingsPlates')}</H>
     <Panel>
       <View accessibilityLabel={st('settingsPlatesYouHave')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 14, paddingHorizontal: 16 }}>
@@ -320,20 +390,22 @@ export function WorkoutPage() {
     <H>{st('settingsDuringWorkout')}</H>
     <List>
       <ListRow title={st('settingsKeepAwake')} sub={st('settingsKeepAwakeSub')} toggle={w.awake} onToggle={v => set('work.awake', v)} />
-      <ListRow title={st('settingsHaptics')} sub={st('settingsHapticsSub')} toggle={w.haptics} onToggle={v => set('work.haptics', v)} />
+      <ListRow title={st('settingsHapticsRow')} sub={st('settingsHapticsSub')} toggle={w.haptics} onToggle={v => set('work.haptics', v)} />
     </List>
   </SetPage>;
 }
 
 /* ---------- Your data ---------- */
 export function DataPage({ backup, restore, exportCsv }: { backup?: () => void; restore?: () => void; exportCsv?: () => void }) {
+  const [p] = useSettingsPrefs();
+  const lastBackup = p.data.lastBackup, phone = useAuth().phoneOnly;
   return <SetPage back={st('settings')} title={st('settingsDataTitle')} testID="settings-data">
-    <Hero icon="layers" color="warning" title={st('settingsDataHero')} body={st('settingsDataHeroBody')} />
+    <Hero icon="layers" color="warning" title={st('settingsDataHero')} body={st(phone ? 'settingsDataHeroBodyPhone' : 'settingsDataHeroBody')} />
     <H>{st('settingsExport')}</H>
     <List><ListRow icon="export" color="accent" title={st('settingsExportCsv')} sub={st('settingsExportCsvSub')} onPress={exportCsv ?? (() => router.push('/progress/export' as never))} /></List>
     <H>{st('settingsBackup')}</H>
     <List footer={st('settingsBackupFoot')}>
-      <ListRow icon="download" color="success" title={st('settingsSaveBackup')} sub={st('settingsSaveBackupSub')} chevron={false} disabled={!backup} onPress={backup} />
+      <ListRow icon="download" color="success" title={st('settingsSaveBackup')} sub={lastBackup ? st('settingsLastBackup', { v: backupWhen(lastBackup) }) : st('settingsNoBackup')} chevron={false} disabled={!backup} onPress={backup} />
       <ListRow icon="upload" color="recovery" title={st('settingsRestore')} sub={st('settingsRestoreSub')} chevron={false} disabled={!restore}
         onPress={() => actionSheet({ title: st('settingsRestoreQ'), message: st('settingsRestoreMsg'), acts: [{ label: st('settingsChooseBackup'), onPress: restore }] })} />
     </List>

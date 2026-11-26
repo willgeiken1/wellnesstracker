@@ -36,7 +36,7 @@ export function Avatar({ name, size }: { name: string; size: number }) {
       <Path d="M-4 40c14-10 26 6 40-4s18-12 30-6M-4 50c16-8 26 4 40-2s18-8 30-4M-4 30c12-8 24 4 38-4s20-10 32-6" stroke={k.c['on-accent']} strokeWidth={1} fill="none" opacity={0.35} />
     </Svg>
     {name ? <KitText weight={700} size={Math.round(size * 0.42)} tracking={-0.03} color="on-accent">{name.charAt(0).toUpperCase()}</KitText>
-      : <Icon name="account" size={Math.round(size * 0.46)} color={k.c['on-accent']} />}
+      : <Icon name="person" size={Math.round(size * 0.46)} color={k.c['on-accent']} />}
   </View>;
 }
 

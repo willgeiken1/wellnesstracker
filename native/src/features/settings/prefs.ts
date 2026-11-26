@@ -24,6 +24,7 @@ export const DEFAULT_PREFS = {
     plates: { '55': false, '45': true, '35': true, '25': true, '10': true, '5': true, '2_5': true } as Record<string, boolean>,
     platesKg: { '25': true, '20': true, '15': true, '10': true, '5': true, '2_5': true, '1_25': true } as Record<string, boolean> },
   sync: { on: true },
+  data: { lastBackup: 0 },
   later: {} as Record<string, boolean>,
 };
 export type SettingsPrefs = typeof DEFAULT_PREFS;
