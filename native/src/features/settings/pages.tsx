@@ -123,7 +123,8 @@ function Conn({ icon, color, name, meta, badge, body, children }: { icon: IconNa
         <KitText weight={700} size={18} tracking={-0.02}>{name}</KitText>
         <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 1 }}>{meta}</KitText>
       </View>
-      {badge}
+      {/* The kit badge sits at the top of a column; here it centres on the name and its line. */}
+      <View>{badge}</View>
     </View>
     <KitText weight={500} size={13.5} lineHeight={1.45} color="text-muted" style={{ marginTop: 12 }}>{body}</KitText>
     {children}
