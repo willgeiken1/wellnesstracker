@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { stepValue } from '@/components/stepper';
 import { useSelectionHaptic } from '@/components/selection-haptic';
@@ -92,7 +92,7 @@ export function Menu<T extends string | number>({ at, title, options, value, onP
   const top = below + h > screenH - 40 ? Math.max(60, at.y - h + 6) : Math.max(60, below);
   const right = 12;
   return <Modal transparent visible animationType="fade" onRequestClose={onClose}>
-    <Pressable accessibilityRole="button" accessibilityLabel={title} style={{ flex: 1 }} onPress={onClose} onLayout={e => setHeight(e.nativeEvent.layout.height)}>
+    <Tappable dim="none" accessibilityRole="button" accessibilityLabel={title} style={{ flex: 1 }} onPress={onClose} onLayout={e => setHeight(e.nativeEvent.layout.height)}>
       <View accessibilityRole="menu" accessibilityLabel={title} style={{ position: 'absolute', top, right: right + Math.max(0, 0), width: 236, maxHeight: 396,
         borderRadius: 14, overflow: 'hidden', backgroundColor: mix(k.dark ? k.c['surface-2'] : k.c.surface, 'transparent', 0.94),
         boxShadow: k.dark ? k.lift : `${k.lift}, 0px 0px 0px 1px ${k.c.hair}` }}>
@@ -108,7 +108,7 @@ export function Menu<T extends string | number>({ at, title, options, value, onP
           })}
         </ScrollView>
       </View>
-    </Pressable>
+    </Tappable>
   </Modal>;
 }
 

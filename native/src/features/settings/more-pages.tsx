@@ -104,7 +104,7 @@ export function DeleteAccountPage() {
         <View style={{ marginTop: 18, backgroundColor: k.c.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, boxShadow: `0px 0px 0px 1.5px ${k.c['hair-2']}` }}>
           <KitText weight={600} size={12} color="text-muted">{st('settingsTypeDeleteShort')}</KitText>
           <TextInput testID="delete-type" value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} spellCheck={false} autoFocus
-            accessibilityLabel={st('settingsTypeDelete')} style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: 2.4, paddingTop: 4, color: k.c.text, minHeight: 36 }} />
+            accessibilityLabel={st('settingsTypeDelete')} style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, paddingTop: 4, color: k.c.text, minHeight: 36 }} />
         </View>
         {failure ? <KitText weight={500} size={13} color="danger" accessibilityRole="alert" style={{ marginTop: 10 }}>{t(failure)}</KitText> : null}
         {!can && <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 10 }}>{st('settingsDeleteNoAccount')}</KitText>}

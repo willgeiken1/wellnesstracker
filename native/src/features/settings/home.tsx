@@ -27,6 +27,7 @@ export function openSection(id: SectionId, focus?: string) {
 export function Avatar({ name, size }: { name: string; size: number }) {
   const k = useKit();
   const end = mix(k.c.training, k.c.accent, 0.7);
+  const initial = name ? name.charAt(0).toLocaleUpperCase() : '';
   const id = 'st-av' + useId().replace(/[^a-zA-Z0-9]/g, '');
   return <View accessible={false} style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
     <Svg width={size} height={size} viewBox="0 0 60 60" style={{ position: 'absolute' }}>
@@ -38,7 +39,7 @@ export function Avatar({ name, size }: { name: string; size: number }) {
     </Svg>
     {/* positioned, so web paints it above the absolute art as native does */}
     <View style={{ position: 'relative' }}>
-      {name ? <KitText weight={700} size={Math.round(size * 0.42)} tracking={-0.03} color="on-accent">{name.charAt(0).toUpperCase()}</KitText>
+      {initial ? <KitText weight={700} size={Math.round(size * 0.42)} tracking={-0.03} color="on-accent">{initial}</KitText>
         : <Icon name="person" size={Math.round(size * 0.46)} color={k.c['on-accent']} />}
     </View>
   </View>;

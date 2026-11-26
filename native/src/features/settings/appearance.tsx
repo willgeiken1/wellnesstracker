@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Image, Linking, Platform, View } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, Polygon, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
-import { Icon, KitText, List, ListFooter, ListRow, SegmentedControl, Tappable, alpha, useKit } from '@/components/kit';
+import { Icon, KitText, List, ListFooter, ListRow, SegmentedControl, Tappable as Pressable, alpha, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
 import { createTheme, palettes, tokens, type Palette, type ThemeOverride } from '@/design/tokens';
 import { PAGE_KEYS } from '@/features/shell/pages';
@@ -43,7 +43,7 @@ function MiniPhone({ palette, look, half, selected }: { palette: Palette; look: 
 
 function ThemeOption({ value, label, selected, onPress, art }: { value: ThemeOverride; label: string; selected: boolean; onPress: () => void; art: React.ReactNode }) {
   const k = useKit();
-  return <Tappable dim="none" testID={`appearance-theme-${value}`} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }}
+  return <Pressable dim="none" testID={`appearance-theme-${value}`} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }}
     onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 8, paddingVertical: 6, borderRadius: 16 }}>
     {art}
     <KitText weight={600} size={14}>{label}</KitText>
@@ -51,7 +51,7 @@ function ThemeOption({ value, label, selected, onPress, art }: { value: ThemeOve
       borderWidth: 2, borderColor: selected ? k.c.accent : k.c['hair-2'], backgroundColor: selected ? k.c.accent : 'transparent' }}>
       {selected ? <Icon name="check" size={13} color={k.c['on-accent']} /> : null}
     </View>
-  </Tappable>;
+  </Pressable>;
 }
 
 const PILLARS = ['training', 'food', 'recovery', 'sleep', 'water'] as const;
@@ -59,7 +59,7 @@ const PILLARS = ['training', 'food', 'recovery', 'sleep', 'water'] as const;
 function PaletteRow({ id, first, selected, onPress }: { id: Palette; first: boolean; selected: boolean; onPress: () => void }) {
   const k = useKit(), { mode } = useTheme();
   const p = tokens.palettes[id], c = p[mode], isDefault = id === palettes[0];
-  return <Tappable dim="none" testID={`appearance-palette-${id}`} accessibilityRole="radio" accessibilityState={{ checked: selected }}
+  return <Pressable dim="none" testID={`appearance-palette-${id}`} accessibilityRole="radio" accessibilityState={{ checked: selected }}
     accessibilityLabel={p.name + (isDefault ? `, ${st('settingsDefaultLower')}` : '')} onPress={onPress}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 58, paddingVertical: 9, paddingLeft: 14, paddingRight: 16,
       backgroundColor: pressed ? alpha(k.c.text, 0.06) : 'transparent' })}>
@@ -78,20 +78,20 @@ function PaletteRow({ id, first, selected, onPress }: { id: Palette; first: bool
     <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
       {selected ? <Icon name="check" size={18} color={k.c.accent} /> : null}
     </View>
-  </Tappable>;
+  </Pressable>;
 }
 
 /** `.st-icons`: the three app icons, each drawn in the current palette and look. */
 function IconOption({ id, name, selected, onPress }: { id: AppIconId; name: string; selected: boolean; onPress: () => void }) {
   const k = useKit(), { palette, mode } = useTheme();
-  return <Tappable dim="none" testID={`appearance-icon-${id}`} accessibilityRole="radio" accessibilityLabel={name} accessibilityState={{ checked: selected }}
+  return <Pressable dim="none" testID={`appearance-icon-${id}`} accessibilityRole="radio" accessibilityLabel={name} accessibilityState={{ checked: selected }}
     onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 9, paddingVertical: 4, borderRadius: 14 }}>
     <View style={{ width: 62, height: 62, borderRadius: 15, overflow: 'hidden',
       boxShadow: selected ? `0px 0px 0px 2.5px ${k.c.bg}, 0px 0px 0px 5px ${k.c.accent}` : `0px 0px 0px 1px ${k.c['hair-2']}` }}>
       <Image source={iconArt(id, palette, mode)} style={{ width: 62, height: 62 }} accessible={false} />
     </View>
     <KitText weight={600} size={13} color={selected ? 'text' : 'text-muted'}>{name}</KitText>
-  </Tappable>;
+  </Pressable>;
 }
 
 const DENSITY_PAD: Record<Density, number> = { airy: 14, balanced: 10, dense: 6 };
