@@ -1,6 +1,6 @@
 import { ImportPreviewConflict } from '../features/importer/errors';
 import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { Alert, AppState } from 'react-native';
 import { t } from '../i18n/en';
 import * as Network from 'expo-network';
@@ -15,6 +15,7 @@ import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, Unreadabl
 import { bootErrorClass } from './boot-diagnostics';
 import { signOutStorage } from './sign-out-storage';
 import { clearSessionMemory } from '../core/session-memory';
+import { setActiveRoutinesStore } from '../features/routines/store';
 import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
@@ -145,6 +146,9 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   },[owner,bootReady]);
   // Never expose the previous owner's repository during the render before effect cleanup.
   const currentRepo=repository?.owner===owner?repository:null;
+  // The Routines store the tab and the Home tiles share belongs to one account. Drop it, before the screen is drawn
+  // again, whenever the account changes, so no tile shows or writes the last account's routines.
+  useLayoutEffect(()=>()=>{setActiveRoutinesStore(null);},[owner]);
   const userId=session?.user.id;
   const engine=useMemo(()=>!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[currentRepo,client,userId,departurePending]);
   const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
@@ -301,6 +305,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
         departingOwner.current=currentRepo.owner;departureLocked.current=true;setDeparturePending(true);
         // Anything held in memory for this owner goes first, so it cannot outlast a sign-out that fails part way.
         clearSessionMemory();
+        setActiveRoutinesStore(null);
         engine?.close();
         client?.auth.stopAutoRefresh();
         try {
