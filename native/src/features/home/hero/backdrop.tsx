@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, LinearGradient, Mask, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { field, fieldData, hsh, isolines, noise, svgPath, type Triple } from './field';
 import type { SkyTokens } from './tones';
@@ -30,9 +32,29 @@ export function backdropPaths(values: Triple, levels: number, pw: number, ph: nu
   return { w, h, layers, grat, stars };
 }
 
-export interface BackdropProps { values: Triple; levels: number; width: number; height: number; colors: Record<string, string>; sky: SkyTokens; dark: boolean; lines: boolean }
+export interface BackdropProps {
+  values: Triple; levels: number; width: number; height: number; colors: Record<string, string>; sky: SkyTokens; dark: boolean; lines: boolean;
+  /** The page's scroll offset: the three line layers drift up at 4, 8.5 and 13 percent of it, so the backdrop stays nearly fixed. */
+  scrollY?: SharedValue<number>; reduceMotion?: boolean;
+}
 
-export function HeroBackdrop({ values, levels, width, height, colors: c, sky, dark, lines }: BackdropProps) {
+/** One depth of line work, drawn 30 points past every edge and drifting with the scroll; the page-wide fade stays put. */
+function BackdropLayer({ i, w, h, H, scrollY, still, children }: { i: number; w: number; h: number; H: number; scrollY?: SharedValue<number>; still: boolean; children: ReactNode }) {
+  const drift = useAnimatedStyle(() => ({ transform: [{ translateY: still || !scrollY ? 0 : -Math.max(0, scrollY.value) * (0.04 + 0.045 * i) }] }));
+  return <Animated.View style={[{ position: 'absolute', left: -P, top: -P, width: w, height: h }, drift]}>
+    <Svg width={w} height={h}>
+      <Defs>
+        <LinearGradient id={`hbFade${i}`} gradientUnits="userSpaceOnUse" x1="0" y1={P} x2="0" y2={P + H}>
+          <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} /><Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0.55} /><Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.3} />
+        </LinearGradient>
+        <Mask id={`hbMask${i}`} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}><Rect width={w} height={h} fill={`url(#hbFade${i})`} /></Mask>
+      </Defs>
+      <G mask={`url(#hbMask${i})`}>{children}</G>
+    </Svg>
+  </Animated.View>;
+}
+
+export function HeroBackdrop({ values, levels, width, height, colors: c, sky, dark, lines, scrollY, reduceMotion = false }: BackdropProps) {
   const key = values.join();
   const b = useMemo(() => backdropPaths(values, levels, width, height), [key, levels, width, height]); // eslint-disable-line react-hooks/exhaustive-deps
   // Lines off leaves the page plain, as the design does.
@@ -62,19 +84,15 @@ export function HeroBackdrop({ values, levels, width, height, colors: c, sky, da
           <Stop offset="0" stopColor={mixHex(c.bg, c.surface, 0.4)} /><Stop offset="0.55" stopColor={c.bg} />
           <Stop offset="1" stopColor={mixHex(mixHex(c.bg, c.text, 0.07), c.accent, 0.05)} />
         </LinearGradient>
-        <LinearGradient id="hbFade" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} /><Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0.55} /><Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.3} />
-        </LinearGradient>
-        <Mask id="hbMask" maskUnits="userSpaceOnUse" x={0} y={0} width={W} height={H}><Rect width={W} height={H} fill="url(#hbFade)" /></Mask>
       </Defs>
       {wash}
-      <G mask="url(#hbMask)">
-        <G transform={`translate(${-P} ${-P})`} fill="none" stroke={sky.line} strokeWidth={1} strokeLinejoin="round">
-          {dark ? b.stars.map((s, k) => <Circle key={`s${k}`} cx={s.x} cy={s.y} r={s.r} fill={sky.star} stroke="none" opacity={s.o} />) : null}
-          {b.grat.map((g, k) => <Path key={`g${k}`} d={g.d} strokeOpacity={g.o} strokeDasharray="2 6" strokeLinecap="round" />)}
-          {b.layers.flat().map((l, k) => <Path key={`l${k}`} d={l.d} strokeOpacity={lineK(l.k)} />)}
-        </G>
-      </G>
     </Svg>
+    {b.layers.map((layer, i) => <BackdropLayer key={i} i={i} w={b.w} h={b.h} H={H} scrollY={scrollY} still={reduceMotion}>
+      <G fill="none" stroke={sky.line} strokeWidth={1} strokeLinejoin="round">
+        {i === 0 && dark ? b.stars.map((s, k) => <Circle key={`s${k}`} cx={s.x} cy={s.y} r={s.r} fill={sky.star} stroke="none" opacity={s.o} />) : null}
+        {i === 1 ? b.grat.map((g, k) => <Path key={`g${k}`} d={g.d} strokeOpacity={g.o} strokeDasharray="2 6" strokeLinecap="round" />) : null}
+        {layer.map((l, k) => <Path key={`l${k}`} d={l.d} strokeOpacity={lineK(l.k)} />)}
+      </G>
+    </BackdropLayer>)}
   </View>;
 }

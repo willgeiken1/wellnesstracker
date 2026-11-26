@@ -1,7 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
-import Animated, { useAnimatedRef } from 'react-native-reanimated';
+import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
@@ -18,7 +18,7 @@ import { tileRoutes } from '@/features/tiles/nav';
 import { tileEdit } from '@/features/tiles/store';
 import { useTileEdit } from '@/features/tiles/use-tiles';
 import { useWorkout } from '@/features/workout/use-workout';
-import { HomeHero } from './hero';
+import { HomeBackdrop, HomeHero } from './hero';
 import { DAYS } from './tiles/data';
 import { registerHomeTiles } from './tiles/register';
 import { useHomeTiles } from './tiles/use-home-tiles';
@@ -39,6 +39,7 @@ export function Home() {
   const insets = useSafeAreaInsets();
   const focused = useFocused();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollY = useScrollViewOffset(scrollRef);
   // Health readings stay in memory for this screen only.
   const health = useHealthDays(focused, undefined, DAYS);
   const apple = useRecovery(focused, undefined, DAYS);
@@ -59,13 +60,17 @@ export function Home() {
     weigh: { run: () => go('/progress') },
   });
 
-  return <Animated.ScrollView ref={scrollRef} testID="home-scroll" style={{ flex: 1, backgroundColor: colors.bg }}
-    contentContainerStyle={{ paddingTop: Math.max(insets.top, MIN_TOP), paddingHorizontal: 16, paddingBottom: pageEndSpace(insets.bottom) }}
-    showsVerticalScrollIndicator={false}>
-    <View>
-      <HomeHero />
-      <View style={{ position: 'absolute', top: 6, right: 0 }}><ProfileButton name={name} /></View>
-    </View>
-    <TileGrid page="home" scrollRef={scrollRef} />
-  </Animated.ScrollView>;
+  // The backdrop sits behind the scroll, so the page moves over it while it stays nearly still.
+  return <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <HomeBackdrop scrollY={scrollY} />
+    <Animated.ScrollView ref={scrollRef} testID="home-scroll" style={{ flex: 1 }}
+      contentContainerStyle={{ paddingTop: Math.max(insets.top, MIN_TOP), paddingHorizontal: 16, paddingBottom: pageEndSpace(insets.bottom) }}
+      showsVerticalScrollIndicator={false}>
+      <View>
+        <HomeHero scrollY={scrollY} />
+        <View style={{ position: 'absolute', top: 6, right: 0 }}><ProfileButton name={name} /></View>
+      </View>
+      <TileGrid page="home" scrollRef={scrollRef} />
+    </Animated.ScrollView>
+  </View>;
 }

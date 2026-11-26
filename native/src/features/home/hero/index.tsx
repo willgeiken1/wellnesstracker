@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { capitals } from '@/components/kit-style';
 import { useSelectionHaptic } from '@/components/selection-haptic';
 import { KitText } from '@/components/themed-text';
@@ -20,8 +19,6 @@ import { HeroWeek } from './week';
 
 export { dateLine, greeting } from './model';
 
-/** The page's top inset, as Home lays it out (at least 47 points). */
-const MIN_TOP = 47;
 const LEVELS = [6, 9, 12] as const;
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -50,7 +47,7 @@ function useReveal(delay: number, build: boolean) {
  * and This week. Real numbers from the day's logs and Health; an empty day shows a clear sky. Tapping an arc shows that
  * pillar's full readout; a day in the week turns the whole hero to that day. Frames stop while Home isn't in front.
  */
-export function HomeHero() {
+export function HomeHero({ scrollY }: { scrollY?: SharedValue<number> } = {}) {
   const { colors, mode, reduceMotion } = useTheme();
   const c = colors as unknown as Record<string, string>;
   const dark = mode === 'dark';
@@ -59,8 +56,6 @@ export function HomeHero() {
   const { now, active } = useClock();
   const input = useHeroInput(now);
   const { width: winW, height: winH } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const top = Math.max(insets.top, MIN_TOP);
   const tick = useSelectionHaptic();
 
   // The selected day (6 is today) goes back to today when the date turns over.
@@ -75,6 +70,8 @@ export function HomeHero() {
   const calm = prefs.motion === 'calm';
   const build = !reduceMotion && !calm;
   const headStyle = useReveal(110, build), secStyle = useReveal(254, build);
+  // The map sinks a little as the page scrolls (12 percent of it), as if it sat further back than the tiles.
+  const mapDrift = useAnimatedStyle(() => ({ transform: [{ translateY: reduceMotion || !scrollY ? 0 : Math.max(0, scrollY.value) * 0.12 }] }));
 
   const select = (i: number) => { if (i === sel) return; tick(); setFocus(-1); setTouched(true); setSel(i); };
 
@@ -98,11 +95,8 @@ export function HomeHero() {
       focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
 
   return <View testID="home-hero" style={{ paddingTop: 6, paddingBottom: 6 }}>
-    <View style={{ position: 'absolute', left: -16, top: -top, width: winW, height: winH }} pointerEvents="none">
-      <HeroBackdrop values={view.week[6].values} levels={LEVELS[prefs.detail]} width={winW} height={winH} colors={c} sky={sky} dark={dark} lines={prefs.lines} />
-    </View>
     {head}
-    {map}
+    <Animated.View style={mapDrift}>{map}</Animated.View>
     {prefs.week ? <>
       <Animated.View style={[{ marginTop: 28, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }, secStyle]}>
         <KitText weight={700} size={16} lineHeight={1.1} tracking={-0.02} accessibilityRole="header">{t('homeHeroThisWeek')}</KitText>
@@ -110,5 +104,25 @@ export function HomeHero() {
       </Animated.View>
       <HeroWeek width={W + 32} week={view.week} sel={sel} colors={c} sky={sky} dark={dark} glow={prefs.glow} reduceMotion={reduceMotion} build={build} onSelect={select} />
     </> : null}
+  </View>;
+}
+
+/**
+ * Behind Home, outside its scroll: today's isobars, the far graticule and the night stars over a soft wash. The page
+ * scrolls over it while its three line layers drift only slightly, so it stays nearly fixed.
+ */
+export function HomeBackdrop({ scrollY }: { scrollY?: SharedValue<number> }) {
+  const { colors, mode, reduceMotion } = useTheme();
+  const c = colors as unknown as Record<string, string>;
+  const [prefs] = useMapPrefs();
+  const { now } = useClock();
+  const input = useHeroInput(now);
+  const values = useMemo(() => heroView(input, 6).week[6].values, [input]);
+  const sky = useMemo(() => skyTokens(c, mode), [c, mode]);
+  const { width, height } = useWindowDimensions();
+  if (!prefs.hero) return null;
+  return <View style={{ position: 'absolute', left: 0, top: 0, width, height }} pointerEvents="none">
+    <HeroBackdrop values={values} levels={LEVELS[prefs.detail]} width={width} height={height} colors={c} sky={sky} dark={mode === 'dark'}
+      lines={prefs.lines} scrollY={scrollY} reduceMotion={reduceMotion} />
   </View>;
 }
