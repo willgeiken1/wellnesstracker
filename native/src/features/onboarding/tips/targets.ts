@@ -1,8 +1,11 @@
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 import { layoutDock } from '@/features/shell/geometry';
 import { PAGES, visiblePages, type PageKey } from '@/features/shell/pages';
 import type { Hole } from './coach';
 
 export interface Screen { width: number; height: number; insetBottom: number }
+/** The phone's own bottom inset. Inside the tabs the context's bottom inset also holds the bar, so the bar is placed from this. */
+export const deviceInsetBottom = () => initialWindowMetrics?.insets.bottom ?? 0;
 const dock = (s: Screen, page: PageKey, hidden: Partial<Record<PageKey, boolean>>) => {
   const active = PAGES.findIndex(p => p.key === page);
   return { active, layout: layoutDock(s.width, s.height, s.insetBottom, PAGES.length, visiblePages(hidden, active), active) };

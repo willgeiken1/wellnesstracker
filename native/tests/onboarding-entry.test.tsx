@@ -14,7 +14,7 @@ import { LAUNCH_COLORS, LAUNCH_TIMING, PEAK, launchEnd, peakDash, peakHeight, pe
 import { onTourRequest, requestTour, takeTour, tourPending } from '../src/features/onboarding/tour/store';
 import { TOUR_PAGES, tourSteps } from '../src/features/onboarding/tour/steps';
 import { SampleTour } from '../src/features/onboarding/tour/sample-tour';
-import { HomeTips, TIPS, TIPS_KEY, TIPS_SEEN_KEY, cardTop, finishTips, plusHole, scrimColor, tabHole, tipsDue, type Measurable } from '../src/features/onboarding/tips';
+import { HomeTips, TIPS, deviceInsetBottom, TIPS_KEY, TIPS_SEEN_KEY, cardTop, finishTips, plusHole, scrimColor, tabHole, tipsDue, type Measurable } from '../src/features/onboarding/tips';
 import { LATER_AT_KEY, LATER_COUNT_KEY, NUDGE_AGAIN_MS, nudgeDue, nudgeFor, nudgeLater } from '../src/features/onboarding/nudge/model';
 import { NUDGE_RESUME, NudgeCard } from '../src/features/onboarding/nudge/nudge-card';
 
@@ -221,6 +221,11 @@ describe('first-Home tips', () => {
       expect(hole.y).toBeGreaterThan(700);
     }
     expect(plus.x).toBeGreaterThan(tab.x);
+    // On the + exactly: 24 pt above the bottom on a phone with no inset, 28 pt to its centre.
+    const flat = plusHole({ width: 393, height: 852, insetBottom: 0 }, 'home');
+    expect(flat.y + flat.h / 2).toBe(800);
+    // The bar is placed from the phone's own inset, not the tabs' larger one that includes the bar.
+    expect(deviceInsetBottom()).toBeLessThan(60);
   });
 });
 

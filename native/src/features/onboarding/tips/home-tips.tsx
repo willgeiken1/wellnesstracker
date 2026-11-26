@@ -1,12 +1,11 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
 import { useShellPrefs } from '@/features/shell/prefs';
 import { Coach, type Hole } from './coach';
 import { TIPS, TIPS_DELAY, finishTips, tipsDue, type TipsStore } from './model';
-import { measureHole, plusHole, type Measurable } from './targets';
+import { deviceInsetBottom, measureHole, plusHole, type Measurable } from './targets';
 
 export interface HomeTipsProps {
   store: TipsStore | null;
@@ -24,10 +23,12 @@ export interface HomeTipsProps {
 export function HomeTips({ store, hero, avatar }: HomeTipsProps) {
   const { reduceMotion } = useTheme();
   const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const insetBottom = deviceInsetBottom();
   const [prefs] = useShellPrefs();
   const [step, setStep] = useState(-1);
   const [hole, setHole] = useState<Hole | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const W = size?.width ?? width, H = size?.height ?? height;
 
   // Wait for Home's own reveal before the first tip.
   useEffect(() => {
@@ -41,7 +42,7 @@ export function HomeTips({ store, hero, avatar }: HomeTipsProps) {
     let live = true;
     const place = async () => {
       const target = TIPS[step].target;
-      const next = target === 'plus' ? plusHole({ width, height, insetBottom: insets.bottom }, 'home', prefs.hidden)
+      const next = target === 'plus' ? plusHole({ width: W, height: H, insetBottom }, 'home', prefs.hidden)
         : target === 'hero' ? await measureHole(hero.current, 4, 24) : await measureHole(avatar.current, 6, 30);
       if (live && next) setHole(next);
     };
@@ -49,7 +50,7 @@ export function HomeTips({ store, hero, avatar }: HomeTipsProps) {
     // Measure again once Home has finished moving things in.
     const again = setTimeout(place, reduceMotion ? 60 : 720);
     return () => { live = false; clearTimeout(again); };
-  }, [step, width, height, insets.bottom, prefs.hidden, hero, avatar, reduceMotion]);
+  }, [step, W, H, insetBottom, prefs.hidden, hero, avatar, reduceMotion]);
 
   if (step < 0 || !store) return null;
   const tip = TIPS[step];
@@ -60,5 +61,5 @@ export function HomeTips({ store, hero, avatar }: HomeTipsProps) {
   };
   return <Coach kind="tips" hole={hole} side={tip.target === 'plus' ? 'above' : tip.target === 'hero' ? 'below' : 'auto'}
     eyebrow={t('obaTipEyebrow').replace('{n}', String(step + 1))} title={t(tip.title)} body={t(tip.body)}
-    index={step} count={TIPS.length} onNext={next} />;
+    index={step} count={TIPS.length} onNext={next} onSize={setSize} />;
 }

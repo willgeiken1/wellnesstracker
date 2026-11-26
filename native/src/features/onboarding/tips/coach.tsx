@@ -47,6 +47,8 @@ export interface CoachProps {
   onNext: () => void;
   /** The tour's Skip tour; tips have none. */
   onSkip?: () => void;
+  /** The overlay's size once laid out, for targets placed by the bar's geometry (the + and the tabs). */
+  onSize?: (size: { width: number; height: number }) => void;
 }
 
 /**
@@ -54,9 +56,12 @@ export interface CoachProps {
  * in white, and a tip card with its eyebrow, title, line, dots and buttons. The hole and the card glide between targets in
  * 0.42 s; with Reduce Motion they jump. A tap anywhere moves on. It is a modal dialog named by the tip's title.
  */
-export function Coach({ kind, hole, side, eyebrow, title, body, index, count, color = 'accent', onNext, onSkip }: CoachProps) {
+export function Coach({ kind, hole, side, eyebrow, title, body, index, count, color = 'accent', onNext, onSkip, onSize }: CoachProps) {
   const k = useKit(), { reduceMotion } = useTheme();
-  const { width: W, height: H } = useWindowDimensions();
+  const win = useWindowDimensions();
+  // The overlay's own size is the space the spotlight is drawn in; until it is laid out, the window's.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const W = size?.width ?? win.width, H = size?.height ?? win.height;
   const [cardH, setCardH] = useState(0);
   const x = useSharedValue(hole?.x ?? 0), y = useSharedValue(hole?.y ?? 0), w = useSharedValue(hole?.w ?? 0), h = useSharedValue(hole?.h ?? 0), r = useSharedValue(hole?.r ?? 0);
   const top = useSharedValue(0), shown = useSharedValue(0), placed = useSharedValue(0);
@@ -79,7 +84,8 @@ export function Coach({ kind, hole, side, eyebrow, title, body, index, count, co
   const tapAnywhere = { onStartShouldSetResponder: () => true, onResponderRelease: onNext };
   const next = last ? t(kind === 'tour' ? 'obaStartExploring' : 'obaGotIt') : t('obaNext');
   return <Modal transparent visible animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onNext}>
-    <Animated.View testID={`coach-${kind}`} style={[StyleSheet.absoluteFill, fade]} accessibilityViewIsModal>
+    <Animated.View testID={`coach-${kind}`} style={[StyleSheet.absoluteFill, fade]} accessibilityViewIsModal
+      onLayout={e => { const { width, height } = e.nativeEvent.layout; if (width !== size?.width || height !== size?.height) { setSize({ width, height }); onSize?.({ width, height }); } }}>
       {/* A tap anywhere moves on, as in the design; it isn't a control of its own, so it takes the touch without a look. */}
       <View testID="coach-scrim" accessible={false} importantForAccessibility="no" style={StyleSheet.absoluteFill} {...tapAnywhere}>
         {hole ? <Svg width={W} height={H} style={StyleSheet.absoluteFill}><AnimatedPath animatedProps={scrim} fill={scrimColor(kind, k.dark)} fillRule="evenodd" /></Svg>

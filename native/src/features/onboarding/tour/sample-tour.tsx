@@ -1,13 +1,12 @@
 import { router, type Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
 import { useShellPrefs } from '@/features/shell/prefs';
 import { showToast } from '@/features/shell/toast';
 import { Coach, type Hole } from '../tips/coach';
-import { tabHole } from '../tips/targets';
+import { deviceInsetBottom, tabHole } from '../tips/targets';
 import { tourSteps } from './steps';
 import { onTourRequest, takeTour, tourPending } from './store';
 
@@ -24,11 +23,14 @@ export const TOUR_DELAY = 450;
 export function SampleTour({ demo }: { demo: boolean }) {
   const { reduceMotion } = useTheme();
   const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const insetBottom = deviceInsetBottom();
   const [prefs] = useShellPrefs();
   const steps = useMemo(() => tourSteps(), []);
   const [step, setStep] = useState(-1);
   const [hole, setHole] = useState<Hole | null>(null);
+  // The bar is placed in the overlay's own space, once the overlay has been laid out.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const W = size?.width ?? width, H = size?.height ?? height;
   // Read when the request is taken, so a change to Reduce Motion doesn't restart the wait and lose the request.
   const reduced = useRef(reduceMotion);
   useEffect(() => { reduced.current = reduceMotion; }, [reduceMotion]);
@@ -47,9 +49,9 @@ export function SampleTour({ demo }: { demo: boolean }) {
     if (step < 0) return;
     const s = steps[step];
     router.navigate(s.href as Href);
-    const id = setTimeout(() => setHole(tabHole({ width, height, insetBottom: insets.bottom }, s.page, prefs.hidden)), TOUR_WAIT);
+    const id = setTimeout(() => setHole(tabHole({ width: W, height: H, insetBottom }, s.page, prefs.hidden)), TOUR_WAIT);
     return () => clearTimeout(id);
-  }, [step, steps, width, height, insets.bottom, prefs.hidden]);
+  }, [step, steps, W, H, insetBottom, prefs.hidden]);
 
   if (step < 0) return null;
   const s = steps[step];
@@ -60,5 +62,5 @@ export function SampleTour({ demo }: { demo: boolean }) {
   };
   const next = () => { if (step < steps.length - 1) setStep(step + 1); else end(); };
   return <Coach kind="tour" hole={hole} side="above" eyebrow={s.eyebrow} title={s.title} body={s.body}
-    index={step} count={steps.length} color={s.color} onNext={next} onSkip={end} />;
+    index={step} count={steps.length} color={s.color} onNext={next} onSkip={end} onSize={setSize} />;
 }
