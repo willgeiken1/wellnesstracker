@@ -36,9 +36,10 @@ already exist on the hosted project. `.github/workflows/row-sync-check.yml`
 ("Check row-sync on Supabase (read-only)") shows whether they match this plan. Run
 it by hand on `main` and approve the production environment. It changes nothing:
 
-1. `live/compare.sql` compares every column, default, forced RLS, policy, trigger,
-   index, `anon`/`authenticated` grant, `row_sync_seq` and the four row-sync
-   functions (arguments, security, settings, body hash) with the shape that
+1. `live/compare.sql` compares every column (type, default, identity), column
+   grant, forced RLS, constraint, policy, trigger, index, `anon`/`authenticated`
+   table privilege, `row_sync_seq` with its settings and grants, and the four
+   row-sync functions (arguments, security, settings, owner, body hash) with the shape that
    `supabase/migrations` plus `apply-0001-0002.sql` produce, and lists every
    difference in one error as `missing` or `unexpected`;
 2. `live/verify.sql` runs the apply workflow's closing safety checks.
