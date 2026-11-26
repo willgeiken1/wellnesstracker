@@ -63,7 +63,7 @@ export function FloatingTabs() {
   // The pages move themselves (TabScene); the navigator only keeps the page that leaves on screen while it fades out.
   return <Tabs screenOptions={{ headerShown: false, transitionSpec: TAB_HOLD }}
     screenLayout={({ children, route, navigation }) => <DockInsets>
-      <TabScene routeKey={route?.key} home={route?.name === 'index'} navigation={navigation as unknown as SceneNavigation}>{children}</TabScene>
+      <TabScene routeKey={route?.key} name={route?.name} home={route?.name === 'index'} navigation={navigation as unknown as SceneNavigation}>{children}</TabScene>
     </DockInsets>}
     tabBar={({ state, emitter, navigateToTab }) => <ShellChrome route={state.routes[state.index]?.name}
       goTo={(page: PageKey) => {

@@ -7,7 +7,8 @@ interface TabState { index: number; routes: { key: string }[] }
 /** The bits of a tab screen's navigation the scene listens to. */
 export interface SceneNavigation {
   getState: () => TabState;
-  addListener: (type: 'state', listener: (e: { data: { state: TabState } }) => void) => () => void;
+  addListener(type: 'state', listener: (e: { data: { state: TabState } }) => void): () => void;
+  addListener(type: 'focus', listener: () => void): () => void;
 }
 
 const openKey = (s: TabState | undefined) => s?.routes[s.index]?.key;
@@ -21,11 +22,12 @@ export function resetTabScenes() { launchKey = null; }
  * page that opens fades in over it (180 ms after 40 ms) while it rises 8 pt on the tab spring. A page's first visit only fades
  * in; Reduce Motion fades only. Screens pushed over the tabs leave the pages as they are, since only a change of tab moves them.
  */
-export function TabScene({ children, routeKey, home, navigation }: { children: ReactNode; routeKey?: string; home?: boolean; navigation?: SceneNavigation }) {
+export function TabScene({ children, routeKey, name, home, navigation }: { children: ReactNode; routeKey?: string; name?: string; home?: boolean; navigation?: SceneNavigation }) {
   const { reduceMotion } = useTheme();
   const reduced = useRef(reduceMotion);
   useEffect(() => { reduced.current = reduceMotion; }, [reduceMotion]);
-  const opacity = useSharedValue(1), rise = useSharedValue(0);
+  // A page under the navigator starts unseen and fades in when it opens, so it never shows for a frame before its fade.
+  const opacity = useSharedValue(navigation && routeKey ? 0 : 1), rise = useSharedValue(0);
 
   useEffect(() => {
     if (!navigation || !routeKey) return;
@@ -44,14 +46,18 @@ export function TabScene({ children, routeKey, home, navigation }: { children: R
       if (launchKey === null) launchKey = routeKey;
       arrive(launchKey !== routeKey);
     }
-    return navigation.addListener('state', e => {
-      const now = openKey(e.data.state) === routeKey;
+    const follow = (state: TabState) => {
+      const now = openKey(state) === routeKey;
       if (now === open) return;
       open = now;
       if (now) { arrive(!visited); visited = true; } else leave();
-    });
+    };
+    const offState = navigation.addListener('state', e => follow(e.data.state));
+    // Focus comes back after a screen pushed over the tabs closes; it only matters if a change of tab was missed meanwhile.
+    const offFocus = navigation.addListener('focus', () => follow(navigation.getState()));
+    return () => { offState(); offFocus(); };
   }, [navigation, routeKey, home, opacity, rise]);
 
   const style = useAnimatedStyle(() => ({ flex: 1, opacity: opacity.value, transform: [{ translateY: rise.value }] }));
-  return <Animated.View style={style}>{children}</Animated.View>;
+  return <Animated.View style={style} testID={name ? `tab-scene-${name}` : undefined}>{children}</Animated.View>;
 }

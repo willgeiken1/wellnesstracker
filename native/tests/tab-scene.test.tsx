@@ -23,7 +23,11 @@ jest.mock('../src/design/theme-provider', () => ({ useTheme: () => ({ reduceMoti
 function tabs(open: string) {
   let state = { index: ['a', 'b', 'c'].indexOf(open), routes: [{ key: 'a' }, { key: 'b' }, { key: 'c' }] };
   const listeners = new Set<(e: { data: { state: typeof state } }) => void>();
-  const navigation: SceneNavigation = { getState: () => state, addListener: (_t, l) => { listeners.add(l); return () => { listeners.delete(l); }; } };
+  const add = (type: string, l: (e: { data: { state: typeof state } }) => void) => {
+    if (type !== 'state') return () => {};
+    listeners.add(l); return () => { listeners.delete(l); };
+  };
+  const navigation = { getState: () => state, addListener: add } as unknown as SceneNavigation;
   const go = (key: string) => act(async () => { state = { ...state, index: ['a', 'b', 'c'].indexOf(key) }; listeners.forEach(l => l({ data: { state } })); });
   return { navigation, go };
 }
@@ -72,6 +76,12 @@ test('under Reduce Motion a page only cross-fades: 200 ms in, nothing travels', 
   expect(a.opacity.value).toEqual({ delay: 0, animation: { timing: 1, config: { duration: 200, easing: 'linear' } } });
   expect(a.rise.value).toBe(0);
   expect(b.opacity.value).toEqual({ timing: 0, config: { duration: 110, easing: 'linear' } });
+});
+
+test('a page under the navigator starts unseen, so it never shows for a frame before it fades in', async () => {
+  const { navigation } = tabs('a');
+  const b = await scene(navigation, 'b');
+  expect(b.opacity.value).toBe(0);
 });
 
 test('a state change that keeps the same tab open moves nothing', async () => {
