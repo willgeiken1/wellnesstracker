@@ -1592,6 +1592,20 @@ export const en = {
   welcomePillsLabel: 'Training, food, sleep and routines', welcomePillTraining: 'Training', welcomePillFood: 'Food', welcomePillSleep: 'Sleep', welcomePillRoutines: 'Routines',
   welcomeLegal: 'By continuing you agree to the ', welcomeLegalAnd: ' and ',
   // P7 settings end
+  // SC settings and welcome side-by-side fixes
+  settingsMapHome: 'Home', settingsMapHero: 'Insight map', settingsMapHeroOn: 'Your day score, map and week at the top of Home', settingsMapHeroOff: 'Home starts with your greeting and tiles',
+  settingsMapOffFoot: 'Turn it back on any time. Your map settings are kept.',
+  settingsMapMap: 'Map', settingsMapMapOn: 'The artwork behind your numbers', settingsMapMapOff: 'Numbers only, no artwork', settingsMapStyle: 'Map style',
+  settingsMapAurora: 'Aurora', settingsMapAuroraLine: 'Light curtains rising off the night side', settingsMapRidge: 'Ridgeline', settingsMapRidgeLine: 'A layered horizon where three peaks climb to each goal',
+  settingsMapDetail: 'Detail', settingsMapLight: 'Light', settingsMapMedium: 'Medium', settingsMapRich: 'Rich',
+  settingsMapGlow: 'Glow', settingsMapOff: 'Off', settingsMapSoft: 'Soft', settingsMapFull: 'Full', settingsMapCalm: 'Calm',
+  settingsMapMotion: 'Motion', settingsMapFullSub: 'Builds in when you open Home', settingsMapCalmSub: 'Appears without the opening build',
+  settingsMapLabels: 'Values on the map', settingsMapLines: 'Lines behind Home', settingsMapWeek: 'This week',
+  settingsMapSameNumbers: 'Every style shows the same numbers.', settingsMapReduceMotion: 'Reduce Motion in iOS also turns movement off here.',
+  settingsLaterVersion: 'Comes in a later version', settingsHealthBodyLater: 'In a later version, Insight reads these from Health. It never writes to Health, and what it reads stays on this iPhone.',
+  settingsRemHeroLater: 'Reminders arrive with notifications in a later version. Nothing here is sent yet.',
+  settingsPlateLbA11y: '{n} pound plates', settingsPlateKgA11y: '{n} kilogram plates',
+  settingsMapReset: 'Reset Insight map', settingsMapResetToast: 'Insight map is back to its defaults',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
