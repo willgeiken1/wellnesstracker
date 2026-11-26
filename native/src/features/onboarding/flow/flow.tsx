@@ -86,7 +86,10 @@ export function Flow({ state, setState, resume, onBlocked, onDone }: {
   const back = () => {
     const p = prevOf(step, d, resume);
     if (p) { go(p); return; }
-    if (router.canGoBack()) router.back(); else router.replace(resume ? '/' : '/auth');
+    if (router.canGoBack()) { router.back(); return; }
+    // Welcome is closed while in guest mode, so a guest going back leaves it first.
+    if (!resume && auth.guest) auth.exitGuest?.();
+    router.replace(resume ? '/' : '/auth');
   };
 
   // Fill from Apple Health: connecting reads body weight into the app; the newest reading fills the field.
