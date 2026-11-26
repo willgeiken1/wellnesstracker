@@ -23,7 +23,7 @@ import { useTrainingData } from '../training-viz';
 import { exLabel } from '../logger/model';
 import { trainingNav } from '../nav';
 import { axisLabel, chartScale, exerciseHistory, type LiftSession } from './model';
-import { ColorEyebrow, Page } from './page';
+import { ColorEyebrow, EyebrowLine, Page } from './page';
 import { Tappable } from '@/components/tappable';
 
 const RESTS = [60, 90, 120, 150, 180];
@@ -50,9 +50,9 @@ export function ExerciseDetail() {
   const live = !!active && data.workout.entries(active.id).some(e => String(e.data.exercise).toLowerCase() === name.toLowerCase());
   const rest = clock(data.workout.rest(name).seconds * 1000);
   return <Page testID="exercise-detail" nav={nav}>
-    <View style={{ marginTop: 8 }}>
-      <ColorEyebrow color={k.c['text-muted']}>{[...groups, equipmentName(ex.equipment)].join(' · ')}</ColorEyebrow>
-      <KitText weight={700} size={30} lineHeight={1.1} tracking={-0.03} accessibilityRole="header" style={{ marginTop: 6, marginBottom: 2 }}>{label}</KitText>
+    <View style={{ marginTop: 12 }}>
+      <EyebrowLine color={k.c['text-muted']}>{[...groups, equipmentName(ex.equipment)].join(' · ')}</EyebrowLine>
+      <KitText weight={700} size={30} lineHeight={1.1} tracking={-0.03} accessibilityRole="header" style={{ marginTop: 4, marginBottom: 2 }}>{label}</KitText>
     </View>
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>

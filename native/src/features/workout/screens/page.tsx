@@ -26,6 +26,11 @@ export function ColorEyebrow({ children, color }: { children: string; color: str
   return <Text style={[font(700, 11, 1, 0.12), capitals, { color }]}>{children}</Text>;
 }
 
+/** An eyebrow on its own text line (`<div><span class="eyebrow">`): the design's 21 pt body line, so it has the same air above and below. */
+export function EyebrowLine({ children, color }: { children: string; color: string }) {
+  return <View style={{ height: 21, paddingTop: 6.5 }}><ColorEyebrow color={color}>{children}</ColorEyebrow></View>;
+}
+
 /** Duration, sets and volume in three columns (`.grid3` of `ui.stat`). */
 export function StatsCard({ min, sets, volume, unit, style }: { min: number; sets: number; volume: number; unit: string; style?: object }) {
   // Bottom-aligned, so the labels line up whether or not a number has a unit beside it.

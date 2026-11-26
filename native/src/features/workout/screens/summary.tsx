@@ -21,7 +21,7 @@ import { exLabel } from '../logger/model';
 import { leaveLogger } from '../logger/screen';
 import { trainingNav } from '../nav';
 import { alsoText, fullDate, sessionResult, type SessionResult } from './model';
-import { ColorEyebrow, Page, StatsCard } from './page';
+import { EyebrowLine, Page, StatsCard } from './page';
 
 /** The workout summary (`workout-summary`): the person's own numbers for the workout just finished. No written recap. */
 export function WorkoutSummary() {
@@ -52,7 +52,7 @@ function SummaryBody({ res, perWeek, weekDone, planName, onDone }: { res: Sessio
       <View style={{ width: 84, height: 84, borderRadius: 42, marginBottom: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(k.c.training, 0.18) }}>
         <Icon name="check" size={40} color={k.c.training} />
       </View>
-      <ColorEyebrow color={k.c.training}>{tr('trainingWorkoutComplete')}</ColorEyebrow>
+      <EyebrowLine color={k.c.training}>{tr('trainingWorkoutComplete')}</EyebrowLine>
       <KitText weight={700} size={32} lineHeight={1.1} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 8, marginBottom: 4, textAlign: 'center' }}>{res.name}</KitText>
       <KitText weight={500} size={14.5} color="text-muted" style={{ textAlign: 'center' }}>
         {tr('trainingDayTimes', { date: fullDate(res.day), a: clockTime(res.startedAt), b: clockTime(res.finishedAt) })}</KitText>
