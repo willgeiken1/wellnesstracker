@@ -12,6 +12,7 @@ import { useAppleHealth } from '@/features/health/use-apple-health';
 import { useOura } from '@/features/health/use-oura';
 import { readProfile } from '@/features/onboarding/model';
 import { st } from './copy';
+import { workoutRest } from './workout-data';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { GROUPS, SECTIONS, searchSettings, type SectionId } from './sections';
 
@@ -58,7 +59,7 @@ export function useWho() {
 }
 
 /** The value at the end of each section's row (SUM in the mockup). */
-export function summary(id: SectionId, p: SettingsPrefs, theme: string, connected: number, syncs: boolean, o: { kcal?: number; limited?: boolean } = {}): string {
+export function summary(id: SectionId, p: SettingsPrefs, theme: string, connected: number, syncs: boolean, o: { kcal?: number; limited?: boolean; rest?: number } = {}): string {
   // The calorie target is the one Goals and targets edits (the food targets), not a copy kept in Settings.
   const kcal = o.kcal ?? p.goals.kcal;
   switch (id) {
@@ -70,7 +71,7 @@ export function summary(id: SectionId, p: SettingsPrefs, theme: string, connecte
     case 'privacy': return st(p.priv.lock ? 'settingsFaceId' : 'settingsNoLock');
     case 'appearance': return theme;
     case 'units': return p.units.weight === 'lb' ? 'US' : st('settingsMetric');
-    case 'workout': return st('settingsRestValue', { v: mss(p.work.rest) });
+    case 'workout': return st('settingsRestValue', { v: mss(o.rest ?? p.work.rest) });
     case 'about': return APP_VERSION;
     default: return '';
   }
@@ -99,7 +100,7 @@ export function SettingsHome() {
     <ScrollView testID="screen-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" scrollEventThrottle={16}
       onScroll={e => setScrolled(e.nativeEvent.contentOffset.y > 46)} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 + insets.bottom }}>
       <StackGapContext.Provider value={0}><SurfaceContext.Provider value="page">
-        <View style={{ marginTop: 2, marginBottom: 12 }}><LargeTitle display>{st('settings')}</LargeTitle></View>
+        <LargeTitle display>{st('settings')}</LargeTitle>
         <View style={{ marginBottom: 16 }}>
           <SearchField testID="settings-search" placeholder={st('settingsSearchPlaceholder')} accessibilityLabel={st('settingsSearchPlaceholder')} value={query} onChangeText={setQuery}
             autoCorrect={false} autoCapitalize="none" returnKeyType="search" clearButtonMode="while-editing" />
@@ -126,7 +127,7 @@ export function SettingsHome() {
           <View style={{ height: 20 }} />
           {GROUPS.map((group, gi) => <View key={gi} style={{ marginTop: gi ? 20 : 0 }}>
             <List testID={`settings-group-${gi}`}>{group.map(id => {
-              const s = SECTIONS[id], v = summary(id, prefs, theme, connected, syncs, { kcal: goalKcal, limited: !!who.auth.phoneOnly });
+              const s = SECTIONS[id], v = summary(id, prefs, theme, connected, syncs, { kcal: goalKcal, limited: !!who.auth.phoneOnly, rest: workoutRest(who.auth.repository, prefs.work.rest) });
               return <ListRow key={id} testID={`settings-row-${id}`} icon={s.icon} color={s.color === 'muted' ? 'text-muted' : s.color} title={s.title} value={v || undefined} onPress={() => openSection(id)} />;
             })}</List>
           </View>)}

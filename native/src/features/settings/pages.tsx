@@ -3,12 +3,13 @@ import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
+import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ProgressBar, SegmentedControl, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
 import { useAuth } from '@/auth/provider';
 import { FLOZ } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { useWorkoutStore } from '@/features/workout/use-workout';
+import { saveWorkoutRest, workoutRest } from './workout-data';
 import { trainingMinutes } from '@/features/home/hero/data';
 import { localDay } from '@/core/workout/rules';
 import { readGoalsData, saveFoodTarget, saveGoalWeight, saveWaterGoal, type GoalsData } from './goals-data';
@@ -24,7 +25,7 @@ import { st } from './copy';
 import { APP_VERSION, Avatar, useWho } from './home';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
-import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper, useOptionalAuth } from './ui';
+import { Cl, Gap, H, Hero, ListRow, Panel, PickRow, RowStepper, SetPage, TimeStepper, useOptionalAuth } from './ui';
 import { backupWhen } from './data-actions';
 
 const KG = 2.20462;
@@ -45,7 +46,8 @@ const paceLabel = (lb: number, p: SettingsPrefs) => p.units.weight === 'kg' ? `$
 function SegRow<T extends string>({ title, sub, value, options, onChange }: { title: string; sub?: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
   return <ListRow title={title} sub={sub} right={<View style={{ width: 150 }}><SegmentedControl compact label={title} value={value} options={options} onChange={onChange} /></View>} />;
 }
-const Ext = () => { const k = useKit(); return <Icon name="ext" size={16} color={k.c.ghost} />; };
+/** The "opens outside the app" mark at a row's end; it sits where a chevron would (`.chev`: 4 pt out each side). */
+const Ext = () => { const k = useKit(); return <View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>; };
 
 /* ---------- Goals and targets ---------- */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -68,6 +70,7 @@ export function GoalsPage() {
   const foot = nowLb == null ? st('settingsPaceFootNoWeight') : !left ? st('settingsAtGoal')
     : st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(goalLb, p), date: `${MONTHS[eta!.getMonth()]} ${eta!.getDate()}` });
   const lost = nowLb != null && startLb != null ? startLb - nowLb : null, total = startLb != null ? startLb - goalLb : null;
+  const hasProgress = lost != null && total != null && total > 0;
   // Minutes trained today, as Home's Insight map counts them (finished sessions and the one running now).
   const store = useWorkoutStore(repo);
   let trained: number | null = null;
@@ -77,21 +80,21 @@ export function GoalsPage() {
     <H first>{st('settingsDailyTargets')}</H>
     <List footer={st('settingsTargetsFoot')}>
       <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: kj ? `${formatNumber(g.eaten * 4.184)} kJ` : `${formatNumber(g.eaten)} kcal` }) : undefined}
-        right={<Stepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
+        right={<RowStepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
         step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''}
         onChange={v => { const next = kj ? Math.round(v / 4.184) : v; if (repo) save(() => saveFoodTarget(repo, 'kcal', next)); else set('goals.kcal', next); }} />} />
       <ListRow title={st('settingsProtein')} sub={g ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
-        right={<Stepper label={st('settingsDailyProtein')} value={protein} step={5} min={40} max={300} unit="g"
+        right={<RowStepper label={st('settingsDailyProtein')} value={protein} step={5} min={40} max={300} unit="g"
         onChange={v => { if (repo) save(() => saveFoodTarget(repo, 'protein', v)); else set('goals.protein', v); }} />} />
-      <ListRow title={st('settingsTraining')} sub={trained != null ? st('settingsMinToday', { v: trained }) : undefined} right={<Stepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />
+      <ListRow title={st('settingsTraining')} sub={trained != null ? st('settingsMinToday', { v: trained }) : undefined} right={<RowStepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />
       <PickRow title={st('settingsSleep')} value={p.goals.sleep} options={sleep} onPick={v => set('goals.sleep', v)} />
       {g && waterV != null ? <ListRow title={st('settingsWater')} sub={st('settingsSoFar', { v: ml ? `${formatNumber(Math.round(g.drankL * 1000))} mL` : `${Math.round(g.drankL * FLOZ)} oz` })}
-        right={<Stepper label={st(ml ? 'settingsDailyWaterMl' : 'settingsDailyWaterOz')} value={waterV} step={ml ? 100 : 4} min={ml ? 1000 : 32} max={ml ? 6000 : 200} unit={ml ? 'mL' : 'oz'}
+        right={<RowStepper label={st(ml ? 'settingsDailyWaterMl' : 'settingsDailyWaterOz')} value={waterV} step={ml ? 100 : 4} min={ml ? 1000 : 32} max={ml ? 6000 : 200} unit={ml ? 'mL' : 'oz'}
           onChange={v => save(() => saveWaterGoal(repo!, ml ? v / 1000 : v / FLOZ))} />} /> : null}
     </List>
     <H>{st('settingsWeightGoal')}</H>
     <Panel>
-      {lost != null && total != null && total > 0 ? <View style={{ padding: 16 }}>
+      {hasProgress ? <View style={{ padding: 16 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <Eyebrow>{st('settingsProgress')}</Eyebrow>
           <KitText weight={700} size={14} numeric color="text-muted">{st('settingsLostOf', { a: wt(Math.max(0, lost), p), b: wt(total, p) })}</KitText>
@@ -102,7 +105,7 @@ export function GoalsPage() {
           <KitText weight={600} size={12.5} color="text-muted">{st('settingsGoalW', { v: wt(goalLb, p) })}</KitText>
         </View>
       </View> : null}
-      <Cl><ListRow title={st('settingsGoalWeight')} right={<Stepper label={st('settingsGoalWeight')} value={kg ? Number((goalLb / KG).toFixed(1)) : Number(goalLb.toFixed(1))}
+      <Cl first={!hasProgress}><ListRow title={st('settingsGoalWeight')} right={<RowStepper label={st('settingsGoalWeight')} value={kg ? Number((goalLb / KG).toFixed(1)) : Number(goalLb.toFixed(1))}
         step={0.5} dec={1} min={kg ? 36 : 80} max={kg ? 180 : 400} unit={kg ? 'kg' : 'lb'}
         onChange={v => { set('goals.weight', kg ? Math.round(v * KG * 2) / 2 : v); if (repo) save(() => saveGoalWeight(repo, v, kg ? 'kg' : 'lb')); }} />} /></Cl>
       {nowLb != null && g?.currentDay ? <Cl><ListRow title={st('settingsCurrentWeight')} sub={shortDay(g.currentDay)} value={wt(nowLb, p)}
@@ -154,7 +157,7 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
         </View>
       </Conn>
       {limited ? null : <Cl>
-        <ListRow title={st(appleOn ? 'settingsReadHealthNow' : 'settingsConnectHealth')} chevron={false} right={<Icon name="repeat" size={18} color={k.c.ghost} />}
+        <ListRow title={st(appleOn ? 'settingsReadHealthNow' : 'settingsConnectHealth')} chevron={false} right={<View style={{ marginHorizontal: -4 }}><Icon name="repeat" size={16} color={k.c.ghost} /></View>}
           disabled={apple.access === 'unavailable' || apple.busy} onPress={() => apple.connect()} />
         <ListRow title={st('settingsChooseReads')} sub={st('settingsInHealthApp')} chevron={false} right={<Ext />}
           onPress={() => actionSheet({ title: st('settingsChooseReads'), message: st('settingsChooseReadsMsg'), acts: [{ label: st('settingsOpenHealth'), onPress: () => { void Linking.openURL('x-apple-health://').catch(() => {}); } }] })} />
@@ -172,7 +175,9 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
           acts: [{ label: st('settingsContinueOura'), onPress: () => ring.connect() }] })} />
         <ListRow title={st('settingsDisconnectOura')} danger chevron={false} onPress={() => actionSheet({ title: st('settingsDisconnectOuraQ'), message: st('settingsDisconnectOuraMsg'),
           acts: [{ label: st('settingsDisconnectOura'), destructive: true, onPress: () => { ring.disconnect(); showToast(st('settingsOuraDisconnected'), { color: 'warning' }); } }] })} />
-      </> : <ListRow title={st('settingsConnectOura')} sub={ouraOffered ? st('settingsConnectOuraSub') : st('settingsOuraNeedsAccount')} disabled={!ouraOffered} onPress={() => ring.connect()} />}</Cl>
+      </> : ouraOffered ? <ListRow title={st('settingsConnectOura')} sub={st('settingsConnectOuraSub')} onPress={() => ring.connect()} />
+        /* Not offered (no account to keep Oura days in): the row is dimmed like the design's disabled rows and has no chevron. */
+        : <View style={{ opacity: 0.45 }}><ListRow title={st('settingsConnectOura')} sub={st('settingsOuraNeedsAccount')} chevron={false} disabled onPress={() => {}} /></View>}</Cl>
     </Panel>
     <H>{st('settingsComingLater')}</H>
     <List footer={st('settingsLaterFoot')}>
@@ -182,8 +187,8 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
         if (limited) return <ListRow key={n} title={n} sub={st('settingsComingLater')} chevron={false} />;
         return <ListRow key={n} title={n} sub={on ? st('settingsLaterOn') : st('settingsComingLater')} chevron={false}
           accessibilityLabel={`${n}, ${st('settingsComingLaterLower')}. ${on ? st('settingsLaterOnA11y') : st('settingsLaterOffA11y')}`}
-          right={on ? <Badge label={st('settingsOnTheList')} color="success" /> : <View style={{ minHeight: 34, paddingHorizontal: 12, borderRadius: 999, justifyContent: 'center', backgroundColor: k.c['accent-tint'] }}>
-            <KitText weight={600} size={13.5} color="accent">{st('settingsTellMe')}</KitText></View>}
+          right={on ? <Badge label={st('settingsOnTheList')} color="success" /> : <View style={{ minHeight: 34, paddingHorizontal: 12, borderRadius: 999, justifyContent: 'center', backgroundColor: alpha(k.c.accent, 0.16) }}>
+            <KitText weight={700} size={13.5} tracking={-0.01} color="accent">{st('settingsTellMe')}</KitText></View>}
           onPress={() => { set(`later.${n}`, !on); showToast(!on ? st('settingsLaterToast', { n }) : st('settingsLaterOffToast', { n })); }} />;
       })}
     </List>
@@ -320,7 +325,6 @@ export function PrivacyPage({ crash, analytics, ai }: { crash?: ReactNode; analy
   let lastKg: number | null = null;
   try { lastKg = repo ? lastWeight(repo.list('weigh_ins')) : null; } catch { lastKg = null; }
   return <SetPage back={st('settings')} title={st('settingsPrivacyTitle')} testID="settings-privacy">
-    <View style={{ height: 8 }} />
     <List>
       <ListRow icon="faceid" color="success" title={st('settingsFaceIdLock')} sub={st('settingsFaceIdLockSub')} toggle={p.priv.lock} onToggle={v => set('priv.lock', v)} />
       {p.priv.lock ? <PickRow title={st('settingsRequireFaceId')} value={p.priv.after} options={after} onPick={v => set('priv.after', v)} /> : null}
@@ -342,7 +346,8 @@ export function PrivacyPage({ crash, analytics, ai }: { crash?: ReactNode; analy
 }
 
 function HidePreview({ text }: { text: string }) {
-  return <View accessible style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16 }}>
+  const k = useKit();
+  return <View accessible style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: k.c.hair }}>
     <KitText weight={600} size={13.5} color="text-muted">{st('settingsPreviewOnHome')}</KitText>
     <KitText weight={700} size={17} numeric>{text}</KitText>
   </View>;
@@ -358,7 +363,6 @@ export function UnitsPage() {
   const sample = [wt(182.1, p), u.height === 'cm' ? '180 cm' : '5 ft 11 in', u.energy === 'kJ' ? '5,190 kJ' : '1,240 kcal', u.water === 'ml' ? '1,680 mL' : '57 oz',
     u.distance === 'km' ? '5.8 km' : '3.6 mi', clock(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), p)];
   return <SetPage back={st('settings')} title={st('settingsUnitsTitle')} testID="settings-units">
-    <View style={{ height: 8 }} />
     <List>
       <SegRow title={st('settingsWeight')} value={u.weight} onChange={v => set('units.weight', v)} options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
       <SegRow title={st('settingsHeight')} value={u.height} onChange={v => set('units.height', v)} options={[{ value: 'ftin', label: 'ft, in' }, { value: 'cm', label: 'cm' }]} />
@@ -376,7 +380,6 @@ export function UnitsPage() {
       </View>
     </Panel>
     <ListFooter>{st('settingsUnitsFoot', { a: order[0], b: order[1] })}</ListFooter>
-    <View style={{ height: 0, backgroundColor: k.c.bg }} />
   </SetPage>;
 }
 
@@ -387,16 +390,32 @@ function PlateChip({ label, a11y, selected, onPress }: { label: string; a11y: st
   return <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={a11y} accessibilityState={{ selected }} onPress={onPress} hitSlop={{ top: 4, bottom: 4 }}
     style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center',
       backgroundColor: selected ? k.c.training : k.dark ? k.c['surface-2'] : k.c.bg, boxShadow: selected || k.dark ? undefined : k.cardEdge }}>
-    <KitText weight={700} size={13.5} numeric color={selected ? 'on-accent' : 'text'}>{label}</KitText>
+    <KitText weight={600} size={13.5} numeric color={selected ? 'on-accent' : 'text'}>{label}</KitText>
   </Tappable>;
 }
 export function WorkoutPage() {
   const k = useKit();
   const [p, set] = useSettingsPrefs();
   // The phone-only build sends no reminders, so the rest timer alert reads Off there.
-  const phoneOnly = useOptionalAuth()?.phoneOnly === true;
+  const auth = useOptionalAuth(), phoneOnly = auth?.phoneOnly === true, repo = auth?.repository ?? null;
+  const [, bump] = useState(0);
   const w = p.work, kg = p.units.weight === 'kg', u = kg ? 'kg' : 'lb';
-  const plates = kg ? [25, 20, 15, 10, 5, 2.5, 1.25] : [55, 45, 35, 25, 10, 5, 2.5], pset = kg ? w.platesKg : w.plates;
+  const plates = kg ? [25, 20, 15, 10, 5, 2.5, 1.25] : [55, 45, 35, 25, 10, 5, 2.5];
+  // Default rest, the plates you have and haptics are the ones a workout uses, so a change here shows in the next set.
+  const store = useWorkoutStore(repo);
+  const live = <T,>(read: () => T, fallback: T): T => { try { return store ? read() : fallback; } catch { return fallback; } };
+  const rest = workoutRest(store ? repo : null, w.rest);
+  const own = live<number[] | null>(() => store!.preferences().plateSet(u), null);
+  const pset: Record<string, boolean> = own ? Object.fromEntries(plates.map(pl => [String(pl).replace('.', '_'), own.includes(pl)])) : kg ? w.platesKg : w.plates;
+  const haptics = live(() => store!.hapticsEnabled(), w.haptics);
+  const act = (fn: () => void) => { try { fn(); } catch { /* left as last saved */ } bump(n => n + 1); };
+  const setRest = (v: number) => { set('work.rest', v); if (store && repo) act(() => saveWorkoutRest(repo, v)); };
+  const setPlate = (pl: number, id: string, on: boolean) => {
+    set(`work.${kg ? 'platesKg' : 'plates'}.${id}`, on);
+    // Sizes saved in a workout that this page does not list are kept.
+    if (store && own) act(() => store.preferences().savePlates(u, on ? [...own, pl] : own.filter(x => x !== pl)));
+  };
+  const setHaptics = (v: boolean) => { set('work.haptics', v); if (store && repo) act(() => repo.localSave('haptics', v)); };
   const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar, rnd = kg ? 2.5 : 5;
   const pct = ({ 1: [0.6], 2: [0.5, 0.75], 3: [0.4, 0.6, 0.8], 4: [0.4, 0.55, 0.7, 0.85] } as Record<number, number[]>)[w.warmN] ?? [0.5, 0.75];
   const reps = ({ 1: [5], 2: [8, 3], 3: [8, 5, 2], 4: [8, 5, 3, 1] } as Record<number, number[]>)[w.warmN] ?? [8, 3];
@@ -406,7 +425,7 @@ export function WorkoutPage() {
   return <SetPage back={st('settings')} title={st('settingsWorkoutTitle')} testID="settings-workout">
     <H first>{st('settingsRestTimer')}</H>
     <List>
-      <ListRow title={st('settingsDefaultRest')} sub={st('settingsDefaultRestSub')} right={<TimeStepper label={st('settingsDefaultRestA11y')} value={w.rest} onChange={v => set('work.rest', v)} />} />
+      <ListRow title={st('settingsDefaultRest')} sub={st('settingsDefaultRestSub')} right={<TimeStepper label={st('settingsDefaultRestA11y')} value={rest} onChange={setRest} />} />
       <ListRow title={st('settingsStartAuto')} sub={st('settingsStartAutoSub')} toggle={w.auto} onToggle={v => set('work.auto', v)} />
       <ListRow title={st('settingsRestAlert')} value={st(p.rem.rest && !phoneOnly ? 'settingsOn' : 'settingsOff')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'reminders', focus: 'Rest timer alert' } })} />
     </List>
@@ -415,7 +434,7 @@ export function WorkoutPage() {
       <View accessibilityLabel={st('settingsPlatesYouHave')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 14, paddingHorizontal: 16 }}>
         {plates.map(pl => { const id = String(pl).replace('.', '_'), on = !!pset[id];
           return <PlateChip key={id} label={`${pl} ${u}`} a11y={st(kg ? 'settingsPlateKgA11y' : 'settingsPlateLbA11y', { n: pl })} selected={on}
-            onPress={() => set(`work.${kg ? 'platesKg' : 'plates'}.${id}`, !on)} />; })}
+            onPress={() => setPlate(pl, id, !on)} />; })}
       </View>
       <Cl><PickRow title={st('settingsBar')} value={kg ? w.barKg : w.bar} options={bars} onPick={v => set(kg ? 'work.barKg' : 'work.bar', v)} /></Cl>
     </Panel>
@@ -424,7 +443,7 @@ export function WorkoutPage() {
     <Panel>
       <ListRow title={st('settingsSuggestWarm')} sub={st('settingsSuggestWarmSub')} toggle={w.warm} onToggle={v => set('work.warm', v)} />
       {w.warm ? <>
-        <Cl><ListRow title={st('settingsWarmups')} right={<Stepper label={st('settingsWarmCount')} value={w.warmN} step={1} min={1} max={4} onChange={v => set('work.warmN', v)} />} /></Cl>
+        <ListRow title={st('settingsWarmups')} right={<RowStepper label={st('settingsWarmCount')} value={w.warmN} step={1} min={1} max={4} onChange={v => set('work.warmN', v)} />} />
         <View style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 14, borderTopWidth: 1, borderTopColor: k.c.hair }}>
           <KitText weight={600} size={12.5} color="text-muted">{st('settingsWarmExample', { top, u })}</KitText>
           <View style={{ marginTop: 8, gap: 6 }}>
@@ -448,7 +467,7 @@ export function WorkoutPage() {
     <H>{st('settingsDuringWorkout')}</H>
     <List>
       <ListRow title={st('settingsKeepAwake')} sub={st('settingsKeepAwakeSub')} toggle={w.awake} onToggle={v => set('work.awake', v)} />
-      <ListRow title={st('settingsHapticsRow')} sub={st('settingsHapticsSub')} toggle={w.haptics} onToggle={v => set('work.haptics', v)} />
+      <ListRow title={st('settingsHapticsRow')} sub={st('settingsHapticsSub')} toggle={haptics} onToggle={setHaptics} />
     </List>
   </SetPage>;
 }
@@ -484,7 +503,7 @@ export function AboutPage() {
   const sub = (section: string) => () => router.push({ pathname: '/settings/[section]', params: { section } });
   return <SetPage back={st('settings')} title={st('settingsAboutTitle')} testID="settings-about">
     <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-      <View style={{ width: 84, height: 84, borderRadius: 20, overflow: 'hidden', boxShadow: k.lift }}>
+      <View style={{ width: 84, height: 84, borderRadius: 20, overflow: 'hidden', boxShadow: k.lift, marginTop: 2 }}>
         <Image source={iconArt(iconId(p.look.icon), palette, mode)} style={{ width: 84, height: 84 }} accessible={false} />
       </View>
       <KitText weight={700} size={24} tracking={-0.03} style={{ marginTop: 12 }}>Insight</KitText>
