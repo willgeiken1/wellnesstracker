@@ -17,7 +17,7 @@ import { capitals } from '@/components/kit-style';
 /** A big number with its small unit (`.fdt-n`). */
 export function Num({ v, unit, fs = 32, color, style }: { v: string; unit?: string; fs?: number; color?: string; style?: StyleProp<TextStyle> }) {
   return <KitText weight={700} size={fs} lineHeight={1} tracking={-0.03} numeric color={color} numberOfLines={1} style={style}>
-    {v}{unit ? <KitText weight={600} size={13} color="text-muted">{` ${unit}`}</KitText> : null}
+    {v}{unit ? <KitText weight={600} tracking={0} size={13} color="text-muted">{` ${unit}`}</KitText> : null}
   </KitText>;
 }
 /** The muted small line (`.fdt-s`). Bold parts go in <B>. */
@@ -69,7 +69,7 @@ export const Dot = ({ color, size = 8 }: { color: string; size?: number }) => <V
 export function KV({ k: key, v, unit, after }: { k: string; v: string; unit?: string; after?: ReactNode }) {
   return <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><KitText weight={600} size={13} color="text-muted">{key}</KitText>{after}</View>
-    <KitText weight={700} size={17} tracking={-0.01} numeric>{v}{unit ? <KitText weight={600} size={11} color="text-muted">{` ${unit}`}</KitText> : null}</KitText>
+    <KitText weight={700} size={17} tracking={-0.01} numeric>{v}{unit ? <KitText weight={600} tracking={0} size={11} color="text-muted">{` ${unit}`}</KitText> : null}</KitText>
   </View>;
 }
 

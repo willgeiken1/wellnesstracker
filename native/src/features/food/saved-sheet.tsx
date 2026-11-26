@@ -64,7 +64,7 @@ function SavedFoods({ combo }: { combo: Combo }) {
           <KitText weight={500} size={13.5}>{String(f.name ?? '')}</KitText>
           {g != null ? <KitText weight={500} size={12} color="text-muted">{`${num(g)} g`}</KitText> : null}
         </View>
-        <KitText weight={700} size={13.5} numeric color="text-muted">{kcal == null ? '–' : num(kcal)}<KitText weight={600} size={12} color="text-muted">{` ${t('foodKcal')}`}</KitText></KitText>
+        <KitText weight={700} size={13.5} numeric color="text-muted">{kcal == null ? '–' : num(kcal)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` ${t('foodKcal')}`}</KitText></KitText>
       </View>; })}
   </View>;
 }
