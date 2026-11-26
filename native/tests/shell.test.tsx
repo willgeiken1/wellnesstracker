@@ -37,16 +37,18 @@ test('tab shell shows Home, Training, Food, Progress and Routines as labelled ta
   expect(routerScreen.getByRole('button', { name: 'Home quick actions' })).toBeTruthy();
 });
 test('Appearance changes theme, accent, and restores system following', async () => {
+  // The redesigned Appearance shows Theme and Palette as radio groups.
   await render(<ThemeProvider><Appearance /><ThemeProbe /></ThemeProvider>);
-  await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Light' }));
   expect(screen.getByTestId('theme')).toHaveTextContent(`light/${DEFAULT_PALETTE}/${createTheme('light').bg}`);
-  await fireEvent.press(screen.getByRole('tab', { name: 'Dark' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Forest Ember' }));
+  expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
+  await fireEvent.press(screen.getByRole('radio', { name: 'Dark' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Forest Ember' }));
   expect(screen.getByTestId('theme')).toHaveTextContent(`dark/forestEmber/${createTheme('dark', 'forestEmber').bg}`);
-  expect(screen.getByRole('button', { name: 'Forest Ember' })).toBeSelected();
-  expect(screen.getByRole('button', { name: paletteName('seaGlassTide') })).not.toBeSelected();
-  await fireEvent.press(screen.getByRole('tab', { name: 'System' }));
-  expect(screen.getByRole('tab', { name: 'System' })).toBeSelected();
+  expect(screen.getByRole('radio', { name: 'Forest Ember' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: paletteName('seaGlassTide') })).not.toBeChecked();
+  await fireEvent.press(screen.getByRole('radio', { name: 'System' }));
+  expect(screen.getByRole('radio', { name: 'System' })).toBeChecked();
 });
 
 function textContent(node: TestInstance): string {
@@ -80,7 +82,11 @@ test.each([
         expect(node.props.accessibilityRole).toBe('button');
         expect(typeof node.props.accessibilityState.selected).toBe('boolean');
         expect(screen.getByRole('button', { name: 'Muscle list' })).toBeTruthy();
-      } else expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
+      } else {
+        // Appearance's theme, palette and icon choices are radios, as in the design, and True black is a switch; each says if it is on.
+        expect(node.props.accessibilityRole).toMatch(/^(button|tab|radio|switch)$/);
+        if (/^(radio|switch)$/.test(node.props.accessibilityRole)) expect(typeof node.props.accessibilityState?.checked).toBe('boolean');
+      }
       expect((node.props.accessibilityLabel ?? textContent(node)).trim().length).toBeGreaterThan(0);
     }
     // The tile grid and Home's hero are fixed-size cards in the design (S, M and L tiles; the hero's art card): their text is
@@ -96,7 +102,9 @@ test.each([
       // Scaling on, with no cap: React Native's defaults (unset) mean the same as true and 0.
       expect(node.props.allowFontScaling).not.toBe(false);
       expect(node.props.maxFontSizeMultiplier ?? 0).toBe(0);
-      expect(node.props.numberOfLines).toBeUndefined();
+      // A page's nav bar title stays on one line, as an iOS navigation bar's does; the page's own text wraps instead.
+      const navTitle = node.props.accessibilityRole === 'header' && StyleSheet.flatten(node.parent?.props.style)?.maxWidth === 190;
+      if (!navTitle) expect(node.props.numberOfLines).toBeUndefined();
       // Any fixed-height text ancestor could clip large type; decorative swatches aren't ancestors.
       for (let ancestor: TestInstance | null = node; ancestor; ancestor = ancestor.parent) {
         const style = StyleSheet.flatten(ancestor.props.style) ?? {};
