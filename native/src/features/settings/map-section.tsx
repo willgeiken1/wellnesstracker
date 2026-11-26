@@ -1,14 +1,14 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { Icon, KitText, List, ListFooter, ListRow, SegmentedControl, Tappable, useKit } from '@/components/kit';
+import { Icon, KitText, List, ListFooter, SegmentedControl, Tappable, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
 import { useMapPrefs, type MapPrefs, type MapStyle } from '@/features/home/hero/prefs';
 import { ridgeColors, ridgeScene, type RidgeState } from '@/features/home/hero/ridge-scene';
 import { tones } from '@/features/home/hero/tones';
 import { showToast } from '@/features/shell/toast';
 import { st } from './copy';
-import { Gap, H, Panel } from './ui';
+import { Gap, H, ListRow, Panel } from './ui';
 
 const f1 = (n: number) => String(Math.round(n * 10) / 10);
 

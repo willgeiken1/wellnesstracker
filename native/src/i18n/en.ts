@@ -1612,6 +1612,8 @@ export const en = {
   settingsPhotoChoose: 'Choose from library', settingsPhotoRemove: 'Remove photo', settingsPhotoRemoved: 'Photo removed. Your initial shows instead.',
   settingsPhotoCameraOff: 'Camera access is off for Insight. You can turn it on in iOS Settings.', settingsPhotoOpenSettings: 'Settings',
   settingsPhotoFailed: "That photo couldn't be saved. Try again.",
+  // FC settings final polish
+  settingsPcWorkoutsPlanSub: 'Sets, reps, weights and your {plan} plan.', settingsPcFoodNSub: 'Meals, water and {n} saved meals.',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */

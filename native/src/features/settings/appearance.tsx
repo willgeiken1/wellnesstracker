@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Image, Linking, Platform, View } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, Polygon, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
-import { Icon, KitText, List, ListFooter, ListRow, SegmentedControl, Tappable as Pressable, alpha, useKit } from '@/components/kit';
+import { Icon, KitText, List, ListFooter, SegmentedControl, Tappable as Pressable, alpha, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
 import { createTheme, palettes, tokens, type Palette, type ThemeOverride } from '@/design/tokens';
 import { PAGE_KEYS } from '@/features/shell/pages';
@@ -10,7 +10,7 @@ import { useShellPrefs } from '@/features/shell/prefs';
 import { APP_ICONS, applyAppIcon, iconArt, iconId, iconsSupported } from './app-icon';
 import { st } from './copy';
 import { useSettingsPrefs, type AppIconId, type Density } from './prefs';
-import { Cl, H, Panel, SetPage } from './ui';
+import { Cl, H, ListRow, Panel, SetPage } from './ui';
 import { MapSection } from './map-section';
 
 /** `.st-tp`: a 78 x 128 pt phone in one look, drawn in the palette's colours for that look. */
@@ -179,7 +179,7 @@ export default function Appearance() {
     <H>{st('settingsAccessibility')}</H>
     <List footer={st('settingsReduceTransparencyFoot')}>
       <ListRow testID="appearance-reduce-transparency" title={st('settingsReduceTransparency')} value={st('settingsIosSettings')} chevron={false}
-        right={<Icon name="ext" size={16} color={k.c.ghost} />} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
+        right={<View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
     </List>
     {persistenceError && <KitText weight={500} size={13} color="danger" accessibilityRole="alert" style={{ marginTop: 12, marginHorizontal: 16 }}>{st('preferenceError')}</KitText>}
   </SetPage>;
