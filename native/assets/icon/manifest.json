@@ -1,5 +1,5 @@
 {
- "note": "Insight app icons, final set. 1024 x 1024 px, 8-bit RGB, sRGB, opaque, square corners. One tinted icon per style serves every theme.",
+ "note": "Insight app icons, final set. 1024 x 1024 px, 8-bit RGB, sRGB, opaque, square corners. One tinted icon per style serves every theme. Palette art redrawn from the mockup's own icon code (v20 Settings, App icon).",
  "palettesSha": "ecf86bacbbc1",
  "palettesAt": "2026-11-25 16:49 UTC",
  "defaultTheme": "seaGlassTide",
@@ -20,7 +20,7 @@
   }
  ],
  "count": 111,
- "totalBytes": 15380596,
+ "totalBytes": 25654787,
  "icons": [
   {
    "file": "lit/seaGlassTide-dark.png",
@@ -32,8 +32,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksSeaGlassTideDark",
    "role": "primary",
-   "bytes": 142410,
-   "sha256": "ce2d0a6043e9"
+   "bytes": 253967,
+   "sha256": "0d0b00289f3c"
   },
   {
    "file": "lit/seaGlassTide-light.png",
@@ -45,8 +45,8 @@
    "appearance": "light",
    "iconName": "LitPeaksSeaGlassTideLight",
    "role": "alternate",
-   "bytes": 109730,
-   "sha256": "66c534b7570b"
+   "bytes": 183503,
+   "sha256": "3876ab36a01c"
   },
   {
    "file": "lit/mountainMist-dark.png",
@@ -58,8 +58,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksMountainMistDark",
    "role": "alternate",
-   "bytes": 148243,
-   "sha256": "99d5e56b621a"
+   "bytes": 263700,
+   "sha256": "062144637c7e"
   },
   {
    "file": "lit/mountainMist-light.png",
@@ -71,8 +71,8 @@
    "appearance": "light",
    "iconName": "LitPeaksMountainMistLight",
    "role": "alternate",
-   "bytes": 109697,
-   "sha256": "91e599d725bc"
+   "bytes": 177767,
+   "sha256": "827df1d406b4"
   },
   {
    "file": "lit/moonlightDusk-dark.png",
@@ -84,8 +84,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksMoonlightDuskDark",
    "role": "alternate",
-   "bytes": 148282,
-   "sha256": "f727ae21c61b"
+   "bytes": 248278,
+   "sha256": "ec5f8839cce8"
   },
   {
    "file": "lit/moonlightDusk-light.png",
@@ -97,8 +97,8 @@
    "appearance": "light",
    "iconName": "LitPeaksMoonlightDuskLight",
    "role": "alternate",
-   "bytes": 108982,
-   "sha256": "39ffb027642f"
+   "bytes": 169037,
+   "sha256": "3c2559e2953c"
   },
   {
    "file": "lit/desertMirage-dark.png",
@@ -110,8 +110,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksDesertMirageDark",
    "role": "alternate",
-   "bytes": 150264,
-   "sha256": "0ad98eabfb0a"
+   "bytes": 251676,
+   "sha256": "194716c98418"
   },
   {
    "file": "lit/desertMirage-light.png",
@@ -123,8 +123,8 @@
    "appearance": "light",
    "iconName": "LitPeaksDesertMirageLight",
    "role": "alternate",
-   "bytes": 109068,
-   "sha256": "b8718d72c23b"
+   "bytes": 184921,
+   "sha256": "0f1b757cf712"
   },
   {
    "file": "lit/springCitrus-dark.png",
@@ -136,8 +136,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksSpringCitrusDark",
    "role": "alternate",
-   "bytes": 148192,
-   "sha256": "645d2924481d"
+   "bytes": 260509,
+   "sha256": "f9a54cf5105c"
   },
   {
    "file": "lit/springCitrus-light.png",
@@ -149,8 +149,8 @@
    "appearance": "light",
    "iconName": "LitPeaksSpringCitrusLight",
    "role": "alternate",
-   "bytes": 114526,
-   "sha256": "eeab73196ac0"
+   "bytes": 194441,
+   "sha256": "3d5f8a09c8dd"
   },
   {
    "file": "lit/lotusGarden-dark.png",
@@ -162,8 +162,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksLotusGardenDark",
    "role": "alternate",
-   "bytes": 148605,
-   "sha256": "ca74b610161b"
+   "bytes": 266084,
+   "sha256": "a52dfb0f4a9c"
   },
   {
    "file": "lit/lotusGarden-light.png",
@@ -175,8 +175,8 @@
    "appearance": "light",
    "iconName": "LitPeaksLotusGardenLight",
    "role": "alternate",
-   "bytes": 108941,
-   "sha256": "c900759246bb"
+   "bytes": 176942,
+   "sha256": "11f50dae4614"
   },
   {
    "file": "lit/auroraFjord-dark.png",
@@ -188,8 +188,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksAuroraFjordDark",
    "role": "alternate",
-   "bytes": 145456,
-   "sha256": "98eac2cf4fc6"
+   "bytes": 253726,
+   "sha256": "b895e5322b4b"
   },
   {
    "file": "lit/auroraFjord-light.png",
@@ -201,8 +201,8 @@
    "appearance": "light",
    "iconName": "LitPeaksAuroraFjordLight",
    "role": "alternate",
-   "bytes": 111969,
-   "sha256": "113945dfeccc"
+   "bytes": 191860,
+   "sha256": "4c931806ec6b"
   },
   {
    "file": "lit/berryMeadow-dark.png",
@@ -214,8 +214,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksBerryMeadowDark",
    "role": "alternate",
-   "bytes": 151392,
-   "sha256": "1d54d985adc7"
+   "bytes": 257780,
+   "sha256": "54819645480b"
   },
   {
    "file": "lit/berryMeadow-light.png",
@@ -227,8 +227,8 @@
    "appearance": "light",
    "iconName": "LitPeaksBerryMeadowLight",
    "role": "alternate",
-   "bytes": 108712,
-   "sha256": "159415ccc806"
+   "bytes": 175841,
+   "sha256": "04227070f712"
   },
   {
    "file": "lit/goldenHour-dark.png",
@@ -240,8 +240,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksGoldenHourDark",
    "role": "alternate",
-   "bytes": 153081,
-   "sha256": "f9061fb005a8"
+   "bytes": 264316,
+   "sha256": "0f41f9031dbb"
   },
   {
    "file": "lit/goldenHour-light.png",
@@ -253,8 +253,8 @@
    "appearance": "light",
    "iconName": "LitPeaksGoldenHourLight",
    "role": "alternate",
-   "bytes": 109182,
-   "sha256": "805ca31df0d6"
+   "bytes": 177572,
+   "sha256": "4ed2ef315c64"
   },
   {
    "file": "lit/glacierBloom-dark.png",
@@ -266,8 +266,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksGlacierBloomDark",
    "role": "alternate",
-   "bytes": 147506,
-   "sha256": "aaf4cc04ace0"
+   "bytes": 246296,
+   "sha256": "68cead1b0762"
   },
   {
    "file": "lit/glacierBloom-light.png",
@@ -279,8 +279,8 @@
    "appearance": "light",
    "iconName": "LitPeaksGlacierBloomLight",
    "role": "alternate",
-   "bytes": 109069,
-   "sha256": "cae3cd0aa929"
+   "bytes": 178338,
+   "sha256": "fbfb648b1e0c"
   },
   {
    "file": "lit/forestEmber-dark.png",
@@ -292,8 +292,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksForestEmberDark",
    "role": "alternate",
-   "bytes": 148369,
-   "sha256": "0e37f1221c0b"
+   "bytes": 237910,
+   "sha256": "a64c452b3130"
   },
   {
    "file": "lit/forestEmber-light.png",
@@ -305,8 +305,8 @@
    "appearance": "light",
    "iconName": "LitPeaksForestEmberLight",
    "role": "alternate",
-   "bytes": 113239,
-   "sha256": "f5db1476b95e"
+   "bytes": 176512,
+   "sha256": "550ad6a3c557"
   },
   {
    "file": "lit/peachNightfall-dark.png",
@@ -318,8 +318,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksPeachNightfallDark",
    "role": "alternate",
-   "bytes": 167704,
-   "sha256": "e77d75b69486"
+   "bytes": 277919,
+   "sha256": "3341cec20077"
   },
   {
    "file": "lit/peachNightfall-light.png",
@@ -331,8 +331,8 @@
    "appearance": "light",
    "iconName": "LitPeaksPeachNightfallLight",
    "role": "alternate",
-   "bytes": 113965,
-   "sha256": "b44178010448"
+   "bytes": 189752,
+   "sha256": "932e2cfc6ddb"
   },
   {
    "file": "lit/velvetPlum-dark.png",
@@ -344,8 +344,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksVelvetPlumDark",
    "role": "alternate",
-   "bytes": 162078,
-   "sha256": "4d332dee07fc"
+   "bytes": 268767,
+   "sha256": "60ef6fbec419"
   },
   {
    "file": "lit/velvetPlum-light.png",
@@ -357,8 +357,8 @@
    "appearance": "light",
    "iconName": "LitPeaksVelvetPlumLight",
    "role": "alternate",
-   "bytes": 113639,
-   "sha256": "18ce91d29d80"
+   "bytes": 178918,
+   "sha256": "30f561e123ab"
   },
   {
    "file": "lit/orchidEvening-dark.png",
@@ -370,8 +370,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksOrchidEveningDark",
    "role": "alternate",
-   "bytes": 163782,
-   "sha256": "dd1a1efb2af5"
+   "bytes": 272515,
+   "sha256": "a7dbae62aed2"
   },
   {
    "file": "lit/orchidEvening-light.png",
@@ -383,8 +383,8 @@
    "appearance": "light",
    "iconName": "LitPeaksOrchidEveningLight",
    "role": "alternate",
-   "bytes": 111887,
-   "sha256": "d80316b393fb"
+   "bytes": 184821,
+   "sha256": "7be3e7a0b11b"
   },
   {
    "file": "lit/rosewood-dark.png",
@@ -396,8 +396,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksRosewoodDark",
    "role": "alternate",
-   "bytes": 165136,
-   "sha256": "084193283c9f"
+   "bytes": 282519,
+   "sha256": "4f88fe82a9df"
   },
   {
    "file": "lit/rosewood-light.png",
@@ -409,8 +409,8 @@
    "appearance": "light",
    "iconName": "LitPeaksRosewoodLight",
    "role": "alternate",
-   "bytes": 114301,
-   "sha256": "3981b085bb0e"
+   "bytes": 181808,
+   "sha256": "f21b47d15468"
   },
   {
    "file": "lit/midnightBloom-dark.png",
@@ -422,8 +422,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksMidnightBloomDark",
    "role": "alternate",
-   "bytes": 164626,
-   "sha256": "770e31b13283"
+   "bytes": 270196,
+   "sha256": "3be03974330b"
   },
   {
    "file": "lit/midnightBloom-light.png",
@@ -435,8 +435,8 @@
    "appearance": "light",
    "iconName": "LitPeaksMidnightBloomLight",
    "role": "alternate",
-   "bytes": 112049,
-   "sha256": "cc13cc4dd90c"
+   "bytes": 183673,
+   "sha256": "4f71f47b8156"
   },
   {
    "file": "lit/lavenderHaze-dark.png",
@@ -448,8 +448,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksLavenderHazeDark",
    "role": "alternate",
-   "bytes": 164748,
-   "sha256": "52d0c9a0824b"
+   "bytes": 259957,
+   "sha256": "21a5cd7a8c94"
   },
   {
    "file": "lit/lavenderHaze-light.png",
@@ -461,8 +461,8 @@
    "appearance": "light",
    "iconName": "LitPeaksLavenderHazeLight",
    "role": "alternate",
-   "bytes": 112405,
-   "sha256": "1b76d03977d7"
+   "bytes": 185734,
+   "sha256": "65fd0e823a1d"
   },
   {
    "file": "lit/coralHarbor-dark.png",
@@ -474,8 +474,8 @@
    "appearance": "dark",
    "iconName": "LitPeaksCoralHarborDark",
    "role": "alternate",
-   "bytes": 169476,
-   "sha256": "1dea01096c64"
+   "bytes": 280120,
+   "sha256": "0b250f0ec220"
   },
   {
    "file": "lit/coralHarbor-light.png",
@@ -487,8 +487,8 @@
    "appearance": "light",
    "iconName": "LitPeaksCoralHarborLight",
    "role": "alternate",
-   "bytes": 113290,
-   "sha256": "fc7a986e02a9"
+   "bytes": 184833,
+   "sha256": "f40a486fd9c6"
   },
   {
    "file": "lit/tinted.png",
@@ -513,8 +513,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowSeaGlassTideDark",
    "role": "alternate",
-   "bytes": 160805,
-   "sha256": "d9f277e852a4"
+   "bytes": 281433,
+   "sha256": "3789bc8ce851"
   },
   {
    "file": "dusk/seaGlassTide-light.png",
@@ -526,8 +526,8 @@
    "appearance": "light",
    "iconName": "DuskGlowSeaGlassTideLight",
    "role": "alternate",
-   "bytes": 118901,
-   "sha256": "b69035f5ce91"
+   "bytes": 197669,
+   "sha256": "b692fde8a4f3"
   },
   {
    "file": "dusk/mountainMist-dark.png",
@@ -539,8 +539,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowMountainMistDark",
    "role": "alternate",
-   "bytes": 166727,
-   "sha256": "dc1dadab322f"
+   "bytes": 289692,
+   "sha256": "04ed99deaf48"
   },
   {
    "file": "dusk/mountainMist-light.png",
@@ -552,8 +552,8 @@
    "appearance": "light",
    "iconName": "DuskGlowMountainMistLight",
    "role": "alternate",
-   "bytes": 119071,
-   "sha256": "73881d13d186"
+   "bytes": 184661,
+   "sha256": "0e88a76fa05a"
   },
   {
    "file": "dusk/moonlightDusk-dark.png",
@@ -565,8 +565,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowMoonlightDuskDark",
    "role": "alternate",
-   "bytes": 169343,
-   "sha256": "30d28bdeb8af"
+   "bytes": 282544,
+   "sha256": "581073a4ce47"
   },
   {
    "file": "dusk/moonlightDusk-light.png",
@@ -578,8 +578,8 @@
    "appearance": "light",
    "iconName": "DuskGlowMoonlightDuskLight",
    "role": "alternate",
-   "bytes": 116075,
-   "sha256": "4efb4674e435"
+   "bytes": 182692,
+   "sha256": "8ba8dce968e4"
   },
   {
    "file": "dusk/desertMirage-dark.png",
@@ -591,8 +591,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowDesertMirageDark",
    "role": "alternate",
-   "bytes": 167131,
-   "sha256": "a6f958a1eb1c"
+   "bytes": 278474,
+   "sha256": "01b5ea2bd31b"
   },
   {
    "file": "dusk/desertMirage-light.png",
@@ -604,8 +604,8 @@
    "appearance": "light",
    "iconName": "DuskGlowDesertMirageLight",
    "role": "alternate",
-   "bytes": 119594,
-   "sha256": "fc4670e6e7a9"
+   "bytes": 200962,
+   "sha256": "f85e7a22b4a8"
   },
   {
    "file": "dusk/springCitrus-dark.png",
@@ -617,8 +617,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowSpringCitrusDark",
    "role": "alternate",
-   "bytes": 166854,
-   "sha256": "70e7841de94a"
+   "bytes": 288002,
+   "sha256": "f280e5ce619a"
   },
   {
    "file": "dusk/springCitrus-light.png",
@@ -630,8 +630,8 @@
    "appearance": "light",
    "iconName": "DuskGlowSpringCitrusLight",
    "role": "alternate",
-   "bytes": 127544,
-   "sha256": "e87fd0ff14b1"
+   "bytes": 210956,
+   "sha256": "cc0a794e9e7e"
   },
   {
    "file": "dusk/lotusGarden-dark.png",
@@ -643,8 +643,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowLotusGardenDark",
    "role": "alternate",
-   "bytes": 170044,
-   "sha256": "951dd9fe501c"
+   "bytes": 292142,
+   "sha256": "066e31dfaa7b"
   },
   {
    "file": "dusk/lotusGarden-light.png",
@@ -656,8 +656,8 @@
    "appearance": "light",
    "iconName": "DuskGlowLotusGardenLight",
    "role": "alternate",
-   "bytes": 117536,
-   "sha256": "24e0bb0fc743"
+   "bytes": 186313,
+   "sha256": "eddff09fbd0a"
   },
   {
    "file": "dusk/auroraFjord-dark.png",
@@ -669,8 +669,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowAuroraFjordDark",
    "role": "alternate",
-   "bytes": 168515,
-   "sha256": "6e94ad3904ef"
+   "bytes": 286603,
+   "sha256": "3cb3eb9e02bb"
   },
   {
    "file": "dusk/auroraFjord-light.png",
@@ -682,8 +682,8 @@
    "appearance": "light",
    "iconName": "DuskGlowAuroraFjordLight",
    "role": "alternate",
-   "bytes": 121236,
-   "sha256": "ce5ef94499f4"
+   "bytes": 201012,
+   "sha256": "e6ecf439bd16"
   },
   {
    "file": "dusk/berryMeadow-dark.png",
@@ -695,8 +695,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowBerryMeadowDark",
    "role": "alternate",
-   "bytes": 165672,
-   "sha256": "992b277f0fd5"
+   "bytes": 291767,
+   "sha256": "475b0386c487"
   },
   {
    "file": "dusk/berryMeadow-light.png",
@@ -708,8 +708,8 @@
    "appearance": "light",
    "iconName": "DuskGlowBerryMeadowLight",
    "role": "alternate",
-   "bytes": 116643,
-   "sha256": "a5b982f4439e"
+   "bytes": 185800,
+   "sha256": "870eb57f902f"
   },
   {
    "file": "dusk/goldenHour-dark.png",
@@ -721,8 +721,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowGoldenHourDark",
    "role": "alternate",
-   "bytes": 174185,
-   "sha256": "689608d8b60d"
+   "bytes": 291133,
+   "sha256": "848d5431fa18"
   },
   {
    "file": "dusk/goldenHour-light.png",
@@ -734,8 +734,8 @@
    "appearance": "light",
    "iconName": "DuskGlowGoldenHourLight",
    "role": "alternate",
-   "bytes": 120683,
-   "sha256": "d519e15d9383"
+   "bytes": 197114,
+   "sha256": "aba518d82a4c"
   },
   {
    "file": "dusk/glacierBloom-dark.png",
@@ -747,8 +747,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowGlacierBloomDark",
    "role": "alternate",
-   "bytes": 168881,
-   "sha256": "40268004d546"
+   "bytes": 269211,
+   "sha256": "11f81d6465dd"
   },
   {
    "file": "dusk/glacierBloom-light.png",
@@ -760,8 +760,8 @@
    "appearance": "light",
    "iconName": "DuskGlowGlacierBloomLight",
    "role": "alternate",
-   "bytes": 117635,
-   "sha256": "33089a4b2c92"
+   "bytes": 183120,
+   "sha256": "582b9ce94999"
   },
   {
    "file": "dusk/forestEmber-dark.png",
@@ -773,8 +773,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowForestEmberDark",
    "role": "alternate",
-   "bytes": 165187,
-   "sha256": "a1c6a592ded0"
+   "bytes": 266997,
+   "sha256": "06f266acfdb9"
   },
   {
    "file": "dusk/forestEmber-light.png",
@@ -786,8 +786,8 @@
    "appearance": "light",
    "iconName": "DuskGlowForestEmberLight",
    "role": "alternate",
-   "bytes": 125859,
-   "sha256": "8627fa775a38"
+   "bytes": 210553,
+   "sha256": "f0fe45fd9ae8"
   },
   {
    "file": "dusk/peachNightfall-dark.png",
@@ -799,8 +799,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowPeachNightfallDark",
    "role": "alternate",
-   "bytes": 180656,
-   "sha256": "8766ddd8e736"
+   "bytes": 312315,
+   "sha256": "4ef49afe2015"
   },
   {
    "file": "dusk/peachNightfall-light.png",
@@ -812,8 +812,8 @@
    "appearance": "light",
    "iconName": "DuskGlowPeachNightfallLight",
    "role": "alternate",
-   "bytes": 130687,
-   "sha256": "f2850ab3bbd9"
+   "bytes": 203854,
+   "sha256": "0dcf45f97111"
   },
   {
    "file": "dusk/velvetPlum-dark.png",
@@ -825,8 +825,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowVelvetPlumDark",
    "role": "alternate",
-   "bytes": 182215,
-   "sha256": "a6fe92ada574"
+   "bytes": 303411,
+   "sha256": "73e8140fded1"
   },
   {
    "file": "dusk/velvetPlum-light.png",
@@ -838,8 +838,8 @@
    "appearance": "light",
    "iconName": "DuskGlowVelvetPlumLight",
    "role": "alternate",
-   "bytes": 128111,
-   "sha256": "4dfc0c8f81ca"
+   "bytes": 189701,
+   "sha256": "899df4ad3912"
   },
   {
    "file": "dusk/orchidEvening-dark.png",
@@ -851,8 +851,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowOrchidEveningDark",
    "role": "alternate",
-   "bytes": 180236,
-   "sha256": "8db07f68357f"
+   "bytes": 316470,
+   "sha256": "8a937358c5ac"
   },
   {
    "file": "dusk/orchidEvening-light.png",
@@ -864,8 +864,8 @@
    "appearance": "light",
    "iconName": "DuskGlowOrchidEveningLight",
    "role": "alternate",
-   "bytes": 124464,
-   "sha256": "0b6526861baf"
+   "bytes": 202208,
+   "sha256": "31649fc77c4a"
   },
   {
    "file": "dusk/rosewood-dark.png",
@@ -877,8 +877,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowRosewoodDark",
    "role": "alternate",
-   "bytes": 178797,
-   "sha256": "09374f822778"
+   "bytes": 302174,
+   "sha256": "7283d57aeb75"
   },
   {
    "file": "dusk/rosewood-light.png",
@@ -890,8 +890,8 @@
    "appearance": "light",
    "iconName": "DuskGlowRosewoodLight",
    "role": "alternate",
-   "bytes": 129574,
-   "sha256": "c2c24eff48ca"
+   "bytes": 195946,
+   "sha256": "612f5a8a4f6d"
   },
   {
    "file": "dusk/midnightBloom-dark.png",
@@ -903,8 +903,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowMidnightBloomDark",
    "role": "alternate",
-   "bytes": 182619,
-   "sha256": "691781f383de"
+   "bytes": 300666,
+   "sha256": "e1beff27dfae"
   },
   {
    "file": "dusk/midnightBloom-light.png",
@@ -916,8 +916,8 @@
    "appearance": "light",
    "iconName": "DuskGlowMidnightBloomLight",
    "role": "alternate",
-   "bytes": 125122,
-   "sha256": "047432c0b78a"
+   "bytes": 199059,
+   "sha256": "cb1b32d5f245"
   },
   {
    "file": "dusk/lavenderHaze-dark.png",
@@ -929,8 +929,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowLavenderHazeDark",
    "role": "alternate",
-   "bytes": 179406,
-   "sha256": "d8e0b690bc06"
+   "bytes": 294501,
+   "sha256": "b5e541e4a805"
   },
   {
    "file": "dusk/lavenderHaze-light.png",
@@ -942,8 +942,8 @@
    "appearance": "light",
    "iconName": "DuskGlowLavenderHazeLight",
    "role": "alternate",
-   "bytes": 124013,
-   "sha256": "b646b0e10045"
+   "bytes": 196904,
+   "sha256": "efc552ac7e33"
   },
   {
    "file": "dusk/coralHarbor-dark.png",
@@ -955,8 +955,8 @@
    "appearance": "dark",
    "iconName": "DuskGlowCoralHarborDark",
    "role": "alternate",
-   "bytes": 181114,
-   "sha256": "02c6e913f67d"
+   "bytes": 305796,
+   "sha256": "61decb58ed4a"
   },
   {
    "file": "dusk/coralHarbor-light.png",
@@ -968,8 +968,8 @@
    "appearance": "light",
    "iconName": "DuskGlowCoralHarborLight",
    "role": "alternate",
-   "bytes": 130166,
-   "sha256": "c03a0b7d6876"
+   "bytes": 201777,
+   "sha256": "055e207faced"
   },
   {
    "file": "dusk/tinted.png",
@@ -994,8 +994,8 @@
    "appearance": "dark",
    "iconName": "ClearNightSeaGlassTideDark",
    "role": "alternate",
-   "bytes": 159132,
-   "sha256": "717283e4be40"
+   "bytes": 287780,
+   "sha256": "19e8973b2c74"
   },
   {
    "file": "clear/seaGlassTide-light.png",
@@ -1007,8 +1007,8 @@
    "appearance": "light",
    "iconName": "ClearNightSeaGlassTideLight",
    "role": "alternate",
-   "bytes": 115486,
-   "sha256": "91741946344b"
+   "bytes": 200016,
+   "sha256": "79482c46b6f9"
   },
   {
    "file": "clear/mountainMist-dark.png",
@@ -1020,8 +1020,8 @@
    "appearance": "dark",
    "iconName": "ClearNightMountainMistDark",
    "role": "alternate",
-   "bytes": 162207,
-   "sha256": "52cd90cbfe70"
+   "bytes": 298831,
+   "sha256": "22efef9e79f5"
   },
   {
    "file": "clear/mountainMist-light.png",
@@ -1033,8 +1033,8 @@
    "appearance": "light",
    "iconName": "ClearNightMountainMistLight",
    "role": "alternate",
-   "bytes": 110244,
-   "sha256": "abda786c696b"
+   "bytes": 183199,
+   "sha256": "dbb832c7282a"
   },
   {
    "file": "clear/moonlightDusk-dark.png",
@@ -1046,8 +1046,8 @@
    "appearance": "dark",
    "iconName": "ClearNightMoonlightDuskDark",
    "role": "alternate",
-   "bytes": 161136,
-   "sha256": "5486be099b7c"
+   "bytes": 294329,
+   "sha256": "f5842da9a6dd"
   },
   {
    "file": "clear/moonlightDusk-light.png",
@@ -1059,8 +1059,8 @@
    "appearance": "light",
    "iconName": "ClearNightMoonlightDuskLight",
    "role": "alternate",
-   "bytes": 105807,
-   "sha256": "f194e78922f9"
+   "bytes": 173627,
+   "sha256": "c8803d034942"
   },
   {
    "file": "clear/desertMirage-dark.png",
@@ -1072,8 +1072,8 @@
    "appearance": "dark",
    "iconName": "ClearNightDesertMirageDark",
    "role": "alternate",
-   "bytes": 162378,
-   "sha256": "03ab0bcf0de1"
+   "bytes": 282421,
+   "sha256": "26038042efd7"
   },
   {
    "file": "clear/desertMirage-light.png",
@@ -1085,8 +1085,8 @@
    "appearance": "light",
    "iconName": "ClearNightDesertMirageLight",
    "role": "alternate",
-   "bytes": 113356,
-   "sha256": "9eb6d43b84f6"
+   "bytes": 194463,
+   "sha256": "605baae345d6"
   },
   {
    "file": "clear/springCitrus-dark.png",
@@ -1098,8 +1098,8 @@
    "appearance": "dark",
    "iconName": "ClearNightSpringCitrusDark",
    "role": "alternate",
-   "bytes": 163331,
-   "sha256": "b124d0fca3df"
+   "bytes": 299263,
+   "sha256": "1378a841fc11"
   },
   {
    "file": "clear/springCitrus-light.png",
@@ -1111,8 +1111,8 @@
    "appearance": "light",
    "iconName": "ClearNightSpringCitrusLight",
    "role": "alternate",
-   "bytes": 118475,
-   "sha256": "96074fd02039"
+   "bytes": 208314,
+   "sha256": "3cc62a2254ec"
   },
   {
    "file": "clear/lotusGarden-dark.png",
@@ -1124,8 +1124,8 @@
    "appearance": "dark",
    "iconName": "ClearNightLotusGardenDark",
    "role": "alternate",
-   "bytes": 161812,
-   "sha256": "b73fa85381b9"
+   "bytes": 300533,
+   "sha256": "46272c50ec42"
   },
   {
    "file": "clear/lotusGarden-light.png",
@@ -1137,8 +1137,8 @@
    "appearance": "light",
    "iconName": "ClearNightLotusGardenLight",
    "role": "alternate",
-   "bytes": 109200,
-   "sha256": "4a54d5c1f361"
+   "bytes": 183166,
+   "sha256": "73dd63023403"
   },
   {
    "file": "clear/auroraFjord-dark.png",
@@ -1150,8 +1150,8 @@
    "appearance": "dark",
    "iconName": "ClearNightAuroraFjordDark",
    "role": "alternate",
-   "bytes": 161993,
-   "sha256": "edac7a509d4d"
+   "bytes": 289174,
+   "sha256": "72a906c26e03"
   },
   {
    "file": "clear/auroraFjord-light.png",
@@ -1163,8 +1163,8 @@
    "appearance": "light",
    "iconName": "ClearNightAuroraFjordLight",
    "role": "alternate",
-   "bytes": 118096,
-   "sha256": "3bd1c71b2733"
+   "bytes": 207325,
+   "sha256": "388a4468b945"
   },
   {
    "file": "clear/berryMeadow-dark.png",
@@ -1176,8 +1176,8 @@
    "appearance": "dark",
    "iconName": "ClearNightBerryMeadowDark",
    "role": "alternate",
-   "bytes": 161330,
-   "sha256": "84a5bcfcf340"
+   "bytes": 300934,
+   "sha256": "0275cbcd2acb"
   },
   {
    "file": "clear/berryMeadow-light.png",
@@ -1189,8 +1189,8 @@
    "appearance": "light",
    "iconName": "ClearNightBerryMeadowLight",
    "role": "alternate",
-   "bytes": 107882,
-   "sha256": "dcdef1be3a99"
+   "bytes": 180850,
+   "sha256": "5f746883938d"
   },
   {
    "file": "clear/goldenHour-dark.png",
@@ -1202,8 +1202,8 @@
    "appearance": "dark",
    "iconName": "ClearNightGoldenHourDark",
    "role": "alternate",
-   "bytes": 166162,
-   "sha256": "3bde0a1d75f4"
+   "bytes": 293127,
+   "sha256": "7c14bf3df44a"
   },
   {
    "file": "clear/goldenHour-light.png",
@@ -1215,8 +1215,8 @@
    "appearance": "light",
    "iconName": "ClearNightGoldenHourLight",
    "role": "alternate",
-   "bytes": 116080,
-   "sha256": "7baac787586c"
+   "bytes": 202920,
+   "sha256": "157ff02fcc03"
   },
   {
    "file": "clear/glacierBloom-dark.png",
@@ -1228,8 +1228,8 @@
    "appearance": "dark",
    "iconName": "ClearNightGlacierBloomDark",
    "role": "alternate",
-   "bytes": 160401,
-   "sha256": "ae29d7c32995"
+   "bytes": 290529,
+   "sha256": "e62aa4b37ad3"
   },
   {
    "file": "clear/glacierBloom-light.png",
@@ -1241,8 +1241,8 @@
    "appearance": "light",
    "iconName": "ClearNightGlacierBloomLight",
    "role": "alternate",
-   "bytes": 110090,
-   "sha256": "fd00d0d2aafd"
+   "bytes": 185894,
+   "sha256": "f374bdf000ab"
   },
   {
    "file": "clear/forestEmber-dark.png",
@@ -1254,8 +1254,8 @@
    "appearance": "dark",
    "iconName": "ClearNightForestEmberDark",
    "role": "alternate",
-   "bytes": 162716,
-   "sha256": "4ae30a486669"
+   "bytes": 277105,
+   "sha256": "cccffd2cbf02"
   },
   {
    "file": "clear/forestEmber-light.png",
@@ -1267,8 +1267,8 @@
    "appearance": "light",
    "iconName": "ClearNightForestEmberLight",
    "role": "alternate",
-   "bytes": 117184,
-   "sha256": "dbeef13c4b78"
+   "bytes": 178258,
+   "sha256": "82e87f7a420b"
   },
   {
    "file": "clear/peachNightfall-dark.png",
@@ -1280,8 +1280,8 @@
    "appearance": "dark",
    "iconName": "ClearNightPeachNightfallDark",
    "role": "alternate",
-   "bytes": 169844,
-   "sha256": "1f916fa1e86f"
+   "bytes": 300273,
+   "sha256": "b890ff65bf9d"
   },
   {
    "file": "clear/peachNightfall-light.png",
@@ -1293,8 +1293,8 @@
    "appearance": "light",
    "iconName": "ClearNightPeachNightfallLight",
    "role": "alternate",
-   "bytes": 111673,
-   "sha256": "4818014968c3"
+   "bytes": 163740,
+   "sha256": "2b4eb85e69f4"
   },
   {
    "file": "clear/velvetPlum-dark.png",
@@ -1306,8 +1306,8 @@
    "appearance": "dark",
    "iconName": "ClearNightVelvetPlumDark",
    "role": "alternate",
-   "bytes": 165028,
-   "sha256": "31915f870271"
+   "bytes": 300597,
+   "sha256": "4d824feacc1c"
   },
   {
    "file": "clear/velvetPlum-light.png",
@@ -1319,8 +1319,8 @@
    "appearance": "light",
    "iconName": "ClearNightVelvetPlumLight",
    "role": "alternate",
-   "bytes": 111185,
-   "sha256": "54b8d2e0c005"
+   "bytes": 186431,
+   "sha256": "d43e944e8e42"
   },
   {
    "file": "clear/orchidEvening-dark.png",
@@ -1332,8 +1332,8 @@
    "appearance": "dark",
    "iconName": "ClearNightOrchidEveningDark",
    "role": "alternate",
-   "bytes": 161927,
-   "sha256": "5358e42b5b7c"
+   "bytes": 290515,
+   "sha256": "57969ea55c52"
   },
   {
    "file": "clear/orchidEvening-light.png",
@@ -1345,8 +1345,8 @@
    "appearance": "light",
    "iconName": "ClearNightOrchidEveningLight",
    "role": "alternate",
-   "bytes": 110130,
-   "sha256": "67996c215781"
+   "bytes": 159723,
+   "sha256": "07cab6c325c0"
   },
   {
    "file": "clear/rosewood-dark.png",
@@ -1358,8 +1358,8 @@
    "appearance": "dark",
    "iconName": "ClearNightRosewoodDark",
    "role": "alternate",
-   "bytes": 163223,
-   "sha256": "33fd1e2187fa"
+   "bytes": 304201,
+   "sha256": "66b2ce4d1c55"
   },
   {
    "file": "clear/rosewood-light.png",
@@ -1371,8 +1371,8 @@
    "appearance": "light",
    "iconName": "ClearNightRosewoodLight",
    "role": "alternate",
-   "bytes": 110866,
-   "sha256": "f22a34b3b48d"
+   "bytes": 188515,
+   "sha256": "989c1d863b1e"
   },
   {
    "file": "clear/midnightBloom-dark.png",
@@ -1384,8 +1384,8 @@
    "appearance": "dark",
    "iconName": "ClearNightMidnightBloomDark",
    "role": "alternate",
-   "bytes": 166310,
-   "sha256": "2a9861e063c5"
+   "bytes": 304048,
+   "sha256": "40bbb848c6bf"
   },
   {
    "file": "clear/midnightBloom-light.png",
@@ -1397,8 +1397,8 @@
    "appearance": "light",
    "iconName": "ClearNightMidnightBloomLight",
    "role": "alternate",
-   "bytes": 111026,
-   "sha256": "fd0f7829d972"
+   "bytes": 160836,
+   "sha256": "2fe1279e8b7a"
   },
   {
    "file": "clear/lavenderHaze-dark.png",
@@ -1410,8 +1410,8 @@
    "appearance": "dark",
    "iconName": "ClearNightLavenderHazeDark",
    "role": "alternate",
-   "bytes": 166524,
-   "sha256": "9b2d17d4a9cc"
+   "bytes": 293869,
+   "sha256": "5f31b32c8cef"
   },
   {
    "file": "clear/lavenderHaze-light.png",
@@ -1423,8 +1423,8 @@
    "appearance": "light",
    "iconName": "ClearNightLavenderHazeLight",
    "role": "alternate",
-   "bytes": 111833,
-   "sha256": "20b5325707de"
+   "bytes": 160031,
+   "sha256": "8246ca11a93b"
   },
   {
    "file": "clear/coralHarbor-dark.png",
@@ -1436,8 +1436,8 @@
    "appearance": "dark",
    "iconName": "ClearNightCoralHarborDark",
    "role": "alternate",
-   "bytes": 170182,
-   "sha256": "1576865de3e8"
+   "bytes": 298856,
+   "sha256": "8ac794933135"
   },
   {
    "file": "clear/coralHarbor-light.png",
@@ -1449,8 +1449,8 @@
    "appearance": "light",
    "iconName": "ClearNightCoralHarborLight",
    "role": "alternate",
-   "bytes": 116486,
-   "sha256": "409f276b0738"
+   "bytes": 160395,
+   "sha256": "daa188658ac7"
   },
   {
    "file": "clear/tinted.png",
