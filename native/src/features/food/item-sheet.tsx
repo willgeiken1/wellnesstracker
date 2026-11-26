@@ -13,18 +13,35 @@ import { closeSheet, foodKey, FoodSheet } from './sheet';
 import { useFoodDay } from './selection';
 import { MACRO_COLOR, MealSeg, PillStepper, SectionLabel, SplitBar, macroPercents } from './ui';
 import { useFoodRevision } from './use-food-revision';
+import { gramsOfOz, ozOf, useFoodWeightUnit, weightText, type FoodWeightUnit } from './weight';
 import { showToast } from '../shell/toast';
 
 const n = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const nice = (v: number) => String(Number(v.toFixed(2)));
 const lower = (s: string) => s.toLowerCase();
 
-/** The serving choices a food offers: its own serving when its weight is known, and 100 g beside it. */
-export function servingsOf(food: Food): { label: string; grams: number | null }[] {
+/**
+ * The serving choices a food offers: its own serving when its weight is known, and 100 g beside it. In ounces (the US
+ * units) its own serving reads "6 oz (170 g)" and a 4 oz serving sits beside a portion of 3 oz or more. `q` is the
+ * serving in words, without the grams.
+ */
+export function servingsOf(food: Food, unit: FoodWeightUnit = 'g'): { label: string; q: string; grams: number | null }[] {
   const g = n(food.amount_g);
-  if (g == null || g <= 0) return [{ label: t('foodOneServing'), grams: null }];
-  const own = { label: `${t('foodOneServing')} (${num(g)} g)`, grams: g };
-  return Math.round(g) === 100 ? [{ label: '100 g', grams: 100 }] : [own, { label: '100 g', grams: 100 }];
+  if (g == null || g <= 0) return [{ label: t('foodOneServing'), q: t('foodOneServing'), grams: null }];
+  const hundred = { label: `100 ${t('foodUnitG')}`, q: `100 ${t('foodUnitG')}`, grams: 100 }, isHundred = Math.round(g) === 100;
+  if (unit === 'oz') {
+    const own = isHundred ? hundred : { label: `${weightText(g, 'oz')} (${weightText(g, 'g')})`, q: weightText(g, 'oz'), grams: g };
+    const four = gramsOfOz(4), oz = ozOf(g);
+    return [own, ...(oz >= 3 && oz !== 4 ? [{ label: `${weightText(four, 'oz')} (${weightText(four, 'g')})`, q: weightText(four, 'oz'), grams: four }] : []), ...(isHundred ? [] : [hundred])];
+  }
+  const own = { label: `${t('foodOneServing')} (${num(g)} g)`, q: `${num(g)} g`, grams: g };
+  return isHundred ? [hundred] : [own, hundred];
+}
+/** The serving and how many of it: "6 oz", "1.5 × 6 oz", or in grams "1 × 150 g"; "2 servings" when the weight is unknown. */
+export function servingTextOf(choice: { q: string; grams: number | null }, amount: number, unit: FoodWeightUnit = 'g') {
+  if (choice.grams == null) return `${nice(amount)} ${amount === 1 ? t('foodServingWord') : t('foodServingsWord')}`;
+  if (unit === 'oz') return `${amount === 1 ? '' : `${nice(amount)} ${t('foodUnitTimes')} `}${choice.q}`;
+  return `${nice(amount)} ${t('foodUnitTimes')} ${num(choice.grams)} g`;
 }
 /** How many times the food's own nutrients a choice of serving and amount comes to. */
 export function multipleFor(food: Food, grams: number | null, amount: number) {
@@ -48,14 +65,14 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
   const { day, today } = useFoodDay();
   const editing = !!target.entryId, inTray = !!currentCart() && !editing;
   const food = target.food, name = String(food.name ?? '');
-  const options = servingsOf(food);
+  const unit = useFoodWeightUnit(repo), options = servingsOf(food, unit);
   const [si, setSi] = useState(0), [amount, setAmount] = useState(target.servings ?? 1);
   const [meal, setMeal] = useState(() => target.meal || nextMealId(dayView(repo, today, { today })));
   const savedRow = () => repo.list('saved_foods').find(r => foodKey(r.data) === foodKey(food));
   const [saved, setSaved] = useState(() => target.source === 'mine' || !!savedRow());
-  const choice = options[si], mult = multipleFor(food, choice.grams, amount), p = portion(food, mult);
+  const pick = Math.min(si, options.length - 1), choice = options[pick], mult = multipleFor(food, choice.grams, amount), p = portion(food, mult);
   const kcal = kcalOf(p.energy_kj), grams = n(p.amount_g);
-  const servingText = choice.grams != null ? `${nice(amount)} × ${num(choice.grams)} g` : `${nice(amount)} ${amount === 1 ? t('foodServingWord') : t('foodServingsWord')}`;
+  const servingText = servingTextOf(choice, amount, unit);
   const source = target.source === 'barcode' ? { badge: t('foodSrcOff'), line: String(food.barcode ?? t('foodSrcOffLine')) }
     : saved ? { badge: t('foodMyFood'), line: t('foodSrcMineLine') } : { badge: t('foodSrcLog'), line: t('foodSrcLogLine') };
 
@@ -91,7 +108,7 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
     <EnergyCard kcal={kcal} p={n(p.protein_g)} c={n(p.carbs_g)} f={n(p.fat_g)} />
     <SectionLabel title={t('foodServingSize')} />
     <Chips style={{ marginBottom: -6 }}>{/* .fd-sv's 4 pt folds into the list's 10 */}
-      {options.map((o, i) => <Chip key={o.label} label={o.label} color="food" selected={i === si} onPress={() => setSi(i)} />)}
+      {options.map((o, i) => <Chip key={o.label} label={o.label} color="food" selected={i === pick} onPress={() => setSi(i)} />)}
     </Chips>
     <List style={{ marginTop: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, paddingLeft: 16, paddingRight: 10 }}>

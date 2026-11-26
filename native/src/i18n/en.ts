@@ -1614,6 +1614,8 @@ export const en = {
   settingsPhotoFailed: "That photo couldn't be saved. Try again.",
   // FC settings final polish
   settingsPcWorkoutsPlanSub: 'Sets, reps, weights and your {plan} plan.', settingsPcFoodNSub: 'Meals, water and {n} saved meals.',
+  // F-OZ food weights in ounces
+  foodUnitOz: 'oz',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
