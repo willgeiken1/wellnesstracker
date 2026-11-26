@@ -45,3 +45,9 @@ test('the motion tokens are the mockup springs and fades', () => {
   expect(FADES).toMatchObject({ tab: 180, tabOut: 110, scrim: 300, reduced: 200, pressIn: 90 });
   expect(DISTANCES).toMatchObject({ pressScale: 0.97, tabRise: 8, sheetTrail: 18, toastRise: 16, cardScale: 0.94 });
 });
+
+test('a tracking of 0 is written out, so a nested unit drops its number\'s tighter tracking', () => {
+  expect(font(600, 13, undefined, 0)).toMatchObject({ letterSpacing: 0 });
+  expect(font(600, 13)).not.toHaveProperty('letterSpacing');
+  expect(font(700, 24, 1.1, -0.03).letterSpacing).toBeCloseTo(-0.72);
+});

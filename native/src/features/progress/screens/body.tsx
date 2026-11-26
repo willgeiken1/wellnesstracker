@@ -42,7 +42,8 @@ function GoalRuler({ d }: { d: ProgressData }) {
   }
   const nx = x(w.kg);
   const aria = fill(t('progressGoalRulerAria'), { start: wtS(start, u), goal: wtS(goal, u), now: wtS(w.kg, u) }) + (eta ? ' ' + fill(t('progressGoalRulerEta'), { when: dShort(eta) }) : '');
-  return <View accessible accessibilityRole="image" accessibilityLabel={aria} style={{ width: '100%', aspectRatio: W / H, marginTop: 10, marginBottom: 2 }}>
+  // The design's 10 pt over and 2 pt under fold into the 8 pt around it on the web, so only the 2 pt extra above is kept here.
+  return <View accessible accessibilityRole="image" accessibilityLabel={aria} style={{ width: '100%', aspectRatio: W / H, marginTop: 2 }}>
     <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
       {marks}
       <Line x1={L} x2={R} y1={y} y2={y} stroke={mix(k.c.recovery, k.c['surface-2'], 0.18)} strokeWidth={6} strokeLinecap="round" />

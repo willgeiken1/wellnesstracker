@@ -82,7 +82,7 @@ const Calories: TileBody = ({ p, d }) => {
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>{v.meals.slice(0, 4).map((m, i) => <View key={m.id} style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Dot color={shade(i)} /><Sub size={11.5}>{m.name}</Sub></View>
         <KitText weight={700} size={15} lineHeight={1.2} numeric color={m.empty ? 'text-muted' : 'text'} style={{ marginTop: 4 }}>
-          {m.empty ? t('foodNone') : num(m.kcal)}{m.empty ? null : <KitText weight={600} size={10.5} color="text-muted">{` ${KC()}`}</KitText>}
+          {m.empty ? t('foodNone') : num(m.kcal)}{m.empty ? null : <KitText weight={600} tracking={0} size={10.5} color="text-muted">{` ${KC()}`}</KitText>}
         </KitText>
       </View>)}</View>
     </View>
@@ -103,7 +103,7 @@ const Macros: TileBody = ({ p, d }) => {
     <MacroRings size={76} values={MAC.slice(0, 3).map(([key]) => ({ frac: g(key) / goal(key), color: c(key) }))} />
     <View style={{ flexDirection: 'row', width: '100%', marginTop: 'auto', paddingTop: 4 }}>{MAC.slice(0, 3).map(([key, name]) => <View key={key} style={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
       <View style={{ width: 14, height: 3, borderRadius: 2, backgroundColor: c(key) }} />
-      <KitText weight={700} size={15} lineHeight={1} numeric style={{ marginTop: 5 }}>{shown(key)}<KitText weight={600} size={10} color="text-muted">g</KitText></KitText>
+      <KitText weight={700} size={15} lineHeight={1} numeric style={{ marginTop: 5 }}>{shown(key)}<KitText weight={600} tracking={0} size={10} color="text-muted">g</KitText></KitText>
       <Sub size={10.5} style={{ marginTop: 3 }}>{t(name)}</Sub>
     </View>)}</View>
   </View>;
@@ -114,7 +114,7 @@ const Macros: TileBody = ({ p, d }) => {
     <View style={{ flexDirection: 'row', gap: 14 }}>{MAC.map(([key, name]) => <View key={key} style={{ flex: 1, minWidth: 0 }}>
       <Sub size={12}>{t(name)}{left ? ` ${t('foodLeft')}` : ''}</Sub>
       <KitText weight={700} size={19} lineHeight={1.1} tracking={-0.02} numeric numberOfLines={1} style={{ marginTop: 4, marginBottom: 8 }}>
-        {shown(key)}<KitText weight={600} size={11} color="text-muted">/{goal(key)} g</KitText>
+        {shown(key)}<KitText weight={600} tracking={0} size={11} color="text-muted">/{goal(key)} g</KitText>
       </KitText>
       <Cells states={meter(g(key) / goal(key), 8)} color={c(key)} h={8} gap={2} r={2} />
     </View>)}</View>
@@ -136,7 +136,7 @@ const Macros: TileBody = ({ p, d }) => {
           <KitText weight={500} size={11} lineHeight={1} color="text-muted" numberOfLines={1}>{togo > 0 ? tx('foodGToGo', { g: togo }) : t('foodTargetMet')}</KitText>
         </View>
         <WellBar frac={gg / gl} h={8} color={c(key)} />
-        <KitText weight={700} size={14} lineHeight={1} numeric style={{ width: 74, textAlign: 'right' }}>{left ? Math.max(0, togo) : gg}<KitText weight={600} size={10.5} color="text-muted">/{gl} g</KitText></KitText>
+        <KitText weight={700} size={14} lineHeight={1} numeric style={{ width: 74, textAlign: 'right' }}>{left ? Math.max(0, togo) : gg}<KitText weight={600} tracking={0} size={10.5} color="text-muted">/{gl} g</KitText></KitText>
       </View>;
     })}</View>
   </View>;
@@ -152,7 +152,7 @@ function MealBars({ d, rowH, gap, w }: { d: Data; rowH: number; gap: number; w: 
     <KitText weight={600} size={12.5} numberOfLines={1} style={{ width: 66 }}>{m.name}</KitText>
     <WellBar frac={m.p / mx} h={8} color={k.c.food} mark={PER_MEAL / mx} dim={m.p < PER_MEAL} width={w - 66 - 40 - 20} />
     <KitText weight={700} size={13.5} lineHeight={1} numeric color={m.empty ? 'text-muted' : 'text'} style={{ width: 40, textAlign: 'right' }}>
-      {m.empty ? t('foodNone') : Math.round(m.p)}{m.empty ? null : <KitText weight={600} size={10} color="text-muted"> g</KitText>}</KitText>
+      {m.empty ? t('foodNone') : Math.round(m.p)}{m.empty ? null : <KitText weight={600} tracking={0} size={10} color="text-muted"> g</KitText>}</KitText>
   </View>)}</View>;
 }
 const Protein: TileBody = ({ p, repo, d }) => {
@@ -201,7 +201,7 @@ function FoodQuickRow({ f, h, first, repo, d, sm, sub }: { f: Food; h: number; f
         <Title size={sm ? 13.5 : 14}>{sm ? name.split(',')[0] : name}</Title>
         <Sub size={11.5}>{sub ?? `${serving}${kcal != null ? ` · ${num(kcal)} ${KC()}` : ''}`}</Sub>
       </View>
-      {sm && pg != null ? <KitText weight={700} size={14.5} lineHeight={1} numeric>{pg}<KitText weight={600} size={11} color="text-muted"> g</KitText></KitText> : null}
+      {sm && pg != null ? <KitText weight={700} size={14.5} lineHeight={1} numeric>{pg}<KitText weight={600} tracking={0} size={11} color="text-muted"> g</KitText></KitText> : null}
     </Tappable>
     <Plus label={tx('foodAddTo', { food: name, meal: mealName(repo, d.next).toLowerCase() })} onPress={() => quickAdd(repo, d.today, d.next, f)} />
   </View>;
@@ -272,7 +272,7 @@ function WaterButton({ c, compact, onPress, unit }: { c: Container; compact: boo
   return <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={tx('foodAddContainer', { name: c.name, size: sizeSpoken(c.oz, unit) })} onPress={onPress}
     style={{ flex: 1, minWidth: 0, height: 44, borderRadius: 13, paddingHorizontal: compact ? 2 : 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: compact ? 3 : 5, backgroundColor: alpha(k.c.water, 0.14) }}>
     <WaterIcon name={c.icon} size={17} color={k.c.water} />
-    <KitText weight={700} size={13.5} numeric color={k.c.water} numberOfLines={1}>{compact ? sizeNum(c.oz, unit) : sizeText(c.oz, unit)}{compact ? <KitText weight={600} size={11} color={k.c.water}>{unitLabel(unit)}</KitText> : null}</KitText>
+    <KitText weight={700} size={13.5} numeric color={k.c.water} numberOfLines={1}>{compact ? sizeNum(c.oz, unit) : sizeText(c.oz, unit)}{compact ? <KitText weight={600} tracking={0} size={11} color={k.c.water}>{unitLabel(unit)}</KitText> : null}</KitText>
   </Tappable>;
 }
 function WaterRow({ cs, repo, d, compact, style }: { cs: Container[]; repo: Repository; d: Data; compact?: boolean; style?: object }) {
@@ -374,7 +374,7 @@ function NuMeter({ x, h }: { x: Nu; h: number }) {
 const Micros: TileBody = ({ p, d }) => {
   const N = nutrients(d.view), lim = p.options.show === 'limit', list = lim ? N.limit : N.reach;
   const valText = (x: Nu, slash: boolean) => x.v == null ? <KitText weight={700} size={13} color="text-muted">{t('foodUnknownVal')}</KitText>
-    : <KitText weight={700} size={13} lineHeight={1} numeric>{num(x.v)}<KitText weight={600} size={10.5} color="text-muted">{slash ? `/${num(x.goal)} ${x.u}` : ` ${x.u}`}</KitText></KitText>;
+    : <KitText weight={700} size={13} lineHeight={1} numeric>{num(x.v)}<KitText weight={600} tracking={0} size={10.5} color="text-muted">{slash ? `/${num(x.goal)} ${x.u}` : ` ${x.u}`}</KitText></KitText>;
   if (p.size === 'S') {
     const x = lim ? N.limit[2] : N.reach[0];
     return <View accessible accessibilityLabel={`${x.key} ${x.v == null ? t('foodUnknownLower') : `${x.v} ${t('foodOf')} ${x.goal} ${x.u}`}`} style={col}>
@@ -611,7 +611,7 @@ const Fits: TileBody = ({ p, repo, d }) => {
     <Tappable dim="row" accessibilityRole="button" onPress={() => foodRoutes.saved(d.next)} accessibilityLabel={tx('foodFitsA11y', { name: x.c.name, kcal: num(x.kcal), p: Math.round(x.p), left: num(left - x.kcal) })}
       style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' }}>
       <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{x.c.name}</Title><Sub size={11.5}>{num(x.kcal)} {KC()} · {tx('foodGProtein', { g: Math.round(x.p) })}</Sub></View>
-      <View style={{ alignItems: 'flex-end' }}><Sub size={11}>{t('foodLeaves')}</Sub><KitText weight={700} size={13.5} numeric>{num(left - x.kcal)}<KitText weight={600} size={10} color="text-muted">{` ${KC()}`}</KitText></KitText></View>
+      <View style={{ alignItems: 'flex-end' }}><Sub size={11}>{t('foodLeaves')}</Sub><KitText weight={700} size={13.5} numeric>{num(left - x.kcal)}<KitText weight={600} tracking={0} size={10} color="text-muted">{` ${KC()}`}</KitText></KitText></View>
     </Tappable>
     <Plus label={tx('foodAddTo', { food: x.c.name, meal: mn })} onPress={() => addSaved(repo, d.today, d.next, x.c)} />
   </View>;

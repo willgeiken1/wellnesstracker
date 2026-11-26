@@ -9,10 +9,11 @@ import { useSelectionHaptic } from './selection-haptic';
 /** The kit's `.seg` (`ui.seg`): choices share one row on a surface-2 track (2 pt padding and gaps, 12 pt corners). The
  * chosen one is raised (the text 10 percent over surface 2 in dark, the surface in light) with a soft shadow; the others
  * are muted. Each choice is 34 pt tall, grown to 46 pt to touch. A tick plays when the choice changes. `compact` is the
- * narrow form that sits at the end of a settings row (32 pt tall, 6 pt side padding, 13 pt text). */
-export function SegmentedControl<T extends string>({ label, options, value, onChange, testID, compact }: {
+ * narrow form that sits at the end of a settings row (32 pt tall, 6 pt side padding, 13 pt text). `track` replaces the
+ * track colour where a page sets its own (a dark sheet's list on Progress uses the page background). */
+export function SegmentedControl<T extends string>({ label, options, value, onChange, testID, compact, track }: {
   label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void; testID?: string;
-  compact?: boolean;
+  compact?: boolean; track?: string;
 }) {
   const { selectorLook } = useTheme();
   const k = useKit();
@@ -21,7 +22,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
   const choose = (next: T) => { if (next !== value) haptic(); onChange(next); };
   if (selectorLook === 'pills') return <Pills label={label} options={options} value={value} onChange={choose} />;
   return <View testID={testID} accessibilityRole="tablist" accessibilityLabel={label}
-    style={{ flexDirection: 'row', gap: 2, padding: 2, borderRadius: KIT.radius.seg, backgroundColor: k.dark ? k.c['surface-2'] : k.fill }}>
+    style={{ flexDirection: 'row', gap: 2, padding: 2, borderRadius: KIT.radius.seg, backgroundColor: track ?? (k.dark ? k.c['surface-2'] : k.fill) }}>
     {options.map(option => {
       const on = option.value === value;
       return <Tappable key={option.value} dim={on ? 'none' : 'seg'} accessibilityRole="tab" accessibilityLabel={option.label}

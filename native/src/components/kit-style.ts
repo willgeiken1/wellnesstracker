@@ -27,7 +27,7 @@ export function font(weight: Weight, size: number, lineHeight?: number, letterSp
   return {
     fontFamily: FAMILY[weight], fontSize: s,
     ...(lineHeight ? { lineHeight: Math.round(s * lineHeight * 100) / 100 } : {}),
-    ...(letterSpacingEm ? { letterSpacing: Math.round(letterSpacingEm * s * 1000) / 1000 } : {}),
+    ...(letterSpacingEm != null ? { letterSpacing: Math.round(letterSpacingEm * s * 1000) / 1000 } : {}), // 0 too: a nested unit drops its number's tracking
   };
 }
 /** The final design's eyebrows (`.eyebrow`, `.ph .eb`) are small capitals, widely tracked. Every kit eyebrow takes its

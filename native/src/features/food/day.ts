@@ -77,7 +77,8 @@ export function nextMealId(view: Pick<DayView, 'meals'>): string {
 }
 
 /** Food names for a meal's one-line summary: Greek yogurt, blueberries, granola. */
-export const foodsLine = (items: FoodItem[]) => items.map((i, k) => k ? i.name.charAt(0).toLowerCase() + i.name.slice(1) : i.name).join(', ');
+/** Each name up to its first comma, so Greek yogurt, plain 2% reads as Greek yogurt. */
+export const foodsLine = (items: FoodItem[]) => items.map((i, k) => { const n = i.name.split(',')[0].trim(); return k ? n.charAt(0).toLowerCase() + n.slice(1) : n; }).join(', ');
 
 const WD = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const parts = (day: string) => day.split('-').map(Number) as [number, number, number];

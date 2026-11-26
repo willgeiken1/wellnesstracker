@@ -1,4 +1,4 @@
-import { daySums, dayView, nextMealId, stripDays, streak, weekDays } from '../src/features/food/day';
+import { daySums, dayView, foodsLine, nextMealId, stripDays, streak, weekDays } from '../src/features/food/day';
 import { saveFood } from '../src/features/food/model';
 import { memoryRepository } from './workout-repository';
 
@@ -73,5 +73,14 @@ describe('days and weeks', () => {
     saveFood(repo, DAY, LUNCH, toast);
     expect(streak(repo, DAY)).toMatchObject({ count: 4, today: true });
     expect(streak(repo, DAY, true).count).toBe(0);
+  });
+});
+
+describe('a meal\'s one-line summary', () => {
+  test('names each food up to its first comma, the first capitalised and the rest lower case', () => {
+    const repo = memoryRepository();
+    saveFood(repo, DAY, BREAKFAST, { ...toast, name: 'Synthetic yogurt, plain 2%' });
+    saveFood(repo, DAY, BREAKFAST, { ...soup, name: 'Berries' });
+    expect(foodsLine(dayView(repo, DAY, { today: DAY }).meals[0].items)).toBe('Synthetic yogurt, berries');
   });
 });

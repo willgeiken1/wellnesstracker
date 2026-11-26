@@ -83,7 +83,8 @@ export function SleepScreen() {
     <Card style={{ paddingTop: 14, paddingHorizontal: 14, paddingBottom: 12 }}>
       {readLine(<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{dot('sleep')}<Text style={[font(600, 14), { color: k.c.text }]}>{dayName(night)}, {nx ? hm(nx.h) : t('progressNoData')}</Text></View>,
         nx?.bed != null && nx.wake != null ? `${clock(nx.bed)} ${t('progressTo')} ${clock(nx.wake)}` : undefined)}
-      <View style={{ gap: 2, marginTop: 10 }}>
+      {/* .pg-win's 10 pt top margin folds into the read line's 8 pt bottom margin on the web, so 2 pt more here. */}
+      <View style={{ gap: 2, marginTop: 2 }}>
         {win.map((x, i) => { const on = i === night; return <Tappable dim="fill" key={i} onPress={() => setNight(i)} accessibilityRole="button" accessibilityState={{ selected: on }}
           accessibilityLabel={`${dayName(i)}, ${x?.bed != null && x.wake != null ? `${clock(x.bed)} ${t('progressTo')} ${clock(x.wake)}, ` : ''}${x ? hm(x.h) : t('progressNoData')}`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 30, borderRadius: 8 }}>

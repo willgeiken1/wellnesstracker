@@ -36,13 +36,13 @@ export const CapB = ({ children }: { children: ReactNode }) => { const k = useKi
 export function Big({ v, unit, size = 'big', color, units }: { v?: string | number; unit?: string; size?: 'big' | 'mid' | 'sm'; color?: string; units?: (readonly [string, string])[] }) {
   const k = useKit(), [fs, lh, tr, us] = size === 'big' ? [44, 1, -0.045, 15] : size === 'mid' ? [30, 1.05, -0.04, 15] : [21, 1.1, -0.03, 12.5];
   // Number and unit sit on one baseline, the unit 3 pt after its number (.pg-big small { margin-left: 3px }); an hours and
-  // minutes value keeps a word space between its groups.
+  // minutes value sets its h and m 1 pt either side (.pg small.hm) and keeps a word space between its groups.
   const groups: (readonly [string, string | undefined])[] = units ?? [[v == null ? '' : String(v), unit]];
   const said = groups.map(([n, u]) => u ? `${n} ${u}` : n).join(' ');
   return <View accessible accessibilityLabel={said} style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'nowrap' }}>
     {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? fs * 0.25 : 0 }}>
       <Text numberOfLines={1} style={[font(700, fs, lh, tr), tab, { color: color ?? k.c.text }]}>{n}</Text>
-      {u ? <Text numberOfLines={1} style={[font(600, us), { color: k.c['text-muted'], marginLeft: 3 }]}>{u}</Text> : null}
+      {u ? <Text numberOfLines={1} style={[font(600, us), { color: k.c['text-muted'] }, units ? { marginLeft: 1, marginRight: 1 } : { marginLeft: 3 }]}>{u}</Text> : null}
     </View>)}
   </View>;
 }
