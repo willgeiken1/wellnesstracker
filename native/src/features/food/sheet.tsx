@@ -8,6 +8,7 @@ import { t } from '@/i18n/en';
 import { kcalOf, num } from './day';
 import type { Food } from './model';
 import { AddButton } from './ui';
+import { weightText, type FoodWeightUnit } from './weight';
 
 /** A stable getter for the newest value, for gesture handlers that are made once. */
 export function useLatest<T>(value: T): () => T {
@@ -102,10 +103,15 @@ export function FoodRow({ title, sub, kcal, on, first, onOpen, onAdd, openLabel,
 }
 
 const n = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
-/** "My food · 150 g · 31 g protein": where it came from, its serving, its protein. */
-export function foodSub(food: Food, mine = false) {
-  const g = n(food.amount_g) ?? n(food.serving_g), p = n(food.protein_g);
-  return [mine || food.saved_food_id ? t('foodMyFood') : '', g != null ? `${num(g)} g` : '', p != null ? `${num(p)} g ${t('foodProteinLower')}` : ''].filter(Boolean).join(' · ');
+/** A food's serving weight as the person reads it ("6 oz" or "170 g"), or nothing when it is unknown. */
+export function foodAmount(food: Food, unit: FoodWeightUnit = 'g') {
+  const g = n(food.amount_g) ?? n(food.serving_g);
+  return g != null ? weightText(g, unit) : '';
+}
+/** "My food · 6 oz · 31 g protein" (or "150 g" in metric): where it came from, its serving, its protein. */
+export function foodSub(food: Food, mine = false, unit: FoodWeightUnit = 'g') {
+  const p = n(food.protein_g);
+  return [mine || food.saved_food_id ? t('foodMyFood') : '', foodAmount(food, unit), p != null ? `${num(p)} g ${t('foodProteinLower')}` : ''].filter(Boolean).join(' · ');
 }
 export const foodKcal = (food: Food) => kcalOf(food.energy_kj);
 export const foodKey = (food: Food) => String(food.name ?? '').trim().toLowerCase();

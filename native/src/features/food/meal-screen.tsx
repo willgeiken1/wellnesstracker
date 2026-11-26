@@ -14,6 +14,7 @@ import { RowLine, useLatest } from './sheet';
 import { MACRO_COLOR, SplitBar } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
+import { useFoodWeightUnit, weightText, type FoodWeightUnit } from './weight';
 import { capitals } from '@/components/kit-style';
 
 /** A pushed Food screen: the kit's bar, then the page scrolling under it. */
@@ -35,7 +36,7 @@ const g = (v: number) => `${num(v)} g`;
  */
 export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string }) {
   useFoodRevision(repo);
-  const k = useKit();
+  const k = useKit(), unit = useFoodWeightUnit(repo);
   const { day, today } = useFoodDay();
   const view = dayView(repo, day, { today }), m = view.meals.find(x => x.id === id) ?? view.meals[0];
   const [editing, setEditing] = useState(false), [open, setOpen] = useState<string | null>(null);
@@ -85,7 +86,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
     </Card>
     <SectionHeader title={t('foodFoodsCap')} aside={plural(m.items.length, t('foodItemWord'), t('foodItemsWord'))} />
     <List>
-      {m.items.map((it, i) => <SwipeRow key={it.id} item={it} first={i === 0} editing={isEditing} open={open === it.id} onOpen={on => setOpen(on ? it.id : null)}
+      {m.items.map((it, i) => <SwipeRow key={it.id} item={it} unit={unit} first={i === 0} editing={isEditing} open={open === it.id} onOpen={on => setOpen(on ? it.id : null)}
         onEdit={() => { if (open) { setOpen(null); return; } foodRoutes.item({ food: it.data, meal: m.id, day, entryId: it.id }); }}
         onDelete={() => { setOpen(null); removeFood(repo, it.id, m.id); }} />)}
     </List>
@@ -98,8 +99,8 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
 }
 
 /** A logged food that slides left to show Delete; in edit mode a red minus does the same. */
-function SwipeRow({ item, first, editing, open, onOpen, onEdit, onDelete }: {
-  item: FoodItem; first: boolean; editing: boolean; open: boolean; onOpen: (on: boolean) => void; onEdit: () => void; onDelete: () => void;
+function SwipeRow({ item, unit, first, editing, open, onOpen, onEdit, onDelete }: {
+  item: FoodItem; unit: FoodWeightUnit; first: boolean; editing: boolean; open: boolean; onOpen: (on: boolean) => void; onEdit: () => void; onDelete: () => void;
 }) {
   const k = useKit();
   const [x] = useState(() => new Animated.Value(0));
@@ -115,7 +116,7 @@ function SwipeRow({ item, first, editing, open, onOpen, onEdit, onDelete }: {
     });
   });
   const p = item.p == null ? null : `${num(item.p)} g ${t('foodProteinLower')}`;
-  const sub = [item.grams != null ? `${num(item.grams)} g` : null, p].filter(Boolean).join(' · ');
+  const sub = [item.grams != null ? weightText(item.grams, unit) : null, p].filter(Boolean).join(' · ');
   return <View style={{ overflow: 'hidden' }}>
     <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={fill(t('foodDeleteNamed'), { name: item.name })} onPress={onDelete} importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
       style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: DEL, alignItems: 'center', justifyContent: 'center', backgroundColor: k.c.danger }}>

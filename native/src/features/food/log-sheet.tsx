@@ -11,9 +11,10 @@ import { combos, meals, recentFoods, shiftDay, type Combo, type Food } from './m
 import { foodRoutes } from './nav';
 import { searchableFoods } from './search';
 import { useFoodDay } from './selection';
-import { ActionTile, closeSheet, foodKcal, foodKey, FoodRow, FoodSheet, foodSub, LinkRow } from './sheet';
+import { ActionTile, closeSheet, foodAmount, foodKcal, foodKey, FoodRow, FoodSheet, foodSub, LinkRow } from './sheet';
 import { MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
+import { useFoodWeightUnit } from './weight';
 
 type Tab = 'recent' | 'saved' | 'mine' | 'results';
 const savedKey = (c: Combo) => `meal:${c.name}`;
@@ -25,7 +26,7 @@ const lower = (s: string) => s.toLowerCase();
  */
 export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: string }) {
   useFoodRevision(repo);
-  const k = useKit();
+  const k = useKit(), unit = useFoodWeightUnit(repo);
   const { day, today } = useFoodDay();
   const mealList = meals(repo);
   const [first] = useState(() => asked && mealList.some(m => m.id === asked) ? asked : nextMealId(dayView(repo, today, { today })));
@@ -41,9 +42,9 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
   const toggleSaved = (c: Combo) => { const key = savedKey(c); if (inCart(key)) removeFromCart(key); else addToCart(c.foods.map(f => cartItem(key, f))); };
   const open = (food: Food, mineFood = false) => foodRoutes.item({ food, meal, day, source: mineFood || food.saved_food_id ? 'mine' : undefined });
   const foodRow = (food: Food, i: number, mineFood = false) => {
-    const name = String(food.name ?? ''), kcal = foodKcal(food), on = inCart(foodKey(food));
-    return <FoodRow key={`${foodKey(food)}-${i}`} first={i === 0} title={name} sub={foodSub(food, mineFood)} kcal={kcal} on={on}
-      openLabel={`${name}${kcal == null ? '' : `, ${num(kcal)} ${t('foodKcal')}`}. ${t('foodShowDetails')}`} onOpen={() => open(food, mineFood)} onAdd={() => toggle(food)} />;
+    const name = String(food.name ?? ''), kcal = foodKcal(food), on = inCart(foodKey(food)), amount = foodAmount(food, unit);
+    return <FoodRow key={`${foodKey(food)}-${i}`} first={i === 0} title={name} sub={foodSub(food, mineFood, unit)} kcal={kcal} on={on}
+      openLabel={`${name}${amount ? `, ${amount}` : ''}${kcal == null ? '' : `, ${num(kcal)} ${t('foodKcal')}`}. ${t('foodShowDetails')}`} onOpen={() => open(food, mineFood)} onAdd={() => toggle(food)} />;
   };
 
   const tabs: [Tab, string][] = [['recent', t('foodTabRecent')], ['saved', t('foodTabSaved')], ['mine', t('foodTabMine')], ['results', t('foodTabResults')]];
