@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PGlite } from '@electric-sql/pglite';
 import { migratedDatabase } from './pglite';
@@ -44,4 +44,57 @@ test('verify catches a weakened table', async () => {
   await expect(db.exec(verify.replace('BEGIN TRANSACTION READ ONLY;', ''))).rejects.toThrow(/not forced on meals/);
   await db.exec('ROLLBACK');
   await db.exec(verify);
+});
+// compare.sql holds the full expected shape, read here from PGlite after the reviewed apply.
+// Rebuild it with ROW_SYNC_WRITE_COMPARE=1 when 0001, 0002 or the migrations change.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const compareBuilder = require('../../server/row-sync/live/compare.cjs');
+const stripLiterals = (script: string) => script.replace(/'(?:[^']|'')*'/g, "''");
+describe('full comparison (live/compare.sql)', () => {
+  let compare: string;
+  test('compare.sql is the shape the reviewed apply produces', async () => {
+    const result = await db.query<{ line: string }>(`SELECT line FROM (${compareBuilder.shape}) AS shape(line)`);
+    const built = compareBuilder.buildCompare(result.rows.map(r => r.line));
+    if (process.env.ROW_SYNC_WRITE_COMPARE === '1') writeFileSync(join(directory, 'live/compare.sql'), built);
+    compare = sql('live/compare.sql');
+    expect(compare).toBe(built);
+    expect(compareBuilder.tables).toEqual([...syncedTables]);
+    const lines = result.rows.map(r => r.line);
+    for (const t of syncedTables) {
+      expect(lines).toContain(`table ${t}`);
+      expect(lines).toContain(`rls ${t} on forced`);
+    }
+    expect(lines).toContain('sequence row_sync_seq');
+    expect(lines.filter(l => l.startsWith('function '))).toHaveLength(4);
+  });
+  test('compare passes on the applied schema', async () => {
+    const [, , done] = await db.exec(compare);
+    expect(done.rows).toEqual([{ result: 'Row-sync matches the plan' }]);
+  });
+  test('compare is a read-only transaction', () => {
+    expect(compare).toMatch(/^BEGIN TRANSACTION READ ONLY;$/m);
+    expect(compare.trimEnd()).toMatch(/ROLLBACK;$/);
+    expect(stripLiterals(compare)).not.toMatch(/\b(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|GRANT|REVOKE|TRUNCATE)\s/);
+  });
+  test('compare lists every drift in one error', async () => {
+    await db.exec(`BEGIN;
+      ALTER TABLE public.meals NO FORCE ROW LEVEL SECURITY;
+      ALTER TABLE public.goals ADD COLUMN stray text;
+      GRANT EXECUTE ON FUNCTION public.sync_push(jsonb) TO anon;`);
+    const body = compare.replace('BEGIN TRANSACTION READ ONLY;', '').replace(/ROLLBACK;\s*$/, '');
+    const error = await db.exec(body).then(() => null, (e: Error) => e.message);
+    await db.exec('ROLLBACK');
+    expect(error).toMatch(/missing: rls meals on forced/);
+    expect(error).toMatch(/unexpected: rls meals on\n/);
+    expect(error).toMatch(/unexpected: column goals\.stray text/);
+    expect(error).toMatch(/missing: execute anon sync_push no/);
+    expect(error).toMatch(/unexpected: execute anon sync_push yes/);
+    await db.exec(compare);
+  });
+  test('compare fails on a schema without row-sync', async () => {
+    const fresh = await migratedDatabase();
+    try {
+      await expect(fresh.exec(compare)).rejects.toThrow(/missing: table profile/);
+    } finally { await fresh.close(); }
+  });
 });
