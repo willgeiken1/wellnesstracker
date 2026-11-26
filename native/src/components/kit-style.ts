@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Insets, TextStyle } from 'react-native';
+import { Platform, type Insets, type TextStyle } from 'react-native';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 
@@ -33,8 +33,14 @@ export function font(weight: Weight, size: number, lineHeight?: number, letterSp
 /** The final design's eyebrows (`.eyebrow`, `.ph .eb`) are small capitals, widely tracked. Every kit eyebrow takes its
  * capitals from here, so they stay in one place. */
 export const capitals: TextStyle = { textTransform: 'uppercase' };
+/** The design wraps every paragraph so its last line is never one stray word (`text-wrap: pretty`). Spread on a Text. */
+export const PRETTY = { lineBreakStrategyIOS: 'push-out' } as const;
+/** The same on the web build, which has no such prop. */
+export const prettyWeb = Platform.OS === 'web' ? ({ textWrapStyle: 'pretty' } as object as TextStyle) : null;
 /** Numbers on stats, values and steppers keep their width as they change. */
 export const tabular: TextStyle = { fontVariant: ['tabular-nums'] };
+/** A unit or note set inside a tabular number goes back to the face's own figures, as the design's `small` does. */
+export const proportional: TextStyle = { fontVariant: ['proportional-nums'] };
 
 /** hitSlop that grows a `width` x `height` control to at least 44 x 44. */
 export function slopFor(width: number, height: number): Insets | undefined {

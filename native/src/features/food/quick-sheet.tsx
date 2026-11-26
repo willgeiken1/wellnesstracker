@@ -52,11 +52,11 @@ export function QuickSheet({ repo, meal: asked, name: given, mine }: { repo: Rep
     header={<SheetHeader title={t('foodTileQuick')} left={t('cancel')} onLeft={() => closeSheet()} right={t('foodAddWord')} onRight={add} rightDisabled={!ok} />}>
     <Tappable dim="none" accessible={false} onPress={() => big.current?.focus()}
       style={{ alignItems: 'center', gap: 4, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 14, borderRadius: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
-      <KitText weight={700} size={12} tracking={0.1} color="text-muted" style={capitals}>{t('foodCaloriesCap')}</KitText>
+      <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{t('foodCaloriesCap')}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8 }}>
         <TextInput ref={big} value={kcalText} onChangeText={setKcal} keyboardType="number-pad" placeholder="0" testID="food-quick-kcal"
           accessibilityLabel={t('foodCaloriesInKcal')} autoComplete="off" placeholderTextColor={k.c.ghost} selectionColor={k.c.food} cursorColor={k.c.food}
-          style={[font(700, 52, 1.1, -0.04), { width: 190, textAlign: 'right', color: k.c.text, padding: 0, fontVariant: ['tabular-nums'] }]} />
+          style={[font(700, 52, 1.1, -0.04), { width: 190, textAlign: 'right', color: k.c.text, padding: 0, paddingVertical: 1, fontVariant: ['tabular-nums'] }]} />
         <KitText weight={600} size={18} color="text-muted" style={{ width: 120 }}>{t('foodKcal')}</KitText>
       </View>
     </Tappable>

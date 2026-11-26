@@ -74,9 +74,9 @@ export function SleepScreen() {
       {S.segments ? <>{segRead()}<Hypnogram night={S} sel={seg} onSel={setSeg} /></> : <Cap>{t('progressNoStages')}</Cap>}
       {S.deep || S.rem || S.core ? <>
         <View style={{ flexDirection: 'row', height: 10, marginTop: 16, borderRadius: 7, overflow: 'hidden', gap: 2, backgroundColor: k.c['surface-2'] }}>{ORDER.map(st => <View key={st} style={{ width: `${S[st] / S.min * 100}%`, backgroundColor: k.tok(STAGES[st][1]) }} />)}</View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, columnGap: 16, marginTop: 16 }}>{ORDER.map(st => <View key={st} style={{ width: '45%', flexDirection: 'row', gap: 10 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, marginTop: 16 }}>{ORDER.map((st, i) => <View key={st} style={{ width: '50%', flexDirection: 'row', gap: 10, paddingLeft: i % 2 ? 8 : 0, paddingRight: i % 2 ? 0 : 8 }}>
           <View style={{ width: 10, height: 10, borderRadius: 3, marginTop: 5, backgroundColor: k.tok(STAGES[st][1]) }} />
-          <View><Big size="sm" v={S[st]} unit={t('progressMinUnit')} /><Cap>{t(STAGES[st][0])}, {Math.round(S[st] / S.min * 100)}%</Cap></View></View>)}</View>
+          <View><Big size="sm" fs={18} v={S[st]} unit={t('progressMinUnit')} /><Cap>{t(STAGES[st][0])}, {Math.round(S[st] / S.min * 100)}%</Cap></View></View>)}</View>
       </> : null}
     </Card> : null}
     <SectionHeader title={t('progressLast7')} aside={avg(sw) != null ? `${t('progressAvgLower')} ${hm(avg(sw)!)}` : undefined} />
@@ -96,7 +96,7 @@ export function SleepScreen() {
               <View style={{ position: 'absolute', top: 1, bottom: 1, left: pos(x.bed), width: `${(x.wake - x.bed) / (A1 - A0) * 100}%`, borderRadius: 6, backgroundColor: on ? k.c.sleep : mix(k.c.sleep, k.c['surface-2'], 0.5) }} />
             </> : null}
           </View>
-          <Text style={[font(700, 12.5), { width: 52, textAlign: 'right', color: on ? k.c.text : k.c['text-muted'] }]}>{x ? hm(x.h) : ''}</Text>
+          <Text style={[font(700, 12.5, undefined, -0.02), { width: 52, textAlign: 'right', color: on ? k.c.text : k.c['text-muted'] }]}>{x ? hm(x.h) : ''}</Text>
         </Tappable>; })}
         <View style={{ flexDirection: 'row', gap: 8, minHeight: 18 }} importantForAccessibility="no-hide-descendants"><View style={{ width: 34 }} />
           <View style={{ flex: 1 }}>{[-120, 0, 120, 240, 360, 480].map(m => <Text key={m} style={[font(600, 11), { position: 'absolute', top: 0, left: pos(m), transform: [{ translateX: -10 }], color: k.c['text-muted'] }]}>{m === 0 ? '12a' : m < 0 ? `${12 + m / 60}p` : `${m / 60}a`}</Text>)}</View><View style={{ width: 52 }} /></View>

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Eyebrow, NavButton, SectionHeader, font, mix, useKit, Tappable } from '@/components/kit';
+import { Badge, Eyebrow, NavButton, SectionHeader, PRETTY, prettyWeb, font, mix, useKit, Tappable } from '@/components/kit';
 import { t } from '@/i18n/en';
 import { addDays, dLong, dShort, finite, weekday, type Pillars } from '../model';
 import { fill, fmt, hm } from '../format';
@@ -49,12 +49,13 @@ export function DayScoreScreen() {
         style={{ flexDirection: 'row', gap: 3 }}>
         {Array.from({ length: 20 }, (_, c) => <View key={c} style={{ flex: 1, gap: 3 }}>{Array.from({ length: 5 }, (_, r) => <View key={r} style={{ aspectRatio: 1, width: '100%', maxWidth: cw + 4, borderRadius: 3, backgroundColor: cell(c * 5 + r) }} />)}</View>)}
       </View>
-      <Cap style={{ marginTop: 8, marginBottom: 4 }}>{t('progressEachSquare')}</Cap>
-      <View style={{ marginTop: 6 }}>{PIL.map(([key, label, c], i) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair, marginLeft: i ? 44 : 0 }}>
+      <Cap style={{ marginTop: 8 }}>{t('progressEachSquare')}</Cap>
+      <View style={{ marginTop: 6 }}>{PIL.map(([key, label, c], i) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, marginLeft: i ? 44 : 0 }}>
+        {i ? <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: k.c.hair }} /> : null}
         <View style={{ marginLeft: i ? -44 : 0 }}><Ic icon={ICON[key]} color={c} size={32} /></View>
-        <View style={{ flex: 1 }}><Text style={[font(600, 16), { color: k.c.text }]}>{t(label)} <Text style={{ color: k.c['text-muted'] }}>{p[key] == null ? t('progressNoData') : Math.round(p[key]!)}</Text></Text>
-          <Text style={[font(500, 13.5, 1.35), { color: k.c['text-muted'], marginTop: 2 }]}>{sub[key]}</Text></View>
-        <Text style={[font(700, 15), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{p[key] == null ? '' : `+${adds(key)}`}</Text>
+        <View style={{ flex: 1 }}><Text style={[font(600, 15.5, 1.25, -0.01), { color: k.c.text }]}>{t(label)} <Text style={[font(600, 15.5, 1.25, -0.02), { color: k.c['text-muted'], fontVariant: ['tabular-nums'] }]}>{p[key] == null ? t('progressNoData') : Math.round(p[key]!)}</Text></Text>
+          <Text {...PRETTY} style={[font(500, 13, 1.35), prettyWeb, { color: k.c['text-muted'], marginTop: 2 }]}>{sub[key]}</Text></View>
+        <Text style={[font(700, 15, undefined, -0.01), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{p[key] == null ? '' : `+${adds(key)}`}</Text>
       </View>)}</View>
       <Divider style={{ marginTop: 6, marginBottom: 12 }} />
       <Split style={{ marginBottom: 0 }}><Cap>{known.length ? fill(t('progressDividedBy'), { sum: known.map(([key]) => Math.round(p[key]!)).join(' + '), n: known.length }) : t('progressScoreWhyNone')}</Cap>

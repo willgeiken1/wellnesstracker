@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { AccessibilityInfo, Appearance, useColorScheme } from 'react-native';
 import type { Repository } from '../data/repository';
 import { compareRows } from '../data/rows';
@@ -77,6 +77,13 @@ function useThemeState(repository?: Repository | null) {
 const ThemeContext = createContext<ReturnType<typeof useThemeState> | null>(null);
 export function ThemeProvider({ children, repository }: PropsWithChildren<{repository?: Repository | null}>) {
   const value = useThemeState(repository);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+/** Draws its children in the dark colours whatever the app's appearance: the barcode camera sheet stays dark in light mode. */
+export function ForceDark({ children }: PropsWithChildren) {
+  const theme = useTheme();
+  const value = useMemo(() => theme.mode === 'dark' ? theme
+    : { ...theme, mode: 'dark' as const, colors: createTheme('dark', theme.palette, theme.trueBlack) }, [theme]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 export function useTheme() {

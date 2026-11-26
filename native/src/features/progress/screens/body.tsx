@@ -138,8 +138,8 @@ export function BodyScreen() {
             <Text key={l} style={[font(600, 12), { color: k.c['text-muted'] }]}>{l} <Text style={[font(700, 12), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{n}</Text></Text>)}
         </View>
         {eta && c30 != null ? <><Divider />
-          <Split style={{ marginBottom: 0, alignItems: 'center' }}><Cap style={{ flex: 1 }}>{fill(t('progressPaceWeek'), { v: wtS(-c30 / 30 * 7, u) })}</Cap>
-            <Text style={[font(700, 17, 1.1, -0.03), { color: k.c.text }]}>{fill(t('progressEstDate'), { date: dShort(eta) })}</Text></Split></> : null}
+          <Split style={{ marginBottom: 0 }}><Cap style={{ flex: 1 }}>{fill(t('progressPaceWeek'), { v: wtS(-c30 / 30 * 7, u) })}</Cap>
+            <Text style={[font(700, 17, 1.1, -0.03), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{fill(t('progressEstDate'), { date: dShort(eta) })}</Text></Split></> : null}
       </> : <Cap>{w.goalKg == null ? t('progressNoGoal') : t('progressWeightEmpty')}</Cap>}
     </Card>
 

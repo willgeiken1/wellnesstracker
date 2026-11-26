@@ -11,12 +11,13 @@ import { useSelectionHaptic } from './selection-haptic';
  * are muted. Each choice is 34 pt tall, grown to 46 pt to touch. A tick plays when the choice changes. `compact` is the
  * narrow form that sits at the end of a settings row (32 pt tall, 6 pt side padding, 13 pt text). `track` replaces the
  * track colour where a page sets its own (a dark sheet's list on Progress uses the page background). */
-export function SegmentedControl<T extends string>({ label, options, value, onChange, testID, compact, track, hug }: {
+export function SegmentedControl<T extends string>({ label, options, value, onChange, testID, compact, track, hug, height }: {
   label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void; testID?: string;
   compact?: boolean; track?: string;
   /** Choices whose label is wider than an equal share: they take their label's width and the others share the rest,
    * as the design's segments do when one label cannot shrink. */
   hug?: readonly T[];
+  /** A choice height of its own, where the design sets one (36 in Containers, 32 in Log weight). */ height?: number;
 }) {
   const { selectorLook } = useTheme();
   const k = useKit();
@@ -30,7 +31,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
       const on = option.value === value, fit = !!hug?.includes(option.value);
       return <Tappable key={option.value} dim={on ? 'none' : 'seg'} accessibilityRole="tab" accessibilityLabel={option.label}
         accessibilityState={{ selected: on }} onPress={() => choose(option.value)} hitSlop={{ top: compact ? 7 : 6, bottom: compact ? 7 : 6 }}
-        style={{ ...(fit ? { flexGrow: 0, flexShrink: 0 } : { flex: 1 }), minHeight: compact ? 32 : 34, paddingHorizontal: compact ? 6 : 10, borderRadius: KIT.radius.segItem, alignItems: 'center', justifyContent: 'center',
+        style={{ ...(fit ? { flexGrow: 0, flexShrink: 0 } : { flex: 1 }), minHeight: height ?? (compact ? 32 : 34), paddingHorizontal: compact ? 6 : 10, borderRadius: KIT.radius.segItem, alignItems: 'center', justifyContent: 'center',
           backgroundColor: on ? k.segOn : 'transparent',
           boxShadow: on ? '0px 1px 3px rgba(0, 0, 0, 0.14), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.06)' : undefined }}>
         <KitText weight={600} size={compact ? 13 : 13.5} tracking={-0.005} color={on ? 'text' : 'text-muted'}

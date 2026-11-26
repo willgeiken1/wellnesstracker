@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { randomUUID } from 'expo-crypto';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { Icon, SegmentedControl, Sheet, font, mix, useKit, Tappable } from '@/components/kit';
+import { GRABBER_ROOM, Icon, SegmentedControl, Sheet, font, mix, useKit, Tappable } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -59,7 +59,7 @@ export function PhotoCaptureSheet() {
     } finally { setBusy(false); }
   };
   return <Sheet scroll={false} gap={0}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 4 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 4, marginTop: GRABBER_ROOM, marginBottom: 4 }}>
       <View style={{ flex: 1, alignItems: 'flex-start' }}>
         <Tappable dim="text" onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('kitCancel')} style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 8, marginLeft: -8 }}>
           <Text style={[font(500, 17, undefined, -0.01), { color: k.c.accent }]}>{t('kitCancel')}</Text></Tappable></View>
@@ -72,7 +72,8 @@ export function PhotoCaptureSheet() {
       style={{ height: 470, borderRadius: 22, overflow: 'hidden', backgroundColor: k.pill }}>
       {live ? <CameraView ref={cam} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }} facing={front ? 'front' : 'back'} mirror={front} animateShutter={false} />
         : <Svg style={{ position: 'absolute', left: 0, top: 0 }} width="100%" height="100%">
-            <Defs><RadialGradient id="cam" cx="50%" cy="30%" rx="120%" ry="80%"><Stop offset="0" stopColor={mix(k.pill, k.c.recovery, 0.8)} /><Stop offset="0.7" stopColor={k.pill} /><Stop offset="1" stopColor={k.pill} /></RadialGradient></Defs>
+            <Defs>{/* radial-gradient(120% 80% at 50% 30%): a unit circle stretched to 1.2 widths by 0.8 heights about its centre, which draws the same oval on every platform */}
+              <RadialGradient id="cam" cx="0.5" cy="0.3" r="1" fx="0.5" fy="0.3" gradientTransform="translate(0.5 0.3) scale(1.2 0.8) translate(-0.5 -0.3)"><Stop offset="0" stopColor={mix(k.pill, k.c.recovery, 0.8)} /><Stop offset="0.7" stopColor={k.pill} /><Stop offset="1" stopColor={k.pill} /></RadialGradient></Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#cam)" /></Svg>}
       {[33.3, 66.7].map(p => <View key={`v${p}`} pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: `${p}%`, width: 1, backgroundColor: mix(ink, 'transparent', 0.14) }} />)}
       {[33.3, 66.7].map(p => <View key={`h${p}`} pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: `${p}%`, height: 1, backgroundColor: mix(ink, 'transparent', 0.14) }} />)}
@@ -93,9 +94,10 @@ export function PhotoCaptureSheet() {
         {last ? <Tappable dim="row" onPress={() => router.push('/progress/photos')} accessibilityRole="button" accessibilityLabel={t('progressSeeAllPhotos')}>
           <PhotoBox p={last} w={48} h={60} date={false} radius={10} /></Tappable> : null}
       </View>
-      <Tappable dim="fill" onPress={() => { void shoot(); }} disabled={busy} accessibilityRole="button" accessibilityLabel={t('progressTakePhotoBtn')} accessibilityState={{ disabled: busy, busy }}
+      {/* .pg-shut .sbtn:active i: the ring holds still and the disc dips to 90 percent while held; Reduce Motion dims it instead */}
+      <Tappable dim={k.reduceMotion ? 'fill' : 'none'} onPress={() => { void shoot(); }} disabled={busy} accessibilityRole="button" accessibilityLabel={t('progressTakePhotoBtn')} accessibilityState={{ disabled: busy, busy }}
         style={{ width: 78, height: 78, borderRadius: 39, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: k.c.text }}>
-        <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: k.c.text }} />
+        {({ pressed }) => <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: k.c.text, transform: [{ scale: pressed && !busy && !k.reduceMotion ? 0.9 : 1 }] }} />}
       </Tappable>
       <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
         <Tappable dim="fill" onPress={() => setTimer(!timer)} accessibilityRole="switch" accessibilityState={{ checked: timer }} accessibilityLabel={t('progressTimer3')}
@@ -104,7 +106,7 @@ export function PhotoCaptureSheet() {
       </View>
     </View>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14 }}>
-      <Icon name="lock2" size={14} color={k.c['text-muted']} /><Text style={[font(500, 12.5), { color: k.c['text-muted'] }]}>{t('progressSavedPhoneOnly')}</Text>
+      <Icon name="lock2" size={14} color={k.c['text-muted']} /><Text style={[font(500, 12.5, 1.45), { color: k.c['text-muted'] }]}>{t('progressSavedPhoneOnly')}</Text>
     </View>
   </Sheet>;
 }

@@ -88,7 +88,7 @@ export function LogWeightSheet() {
     else go();
   };
   return <Sheet scroll={false} header={<SheetHeader title={t('progressLogWeight')} right={t('progressSave')} onRight={save} rightDisabled={!repo} testID="log-weight" />}>
-    <View style={{ alignItems: 'center', paddingTop: 18, paddingBottom: 8 }}>
+    <View style={{ alignItems: 'center', paddingTop: 18, paddingBottom: 12 }}>{/* 8 and a 16 pt spacer in the design, less the sheet's own 12 */}
       {typing != null
         ? <TextInput autoFocus value={typing} onChangeText={setTyping} keyboardType="decimal-pad" accessibilityLabel={fill(t('progressWeightIn'), { unit: unitWord })}
             onBlur={() => { const n = Number(typing); if (Number.isFinite(n) && n > 0) set(n); setTyping(null); }}
@@ -108,9 +108,8 @@ export function LogWeightSheet() {
         <Round icon="plus" label={fill(t('progressIncreaseBy'), { u })} onPress={() => set(v + 0.1)} />
       </View>
     </View>
-    <View style={{ height: 4 }} />
     <List footer={t('progressReadsHealth')}>
-      <ListRow title={t('progressDate')} right={<View style={{ width: 184 }}><SegmentedControl compact track={k.dark ? k.c.bg : undefined} label={t('progressDate')} value={day} onChange={x => {
+      <ListRow title={t('progressDate')} right={<View style={{ width: 184 }}><SegmentedControl height={32} track={k.dark ? k.c.bg : undefined} label={t('progressDate')} value={day} onChange={x => {
         setDay(x); if (x === 'today' && startKg != null) setV(round1(wtV(startKg, u)));
       }} options={[{ value: 'today', label: t('progressTodayCap') }, { value: 'yesterday', label: t('progressYesterday') }]} /></View>} />
       {day === 'today' ? <ListRow title={t('progressTime')} value={clockAt(Date.now())} /> : null}

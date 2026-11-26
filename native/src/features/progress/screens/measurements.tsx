@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { List, ListRow, Sheet, SheetHeader, Stepper, font, useKit } from '@/components/kit';
+import { List, ListRow, Sheet, SheetHeader, Stepper, PRETTY, prettyWeb, font, useKit } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -42,15 +42,15 @@ export function MeasurementsSheet() {
   };
   const L = lenU(u);
   return <Sheet header={<SheetHeader title={t('progressMeasurements')} right={t('progressSave')} onRight={save} rightDisabled={!repo} testID="measurements" />}>
-    <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'], marginBottom: 4 }]}>{t('progressMeasureLead')}</Text>
+    <Text {...PRETTY} style={[font(500, 14, 1.45), prettyWeb, { color: k.c['text-muted'], marginBottom: 4 }]}>{t('progressMeasureLead')}</Text>
     <List><ListRow title={t('progressDate')} value={t('progressTodayCap')} strong /></List>
     <List footer={t('progressMeasureFoot')}>
       {MEASURE_KEYS.map(key => { const last = lastCm(key);
         return <ListRow key={key} title={measureName(key)} sub={last != null ? fill(t('progressLastV'), { v: lenS(last, u) }) : t('progressNotMeasured')}
-          right={<Stepper track={k.c['surface-2']} label={measureName(key)} value={vals[key]} unit={L} step={0.5} dec={1} min={cm ? 13 : 5} max={cm ? 203 : 80}
-            onChange={v => { touch(key); setVals(prev => ({ ...prev, [key]: v })); }} testID={`measure-${key}`} />} />; })}
+          right={<View><Stepper track={k.c['surface-2']} label={measureName(key)} value={vals[key]} unit={L} step={0.5} dec={1} min={cm ? 13 : 5} max={cm ? 203 : 80}
+            onChange={v => { touch(key); setVals(prev => ({ ...prev, [key]: v })); }} testID={`measure-${key}`} /></View>} />; })}
       <ListRow title={t('progressBodyFat')} sub={fat ? fill(t(fat.health ? 'progressLastFatScale' : 'progressLastV'), { v: `${fmt(fat.pct, 1)}%` }) : t('progressNotMeasured')}
-        right={<Stepper track={k.c['surface-2']} label={t('progressBodyFat')} value={bf} unit="%" step={0.1} dec={1} min={3} max={60} onChange={v => { touch('bf'); setBf(v); }} testID="measure-bf" />} />
+        right={<View><Stepper track={k.c['surface-2']} label={t('progressBodyFat')} value={bf} unit="%" step={0.1} dec={1} min={3} max={60} onChange={v => { touch('bf'); setBf(v); }} testID="measure-bf" /></View>} />
     </List>
   </Sheet>;
 }

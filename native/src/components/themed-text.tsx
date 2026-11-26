@@ -1,4 +1,5 @@
 import { Text, type TextProps } from 'react-native';
+import { PRETTY, prettyWeb } from './kit-style';
 import { tokens } from '@/design/tokens';
 import { useTheme } from '@/design/theme-provider';
 import { font, tabular, useKit, type Weight } from './kit-style';
@@ -20,6 +21,14 @@ export function ThemedText({ variant = 'body', muted = false, numeric = false, s
 export function KitText({ weight = 500, size = 15, lineHeight, tracking, color = 'text', numeric = false, style, ...props }:
   TextProps & { weight?: Weight; size?: number; lineHeight?: number; tracking?: number; color?: string; numeric?: boolean }) {
   const { tok } = useKit();
-  return <Text {...props} allowFontScaling maxFontSizeMultiplier={0}
-    style={[font(weight, size, lineHeight, tracking), { color: tok(color) }, numeric && tabular, style]} />;
+  return <Text {...PRETTY} {...props} allowFontScaling maxFontSizeMultiplier={0}
+    style={[font(weight, size, lineHeight, tracking), prettyWeb, { color: tok(color) }, numeric && tabular, style]} />;
+}
+
+/**
+ * An exact gap inside a line of text, where the design sets a margin between a number and its unit
+ * (`small { margin-left: 3px }`). A space of the body face is 0.173 em wide; tracking makes up the rest.
+ */
+export function TextGap({ pt, size = 11 }: { pt: number; size?: number }) {
+  return <Text style={{ fontFamily: tokens.font.body, fontSize: size, letterSpacing: Math.round((pt - 0.173 * size) * 100) / 100 }}>{' '}</Text>;
 }

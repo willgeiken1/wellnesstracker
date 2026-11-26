@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from 'react';
 import { ScrollView, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card, Icon, NavBar, StackGapContext, SurfaceContext, font, mix, useKit, type IconName } from '@/components/kit';
+import { Card, Icon, NavBar, StackGapContext, SurfaceContext, PRETTY, prettyWeb, font, mix, useKit, type IconName } from '@/components/kit';
 
 /* The pieces the Progress screens and sheets share (the mockup's .pg-* classes). */
 
@@ -22,25 +22,26 @@ export function Page({ back, title, right, children, testID, scrollRef }: { back
 
 /** Grey small text (.pg-cap); `B` inside it is bold. */
 export function Cap({ children, style, size = 12.5 }: { children: ReactNode; style?: StyleProp<TextStyle>; size?: number }) {
-  const k = useKit(); return <Text style={[font(600, size, 1.35), { color: k.c['text-muted'] }, style]}>{children}</Text>;
+  const k = useKit(); return <Text {...PRETTY} style={[font(600, size, 1.35), prettyWeb, { color: k.c['text-muted'] }, style]}>{children}</Text>;
 }
 /** Body text (.pg-txt). */
 export function Txt({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
-  const k = useKit(); return <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'] }, style]}>{children}</Text>;
+  const k = useKit(); return <Text {...PRETTY} style={[font(500, 14, 1.45), prettyWeb, { color: k.c['text-muted'] }, style]}>{children}</Text>;
 }
 /** Bold text inside Cap or Txt. */
 export const Bold = ({ children }: { children: ReactNode }) => { const k = useKit(); return <Text style={[font(700, 14), { color: k.c.text }]}>{children}</Text>; };
 export const CapB = ({ children }: { children: ReactNode }) => { const k = useKit(); return <Text style={[font(700, 12.5), tab, { color: k.c.text }]}>{children}</Text>; };
 
 /** A number in the screen styles: big 44, mid 30, small 21, with a small grey unit. */
-export function Big({ v, unit, size = 'big', color, units }: { v?: string | number; unit?: string; size?: 'big' | 'mid' | 'sm'; color?: string; units?: (readonly [string, string])[] }) {
-  const k = useKit(), [fs, lh, tr, us] = size === 'big' ? [44, 1, -0.045, 15] : size === 'mid' ? [30, 1.05, -0.04, 15] : [21, 1.1, -0.03, 12.5];
+export function Big({ v, unit, size = 'big', color, units, fs: own }: { v?: string | number; unit?: string; size?: 'big' | 'mid' | 'sm'; color?: string; units?: (readonly [string, string])[]; /** A number size of its own, where the design sets one inline. */ fs?: number }) {
+  const k = useKit(), [fs0, lh, tr, us] = size === 'big' ? [44, 1, -0.045, 15] : size === 'mid' ? [30, 1.05, -0.04, 15] : [21, 1.1, -0.03, 12.5];
+  const fs = own ?? fs0;
   // Number and unit sit on one baseline, the unit 3 pt after its number (.pg-big small { margin-left: 3px }); an hours and
-  // minutes value sets its h and m 1 pt either side (.pg small.hm) and keeps a word space between its groups.
+  // minutes value sets its h and m 1 pt either side (.pg small.hm) and keeps a word space of the number face (0.178 em, less its tracking) between its groups.
   const groups: (readonly [string, string | undefined])[] = units ?? [[v == null ? '' : String(v), unit]];
   const said = groups.map(([n, u]) => u ? `${n} ${u}` : n).join(' ');
   return <View accessible accessibilityLabel={said} style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'nowrap' }}>
-    {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? fs * 0.25 : 0 }}>
+    {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? fs * (0.178 + tr) : 0 }}>
       <Text numberOfLines={1} style={[font(700, fs, lh, tr), tab, { color: color ?? k.c.text }]}>{n}</Text>
       {u ? <Text numberOfLines={1} style={[font(600, us), { color: k.c['text-muted'] }, units ? { marginLeft: 1, marginRight: 1 } : { marginLeft: 3 }]}>{u}</Text> : null}
     </View>)}
@@ -59,7 +60,7 @@ export function Three({ children }: { children: ReactNode[] }) {
 export function Stats({ items }: { items: { l: string; v: ReactNode; s?: string }[] }) {
   const k = useKit();
   return <View style={{ flexDirection: 'row', backgroundColor: k.cardBg, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 4, boxShadow: k.cardEdge }}>
-    {items.map((x, i) => <View key={i} style={{ flex: 1, paddingHorizontal: 12, borderLeftWidth: i ? 1 : 0, borderLeftColor: k.c.hair }}>
+    {items.map((x, i) => <View key={i} style={{ width: `${100 / items.length}%`, paddingHorizontal: 12, borderLeftWidth: i ? 1 : 0, borderLeftColor: k.c.hair }}>
       <Text style={[font(600, 12), { color: k.c['text-muted'] }]}>{x.l}</Text>
       <View style={{ marginTop: 4 }}>{x.v}</View>
       {x.s ? <Text style={[font(500, 11.5), { color: k.c['text-muted'], marginTop: 2 }]}>{x.s}</Text> : null}

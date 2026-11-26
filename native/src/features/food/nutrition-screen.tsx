@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
-import { Badge, Card, Icon, KitText, List, ListFooter, ListRow, SectionHeader, SegmentedControl, Stat, Tappable, alpha, mix, useKit } from '@/components/kit';
+import { Badge, Card, Icon, KitText, List, ListFooter, ListRow, SectionHeader, SegmentedControl, Stat, Tappable, alpha, mix, useKit, proportional } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
@@ -53,9 +53,9 @@ function DayPart({ repo }: { repo: Repository }) {
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
         <View>
-          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{isToday ? t('foodEatenToday') : fill(t('foodEatenOn'), { day: weekdayName(day) })}</KitText>
-          <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6 }}>{num(v.eaten)}
-            <KitText weight={600} tracking={0} size={13} color="text-muted">{` ${fill(t('foodOfGoalKcal'), { goal: num(v.goal) })}`}</KitText></KitText>
+          <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{isToday ? t('foodEatenToday') : fill(t('foodEatenOn'), { day: weekdayName(day) })}</KitText>
+          <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6 }}>{num(v.eaten)}
+            <KitText weight={600} tracking={0} size={13} color="text-muted" style={proportional}>{` ${fill(t('foodOfGoalKcal'), { goal: num(v.goal) })}`}</KitText></KitText>
         </View>
         {v.burned != null ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 22, paddingHorizontal: 8, borderRadius: 999, backgroundColor: k.tint(k.c['text-muted'], 0.16) }}>
           <Icon name="apple" size={12} color={k.c['text-muted']} /><KitText weight={600} size={12} color="text-muted">{fill(t('foodNBurned'), { v: num(v.burned) })}</KitText>
@@ -92,16 +92,16 @@ function NuRow({ x, first }: { x: Nu; first: boolean }) {
     {!first && <RowLine />}
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: known ? 8 : 0 }}>
       <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01}>{x.key}</KitText>
-      {known ? <KitText weight={700} size={15} numeric>{num(x.v!)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` / ${num(x.goal)} ${x.u}${x.limit ? ` ${t('foodMax')}` : ''}`}</KitText></KitText>
+      {known ? <KitText weight={700} size={15} tracking={-0.01} numeric>{num(x.v!)}<KitText weight={600} tracking={0} size={12} color="text-muted" style={proportional}>{` / ${num(x.goal)} ${x.u}${x.limit ? ` ${t('foodMax')}` : ''}`}</KitText></KitText>
         : <KitText weight={700} size={15} color="text-muted">{t('foodUnknownVal')}</KitText>}
     </View>
     {known ? x.limit
-      ? <View onLayout={e => setW(e.nativeEvent.layout.width)} style={{ height: 7, borderRadius: 2, marginVertical: 2, backgroundColor: mix(k.c.food, k.c['surface-2'], 0.13) }}>
+      ? <View onLayout={e => setW(e.nativeEvent.layout.width)} style={{ height: 7, borderRadius: 2, backgroundColor: mix(k.c.food, k.c['surface-2'], 0.13) }}>
           <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, width: `${Math.min(100, x.v! / mx * 100)}%`, backgroundColor: x.v! > x.goal ? k.c.warning : k.tok(x.color ?? 'food') }} />
           {w ? <View style={{ position: 'absolute', top: -4, bottom: -4, width: 2, marginLeft: -1, left: x.goal / mx * w, borderRadius: 1, backgroundColor: k.c.text, boxShadow: `0px 0px 0px 1.5px ${k.cardBg}` }} /> : null}
         </View>
-      : <View style={{ marginVertical: 2 }}><Cells states={meter(x.v! / x.goal, 20)} color={k.tok(x.color ?? 'food')} h={7} gap={2} r={2} /></View> : null}
-    <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 6 }}>{nuNote(x)}</KitText>
+      : <View><Cells states={meter(x.v! / x.goal, 20)} color={k.tok(x.color ?? 'food')} h={7} gap={2} r={2} /></View> : null}
+    <KitText weight={500} size={13} lineHeight={1.35} color="text-muted" style={{ marginTop: 6 }}>{nuNote(x)}</KitText>
   </View>;
 }
 
@@ -124,19 +124,19 @@ function WeekPart({ repo }: { repo: Repository }) {
     </View>
     <SectionHeader title={t('foodCaloriesCap')} />
     <Card>
-      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{label(hi)}</KitText>
-      <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6, marginBottom: 12 }}>{kc[hi] == null ? '–' : num(kc[hi]!)}<KitText weight={600} tracking={0} size={13} color="text-muted">{` ${t('foodKcal')}`}</KitText></KitText>
+      <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{label(hi)}</KitText>
+      <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6, marginBottom: 12 }}>{kc[hi] == null ? '–' : num(kc[hi]!)}<KitText weight={600} tracking={0} size={13} color="text-muted">{` ${t('foodKcal')}`}</KitText></KitText>
       <DevChart vals={kc} days={days} today={today} hi={hi} onPick={setHi} goal={goal} unit="" goalText={`${num(goal)} ${t('foodKcal')} ${t('foodGoalWord')}`} label={t('foodCaloriesByDay')} />
     </Card>
     <SectionHeader title={t('foodMacroProtein')} />
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <View>
-          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{label(phi)}</KitText>
-          <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6 }}>{pr[phi] == null ? '–' : num(pr[phi]!)}<KitText weight={600} tracking={0} size={13} color="text-muted"> g</KitText></KitText>
+          <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{label(phi)}</KitText>
+          <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6 }}>{pr[phi] == null ? '–' : num(pr[phi]!)}<KitText weight={600} tracking={0} size={13} color="text-muted"> g</KitText></KitText>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{t('foodDailyAverage')}</KitText>
+          <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{t('foodDailyAverage')}</KitText>
           <KitText weight={700} size={16} numeric style={{ marginTop: 6 }}>{avg(fullP) == null ? '–' : num(avg(fullP)!)}<KitText weight={600} tracking={0} size={12} color="text-muted"> g</KitText></KitText>
         </View>
       </View>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, Icon, List, ListRow, SectionHeader, SegmentedControl, Sheet, SheetHeader, font, mix, useKit, Tappable, type IconName } from '@/components/kit';
+import { Button, Icon, List, ListRow, SectionHeader, SegmentedControl, Sheet, SheetHeader, PRETTY, prettyWeb, font, mix, useKit, Tappable, type IconName } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
@@ -41,7 +41,7 @@ export function ExportSheet() {
   };
   const summary = files.length ? fill(t(files.length === 1 ? 'progressOneCsv' : 'progressNCsv'), { n: files.length, kb: Math.max(1, Math.round(bytes / 1024)) }) : t('progressChooseOne');
   return <Sheet header={<SheetHeader title={t('progressExportData')} left={t('kitCancel')} testID="export" />}>
-    <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'], marginBottom: 4 }]}>{t('progressExportLead')}</Text>
+    <Text {...PRETTY} style={[font(500, 14, 1.45), prettyWeb, { color: k.c['text-muted'] }]}>{t('progressExportLead')}</Text>
     <SectionHeader title={t('progressExData')} />
     <List footer={t('progressExFoot')}>
       {EXPORT_KINDS.map(x => { const [l, icon, color] = KINDS[x];

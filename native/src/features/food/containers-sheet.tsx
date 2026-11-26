@@ -39,13 +39,13 @@ export function ContainersSheet({ repo }: { repo: Repository }) {
   const move = (from: number, to: number) => { if (from === to) return; setContainers(repo, moveContainer(cs, from, to)); };
   return <FoodSheet testID="food-containers-sheet" header={<SheetHeader title={t('foodContainers')} left={t('shellDone')} onLeft={() => closeSheet()} />}>
     <SectionLabel title={t('foodUnits')} inset first />
-    <SegmentedControl label={t('foodUnits')} value={u} onChange={(v: WaterUnit) => setWaterUnit(repo, v)}
+    <SegmentedControl height={36} label={t('foodUnits')} value={u} onChange={(v: WaterUnit) => setWaterUnit(repo, v)}
       options={[{ value: 'oz', label: t('foodFluidOunces') }, { value: 'ml', label: t('foodMilliliters') }]} />
-    <SectionLabel title={t('foodYourContainers')} aside={fill(t('foodNOnQuick'), { n: nq })} />
+    <SectionLabel title={t('foodYourContainers')} aside={fill(t('foodNOnQuick'), { n: nq })} asideNumeric />
     <List>
       {cs.map((c, i) => <ContainerRow key={c.id} c={c} u={u} i={i} count={cs.length} onEdit={() => setEdit(c.id)} onToggle={on => toggle(c, on)}
         onMove={(to, spoken) => { move(i, to); if (spoken) showToast(fill(t('foodMovedTo'), { name: c.name, n: to + 1 }), { color: 'water' }); else showToast(t('foodOrderSaved'), { color: 'water' }); }} />)}
-      <LinkRow first={false} icon="plus" color="water" title={t('foodAddContainerRow')} sub={t('foodAddContainerSub')} onPress={() => setEdit('new')} />
+      <View style={{ paddingTop: 1 }}><RowLine inset={0} /><LinkRow first={false} icon="plus" color="water" title={t('foodAddContainerRow')} sub={t('foodAddContainerSub')} onPress={() => setEdit('new')} /></View>
     </List>
     <Caption>{t('foodContainersNote')}</Caption>
   </FoodSheet>;
@@ -64,7 +64,7 @@ function ContainerRow({ c, u, i, count, onEdit, onToggle, onMove }: {
     onPanResponderRelease: (_, g) => { setDrag(false); setDy(0); const { i: at, count: n, onMove: mv } = live(); const to = Math.max(0, Math.min(n - 1, at + Math.round(g.dy / ROW))); if (to !== at) mv(to, false); },
     onPanResponderTerminate: () => { setDrag(false); setDy(0); },
   }));
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: ROW, paddingLeft: 2, paddingRight: 8, backgroundColor: drag ? k.cardBg : 'transparent',
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: i > 0 ? ROW + 1 : ROW, paddingTop: i > 0 ? 1 : 0, paddingLeft: 2, paddingRight: 8, backgroundColor: drag ? k.cardBg : 'transparent',
     zIndex: drag ? 2 : 0, transform: [{ translateY: dy }, { scale: drag && !k.reduceMotion ? 1.02 : 1 }], boxShadow: drag ? '0px 10px 24px -10px rgba(0,0,0,0.6)' : undefined }}>
     {i > 0 && !drag && <RowLine inset={0} />}
     <View {...pan.panHandlers} accessible accessibilityRole="adjustable" accessibilityLabel={fill(t('foodReorder'), { name: c.name })}
@@ -77,8 +77,8 @@ function ContainerRow({ c, u, i, count, onEdit, onToggle, onMove }: {
       style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }}>
       <View style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: k.tint(k.c.water, 0.15) }}><WaterIcon name={c.icon} size={20} color={k.c.water} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <KitText weight={600} size={15.5} lineHeight={1.25} numberOfLines={1}>{c.name}</KitText>
-        <KitText weight={500} size={13} numeric color="text-muted">{sizeText(c.oz, u) + (c.quick ? ` · ${t('foodTileQuick')}` : '')}</KitText>
+        <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01} numberOfLines={1}>{c.name}</KitText>
+        <KitText weight={500} size={13} tracking={-0.02} color="text-muted" style={{ marginTop: 2 }}>{sizeText(c.oz, u) + (c.quick ? ` · ${t('foodTileQuick')}` : '')}</KitText>
       </View>
       <View style={{ marginRight: 4 }}><Icon name="chevron-right" size={16} color={k.c.ghost} /></View>
     </Tappable>

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
-import { Icon, KitText, PressScale, Tappable, alpha, mix, slopFor, useKit, type IconName } from '@/components/kit';
+import { Icon, KitText, PressScale, TextGap, Tappable, alpha, mix, slopFor, useKit, type IconName } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import type { Repository } from '@/data/repository';
 import { plate, raised, well } from '../../tiles/depth';
@@ -17,14 +17,15 @@ import { capitals } from '@/components/kit-style';
 /** A big number with its small unit (`.fdt-n`). */
 export function Num({ v, unit, fs = 32, color, style }: { v: string; unit?: string; fs?: number; color?: string; style?: StyleProp<TextStyle> }) {
   return <KitText weight={700} size={fs} lineHeight={1} tracking={-0.03} numeric color={color} numberOfLines={1} style={style}>
-    {v}{unit ? <KitText weight={600} tracking={0} size={13} color="text-muted">{` ${unit}`}</KitText> : null}
+    {v}{unit ? <><TextGap pt={4} /><KitText weight={600} tracking={0} size={13} color="text-muted">{unit}</KitText></> : null}
   </KitText>;
 }
 /** The muted small line (`.fdt-s`). Bold parts go in <B>. */
 export function Sub({ children, size = 12.5, style, lines = 1, color }: { children: ReactNode; size?: number; style?: StyleProp<TextStyle>; lines?: number; color?: string }) {
   return <KitText weight={500} size={size} lineHeight={1.35} color={color ?? 'text-muted'} numberOfLines={lines} style={style}>{children}</KitText>;
 }
-export function B({ children }: { children: ReactNode }) { return <KitText weight={600} size={12.5} color="text">{children}</KitText>; }
+/** Bold words inside a muted line (`.fdt-s b`): the line's own size, in ink. */
+export function B({ children, size = 12.5 }: { children: ReactNode; size?: number }) { return <KitText weight={600} size={size} color="text">{children}</KitText>; }
 /** A title line (`.fdt-t`). */
 export function Title({ children, size = 15, style }: { children: ReactNode; size?: number; style?: StyleProp<TextStyle> }) {
   return <KitText weight={600} size={size} lineHeight={1.25} numberOfLines={1} style={style}>{children}</KitText>;
@@ -69,7 +70,7 @@ export const Dot = ({ color, size = 8 }: { color: string; size?: number }) => <V
 export function KV({ k: key, v, unit, after }: { k: string; v: string; unit?: string; after?: ReactNode }) {
   return <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><KitText weight={600} size={13} color="text-muted">{key}</KitText>{after}</View>
-    <KitText weight={700} size={17} tracking={-0.01} numeric>{v}{unit ? <KitText weight={600} tracking={0} size={11} color="text-muted">{` ${unit}`}</KitText> : null}</KitText>
+    <KitText weight={700} size={17} tracking={-0.01} numeric>{v}{unit ? <><TextGap pt={3} /><KitText weight={600} tracking={0} size={11} color="text-muted">{unit}</KitText></> : null}</KitText>
   </View>;
 }
 

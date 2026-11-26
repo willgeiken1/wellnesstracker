@@ -47,7 +47,7 @@ export function WeeklyScreen() {
   return <Page back={t('progress')} title={t('progressWeeklyTitle')} right={<NavButton icon="share" label={t('progressShareReport')} onPress={share} />}>
     <View style={{ paddingTop: 6, paddingBottom: 6 }}>
       <Eyebrow style={{ marginBottom: 8 }}>{t('progressWeeklyTitle')}</Eyebrow>
-      <Text style={[font(700, 28, 1.1, -0.03), { color: k.c.text }]}>{title}</Text>
+      <Text style={[font(700, 30, 1.1, -0.03), { color: k.c.text }]}>{title}</Text>
       <Txt style={[font(500, 15, 1.45), { marginTop: 10, color: k.c.text }]}>{lead}</Txt>
     </View>
     <Card>

@@ -58,7 +58,7 @@ export function PhotosScreen() {
           <PhotoBox p={p} w="100%" date={false} radius={16} />
           <View style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={[font(600, 13), { color: k.c.text }]}>{dShort(p.day)}</Text>
-            {p.kg != null ? <Text style={[font(600, 13), { color: k.c['text-muted'], fontVariant: ['tabular-nums'] }]}>{wtS(p.kg, u)}</Text> : null}</View>
+            {p.kg != null ? <Text style={[font(600, 13, undefined, -0.02), { color: k.c['text-muted'], fontVariant: ['tabular-nums'] }]}>{wtS(p.kg, u)}</Text> : null}</View>
         </View>)}
       </View>
       {delta ? <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14 }}><Badge label={delta} color="recovery" /></View> : null}

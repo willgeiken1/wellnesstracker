@@ -103,7 +103,7 @@ function DayStrip({ repo, day, today, goal }: { repo: Repository; day: string; t
           style={{ flex: 1, minHeight: 70, paddingTop: 8, paddingBottom: 7, borderRadius: 16, alignItems: 'center', gap: 5, backgroundColor: on ? alpha(k.c.food, 0.15) : 'transparent', opacity: d.future ? 0.4 : 1 }}>
           <KitText weight={700} size={11} tracking={0.06} color={d.today || on ? k.c.food : 'text-muted'}>{d.wd}</KitText>
           <Ring value={(kcal ?? 0) / goal} size={38} stroke={3} color="food" label={spoken}>
-            <KitText weight={700} size={14} numeric color={d.today ? k.c.food : 'text'}>{d.date}</KitText>
+            <KitText weight={700} size={14} tracking={-0.02} color={d.today ? k.c.food : 'text'}>{d.date}</KitText>
           </Ring>
         </Tappable>;
       })}
