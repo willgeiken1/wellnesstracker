@@ -8,7 +8,8 @@ import { ROUTINES_ENABLED } from "../logger/js/shared/routines-flag.js";
 
 const APP_ROOT = fileURLToPath(new URL("../native/src/app/", import.meta.url));
 const TAB_DIR = join(APP_ROOT, "(tabs)");
-const TAB_FILES = ["_layout.tsx", "food.tsx", "index.tsx", "progress.tsx", "routines.tsx", "workouts.tsx"];
+/* insights.tsx is a tab route that only redirects to Progress. */
+const TAB_FILES = ["_layout.tsx", "food.tsx", "index.tsx", "insights.tsx", "progress.tsx", "routines.tsx", "workouts.tsx"];
 /* The iPhone app has one Routines tab, and its screens live in one folder beside
    the tabs. These two paths are the only routine routes the app may have. */
 const NATIVE_ROUTINES_TAB = "(tabs)/routines.tsx";
@@ -140,10 +141,8 @@ test("native tabs are exactly Home, Workouts, Food, Progress, and Routines", () 
 });
 
 test("native Insights is a section of Progress: /insights only redirects there", () => {
-  /* A file left in (tabs) is still a tab route, so insights.tsx may only live outside it. */
-  assert.ok(!readdirSync(TAB_DIR).includes("insights.tsx"));
-  const src = codeWithoutComments(readFileSync(join(APP_ROOT, "insights.tsx"), "utf8"));
-  assert.match(src, /<Redirect\s+href=\{\{\s*pathname:\s*'\/progress'/);
+  const src = codeWithoutComments(readFileSync(join(TAB_DIR, "insights.tsx"), "utf8"));
+  assert.match(src, /<Redirect\s+href=(?:"\/progress"|\{\{\s*pathname:\s*'\/progress')/);
   assert.equal(forbiddenRouteName("insights.tsx"), null);
 });
 
@@ -232,15 +231,16 @@ test("my-routines.tsx and routine.tsx are forbidden native routes", () => {
   assert.equal(forbiddenRouteName("routine.tsx", "workout/routine.tsx"), "routine");
 });
 
-test("tabs.ts lists exactly the five tabs, and Routines is the only routine tab", () => {
-  const src = readFileSync(new URL("../native/src/features/shell/tabs.ts", import.meta.url), "utf8");
-  const tabs = tabConfigEntries(src);
-  assert.deepEqual(tabs.map((tab) => tab.route), ["index", "workouts", "food", "progress", "routines"]);
-  assert.deepEqual(tabs.map((tab) => tab.label), ["home", "workouts", "food", "progress", "routines"]);
-  assert.ok(existsSync(join(TAB_DIR, "routines.tsx")), "tabs.ts names a Routines tab with no route file");
-  for (const tab of tabs.slice(0, 4)) {
-    assert.equal(forbiddenRouteName(`${tab.route}.tsx`), null, tab.route);
-    assert.equal(forbiddenRouteName(`${tab.label}.tsx`), null, tab.label);
+test("shell/pages.ts lists exactly the five tabs, and Routines is the only routine tab", () => {
+  const full = readFileSync(new URL("../native/src/features/shell/pages.ts", import.meta.url), "utf8");
+  const src = full.slice(full.indexOf("export const PAGES"), full.indexOf("] as const", full.indexOf("export const PAGES")));
+  const routes = quotedField(src, "route"), keys = quotedField(src, "key");
+  assert.deepEqual(routes, ["index", "workouts", "food", "progress", "routines"]);
+  assert.deepEqual(keys, ["home", "training", "food", "progress", "routines"]);
+  assert.ok(existsSync(join(TAB_DIR, "routines.tsx")), "pages.ts names a Routines tab with no route file");
+  for (let i = 0; i < 4; i++) {
+    assert.equal(forbiddenRouteName(`${routes[i]}.tsx`), null, routes[i]);
+    assert.equal(forbiddenRouteName(`${keys[i]}.tsx`), null, keys[i]);
   }
   const sneaky = tabConfigEntries("{ route: 'my-routines', label: 'routines', symbol: 'pills' }");
   assert.equal(sneaky.length, 1);

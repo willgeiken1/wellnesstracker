@@ -756,6 +756,8 @@ export const en = {
   recoveryTable_custom_exercises: 'Custom exercise',
   recoveryTable_plans: 'Plan',
   recoveryTable_pauses: 'Pause',
+  recoveryTable_daily_blocks: 'Daily routine', recoveryTable_daily_items: 'Routine item', recoveryTable_daily_placements: 'Routine item place', recoveryTable_daily_compounds: 'Routine item amount',
+  recoveryTable_daily_logs: 'Routine log', recoveryTable_daily_types: 'Routine item type', recoveryTable_daily_prefs: 'Routine settings',
   recoveryTable_purges: 'Deletion range',
   restoreVersionFailed: 'This version could not be restored. It may have expired, been deleted, or changed again.',
   signOutWait: 'Wait', signOutAnyway: 'Sign out anyway',

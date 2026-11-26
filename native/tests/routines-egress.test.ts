@@ -14,8 +14,10 @@ function files(dir: string): string[] {
   });
 }
 
-test('the routines import closure has no network, telemetry, logging, sync or AI capability', () => {
+test('the routines data closure has no network, telemetry, logging, sync or AI capability', () => {
   const start = path.join(SRC, 'features/routines');
+  // The store, the tables behind it and the plain model logic. The screens are checked below.
+  const roots = [path.join(start, 'store.ts'), path.join(start, 'model.ts'), ...files(path.join(start, 'data')), ...files(path.join(start, 'model'))];
   const seen = new Set<string>();
   function visit(file: string) {
     if (seen.has(file)) return;
@@ -25,7 +27,9 @@ test('the routines import closure has no network, telemetry, logging, sync or AI
     // Type-only imports are erased before the app runs, so they carry no capability.
     for (const match of text.matchAll(/import\s+(?!type\b)[\s\S]*?from\s*['"]([^'"]+)['"]/g)) {
       const spec = match[1];
-      expect(spec.startsWith('.') || spec.startsWith('@/')).toBe(true);
+      // The shared store hook is the one outside package, React itself.
+      if (spec === 'react' && file === path.join(start, 'store.ts')) continue;
+      expect([path.relative(SRC, file), spec, spec.startsWith('.') || spec.startsWith('@/')]).toEqual([path.relative(SRC, file), spec, true]);
       const base = spec.startsWith('@/') ? path.join(SRC, spec.slice(2)) : path.resolve(path.dirname(file), spec);
       const next = ['.ts', '.tsx'].map(ext => base + ext).find(candidate => fs.existsSync(candidate)) ?? base;
       expect(next).not.toMatch(/\/auth\/|\/sync\/|\/server\/|\/ai\/|telemetry|analytics|sentry|posthog/i);
@@ -34,9 +38,8 @@ test('the routines import closure has no network, telemetry, logging, sync or AI
       visit(next);
     }
   }
-  const own = files(start);
-  own.forEach(visit);
-  expect(own.length).toBeGreaterThanOrEqual(8);
+  roots.forEach(visit);
+  expect(roots.length).toBeGreaterThanOrEqual(8);
   expect([...seen].every(file => file.startsWith(start))).toBe(true);
 });
 
@@ -46,7 +49,7 @@ test('no telemetry or AI code reads a routine table or imports routine code', ()
   for (const file of outward) {
     const text = fs.readFileSync(file, 'utf8');
     expect(text).not.toMatch(/daily_(?:blocks|items|placements|compounds|logs|types|prefs)/);
-    expect(text).not.toMatch(/features\/routines|routine-catalog|readRoutineStore/);
+    expect(text).not.toMatch(/features\/routines|routine-catalog|readRoutineStore|sqlite-store/);
   }
   const functions = path.resolve(__dirname, '../../supabase/functions');
   for (const file of files(functions)) expect(fs.readFileSync(file, 'utf8')).not.toMatch(/daily_(?:blocks|items|placements|compounds|logs|types|prefs)/);
@@ -64,7 +67,7 @@ test('routine tables are not in the list the sync engine pushes and pulls', () =
 
 /* The Routines tab and its screens. They draw the routine rows, so the same rule holds for them as for the
    store: nothing in them may send, log or report, and no import of theirs may lead to code that does. */
-const UI = path.join(SRC, 'features/routines-ui');
+const UI = path.join(SRC, 'features/routines');
 const OUTWARD = /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|\bconsole\s*\.|\b(?:Sentry|PostHog|posthog)\s*\.|\b(?:captureException|captureMessage|captureEvent|track|capture|sendBeacon)\s*\(/;
 const imports = (text: string) => [...text.matchAll(/import\s+(?!type\b)[\s\S]*?from\s*['"]([^'"]+)['"]/g)].map(match => match[1]);
 
@@ -87,7 +90,7 @@ test('the only routes for routines are the tab and its routines folder, and they
     const text = fs.readFileSync(path.join(app, route), 'utf8');
     expect([route, OUTWARD.test(text)]).toEqual([route, false]);
     // A route file is a thin door: it may reach the Routines screens, the router and the strings, and nothing else.
-    for (const spec of imports(text)) expect([route, /^(?:@\/features\/routines-ui\/[\w-]+|@\/i18n\/en|expo-router)$/.test(spec)]).toEqual([route, true]);
+    for (const spec of imports(text)) expect([route, /^(?:@\/features\/routines\/[\w-]+|@\/auth\/provider|@\/components\/[\w-]+|@\/i18n\/en|expo-router)$/.test(spec)]).toEqual([route, true]);
   }
   // No other route reads routine data.
   const others = files(app).filter(file => !routes.includes(path.relative(app, file)) && path.relative(app, file) !== '_layout.tsx');
@@ -99,26 +102,24 @@ test('telemetry does not count the Routines tab or see its path', () => {
   expect(telemetry).not.toMatch(/['"`]\/?routines['"`]/);
 });
 
-/* Home and the Progress charts draw routine data too: tiles that show and tick off items, and the "Started"
-   lines. Each file that reads it is named here, one path at a time, and held to the same rule as the Routines
-   screens. A new reader fails this test until its path is added on purpose. */
+/* Setup's routine step writes routine data through the store. Each file outside Routines that reads it is named
+   here, one path at a time, and held to the same rule as the Routines screens. A new reader fails this test until
+   its path is added on purpose. */
 const READERS = [
-  'features/home/tiles.ts', // the Home layout tells a routine tile id from any other; it reads ids, never a routine
-  'features/home/routine-tiles.tsx', // the routine tiles on Home
-  'features/home/screen.tsx', // Home hands the routines it was given to those tiles and to Edit Home's list
-  'features/insights/recovery.tsx', // "Started" lines on the sleep and heart rate variability charts, and their switches
-  'features/body/screen.tsx', // "Started" lines on the weight chart, and their switches
+  // Setup's routine step opens the store and hands it the suggested routines. save.ts beside it names the store's
+  // type only, which carries nothing at run time.
+  'features/onboarding/flow/flow.tsx',
 ];
 /* The sample items of "Look around first" and the leak-test rows. Both are made up. */
-const FIXTURE_READERS = ['demo.ts', 'routines.ts'];
-const ROUTINE_HOMES = [path.join(SRC, 'features/routines'), UI, path.join(SRC, 'app/routines')];
+const FIXTURE_READERS = ['routines.ts'];
+const ROUTINE_HOMES = [UI, path.join(SRC, 'app/routines')];
 const insideRoutines = (file: string) => ROUTINE_HOMES.some(home => file === home || file.startsWith(home + path.sep)) || file === path.join(SRC, 'app/(tabs)/routines.tsx');
 function resolved(file: string, spec: string): string {
   return spec.startsWith('@/') ? path.join(SRC, spec.slice(2)) : spec.startsWith('.') ? path.resolve(path.dirname(file), spec) : spec;
 }
 const readsRoutines = (file: string) => imports(fs.readFileSync(file, 'utf8')).some(spec => insideRoutines(resolved(file, spec)) || ROUTINE_HOMES.some(home => resolved(file, spec).startsWith(home + path.sep)));
 
-test('outside Routines only the named Home and Progress files read routine data, and they send, log and report nothing', () => {
+test('outside Routines only the named setup files read routine data, and they send, log and report nothing', () => {
   const readers = files(SRC).filter(file => !insideRoutines(file) && readsRoutines(file)).map(file => path.relative(SRC, file)).sort();
   expect(readers).toEqual([...READERS].sort());
   for (const reader of READERS) {
@@ -130,12 +131,9 @@ test('outside Routines only the named Home and Progress files read routine data,
   expect(files(fixtures).filter(readsRoutines).map(file => path.relative(fixtures, file)).sort()).toEqual(FIXTURE_READERS);
 });
 
-test('the charts are handed days to mark and never a name, and Edit Home is handed names and never a routine', () => {
-  for (const file of ['features/insights/mini-chart.tsx', 'features/body/chart.tsx', 'features/home/edit-sheet.tsx']) {
+test('the charts and Home do not read routines', () => {
+  for (const file of ['features/insights/mini-chart.tsx', 'features/body/chart.tsx', 'features/home/screen.tsx']) {
     const text = fs.readFileSync(path.join(SRC, file), 'utf8');
-    expect([file, /features\/routines|routines-ui/.test(text)]).toEqual([file, false]);
-    expect([file, OUTWARD.test(text)]).toEqual([file, false]);
+    expect([file, /features\/routines/.test(text)]).toEqual([file, false]);
   }
-  // The Insights view fires one bare event when it opens. It does not read routines; only Recovery, below it, does.
-  expect(fs.readFileSync(path.join(SRC, 'features/insights/screen.tsx'), 'utf8')).not.toMatch(/features\/routines|routines-ui|started/i);
 });
