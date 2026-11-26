@@ -7,9 +7,11 @@ import {
 import { guardRoutinesStore, routineTablesIo } from './data/sqlite-store';
 
 /*
- * The Routines data adapter. The screens and tiles talk only to `RoutinesStore`; this file keeps it in the app's local
- * storage (the repository's owner-scoped local table, like Water and the shell prefs), one JSON document under ROUTINES_KEY.
- * The real Routines data layer can replace `createLocalRoutinesStore` with anything that meets the same interface.
+ * The Routines data adapter. The screens and tiles talk only to `RoutinesStore`. `createLocalRoutinesStore` keeps each
+ * account's routines on the phone, in that account's daily_* tables (data/sqlite-store.ts): a routine, an item, its place
+ * in a routine, a pause and a check-off are each a row of their own. ROUTINES_KEY is only where an earlier build kept the
+ * whole state as one JSON document; one found there is moved into the tables and the key is cleared.
+ * The store the tab and the Home tiles share is dropped when the account changes or signs out (auth/provider.tsx).
  */
 
 export const ROUTINES_KEY = 'routines';
