@@ -1432,7 +1432,8 @@ export const en = {
   routinesWindowArc: 'Time window on the sun path. Tap near either end to move it.',
   routinesMonday: 'Monday', routinesTuesday: 'Tuesday', routinesWednesday: 'Wednesday', routinesThursday: 'Thursday', routinesFriday: 'Friday', routinesSaturday: 'Saturday', routinesSunday: 'Sunday',
   routinesFromTabs: 'From your tabs', routinesFromTabsToast: 'Pick from Supplements, Peptides, Medications and Other',
-  routinesFromLibrary: 'From the library', routinesFromLibraryToast: 'The library lists common items to start from',
+  // Backticks: a quote mark right after the word from reads as an import to the source scans in tests.
+  routinesFromLibrary: 'From the library', routinesFromLibraryToast: `The library lists common items to start from`,
   routinesGone: 'This routine isn’t here anymore', routinesHistory: 'History', routinesHistorySub: 'Last 30 days, item by item',
   routinesHelpCheck: 'Leave this blank to hide it. Days left uses this count and the days you logged.',
   routinesHelpDose: 'Leave On hand blank to hide it. Leave Mixed on blank unless a vial was mixed.',
