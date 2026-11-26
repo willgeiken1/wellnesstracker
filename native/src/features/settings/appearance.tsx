@@ -68,7 +68,7 @@ function PaletteRow({ id, first, selected, onPress }: { id: Palette; first: bool
       boxShadow: selected ? `0px 0px 0px 2px ${k.cardBg}, 0px 0px 0px 4px ${c.accent}` : `inset 0px 0px 0px 1px ${alpha(k.c.text, 0.1)}` }} />
     <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-        <KitText weight={600} size={15.5} lineHeight={1.2} numberOfLines={1}>{p.name}</KitText>
+        <KitText weight={600} size={15.5} lineHeight={1.2}>{p.name}</KitText>
         {isDefault ? <KitText weight={500} size={13} color="text-muted" style={{ marginLeft: 6 }}>{st('settingsDefault')}</KitText> : null}
       </View>
       <View style={{ flexDirection: 'row', gap: 5 }}>

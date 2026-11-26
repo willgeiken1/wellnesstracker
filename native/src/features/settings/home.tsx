@@ -108,12 +108,12 @@ export function SettingsHome() {
               borderRadius: 20, backgroundColor: pressed ? mix(k.c.text, k.c.surface, 0.05) : k.c.surface, boxShadow: k.cardEdge })}>
             <Avatar name={who.name || who.email} size={60} />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <KitText weight={700} size={20} lineHeight={1.2} tracking={-0.02} numberOfLines={1}>{who.name || who.signIn}</KitText>
+              <KitText weight={700} size={20} lineHeight={1.2} tracking={-0.02}>{who.name || who.signIn}</KitText>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
                 {who.auth.session && who.name ? <Icon name="apple-fill" size={13} color={k.c['text-muted']} /> : null}
-                <KitText weight={600} size={13.5} color="text-muted" numberOfLines={1}>{line1}</KitText>
+                <KitText weight={600} size={13.5} color="text-muted">{line1}</KitText>
               </View>
-              {line2 ? <KitText weight={500} size={12.5} color="ghost" style={{ marginTop: 2 }} numberOfLines={1}>{line2}</KitText> : null}
+              {line2 ? <KitText weight={500} size={12.5} color="ghost" style={{ marginTop: 2 }}>{line2}</KitText> : null}
             </View>
             <Icon name="chevron-right" size={16} color={k.c.ghost} />
           </Tappable>
