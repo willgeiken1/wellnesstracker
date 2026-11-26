@@ -27,9 +27,11 @@ export function Caption({ w, h, size, color, text }: { w: number; h: number; siz
     <SvgText x={w / 2} y={h / 2 + size * 0.36} textAnchor="middle" fill={color} fontFamily={tokens.font.heading} fontSize={size}>{text}</SvgText>
   </Svg>;
 }
+/** The unit sits 4 pt after its number (`.rtt-n small`): a space in the app font is 0.175 em wide, so this size makes one 4 pt. */
+const UNIT_GAP = 4 / 0.175;
 export function Num({ v, unit, fs = 32, color, style }: { v: string | number; unit?: string; fs?: number; color?: string; style?: StyleProp<TextStyle> }) {
   return <KitText weight={700} size={fs} lineHeight={1} tracking={-0.03} numeric color={color} numberOfLines={1} style={style}>
-    {String(v)}{unit ? <KitText weight={600} size={13} tracking={UNTRACKED} color="text-muted">{` ${unit}`}</KitText> : null}
+    {String(v)}{unit ? <><KitText weight={600} size={UNIT_GAP} tracking={UNTRACKED}>{' '}</KitText><KitText weight={600} size={13} tracking={UNTRACKED} color="text-muted">{unit}</KitText></> : null}
   </KitText>;
 }
 /** The muted small line (`.rtt-s`). */

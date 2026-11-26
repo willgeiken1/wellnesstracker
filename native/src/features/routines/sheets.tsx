@@ -168,9 +168,9 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
             </>; })() : null}
             <Line x1={10} y1={100} x2={290} y2={100} stroke={c['text-muted']} strokeWidth={1.3} />
             {[[20, 5], [85, 11], [150, 14], [215, 17], [280, 23]].map(([x, h]) => <SvgText key={h} x={x} y={116} textAnchor="middle" fontSize={10} {...lbl}>{hax(h)}</SvgText>)}
-            <SvgText x={150} y={66} textAnchor="middle" fill={c.text} fontFamily={tokens.font.heading} fontSize={21} letterSpacing={-0.4}>{big}</SvgText>
             <SvgText x={150} y={84} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={11}>{sm}</SvgText>
           </Svg> : null}
+          {aw > 0 ? <ArcNumber size={21} baseline={66} scale={aw / 300}>{big}</ArcNumber> : null}
         </View>
         <View accessibilityRole="none" accessibilityLabel={t('routinesTitle')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 4 }}>
           {RL.map(r => {
@@ -249,7 +249,7 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
     showToast(t('routinesNoteSaved'), { color: 'sleep' });
   };
   return <RtSheet testID="routines-converter" header={<SheetTitle title={t('routinesUnitConverter')} size={22} onClose={closeRoutines}
-    back={fromAI ? t('routinesAddItem') : undefined} />}>
+    back={fromAI ? t('routinesAddItem') : undefined} top />}>
     <Help>{t('routinesConvHelp')}</Help>
     <DoseCard small color={c.sleep} label={t('routinesAmount')} right={<ClearPill label={t('routinesClearAmount')} disabled={C.amt == null} onPress={() => set({ amt: null })} />}>
       <Readout small testID="routines-conv-amount" label={t('routinesAmount')} value={C.amt} unit={C.from} onChange={a => set({ amt: a })} />
@@ -269,7 +269,7 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
         </View>
       </View> : null}
     </DoseCard>
-    <View accessibilityLiveRegion="polite" style={{ backgroundColor: rt.well, borderRadius: 22, padding: 14, gap: 12, boxShadow: rt.edge ?? `0 0 0 1px ${c.hair}` }}>
+    <View accessibilityLiveRegion="polite" style={{ backgroundColor: rt.well, borderRadius: 22, padding: 14, gap: 12, boxShadow: rt.edge }}>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
           <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={capitals}>{t('routinesConverted')}</KitText>
@@ -436,9 +436,9 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
             </G>; })}
             <Line x1={16} y1={112} x2={244} y2={112} stroke={c['text-muted']} strokeWidth={1.3} />
             {[5, 8, 11, 14, 17, 20, 23].map(x => <SvgText key={x} x={P2(x)[0]} y={128} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10}>{hax(x)}</SvgText>)}
-            <SvgText x={130} y={80} textAnchor="middle" fill={c.text} fontFamily={tokens.font.heading} fontSize={17}>{rng(from, to)}</SvgText>
             <SvgText x={130} y={97} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={11} letterSpacing={0.9}>{dragCaps}</SvgText>
           </Svg> : null}
+          {aw > 0 ? <ArcNumber size={17} baseline={80} scale={aw / 260}>{rng(from, to)}</ArcNumber> : null}
         </View>
       </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -478,4 +478,11 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
     </Blk>
     <Cta testID="routines-new-save" label={t('routinesSaveRoutine')} color={c.text} ink={c.bg} onPress={save} />
   </RtSheet>;
+}
+
+/** The big time inside an arc (`.rt-arc .big`), drawn as text over the drawing so its figures keep one width and its
+ * tracking, which drawn-in text cannot. `baseline` and `size` are in the drawing's own units. */
+function ArcNumber({ children, size, baseline, scale }: { children: string; size: number; baseline: number; scale: number }) {
+  return <KitText weight={700} size={size * scale} tracking={-0.02} numeric numberOfLines={1} allowFontScaling={false} pointerEvents="none"
+    style={{ position: 'absolute', left: 0, right: 0, top: (baseline - size * 1.04) * scale, textAlign: 'center' }}>{children}</KitText>;
 }

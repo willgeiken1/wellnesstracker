@@ -122,7 +122,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   pad: { paddingHorizontal: 16 },
   intro: { marginHorizontal: 4, marginBottom: 4, fontFamily: tokens.font.body, fontSize: 14, lineHeight: 20.3 },
-  chipsWrap: { marginHorizontal: -16, marginTop: 9, marginBottom: 6, flexGrow: 0 },
+  chipsWrap: { marginHorizontal: -16, marginTop: 8, marginBottom: 8, flexGrow: 0 },
   chips: { gap: 8, paddingHorizontal: 16 },
   chip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   chipText: { fontFamily: tokens.font.bodyStrong, fontSize: 13.5 },

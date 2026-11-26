@@ -64,16 +64,19 @@ export const TrayCard = memo(function TrayCard({ cfg, def, tint, pick, onStyle, 
       <Text numberOfLines={1} style={[s.stText, { color: on ? colors.text : colors['text-muted'] }]}>{name || fill(t('tilesStyleN'), { n: i + 1 })}</Text>
     </Pressable>;
   };
-  const seg = (label: string, children: ReactNode) => <View style={s.ctl}>
+  // With no preview the header's bottom margin and the next block's top margin collapse into the larger one, as in the design.
+  const headGap = edit ? 10 : 12;
+  let firstCtl = !preview && !showStyles;
+  const seg = (label: string, children: ReactNode) => { const top = firstCtl ? Math.max(10, headGap) : 10; firstCtl = false; return <View style={[s.ctl, { marginTop: top }]}>
     <Text style={[s.ctlLabel, { color: colors['text-muted'] }]}>{label}</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.segScroll} contentContainerStyle={[s.seg, { backgroundColor: segBg }]}
       accessibilityRole="radiogroup" accessibilityLabel={label}>{children}</ScrollView>
-  </View>;
+  </View>; };
 
   const f = FRAMES[pick.size], k = Math.min(1, inner / f.w), ph = Math.round(f.h * k);
   return <View accessibilityLabel={fill(t('tilesCardLabel'), { title: def.title })} style={[s.card, sheetCard(colors, mode), edit && { marginBottom: 14 }]}
     onLayout={e => setInner(Math.round(e.nativeEvent.layout.width - 28))}>
-    <View style={[s.head, edit && { marginBottom: 10 }]}>
+    <View style={[s.head, { marginBottom: preview ? headGap : 0 }]}>
       <View style={[s.ic, { backgroundColor: rgba(tint, 0.15) }]}><TileIcon name={def.icon} size={17} color={tint} /></View>
       <View style={s.headText}>
         <Text numberOfLines={1} style={[s.title, { color: colors.text }]}>{def.title}</Text>

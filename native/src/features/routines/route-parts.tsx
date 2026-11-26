@@ -58,12 +58,13 @@ export function RtSheet({ header, children, testID }: { header: ReactNode; child
 }
 
 /** The sheet's title row (`.rt-shd`): 700 24 pt, a 32 pt close button, and an optional back link above the title. */
-export function SheetTitle({ title, onClose, back, onBack, size = 24, closeLabel }: {
+export function SheetTitle({ title, onClose, back, onBack, size = 24, closeLabel, top }: {
   title: string; onClose: () => void; back?: string; onBack?: () => void; size?: number; closeLabel?: string;
+  /** Line the title up with the top of the close button instead of its middle (the converter's header). */ top?: boolean;
 }) {
   const k = useKit(), rt = useRt();
-  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: back ? 'flex-start' : 'center', gap: 12,
-    paddingTop: 8 + GRABBER_ROOM, paddingBottom: 8, backgroundColor: k.sheetBg }}>
+  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: back || top ? 'flex-start' : 'center', gap: 12,
+    paddingTop: 10 + GRABBER_ROOM, paddingBottom: 8, backgroundColor: k.sheetBg }}>
     <View style={{ gap: 2, flexShrink: 1 }}>
       {back ? <Tappable dim="text" accessibilityRole="button" accessibilityLabel={back} onPress={onBack ?? onClose}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 32 }}>
@@ -118,7 +119,7 @@ export function GhostBtn({ label, onPress }: { label: string; onPress: () => voi
 export function DoseCard({ color, children, small, label, right }: { color: string; children: ReactNode; small?: boolean; label: string; right?: ReactNode }) {
   const rt = useRt();
   return <View style={{ backgroundColor: color, borderRadius: 24, paddingTop: 14, paddingHorizontal: 14, paddingBottom: 12, gap: 10 }}>
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: small ? 20 : 24 }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
       <KitText weight={700} size={11} tracking={0.14} color={rt.inkm} style={capitals}>{label}</KitText>
       {right}
     </View>
