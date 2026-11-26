@@ -63,20 +63,24 @@ jobs:
         id: compare
         run: |
           set -uo pipefail
-          supabase db query --linked -f "$ROW_SYNC_DIR/live/compare.sql" > "$RUNNER_TEMP/compare.txt" 2>&1
-          status=$?
+          # The step shell runs with -e, so the exit code is caught here; otherwise a
+          # failing check would stop the step before its findings are printed.
+          status=0
+          supabase db query --linked -f "$ROW_SYNC_DIR/live/compare.sql" > "$RUNNER_TEMP/compare.txt" 2>&1 || status=$?
           cat "$RUNNER_TEMP/compare.txt"
-          exit $status
+          exit "$status"
 
       - name: Verify safety checks (read-only)
         id: verify
         if: always() && steps.link.outcome == 'success'
         run: |
           set -uo pipefail
-          supabase db query --linked -f "$ROW_SYNC_DIR/live/verify.sql" > "$RUNNER_TEMP/verify.txt" 2>&1
-          status=$?
+          # The step shell runs with -e, so the exit code is caught here; otherwise a
+          # failing check would stop the step before its findings are printed.
+          status=0
+          supabase db query --linked -f "$ROW_SYNC_DIR/live/verify.sql" > "$RUNNER_TEMP/verify.txt" 2>&1 || status=$?
           cat "$RUNNER_TEMP/verify.txt"
-          exit $status
+          exit "$status"
 
       - name: Record the check for the ledger
         if: always()
