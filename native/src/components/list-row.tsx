@@ -3,7 +3,7 @@ import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { Tappable as Pressable } from './tappable';
 import { KitText } from './themed-text';
 import { Icon, type IconName } from './icon';
-import { KIT, SurfaceContext, useKit } from './kit-style';
+import { KIT, StackGapContext, SurfaceContext, useKit } from './kit-style';
 import { Switch } from './switch';
 
 /** Where a row sits in its list: whether a hairline goes above it and how far in it starts. */
@@ -30,7 +30,9 @@ export function List({ children, footer, style, testID }: { children: ReactNode;
 
 /** The kit's `.foot`: a 12.5 pt muted note under a list or section. */
 export function ListFooter({ children }: { children: ReactNode }) {
-  return <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ marginTop: 8, marginHorizontal: 16 }}>{children}</KitText>;
+  // The design puts the note 8 pt under its card; inside a stack that already spaces blocks, it pulls back by the gap.
+  const gap = useContext(StackGapContext);
+  return <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ marginTop: 8 - gap, marginHorizontal: 16 }}>{children}</KitText>;
 }
 
 export type ListRowProps = {
