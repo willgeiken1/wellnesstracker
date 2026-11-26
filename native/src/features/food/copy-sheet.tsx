@@ -44,8 +44,8 @@ export function CopySheet({ repo }: { repo: Repository }) {
   </FoodSheet>;
   return <FoodSheet testID="food-copy-sheet" header={header}>
     <View style={{ marginTop: 2, marginHorizontal: 4, marginBottom: 14 }}>
-      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{fullDate(from)}</KitText>
-      <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.03} numeric style={{ marginTop: 6 }}>{num(y.eaten)}
+      <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{fullDate(from)}</KitText>
+      <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6 }}>{num(y.eaten)}
         <KitText weight={600} tracking={0} size={13} color="text-muted">{` ${t('foodKcal')} · ${plural(list.length, t('foodMealWord'), t('foodMealsWord'))}`}</KitText></KitText>
     </View>
     <List>

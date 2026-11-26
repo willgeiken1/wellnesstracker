@@ -179,8 +179,8 @@ export function EnergyLegend({ p, c, f }: { p: number | null; c: number | null; 
     {rows.map(([label, g, pct, color]) => <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.tok(color) }} />
       <KitText weight={500} size={13} color="text-muted" style={{ flex: 1 }}>{label}</KitText>
-      <KitText weight={700} size={13.5} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
-      <KitText weight={700} size={12.5} numeric color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
+      <KitText weight={700} size={13.5} tracking={-0.02} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
+      <KitText weight={700} size={12.5} tracking={-0.02} numeric color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
     </View>)}
   </View>;
 }

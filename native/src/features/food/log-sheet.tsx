@@ -100,7 +100,7 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
       {([['barcode', t('foodTileScan'), 'barcode'], ['bolt', t('foodTileQuick'), 'quick'], ['copy', t('foodCopyYesterday'), 'copy']] as const).map(([icon, label, to]) =>
         <ActionTile key={to} icon={icon} label={label} onPress={() => go(to)} />)}
     </View>
-    <Chips style={{ marginBottom: -2 }}>
+    <Chips style={{ marginBottom: -6 }}>
       {tabs.map(([id, label]) => <Chip key={id} label={label} color="food" selected={tab === id} onPress={() => setTab(id)} />)}
     </Chips>
     {body}

@@ -83,14 +83,14 @@ export function MealSeg({ meals, value, onChange, label }: { meals: { id: string
 }
 
 /** The small capitals label over a list (`.fd-lh`), with an optional plain aside or a tappable one on the right. */
-export function SectionLabel({ title, aside, onAside, asideColor, inset, first }: { title: string; aside?: string; onAside?: () => void; asideColor?: string; inset?: boolean; first?: boolean }) {
+export function SectionLabel({ title, aside, onAside, asideColor, inset, first, asideNumeric }: { title: string; aside?: string; onAside?: () => void; asideColor?: string; inset?: boolean; first?: boolean; /** A count on the right (`.num`): tabular and a touch tighter. */ asideNumeric?: boolean }) {
   return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginTop: first ? 4 : inset ? 16 : 20, marginBottom: 8, marginHorizontal: inset ? 0 : 4 }}>
     <KitText accessibilityRole="header" weight={700} size={12} tracking={0.06} color="text-muted" style={capitals}>{title}</KitText>
     {aside ? onAside
       ? <Tappable dim="text" accessibilityRole="button" accessibilityLabel={aside} onPress={onAside} hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}>
-          <KitText weight={600} size={13.5} color={asideColor ?? 'accent'}>{aside}</KitText>
+          <KitText weight={600} size={14} color={asideColor ?? 'accent'}>{aside}</KitText>
         </Tappable>
-      : <KitText weight={500} size={12.5} color="text-muted">{aside}</KitText> : null}
+      : <KitText weight={500} size={12.5} tracking={asideNumeric ? -0.02 : undefined} numeric={asideNumeric} color="text-muted">{aside}</KitText> : null}
   </View>;
 }
 /** A muted line of help under a block (`.fd-cap`). */
@@ -124,7 +124,7 @@ export function PillStepper({ value, onChange, step, min, max, format, label, co
     accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={e => go(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
     style={{ flexDirection: 'row', alignItems: 'center', gap: 2, padding: 3, borderRadius: 999, backgroundColor: bg, flexShrink: 0 }}>
     {btn(-1)}
-    <KitText weight={700} size={17} numeric style={{ minWidth: 56, textAlign: 'center' }}>{format(value)}</KitText>
+    <KitText weight={700} size={17} tracking={-0.02} numeric style={{ minWidth: 56, textAlign: 'center' }}>{format(value)}</KitText>
     {btn(1)}
   </View>;
 }

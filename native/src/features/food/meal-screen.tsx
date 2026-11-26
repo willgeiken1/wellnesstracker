@@ -43,12 +43,12 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
   const header = <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, marginBottom: 18 }}>
     <View style={{ width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: k.tint(k.c.food, 0.16) }}><Icon name={m.icon} size={22} color={k.c.food} /></View>
     <View style={{ flex: 1, minWidth: 0 }}>
-      <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{shortDate(day)}</KitText>
+      <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{shortDate(day)}</KitText>
       <KitText accessibilityRole="header" weight={700} size={30} lineHeight={1.05} tracking={-0.035} style={{ marginTop: 6 }}>{m.name}</KitText>
     </View>
     {m.time != null ? <View accessible accessibilityLabel={fill(t('foodTimeEaten'), { time: clock(m.time) })}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: k.controlBg, boxShadow: k.cardEdge }}>
-      <Icon name="clock" size={15} color={k.c.text} /><KitText weight={600} size={14} numeric>{clock(m.time)}</KitText>
+      <Icon name="clock" size={15} color={k.c.text} /><KitText weight={600} size={13.5} tracking={-0.02} numeric>{clock(m.time)}</KitText>
     </View> : null}
   </View>;
   const right = empty ? undefined : <NavButton label={isEditing ? t('shellDone') : t('foodEditBtn')} onPress={() => { setEditing(!isEditing); setOpen(null); }} />;
@@ -81,7 +81,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
           </View>)}
       </View>
       <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: m.p * 4, color: k.tok(MACRO_COLOR.p) }, { v: m.c * 4, color: k.tok(MACRO_COLOR.c) }, { v: m.f * 9, color: k.tok(MACRO_COLOR.f) }]} />
-      <KitText weight={500} size={12.5} lineHeight={1.4} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{fill(t('foodShareOfDay'), { pct: share, goal: num(view.goal) })}</KitText>
+      <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{fill(t('foodShareOfDay'), { pct: share, goal: num(view.goal) })}</KitText>
     </Card>
     <SectionHeader title={t('foodFoodsCap')} aside={plural(m.items.length, t('foodItemWord'), t('foodItemsWord'))} />
     <List>
@@ -134,7 +134,7 @@ function SwipeRow({ item, first, editing, open, onOpen, onEdit, onDelete }: {
           <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01} numberOfLines={1}>{item.name}</KitText>
           {sub ? <KitText weight={500} size={13} lineHeight={1.35} color="text-muted" numberOfLines={1} style={{ marginTop: 2 }}>{sub}</KitText> : null}
         </View>
-        <KitText weight={700} size={15} numeric>{item.kcal == null ? '–' : num(item.kcal)}</KitText>
+        <KitText weight={700} size={15} tracking={-0.01} numeric>{item.kcal == null ? '–' : num(item.kcal)}</KitText>
       </Tappable>
     </Animated.View>
   </View>;
