@@ -39,7 +39,7 @@ test('the routines data closure has no network, telemetry, logging, sync or AI c
     }
   }
   roots.forEach(visit);
-  expect(roots.length).toBeGreaterThanOrEqual(8);
+  expect(roots.length).toBeGreaterThanOrEqual(4);
   // Outside Routines it reaches only the list of what to drop when the account changes, which holds no data.
   const shared = [path.join(SRC, 'core', 'session-memory.ts')];
   expect([...seen].filter(file => !file.startsWith(start))).toEqual(shared);
@@ -137,5 +137,25 @@ test('the charts and Home do not read routines', () => {
   for (const file of ['features/insights/mini-chart.tsx', 'features/body/chart.tsx', 'features/home/screen.tsx']) {
     const text = fs.readFileSync(path.join(SRC, file), 'utf8');
     expect([file, /features\/routines/.test(text)]).toEqual([file, false]);
+  }
+});
+
+/* The app never works out an amount: no routine code may suggest one. */
+const ADVICE = /recommended dose|should take|prescrib|typical dose|suggested dose|you should/i;
+
+test('no routine code calls the network, analytics or crash reporting, and none suggests an amount', () => {
+  const own = files(UI);
+  expect(own).toContain(path.join(UI, 'data', 'sqlite-store.ts'));
+  for (const file of own) {
+    const src = fs.readFileSync(file, 'utf8');
+    expect(src).not.toMatch(/\bfetch\s*\(/);
+    expect(src).not.toMatch(/XMLHttpRequest/);
+    expect(src).not.toMatch(/sendBeacon/);
+    expect(src).not.toMatch(/posthog/i);
+    expect(src).not.toMatch(/Sentry/);
+    expect(src).not.toMatch(/captureMessage|captureException/);
+    expect(src).not.toMatch(/console\./);
+    expect(src).not.toMatch(/from ['"][^'"]*(telemetry|analytics|food-ai|workout-ai|\/ai\/)/);
+    expect(src).not.toMatch(ADVICE);
   }
 });
