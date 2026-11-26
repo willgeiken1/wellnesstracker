@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Image, Linking, Platform, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/auth/provider';
-import { Button, Icon, KitText, List, ListFooter, ListRow, SegmentedControl, Sheet, SheetHeader, alpha, useKit, type IconName } from '@/components/kit';
+import { Button, Icon, KitText, List, ListFooter, SegmentedControl, Sheet, SheetHeader, alpha, useKit, type IconName } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { iconArt, iconId } from './app-icon';
@@ -17,13 +17,13 @@ import { APP_VERSION } from './home';
 import { LEGAL_LINKS, openPage } from './links';
 import { useSettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
-import { Gap, H, Hero, Panel, PickRow, SetPage } from './ui';
+import { Gap, H, Hero, ListRow, Panel, PickRow, SetPage } from './ui';
 
 /** `.st-info`: an icon square, a title and a line, and an optional value at the end. */
 function Info({ icon, color, title, sub, value, first }: { icon: IconName; color: string; title: string; sub?: string; value?: string; first?: boolean }) {
   const k = useKit(), c = k.tok(color);
   return <View accessible style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'flex-start', borderTopWidth: first ? 0 : 1, borderTopColor: k.c.hair }}>
-    <View style={{ width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(c, 0.15) }}><Icon name={icon} size={17} color={c} /></View>
+    <View style={{ width: 30, height: 30, borderRadius: 9, marginTop: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(c, 0.15) }}><Icon name={icon} size={17} color={c} /></View>
     <View style={{ flex: 1 }}>
       <KitText weight={600} size={15} lineHeight={1.3}>{title}</KitText>
       {sub ? <KitText weight={500} size={13} lineHeight={1.4} color="text-muted" style={{ marginTop: 2 }}>{sub}</KitText> : null}
@@ -33,7 +33,7 @@ function Info({ icon, color, title, sub, value, first }: { icon: IconName; color
 }
 /** Where Send feedback goes: the support address on the public support page. */
 const FEEDBACK_EMAIL = 'insight.wellnessos@gmail.com';
-const Ext = () => { const k = useKit(); return <Icon name="ext" size={16} color={k.c.ghost} />; };
+const Ext = () => { const k = useKit(); return <View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>; };
 const openRange = () => router.push({ pathname: '/settings/[section]', params: { section: 'delete-range' } });
 
 /* ---------- Privacy center ---------- */
@@ -80,6 +80,7 @@ export function DeleteAccountPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [failure, setFailure] = useState<'deleteAccountUncertain' | 'deleteAccountFailed' | 'signOutFailed' | null>(null);
   const going = useRef(false);
   const can = !!auth.deleteAccount && !!auth.session;
@@ -106,10 +107,11 @@ export function DeleteAccountPage() {
       <KitText weight={700} size={28} lineHeight={1.12} tracking={-0.03} accessibilityRole="header" style={{ marginTop: 10 }}>{st(two ? 'settingsTypeDelete' : 'settingsDeleteQ')}</KitText>
       <KitText weight={500} size={15} lineHeight={1.5} color="text-muted" style={{ marginTop: 10 }}>{st(two ? 'settingsDeleteBody2' : 'settingsDeleteBody1')}</KitText>
       {two ? <>
-        <View style={{ marginTop: 18, backgroundColor: k.c.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, boxShadow: `0px 0px 0px 1.5px ${k.c['hair-2']}` }}>
+        <View style={{ marginTop: 18, backgroundColor: k.c.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, boxShadow: typing ? `0px 0px 0px 2px ${k.c.danger}` : `0px 0px 0px 1.5px ${k.c['hair-2']}` }}>
           <KitText weight={600} size={12} color="text-muted">{st('settingsTypeDeleteShort')}</KitText>
-          <TextInput testID="delete-type" value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} spellCheck={false} autoFocus
-            accessibilityLabel={st('settingsTypeDelete')} style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, paddingTop: 4, color: k.c.text, minHeight: 36 }} />
+          <TextInput testID="delete-type" value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} spellCheck={false} autoFocus onFocus={() => setTyping(true)} onBlur={() => setTyping(false)}
+            accessibilityLabel={st('settingsTypeDelete')} selectionColor={k.c.danger} cursorColor={k.c.danger}
+            style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: 2.4, textTransform: 'uppercase', paddingTop: 4, paddingBottom: 0, color: k.c.text }} />
         </View>
         {failure ? <KitText weight={500} size={13} color="danger" accessibilityRole="alert" style={{ marginTop: 10 }}>{t(failure)}</KitText> : null}
         {!can && <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 10 }}>{st('settingsDeleteNoAccount')}</KitText>}
@@ -180,8 +182,8 @@ export function DeleteRangePage() {
   };
   const tog = (key: RangeKind, title: string, icon: IconName, color: string) =>
     <ListRow key={key} icon={icon} color={color} title={title} toggle={kinds[key] && canDeleteKind(key)} disabled={!canDeleteKind(key)} onToggle={v => setKinds(s => ({ ...s, [key]: v }))} />;
-  return <Sheet testID="settings-delete-range" header={<SheetHeader title={st('settingsDeleteRange')} left={st('cancel')} />}>
-    <KitText weight={500} size={14.5} lineHeight={1.5} color="text-muted" style={{ marginTop: 2, marginHorizontal: 4, marginBottom: 4 }}>{st('settingsRangeLead')}</KitText>
+  return <Sheet gap={0} testID="settings-delete-range" header={<SheetHeader title={st('settingsDeleteRange')} left={st('cancel')} />}>
+    <KitText weight={500} size={14.5} lineHeight={1.5} color="text-muted" style={{ marginHorizontal: 4, marginBottom: 16 }}>{st('settingsRangeLead')}</KitText>
     <List>
       <PickRow title={st('settingsDates')} value={preset} options={opts} onPick={setPreset} />
       <PickRow title={st('settingsFrom')} value={preset} options={opts} onPick={setPreset} short={() => dayLabel(from)} chevron />
@@ -195,7 +197,7 @@ export function DeleteRangePage() {
       {tog('routines', st('settingsRangeRoutines'), 'routines', 'sleep')}
       {tog('photos', st('settingsRangePhotos'), 'camera', 'accent-2')}
     </List>
-    <View style={{ marginTop: 8 }}>
+    <View style={{ marginTop: 20 }}>
       <Button testID="delete-range-go" label={n ? st(n > 1 ? 'settingsDeleteNTypes' : 'settingsDelete1Type', { n }) : st('settingsPickToDelete')} variant="destructive" full disabled={!n || !can}
         onPress={() => actionSheet({ title: st('settingsDeleteRangeQ', { r: label(from, to) }), message: st(auth.phoneOnly ? 'settingsDeleteRangeMsgPhone' : 'settingsDeleteRangeMsg'),
           acts: [{ label: st('settingsDelete'), destructive: true, onPress: go }] })} />
@@ -214,25 +216,25 @@ const NEWS: [IconName, string, string, string][] = [
 export function WhatsNewPage() {
   const k = useKit(), { palette, mode } = useTheme();
   const [p] = useSettingsPrefs();
-  return <Sheet testID="settings-whats-new" header={<SheetHeader title={st('settingsWhatsNew')} left={null} right={st('settingsDone')} onRight={() => router.back()} />}>
-    <View style={{ alignItems: 'center' }}>
-      <View style={{ width: 84, height: 84, borderRadius: 20, overflow: 'hidden', boxShadow: k.lift }}>
+  return <Sheet gap={0} testID="settings-whats-new" header={<SheetHeader title={st('settingsWhatsNew')} left={null} right={st('settingsDone')} onRight={() => router.back()} />}>
+    <View style={{ alignItems: 'center', paddingBottom: 4 }}>
+      <View style={{ width: 84, height: 84, borderRadius: 20, overflow: 'hidden', boxShadow: k.lift, marginTop: 2 }}>
         <Image source={iconArt(iconId(p.look.icon), palette, mode)} style={{ width: 84, height: 84 }} accessible={false} />
       </View>
       <KitText weight={700} size={24} tracking={-0.03} style={{ marginTop: 12 }}>Insight 1.0</KitText>
       <KitText weight={600} size={13.5} color="text-muted" style={{ marginTop: 2 }}>{st('settingsFirstRelease')}</KitText>
     </View>
-    <Panel style={{ marginTop: 8 }}>
+    <Panel style={{ marginTop: 20 }}>
       {NEWS.map(([icon, color, title, body], i) => { const c = k.tok(color);
         return <View key={title} style={{ flexDirection: 'row', gap: 14, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'flex-start', borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
-          <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(c, 0.16) }}><Icon name={icon} size={21} color={c} /></View>
+          <View style={{ width: 40, height: 40, borderRadius: 12, marginTop: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(c, 0.16) }}><Icon name={icon} size={21} color={c} /></View>
           <View style={{ flex: 1 }}>
             <KitText weight={700} size={16} lineHeight={1.3} tracking={-0.015}>{title}</KitText>
             <KitText weight={500} size={13.5} lineHeight={1.45} color="text-muted" style={{ marginTop: 3 }}>{body}</KitText>
           </View>
         </View>; })}
     </Panel>
-    <View style={{ marginTop: 8 }}><Button label={st('settingsContinue')} full onPress={() => router.back()} /></View>
+    <View style={{ marginTop: 20 }}><Button label={st('settingsContinue')} full onPress={() => router.back()} /></View>
   </Sheet>;
 }
 
@@ -241,18 +243,19 @@ export function FeedbackPage() {
   const [topic, setTopic] = useState<'idea' | 'problem' | 'other'>('idea');
   const [text, setText] = useState('');
   const [meta, setMeta] = useState(true);
+  const [writing, setWriting] = useState(false);
   const send = () => {
     const topicLabel = st(topic === 'idea' ? 'settingsAnIdea' : topic === 'problem' ? 'settingsAProblem' : 'settingsSomethingElse');
     const body = text.trim() + (meta ? `\n\nInsight ${APP_VERSION}, ${Platform.OS} ${String(Platform.Version)}` : '');
     const url = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(`Insight feedback: ${topicLabel}`)}&body=${encodeURIComponent(body)}`;
     void Linking.openURL(url).then(() => { router.back(); showToast(st('settingsFeedbackMail')); }, () => { void openPage(LEGAL_LINKS.support); });
   };
-  return <Sheet testID="settings-feedback" header={<SheetHeader title={st('settingsSendFeedback')} left={st('cancel')} right={st('settingsSend')} rightDisabled={!text.trim()} onRight={send} />}>
+  return <Sheet gap={0} testID="settings-feedback" header={<SheetHeader title={st('settingsSendFeedback')} left={st('cancel')} right={st('settingsSend')} rightDisabled={!text.trim()} onRight={send} />}>
     <SegmentedControl label={st('settingsFeedbackTopic')} value={topic} onChange={setTopic}
       options={[{ value: 'idea', label: st('settingsAnIdea') }, { value: 'problem', label: st('settingsAProblem') }, { value: 'other', label: st('settingsSomethingElse') }]} />
     <TextInput testID="feedback-text" value={text} onChangeText={setText} multiline placeholder={st('settingsFeedbackPlaceholder')} placeholderTextColor={k.c['text-muted']}
-      accessibilityLabel={st('settingsYourFeedback')} textAlignVertical="top"
-      style={{ minHeight: 150, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, backgroundColor: k.c.surface, boxShadow: k.cardEdge,
+      accessibilityLabel={st('settingsYourFeedback')} textAlignVertical="top" onFocus={() => setWriting(true)} onBlur={() => setWriting(false)} selectionColor={k.c.accent} cursorColor={k.c.accent}
+      style={{ minHeight: 150, marginTop: 12, marginBottom: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, backgroundColor: k.c.surface, boxShadow: writing ? `0px 0px 0px 2px ${k.c.accent}` : k.cardEdge,
         fontFamily: 'PlusJakartaSans_500Medium', fontSize: 16, lineHeight: 23, color: k.c.text }} />
     <List footer={st('settingsFeedbackFoot')}>
       <ListRow title={st('settingsIncludeDetails')} sub={st('settingsIncludeDetailsSub', { v: APP_VERSION })} toggle={meta} onToggle={setMeta} />
