@@ -48,8 +48,8 @@ export function CardioLogSheet({ at }: { at?: number }) {
   const field = (title: string, sub: string, right: ReactNode, first = false) => <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
     minHeight: 64, paddingVertical: 8, paddingLeft: 16, paddingRight: 8, borderTopWidth: first ? 0 : 1, borderTopColor: k.c.hair }}>
     <View style={{ flexShrink: 1 }}>
-      <KitText weight={600} size={15.5} lineHeight={1.26}>{title}</KitText>
-      <KitText weight={500} size={12.5} lineHeight={1.26} color="text-muted">{sub}</KitText>
+      <KitText weight={600} size={15.5} lineHeight={21 / 15.5}>{title}</KitText>
+      <KitText weight={500} size={12.5} lineHeight={16 / 12.5} color="text-muted" lineBreakStrategyIOS="push-out">{sub}</KitText>
     </View>
     {right}
   </View>;

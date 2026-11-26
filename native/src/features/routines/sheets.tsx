@@ -279,7 +279,7 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
         </View>
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
           <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={capitals}>{t('routinesRate')}</KitText>
-          <KitText weight={700} size={17} tracking={-0.01} numeric numberOfLines={1} color={r.ok ? 'text' : 'ghost'} style={{ paddingTop: 9 }}>{r.ok ? r.rate : '–'}</KitText>
+          <KitText weight={700} size={17} tracking={-0.01} numeric numberOfLines={1} color={r.ok ? 'text' : 'ghost'} style={{ paddingTop: 12.5 }}>{r.ok ? r.rate : '–'}</KitText>
         </View>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
