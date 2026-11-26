@@ -4,7 +4,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTimi
 import Svg, { Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText, TextPath, TSpan } from 'react-native-svg';
 import { KitText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
-import type { AuroraCanvasProps } from './aurora-canvas';
+import type { AuroraCanvasProps } from './aurora-canvas-impl';
 import { HERO_H } from './camera';
 import { heroLayout } from './layout';
 import type { HeroView, Part } from './model';
@@ -106,7 +106,7 @@ export function AuroraHero(p: AuroraProps) {
         accessibilityLabel={pl.spoken} accessibilityState={{ selected: focus === tg.pillar }} testID={`home-hero-arc-${pl.key}`}
         style={{ position: 'absolute', left: tg.x, top: tg.y, width: tg.w, height: tg.h, borderRadius: 23 }} />;
     })}
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, width: w, top: 0, height: L.apex.y - 28, alignItems: 'center', justifyContent: 'flex-end' }, apexStyle]}>
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, width: w, top: 0, height: L.apex.y - 26, alignItems: 'center', justifyContent: 'flex-end' }, apexStyle]}>
       <Animated.View style={[{ alignItems: 'center', gap: 6 }, dayStyle]} testID="home-hero-score">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Svg width={14} height={6} style={sky.glow ? { shadowColor: sky.air, shadowOpacity: 0.5 * p.glow, shadowRadius: 5, shadowOffset: { width: 0, height: 0 } } : undefined}>
