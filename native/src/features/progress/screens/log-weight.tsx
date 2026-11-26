@@ -110,7 +110,7 @@ export function LogWeightSheet() {
     </View>
     <View style={{ height: 4 }} />
     <List footer={t('progressReadsHealth')}>
-      <ListRow title={t('progressDate')} right={<View style={{ width: 184 }}><SegmentedControl compact label={t('progressDate')} value={day} onChange={x => {
+      <ListRow title={t('progressDate')} right={<View style={{ width: 184 }}><SegmentedControl compact track={k.dark ? k.c.bg : undefined} label={t('progressDate')} value={day} onChange={x => {
         setDay(x); if (x === 'today' && startKg != null) setV(round1(wtV(startKg, u)));
       }} options={[{ value: 'today', label: t('progressTodayCap') }, { value: 'yesterday', label: t('progressYesterday') }]} /></View>} />
       {day === 'today' ? <ListRow title={t('progressTime')} value={clockAt(Date.now())} /> : null}
