@@ -61,6 +61,13 @@ const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const idOf = (v: unknown) => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
 /** A check-off as the store keeps it: done or skipped. */
 const markOf = (v: unknown): Mark | null => (v === 'd' || v === 's' ? v : null);
+/** When a check-off counts as made: now for today, and noon of the day for any other day, so the moment falls on the
+ *  day it is for (deleting a day's history goes by both). */
+function markedAt(day: string, now: number): number {
+  if (day === nowOf().day) return now;
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d, 12).getTime();
+}
 
 /* Weekdays as a mask, Monday bit 0 to Sunday bit 6, the order the web app's rows use. The screens count 0 as Sunday. */
 const bit = (wd: number) => 1 << ((wd + 6) % 7);
@@ -266,7 +273,7 @@ export function commitRoutinesState(repo: Repository, next: RoutinesState, prev:
       if (mark) {
         const status = mark === 'd' ? 'done' : 'skipped';
         if (have && have.deleted_at === null && have.data.status === status && have.data.undone !== 1) continue;
-        repo.save('daily_logs', { item_id: item, compound_id: null, day, status, amount: null, unit: null, note: null, at: now, site: null, rest: 0, undone: 0 }, rowId, now); written++;
+        repo.save('daily_logs', { item_id: item, compound_id: null, day, status, amount: null, unit: null, note: null, at: markedAt(day, now), site: null, rest: 0, undone: 0 }, rowId, now); written++;
       } else if (have && have.deleted_at === null) {
         if (day < keepFrom) { repo.remove('daily_logs', rowId, now); written++; }
         else if (have.data.undone !== 1) { repo.save('daily_logs', { ...have.data, undone: 1 }, rowId, now); written++; }

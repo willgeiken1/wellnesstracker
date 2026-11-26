@@ -449,3 +449,19 @@ describe('a value out of the range its column takes', () => {
     expect(reopened(repo).log[TODAY]).toEqual({ fa: 'd', fc: 'd', fe: 's' });
   });
 });
+
+test('a check-off for another day is stamped at noon of that day, so deleting a day takes only its own', async () => {
+  const { repo } = await account();
+  commitRoutinesState(repo, fixtureState(), null);
+  const store = createLocalRoutinesStore(repo);
+  const past = addDays(TODAY, -3);
+  store.toggleDone('fc', past);
+  store.toggleSkip('fb', past);
+  store.toggleDone('fa');
+  const noon = new Date(`${past}T12:00:00`).getTime();
+  expect(repo.get('daily_logs', routineLogId(itemRowId('fc'), past))!.data.at).toBe(noon);
+  expect(repo.get('daily_logs', routineLogId(itemRowId('fb'), past))!.data.at).toBe(noon);
+  // Today's keeps the moment it was made.
+  const today = repo.get('daily_logs', routineLogId(itemRowId('fa'), TODAY))!.data.at as number;
+  expect(Math.abs(today - Date.now())).toBeLessThan(60000);
+});
