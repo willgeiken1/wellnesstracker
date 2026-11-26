@@ -94,9 +94,10 @@ export function PhotoCaptureSheet() {
         {last ? <Tappable dim="row" onPress={() => router.push('/progress/photos')} accessibilityRole="button" accessibilityLabel={t('progressSeeAllPhotos')}>
           <PhotoBox p={last} w={48} h={60} date={false} radius={10} /></Tappable> : null}
       </View>
-      <Tappable dim="fill" onPress={() => { void shoot(); }} disabled={busy} accessibilityRole="button" accessibilityLabel={t('progressTakePhotoBtn')} accessibilityState={{ disabled: busy, busy }}
+      {/* .pg-shut .sbtn:active i: the ring holds still and the disc dips to 90 percent while held; Reduce Motion dims it instead */}
+      <Tappable dim={k.reduceMotion ? 'fill' : 'none'} onPress={() => { void shoot(); }} disabled={busy} accessibilityRole="button" accessibilityLabel={t('progressTakePhotoBtn')} accessibilityState={{ disabled: busy, busy }}
         style={{ width: 78, height: 78, borderRadius: 39, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: k.c.text }}>
-        <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: k.c.text }} />
+        {({ pressed }) => <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: k.c.text, transform: [{ scale: pressed && !busy && !k.reduceMotion ? 0.9 : 1 }] }} />}
       </Tappable>
       <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
         <Tappable dim="fill" onPress={() => setTimer(!timer)} accessibilityRole="switch" accessibilityState={{ checked: timer }} accessibilityLabel={t('progressTimer3')}
