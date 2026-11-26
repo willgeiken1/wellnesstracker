@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { Tappable } from '@/components/tappable';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
@@ -115,14 +116,15 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
         </Animated.View>
         {week.map((wd, i) => {
           const on = i === sel, pb = H - weekArcY(WK.pad + (i + 0.5) * (RW - 2 * WK.pad) / 7, RW) - 37;
-          return <Pressable key={i} onPress={() => { if (i !== sel) onSelect(i); }} accessibilityRole="button" accessibilityLabel={wd.label}
+          // The day itself shows the tap: it grows and the arc moves to it.
+          return <Tappable dim="none" key={i} onPress={() => { if (i !== sel) onSelect(i); }} accessibilityRole="button" accessibilityLabel={wd.label}
             accessibilityState={{ selected: on }} testID={`home-hero-day-${i}`}
             style={{ position: 'absolute', top: 0, bottom: 0, left: i * RW / 7, width: RW / 7, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: pb, borderRadius: 12 }}>
             <View style={{ alignItems: 'center', transform: [{ scale: on ? 1.1 : 1 }], transformOrigin: 'bottom' }}>
               <KitText weight={600} size={12} lineHeight={1} color={wd.today ? 'accent' : on ? 'text' : 'text-muted'}>{wd.short}</KitText>
               {wd.today ? <View style={{ position: 'absolute', top: '100%', marginTop: 5, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accent }} /> : null}
             </View>
-          </Pressable>;
+          </Tappable>;
         })}
       </View>
     </GestureDetector>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
-import { PixelRatio, Pressable, View } from 'react-native';
+import { PixelRatio, View } from 'react-native';
+import { Tappable } from '@/components/tappable';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText, TextPath, TSpan } from 'react-native-svg';
 import { KitText } from '@/components/themed-text';
@@ -102,7 +103,8 @@ export function AuroraHero(p: AuroraProps) {
     </Animated.View>
     {L.targets.map(tg => {
       const pl = view.pillars[tg.pillar];
-      return <Pressable key={tg.pillar} onPress={() => p.onFocus(focus === tg.pillar ? -1 : tg.pillar)} accessibilityRole="button"
+      // The arc itself shows the tap: the chosen pillar lights up and the others fade.
+      return <Tappable dim="none" key={tg.pillar} onPress={() => p.onFocus(focus === tg.pillar ? -1 : tg.pillar)} accessibilityRole="button"
         accessibilityLabel={pl.spoken} accessibilityState={{ selected: focus === tg.pillar }} testID={`home-hero-arc-${pl.key}`}
         style={{ position: 'absolute', left: tg.x, top: tg.y, width: tg.w, height: tg.h, borderRadius: 23 }} />;
     })}

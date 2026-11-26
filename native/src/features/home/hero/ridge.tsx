@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { Tappable } from '@/components/tappable';
 import { SvgXml } from 'react-native-svg';
 import { t } from '@/i18n/en';
 import { HERO_H } from './camera';
@@ -93,7 +94,8 @@ export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, la
     <View accessible accessibilityRole="summary" accessibilityLabel={view.label} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }}>
       <SvgXml xml={xml} width={W} height={H} />
     </View>
-    {labels ? xs.map((x, i) => <Pressable key={i} onPress={() => setFocus(f => f === i ? -1 : i)} accessibilityRole="button"
+    {/* The peak itself shows the tap: the chosen pillar lights up and the others fade. */}
+    {labels ? xs.map((x, i) => <Tappable dim="none" key={i} onPress={() => setFocus(f => f === i ? -1 : i)} accessibilityRole="button"
       accessibilityLabel={view.pillars[i].spoken} accessibilityState={{ selected: focus === i }} testID={`home-hero-peak-${view.pillars[i].key}`}
       style={{ position: 'absolute', left: x - 64, top: yb + 20, width: 128, height: 62 }} />) : null}
   </View>;
