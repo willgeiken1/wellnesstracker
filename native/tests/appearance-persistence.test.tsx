@@ -19,7 +19,8 @@ test('theme and accent persist through provider restart and reset across owner r
  await view.unmount();view=await render(<ThemeProvider repository={a}><Appearance/></ThemeProvider>);
  expect(screen.getByRole('radio',{name:'Light'})).toBeChecked();expect(pal('moonlightDusk')).toBeChecked();
  await view.rerender(<ThemeProvider repository={b}><Appearance/></ThemeProvider>);
- expect(screen.getByRole('radio',{name:'System'})).toBeChecked();expect(pal(DEFAULT_PALETTE)).toBeChecked();
+ // A fresh install starts on Dark, as in the final mockup.
+ expect(screen.getByRole('radio',{name:'Dark'})).toBeChecked();expect(pal(DEFAULT_PALETTE)).toBeChecked();
 });
 test('an accent saved before themes opens as its closest theme, and a pick is saved in the same setting',async()=>{
  const repo=settingsRepository();repo.save('settings',{theme_override:'dark',accent:'sand',rest_seconds:90});

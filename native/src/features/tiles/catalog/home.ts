@@ -281,7 +281,7 @@ const allHomeTiles: TilePageConfig = {
 };
 
 /** Tiles only Apple Health fills. Android has no Apple Health in v1, so there Home neither offers nor starts with them. */
-export const APPLE_ONLY_TILES: readonly string[] = ['active', 'exercise', 'bodyFat', 'water', 'mindful'];
+export const APPLE_ONLY_TILES: readonly string[] = ['active', 'exercise', 'bodyFat', 'mindful'];
 const withoutAppleOnly = (cfg: TilePageConfig): TilePageConfig => ({
   ...cfg,
   defaults: cfg.defaults.filter(([id]) => !APPLE_ONLY_TILES.includes(id)),

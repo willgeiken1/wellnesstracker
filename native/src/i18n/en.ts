@@ -1074,7 +1074,7 @@ export const en = {
   trainingExercises: 'Exercises', trainingReplacedWith: 'Replaced with {name}', trainingAddedTo: '{n} added to {name}', trainingAddedOne: '{name} added', trainingAddedMany: '{n} exercises added',
   trainingOther: 'Other', trainingAdded: 'Added', trainingAddN: 'Add ({n})', trainingAddShort: 'Add', trainingSearchExercises: 'Search exercises', trainingFilterMuscle: 'Filter by muscle',
   trainingAll: 'All', trainingRecent: 'Recent', trainingResults_one: '1 result', trainingResults_other: '{n} results', trainingAllExercises: 'All exercises',
-  trainingCreate: 'Create “{name}”', trainingCreateSub: 'A custom exercise, added by name',
+  trainingCreate: 'Create “{name}”', trainingCreateSub: 'A custom exercise, saved to your library',
   trainingClose: 'Close', trainingRestLeft: 'Rest time left', trainingReady: 'ready', trainingOfTime: 'of {time}', trainingDefaultRestFor: 'Default rest for {name}', trainingPickLength: 'Pick a length to start',
   trainingSkipRest: 'Skip rest', trainingStartRest: 'Start rest', trainingRestForName: 'Rest for {name}', trainingLength: 'Length', trainingRestLength: 'Rest length', trainingRestChip: '{time} rest',
   trainingRestFoot: 'The timer keeps running while you use other apps, with a gentle buzz at zero.',

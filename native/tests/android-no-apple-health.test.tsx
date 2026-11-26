@@ -37,7 +37,7 @@ test('on Android the tile tray offers Steps and Sleep but none of the Apple Heal
     const { tilePage } = require('../src/features/tiles/registry') as typeof import('../src/features/tiles/registry');
     const home = tilePage('home'), offered = home.tiles.map(d => d.id), starts = home.defaults.map(([id]) => id);
     for (const id of RING_TILES) expect(offered).toContain(id);
-    for (const id of ['active', 'exercise', 'bodyFat', 'water', 'mindful']) {
+    for (const id of ['active', 'exercise', 'bodyFat', 'mindful']) {
       expect(offered).not.toContain(id);
       expect(starts).not.toContain(id);
     }

@@ -6,7 +6,7 @@ import { createTheme, paletteLocked, tokens, type Palette, type ThemeOverride } 
 import { DEFAULT_APPEARANCE, formatAppearance, parseAppearance, PRESETS, presetOf, type BarLook, type Intensity, type KeypadLook, type Looks, type Motion, type Preset, type RingLook, type SelectorLook } from './looks';
 
 function useThemeState(repository?: Repository | null) {
-  const [override, updateOverride] = useState<ThemeOverride>('system');
+  const [override, updateOverride] = useState<ThemeOverride>('dark');
   const [appearance, updateAppearance] = useState<Looks>(DEFAULT_APPEARANCE);
   const palette = appearance.palette;
   const [persistenceError, setPersistenceError] = useState(false);
@@ -17,7 +17,8 @@ function useThemeState(repository?: Repository | null) {
       try {
         const row = repository?.list('settings').sort(compareRows).at(-1);
         const theme = row?.data.theme_override, color = row?.data.accent;
-        updateOverride(theme === 'light' || theme === 'dark' ? theme : 'system');
+        // A new install starts dark, as Insight is designed; choosing System follows the iPhone.
+        updateOverride(theme === 'light' || theme === 'dark' || theme === 'system' ? theme : 'dark');
         // Palette and looks live in the existing `accent` setting, so older saved accents still resolve.
         updateAppearance(parseAppearance(color));
         updateTrueBlack(typeof color === 'string' && color.split(';').includes('black=1'));

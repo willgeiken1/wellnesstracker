@@ -19,6 +19,8 @@ const ALLOWLIST: { file: string; line: number; reason: string }[] = [
   // The final mockup Will approved on Nov 25 2026 replaces INS-03 for eyebrows: `.eyebrow` and `.ph .eb` are tracked small
   // capitals (the "RECENT" label in Log food, a tab's date line). The kit keeps that one style in this single constant.
   { file: "components/kit-style.ts", line: 35, reason: "final mockup eyebrow capitals, kept in one kit constant" },
+  // The final mockup tracks the typed DELETE in Delete account (`.st-type input`, letter-spacing .12em at 20 pt).
+  { file: "features/settings/more-pages.tsx", line: 119, reason: "final mockup tracks the typed DELETE confirmation" },
 ];
 
 function findSourceFiles(dir: string, extensions = /\.(tsx?|jsx?)$/): string[] {

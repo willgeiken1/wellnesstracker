@@ -29,6 +29,7 @@ import { LocalDataRecovery } from '../auth/screens';
 import { setAndroidCopy, t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
 import { PrivacyCover } from '@/features/privacy-lock/cover';
+import { useRestLiveActivity } from '@/features/workout/live-activity';
 
 import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
 void SplashScreen.preventAutoHideAsync();
@@ -68,6 +69,8 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
     </Stack>
   </NavigationThemeProvider>;
 }
+/** Keeps the Lock Screen rest timer in step from launch, so a rest that ended while the app was closed doesn't linger. */
+function RestLiveActivity() { useRestLiveActivity(); return null; }
 function Application() {
   const auth = useAuth();
   useEffect(()=>{
@@ -83,6 +86,7 @@ function Application() {
     <TelemetryRuntime userId={auth.session?.user.id} />
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
+    {auth.ready && <RestLiveActivity />}
     {auth.ready && <PrivacyCover access={!!auth.session || auth.demo || auth.phoneOnly === true} />}
   </ThemeProvider>;
 }
