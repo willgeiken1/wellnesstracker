@@ -39,8 +39,11 @@ const openRange = () => router.push({ pathname: '/settings/[section]', params: {
 /* ---------- Privacy center ---------- */
 export function PrivacyCenterPage() {
   const auth = useAuth(), phone = auth.phoneOnly;
-  let photos = 0;
+  // The plan's name and the saved meal count are said where there are any, as the design words these lines.
+  let photos = 0, saved = 0, plan = '';
   try { photos = auth.repository ? readPhotos(auth.repository).length : 0; } catch { photos = 0; }
+  try { saved = auth.repository ? combos(auth.repository).length : 0; } catch { saved = 0; }
+  try { plan = (auth.repository?.localGet<string>('plans:name') || '').trim(); } catch { plan = ''; }
   return <SetPage back={st('settingsPrivacyShort')} title={st('settingsPrivacyCenter')} testID="settings-privacy-center">
     <Hero tint icon="shield" color="success" title={st('settingsWhatWeStore')} body={st('settingsWhatWeStoreBody')} />
     <H>{st('settingsOnlyOnIphone')}</H>
@@ -51,8 +54,8 @@ export function PrivacyCenterPage() {
     </Panel>
     <H>{st(phone ? 'settingsAlsoOnIphone' : 'settingsInAccount')}</H>
     <Panel>
-      <Info first icon="workouts" color="training" title={st('settingsPcWorkouts')} sub={st('settingsPcWorkoutsSub')} />
-      <Info icon="food" color="food" title={st('settingsPcFood')} sub={st('settingsPcFoodSub')} />
+      <Info first icon="workouts" color="training" title={st('settingsPcWorkouts')} sub={plan ? st('settingsPcWorkoutsPlanSub', { plan }) : st('settingsPcWorkoutsSub')} />
+      <Info icon="food" color="food" title={st('settingsPcFood')} sub={saved > 1 ? st('settingsPcFoodNSub', { n: saved }) : st('settingsPcFoodSub')} />
       <Info icon="scale" color="accent" title={st('settingsPcBody')} sub={st('settingsPcBodySub')} />
       <Info icon="routines" color="sleep" title={st('settingsPcRoutines')} sub={st('settingsPcRoutinesSub')} />
       <Info icon="ring" color="recovery" title={st('settingsPcOura')} sub={st('settingsPcOuraSub')} />
@@ -90,6 +93,8 @@ export function DeleteAccountPage() {
   let saved = 0, photos = 0;
   try { saved = auth.repository ? combos(auth.repository).length : 0; } catch { saved = 0; }
   try { photos = auth.repository ? readPhotos(auth.repository).length : 0; } catch { photos = 0; }
+  let plan = '';
+  try { plan = (auth.repository?.localGet<string>('plans:name') || '').trim(); } catch { plan = ''; }
   const final = () => {
     if (going.current || !ok || !auth.deleteAccount) return;
     going.current = true; setBusy(true); setFailure(null);
@@ -122,7 +127,7 @@ export function DeleteAccountPage() {
       </> : <>
         <Gap />
         <Panel>
-          <Info first icon="workouts" color="training" title={st('settingsDel1')} />
+          <Info first icon="workouts" color="training" title={st('settingsDel1')} value={plan || undefined} />
           <Info icon="food" color="food" title={st('settingsDel2')} value={saved ? st('settingsNSavedMeals', { n: saved }) : undefined} />
           <Info icon="scale" color="accent" title={st('settingsDel3')} value={photos ? st('settingsNPhotos', { n: photos }) : undefined} />
           <Info icon="routines" color="sleep" title={st('settingsDel4')} />

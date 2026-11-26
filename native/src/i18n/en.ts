@@ -1606,6 +1606,8 @@ export const en = {
   settingsRemHeroLater: 'Reminders arrive with notifications in a later version. Nothing here is sent yet.',
   settingsPlateLbA11y: '{n} pound plates', settingsPlateKgA11y: '{n} kilogram plates',
   settingsMapReset: 'Reset Insight map', settingsMapResetToast: 'Insight map is back to its defaults',
+  // FC settings final polish
+  settingsPcWorkoutsPlanSub: 'Sets, reps, weights and your {plan} plan.', settingsPcFoodNSub: 'Meals, water and {n} saved meals.',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
