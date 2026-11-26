@@ -13,6 +13,7 @@ import { useOura } from '@/features/health/use-oura';
 import { readProfile } from '@/features/onboarding/model';
 import { st } from './copy';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
+import { AvatarPhoto, useProfilePhoto } from './avatar-photo';
 import { GROUPS, SECTIONS, searchSettings, type SectionId } from './sections';
 
 export const APP_VERSION = `${Constants.expoConfig?.version ?? '1.0'} (${Constants.expoConfig?.ios?.buildNumber ?? '1'})`;
@@ -30,6 +31,7 @@ export function Avatar({ name, size }: { name: string; size: number }) {
   const end = mix(k.c.training, k.c.accent, 0.7);
   const initial = name ? name.charAt(0).toLocaleUpperCase() : '';
   const id = 'st-av' + useId().replace(/[^a-zA-Z0-9]/g, '');
+  const photo = useProfilePhoto();
   return <View accessible={false} style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
     <Svg width={size} height={size} viewBox="0 0 60 60" style={{ position: 'absolute' }}>
       <Defs><RadialGradient id={id} cx="12" cy="6" r="72" gradientUnits="userSpaceOnUse">
@@ -43,6 +45,7 @@ export function Avatar({ name, size }: { name: string; size: number }) {
       {initial ? <KitText weight={700} size={Math.round(size * 0.42)} tracking={-0.03} color="on-accent">{initial}</KitText>
         : <Icon name="person" size={Math.round(size * 0.46)} color={k.c['on-accent']} />}
     </View>
+    {photo ? <AvatarPhoto uri={photo} size={size} /> : null}
   </View>;
 }
 
