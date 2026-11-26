@@ -22,7 +22,7 @@ export function TextField({ label, unit, testID, onFocus, onBlur, ...input }: In
       <TextInput accessibilityLabel={label} {...input} allowFontScaling maxFontSizeMultiplier={0}
         placeholderTextColor={k.tint(k.c['text-muted'], 0.78)} selectionColor={k.c.accent} cursorColor={k.c.accent}
         onFocus={e => { setFocused(true); onFocus?.(e); }} onBlur={e => { setFocused(false); onBlur?.(e); }}
-        style={[font(600, 17), { flex: 1, minWidth: 0, color: k.c.text, paddingTop: 2, paddingBottom: 0, paddingHorizontal: 0, minHeight: 26 }]} />
+        style={[font(600, 17), { flex: 1, minWidth: 0, color: k.c.text, paddingTop: 2, paddingBottom: 0, paddingHorizontal: 0, minHeight: 24 }]} />
       {unit ? <KitText weight={600} size={14} color="text-muted" style={{ flexShrink: 0 }}>{unit}</KitText> : null}
     </View>
   </View>;
