@@ -84,7 +84,7 @@ export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, la
     v: s.x.v.map(v => Math.max(0, Math.min(1.08, v))),
     met: s.x.v.map((v, i) => view.pillars[i].met && !view.pillars[i].rest ? smooth(0.955, 0.998, v) : 0),
     tok: view.pillars.map((p, i) => p.rest ? [[t('homeHeroRest'), 'v', 0]] : settled(s, 'a', i) || kinds[i] === 'mask' ? p.arc : tokens(kinds[i], s.x.a[i])),
-    pct: String(Math.round(Math.max(0, s.x.p[0]))), r: rr, ta: a.r0 < 0 ? 1 : outCubic(((now - a.r0) / a.rDur - 0.12) / 0.55), f: s.x.f.slice(),
+    pct: view.empty ? '' : String(Math.round(Math.max(0, s.x.p[0]))), r: rr, ta: a.r0 < 0 ? 1 : outCubic(((now - a.r0) / a.rDur - 0.12) / 0.55), f: s.x.f.slice(),
   };
   const xml = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${ridgeScene(W, H, state, K, { uid: 'rg', detail, labels, glow })}</svg>`;
   const { xs, yb } = ridgePeaks(W, H);

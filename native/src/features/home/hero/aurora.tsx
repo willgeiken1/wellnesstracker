@@ -115,8 +115,9 @@ export function AuroraHero(p: AuroraProps) {
           </Svg>
           <KitText weight={600} size={12.5} lineHeight={1} color={allMet ? 'text' : 'text-muted'}>{view.caption}</KitText>
         </View>
-        <KitText weight={700} size={46} lineHeight={0.84} tracking={-0.045} numeric color={empty ? 'text-muted' : 'text'}
-          style={{ paddingTop: 2, textShadowColor: p.mode === 'dark' ? sky.deep : 'transparent', textShadowRadius: 9 }}>{String(view.pct)}</KitText>
+        {/* An empty day has no score: nothing logged is never drawn as 0. */}
+        {empty ? null : <KitText weight={700} size={46} lineHeight={0.84} tracking={-0.045} numeric
+          style={{ paddingTop: 2, textShadowColor: p.mode === 'dark' ? sky.deep : 'transparent', textShadowRadius: 9 }}>{String(view.pct)}</KitText>}
       </Animated.View>
       <Animated.View style={[{ position: 'absolute', bottom: 0, alignItems: 'center', gap: 6 }, pdStyle]} accessibilityLiveRegion="polite"
         importantForAccessibility={fp ? 'auto' : 'no-hide-descendants'} accessibilityElementsHidden={!fp} testID="home-hero-detail">

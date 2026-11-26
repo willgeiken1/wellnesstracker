@@ -1,6 +1,6 @@
 import { Canvas, Picture, Skia, type SkPicture } from '@shopify/react-native-skia';
 import { useEffect, useRef, useState } from 'react';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, useExclusiveGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { AuroraScene } from './aurora-scene';
 import { HERO_H } from './camera';
@@ -83,14 +83,18 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
   const onStart = () => { if (p.reduceMotion) return; motion.dragging = true; drag.current.a0 = motion.az; invalidate(); };
   const onMove = (dx: number) => { if (!motion.dragging) return; motion.az = Math.max(-0.5, Math.min(0.5, drag.current.a0 - dx * 0.005)); invalidate(); };
   const onEnd = () => { motion.dragging = false; motion.rest(); invalidate(); };
-  const pan = Gesture.Pan().activeOffsetX([-8, 8]).failOffsetY([-10, 10])
-    .onBegin(() => { runOnJS(begin)(); })
-    .onStart(() => { runOnJS(onStart)(); })
-    .onUpdate(e => { runOnJS(onMove)(e.translationX); })
-    .onFinalize(() => { runOnJS(onEnd)(); });
-  const tap = Gesture.Tap().onEnd(() => { runOnJS(p.onTapSky)(); });
+  const onTapSky = p.onTapSky;
+  const pan = usePanGesture({
+    activeOffsetX: [-8, 8], failOffsetY: [-10, 10],
+    onBegin: () => { 'worklet'; runOnJS(begin)(); },
+    onActivate: () => { 'worklet'; runOnJS(onStart)(); },
+    onUpdate: e => { 'worklet'; runOnJS(onMove)(e.translationX); },
+    onFinalize: () => { 'worklet'; runOnJS(onEnd)(); },
+  });
+  const tap = useTapGesture({ maxDistance: 6, onActivate: () => { 'worklet'; runOnJS(onTapSky)(); } });
+  const gesture = useExclusiveGestures(pan, tap);
 
-  return <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
+  return <GestureDetector gesture={gesture}>
     <Canvas style={{ position: 'absolute', left: 0, top: 0, width, height: HERO_H }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {pic ? <Picture picture={pic} /> : null}
     </Canvas>

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { KitText } from '@/components/themed-text';
@@ -45,10 +45,12 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
 
   const pick = (x: number) => { const i = dayAt(x, RW); if (i !== sel) onSelect(i); };
   const settle = () => { dragging.value = 0; selX.value = reduceMotion ? sel : withTiming(sel, { duration: 500, easing: Easing.bezier(0.34, 1.3, 0.5, 1) }); };
-  const pan = Gesture.Pan().activeOffsetX([-6, 6]).failOffsetY([-12, 12])
-    .onStart(e => { dragging.value = 1; runOnJS(pick)(e.x); })
-    .onUpdate(e => { if (!reduceMotion) selX.value = Math.max(0, Math.min(6, e.x / RW * 7 - 0.5)); runOnJS(pick)(e.x); })
-    .onFinalize(() => { runOnJS(settle)(); });
+  const pan = usePanGesture({
+    activeOffsetX: [-6, 6], failOffsetY: [-12, 12],
+    onActivate: e => { 'worklet'; dragging.value = 1; runOnJS(pick)(e.x); },
+    onUpdate: e => { 'worklet'; if (!reduceMotion) selX.value = Math.max(0, Math.min(6, e.x / RW * 7 - 0.5)); runOnJS(pick)(e.x); },
+    onFinalize: () => { 'worklet'; runOnJS(settle)(); },
+  });
 
   const defs = <Defs>
     <LinearGradient id="hwGlobe" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor={sky.globeA} /><Stop offset="1" stopColor={sky.globeB} stopOpacity={0} /></LinearGradient>

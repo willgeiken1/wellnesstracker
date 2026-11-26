@@ -35,7 +35,7 @@ export function PlainHero({ view, colors, reduceMotion }: { view: HeroView; colo
       </Svg>
       <KitText weight={600} size={13} lineHeight={1} color="text-muted">{view.caption}</KitText>
     </View>
-    <KitText weight={700} size={60} lineHeight={1} tracking={-0.045} numeric style={{ marginTop: 8 }}>{String(view.pct)}</KitText>
+    {view.empty ? <View style={{ height: 68 }} /> : <KitText weight={700} size={60} lineHeight={1} tracking={-0.045} numeric style={{ marginTop: 8 }}>{String(view.pct)}</KitText>}
     <View style={{ alignSelf: 'stretch', flexDirection: 'row', gap: 14, marginTop: 26 }}>
       {view.pillars.map((p, i) => <View key={p.key} style={{ flex: 1, minWidth: 0 }}>
         <KitText weight={700} size={11} lineHeight={1} tracking={0.13} color={KEYS[i]} style={capitals}>{p.label}</KitText>
