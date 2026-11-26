@@ -1,4 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { DepartureFailure } from '@/auth/sign-out';
+import { syncBeforeSignOut } from '@/auth/sign-out-sync';
+import { SyncRecovery } from '@/auth/sync-recovery';
+import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Badge, Chip, Eyebrow, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
@@ -67,7 +71,7 @@ export function GoalsPage() {
   return <SetPage back={st('settings')} title={st('settingsGoalsTitle')} testID="settings-goals">
     <H first>{st('settingsDailyTargets')}</H>
     <List footer={st('settingsTargetsFoot')}>
-      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: kj ? `${formatNumber(g.eaten * 4.184)} kJ` : formatNumber(g.eaten) }) : undefined}
+      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: kj ? `${formatNumber(g.eaten * 4.184)} kJ` : `${formatNumber(g.eaten)} kcal` }) : undefined}
         right={<Stepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
         step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''}
         onChange={v => { const next = kj ? Math.round(v / 4.184) : v; if (repo) save(() => saveFoodTarget(repo, 'kcal', next)); else set('goals.kcal', next); }} />} />
@@ -194,6 +198,25 @@ export function AccountPage() {
   const auth = who.auth;
   const syncs = !!auth.session && !auth.phoneOnly;
   const relay = /privaterelay\.appleid\.com$/i.test(who.email);
+  const [error, setError] = useState<'signOutFailed' | 'signOutNotStarted' | null>(null);
+  const busy = useRef(false);
+  const leave = async (discard: boolean) => {
+    if (busy.current) return; busy.current = true;
+    try { await (discard ? auth.signOut(true) : auth.signOut()); showToast(st('settingsSignedOut')); }
+    catch (cause) { setError(cause instanceof DepartureFailure ? 'signOutFailed' : 'signOutNotStarted'); }
+    finally { busy.current = false; }
+  };
+  /* Sync first; when changes would be lost, say how many and ask again (the sign-out rules in auth/screens). */
+  const signOut = async () => {
+    if (busy.current) return; busy.current = true; setError(null);
+    let count = 0;
+    try { await (auth.prepareSignOut ? auth.prepareSignOut() : syncBeforeSignOut(auth.syncNow)); count = auth.repository?.unsyncedCount() ?? auth.pending; }
+    catch (cause) { busy.current = false; setError(cause instanceof DepartureFailure ? 'signOutFailed' : 'signOutNotStarted'); return; }
+    busy.current = false;
+    if (count === 0) { void leave(false); return; }
+    actionSheet({ title: t('signOutConfirm'), message: `${t('signOutBody')} ${signOutUnsynced(count)}`, cancel: t('signOutWait'),
+      acts: [{ label: t('signOutAnyway'), destructive: true, onPress: () => { void leave(true); } }] });
+  };
   return <SetPage back={st('settings')} title={st('settingsAccountTitle')} testID="settings-account">
     <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
       <Avatar name={who.name || who.email} size={92} />
@@ -225,10 +248,16 @@ export function AccountPage() {
         onPress={() => showToast(st('settingsUsingIphone'))} right={<Badge label={st('settingsThisDevice')} color="accent" />} />
     </List>
     <Gap />
-    {auth.demo ? <List><ListRow title={st('settingsBackToLog')} chevron={false} onPress={() => { void auth.signOut(); router.replace('/'); }} /></List>
+    {auth.demo ? <List>
+        {!auth.phoneOnly && auth.configured ? <ListRow title={t('createAccount')} onPress={() => router.push('/onboarding')} /> : null}
+        {!auth.phoneOnly && auth.configured ? <ListRow title={t('haveAccount')} onPress={() => router.push('/sign-in')} /> : null}
+        <ListRow title={st('settingsBackToLog')} chevron={false} onPress={() => { void auth.signOut(); router.replace('/'); }} />
+      </List>
       : auth.session ? <List><ListRow title={st('settingsSignOut')} danger chevron={false} onPress={() => actionSheet({ title: st('settingsSignOutQ'), message: st('settingsSignOutMsg'),
-        acts: [{ label: st('settingsSignOut'), destructive: true, onPress: () => { void auth.signOut(); showToast(st('settingsSignedOut')); } }] })} /></List>
+        acts: [{ label: st('settingsSignOut'), destructive: true, onPress: () => { void signOut(); } }] })} /></List>
       : <List><ListRow title={st('settingsLookAround')} sub={st('settingsLookAroundSub')} onPress={() => { auth.lookAround(); router.replace('/'); }} /></List>}
+    {error ? <KitText weight={500} size={13} color="danger" accessibilityRole="alert" style={{ marginTop: 8, marginHorizontal: 16 }}>{t(error)}</KitText> : null}
+    {syncs ? <SyncRecovery repository={auth.repository} /> : null}
   </SetPage>;
 }
 
@@ -310,7 +339,7 @@ export function UnitsPage() {
   const weeks = [{ v: 'mon' as const, l: 'Monday' }, { v: 'sun' as const, l: 'Sunday' }, { v: 'sat' as const, l: 'Saturday' }];
   const order = { mon: ['Monday', 'Sunday'], sun: ['Sunday', 'Saturday'], sat: ['Saturday', 'Friday'] }[u.week];
   const sample = [wt(182.1, p), u.height === 'cm' ? '180 cm' : '5 ft 11 in', u.energy === 'kJ' ? '5,190 kJ' : '1,240 kcal', u.water === 'ml' ? '1,680 mL' : '57 oz',
-    u.distance === 'km' ? '5.8 km' : '3.6 mi', clock('4:10 PM', p)];
+    u.distance === 'km' ? '5.8 km' : '3.6 mi', clock(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), p)];
   return <SetPage back={st('settings')} title={st('settingsUnitsTitle')} testID="settings-units">
     <View style={{ height: 8 }} />
     <List>

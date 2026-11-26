@@ -6,7 +6,10 @@ import { Button, Icon, KitText, List, ListFooter, ListRow, SegmentedControl, She
 import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { iconArt, iconId } from './app-icon';
+import { readPhotos } from '@/features/progress/local';
 import { st } from './copy';
+import { AccountDeletionFailed, AccountDeletionUncertain, DepartureFailure } from '@/auth/sign-out';
+import { t } from '@/i18n/en';
 import { useDataActions } from './data-actions';
 import { RANGE_KINDS, canDeleteKind, deleteDateRange, isoDay, type RangeKind } from './delete-range';
 import { APP_VERSION } from './home';
@@ -34,13 +37,15 @@ const openRange = () => router.push({ pathname: '/settings/[section]', params: {
 
 /* ---------- Privacy center ---------- */
 export function PrivacyCenterPage() {
-  const phone = useAuth().phoneOnly;
+  const auth = useAuth(), phone = auth.phoneOnly;
+  let photos = 0;
+  try { photos = auth.repository ? readPhotos(auth.repository).length : 0; } catch { photos = 0; }
   return <SetPage back={st('settingsPrivacyShort')} title={st('settingsPrivacyCenter')} testID="settings-privacy-center">
     <Hero tint icon="shield" color="success" title={st('settingsWhatWeStore')} body={st('settingsWhatWeStoreBody')} />
     <H>{st('settingsOnlyOnIphone')}</H>
     <Panel>
       <Info first icon="heart" color="danger" title={st('settingsPcHealth')} sub={st('settingsPcHealthSub')} />
-      <Info icon="camera" color="accent-2" title={st('settingsPcPhotos')} sub={st('settingsPcPhotosSub')} />
+      <Info icon="camera" color="accent-2" title={st('settingsPcPhotos')} sub={st('settingsPcPhotosSub')} value={photos ? st('settingsNPhotos', { n: photos }) : undefined} />
       <Info icon="faceid" color="success" title={st('settingsFaceId')} sub={st('settingsPcFaceIdSub')} />
     </Panel>
     <H>{st(phone ? 'settingsAlsoOnIphone' : 'settingsInAccount')}</H>
@@ -74,15 +79,17 @@ export function DeleteAccountPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<'deleteAccountUncertain' | 'deleteAccountFailed' | 'signOutFailed' | null>(null);
   const going = useRef(false);
   const can = !!auth.deleteAccount && !!auth.session;
   const ok = typed.trim().toUpperCase() === 'DELETE';
   const { backup } = useDataActions();
   const final = () => {
     if (going.current || !ok || !auth.deleteAccount) return;
-    going.current = true; setBusy(true);
+    going.current = true; setBusy(true); setFailure(null);
     void auth.deleteAccount().then(() => { router.replace('/'); showToast(st('settingsDeletedAccount')); })
-      .catch(() => { showToast(st('deleteAccountFailed'), { color: 'warning' }); })
+      .catch((cause: unknown) => { setFailure(cause instanceof AccountDeletionUncertain ? 'deleteAccountUncertain' : cause instanceof AccountDeletionFailed ? 'deleteAccountFailed'
+        : cause instanceof DepartureFailure ? 'signOutFailed' : 'deleteAccountUncertain'); })
       .finally(() => { going.current = false; setBusy(false); });
   };
   const eyebrow = (n: number) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -100,6 +107,7 @@ export function DeleteAccountPage() {
           <TextInput testID="delete-type" value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} spellCheck={false} autoFocus
             accessibilityLabel={st('settingsTypeDelete')} style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: 2.4, paddingTop: 4, color: k.c.text, minHeight: 36 }} />
         </View>
+        {failure ? <KitText weight={500} size={13} color="danger" accessibilityRole="alert" style={{ marginTop: 10 }}>{t(failure)}</KitText> : null}
         {!can && <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 10 }}>{st('settingsDeleteNoAccount')}</KitText>}
         <View style={{ gap: 10, marginTop: 22 }}>
           <Button testID="delete-final" label={st('settingsDeletePermanently')} variant="destructive" full disabled={!ok || !can || busy} busy={busy} onPress={final} />
@@ -172,8 +180,8 @@ export function DeleteRangePage() {
     <KitText weight={500} size={14.5} lineHeight={1.5} color="text-muted" style={{ marginTop: 2, marginHorizontal: 4, marginBottom: 4 }}>{st('settingsRangeLead')}</KitText>
     <List>
       <PickRow title={st('settingsDates')} value={preset} options={opts} onPick={setPreset} />
-      <PickRow title={st('settingsFrom')} value={preset} options={opts} onPick={setPreset} short={() => dayLabel(from)} />
-      <PickRow title={st('settingsTo')} value={preset} options={opts} onPick={setPreset} short={() => dayLabel(to)} />
+      <PickRow title={st('settingsFrom')} value={preset} options={opts} onPick={setPreset} short={() => dayLabel(from)} chevron />
+      <PickRow title={st('settingsTo')} value={preset} options={opts} onPick={setPreset} short={() => dayLabel(to)} chevron />
     </List>
     <H>{st('settingsWhatToDelete')}</H>
     <List footer={st('settingsRangeFoot')}>

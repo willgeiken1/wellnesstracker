@@ -62,8 +62,9 @@ export function Hero({ icon, color, title, body, tint }: { icon: IconName; color
 
 export type MenuOption<T> = { v: T; l: string };
 /** A value row with ⌃⌄ that opens a menu of choices with a check on the current one (`pick` + `openMenu`, UIMenu). */
-export function PickRow<T extends string | number>({ title, sub, value, options, onPick, short, testID }: {
+export function PickRow<T extends string | number>({ title, sub, value, options, onPick, short, testID, chevron }: {
   title: string; sub?: string; value: T; options: readonly MenuOption<T>[]; onPick: (v: T) => void; short?: (v: T) => string; testID?: string;
+  /** Show a chevron instead of ⌃⌄ (the From and To rows of Delete a date range). */ chevron?: boolean;
 }) {
   const k = useKit();
   const anchor = useRef<{ measureInWindow(cb: (x: number, y: number, w: number, h: number) => void): void } | null>(null);
@@ -71,9 +72,9 @@ export function PickRow<T extends string | number>({ title, sub, value, options,
   const label = short ? short(value) : options.find(o => String(o.v) === String(value))?.l ?? String(value);
   const open = () => anchor.current?.measureInWindow((x, y, w, h) => setAt({ x, y, w, h }));
   return <View ref={anchor as never} collapsable={false}>
-    <ListRow testID={testID} title={title} sub={sub} chevron={false} onPress={open} accessibilityHint={label}
+    <ListRow testID={testID} title={title} sub={sub} onPress={open} accessibilityHint={label}
       value={<KitText weight={700} size={15} tracking={-0.01} numeric color="text-muted" numberOfLines={1} style={{ maxWidth: 170 }}>{label}</KitText>}
-      right={<View style={{ marginLeft: -6 }}><Icon name="updown" size={14} color={k.c.ghost} /></View>} />
+      right={chevron ? undefined : <View style={{ marginLeft: -6 }}><Icon name="updown" size={14} color={k.c.ghost} /></View>} chevron={!!chevron} />
     <Menu at={at} title={title} options={options} value={value} onClose={() => setAt(null)} onPick={v => { setAt(null); onPick(v); }} />
   </View>;
 }
