@@ -34,6 +34,15 @@ export const DISTANCES = {
   /** The selected tab icon lands from this scale. */ popFrom: 0.78,
 } as const;
 
+/** How a tab page arrives (motion.css, tabs): it fades in over 180 ms after 40 ms while it rises 8 pt on the tab spring. A page's
+ * first visit after the app has shown another tab only fades, 180 ms at once, while its own items settle (Home always rises).
+ * Under Reduce Motion it is a 200 ms fade. The page that leaves fades out in 110 ms underneath. */
+export function tabArrival(firstVisit: boolean, home: boolean, reduced: boolean): { fade: number; delay: number; rise: number } {
+  if (reduced) return { fade: FADES.reduced, delay: 0, rise: 0 };
+  if (firstVisit && !home) return { fade: FADES.tab, delay: 0, rise: 0 };
+  return { fade: FADES.tab, delay: FADES.tabDelay, rise: DISTANCES.tabRise };
+}
+
 /** An Animated.spring config for one of the kit's springs. */
 export function springConfig(name: SpringName, toValue: number, useNativeDriver = true): Animated.SpringAnimationConfig {
   const { mass, stiffness, damping } = SPRINGS[name];

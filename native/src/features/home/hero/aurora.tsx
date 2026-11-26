@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { PixelRatio, View } from 'react-native';
+import { FadeG, FadeUp, useCountTo } from './text-motion';
 import { Tappable } from '@/components/tappable';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import Svg, { Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText, TextPath, TSpan } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop, Text as SvgText, TextPath, TSpan } from 'react-native-svg';
 import { KitText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
 import type { AuroraCanvasProps } from './aurora-canvas-impl';
@@ -63,12 +64,15 @@ export function AuroraHero(p: AuroraProps) {
   const muted = colors['text-muted'], text = colors.text, pc = KEYS.map(k => colors[k]);
   const allMet = view.allMet, empty = view.empty;
   const fp = focus >= 0 ? view.pillars[focus] : null;
+  // A day change moves the words too: the score counts to its new value, the caption fades up, each readout fades in.
+  const textAnim = p.animate && !p.reduceMotion;
+  const pct = useCountTo(view.pct, textAnim);
   const readout = (halo: boolean) => SLOT.map((pi, j) => {
     const pl = view.pillars[pi], rest = pi === 0 && view.rest, zero = !(pl.value > 0) && !rest;
     const name = pl.label.toUpperCase();
     const op = !p.labels ? 0 : focus >= 0 && focus !== pi ? 0.34 : 1;
     const stroke = halo ? { stroke: sky.halo, strokeOpacity: sky.haloAlpha, strokeWidth: 3.5, strokeLinejoin: 'round' as const } : {};
-    return <G key={`${halo}${pi}`} opacity={op}>
+    return <FadeG key={`${halo}${pi}`} k={`${name}|${pl.arc.map(a => a[0]).join(',')}`} opacity={op} animate={textAnim}>
       <SvgText textAnchor="middle" fontFamily={BODY} fontSize={9.5} letterSpacing={1.235} fill={pc[pi]} {...stroke}>
         <TextPath href="#heroLimbAbove" startOffset={L.valueAt[j]}>
           <TSpan>{name}</TSpan>{valueSpans(pl.arc, text, muted, zero)}
@@ -80,7 +84,7 @@ export function AuroraHero(p: AuroraProps) {
           <TSpan fontFamily={BODY} fontSize={10} letterSpacing={0} fill={pl.met ? pc[pi] : text} fillOpacity={pl.met ? 1 : 0.72}>{pl.cap}</TSpan>
         </TextPath>
       </SvgText>}
-    </G>;
+    </FadeG>;
   });
 
   return <View style={{ height: HERO_H, marginTop: 2, marginHorizontal: -16, marginBottom: -40 }} testID="home-hero-aurora">
@@ -115,11 +119,13 @@ export function AuroraHero(p: AuroraProps) {
             <Defs><LinearGradient id="heroCapPill" x1="0" y1="0" x2="1" y2="0"><Stop offset="0" stopColor={colors.training} /><Stop offset="0.5" stopColor={colors.sleep} /><Stop offset="1" stopColor={colors.food} /></LinearGradient></Defs>
             <Rect width={14} height={6} rx={3} fill="url(#heroCapPill)" />
           </Svg>
-          <KitText weight={600} size={12.5} lineHeight={1} color={allMet ? 'text' : 'text-muted'}>{view.caption}</KitText>
+          <FadeUp k={view.caption} animate={textAnim}>
+            <KitText weight={600} size={12.5} lineHeight={1} color={allMet ? 'text' : 'text-muted'}>{view.caption}</KitText>
+          </FadeUp>
         </View>
         {/* An empty day has no score: nothing logged is never drawn as 0. */}
         {empty ? null : <KitText weight={700} size={46} lineHeight={0.84} tracking={-0.045} numeric
-          style={{ paddingTop: 2, textShadowColor: p.mode === 'dark' ? sky.deep : 'transparent', textShadowRadius: 9 }}>{String(view.pct)}</KitText>}
+          style={{ paddingTop: 2, textShadowColor: p.mode === 'dark' ? sky.deep : 'transparent', textShadowRadius: 9 }}>{String(pct)}</KitText>}
       </Animated.View>
       <Animated.View style={[{ position: 'absolute', bottom: 0, alignItems: 'center', gap: 6 }, pdStyle]} accessibilityLiveRegion="polite"
         importantForAccessibility={fp ? 'auto' : 'no-hide-descendants'} accessibilityElementsHidden={!fp} testID="home-hero-detail">

@@ -96,9 +96,10 @@ test('the controls the acceptance review named dim at the right strength', () =>
   // Home opens Settings from the shell's profile button, which shows its press.
   expect(read('src/features/home/screen.tsx')).toMatch(/<ProfileButton\b/);
   expect(read('src/features/shell/profile-button.tsx')).toMatch(/<Tappable dim="none"[^>]*accessibilityLabel=\{t\('shellProfile'\)\}/);
-  // The floating bar's tabs and + button show a press by shrinking, as the mockup's shell does, rather than by dimming.
+  // The floating bar's tabs and + button show a press by shrinking, as the mockup's shell does, rather than by dimming: down in
+  // 90 ms and back on the press spring (features/shell/press.ts).
   const dock = read('src/features/shell/dock.tsx');
   expect(dock).toMatch(/<Tappable dim="none" testID=\{`tab-\$\{page\.route\}`\}/);
   expect(dock).toMatch(/<Tappable dim="none" testID="dock-plus"/);
-  expect(dock.match(/scale: pressed \? PRESS_SCALE/g)).toHaveLength(2);
+  expect(dock.match(/useSpringPress\(PRESS_SCALE, still\)/g)).toHaveLength(2);
 });

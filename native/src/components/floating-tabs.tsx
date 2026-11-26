@@ -8,6 +8,8 @@ import { tokens } from '@/design/tokens';
 import { ShellChrome } from '@/features/shell/shell';
 import { DOCK, dockBottom as shellDockBottom, pageEndSpace } from '@/features/shell/geometry';
 import { PAGES, pageLabel, type PageKey } from '@/features/shell/pages';
+import { TabScene, type SceneNavigation } from '@/features/shell/tab-scene';
+import { FADES } from './kit-motion';
 import { PRESSED_FILL_OPACITY } from './tappable';
 
 /** The open tab's circle, the other tabs, the room inside a pill and the gap between pieces of the bar. */
@@ -52,11 +54,17 @@ function DockInsets({ children }: { children: ReactNode }) {
   return <SafeAreaInsetsContext.Provider value={{ ...insets, bottom: dockSpace(insets.bottom) }}>{children}</SafeAreaInsetsContext.Provider>;
 }
 
+/** How long the navigator keeps the page that leaves attached: its 110 ms fade, with a frame to spare. */
+const TAB_HOLD = { animation: 'timing', config: { duration: FADES.tabOut + 30 } } as const;
+
 /** The tab pages behind the shell: Home, Training, Food, Progress and Routines on the floating bar. Insights has folded into
  * Progress; its route stays so old links land on Progress. */
 export function FloatingTabs() {
-  const { reduceMotion } = useTheme();
-  return <Tabs screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'fade' }} screenLayout={({ children }) => <DockInsets>{children}</DockInsets>}
+  // The pages move themselves (TabScene); the navigator only keeps the page that leaves on screen while it fades out.
+  return <Tabs screenOptions={{ headerShown: false, transitionSpec: TAB_HOLD }}
+    screenLayout={({ children, route, navigation }) => <DockInsets>
+      <TabScene routeKey={route?.key} name={route?.name} home={route?.name === 'index'} navigation={navigation as unknown as SceneNavigation}>{children}</TabScene>
+    </DockInsets>}
     tabBar={({ state, emitter, navigateToTab }) => <ShellChrome route={state.routes[state.index]?.name}
       goTo={(page: PageKey) => {
         const name = PAGES.find(p => p.key === page)!.route, route = state.routes.find(r => r.name === name);
