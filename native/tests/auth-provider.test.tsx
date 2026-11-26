@@ -732,3 +732,50 @@ test('Sign in with Apple signs in with the identity token and raw nonce, and rep
  await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');});
  expect(result).toBe('authFailed');
 });
+
+test('Continue with email signs in, or makes the account when that email has none, with one button', async () => {
+  const guest = fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: () => guest });
+  const fixture = clientFixture(null);
+  const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  // A returning person: the password works.
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'secret123'))).toBeNull();
+  expect(fixture.auth.signUp).not.toHaveBeenCalled();
+  // A new person: sign-in fails, so the account is made and the email waits for confirmation.
+  fixture.auth.signInWithPassword.mockResolvedValue({ error: { message: 'Invalid login credentials' } } as never);
+  expect(await act(async () => observed.continueWithEmail!('new@example.test', 'secret123'))).toBe('confirmEmail');
+  expect(fixture.auth.signUp).toHaveBeenLastCalledWith({ email: 'new@example.test', password: 'secret123' });
+  // An email that already has an account, with the wrong password: signing up returns no identities, which is a failure.
+  fixture.auth.signUp.mockResolvedValue({ data: { session: null, user: { identities: [] } }, error: null } as never);
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'wrongpass'))).toBe('authFailed');
+  // Too short to be a new password: no account is made.
+  fixture.auth.signUp.mockClear();
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'short'))).toBe('authFailed');
+  expect(fixture.auth.signUp).not.toHaveBeenCalled();
+  await view.unmount();
+});
+
+test('a guest opens the app on this phone only, is remembered, and can leave; Google is not set up', async () => {
+  const guest = fixtureRepo('guest'), local = new Map<string, unknown>();
+  const device = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); } };
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: (owner: string) => owner === 'device' ? device : guest } as never);
+  const view = await render(<AuthProvider client={null}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  expect(observed.guest).toBe(false);
+  await act(async () => { observed.continueAsGuest!(); });
+  expect(observed.guest).toBe(true);
+  await waitFor(() => expect(local.get('guestMode')).toBe(true));
+  expect(observed.repository).toBe(guest);
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(await observed.signInWithGoogle!()).toEqual({ ok: false, reason: 'notConfigured' });
+  await act(async () => { observed.exitGuest!(); });
+  expect(observed.guest).toBe(false);
+  await waitFor(() => expect(local.get('guestMode')).toBe(false));
+  await view.unmount();
+  // Reopened after a guest session, the phone remembers.
+  local.set('guestMode', true);
+  const again = await render(<AuthProvider client={null}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.guest).toBe(true));
+  await again.unmount();
+});

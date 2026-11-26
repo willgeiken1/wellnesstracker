@@ -18,6 +18,8 @@ async function wrap(ui:React.ReactNode,auth=state()){await render(<AuthContext.P
 const flat=(node:{props:{style?:unknown}})=>StyleSheet.flatten(node.props.style as never) as Record<string,unknown>;
 beforeEach(()=>{jest.mocked(router.push).mockClear();jest.mocked(router.replace).mockClear();});
 
+// Welcome follows onboarding mockup v21 (ob-welcome): Apple, email, Google, Skip for now, then the legal line.
+// These replace the earlier Get started, I have an account, Import and Look around rows.
 describe('Welcome',()=>{
  test('says what the app is for under one title, over the contour map, with the four strands and the legal line',async()=>{
   await wrap(<Welcome/>);
@@ -30,27 +32,25 @@ describe('Welcome',()=>{
   expect(screen.getByText(/By continuing you agree to the/)).toBeTruthy();
   expect(screen.queryByText(/Plus|Subscribe/)).toBeNull();
  });
- test('one main button and three quieter ways in, each firing its own handler',async()=>{
-  const auth=await wrap(<Welcome/>);
-  await fireEvent.press(screen.getByRole('button',{name:t('getStarted')}));expect(router.push).toHaveBeenLastCalledWith('/onboarding');
-  await fireEvent.press(screen.getByRole('button',{name:t('haveAccount')}));expect(router.push).toHaveBeenLastCalledWith('/auth/sign-in');
-  await fireEvent.press(screen.getByRole('button',{name:t('importChoose')}));expect(router.push).toHaveBeenLastCalledWith('/import');
-  await fireEvent.press(screen.getByRole('button',{name:t('lookAround')}));expect(auth.lookAround).toHaveBeenCalledTimes(1);
-  expect(screen.queryByRole('alert')).toBeNull();
+ test('email, Google and Skip for now come in that order, each going its own way',async()=>{
+  const signInWithGoogle=jest.fn(async()=>({ok:false as const,reason:'notConfigured' as const}));
+  await wrap(<Welcome/>,{...state(),signInWithGoogle});
+  const names=screen.getAllByRole('button').map(b=>b.props.accessibilityLabel as string);
+  expect(names.filter(n=>[t('obaEmail'),t('obaGoogle'),t('obaSkip')].includes(n))).toEqual([t('obaEmail'),t('obaGoogle'),t('obaSkip')]);
+  await fireEvent.press(screen.getByRole('button',{name:t('obaEmail')}));expect(router.push).toHaveBeenLastCalledWith('/auth/email');
+  await fireEvent.press(screen.getByRole('button',{name:t('obaSkip')}));expect(router.push).toHaveBeenLastCalledWith('/auth/skip');
+  expect(screen.queryByTestId('welcome-google-notice')).toBeNull();
+  await fireEvent.press(screen.getByRole('button',{name:t('obaGoogle')}));
+  expect(signInWithGoogle).toHaveBeenCalledTimes(1);
+  expect(await screen.findByTestId('welcome-google-notice')).toHaveTextContent(t('obaGoogleOff'));
+  for(const old of ['getStarted','haveAccount','importChoose','lookAround'] as const)expect(screen.queryByRole('button',{name:t(old)})).toBeNull();
  });
- test('without accounts it says so in a quiet row and still lets the person look around',async()=>{
-  const auth=await wrap(<Welcome/>,{...state(),configured:false});
-  expect(screen.getByRole('alert')).toHaveTextContent(t('accountsUnavailable'));
-  expect(screen.getByRole('button',{name:t('getStarted')})).toBeDisabled();
-  expect(screen.getByRole('button',{name:t('haveAccount')})).toBeDisabled();
-  await fireEvent.press(screen.getByRole('button',{name:t('lookAround')}));expect(auth.lookAround).toHaveBeenCalled();
- });
- test('every pressable row is at least 44 points tall',async()=>{
+ test('every way in is at least 44 points tall',async()=>{
   await wrap(<Welcome/>);
-  for(const name of [t('getStarted'),t('haveAccount'),t('lookAround'),t('importChoose')])
-   expect(Number(flat(screen.getByRole('button',{name})).minHeight)).toBeGreaterThanOrEqual(44);
+  for(const name of [t('obaEmail'),t('obaGoogle'),t('obaSkip')])
+   expect(Number(flat(screen.getByRole('button',{name})).minHeight??flat(screen.getByRole('button',{name})).height)).toBeGreaterThanOrEqual(44);
  });
- test('the auth landing route shows this screen and sign-in routes show the new form',()=>{
+ test('the auth landing route shows this screen and sign-in routes show the form',()=>{
   expect((require('../src/app/auth/index') as {default:unknown}).default).toBe(Welcome);
   for(const route of ['../src/app/auth/sign-in','../src/app/sign-in'])expect(String((require(route) as {default:()=>unknown}).default)).toContain('AuthForm');
  });

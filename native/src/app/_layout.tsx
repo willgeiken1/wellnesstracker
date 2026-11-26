@@ -30,6 +30,7 @@ import { setAndroidCopy, t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
 import { PrivacyCover } from '@/features/privacy-lock/cover';
 import { useRestLiveActivity } from '@/features/workout/live-activity';
+import { LaunchOverlay } from '@/features/onboarding/launch';
 
 import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
 void SplashScreen.preventAutoHideAsync();
@@ -85,14 +86,14 @@ function Application() {
     {AI_FEATURES_ENABLED && <FoodAiRuntime repo={auth.ready ? auth.repository : null} />}
     <TelemetryRuntime userId={auth.session?.user.id} />
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
-    {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
+    {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.guest === true || auth.phoneOnly === true} signedIn={!!auth.session} />}
     {auth.ready && <RestLiveActivity />}
-    {auth.ready && <PrivacyCover access={!!auth.session || auth.demo || auth.phoneOnly === true} />}
+    {auth.ready && <PrivacyCover access={!!auth.session || auth.demo || auth.guest === true || auth.phoneOnly === true} />}
   </ThemeProvider>;
 }
 export default function RootLayout() {
   const [loaded, error] = useFonts({ Lexend_300Light, Lexend_500Medium, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
   useEffect(() => { if (loaded || error) void SplashScreen.hideAsync(); }, [loaded, error]);
   if (!loaded && !error) return null;
-  return <GestureHandlerRootView style={{ flex: 1 }}><OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider></GestureHandlerRootView>;
+  return <GestureHandlerRootView style={{ flex: 1 }}><OnboardingDraftProvider><AuthProvider>{error && <ThemeProvider><ThemedText accessibilityRole="alert">{t('fontError')}</ThemedText></ThemeProvider>}<Application /></AuthProvider></OnboardingDraftProvider><LaunchOverlay /></GestureHandlerRootView>;
 }

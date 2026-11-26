@@ -22,6 +22,9 @@ export const MEDIUM_SHARE = {
   'quick-cal': 0.679,
   'copy-day': 0.563,
   'log-weight': 0.651,
+  // Welcome's two sheets (ob-email, ob-skip)
+  'ob-email': 0.501,
+  'ob-skip': 0.485,
 } as const;
 export type MediumSheet = keyof typeof MEDIUM_SHARE;
 
@@ -124,3 +127,12 @@ export function routeOptions(name: string, extra?: NativeStackNavigationOptions)
     ? ({ route }: { route: { params?: object } }) => ({ ...o(route.params as Record<string, unknown> | undefined), ...extra })
     : { ...o, ...extra };
 }
+
+/**
+ * The sign-in screens' sheets, opened over Welcome before there is an account (the auth group, app/auth/_layout.tsx):
+ * Continue with email and Skip for now, each a medium sheet at the design's height.
+ */
+export const AUTH_ROUTES: Record<string, { mock: string; options: NativeStackNavigationOptions }> = {
+  email: { mock: 'ob-email', options: mediumSheet('ob-email') },
+  skip: { mock: 'ob-skip', options: mediumSheet('ob-skip') },
+};
