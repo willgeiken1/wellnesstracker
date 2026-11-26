@@ -63,14 +63,14 @@ export function SheetFrame({ testID, title, onClose, back, toast, children }: {
     <View style={{ paddingHorizontal: PAGE, paddingTop: Math.max(insets.top, PAGE), paddingBottom: tokens.spacing[1], gap: tokens.spacing[0] }}>
       {back && <Tappable testID={`${testID}-back`} accessibilityRole="button" accessibilityLabel={back.label} onPress={back.onPress} hitSlop={{ top: 6, bottom: 6, right: 12 }}
         style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', minHeight: 32, gap: 2, marginLeft: -6 }}>
-        <Glyph name="back" size={20} color={colors.accent} weight={2.2} />
+        <Glyph name="back" size={20} color={colors.accent} />
         <ThemedText style={{ color: colors.accent, fontWeight: '600' }}>{back.label}</ThemedText>
       </Tappable>}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] }}>
         <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1, fontWeight: '600' }}>{title}</ThemedText>
         <Tappable dim="fill" testID={`${testID}-close`} accessibilityRole="button" accessibilityLabel={rs('close')} onPress={onClose} hitSlop={6}
           style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
-          <Glyph name="close" size={16} color={colors['text-muted']} weight={2.4} />
+          <Glyph name="close" size={16} color={colors['text-muted']} />
         </Tappable>
       </View>
     </View>

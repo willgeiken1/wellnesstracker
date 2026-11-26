@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 import { hasOura, homeOuraReconnectHTML, homeOuraWaiting, ouraMembershipInactive, visibleHomeIds } from "../shared/oura-gate.js";
 import { addToDraft, galleryEntries, needsSizeChoice, removeFromDraft, reorderDraft, sizeChoices, sizeLabel } from "../shared/home-edit.js";
 import "../shared/home-defaults.js";
@@ -146,7 +147,7 @@ function homeEditCardsHTML(draft) {
     const widget = app.HOME_WIDGETS[id];
     const span = app.widgetSize(id, layout) === "medium" ? " span-m" : "";
     const name = app.esc(widget.name);
-    return `<div class="hw-slot${span}" data-hw="${id}" data-id="${id}" tabindex="0" role="group" aria-label="${name}, ${index + 1} of ${all.length}. Arrow keys move it."><div class="hw-body" inert>${widgetBody(id, data)}</div><button type="button" class="hw-minus" data-action="home-remove" data-id="${id}" aria-label="Remove ${name}"><span aria-hidden="true">−</span></button></div>`;
+    return `<div class="hw-slot${span}" data-hw="${id}" data-id="${id}" tabindex="0" role="group" aria-label="${name}, ${index + 1} of ${all.length}. Arrow keys move it."><div class="hw-body" inert>${widgetBody(id, data)}</div><button type="button" class="hw-minus" data-action="home-remove" data-id="${id}" aria-label="Remove ${name}">${icon("minus")}</button></div>`;
   }).join("");
   return `<div class="home-v2 editing" data-home-list>${cards || `<p class="home-editor-empty">No widgets on Home. Tap Add to pick some.</p>`}</div>`;
 }
@@ -220,7 +221,7 @@ function galleryPreview(id, size, data) {
 /* In-flow header: Cancel (with Back in the size step) left, title centered, close right.
    It is a grid row, so nothing sits on top of anything else. */
 function galleryBar(title, back) {
-  return `<div class="hw-gal-bar"><div class="hw-gal-side">${back}<button type="button" class="hw-gal-cancel" data-action="sheet-close">Cancel</button></div><div class="hw-gal-title">${title}</div><div class="hw-gal-side end"><button type="button" class="hw-gal-x" data-action="sheet-close" aria-label="Close"><span aria-hidden="true">×</span></button></div></div>`;
+  return `<div class="hw-gal-bar"><div class="hw-gal-side">${back}<button type="button" class="hw-gal-cancel" data-action="sheet-close">Cancel</button></div><div class="hw-gal-title">${title}</div><div class="hw-gal-side end"><button type="button" class="hw-gal-x" data-action="sheet-close" aria-label="Close">${icon("close")}</button></div></div>`;
 }
 
 function homeGalleryHTML() {
@@ -231,7 +232,7 @@ function homeGalleryHTML() {
   if (pick) {
     const options = sizeChoices(pick.id).map((size) =>
       `<div class="hw-gal-item hw-gal-size${size === "medium" ? " span-m" : ""}"><button type="button" class="hw-gal-hit" data-action="home-add" data-id="${app.esc(pick.id)}" data-size="${size}" aria-label="Add ${app.esc(pick.name)}, ${sizeLabel(size).toLowerCase()}"></button>${galleryPreview(pick.id, size, data)}<b>${sizeLabel(size)}</b></div>`).join("");
-    const back = `<button type="button" class="hw-gal-back" data-action="home-gal-back" aria-label="Back to all widgets"><span aria-hidden="true">‹</span></button>`;
+    const back = `<button type="button" class="hw-gal-back" data-action="home-gal-back" aria-label="Back to all widgets">${icon("chevron-left")}</button>`;
     return `<div class="hw-gal-top">${galleryBar(`<b>${app.esc(pick.name)}</b><em>Choose a size</em>`, back)}</div>
       <div class="hw-gal-scroll"><div class="hw-gal-grid">${options}</div></div>`;
   }
@@ -240,7 +241,7 @@ function homeGalleryHTML() {
   const items = entries.map((e) =>
     `<div class="hw-gal-item${e.size === "medium" ? " span-m" : ""}"><button type="button" class="hw-gal-hit" data-action="home-gal-pick" data-id="${app.esc(e.id)}" aria-label="${app.esc(e.title)}, ${app.esc(e.subtitle)}"></button>${galleryPreview(e.id, e.size, data)}<b>${app.esc(e.title)}</b><em>${app.esc(e.subtitle)}</em></div>`).join("");
   const none = q.trim() ? "No widgets match that search." : "Every widget is already on Home.";
-  const search = `<label class="hw-gal-find"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="text-in hw-gal-search" id="home-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search Widgets" aria-label="Search widgets" value="${app.esc(q)}"></label>`;
+  const search = `<label class="hw-gal-find">${icon("search", { size: 20 })}<input class="text-in hw-gal-search" id="home-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search Widgets" aria-label="Search widgets" value="${app.esc(q)}"></label>`;
   return `<div class="hw-gal-top">${galleryBar("<b>Add Widget</b>", "")}${search}</div>
     <div class="hw-gal-scroll" id="home-q-list">${items ? `<div class="hw-gal-grid">${items}</div>` : `<p class="sub hw-gal-none">${none}</p>`}</div>`;
 }

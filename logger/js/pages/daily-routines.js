@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 import {
   canMutateRoutines,
   followParentEdits,
@@ -1359,8 +1360,8 @@ function pageHeader(title, sub, gear) {
   return `<div class="page-head"><div class="ph-text"><h1 class="page-title">${esc(title)}</h1>${sub ? `<div class="page-sub">${esc(sub)}</div>` : ""}</div>${gear || ""}</div>`;
 }
 
-const GEAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3V20.5M3.5 12h2.2M18.3 12h2.2M6.1 6.1l1.6 1.6M16.3 16.3l1.6 1.6M17.9 6.1l-1.6 1.6M7.7 16.3l-1.6 1.6"/></svg>`;
-const CHECK = `<svg class="dr-streak-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.2 16.7 19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const GEAR = icon("settings");
+const CHECK = icon("check", { cls: "dr-streak-mark" });
 
 function gearButton() {
   return `<button type="button" class="icon-btn dr-gear" data-action="routines-settings" aria-label="Routines settings">${GEAR}</button>`;
@@ -1517,7 +1518,7 @@ function editRowHTML(row) {
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
       <span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}
     </button>
-    <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
+    <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines">${icon("minus")}</button>
   </li>`;
 }
 
@@ -1525,7 +1526,7 @@ function doneRowHTML(row, projected, date, day) {
   const state = rowState(row.log);
   const label = state === "skipped" ? "Skipped" : state === "partial" ? "Partial" : "Logged";
   const markClass = state === "skipped" ? "dr-mark dr-mark-skip" : "dr-mark dr-mark-on";
-  const mark = state === "skipped" ? "–" : "✓";
+  const mark = icon(state === "skipped" ? "minus" : "check", { size: 16 });
   const doseHTML = amountMarkup(loggedAmountText(row.log));
   const next = countdownMarkup(projected, row, date, day);
   return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
@@ -1567,7 +1568,7 @@ export function routineBlockTileHTML(block, projected, view) {
         ${swatches}
         <button type="button" class="dr-rename" data-action="routines-rename-block" data-block-id="${esc(block.id)}" aria-label="Rename ${esc(block.name)}">Rename</button>
         <button type="button" class="dr-dup" data-action="routines-duplicate-block" data-block-id="${esc(block.id)}" aria-label="Duplicate ${esc(block.name)}">Duplicate</button>
-        <button type="button" class="dr-minus" data-action="routines-delete-block" data-block-id="${esc(block.id)}" aria-label="Delete ${esc(block.name)}"><span aria-hidden="true">−</span></button>
+        <button type="button" class="dr-minus" data-action="routines-delete-block" data-block-id="${esc(block.id)}" aria-label="Delete ${esc(block.name)}">${icon("minus")}</button>
       </div>`
     : `<button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-block" data-block-id="${esc(block.id)}" aria-label="Rename ${esc(block.name)}">Rename</button>`;
   return `<article class="dr-tile" data-color="${color}" data-block-id="${esc(block.id)}" data-current="${current ? "true" : "false"}" data-collapsed="${collapsed ? "true" : "false"}" data-last="${last ? "true" : "false"}" data-id="${esc(block.id)}">

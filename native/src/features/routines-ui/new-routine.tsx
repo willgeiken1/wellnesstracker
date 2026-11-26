@@ -38,7 +38,7 @@ function TimeField({ testID, label, minutes, typing, onTyping: setTyping, onMinu
   const stepButton = (by: number) => (
     <Tappable dim="fill" testID={`${testID}-${by < 0 ? 'earlier' : 'later'}`} accessibilityRole="button" accessibilityLabel={`${label}, ${by < 0 ? rs('earlier') : rs('later')}`} onPress={() => { setTyping(null); onMinutes(stepClock(settledMinutes(typing, minutes), by)); }}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'] }}>
-      <Glyph name={by < 0 ? 'minus' : 'add'} size={20} color={colors.text} weight={2.2} />
+      <Glyph name={by < 0 ? 'minus' : 'add'} size={20} color={colors.text} />
     </Tappable>
   );
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: tokens.spacing[1] }}>
@@ -175,7 +175,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
     <Tappable dim="fill" testID={by < 0 ? 'routine-move-up' : 'routine-move-down'} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: opened.name })}
       accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => move(by)}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: allowed ? 1 : 0.35 }}>
-      <Glyph name={by < 0 ? 'up' : 'down'} size={20} color={colors.text} weight={2.2} />
+      <Glyph name={by < 0 ? 'up' : 'down'} size={20} color={colors.text} />
     </Tappable>
   );
 
@@ -229,7 +229,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
             <Tappable testID={`routine-item-${by < 0 ? 'up' : 'down'}-${item.id}`} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: item.name })}
               accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => moveItem(item.id, by)}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: allowed ? 1 : 0.35 }}>
-              <Glyph name={by < 0 ? 'up' : 'down'} size={18} color={colors.text} weight={2.2} />
+              <Glyph name={by < 0 ? 'up' : 'down'} size={18} color={colors.text} />
             </Tappable>
           );
           return <View key={item.id} testID={`routine-item-row-${item.id}`} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', minHeight: 52, borderTopWidth: index ? 1 : 0, borderTopColor: colors.hair }}>
@@ -238,14 +238,14 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
             {inside.length > 1 && step(1, index < inside.length - 1)}
             <Tappable testID={`routine-item-${item.id}`} accessibilityRole="button" accessibilityLabel={rs('itemRemove', { name: item.name })} onPress={() => toggleItem(item.id)}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-              <Glyph name="close" size={16} color={colors['text-muted']} weight={2.4} />
+              <Glyph name="close" size={16} color={colors['text-muted']} />
             </Tappable>
           </View>;
         })}
       </View>}
       <Tappable testID="routine-items-more" accessibilityRole="button" accessibilityLabel={rs('itemsMore')} accessibilityState={{ expanded: adding }} onPress={() => { glide(); setAdding(!adding); }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], minHeight: 44 }}>
-        <Glyph name={adding ? 'down' : 'add'} size={18} color={colors.accent} weight={2.2} />
+        <Glyph name={adding ? 'down' : 'add'} size={18} color={colors.accent} />
         <ThemedText style={{ color: colors.accent, fontWeight: '600' }}>{rs('itemsMore')}</ThemedText>
       </Tappable>
       {adding && (outside.length
@@ -253,7 +253,7 @@ function RoutineForm({ data, view, opened }: { data: RoutinesData; view: Routine
           {outside.map((item) => (
             <Tappable dim="fill" key={item.id} testID={`routine-add-${item.id}`} accessibilityRole="button" accessibilityLabel={rs('itemAdd', { name: item.name })} onPress={() => toggleItem(item.id)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[0], minHeight: 44, borderRadius: 22, paddingHorizontal: tokens.spacing[2], borderWidth: 1.5, borderColor: colors['hair-2'] }}>
-              <Glyph name="add" size={14} color={colors['text-muted']} weight={2.4} />
+              <Glyph name="add" size={14} color={colors['text-muted']} />
               <ThemedText variant="caption" style={{ fontWeight: '600', flexShrink: 1 }}>{item.name}</ThemedText>
             </Tappable>
           ))}

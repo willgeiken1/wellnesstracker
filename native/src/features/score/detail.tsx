@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { Pressable, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
+import { Icon } from '@/components/icon';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { WorkoutStore } from '@/data/workout/store';
@@ -46,9 +46,7 @@ function Step({ glyph, label, onPress, disabled }: { glyph: 'minus' | 'plus'; la
   const { colors } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.35 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
-    <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}>
-      <Path d={glyph === 'minus' ? 'M6 12h12' : 'M12 6v12M6 12h12'} fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
+    <Icon name={glyph} size={20} color={colors.text} />
   </Pressable>;
 }
 

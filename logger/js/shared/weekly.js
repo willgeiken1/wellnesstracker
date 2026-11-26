@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "./icons.js";
 import { UNFAVORABLE_MARK, addDays, claimSupported, findingsForWeek, foldedAlso } from "./correlate.js";
 
 /* In-app weekly report. Numbers stay on the device. Dismiss state is a list of
@@ -506,7 +507,7 @@ function weekCardHTML() {
     `<span class="week-stat"><span>${k}</span><b>${app.esc(v)}</b></span>`).join("")}</div>` : "";
   return `<section class="card week-card">
     <div class="week-top"><p class="week-k">Your week</p>
-      <button type="button" class="week-x" data-action="week-dismiss" data-week="${due.start}" aria-label="Dismiss your week">×</button></div>
+      <button type="button" class="week-x" data-action="week-dismiss" data-week="${due.start}" aria-label="Dismiss your week">${icon("close")}</button></div>
     <button type="button" class="week-go" data-action="week-open" data-week="${due.start}">
       <h2 class="week-h">${app.esc(report.headline)}</h2>
       <p class="week-range">${rangeLabel(report.start, report.end)}</p>
@@ -524,7 +525,7 @@ function weeklyListHTML() {
   if (!reports.length || reports.every((r) => r.empty)) return head + emptyCopy();
   const row = (r) => `<button type="button" class="wk-link" data-action="week-open" data-week="${r.start}">
       <span><b>${rangeLabel(r.start, r.end)}</b><span class="sub">${app.esc(r.headline)}</span></span>
-      <span class="wk-chev" aria-hidden="true">›</span></button>`;
+      <span class="wk-chev" aria-hidden="true">${icon("chevron-right")}</span></button>`;
   const LATEST = 3;
   const older = reports.slice(LATEST);
   const more = older.length ? `<details class="wk-older"><summary><span class="wk-more">See all ${reports.length} weeks</span><span class="wk-less">Show fewer</span></summary>${older.map(row).join("")}</details>` : "";

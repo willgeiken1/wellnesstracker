@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 
 /* In-progress workout screen and bottom sheets. */
 function renderWorkout() {
@@ -64,7 +65,7 @@ function exerciseHTML(s, e, i) {
       <span class="ex-count${done.length ? " has" : ""}">${done.filter(app.isWork).length || (done.length ? "W" : "")}</span>
       <span class="ex-last">${e.original ? `Swapped in for ${app.esc(e.original)} · ` : ""}${app.esc(prev ? "Last: " + prev.filter((x) => x.tag !== "warmup").map(app.fmtSet).join(", ") : "No previous sets")}</span>
     </button>
-    <button class="ex-x" data-action="ex-remove" data-i="${i}" aria-label="Remove ${app.esc(e.name)}">×</button>
+    <button class="ex-x" data-action="ex-remove" data-i="${i}" aria-label="Remove ${app.esc(e.name)}">${icon("close")}</button>
     </div>
     <div class="ex-ms">${machineChipHTML(e.name)}</div>`;
   if (open) {
@@ -77,7 +78,7 @@ function exerciseHTML(s, e, i) {
       ${done.length ? `<ol class="sets">${done.map((x, j) => {
         const badges = `${x.tag === "failure" ? `<span class="badge fail">F</span>` : ""}${x.pr && x.pr.length ? `<span class="badge pr">PR</span>` : ""}${x.rpe ? `<span class="badge rpe">RPE ${x.rpe}</span>` : ""}`;
         return `<li><span class="set-n${x.tag === "warmup" ? " wu" : ""}">${x.tag === "warmup" ? "W" : ++wi}</span><button class="set-v set-edit" data-action="set-edit" data-i="${i}" data-s="${j}" aria-label="Edit set ${j + 1}">${app.fmtSet(x)}${badges ? `<span class="set-badges">${badges}</span>` : ""}</button>
-      <button class="set-x" data-action="delset" data-i="${i}" data-s="${j}" aria-label="Remove set ${j + 1}">×</button>
+      <button class="set-x" data-action="delset" data-i="${i}" data-s="${j}" aria-label="Remove set ${j + 1}">${icon("close")}</button>
       ${x.note ? `<span class="set-note">${app.esc(x.note)}</span>` : ""}</li>`;
       }).join("")}</ol>` : ""}
       <div class="uni-row"><span id="uni-l-${i}">Unilateral</span>
@@ -227,7 +228,7 @@ function renderSheet() {
     : "Sheet";
   el.innerHTML = `<div class="sheet-back" data-action="sheet-close"></div>
     <div class="${cardClass}" role="dialog" aria-modal="true" aria-label="${sheetName}"><div class="grabber"></div>
-    ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">×</button>`}${inner}</div>`;
+    ${app.ui.sheet === "home-gallery" ? "" : `<button class="sheet-x" data-action="sheet-close" aria-label="Close">${icon("close")}</button>`}${inner}</div>`;
   el.dataset.open = app.ui.sheet;
   const card = el.querySelector(".sheet-card");
   if (card && sameSheet && keepTop) card.scrollTop = keepTop;

@@ -6,6 +6,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Card } from '../../components/card';
 import { ThemedText } from '../../components/themed-text';
 import { touchTarget } from '../../components/button';
+import { Icon } from '../../components/icon';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
 import { terrain } from '../home/contour';
@@ -42,9 +43,7 @@ export function Shell({ step, onBack, scrollRef, children }: PropsWithChildren<{
           {onBack && <Pressable testID="onboarding-back" accessibilityRole="button" accessibilityLabel={t('onboardingBack')} onPress={onBack}
             style={({ pressed }) => ({ width: touchTarget, height: touchTarget, borderRadius: touchTarget / 2, alignItems: 'center', justifyContent: 'center',
               backgroundColor: colors.surface, opacity: pressed ? PRESSED_FILL_OPACITY : 1 })}>
-            <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}>
-              <Path d="M15 5L8 12L15 19" fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="chevron-left" size={22} color={colors.text} />
           </Pressable>}
           {step ? <StepProgress step={step} /> : null}
         </View>}
@@ -89,11 +88,7 @@ export function Notice({ text, onRetry, retryLabel, testID }: { text: string; on
   const { colors } = useTheme();
   return <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[1], paddingLeft: tokens.spacing[2], paddingRight: onRetry ? tokens.spacing[0] : tokens.spacing[2],
     minHeight: touchTarget, borderRadius: tokens.radii.card, backgroundColor: colors['surface-2'], borderWidth: 1, borderColor: colors['hair-2'] }}>
-    <Svg width={16} height={16} viewBox="0 0 16 16" accessible={false}>
-      <Circle cx={8} cy={8} r={7} fill="none" stroke={colors['text-muted']} strokeWidth={1.5} />
-      <Path d="M8 4.5V8.5" stroke={colors['text-muted']} strokeWidth={1.6} strokeLinecap="round" />
-      <Circle cx={8} cy={11.2} r={0.9} fill={colors['text-muted']} />
-    </Svg>
+    <Icon name="error" size={16} color={colors['text-muted']} />
     <ThemedText accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flex: 1, fontSize: 14, lineHeight: 19, paddingVertical: tokens.spacing[1] }}>{text}</ThemedText>
     {onRetry && <Pressable accessibilityRole="button" accessibilityLabel={retryLabel ?? t('bootRetry')} onPress={onRetry}
       style={({ pressed }) => ({ minHeight: touchTarget, minWidth: touchTarget, paddingHorizontal: tokens.spacing[2], alignItems: 'center', justifyContent: 'center', opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
@@ -128,9 +123,7 @@ export function LinkRow({ label, body, onPress, disabled = false, first = false,
       <ThemedText style={semibold}>{label}</ThemedText>
       <ThemedText muted variant="caption" style={{ lineHeight: 18 }}>{body}</ThemedText>
     </View>
-    <Svg width={18} height={18} viewBox="0 0 24 24" accessible={false}>
-      <Path d="M9 5L16 12L9 19" fill="none" stroke={colors['text-muted']} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
+    <Icon name="chevron-right" size={18} color={colors['text-muted']} />
   </Pressable>;
 }
 

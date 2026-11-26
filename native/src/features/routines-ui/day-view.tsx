@@ -39,8 +39,8 @@ function Tick({ done, skipped, tone }: { done: boolean; skipped: boolean; tone: 
   return <View style={{ width: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
     <View testID={done ? 'tick-done' : skipped ? 'tick-skipped' : 'tick-open'} style={{ width: TICK, aspectRatio: 1, borderRadius: TICK / 2, alignItems: 'center', justifyContent: 'center',
       borderWidth: done ? 0 : 1.5, borderColor: colors['text-muted'], backgroundColor: done ? tone : 'transparent' }}>
-      {done && <Glyph name="check" size={16} color={colors['on-accent']} width={2.4} />}
-      {skipped && <Glyph name="dash" size={16} color={colors['text-muted']} width={2.2} />}
+      {done && <Glyph name="check" size={16} color={colors['on-accent']} />}
+      {skipped && <Glyph name="dash" size={16} color={colors['text-muted']} />}
     </View>
   </View>;
 }

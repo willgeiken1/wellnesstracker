@@ -115,7 +115,7 @@ export function Routines({ store, run, undo, onUndo }: { store: WorkoutStore | n
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel={t('startTemplate').replace('{name}', name)} onPress={() => run(() => startRoutine(store, r.id))}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-              <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}><Path d="M8 5.5v13l11-6.5z" fill="none" stroke={colors.text} strokeWidth={1.8} strokeLinejoin="round" /></Svg>
+              <Icon name="play" size={22} color={colors.text} />
             </Pressable>
           </View>
           {expanded && <View style={[layout.row, { flexWrap: 'wrap', paddingBottom: tokens.spacing[1] }]}>

@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "./icons.js";
 
 /* Muscle maps, exercise bank, and page headers. */
 /* ================= Muscles: basic + advanced, diagrams, exercise bank ================= */
@@ -122,7 +123,7 @@ function avatarHTML() {
   const p = app.state.profile;
   const inner = p && p.photo ? `<img src="${p.photo}" alt="">`
     : app.firstName() ? app.esc(p.name.trim().split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase())
-    : `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h8M16 7h4M4 12h2M10 12h10M4 17h10M18 17h2"/><circle cx="14" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="17" r="2"/></svg>`;
+    : icon("sliders", { size: 22 });
   return `<button class="avatar" data-action="tab" data-tab="settings" aria-label="Settings">${inner}</button>`;
 }
 app.avatarHTML = avatarHTML;
@@ -133,7 +134,7 @@ function pageHead(title, sub, opts = {}) {
 }
 app.pageHead = pageHead;
 
-const PLUS_SVG = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+const PLUS_SVG = icon("plus", { size: 24 });
 app.PLUS_SVG = PLUS_SVG;
 
 function squarePhoto(file, size) {
@@ -364,7 +365,7 @@ function bankListHTML(o) {
     const on = have.has(name.toLowerCase());
     const tierAttr = tier == null ? "" : ` data-tier="${tier}"`;
     return `<button class="pk-row${on ? " on" : ""}"${tierAttr} data-action="${o.action}" data-src="${src}" data-name="${app.esc(name)}" aria-pressed="${on}">
-      <span class="pk-t"><b>${app.esc(name)}</b><span>${app.esc(app.musclesLabel(e, 3))}</span></span><span class="pk-ic" aria-hidden="true">${on ? "✓" : "+"}</span></button>`;
+      <span class="pk-t"><b>${app.esc(name)}</b><span>${app.esc(app.musclesLabel(e, 3))}</span></span><span class="pk-ic" aria-hidden="true">${icon(on ? "check" : "plus")}</span></button>`;
   };
   const bankE = (b) => ({ name: b.n, group: b.g, adv: b.a, muscles: app.basicOf(b.a) });
   const custom = app.customExercises().filter((e) => !(o.exclude || new Set()).has(e.name.toLowerCase()));

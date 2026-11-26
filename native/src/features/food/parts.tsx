@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { ActivityIndicator, Pressable, TextInput, View, type KeyboardTypeOptions, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { touchTarget } from '../../components/button';
+import { Icon, type IconName } from '../../components/icon';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
 import { tokens } from '../../design/tokens';
@@ -11,31 +11,6 @@ import { en, foodDayLabel, t } from '../../i18n/en';
 /** Shared parts for the food logging screens: one look for fields, rows, notices and actions. */
 export const semibold = { fontWeight: '600' } as const;
 export const foodCard = { borderRadius: 18, padding: tokens.spacing[3] } as const;
-
-export const GLYPH = {
-  search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13M15.5 15.5L20 20',
-  scan: 'M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M11 9v6M14 9v6M16.5 9v6',
-  snap: 'M4 8h3l1.5-2h7L17 8h3v11H4zM12 10.5a3 3 0 1 0 0 6a3 3 0 0 0 0-6',
-  describe: 'M4 5h16v11H10l-5 4v-4H4z',
-  saved: 'M12 4l2.5 5.2 5.5.8-4 4 1 5.6-5-2.7-5 2.7 1-5.6-4-4 5.5-.8z',
-  pencil: 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
-  plus: 'M12 5v14M5 12h14',
-  chevron: 'M9 5l7 7-7 7',
-  back: 'M15 5l-7 7 7 7',
-  torch: 'M9 3h6v4l-2 3v11h-2V10L9 7zM9 7h6',
-  camera: 'M4 8h3l1.5-2h7L17 8h3v11H4zM12 10.5a3 3 0 1 0 0 6a3 3 0 0 0 0-6',
-  cameraOff: 'M4 8h3l1.5-2h7L17 8h3v11H4zM4 4l16 17',
-  close: 'M6 6l12 12M18 6L6 18',
-} as const;
-export type GlyphName = keyof typeof GLYPH;
-
-/** Decorative line icon; the control around it carries the label. */
-export function Glyph({ name, size = 20, color, width = 1.8 }: { name: GlyphName; size?: number; color?: string; width?: number }) {
-  const { colors } = useTheme();
-  return <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
-    <Path d={GLYPH[name]} fill="none" stroke={color ?? colors.text} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>;
-}
 
 /** "today", "yesterday" or a short date, for use inside a sentence. */
 export function dayInSentence(day: string, today: string) {
@@ -109,12 +84,12 @@ export function PrimaryAction({ label, onPress, disabled = false, busy = false, 
 }
 
 /** A second-rank action: a soft pill the width of its panel. */
-export function SoftAction({ label, onPress, disabled = false, glyph }: { label: string; onPress: () => void; disabled?: boolean; glyph?: GlyphName }) {
+export function SoftAction({ label, onPress, disabled = false, glyph }: { label: string; onPress: () => void; disabled?: boolean; glyph?: IconName }) {
   const { colors } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: touchTarget, borderRadius: 14, paddingHorizontal: tokens.spacing[3], paddingVertical: 8, flexDirection: 'row', gap: 8,
       alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.45 : pressed ? PRESSED_FILL_OPACITY : 1 })}>
-    {glyph && <Glyph name={glyph} size={18} />}
+    {glyph && <Icon name={glyph} size={18} />}
     <ThemedText style={[semibold, { fontSize: 15, textAlign: 'center' }]}>{label}</ThemedText>
   </Pressable>;
 }
@@ -137,7 +112,7 @@ export function PanelHeader({ title, action }: { title: string; action?: { label
 
 /** A tappable list row: name, a muted second line, a value on the right and a small glyph. */
 export function ItemRow({ label, title, detail, value, glyph = 'plus', first = false, onPress, testID }: {
-  label: string; title: string; detail?: string; value?: string; glyph?: GlyphName | null; first?: boolean; onPress: () => void; testID?: string;
+  label: string; title: string; detail?: string; value?: string; glyph?: IconName | null; first?: boolean; onPress: () => void; testID?: string;
 }) {
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
@@ -148,7 +123,7 @@ export function ItemRow({ label, title, detail, value, glyph = 'plus', first = f
       {!!detail && <ThemedText muted numeric variant="caption">{detail}</ThemedText>}
     </View>
     {!!value && <ThemedText muted numeric>{value}</ThemedText>}
-    {glyph && <Glyph name={glyph} size={18} color={colors['text-muted']} width={2} />}
+    {glyph && <Icon name={glyph} size={18} color={colors['text-muted']} />}
   </Pressable>;
 }
 

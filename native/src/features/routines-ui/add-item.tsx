@@ -37,7 +37,7 @@ function RoundButton({ testID, label, glyph, onPress, disabled = false }: { test
   const { colors } = useTheme();
   return <Tappable dim="fill" testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: disabled ? 0.35 : 1 }}>
-    <Glyph name={glyph} size={20} color={colors.text} weight={2.2} />
+    <Glyph name={glyph} size={20} color={colors.text} />
   </Tappable>;
 }
 
@@ -249,7 +249,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
           <ThemedText style={{ fontWeight: '600' }}>{rs('converter')}</ThemedText>
           <ThemedText variant="caption" muted>{rs('converterLine')}</ThemedText>
         </View>
-        <Glyph name="chevron" size={18} color={colors['text-muted']} weight={2.2} />
+        <Glyph name="chevron" size={18} color={colors['text-muted']} />
       </Tappable>}
     </View>}
 
@@ -267,7 +267,7 @@ function ItemForm({ data, view, source }: { data: RoutinesData; view: RoutineVie
               borderWidth: 1.5, borderColor: on ? colors.text : colors['hair-2'], backgroundColor: on ? colors['surface-2'] : 'transparent' }}>
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: slotColor(colors, routine.color) }} />
             <ThemedText variant="caption" style={{ fontWeight: '600', flexShrink: 1 }}>{routine.name}</ThemedText>
-            {on && <Glyph name="check" size={16} color={colors.text} weight={2.4} />}
+            {on && <Glyph name="check" size={16} color={colors.text} />}
           </Tappable>;
         })}
       </View>}

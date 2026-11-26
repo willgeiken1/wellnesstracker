@@ -10,7 +10,8 @@ import { tokens } from '../../design/tokens';
 import { t } from '../../i18n/en';
 import { calorieMismatch, lookupBarcode, normalizeBarcode, scannedPortion, type ScannedFood } from './barcode';
 import type { Food } from './model';
-import { FieldRow, Glyph, Group, GroupLabel, ItemRow, kcalOf, macroText, NoticeRow, PanelHeader, PrimaryAction, QuietAction, semibold, SoftAction } from './parts';
+import { Icon } from '../../components/icon';
+import { FieldRow, Group, GroupLabel, ItemRow, kcalOf, macroText, NoticeRow, PanelHeader, PrimaryAction, QuietAction, semibold, SoftAction } from './parts';
 
 /** Four corner marks that show where to hold the barcode. Drawn over the camera, or over the idle panel in a quieter colour. */
 function FrameGuide({ color }: { color: string }) {
@@ -58,11 +59,11 @@ export function FoodScanner({repo,onChoose,onManual,onClose,onSearch}:{repo:Repo
         <FrameGuide color={colors.accent}/>
         <Pressable accessibilityRole="button" accessibilityLabel={t(torch?'barcodeTorchOff':'barcodeTorchOn')} accessibilityState={{selected:torch}} onPress={()=>setTorch(!torch)}
           style={({pressed})=>({position:'absolute',right:10,bottom:10,minHeight:44,paddingHorizontal:14,borderRadius:22,flexDirection:'row',alignItems:'center',gap:6,backgroundColor:torch?colors.accent:colors.surface,opacity:pressed?PRESSED_FILL_OPACITY:1})}>
-          <Glyph name="torch" size={18} color={torch?colors['on-accent']:colors.text}/>
+          <Icon name="torch" size={18} color={torch?colors['on-accent']:colors.text}/>
           <ThemedText style={[semibold,{fontSize:14,color:torch?colors['on-accent']:colors.text}]}>{t(torch?'barcodeTorchLabelOn':'barcodeTorchLabel')}</ThemedText>
         </Pressable>
       </View>:<View style={{borderRadius:16,backgroundColor:colors['surface-2'],paddingHorizontal:tokens.spacing[3],paddingVertical:tokens.spacing[4],gap:tokens.spacing[2],alignItems:'center'}} testID={denied?'barcode-camera-off':'barcode-camera-idle'}>
-        <Glyph name={denied?'cameraOff':'scan'} size={34} color={colors['text-muted']} width={1.6}/>
+        <Icon name={denied?'camera-off':'scan-barcode'} size={34} color={colors['text-muted']}/>
         <ThemedText style={[semibold,{textAlign:'center'}]}>{t(denied?'barcodeCameraOff':'barcodeCameraIdle')}</ThemedText>
         <ThemedText muted variant="caption" accessibilityLiveRegion="polite" style={{textAlign:'center'}}>{t(denied?'barcodeDenied':'barcodeCameraIdleBody')}</ThemedText>
         <View style={{alignSelf:'stretch',gap:tokens.spacing[1]}}>

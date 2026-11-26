@@ -2,7 +2,7 @@ import { Tappable as Pressable } from '@/components/tappable';
 import { Stack, router } from 'expo-router';
 import { touchTarget } from '@/components/button';
 import { useTheme } from '@/design/theme-provider';
-import { SettingsIcon } from '@/features/settings/parts';
+import { Icon } from '@/components/icon';
 import { t } from '@/i18n/en';
 export const unstable_settings = { initialRouteName: 'index' };
 /** Settings is the first screen of its own stack, so the system gives it no back button. This one leaves Settings. */
@@ -11,7 +11,7 @@ function LeaveSettings() {
   return <Pressable testID="settings-back" accessibilityRole="button" accessibilityLabel={t('settingsBack')} hitSlop={8}
     onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
     style={{ minWidth: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' }}>
-    <SettingsIcon name="back" size={20} color={colors.text} />
+    <Icon name="back" size={20} color={colors.text} />
   </Pressable>;
 }
 export default function SettingsLayout() {

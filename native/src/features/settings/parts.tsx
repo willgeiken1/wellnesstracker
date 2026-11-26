@@ -1,10 +1,9 @@
 import { Children, type PropsWithChildren } from 'react';
 import { PRESSED_ROW_OPACITY, PRESSED_FILL_OPACITY } from '@/components/tappable';
 import { useSelectionHaptic } from '@/components/selection-haptic';
-import { Platform, Pressable, Switch, View, type ColorValue } from 'react-native';
-import { SymbolView } from 'expo-symbols';
-import Svg, { Path } from 'react-native-svg';
+import { Pressable, Switch, View, type ColorValue } from 'react-native';
 import { Card } from '@/components/card';
+import { Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { touchTarget } from '@/components/button';
 import { useTheme } from '@/design/theme-provider';
@@ -13,37 +12,6 @@ import { tokens } from '@/design/tokens';
 /** The shared parts of the Settings screens: grouped inset lists, rows, switches and choice chips. */
 export const semibold = { fontWeight: '600' } as const;
 const ROW_HEIGHT = 52;
-
-const symbols = {
-  account: 'person.crop.circle', profile: 'ruler', appearance: 'paintpalette', workout: 'dumbbell', health: 'heart', score: 'target',
-  notifications: 'bell', privacy: 'lock', data: 'square.and.arrow.down', about: 'info.circle',
-  search: 'magnifyingglass', back: 'chevron.left', forward: 'chevron.right',
-} as const;
-const paths = {
-  account: 'M20 21Q20 14 12 14Q4 14 4 21M12 3A4 4 0 1 0 12 11A4 4 0 1 0 12 3',
-  profile: 'M3 8H21V16H3ZM7 8V11M11 8V12M15 8V11M19 8V12',
-  appearance: 'M12 3A9 9 0 1 0 12 21Q14 21 14 19Q14 17.5 15.5 17.5H17A4 4 0 0 0 21 13.5Q21 3 12 3M8 10.5V10.6M12 7.5V7.6M16 10.5V10.6',
-  workout: 'M3 7V17M6 5V19M18 5V19M21 7V17M6 12H18',
-  health: 'M12 20Q4 14 4 9A4 4 0 0 1 12 7A4 4 0 0 1 20 9Q20 14 12 20Z',
-  score: 'M12 3A9 9 0 1 0 12 21A9 9 0 1 0 12 3M12 8A4 4 0 1 0 12 16A4 4 0 1 0 12 8',
-  notifications: 'M6 17V11A6 6 0 0 1 18 11V17L20 19H4ZM10 21H14',
-  privacy: 'M6 11H18V20H6ZM8 11V8A4 4 0 0 1 16 8V11',
-  data: 'M12 3V15M7 10L12 15L17 10M4 20H20',
-  about: 'M12 3A9 9 0 1 0 12 21A9 9 0 1 0 12 3M12 11V16M12 8V8.1',
-  search: 'M10.5 4A6.5 6.5 0 1 0 10.5 17A6.5 6.5 0 1 0 10.5 4M15.5 15.5L20 20',
-  back: 'M15 5L8 12L15 19',
-  forward: 'M9 5L16 12L9 19',
-};
-export type SettingsIconName = keyof typeof paths;
-/** Decorative: the control around it carries the label. */
-export function SettingsIcon({ name, size = 20, color }: { name: SettingsIconName; size?: number; color?: ColorValue }) {
-  const { colors } = useTheme();
-  const tint = color ?? colors.text;
-  if (Platform.OS === 'ios') return <SymbolView name={symbols[name]} size={size} tintColor={tint} accessible={false} />;
-  return <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
-    <Path d={paths[name]} fill="none" stroke={tint} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>;
-}
 
 /** The small heading above a group. Sentence case, semibold. */
 export function SectionLabel({ children }: { children: string }) {
@@ -62,7 +30,7 @@ export function Group({ children, testID }: PropsWithChildren<{ testID?: string 
 
 /** A row that opens something: icon, label, an optional current value, chevron. */
 export function NavRow({ label, value, icon, onPress, testID }: {
-  label: string; value?: string; icon?: SettingsIconName; onPress: () => void; testID?: string;
+  label: string; value?: string; icon?: IconName; onPress: () => void; testID?: string;
 }) {
   const { colors } = useTheme();
   return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label}
@@ -70,11 +38,11 @@ export function NavRow({ label, value, icon, onPress, testID }: {
     style={({ pressed }) => ({ minHeight: ROW_HEIGHT, paddingVertical: tokens.spacing[1], flexDirection: 'row', alignItems: 'center',
       gap: tokens.spacing[2], opacity: pressed ? PRESSED_ROW_OPACITY : 1 })}>
     {icon && <View style={{ width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['accent-tint'] }}>
-      <SettingsIcon name={icon} size={18} color={colors.accent} />
+      <Icon name={icon} size={18} color={colors.accent} />
     </View>}
     <ThemedText style={{ flex: 1 }}>{label}</ThemedText>
     {!!value && <ThemedText muted variant="caption" style={{ flexShrink: 1, maxWidth: '45%', textAlign: 'right' }}>{value}</ThemedText>}
-    <SettingsIcon name="forward" size={14} color={colors['text-muted']} />
+    <Icon name="forward" size={14} color={colors['text-muted']} />
   </Pressable>;
 }
 
@@ -140,9 +108,7 @@ export function ChoiceChips<T extends string | number>({ options, value, onChang
   </View>;
 }
 function ChipCheck({ color }: { color: ColorValue }) {
-  return <Svg testID="chip-selected-mark" width={16} height={16} viewBox="0 0 24 24" accessible={false}>
-    <Path d="M5 12.5L10 17.5L19 7" fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>;
+  return <View testID="chip-selected-mark"><Icon name="check" size={16} color={color} /></View>;
 }
 
 /** A quiet card for a screen that has nothing to show yet. States the fact, no badge, no button. */

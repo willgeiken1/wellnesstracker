@@ -62,7 +62,7 @@ export function EditRoutines() {
     <Tappable dim="fill" testID={`edit-routines-${by < 0 ? 'up' : 'down'}-${block.id}`} accessibilityRole="button" accessibilityLabel={rs(by < 0 ? 'moveUpNamed' : 'moveDownNamed', { name: block.name })}
       accessibilityState={{ disabled: !allowed }} disabled={!allowed} onPress={() => move(block, by)}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors['surface-2'], opacity: allowed ? 1 : 0.35 }}>
-      <Glyph name={by < 0 ? 'up' : 'down'} size={20} color={colors.text} weight={2.2} />
+      <Glyph name={by < 0 ? 'up' : 'down'} size={20} color={colors.text} />
     </Tappable>
   );
   const lines = (block: RoutineBlock) => <View style={{ flex: 1, minWidth: 120, gap: 2 }}>
@@ -91,7 +91,7 @@ export function EditRoutines() {
     })}
     <Tappable dim="fill" testID="edit-routines-new" accessibilityRole="button" accessibilityLabel={rs('newRoutine')} onPress={() => router.push(routineRoutes.newRoutine())}
       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing[1], minHeight: 56, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors['text-muted'] }}>
-      <Glyph name="add" size={18} color={colors.text} weight={2.2} />
+      <Glyph name="add" size={18} color={colors.text} />
       <ThemedText style={{ fontWeight: '600' }}>{rs('newRoutine')}</ThemedText>
     </Tappable>
     {!!hidden.length && <>

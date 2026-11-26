@@ -12,6 +12,8 @@ import {
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import Svg, { Path } from "react-native-svg";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { Icon } from "@/components/icon";
+import { ICON_STROKE } from "@/components/icon-data";
 import { useTheme } from "@/design/theme-provider";
 import { Tappable } from "@/components/tappable";
 import { ThemedText } from "@/components/themed-text";
@@ -110,33 +112,36 @@ export function Line({
     | "summit"
     | "backspace"
     | "trend"
-    | "clock"
     | "cloud-off"
     | "barbell";
   color?: string;
   size?: number;
 }) {
   const { colors } = useTheme();
+  // Most names draw the shared Insight icon. The four below have no drawing in the set yet, and keep the set's box and line.
+  const shared = {
+    check: "check",
+    down: "chevron-down",
+    close: "close",
+    more: "more",
+    barbell: "workouts",
+  } as const;
   const paths = {
-    check: "M4 12L9 17L20 6",
-    down: "M5 8L12 15L19 8",
-    close: "M5 5L19 19M19 5L5 19",
-    more: "M4 12H5M11 12H12M18 12H19",
     summit: "M3 20L12 4L21 20Z",
     backspace: "M9 5H21V19H9L3 12ZM12 9L18 15M18 9L12 15",
-    clock: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18M12 7V12L16 14",
     "cloud-off":
       "M3 3L21 21M6 6a6 6 0 0 1 11 3h1a4 4 0 0 1 3 7M6 10a4 4 0 0 0 0 8h10",
-    barbell: "M2 12H22M6 5V19M9 3V21M15 3V21M18 5V19",
     trend: "M3 18L9 12L14 15L21 6M15 6H21V12",
-  };
+  } as const;
+  if (name in shared)
+    return <Icon name={shared[name as keyof typeof shared]} size={size} color={color} />;
   return (
     <Svg accessible={false} width={size} height={size} viewBox="0 0 24 24">
       <Path
-        d={paths[name]}
+        d={paths[name as keyof typeof paths]}
         fill="none"
         stroke={color ?? colors.text}
-        strokeWidth={name === "more" ? 3 : 1.8}
+        strokeWidth={ICON_STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
       />

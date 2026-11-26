@@ -1,7 +1,7 @@
 export const tabs = [
-  { route: 'index', label: 'home', symbol: 'house' },
-  { route: 'workouts', label: 'workouts', symbol: 'dumbbell' },
-  { route: 'food', label: 'food', symbol: 'fork.knife' },
-  { route: 'progress', label: 'progress', symbol: 'chart.xyaxis.line' },
-  { route: 'routines', label: 'routines', symbol: 'sun.horizon' },
+  { route: 'index', label: 'home' },
+  { route: 'workouts', label: 'workouts' },
+  { route: 'food', label: 'food' },
+  { route: 'progress', label: 'progress' },
+  { route: 'routines', label: 'routines' },
 ] as const;

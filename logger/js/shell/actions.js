@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 
 /* Clicks, typing, and the rest of the event wiring. */
 /* ================= Actions ================= */
@@ -90,13 +91,13 @@ function stepPair(i, d, wf, rf, bw, hint) {
   const kind = (field) => (field === "r" || field === "rR") ? "reps" : "weight";
   return `<div class="steppers">
         <div class="stepper"><label for="${wf}-${i}">Weight (${app.wUnit()})</label><div class="step-row">
-          <button data-action="step" data-field="${wf}" data-d="-${app.wStep()}" data-i="${i}" aria-label="Weight minus ${app.wStep()}">−</button>
+          <button data-action="step" data-field="${wf}" data-d="-${app.wStep()}" data-i="${i}" aria-label="Weight minus ${app.wStep()}">${icon("minus")}</button>
           <input id="${wf}-${i}" data-field="${wf}" data-i="${i}" ${app.setNumAttrs(kind(wf))} placeholder="${ph(wf, bw ? "BW" : "0")}" value="${app.esc(d[wf] || "")}">
-          <button data-action="step" data-field="${wf}" data-d="${app.wStep()}" data-i="${i}" aria-label="Weight plus ${app.wStep()}">+</button></div></div>
+          <button data-action="step" data-field="${wf}" data-d="${app.wStep()}" data-i="${i}" aria-label="Weight plus ${app.wStep()}">${icon("plus")}</button></div></div>
         <div class="stepper"><label for="${rf}-${i}">Reps</label><div class="step-row">
-          <button data-action="step" data-field="${rf}" data-d="-1" data-i="${i}" aria-label="Reps minus 1">−</button>
+          <button data-action="step" data-field="${rf}" data-d="-1" data-i="${i}" aria-label="Reps minus 1">${icon("minus")}</button>
           <input id="${rf}-${i}" data-field="${rf}" data-i="${i}" ${app.setNumAttrs(kind(rf))} placeholder="${ph(rf, "0")}" value="${app.esc(d[rf] || "")}">
-          <button data-action="step" data-field="${rf}" data-d="1" data-i="${i}" aria-label="Reps plus 1">+</button></div></div>
+          <button data-action="step" data-field="${rf}" data-d="1" data-i="${i}" aria-label="Reps plus 1">${icon("plus")}</button></div></div>
       </div>`;
 }
 app.stepPair = stepPair;

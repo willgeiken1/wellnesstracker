@@ -102,6 +102,10 @@ input::placeholder, textarea::placeholder {
 [hidden] { display: none !important; }
 h1, h2, h3, h4 { margin: 0; }
 
+/* ---------- Icons ---------- */
+/* One icon from the shared set (js/shared/icons.js). It is as tall as the text it sits in unless its slot sets a size. */
+.ic { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -.125em; pointer-events: none; }
+
 /* ---------- Shell ---------- */
 #view { padding: 14px 16px calc(var(--tabs-h) + 110px + var(--safe-bottom)); max-width: 640px; margin: 0 auto; }
 .page-title { font-family: var(--display); font-weight: 700; font-size: 38px; line-height: 1.05; }

@@ -35,7 +35,7 @@ function Mark({ mark, size = 16 }: { mark: string; size?: number }) {
   const { colors } = useTheme();
   const glyph = GLYPH[routineMarkIcon(mark).icon];
   if (!glyph) return <View style={{ width: size, aspectRatio: 1 }} />;
-  return <Glyph name={glyph} size={size} color={mark === 'logged' || mark === 'partial' ? colors.text : colors['text-muted']} width={2} />;
+  return <Glyph name={glyph} size={size} color={mark === 'logged' || mark === 'partial' ? colors.text : colors['text-muted']} />;
 }
 
 /** One day: its date, then each item with what happened to it and the amount stored on that log. */

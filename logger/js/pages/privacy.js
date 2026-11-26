@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { icon } from "../shared/icons.js";
 import { applyPurges, buildExportFiles, coveredBy, localStamp, mergeCheckins, mergeWeighIns, notePurge, purgeCutoff, stripRange, unionPurges, validDay, weighAfterPurge, zipStore } from "../shared/purge.js";
 
 /* Privacy center: export, date-range delete, account delete, and app lock. */
@@ -715,7 +716,7 @@ function renderLock(force) {
       ${L.passcodeHash ? `<button class="btn block" data-action="lock-show-pass" style="margin-top:8px">Use app passcode</button>` : ""}
       <button class="link-btn lock-alt" data-action="lock-relogin">Sign in again instead</button>`;
   }
-  el.innerHTML = `<div class="lock-card"><div class="lock-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>${body}
+  el.innerHTML = `<div class="lock-card"><div class="lock-mark" aria-hidden="true">${icon("lock", { size: 28 })}</div>${body}
     <p class="sub small lock-foot">If biometrics aren't available, signing in with your password opens the app. You won't be locked out of your account.</p></div>`;
 }
 app.renderLock = renderLock;
