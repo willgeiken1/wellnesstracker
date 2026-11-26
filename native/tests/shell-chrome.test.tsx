@@ -22,7 +22,7 @@ jest.mock('expo-router', () => {
   const React = require('react');
   const { Text: Host } = require('react-native');
   return {
-    router: { push: jest.fn(), back: jest.fn(), navigate: jest.fn() },
+    router: { push: jest.fn(), back: jest.fn(), navigate: jest.fn() }, useIsFocused: () => true,
     Redirect: ({ href }: { href: string }) => React.createElement(Host, { testID: 'redirect' }, href),
   };
 });
@@ -195,12 +195,18 @@ describe('the frame around the pages', () => {
     expect(router.push).toHaveBeenCalledWith('/settings');
     expect(screen.getByText('S')).toBeTruthy();
   });
-  test('Routines is a tab with a plain empty state until its page arrives', async () => {
-    await render(<Harness><Routines /></Harness>);
-    expect(screen.getByText('Supplement, habit or dose')).toBeTruthy();
+  // The Routines page replaced the placeholder: it draws under the shell, its + is its own, and Add item opens the add sheet.
+  test('Routines is a tab with its own page, + actions and Add item', async () => {
+    await render(<Harness start="routines"><Routines /></Harness>);
+    expect(screen.getByTestId('routines-tab')).toBeTruthy();
+    expect(plus().props.accessibilityLabel).toBe('Routines quick actions');
     await fireEvent.press(screen.getAllByRole('button', { name: 'Add item' })[0]);
-    await act(async () => {});
-    expect(screen.getByText('This isn’t available yet')).toBeTruthy();
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/routines/add', params: {} });
+  });
+  test('Routines without an account says how to see it, calmly', async () => {
+    mockRepo = null;
+    await render(<Harness start="routines"><Routines /></Harness>);
+    expect(screen.getByText('Sign in or look around first to see your routines.')).toBeTruthy();
   });
   test('the old Insights address goes to Progress', async () => {
     await render(<InsightsRoute />);
