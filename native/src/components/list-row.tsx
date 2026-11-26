@@ -5,6 +5,7 @@ import { KitText } from './themed-text';
 import { Icon, type IconName } from './icon';
 import { KIT, StackGapContext, SurfaceContext, useKit } from './kit-style';
 import { Switch } from './switch';
+import { ROW_DENSITY, useRowDensity } from './row-density';
 
 /** Where a row sits in its list: whether a hairline goes above it and how far in it starts. */
 const RowPlace = createContext<{ index: number; inset: number }>({ index: 0, inset: 16 });
@@ -49,13 +50,15 @@ export type ListRowProps = {
 };
 
 /**
- * The kit's `.row` (`ui.row`): at least 56 pt tall, 16 pt in from each side, 12 pt between its parts. Tappable rows
+ * The kit's `.row` (`ui.row`): at least 56 pt tall (62 airy, 46 dense: the Density choice in Settings), 16 pt in from
+ * each side, 12 pt between its parts. Tappable rows
  * highlight while held. Put rows in a List so the hairlines between them are drawn.
  */
 export function ListRow({ title, label, sub, icon, color, value, strong, chevron, toggle, onToggle, right, danger, onPress, disabled,
   testID, accessibilityLabel, accessibilityHint }: ListRowProps) {
   const k = useKit();
   const place = useContext(RowPlace);
+  const density = useRowDensity();
   const name = title ?? label ?? '';
   const c = k.tok(color);
   const showChevron = chevron ?? !!onPress;
@@ -75,7 +78,7 @@ export function ListRow({ title, label, sub, icon, color, value, strong, chevron
     {toggle != null && <Switch value={toggle} onValueChange={next => onToggle?.(next)} label={name} disabled={disabled} />}
     {showChevron && <View style={{ marginHorizontal: -4 }}><Icon name="chevron-right" size={16} color={k.c.ghost} /></View>}
   </>;
-  const rowStyle: ViewStyle = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, paddingHorizontal: 16 };
+  const rowStyle: ViewStyle = { flexDirection: 'row', alignItems: 'center', gap: 12, ...ROW_DENSITY[density], paddingHorizontal: 16 };
   if (!onPress) return <View testID={testID} style={rowStyle}>{body}</View>;
   return <Pressable dim="none" testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? [name, sub, typeof value === 'string' ? value : undefined].filter(Boolean).join(', ')}
     accessibilityHint={accessibilityHint} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
