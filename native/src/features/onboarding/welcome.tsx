@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Image, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Circle, Defs, G, LinearGradient, Mask, Path, Rect, Stop } from 'react-native-svg';
@@ -6,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KitText, Tappable, useKit } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { useTheme } from '@/design/theme-provider';
-import { terrain } from '@/features/home/contour';
+import { BAND_OPACITY, BAND_WIDTH, welcomeArt, type WelcomeArt } from './welcome-art';
 import { iconArt, iconId } from '@/features/settings/app-icon';
 import { LEGAL_LINKS, openPage } from '@/features/settings/links';
 import { useSettingsPrefs } from '@/features/settings/prefs';
@@ -25,22 +24,23 @@ function Shape({ kind, color }: { kind: 'c' | 't' | 'd' | 's'; color: string }) 
   </Svg>;
 }
 
+let ART: WelcomeArt | null = null;
 function Art({ width }: { width: number }) {
   const k = useKit();
-  const map = useMemo(() => terrain([1, 0.86, 0.94, 0.8], width, 430, { sd: 0.16, wobble: 0.22, levels: 7, seed: 29,
-    positions: [[0.24, 0.36], [0.66, 0.66], [0.32, 0.8], [0.8, 0.26]] }), [width]);
-  const colors = STRANDS.map(([c]) => k.tok(c));
-  return <Svg width={width} height={430} style={{ position: 'absolute', top: 0, left: 0 }} accessible={false}>
+  const art = ART ??= welcomeArt(393, 430);
+  return <Svg width={width} height={430} viewBox="0 0 393 430" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', top: 0, left: 0 }} accessible={false}>
     <Defs>
       <LinearGradient id="wel-fade" x1="0" y1="0" x2="0" y2="1">
         <Stop offset="0.04" stopColor="#fff" stopOpacity={0} /><Stop offset="0.22" stopColor="#fff" stopOpacity={1} />
         <Stop offset="0.62" stopColor="#fff" stopOpacity={1} /><Stop offset="0.98" stopColor="#fff" stopOpacity={0} />
       </LinearGradient>
-      <Mask id="wel-mask"><Rect width={width} height={430} fill="url(#wel-fade)" /></Mask>
+      <Mask id="wel-mask"><Rect width={393} height={430} fill="url(#wel-fade)" /></Mask>
     </Defs>
     <G mask="url(#wel-mask)">
-      {map.lines.map((l, i) => <Path key={i} d={l.d} fill="none" stroke={colors[l.hill]} strokeWidth={l.width * 1.1} opacity={Math.min(1, l.opacity * 1.15)} strokeLinecap="round" />)}
-      {map.markers.filter(m => m.summit).map(m => <Circle key={m.hill} cx={m.x} cy={m.y} r={5} fill={colors[m.hill]} />)}
+      {art.paths.map((l, i) => <Path key={i} d={l.d} fill="none" stroke={k.tok(l.c)} strokeOpacity={BAND_OPACITY[l.band]} strokeWidth={BAND_WIDTH[l.band]} strokeLinecap="round" />)}
+      {art.marks.map(m => { const c = k.tok(m.c); return m.mk === 'c' ? <Circle key={m.c} cx={m.x} cy={m.y} r={5} fill={c} />
+        : m.mk === 's' ? <Rect key={m.c} x={m.x - 4.5} y={m.y - 4.5} width={9} height={9} rx={2} fill={c} />
+        : <Path key={m.c} d={`M${m.x} ${m.y - 6}L${m.x + 6} ${m.y + 4.5}L${m.x - 6} ${m.y + 4.5}Z`} fill={c} stroke={c} strokeWidth={1.5} strokeLinejoin="round" />; })}
     </G>
   </Svg>;
 }
@@ -82,7 +82,7 @@ export function Welcome() {
       </Tappable>
       <Tappable testID="welcome-look-around" accessibilityRole="button" accessibilityLabel={t('lookAround')} onPress={auth.lookAround}
         style={{ minHeight: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' }}>
-        <KitText weight={600} size={16} color="accent-2">{t('lookAround')}</KitText>
+        <KitText weight={600} size={16} color="accent">{t('lookAround')}</KitText>
       </Tappable>
       <View testID="welcome-other-ways" style={{ flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
         {quiet('welcome-sign-in', t('haveAccount'), () => router.push('/auth/sign-in'), !auth.configured)}

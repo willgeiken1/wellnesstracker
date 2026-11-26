@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -27,16 +27,20 @@ export function openSection(id: SectionId, focus?: string) {
 export function Avatar({ name, size }: { name: string; size: number }) {
   const k = useKit();
   const end = mix(k.c.training, k.c.accent, 0.7);
+  const id = 'st-av' + useId().replace(/[^a-zA-Z0-9]/g, '');
   return <View accessible={false} style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
     <Svg width={size} height={size} viewBox="0 0 60 60" style={{ position: 'absolute' }}>
-      <Defs><RadialGradient id="st-av" cx="12" cy="6" r="72" gradientUnits="userSpaceOnUse">
+      <Defs><RadialGradient id={id} cx="12" cy="6" r="72" gradientUnits="userSpaceOnUse">
         <Stop offset="0" stopColor={k.c['accent-2']} /><Stop offset="0.45" stopColor={k.c.accent} /><Stop offset="1" stopColor={end} />
       </RadialGradient></Defs>
-      <Rect width={60} height={60} fill="url(#st-av)" />
+      <Rect width={60} height={60} fill={`url(#${id})`} />
       <Path d="M-4 40c14-10 26 6 40-4s18-12 30-6M-4 50c16-8 26 4 40-2s18-8 30-4M-4 30c12-8 24 4 38-4s20-10 32-6" stroke={k.c['on-accent']} strokeWidth={1} fill="none" opacity={0.35} />
     </Svg>
-    {name ? <KitText weight={700} size={Math.round(size * 0.42)} tracking={-0.03} color="on-accent">{name.charAt(0).toUpperCase()}</KitText>
-      : <Icon name="person" size={Math.round(size * 0.46)} color={k.c['on-accent']} />}
+    {/* positioned, so web paints it above the absolute art as native does */}
+    <View style={{ position: 'relative' }}>
+      {name ? <KitText weight={700} size={Math.round(size * 0.42)} tracking={-0.03} color="on-accent">{name.charAt(0).toUpperCase()}</KitText>
+        : <Icon name="person" size={Math.round(size * 0.46)} color={k.c['on-accent']} />}
+    </View>
   </View>;
 }
 
