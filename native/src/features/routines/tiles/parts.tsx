@@ -20,7 +20,7 @@ export interface Ctx { s: RoutinesState; n: Now; store: RoutinesStore; live: boo
 /** A big number with its small unit (`.rtt-n`). */
 export function Num({ v, unit, fs = 32, color, style }: { v: string | number; unit?: string; fs?: number; color?: string; style?: StyleProp<TextStyle> }) {
   return <KitText weight={700} size={fs} lineHeight={1} tracking={-0.03} numeric color={color} numberOfLines={1} style={style}>
-    {String(v)}{unit ? <KitText weight={600} size={13} color="text-muted">{` ${unit}`}</KitText> : null}
+    {String(v)}{unit ? <KitText weight={600} size={13} color="text-muted" style={{ letterSpacing: 0 }}>{` ${unit}`}</KitText> : null}
   </KitText>;
 }
 /** The muted small line (`.rtt-s`). */
@@ -86,7 +86,7 @@ export function TBtn({ label, icon, onPress, kind = 'fill', color, full, live, s
       backgroundColor: kind === 'ghost' ? alpha(color, 0.15) : undefined, borderWidth: kind === 'quiet' ? 1 : 0, borderColor: k.c['hair-2'],
       alignSelf: full ? 'stretch' : 'flex-start' } as ViewStyle}>
     {kind === 'fill' && w ? <TileSurface spec={raised(color, k.mode, 11)} width={w} height={h} /> : null}
-    {icon ? <Icon name={icon} size={h < 30 ? 14 : 16} color={ink} /> : null}
+    {icon ? <View><Icon name={icon} size={h < 30 ? 14 : 16} color={ink} /></View> : null}
     <KitText weight={700} size={fs} color={ink} numberOfLines={1}>{label}</KitText>
   </PressScale>;
 }

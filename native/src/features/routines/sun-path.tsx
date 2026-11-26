@@ -1,6 +1,5 @@
-import { useId } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useKit } from '@/components/kit';
 import { tokens } from '@/design/tokens';
 import { hax, rItems, todayItems, type Now, type RoutinesState, isDone, isPaused } from './model';
@@ -19,7 +18,7 @@ export function SunPath({ s, n, width, only, big, caps, small, label }: {
   /** Draw only this routine (the detail screen). */
   only?: string; big: string; caps?: string; small?: boolean; label: string;
 }) {
-  const k = useKit(), c = k.c, gid = `rtsky${useId().replace(/[^a-z0-9]/gi, '')}`;
+  const k = useKit(), c = k.c;
   const now = Math.max(5, Math.min(23, n.h));
   const rs = s.routines.filter(r => !only || r.id === only);
   const its = (only ? rItems(s, only, n) : todayItems(s, n)).slice().sort((a, b) => a.h - b.h);
@@ -39,8 +38,6 @@ export function SunPath({ s, n, width, only, big, caps, small, label }: {
   }
   return <View accessible accessibilityRole="image" accessibilityLabel={label} style={{ width, height }}>
     <Svg width={width} height={height} viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ overflow: 'visible' }}>
-      <Defs><LinearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor={c.warning} stopOpacity={0.12} /><Stop offset="1" stopColor={c.warning} stopOpacity={0} /></LinearGradient></Defs>
-      <Path d="M18 122 A128 96 0 0 1 274 122 Z" fill={`url(#${gid})`} />
       <Path d="M18 122 A128 96 0 0 1 274 122" fill="none" stroke={c['hair-2']} strokeWidth={2} strokeDasharray="1 6" strokeLinecap="round" />
       <Path d={arcD(5, now)} fill="none" stroke={c['text-muted']} strokeWidth={2} opacity={0.7} />
       {rs.map(r => {

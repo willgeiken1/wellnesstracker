@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
-import { router, useNavigation } from 'expo-router';
+import { router, useNavigation, type NativeStackNavigationOptions } from 'expo-router';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { EmptyState, Icon, KitText, Sheet, SheetHeader, Tappable, alpha, font, useKit } from '@/components/kit';
 import { capitals } from '@/components/kit-style';
@@ -12,8 +12,8 @@ import { nudge, pretty, parseAmt, smallSteps, stepsFor } from './model';
 /* The frame and the small parts the Routines sheets share (`.rt-sheet` and friends in the mockup). */
 
 /** Native form sheet options for the Routines sheets: all open large. */
-export const sheetOptions = { headerShown: false, presentation: 'formSheet', sheetGrabberVisible: true, sheetCornerRadius: 28,
-  sheetAllowedDetents: [1], contentStyle: { flex: 1 } } as const;
+export const sheetOptions: NativeStackNavigationOptions = { headerShown: false, presentation: 'formSheet', sheetGrabberVisible: true, sheetCornerRadius: 28,
+  sheetAllowedDetents: [1], contentStyle: { flex: 1 } };
 
 /** Whether this screen was opened cold (a link or a widget), with nothing under it to go back to. */
 export function useCold() {
@@ -52,7 +52,8 @@ export function useRt() {
 
 /** A Routines sheet: the big title with a round close button pinned at the top, then the blocks 16 pt apart. */
 export function RtSheet({ header, children, testID }: { header: ReactNode; children: ReactNode; testID?: string }) {
-  return <Sheet header={header} gap={16} testID={testID}>{children}</Sheet>;
+  // The mockup keeps its header inside the 16 pt grid, so the first block sits a gap below it.
+  return <Sheet header={header} gap={16} testID={testID}><View />{children}</Sheet>;
 }
 
 /** The sheet's title row (`.rt-shd`): 700 24 pt, a 32 pt close button, and an optional back link above the title. */

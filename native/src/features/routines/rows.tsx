@@ -44,7 +44,7 @@ export const checkLabel = (i: Item) => fill(t('routinesCheckLabel'), { name: i.n
 export function ItemRow({ i, s, n, store, next, color, first }: { i: Item; s: RoutinesState; n: Now; store: RoutinesStore; next: boolean; color: string; first?: boolean }) {
   const m = markOf(s, n.day, i.id), done = m === 'd', skip = m === 's';
   return <RowShell first={first}>
-    <KitText weight={600} size={12} numeric color={next ? color : 'text-muted'} numberOfLines={1} style={{ width: 53, flexShrink: 0, opacity: skip ? 0.5 : 1 }}>{h12(i.h)}</KitText>
+    <KitText weight={600} size={12} numeric color={next ? color : 'text-muted'} numberOfLines={1} style={{ width: 72, marginRight: -19, flexShrink: 0, opacity: skip ? 0.5 : 1 }}>{h12(i.h)}</KitText>
     <View style={{ flex: 1, minWidth: 0, gap: 1, opacity: skip ? 0.5 : 1 }}>
       <KitText weight={600} size={15.5} lineHeight={1.25} style={done ? { textDecorationLine: 'line-through', opacity: 0.55 } : undefined}>{i.name}</KitText>
       <KitText weight={500} size={13} color="text-muted">{i.dose}</KitText>
@@ -56,7 +56,7 @@ export function ItemRow({ i, s, n, store, next, color, first }: { i: Item; s: Ro
 /** An item not due today: its days instead of a check-off. */
 export function OffRow({ i, first }: { i: Item; first?: boolean }) {
   return <RowShell first={first}>
-    <KitText weight={600} size={12} numeric color="text-muted" numberOfLines={1} style={{ width: 53, flexShrink: 0 }}>{h12(i.h)}</KitText>
+    <KitText weight={600} size={12} numeric color="text-muted" numberOfLines={1} style={{ width: 72, marginRight: -19, flexShrink: 0 }}>{h12(i.h)}</KitText>
     <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
       <KitText weight={600} size={15.5} lineHeight={1.25}>{i.name}</KitText>
       <KitText weight={500} size={13} color="text-muted">{i.dose}</KitText>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Platform, ScrollView, Share, TextInput, View, type GestureResponderEvent } from 'react-native';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Chip, Icon, type IconName, KitText, List, ListRow, SegmentedControl, SheetHeader, Tappable, font, mix, useKit } from '@/components/kit';
 import { tokens } from '@/design/tokens';
@@ -102,7 +102,7 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
               alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 -3px 0 rgba(20,20,20,0.12)' : undefined }}>
               <Icon name={TYPE_ICON[ty]} size={20} color={on ? rt.ink : c['text-muted']} />
             </View>
-            <KitText weight={600} size={11} lineHeight={1.2} color={on ? 'text' : 'text-muted'} numberOfLines={1} style={{ textAlign: 'center' }}>{TYPE_NAME[ty]}</KitText>
+            <KitText weight={600} size={11} lineHeight={1.2} color={on ? 'text' : 'text-muted'} numberOfLines={1} style={{ textAlign: 'center', width: 80, alignSelf: 'center' }}>{TYPE_NAME[ty]}</KitText>
           </Tappable>;
         })}
         <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={t('routinesNewType')} onPress={() => showToast(t('routinesNewTypeToast'), { color: 'sleep' })}
@@ -318,7 +318,15 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
   const strip = useRef<ComponentRef<typeof ScrollView>>(null);
   const r = rById(s, rid);
   const back = addDays(n.day, days), backLabel = shortDate(back);
-  useEffect(() => { strip.current?.scrollTo({ x: Math.max(0, (days - 4) * 54), animated: true }); }, [days]);
+  const [stripW, setStripW] = useState(0), placed = useRef(false);
+  useEffect(() => {
+    // Like the mockup's scrollIntoView: the chosen day moves to the middle, and the strip opens unscrolled while it fits.
+    if (!stripW) return;
+    const fits = 16 + days * 54 - 6 <= stripW, wasPlaced = placed.current;
+    placed.current = true;
+    if (!wasPlaced && fits) return;
+    strip.current?.scrollTo({ x: Math.max(0, 16 + (days - 1) * 54 + 24 - stripW / 2), animated: wasPlaced });
+  }, [days, stripW]);
   if (!r) return null;
   const go = () => {
     const undo = store.pause(r.id, back, why);
@@ -343,13 +351,13 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {UNTIL.map(([d, l]) => <Chip key={d} label={l} color="sleep" selected={days === d} onPress={() => setDays(d)} />)}
       </View>
-      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={t('routinesPickBack')}
+      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={t('routinesPickBack')} onLayout={e => setStripW(e.nativeEvent.layout.width)}
         style={{ marginHorizontal: -16, flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 16, paddingVertical: 2 }}>
         {Array.from({ length: 14 }, (_, i) => {
           const d = i + 1, day = addDays(n.day, d), on = d === days, inside = d < days, dt = dateOf(day);
           return <Tappable key={d} dim="fill" accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={fill(t('routinesBackOnDay'), { date: shortDate(day) })}
             onPress={() => setDays(d)} style={{ width: 48, minHeight: 62, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 2,
-              backgroundColor: on ? c.sleep : inside ? mix(rt.raised, c.sleep, 0.22) : rt.raised, boxShadow: on ? undefined : `0 0 0 1px ${c.hair}` }}>
+              backgroundColor: on ? c.sleep : inside ? mix(c.sleep, rt.raised, 0.22) : rt.raised, boxShadow: on ? undefined : `0 0 0 1px ${c.hair}` }}>
             <KitText weight={700} size={10.5} tracking={0.06} color={on ? rt.inkm : 'text-muted'} style={{ textTransform: 'uppercase' }}>{dt.toLocaleDateString('en-US', { weekday: 'short' })}</KitText>
             <KitText weight={700} size={18} numeric color={on ? rt.ink : 'text'}>{String(dt.getDate())}</KitText>
           </Tappable>;
@@ -357,7 +365,7 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
       </ScrollView>
     </Blk>
     <View style={{ backgroundColor: rt.well, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', gap: 12, alignItems: 'center', boxShadow: `0 0 0 1px ${c.hair}` }}>
-      <View style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: mix('transparent', c.sleep, 0.16) }}>
+      <View style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: mix(c.sleep, 'transparent', 0.16) }}>
         <Icon name="pause" size={18} color={c.sleep} />
       </View>
       <KitText weight={500} size={14} lineHeight={1.4} style={{ flex: 1 }}>
@@ -420,10 +428,10 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
             <Path d="M16 112 A114 84 0 0 1 244 112" fill="none" stroke={c['hair-2']} strokeWidth={2} strokeDasharray="1 6" strokeLinecap="round" />
             {s.routines.map(r => <Path key={r.id} d={nseg(r.from, Math.min(23, r.to))} fill="none" stroke={c[r.color]} strokeWidth={6} opacity={0.3} strokeLinecap="round" />)}
             <Path d={nseg(from, to)} fill="none" stroke={c[color]} strokeWidth={9} strokeLinecap="round" />
-            {[from, to].map((x, i) => { const p = P2(x); return <View key={i}>
+            {[from, to].map((x, i) => { const p = P2(x); return <G key={i}>
               <Line x1={p[0]} y1={112} x2={p[0]} y2={p[1]} stroke={c['hair-2']} strokeWidth={1.4} />
               <Circle cx={p[0]} cy={p[1]} r={9} fill="#FFFDF2" stroke="#141414" strokeWidth={3} />
-            </View>; })}
+            </G>; })}
             <Line x1={16} y1={112} x2={244} y2={112} stroke={c['text-muted']} strokeWidth={1.3} />
             {[5, 8, 11, 14, 17, 20, 23].map(x => <SvgText key={x} x={P2(x)[0]} y={128} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10}>{hax(x)}</SvgText>)}
             <SvgText x={130} y={80} textAnchor="middle" fill={c.text} fontFamily={tokens.font.heading} fontSize={17}>{rng(from, to)}</SvgText>
