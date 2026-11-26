@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
@@ -34,6 +34,7 @@ export function ExerciseDetail() {
   const { name: raw } = useLocalSearchParams<{ name?: string }>();
   const data = useTrainingData(), k = useKit();
   const [mode, setMode] = useState<Mode>('top');
+  const navigation = useNavigation();
   const name = raw || '', label = exLabel(name);
   const editRest = () => data && actionSheet({ title: tr('trainingRestForName', { name: label }),
     actions: RESTS.map(sec => ({ label: clock(sec * 1000), run: () => { data.workout.setRest(name, { ...data.workout.rest(name), seconds: sec }); showToast(tr('trainingRestSet', { name: label, rest: clock(sec * 1000) }), { color: 'training' }); } })) });
@@ -47,6 +48,12 @@ export function ExerciseDetail() {
   const bestEst = hist.reduce((p, x) => x.est > p.est ? x : p), heavy = hist.reduce((p, x) => x.top.w > p.top.w || (x.top.w === p.top.w && x.top.r > p.top.r) ? x : p);
   const bestVol = hist.reduce((p, x) => x.volume > p.volume ? x : p), last = hist[hist.length - 1];
   const active = data.workout.active();
+  // Opened from the logger, Back to workout goes back to it (the design's back); from anywhere else it opens the logger.
+  const backToWorkout = () => {
+    const st = navigation.getState();
+    if (st && st.index > 0 && st.routes[st.index - 1]?.name === 'workout') navigation.goBack();
+    else trainingNav.logger();
+  };
   const live = !!active && data.workout.entries(active.id).some(e => String(e.data.exercise).toLowerCase() === name.toLowerCase());
   const rest = clock(data.workout.rest(name).seconds * 1000);
   return <Page testID="exercise-detail" nav={nav}>
@@ -88,7 +95,7 @@ export function ExerciseDetail() {
     <List>{hist.slice().reverse().map(x => <ListRow key={x.id} title={dayLabel(x.day)} sub={tr('trainingHistSub', { sets: trCount('trainingSetCount', x.sets.length), v: `${fmt(x.est)} ${u}` })}
       value={setText(x.top.w, x.top.r, u)} onPress={() => trainingNav.detail(x.id)} />)}</List>
     <View style={{ marginTop: 8 }}>
-      {live ? <Button label={tr('trainingBackToWorkout')} variant="secondary" color="training" full onPress={() => trainingNav.logger()} />
+      {live ? <Button label={tr('trainingBackToWorkout')} variant="secondary" color="training" full onPress={backToWorkout} />
         : <Button label={tr('trainingLastRest', { set: setText(last.top.w, last.top.r, u), rest })} variant="quiet" full onPress={editRest} />}
     </View>
   </Page>;
