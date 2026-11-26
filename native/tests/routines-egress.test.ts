@@ -40,7 +40,9 @@ test('the routines data closure has no network, telemetry, logging, sync or AI c
   }
   roots.forEach(visit);
   expect(roots.length).toBeGreaterThanOrEqual(8);
-  expect([...seen].every(file => file.startsWith(start))).toBe(true);
+  // Outside Routines it reaches only the list of what to drop when the account changes, which holds no data.
+  const shared = [path.join(SRC, 'core', 'session-memory.ts')];
+  expect([...seen].filter(file => !file.startsWith(start))).toEqual(shared);
 });
 
 test('no telemetry or AI code reads a routine table or imports routine code', () => {

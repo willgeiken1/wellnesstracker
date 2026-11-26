@@ -2,7 +2,8 @@
 
    A value is kept under the owner it was written for. It is handed back only to that same owner, and it is
    dropped when the owner signs out, deletes the account or leaves the demo, and when the app closes. Nothing
-   here is saved, sent or logged. */
+   here is saved, sent or logged. Code that holds something for the owner in its own memory can ask to have it
+   dropped at the same times, and whenever the owner changes, without the sign-in code having to know of it. */
 
 const held = new Map<string, { owner: string; value: unknown }>();
 
@@ -18,7 +19,21 @@ export function keepSessionMemory(owner: string | null | undefined, key: string,
   else held.set(key, { owner, value });
 }
 
+/* Things that cannot be kept under an owner, like a store shared by several screens, name here what drops them. */
+const droppers = new Map<string, () => void>();
+
+/** Runs `drop` whenever the owner changes or leaves this phone. One `drop` per key: naming a key again replaces it. */
+export function dropWhenOwnerChanges(key: string, drop: () => void): void {
+  droppers.set(key, drop);
+}
+
+/** The app's owner changed: drops what was held for the one before. Values kept by owner are already safe. */
+export function ownerChanged(): void {
+  droppers.forEach(drop => drop());
+}
+
 /** Drops everything. Called when the owner leaves this phone. */
 export function clearSessionMemory(): void {
   held.clear();
+  ownerChanged();
 }

@@ -15,7 +15,7 @@ import { seedDemo } from '../fixtures/demo';
 import { syncTables } from '../src/data/sync/flags';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
-import { activeRoutinesStore, setActiveRoutinesStore, type RoutinesStore } from '../src/features/routines/store';
+import { activeRoutinesStore, createLocalRoutinesStore, setActiveRoutinesStore } from '../src/features/routines/store';
 
 jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),setItemAsync:jest.fn(),deleteItemAsync:jest.fn(),WHEN_UNLOCKED_THIS_DEVICE_ONLY:6}));
 jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), clearLocalSession: jest.fn(async()=>{}) }));
@@ -96,7 +96,7 @@ test('the Routines store the tab and tiles share is dropped when the account cha
   jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:owner===OWNER_B?b:guest});
   const fixture=clientFixture();const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
   await waitFor(()=>expect(observed.ready).toBe(true));expect(observed.repository).toBe(a);
-  const held={} as RoutinesStore;
+  const held=createLocalRoutinesStore(a);
   await act(async()=>{setActiveRoutinesStore(held,a);});
   expect(activeRoutinesStore()).toBe(held);
   await act(async()=>{fixture.emit(session(OWNER_B));});

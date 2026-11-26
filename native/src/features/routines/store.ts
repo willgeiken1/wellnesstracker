@@ -4,6 +4,7 @@ import {
   ALL_DAYS, addDays, clock, demoState, emptyState, itemById, normalize, nowOf, pretty, rById,
   type HiddenRoutine, type Item, type ItemKind, type ItemType, type Mark, type Now, type Routine, type RoutineColor, type RoutinesState,
 } from './model';
+import { dropWhenOwnerChanges } from '@/core/session-memory';
 import { guardRoutinesStore, routineTablesIo } from './data/sqlite-store';
 
 /*
@@ -11,7 +12,7 @@ import { guardRoutinesStore, routineTablesIo } from './data/sqlite-store';
  * account's routines on the phone, in that account's daily_* tables (data/sqlite-store.ts): a routine, an item, its place
  * in a routine, a pause and a check-off are each a row of their own. ROUTINES_KEY is only where an earlier build kept the
  * whole state as one JSON document; one found there is moved into the tables and the key is cleared.
- * The store the tab and the Home tiles share is dropped when the account changes or signs out (auth/provider.tsx).
+ * The store the tab and the Home tiles share is dropped when the account changes or signs out (core/session-memory.ts).
  */
 
 export const ROUTINES_KEY = 'routines';
@@ -132,6 +133,8 @@ function structuredCloneState(s: RoutinesState): RoutinesState { return JSON.par
 /** The store for one account, kept in the phone's daily_* tables (data/sqlite-store.ts). A document an earlier build
  * left under ROUTINES_KEY is taken into the tables once. The demo account starts with the sample routines. */
 export function createLocalRoutinesStore(repo: Repository): RoutinesStore {
+  // The shared store below follows one account: it is dropped on sign-out and whenever the account changes.
+  dropWhenOwnerChanges(ROUTINES_KEY, () => setActiveRoutinesStore(null));
   return guardRoutinesStore(createRoutinesStore(routineTablesIo(repo, {
     legacyKey: ROUTINES_KEY,
     seed: repo.owner === 'demo' ? () => demoState() : undefined,
