@@ -135,8 +135,12 @@ test("merging preserves an edited home layout and gated values stay off the wire
       true,
     );
     expect(l.repo.list("home_layout")).toHaveLength(1);
-    expect(l.repo.list("sets")[0].data.tag).toBeNull();
+    // The phone keeps the gated tag; only the sync payload drops it.
+    expect(l.repo.list("sets")[0].data.tag).toBe("warmup");
     const set = l.repo.list("sets")[0];
+    expect(
+      l.repo.pending().find((p) => p.row.id === set.id)?.row.data,
+    ).not.toHaveProperty("tag");
     expect(
       l.repo.localGet<{ data: { tag: string } }>("pwaOriginal:" + set.id)?.data
         .tag,

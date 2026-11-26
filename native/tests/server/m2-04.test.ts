@@ -238,7 +238,8 @@ test('OFF edits preserve server v1 values on a re-enabled push',async()=>{
   await rollback.sync();rollback.close();
   expect(off.get('sets',row.id)?.data.tag).toBe('warmup');
   off.save('sets',{...off.get('sets',row.id)!.data,reps:10},row.id,300);
-  expect(enabled.pending()[0].row.data).toMatchObject({reps:10,tag:null});
+  // The phone keeps its own stale tag; the ON replay refills the server's before the push.
+  expect(off.get('sets',row.id)?.data).toMatchObject({reps:10,tag:'warmup'});
   await restored.sync();expect(restored.status).toBe('idle');
   expect(push).toHaveBeenCalledTimes(1);
   expect(push.mock.calls[0][0][0].data).toMatchObject({reps:10,tag:'drop'});
