@@ -3,6 +3,7 @@ import { Platform, ScrollView, Share, TextInput, View, type GestureResponderEven
 import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Chip, Icon, type IconName, KitText, List, ListRow, SegmentedControl, SheetHeader, Tappable, font, mix, useKit } from '@/components/kit';
+import { capitals } from '@/components/kit-style';
 import { tokens } from '@/design/tokens';
 import { showToast } from '@/features/shell/toast';
 import { t } from '@/i18n/en';
@@ -82,7 +83,7 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
     showToast(t('routinesItemAdded'), { color: 'sleep', action: { label: t('routinesUndo'), onAction: undo } });
   };
   const arcH = (aw * 122) / 300;
-  const lbl = { fill: c['text-muted'], fontFamily: tokens.font.bodyStrong, fontSize: 10 } as const;
+  const lbl = { fill: c['text-muted'], fontFamily: tokens.font.bodyStrong } as const;
 
   return <RtSheet testID="routines-add-item" header={<SheetTitle title={t('routinesAddItem')} onClose={closeRoutines} />}>
     <Blk>
@@ -166,7 +167,7 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
               <Circle cx={q[0]} cy={q[1]} r={8} fill="#FFFDF2" stroke="#141414" strokeWidth={3} />
             </>; })() : null}
             <Line x1={10} y1={100} x2={290} y2={100} stroke={c['text-muted']} strokeWidth={1.3} />
-            {[[20, 5], [85, 11], [150, 14], [215, 17], [280, 23]].map(([x, h]) => <SvgText key={h} x={x} y={116} textAnchor="middle" {...lbl}>{hax(h)}</SvgText>)}
+            {[[20, 5], [85, 11], [150, 14], [215, 17], [280, 23]].map(([x, h]) => <SvgText key={h} x={x} y={116} textAnchor="middle" fontSize={10} {...lbl}>{hax(h)}</SvgText>)}
             <SvgText x={150} y={66} textAnchor="middle" fill={c.text} fontFamily={tokens.font.heading} fontSize={21} letterSpacing={-0.4}>{big}</SvgText>
             <SvgText x={150} y={84} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={11}>{sm}</SvgText>
           </Svg> : null}
@@ -258,7 +259,7 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
     <DoseCard small color={c.accent} label={t('routinesConvertTo')}>
       <UnitSeg units={CONVERT_UNITS} value={C.to} onChange={u => set({ to: u })} label={t('routinesToUnit')} cardColor={c.accent} />
       {iu ? <View style={{ gap: 6 }}>
-        <KitText weight={700} size={11} tracking={0.14} color={rt.inkm} style={{ textTransform: 'uppercase' }}>{t('routinesIuFor')}</KitText>
+        <KitText weight={700} size={11} tracking={0.14} color={rt.inkm} style={capitals}>{t('routinesIuFor')}</KitText>
         <View accessibilityRole="radiogroup" accessibilityLabel={t('routinesIuForLabel')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {(Object.keys(IU_FOR) as Vitamin[]).map(v => { const on = C.vit === v; return <Tappable key={v} dim="fill" accessibilityRole="radio" accessibilityState={{ selected: on }}
             accessibilityLabel={IU_FOR[v].n} onPress={() => set({ vit: v })}
@@ -271,13 +272,13 @@ export function Converter({ from, amt, unit }: { from?: string; amt?: string; un
     <View accessibilityLiveRegion="polite" style={{ backgroundColor: rt.well, borderRadius: 22, padding: 14, gap: 12, boxShadow: rt.edge ?? `0 0 0 1px ${c.hair}` }}>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{t('routinesConverted')}</KitText>
+          <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={capitals}>{t('routinesConverted')}</KitText>
           <KitText testID="routines-conv-result" weight={700} size={30} tracking={-0.03} numeric numberOfLines={1} color={r.ok ? 'text' : 'ghost'}>
             {r.ok && r.v != null ? fnum(r.v) : '–'}{r.ok ? <KitText weight={600} size={15} color="text-muted">{` ${C.to}`}</KitText> : null}
           </KitText>
         </View>
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={{ textTransform: 'uppercase' }}>{t('routinesRate')}</KitText>
+          <KitText weight={700} size={11} tracking={0.14} color="text-muted" style={capitals}>{t('routinesRate')}</KitText>
           <KitText weight={700} size={17} tracking={-0.01} numeric numberOfLines={1} color={r.ok ? 'text' : 'ghost'} style={{ paddingTop: 9 }}>{r.ok ? r.rate : '–'}</KitText>
         </View>
       </View>
@@ -358,7 +359,7 @@ export function PauseRoutine({ store, routine }: { store: RoutinesStore; routine
           return <Tappable key={d} dim="fill" accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={fill(t('routinesBackOnDay'), { date: shortDate(day) })}
             onPress={() => setDays(d)} style={{ width: 48, minHeight: 62, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 2,
               backgroundColor: on ? c.sleep : inside ? mix(c.sleep, rt.raised, 0.22) : rt.raised, boxShadow: on ? undefined : `0 0 0 1px ${c.hair}` }}>
-            <KitText weight={700} size={10.5} tracking={0.06} color={on ? rt.inkm : 'text-muted'} style={{ textTransform: 'uppercase' }}>{dt.toLocaleDateString('en-US', { weekday: 'short' })}</KitText>
+            <KitText weight={700} size={10.5} tracking={0.06} color={on ? rt.inkm : 'text-muted'} style={capitals}>{dt.toLocaleDateString('en-US', { weekday: 'short' })}</KitText>
             <KitText weight={700} size={18} numeric color={on ? rt.ink : 'text'}>{String(dt.getDate())}</KitText>
           </Tappable>;
         })}
@@ -390,6 +391,7 @@ const COLOR_NAME: Record<RoutineColor, string> = { warning: t('routinesColAmber'
 
 export function NewRoutine({ store }: { store: RoutinesStore }) {
   const k = useKit(), c = k.c, rt = useRt(), { s } = useRoutines(store);
+  const dragCaps = t('routinesDragEither').toUpperCase(); // SVG text has no text transform.
   const [name, setName] = useState(''), [from, setFrom] = useState(15), [to, setTo] = useState(17);
   const [days, setDays] = useState([1, 1, 1, 1, 1, 0, 0]), [color, setColor] = useState<RoutineColor>('food'), [items, setItems] = useState<string[]>([]);
   const [aw, onAw] = useWidth(), drag = useRef<'from' | 'to' | null>(null);
@@ -435,7 +437,7 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
             <Line x1={16} y1={112} x2={244} y2={112} stroke={c['text-muted']} strokeWidth={1.3} />
             {[5, 8, 11, 14, 17, 20, 23].map(x => <SvgText key={x} x={P2(x)[0]} y={128} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10}>{hax(x)}</SvgText>)}
             <SvgText x={130} y={80} textAnchor="middle" fill={c.text} fontFamily={tokens.font.heading} fontSize={17}>{rng(from, to)}</SvgText>
-            <SvgText x={130} y={97} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={11} letterSpacing={0.9}>{t('routinesDragEither').toUpperCase()}</SvgText>
+            <SvgText x={130} y={97} textAnchor="middle" fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={11} letterSpacing={0.9}>{dragCaps}</SvgText>
           </Svg> : null}
         </View>
       </View>

@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { Icon, KitText, PressScale, Tappable, alpha, mix, slopFor, useKit, type IconName } from '@/components/kit';
 import { capitals } from '@/components/kit-style';
+import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import { raised } from '../../tiles/depth';
 import { TileSurface } from '../../tiles/tile-surface';
@@ -18,9 +19,17 @@ import type { RoutinesStore } from '../store';
 export interface Ctx { s: RoutinesState; n: Now; store: RoutinesStore; live: boolean; w: number; h: number }
 
 /** A big number with its small unit (`.rtt-n`). */
+/** Nested text takes its parent's tracking unless it sets its own; a unit after a tightly tracked number reads untracked. */
+const UNTRACKED = 0.0001;
+/** A caption smaller than the kit's 11 pt text floor, drawn as chart lettering the way the mockup sets it (week letters, day labels). */
+export function Caption({ w, h, size, color, text }: { w: number; h: number; size: number; color: string; text: string }) {
+  return <Svg width={w} height={h} accessible={false}>
+    <SvgText x={w / 2} y={h / 2 + size * 0.36} textAnchor="middle" fill={color} fontFamily={tokens.font.heading} fontSize={size}>{text}</SvgText>
+  </Svg>;
+}
 export function Num({ v, unit, fs = 32, color, style }: { v: string | number; unit?: string; fs?: number; color?: string; style?: StyleProp<TextStyle> }) {
   return <KitText weight={700} size={fs} lineHeight={1} tracking={-0.03} numeric color={color} numberOfLines={1} style={style}>
-    {String(v)}{unit ? <KitText weight={600} size={13} color="text-muted" style={{ letterSpacing: 0 }}>{` ${unit}`}</KitText> : null}
+    {String(v)}{unit ? <KitText weight={600} size={13} tracking={UNTRACKED} color="text-muted">{` ${unit}`}</KitText> : null}
   </KitText>;
 }
 /** The muted small line (`.rtt-s`). */

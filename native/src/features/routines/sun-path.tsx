@@ -19,6 +19,8 @@ export function SunPath({ s, n, width, only, big, caps, small, label }: {
   only?: string; big: string; caps?: string; small?: boolean; label: string;
 }) {
   const k = useKit(), c = k.c;
+  // SVG text has no text transform, so the small capitals are spelled out here.
+  const capsUp = caps ? caps.toUpperCase() : null;
   const now = Math.max(5, Math.min(23, n.h));
   const rs = s.routines.filter(r => !only || r.id === only);
   const its = (only ? rItems(s, only, n) : todayItems(s, n)).slice().sort((a, b) => a.h - b.h);
@@ -70,7 +72,7 @@ export function SunPath({ s, n, width, only, big, caps, small, label }: {
       <Circle cx={sun[0]} cy={sun[1]} r={8.5} fill={c.warning} stroke={c.surface} strokeWidth={3} />
       <Path d="M281 104.5a6 6 0 1 1-7.4-7.4 4.8 4.8 0 0 0 7.4 7.4z" fill={c['text-muted']} />
       <SvgText x={146} y={only ? 92 : 86} fill={c.text} fontFamily={tokens.font.heading} fontSize={small ? 19 : 36} letterSpacing={small ? -0.3 : -1.44} textAnchor="middle">{big}</SvgText>
-      {caps ? <SvgText x={146} y={106} fill={c['text-muted']} fontFamily={tokens.font.heading} fontSize={10.5} letterSpacing={1.68} textAnchor="middle">{caps}</SvgText> : null}
+      {caps ? <SvgText x={146} y={106} fill={c['text-muted']} fontFamily={tokens.font.heading} fontSize={10.5} letterSpacing={1.68} textAnchor="middle">{capsUp}</SvgText> : null}
     </Svg>
   </View>;
 }

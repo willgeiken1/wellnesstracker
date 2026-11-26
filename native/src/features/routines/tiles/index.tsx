@@ -16,7 +16,7 @@ import {
 import { routinesRoutes, routinesTab } from '../nav';
 import { SunPath, Thumb } from '../sun-path';
 import { activeRoutinesStore, useActiveRoutinesStore, useRoutines } from '../store';
-import { B, Ck, Dot, Hair, Head, IRow, Ic, Kick, Num, OffIRow, RingG, Segs, Sub, TBtn, Title, type Ctx } from './parts';
+import { B, Caption, Ck, Dot, Hair, Head, IRow, Ic, Kick, Num, OffIRow, RingG, Segs, Sub, TBtn, Title, type Ctx } from './parts';
 
 /* Registers the Routines tab's eleven tiles with the tile engine: what each draws, the grey text in its header and what
    a tap opens. Each reads the shared routines store; check-off and skip inside a tile run only outside edit mode. */
@@ -54,7 +54,7 @@ const Sun: Body = ({ p, c }) => {
   const caps = byLeft ? fill(t('routinesNowCaps'), { now }) : left ? fill(t('routinesNLeftToday'), { n: left }) : t('routinesAllDoneToday');
   if (p.size === 'M') {
     return <View style={{ flex: 1, flexDirection: 'row', gap: 12 }}>
-      <View style={{ width: 206, marginTop: -6, marginLeft: -6 }}><SunPath s={s} n={n} width={206} big={big} caps={caps.toUpperCase()} label={label} /></View>
+      <View style={{ width: 206, marginTop: -6, marginLeft: -6 }}><SunPath s={s} n={n} width={206} big={big} caps={caps} label={label} /></View>
       <View style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
         {byLeft ? <><Num v={today.length - left} unit={fill(t('routinesOfN'), { n: today.length })} fs={28} /><Sub style={{ marginTop: 4 }}>{t('routinesDoneToday')}</Sub></>
           : <><Num v={left} unit={t('routinesLeftWord')} fs={28} /><Sub style={{ marginTop: 4 }}>{fill(t('routinesOfNToday'), { n: today.length })}</Sub></>}
@@ -92,7 +92,7 @@ const Sun: Body = ({ p, c }) => {
     </>;
   }
   return <View style={col}>
-    <View style={{ marginTop: -10, marginHorizontal: -10 }}><SunPath s={s} n={n} width={c.w + 20} big={big} caps={caps.toUpperCase()} label={label} /></View>
+    <View style={{ marginTop: -10, marginHorizontal: -10 }}><SunPath s={s} n={n} width={c.w + 20} big={big} caps={caps} label={label} /></View>
     <View style={auto}>{foot}</View>
   </View>;
 };
@@ -399,7 +399,7 @@ const PeptidesTile: Body = ({ p, c }) => {
   const week = (x: (typeof ps)[number]) => <View style={{ flexDirection: 'row', gap: 2 }}>{[1, 2, 3, 4, 5, 6, 0].map(w => {
     const on = !x.i.days || x.i.days.includes(w), today = w === n.wd;
     return <View key={w} style={{ width: 13, height: 18, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? color : alpha(k.c['text-muted'], 0.12), borderWidth: today ? 1.4 : 0, borderColor: k.c.text }}>
-      <KitText weight={700} size={11} style={{ fontSize: 9 }} color={on ? 'on-accent' : 'text-muted'}>{weekLetter(w)}</KitText>
+      <Caption w={13} h={18} size={9} color={on ? k.c['on-accent'] : k.c['text-muted']} text={weekLetter(w)} />
     </View>;
   })}</View>;
   const pepRow = (x: (typeof ps)[number]) => <View key={x.i.id} style={{ height: 54, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -481,7 +481,7 @@ const Week: Body = ({ p, c }) => {
   return <View style={col} accessible accessibilityRole="image" accessibilityLabel={aria}>
     <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}><View style={{ flex: 1 }}>{head}</View><Sub>{ahead ? t('routinesScheduled') : t('routinesDoneLast7')}</Sub></View>
     <View style={[auto, { gap: 5 }]}>
-      <View style={{ flexDirection: 'row', gap: 5 }}><View style={{ width: 62 }} />{w.map(d => <KitText key={d.day} weight={700} size={11} color={d.today ? 'text' : 'text-muted'} style={{ width: cw, textAlign: 'center', fontSize: 9.5 }}>{`${weekLetter(d.wd)} ${dateOf(d.day).getDate()}`}</KitText>)}</View>
+      <View style={{ flexDirection: 'row', gap: 5 }}><View style={{ width: 62 }} />{w.map(d => <Caption key={d.day} w={cw} h={13} size={9.5} color={d.today ? k.c.text : k.c['text-muted']} text={`${weekLetter(d.wd)} ${dateOf(d.day).getDate()}`} />)}</View>
       {rs.map((r, ri) => <View key={r.id} style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
         <View style={{ width: 62, flexDirection: 'row', alignItems: 'center', gap: 6 }}><Dot color={cOf(k, r)} size={7} /><KitText weight={600} size={12} numberOfLines={1} style={{ flexShrink: 1 }}>{r.name}</KitText></View>
         {w.map(d => { const x = d.cells[ri]; return <View key={d.day} style={[{ width: cw, height: ch, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, PCLS(k, x.st, cOf(k, r))]}>
