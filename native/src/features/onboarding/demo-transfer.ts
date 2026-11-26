@@ -1,6 +1,6 @@
 import { stableJson } from '../../../../supabase/functions/_shared/pwa-import';
 import type { Repository } from '../../data/repository';
-import { localTables } from '../../data/rows';
+import { syncedTables } from '../../data/rows';
 import { sampleRow } from '../../../fixtures/demo';
 import { today } from './model';
 import { t } from '../../i18n/en';
@@ -8,7 +8,7 @@ import { t } from '../../i18n/en';
  * at the transfer boundary. Nothing is erased and no sample can be enqueued. */
 export function assertDemoTransferSafe(source:Repository) {
   if(source.localGet('loggerFixture')&&!source.localGet('demoFixtureSamplesTracked'))throw new Error('Unmarked legacy fixture.');
-  if(!source.localGet('demoSamples')&&localTables.some(table=>source.list(table).length))throw new Error('Unmarked legacy demo.');
+  if(!source.localGet('demoSamples')&&syncedTables.some(table=>source.list(table).length))throw new Error('Unmarked legacy demo.');
 }
 /** Runs synchronously before the destination is handed to SyncEngine. Shared SQLite
  * atomic guards commit user rows and source erasure together, so retries are safe. */
@@ -20,7 +20,7 @@ export function promoteDemo(source:Repository,destination:Repository) {
   const existingHome=destination.list('home_layout',true).length>0;
   const skip=new Set<string>(['profile','food_targets','weigh_ins'].filter(table=>destination.list(table as 'profile'|'food_targets'|'weigh_ins').length>0));
   if(source.localGet('pwaHomeImported')&&existingHome)skip.add('home_layout');
-  const rows=localTables.filter(table=>table!=='purges').flatMap(table=>source.list(table));
+  const rows=syncedTables.filter(table=>table!=='purges').flatMap(table=>source.list(table));
   const excluded=new Set(rows.filter(row=>samples?.includes(row.id)||sampleRow(row)).map(row=>row.id));
   const weighInsSkipped=skip.has('weigh_ins')&&rows.some(row=>row.table==='weigh_ins'&&!excluded.has(row.id));
   destination.atomic(()=>{

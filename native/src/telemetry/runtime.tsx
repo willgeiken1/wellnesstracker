@@ -4,12 +4,11 @@ import { onDevicePreferencesSaved, readDevicePreferences } from '../features/onb
 import { applyTelemetry, setTelemetryUser, track } from './sdk';
 import type { USAGE_TABS } from './scrub';
 
-/** Which tab a route belongs to, or nothing for screens that are not a tab. The fifth tab is left out on
- * purpose: no usage event names it, so nothing about its use leaves the phone. */
+/** Which tab a route belongs to, or nothing for screens that are not a tab. */
 export function tabForPath(pathname:string|undefined):(typeof USAGE_TABS)[number]|undefined{
   if(pathname==='/'||pathname==='')return 'home';
   const first=pathname?.split('/')[1];
-  return first==='workouts'||first==='food'||first==='progress'||first==='settings'?first:undefined;
+  return first==='workouts'||first==='food'||first==='progress'||first==='insights'||first==='settings'?first:undefined;
 }
 
 /** Keeps crash reports and analytics in step with the switches in Settings > Privacy. Renders nothing. */

@@ -19,7 +19,7 @@ are copied exactly from the existing 44-key PWA bank for that future work.
   selection outline/card, common/scientific labels, optional light haptic,
   controls for side/outline and the same complete accessible list. Screen
   readers start in list mode. Static rendering respects Reduce Motion.
-- Insights (a view of the Progress tab since Nov 22 2026) refreshes recency once per minute and on foreground, only while that view is shown, cleaning up
+- Insights refreshes recency once per minute and on foreground, cleaning up
   timers and listeners. `/muscle/[key]` is an explicitly labeled detail stub.
 - The body map is native-only per Will (2026-10-28, 7:15 AM CT). Fix round 2
   removed the PWA diagram swap; `logger/` matches main, with no worker bump.

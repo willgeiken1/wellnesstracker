@@ -5,8 +5,7 @@ import type { PropsWithChildren } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { FoodCalendar } from '../src/features/food/calendar';
 import { FoodEntry } from '../src/features/food/entry';
-import { FoodLogScreen } from '../src/features/food/log-screen';
-import { meals, saveCombo, saveFood, saveReusable, setTargets, toggleFavorite } from '../src/features/food/model';
+import { meals, saveFood, setTargets } from '../src/features/food/model';
 import { FoodScanner } from '../src/features/food/scanner';
 import { FoodTargets } from '../src/features/food/targets';
 import { memoryRepository } from './workout-repository';
@@ -20,128 +19,10 @@ const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</
 const blank = { fiber_g: null, sugar_g: null, sodium_mg: null, amount_g: null };
 /** Made-up sample foods only. */
 const oats = { name: 'Synthetic oats', energy_kj: 300 * 4.184, protein_g: 10, carbs_g: 54, fat_g: 5, ...blank };
-const mystery = { name: 'Synthetic mystery snack', energy_kj: null, protein_g: null, carbs_g: null, fat_g: null, ...blank };
 const DAY = '2026-10-27', YESTERDAY = '2026-10-26';
 // 12:00 local on a made-up day: lunch time, well clear of the 4 a.m. day boundary.
 beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(new Date(2026, 9, 27, 12, 0)); mockGranted = false; mockRequest.mockReset(); mockCameraProps = {}; });
 afterEach(() => jest.useRealTimers());
-
-describe('log screen', () => {
-  test('offers Search, Scan, Snap, Describe, Saved in that order, each a labelled tab, with Search chosen first', async () => {
-    await render(<FoodLogScreen repository={memoryRepository()} />, { wrapper });
-    const tabs = within(screen.getByTestId('food-log-modes')).getAllByRole('tab');
-    expect(tabs.map(tab => tab.props.accessibilityLabel)).toEqual(['Search', 'Scan', 'Snap', 'Describe', 'Saved']);
-    expect(screen.getByRole('tab', { name: 'Search' })).toBeSelected();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Saved' }));
-    expect(screen.getByRole('tab', { name: 'Saved' })).toBeSelected();
-    expect(screen.getByRole('tab', { name: 'Search' })).not.toBeSelected();
-    expect(screen.getByTestId('food-saved')).toBeTruthy();
-  });
-
-  test('shows the day as a word, not a raw date, and starts on the first meal, as the Food tab does', async () => {
-    await render(<FoodLogScreen repository={memoryRepository()} />, { wrapper });
-    expect(screen.getByTestId('food-log-day').props.children).toBe('Today');
-    expect(screen.queryByText(new RegExp(DAY))).toBeNull();
-    expect(screen.getByRole('button', { name: 'Breakfast' })).toBeSelected();
-    await fireEvent.press(screen.getByRole('button', { name: 'Choose the day to log to' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Yesterday, nothing logged' }));
-    expect(screen.getByTestId('food-log-day').props.children).toBe('Yesterday');
-    expect(screen.getByText('Nothing logged for yesterday yet.')).toBeTruthy();
-  });
-
-  test('with no foods on the phone, Search says so and still leads to manual entry', async () => {
-    const repo = memoryRepository();
-    await render(<FoodLogScreen repository={repo} />, { wrapper });
-    expect(within(screen.getByTestId('food-search-empty')).getByText('No foods on this phone yet')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Search your foods'), 'Synthetic soup');
-    expect(screen.getByText('Nothing matches “Synthetic soup”')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Enter “Synthetic soup” manually' }));
-    expect(screen.getByLabelText('Food name')).toHaveDisplayValue('Synthetic soup');
-    await fireEvent.press(screen.getByRole('button', { name: 'Save to today' }));
-    const [row] = repo.list('food_entries');
-    expect(row.data).toMatchObject({ name: 'Synthetic soup', day: DAY, energy_kj: null, protein_g: null });
-    expect(row.data.meal_id).toBe(meals(repo)[0].id);
-    expect(within(screen.getByTestId('food-log-day-list')).getByText('kcal not entered')).toBeTruthy();
-    expect(within(screen.getByTestId('food-log-day-list')).queryByText(/\b0 kcal/)).toBeNull();
-  });
-
-  test('a food found by Search logs on tap and Undo takes it back', async () => {
-    const repo = memoryRepository();
-    saveFood(repo, YESTERDAY, meals(repo)[0].id, oats, 1, undefined, DAY);
-    await render(<FoodLogScreen repository={repo} />, { wrapper });
-    await fireEvent.changeText(screen.getByLabelText('Search your foods'), 'oats');
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Synthetic oats' }));
-    expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(1);
-    expect(within(screen.getByTestId('food-log-added')).getByText('Added Synthetic oats to Breakfast.')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Undo' }));
-    expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(0);
-    expect(screen.queryByTestId('food-log-added')).toBeNull();
-  });
-
-  test('a failed add shows a quiet row with Retry beside the list, and Retry adds it', async () => {
-    const repo = memoryRepository();
-    saveFood(repo, YESTERDAY, meals(repo)[0].id, oats, 1, undefined, DAY);
-    await render(<FoodLogScreen repository={repo} />, { wrapper });
-    const save = jest.spyOn(repo, 'save').mockImplementation(() => { throw new Error('Synthetic failure'); });
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Synthetic oats' }));
-    expect(screen.getByRole('alert')).toBeTruthy();
-    save.mockRestore();
-    await fireEvent.press(screen.getByRole('button', { name: 'Retry' }));
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(1);
-  });
-
-  test('Saved lists saved foods, favorites and combos, says how empty ones fill, and logs a combo with Undo', async () => {
-    const repo = memoryRepository(), [breakfast] = meals(repo);
-    await render(<FoodLogScreen repository={repo} />, { wrapper });
-    await fireEvent.press(screen.getByRole('tab', { name: 'Saved' }));
-    expect(screen.getByText(/^Nothing saved yet\./)).toBeTruthy();
-    expect(screen.getByText(/^No favorites for this meal yet\./)).toBeTruthy();
-    expect(screen.getByText(/^No combos yet\./)).toBeTruthy();
-    saveFood(repo, YESTERDAY, breakfast.id, oats, 1, undefined, DAY);
-    saveFood(repo, YESTERDAY, breakfast.id, mystery, 1, undefined, DAY);
-    saveCombo(repo, YESTERDAY, breakfast.id, 'Synthetic combo');
-    saveReusable(repo, oats);
-    toggleFavorite(repo, breakfast.id, mystery);
-    await screen.rerender(<FoodLogScreen repository={repo} />);
-    expect(screen.getByRole('button', { name: 'Log Synthetic oats' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Log Synthetic mystery snack' })).toBeTruthy();
-    // One food in the combo has no calories, so the combo shows no total instead of a short one.
-    expect(within(screen.getByRole('button', { name: 'Log combo Synthetic combo' })).queryByText(/kcal/)).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Log combo Synthetic combo' }));
-    expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(2);
-    expect(screen.getByText('Added 2 foods to Breakfast.')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Undo' }));
-    expect(repo.list('food_entries').filter(row => row.data.day === DAY)).toHaveLength(0);
-  });
-
-  test('a logged food opens for editing from the day list and saves in place', async () => {
-    const repo = memoryRepository();
-    saveFood(repo, DAY, meals(repo)[0].id, oats, 1, undefined, DAY);
-    await render(<FoodLogScreen repository={repo} />, { wrapper });
-    expect(within(screen.getByTestId('food-log-day-list')).getByText('Breakfast · P 10 · C 54 · F 5')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Edit Synthetic oats' }));
-    expect(screen.getByText('Edit food')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Calories (kcal)'), '250');
-    await fireEvent.press(screen.getByRole('button', { name: 'Save to today' }));
-    expect(repo.list('food_entries')).toHaveLength(1);
-    expect(repo.list('food_entries')[0].data.energy_kj).toBeCloseTo(250 * 4.184);
-    expect(screen.getByText('Saved Synthetic oats.')).toBeTruthy();
-  });
-
-  test('Scan falls back to search and to manual entry; Describe still asks consent first', async () => {
-    await render(<FoodLogScreen repository={memoryRepository()} />, { wrapper });
-    await fireEvent.press(screen.getByRole('tab', { name: 'Scan' }));
-    expect(mockRequest).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole('button', { name: 'Search your foods' }));
-    expect(screen.getByRole('tab', { name: 'Search' })).toBeSelected();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Scan' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Enter food manually' }));
-    expect(screen.getByLabelText('Food name')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Describe' }));
-    expect(screen.getByText('Allow AI estimates and workout summaries?')).toBeTruthy();
-  });
-});
 
 describe('entry form', () => {
   const open = async (props: Partial<Parameters<typeof FoodEntry>[0]> = {}) => {

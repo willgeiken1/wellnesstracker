@@ -145,15 +145,16 @@ export class Repository {
       const previous = this.get(input.table, input.id);
       if (previous && previous.table === 'weigh_ins' && previous.data.source !== input.data.source) throw new Error('Provenance is immutable.');
       let row = healthLocal ? { ...input, data: Object.fromEntries(Object.keys(columns[input.table]).map(k => [k,input.deleted_at !== null && k !== 'source' ? null : input.data[k] ?? null])) } : canonicalRow(input);
-      // An OFF edit cannot author v1 values retained from an earlier enabled run.
-      // Clear dormant fields and mark them for server refill before an ON push.
-      if (!this.syncFlags.syncedV1Columns && hasGatedColumns(row.table)) row = canonicalRow(projectSyncRow(row,this.syncFlags));
+      // OFF keeps gated values in the phone's own database: the flag only keeps
+      // them out of sync (pending() and the transport project them away). An OFF
+      // edit still cannot author them on the server: the dormant marker below has
+      // an ON replay refill them from the server before any ON push.
       if (previous && compareRows(row, previous) <= 0) return;
       this.atomic(() => {
         row = this.write(row);
         if (hasGatedColumns(row.table)) {
           if (!this.syncFlags.syncedV1Columns) {
-            // OFF nulls every gated column, so replacing a JSON marker with '1' is correct.
+            // An OFF edit authors no gated column for sync, so replacing a JSON marker with '1' is correct.
             this.setState(this.dormantKey(row.table,row.id),'1');
             this.setState(this.replayKey(row.table),'needed');
             // Even a previously enabled cursor must replay this server row.

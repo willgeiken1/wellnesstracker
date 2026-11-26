@@ -11,7 +11,7 @@ import {
   type SetupDraft,
 } from '@/features/routines/model/setup';
 import type { RoutineView } from '@/features/routines/model/shape';
-import { removedDefaultRoutines } from '@/features/routines/store';
+import { removedDefaultRoutines } from '@/features/routines/data/sqlite';
 import { commitRoutines, routineClockNow, useRoutines, type RoutinesData } from './add-item-data';
 import { announce, ErrorLine, OutlineButton, PrimaryButton, SheetFrame, SheetUnavailable, useSheetClose } from './add-item-frame';
 import { Glyph } from './add-item-glyphs';

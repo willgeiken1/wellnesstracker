@@ -29,7 +29,7 @@ describe('saved appearance text', () => {
     for (const junk of [null, undefined, 4, '', 'nope;ring=nope']) expect(parseAppearance(junk)).toEqual(DEFAULT_APPEARANCE);
   });
   test('round-trips every look and writes only what differs from the default', () => {
-    expect(formatAppearance(DEFAULT_APPEARANCE)).toBe('seaGlassTide');
+    expect(formatAppearance(DEFAULT_APPEARANCE)).toBe('orchidEvening');
     expect(formatAppearance({ ...DEFAULT_APPEARANCE, palette: 'goldenHour', ring: 'liquid' })).toBe('goldenHour;ring=liquid');
     for (const ring of RING_LOOKS) expect(parseAppearance(formatAppearance({ ...DEFAULT_APPEARANCE, palette: 'berryMeadow', ring }))).toEqual({ ...DEFAULT_APPEARANCE, palette: 'berryMeadow', ring });
   });
@@ -55,24 +55,22 @@ test.each(RING_LOOKS)('%s draws a track with no arc at zero and an arc once ther
   expect(paths().length).toBeGreaterThan(0);
 });
 
-test('picking a ring look saves beside the theme and survives a restart', async () => {
-  const repo = settingsRepository({ theme_override: 'dark', accent: 'goldenHour', rest_seconds: 90 });
+// Appearance has no ring picker any more (the redesign dropped it); picking a palette keeps a saved ring look and the rest.
+test('picking a palette saves beside the theme, keeps the saved ring look and survives a restart', async () => {
+  const repo = settingsRepository({ theme_override: 'dark', accent: 'goldenHour;ring=liquid', rest_seconds: 90 });
   let view = await render(<ThemeProvider repository={repo}><Appearance /></ThemeProvider>);
-  expect(screen.getByRole('button', { name: 'Contour' })).toBeSelected();
-  await fireEvent.press(screen.getByRole('button', { name: 'Liquid' }));
-  expect(repo.list('settings')[0].data).toMatchObject({ theme_override: 'dark', accent: 'goldenHour;ring=liquid', rest_seconds: 90 });
+  expect(screen.getByRole('radio', { name: 'Golden Hour' })).toBeChecked();
+  await fireEvent.press(screen.getByRole('radio', { name: 'Berry Meadow' }));
+  expect(repo.list('settings')[0].data).toMatchObject({ theme_override: 'dark', accent: 'berryMeadow;ring=liquid', rest_seconds: 90 });
   await view.unmount();
   view = await render(<ThemeProvider repository={repo}><Appearance /></ThemeProvider>);
-  expect(screen.getByRole('button', { name: 'Liquid' })).toBeSelected();
-  expect(screen.getByRole('button', { name: 'Golden Hour' })).toBeSelected();
-  await fireEvent.press(screen.getByRole('button', { name: 'Berry Meadow' }));
-  expect(repo.list('settings')[0].data.accent).toBe('berryMeadow;ring=liquid');
-  await fireEvent.press(screen.getByRole('button', { name: 'Contour' }));
-  expect(repo.list('settings')[0].data.accent).toBe('berryMeadow');
+  expect(screen.getByRole('radio', { name: 'Berry Meadow' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Golden Hour' })).not.toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
 });
 
 test.each(RING_LOOKS)('the food ring follows the %s look and keeps its spoken summary', async look => {
-  const repo = settingsRepository({ accent: `seaGlassTide;ring=${look}` });
+  const repo = settingsRepository({ accent: `orchidEvening;ring=${look}` });
   await render(<ThemeProvider repository={repo}><CalorieRing total={total} target={target} /></ThemeProvider>);
   for (const key of ['energy_kj', 'protein_g', 'carbs_g', 'fat_g']) expect(screen.getByTestId(`food-ring-${key}`).props.id ?? screen.getByTestId(`food-ring-${key}`).props.name).toBe(`ring-look-${look}`);
   expect(screen.getByRole('image').props.accessibilityLabel).toContain('1400');
@@ -81,7 +79,7 @@ test.each(RING_LOOKS)('the food ring follows the %s look and keeps its spoken su
 
 test('an estimated day stays dashed in every look', async () => {
   for (const look of RING_LOOKS) {
-    const view = await render(<ThemeProvider repository={settingsRepository({ accent: `seaGlassTide;ring=${look}` })}><CalorieRing total={total} target={target} estimated /></ThemeProvider>);
+    const view = await render(<ThemeProvider repository={settingsRepository({ accent: `orchidEvening;ring=${look}` })}><CalorieRing total={total} target={target} estimated /></ThemeProvider>);
     const dashed = screen.getByTestId('food-ring-energy_kj').queryAll(node => (node.type as unknown as string) === 'RNSVGPath' && !!node.props.strokeDasharray);
     expect(dashed.length).toBeGreaterThan(0);
     await view.unmount();

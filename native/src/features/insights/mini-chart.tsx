@@ -20,11 +20,8 @@ export function linePath(values: (number | null)[], top: number, height: number)
  * A small chart for one number per day. Bars for totals, a line for daily values, an optional dashed goal.
  * Still on purpose: no animation, so it behaves the same with Reduce Motion on.
  */
-export function MiniChart({ values, goal, bars = false, color, height = 120, first, last, testID, marks }: {
+export function MiniChart({ values, goal, bars = false, color, height = 120, first, last, testID }: {
   values: (number | null)[]; goal?: number | null; bars?: boolean; color: string; height?: number; first: string; last: string; testID?: string;
-  /** Days to stand a thin upright line on, by their place in `values`. The chart draws the line and nothing
-   * else: what a line means is said in words under the chart, by whoever asked for it. */
-  marks?: readonly number[];
 }) {
   const { colors } = useTheme();
   const known = values.filter((v): v is number => v !== null), top = Math.max(1, ...known, goal ?? 0) * 1.08;
@@ -32,11 +29,9 @@ export function MiniChart({ values, goal, bars = false, color, height = 120, fir
   const step = values.length > 1 ? (W - PAD * 2) / (values.length - 1) : 0;
   // A value with no logged day on either side cannot join a line, so it is drawn as a dot.
   const alone = (i: number) => !bars && values[i] !== null && (values[i - 1] ?? null) === null && (values[i + 1] ?? null) === null;
-  const markX = (i: number) => bars ? PAD + i * slot + slot / 2 : PAD + i * step;
   return <View accessible={false}>
     <Svg testID={testID} width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" accessible={false}>
       <Line x1={PAD} x2={W - PAD} y1={height - PAD} y2={height - PAD} stroke={colors['surface-2']} strokeWidth={1} />
-      {(marks ?? []).filter(i => i >= 0 && i < values.length).map(i => <Line key={`mark-${i}`} testID="chart-mark" x1={markX(i)} x2={markX(i)} y1={PAD} y2={height - PAD} stroke={colors['text-muted']} strokeWidth={1.5} />)}
       {goal != null && goal > 0 && <Line testID="chart-goal" x1={PAD} x2={W - PAD} y1={y(goal)} y2={y(goal)} stroke={colors['text-muted']} strokeWidth={1} strokeDasharray="4 4" />}
       {bars
         ? values.map((value, i) => value ? <Rect key={i} testID="chart-bar" x={PAD + i * slot + slot * 0.18} width={slot * 0.64} y={y(value)} height={Math.max(1, height - PAD - y(value))} rx={2} fill={color} /> : null)

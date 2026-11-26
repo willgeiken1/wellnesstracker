@@ -68,8 +68,8 @@ const pressables = (source: string) => {
 
 test('no tap target is a bare Pressable with nothing to show the press', () => {
   // A plain Pressable is fine when it draws its own pressed look; one that takes a tap and shows nothing must be a Tappable.
-  // These two are not controls with a look of their own: a chart you scrub and the see-through backdrop behind the add menu.
-  const allowed = ['src/features/body/chart.tsx', 'src/features/home/screen.tsx'];
+  // This one is not a control with a look of its own: a chart you scrub. Home has no add menu or backdrop of its own any more.
+  const allowed = ['src/features/body/chart.tsx'];
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((name: string) => {
     const path = join(dir, name);
     return statSync(path).isDirectory() ? walk(path) : /\.tsx$/.test(name) ? [path] : [];
@@ -81,45 +81,25 @@ test('no tap target is a bare Pressable with nothing to show the press', () => {
     return pressables(source).filter(({ tag }) => /onPress=/.test(tag) && !/pressed/.test(tag)).map(({ line }) => `${file}:${line}`);
   });
   expect(bare.filter(at => !allowed.some(file => at.startsWith(file + ':')))).toEqual([]);
-  expect(bare.filter(at => at.startsWith('src/features/home/screen.tsx:'))).toHaveLength(1);
+  expect(bare.filter(at => at.startsWith('src/features/home/'))).toEqual([]);
   expect(bare.filter(at => at.startsWith('src/features/body/chart.tsx:'))).toHaveLength(1);
 });
 
 test('the controls the acceptance review named dim at the right strength', () => {
   const read = (file: string) => readFileSync(join(__dirname, '..', file), 'utf8');
-  for (const file of ['src/features/food/log-screen.tsx', 'src/features/home/screen.tsx', 'src/features/home/edit-sheet.tsx',
-    'src/features/paywall/screen.tsx', 'src/features/workout/parts.tsx', 'src/features/atlas/body-atlas.tsx', 'src/features/body/entry.tsx'])
+  // The paywall screen is gone: Insight has no paid plan (tests/paywall-route.test.tsx).
+  for (const file of ['src/features/shell/profile-button.tsx',
+    'src/features/workout/parts.tsx', 'src/features/atlas/body-atlas.tsx', 'src/features/body/entry.tsx'])
     expect(read(file)).toMatch(/<Tappable\b/);
-  expect(read('src/features/food/log-screen.tsx')).toMatch(/<Tappable dim="fill" key=\{meal\.id\}/);
-  expect(read('src/features/home/edit-sheet.tsx')).toMatch(/<Tappable dim="fill"[^>]*accessibilityLabel=\{t\('done'\)\}/);
-  expect(read('src/features/home/screen.tsx')).toMatch(/<Tappable dim="fill"[^>]*accessibilityLabel=\{t\('openSettings'\)\}/);
-  // A bare dock icon dims like any icon; only the open tab's filled circle takes the lighter dim.
-  expect(read('src/components/floating-tabs.tsx')).toMatch(/dim=\{open \? 'fill' : 'row'\}/);
-});
-
-test('the Routines screens dim their filled controls as fills and leave rows, icons and text to the row dim', () => {
-  const read = (file: string) => readFileSync(join(__dirname, '..', 'src/features', file), 'utf8');
-  const fill = (file: string, testID: string) => expect([file, testID, new RegExp(`<Tappable dim="fill"[^>]*testID=\\{?[\`"']?${testID}`).test(read(file))]).toEqual([file, testID, true]);
-  const row = (file: string, testID: string) => expect([file, testID, new RegExp(`<Tappable (?:key=\\{[^}]*\\} )?testID=\\{?[\`"']?${testID}`).test(read(file))]).toEqual([file, testID, true]);
-  fill('routines-ui/parts.tsx', 'testID} accessibilityRole="button" accessibilityLabel=\\{label\\} accessibilityState=\\{\\{ disabled \\}\\} disabled=\\{disabled\\} onPress=\\{onPress\\}\\s+style=\\{\\{ minHeight: 52');
-  fill('routines-ui/setup.tsx', 'setup-choice-');
-  fill('routines-ui/details.tsx', 'log-site-');
-  fill('routines-ui/edit-routines.tsx', 'edit-routines-new');
-  fill('routines-ui/edit-routines.tsx', 'edit-routines-restore-');
-  fill('routines-ui/new-routine.tsx', 'routine-day-');
-  fill('routines-ui/new-routine.tsx', 'routine-add-');
-  fill('routines-ui/add-item.tsx', 'item-kind-');
-  fill('routines-ui/add-item.tsx', 'item-converter');
-  fill('routines-ui/add-item-amount-card.tsx', '\\$\\{testID\\}-unit-');
-  fill('routines-ui/type-view.tsx', 'routine-gauge-');
-  fill('home/routine-tiles.tsx', 'home-tile-\\$');
-  row('routines-ui/day-view.tsx', 'routine-row-');
-  row('routines-ui/day-view.tsx', 'routine-fold-');
-  row('routines-ui/details.tsx', 'details-history-');
-  row('routines-ui/history.tsx', 'history-item');
-  row('routines-ui/new-routine.tsx', 'routine-items-more');
-  row('home/routine-tiles.tsx', 'home-tile-open-');
-  // A graph that is scrubbed and a path that is tapped to place a time show the touch themselves.
-  expect(read('routines-ui/history.tsx')).toMatch(/<Tappable dim="none" testID="history-bars"/);
-  expect(read('routines-ui/add-item-sun-arc.tsx')).toMatch(/<Tappable dim="none" testID="arc-surface"/);
+  // Home's Done is the tile grid's edit bar now, and it dims when pressed.
+  expect(read('src/features/tiles/tile-grid.tsx')).toMatch(/onPress=\{onDone\} style=\{\(\{ pressed \}\) => \[[^\]]*pressed && \{ opacity: 0\.\d+ \}\]/);
+  // Home opens Settings from the shell's profile button, which shows its press.
+  expect(read('src/features/home/screen.tsx')).toMatch(/<ProfileButton\b/);
+  expect(read('src/features/shell/profile-button.tsx')).toMatch(/<Tappable dim="none"[^>]*accessibilityLabel=\{t\('shellProfile'\)\}/);
+  // The floating bar's tabs and + button show a press by shrinking, as the mockup's shell does, rather than by dimming: down in
+  // 90 ms and back on the press spring (features/shell/press.ts).
+  const dock = read('src/features/shell/dock.tsx');
+  expect(dock).toMatch(/<Tappable dim="none" testID=\{`tab-\$\{page\.route\}`\}/);
+  expect(dock).toMatch(/<Tappable dim="none" testID="dock-plus"/);
+  expect(dock.match(/useSpringPress\(PRESS_SCALE, still\)/g)).toHaveLength(2);
 });

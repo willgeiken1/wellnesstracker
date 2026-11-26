@@ -12,7 +12,7 @@ import { ThemeProvider } from '../src/design/theme-provider';
 import { SetupSheet } from '../src/features/routines-ui/setup';
 import { keepSetupDraft, keptSetupDraft } from '../src/features/routines-ui/setup-draft';
 import { openSetupDraft } from '../src/features/routines/model/setup';
-import { seedDefaultRoutines } from '../src/features/routines/store';
+import { seedDefaultRoutines } from '../src/features/routines/data/sqlite';
 import { sheetRepository } from './routines-sheets-kit';
 
 /* The setup quiz asks what a person takes and whether they inject it. Answers given by one account must never

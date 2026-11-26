@@ -6,7 +6,7 @@ import type { Row } from '../src/data/rows';
 import { routineDayKey } from '../src/features/routines/model/dose';
 import type { RoutineStore } from '../src/features/routines/model/shape';
 import type { RoutineClock } from '../src/features/routines/model/write';
-import { commitRoutineStore, readRoutineStore, seedDefaultRoutines } from '../src/features/routines/store';
+import { commitRoutineStore, readRoutineStore, seedDefaultRoutines } from '../src/features/routines/data/sqlite';
 
 /* Shared by the Routines sheet tests. Everything here is synthetic: made-up names, no real routine of anyone's. */
 

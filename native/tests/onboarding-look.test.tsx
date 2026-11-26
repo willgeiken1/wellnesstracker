@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { StyleSheet } from 'react-native';
-import { Onboarding, OnboardingDraftProvider } from '../src/features/onboarding/screen';
+import { OnboardingDraftProvider } from '../src/features/onboarding/screen';
 import { Welcome } from '../src/features/onboarding/welcome';
 import { AuthForm } from '../src/features/onboarding/auth-form';
 import { Profile } from '../src/features/onboarding/profile';
@@ -18,42 +18,39 @@ async function wrap(ui:React.ReactNode,auth=state()){await render(<AuthContext.P
 const flat=(node:{props:{style?:unknown}})=>StyleSheet.flatten(node.props.style as never) as Record<string,unknown>;
 beforeEach(()=>{jest.mocked(router.push).mockClear();jest.mocked(router.replace).mockClear();});
 
+// Welcome follows onboarding mockup v21 (ob-welcome): Apple, email, Google, Skip for now, then the legal line.
+// These replace the earlier Get started, I have an account, Import and Look around rows.
 describe('Welcome',()=>{
- test('says what the app is for under one title, with step 1 of 3',async()=>{
+ test('says what the app is for under one title, over the contour map, with the four strands and the legal line',async()=>{
   await wrap(<Welcome/>);
   expect(screen.getAllByRole('header')).toHaveLength(1);
-  expect(screen.getByRole('header')).toHaveTextContent(t('welcomeTitle'));
-  expect(screen.getByRole('progressbar',{name:'Step 1 of 3'})).toBeTruthy();
-  expect(screen.getAllByTestId('onboarding-progress-done')).toHaveLength(1);
-  expect(screen.getAllByTestId('onboarding-progress-todo')).toHaveLength(2);
+  expect(screen.getByRole('header')).toHaveTextContent('Insight');
+  expect(screen.getByText(t('welcomeLine'))).toBeTruthy();
   expect(screen.getByRole('image',{name:t('welcomeMapLabel')})).toBeTruthy();
-  for(const key of ['welcomeWorkouts','welcomeFood','welcomeHealth'] as const)expect(screen.getByText(t(key))).toBeTruthy();
-  // Apple Health and Oura connect in v1, so the screen offers them and only says Fitbit and WHOOP come later.
-  expect(screen.getByText(t('welcomeHealthBody'))).toBeTruthy();
-  expect(t('welcomeHealthBody')).toMatch(/Apple Health/);expect(t('welcomeHealthBody')).toMatch(/Oura/);
-  expect(screen.queryByText(/Connecting opens in a later update/)).toBeNull();
+  expect(screen.getByTestId('welcome-strands')).toHaveProp('accessibilityLabel','Training, food, sleep and routines');
+  for(const word of ['Training','Food','Sleep','Routines'])expect(screen.getByText(word)).toBeTruthy();
+  expect(screen.getByText(/By continuing you agree to the/)).toBeTruthy();
+  expect(screen.queryByText(/Plus|Subscribe/)).toBeNull();
  });
- test('one main button and three quieter ways in, each firing its own handler',async()=>{
-  const auth=await wrap(<Welcome/>);
-  await fireEvent.press(screen.getByRole('button',{name:t('getStarted')}));expect(router.push).toHaveBeenLastCalledWith('/onboarding');
-  await fireEvent.press(screen.getByRole('button',{name:t('haveAccount')}));expect(router.push).toHaveBeenLastCalledWith('/auth/sign-in');
-  await fireEvent.press(screen.getByRole('button',{name:t('importChoose')}));expect(router.push).toHaveBeenLastCalledWith('/import');
-  await fireEvent.press(screen.getByRole('button',{name:t('lookAround')}));expect(auth.lookAround).toHaveBeenCalledTimes(1);
-  expect(screen.queryByRole('alert')).toBeNull();
+ test('email, Google and Skip for now come in that order, each going its own way',async()=>{
+  const signInWithGoogle=jest.fn(async()=>({ok:false as const,reason:'notConfigured' as const}));
+  await wrap(<Welcome/>,{...state(),signInWithGoogle});
+  const names=screen.getAllByRole('button').map(b=>b.props.accessibilityLabel as string);
+  expect(names.filter(n=>[t('obaEmail'),t('obaGoogle'),t('obaSkip')].includes(n))).toEqual([t('obaEmail'),t('obaGoogle'),t('obaSkip')]);
+  await fireEvent.press(screen.getByRole('button',{name:t('obaEmail')}));expect(router.push).toHaveBeenLastCalledWith('/auth/email');
+  await fireEvent.press(screen.getByRole('button',{name:t('obaSkip')}));expect(router.push).toHaveBeenLastCalledWith('/auth/skip');
+  expect(screen.queryByTestId('welcome-google-notice')).toBeNull();
+  await fireEvent.press(screen.getByRole('button',{name:t('obaGoogle')}));
+  expect(signInWithGoogle).toHaveBeenCalledTimes(1);
+  expect(await screen.findByTestId('welcome-google-notice')).toHaveTextContent(t('obaGoogleOff'));
+  for(const old of ['getStarted','haveAccount','importChoose','lookAround'] as const)expect(screen.queryByRole('button',{name:t(old)})).toBeNull();
  });
- test('without accounts it says so in a quiet row and still lets the person look around',async()=>{
-  const auth=await wrap(<Welcome/>,{...state(),configured:false});
-  expect(screen.getByRole('alert')).toHaveTextContent(t('accountsUnavailable'));
-  expect(screen.getByRole('button',{name:t('getStarted')})).toBeDisabled();
-  expect(screen.getByRole('button',{name:t('haveAccount')})).toBeDisabled();
-  await fireEvent.press(screen.getByRole('button',{name:t('lookAround')}));expect(auth.lookAround).toHaveBeenCalled();
- });
- test('every pressable row is at least 44 points tall',async()=>{
+ test('every way in is at least 44 points tall',async()=>{
   await wrap(<Welcome/>);
-  for(const name of [t('getStarted'),t('haveAccount'),t('lookAround'),t('importChoose')])
-   expect(Number(flat(screen.getByRole('button',{name})).minHeight)).toBeGreaterThanOrEqual(44);
+  for(const name of [t('obaEmail'),t('obaGoogle'),t('obaSkip')])
+   expect(Number(flat(screen.getByRole('button',{name})).minHeight??flat(screen.getByRole('button',{name})).height)).toBeGreaterThanOrEqual(44);
  });
- test('the auth landing route shows this screen and sign-in routes show the new form',()=>{
+ test('the auth landing route shows this screen and sign-in routes show the form',()=>{
   expect((require('../src/app/auth/index') as {default:unknown}).default).toBe(Welcome);
   for(const route of ['../src/app/auth/sign-in','../src/app/sign-in'])expect(String((require(route) as {default:()=>unknown}).default)).toContain('AuthForm');
  });
@@ -74,7 +71,8 @@ describe('Sign in',()=>{
   expect(screen.getByText(t('passwordHelp'))).toBeTruthy();
  });
  test('the focused field shows the accent border and loses it on blur',async()=>{
-  await wrap(<AuthForm/>);const colors=createTheme('light');
+  // A fresh install now starts Dark, so sign-in shows the dark field border and accent.
+  await wrap(<AuthForm/>);const colors=createTheme('dark');
   expect(flat(screen.getByLabelText(t('email'))).borderColor).toBe(colors['hair-2']);
   await fireEvent(screen.getByLabelText(t('email')),'focus');
   expect(flat(screen.getByLabelText(t('email'))).borderColor).toBe(colors.accent);
@@ -124,69 +122,7 @@ describe('Sign in',()=>{
  });
 });
 
-describe('About you and Start',()=>{
- test('date of birth has a plain label, a helper line and its own inline error',async()=>{
-  const auth=await wrap(<Onboarding/>);
-  expect(t('birthDate')).toBe('Date of birth');expect(screen.getByText(t('birthDateHelp'))).toBeTruthy();
-  expect(screen.getByRole('progressbar',{name:'Step 2 of 3'})).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-13-45');
-  await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
-  expect(screen.getByRole('alert')).toHaveTextContent(t('birthDateInvalid'));expect(auth.createAccount).not.toHaveBeenCalled();
-  // Typing again clears the message until the next check.
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');expect(screen.queryByRole('alert')).toBeNull();
-  await fireEvent.changeText(screen.getByLabelText(t('profileHeight').replace('{unit}',screen.queryByLabelText('Height (cm, optional)')?'cm':'in')),'-4');
-  await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
-  expect(screen.getByRole('alert')).toHaveTextContent(t('statsInvalid'));
- });
- test('Back on About you clears the draft and returns to welcome, or to Account in the demo',async()=>{
-  await wrap(<Onboarding/>);await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('onboardingBack')}));
-  expect(router.replace).toHaveBeenLastCalledWith('/auth');expect(screen.getByLabelText(t('birthDate'))).toHaveDisplayValue('');
-  await screen.unmount();
-  await wrap(<Onboarding/>,{...state(),demo:true});await fireEvent.press(screen.getByRole('button',{name:t('onboardingBack')}));
-  expect(router.replace).toHaveBeenLastCalledWith('/settings/account');
- });
- test('Start offers two labelled routine choices and stores the same values as before',async()=>{
-  const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
-  const repository=memoryRepository(),device=memoryRepository();
-  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>device,wipeAll:()=>{}});
-  await wrap(<Onboarding/>,{...state(),repository,session:{user:{id:'synthetic'}} as AuthState['session']});
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
-  expect(screen.getByRole('progressbar',{name:'Step 3 of 3'})).toBeTruthy();
-  expect(screen.getByRole('radio',{name:t('starterNone')})).toBeChecked();
-  expect(screen.getByRole('radio',{name:t('starterFullBody')})).not.toBeChecked();
-  expect(screen.getByText(t('starterFullBodyBody'))).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button',{name:t('finishOnboarding')}));
-  expect(repository.list('routines')).toHaveLength(0);expect(repository.localGet('onboardingComplete')).toBe(true);
-  expect(router.replace).toHaveBeenLastCalledWith('/');
- });
- test('a failed save shows a quiet row whose Retry runs the same save',async()=>{
-  const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
-  const repository=memoryRepository(),device=memoryRepository();
-  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>device,wipeAll:()=>{}});
-  const atomic=jest.spyOn(repository,'atomic').mockImplementationOnce(()=>{throw new Error('synthetic write failure');});
-  await wrap(<Onboarding/>,{...state(),repository,session:{user:{id:'synthetic'}} as AuthState['session']});
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
-  await fireEvent.press(screen.getByRole('button',{name:t('finishOnboarding')}));
-  expect(screen.getByRole('alert')).toHaveTextContent(t('workoutSaveError'));expect(repository.list('profile')).toHaveLength(0);
-  await fireEvent.press(screen.getByRole('button',{name:t('bootRetry')}));
-  expect(atomic).toHaveBeenCalled();expect(repository.list('profile')).toHaveLength(1);expect(router.replace).toHaveBeenLastCalledWith('/');
- });
- test('while the account is still loading the button is off and a line says why',async()=>{
-  await wrap(<Onboarding/>,{...state(),initialPullComplete:false,repository:memoryRepository(),session:{user:{id:'synthetic'}} as AuthState['session']});
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
-  expect(screen.getByText(t('onboardingPreparing'))).toBeTruthy();expect(screen.getByRole('button',{name:t('finishOnboarding')})).toBeDisabled();
- });
- test('the ages 13+ screen is plain and offers only the way back',async()=>{
-  await wrap(<Onboarding/>);await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2020-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
-  expect(screen.getByRole('header')).toHaveTextContent(t('ages13Title'));expect(t('ages13Body')).not.toMatch(/thanks/i);
-  expect(screen.getAllByRole('button')).toHaveLength(1);
- });
-});
+// The setup steps after sign-in are covered in onboarding-flow.test.tsx.
 
 describe('Settings profile',()=>{
  test('an invalid date shows under the date field, and a good save says Saved',async()=>{

@@ -10,6 +10,7 @@ import { useAppleHealth } from '../src/features/health/use-apple-health';
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 // Made-up readings only.
 const samples: WeightSample[] = [1, 2, 3].map(n => ({ id: `AAAAAAAA-0000-4000-8000-00000000000${n}`, at: new Date(2026, 9, n, 7), kg: 80 + n / 10 }));
+let owners = 0;
 function fakes(start: HealthAccess, list = samples) {
   let access = start;
   const saved = new Map<string, unknown>();
@@ -20,7 +21,8 @@ function fakes(start: HealthAccess, list = samples) {
     steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [], workouts: async () => [],
   };
   const local = new Map<string, unknown>();
-  const repo = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); }, healthWeightsFrom: () => undefined, noteHealthWeightsFrom: () => {} } as unknown as Repository;
+  // Each fake is its own signed-in person, as a real repository is: Home's tiles are kept per owner.
+  const repo = { owner: `connect-owner-${++owners}`, localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); }, list: () => [], get: (_: string, id: string) => saved.get(id), save: (_: string, data: unknown, id: string) => { saved.set(id, data); }, healthWeightsFrom: () => undefined, noteHealthWeightsFrom: () => {} } as unknown as Repository;
   return { source, repo, saved, local };
 }
 function Page({ repo, source }: { repo: Repository | null; source: HealthSource | null }) {
@@ -59,7 +61,14 @@ test('connecting puts the Steps and Sleep tiles on Home by id only; a quiet visi
   expect(first.local.size).toBe(0);
   await fireEvent.press(screen.getByTestId('connect-apple-button'));
   await settle();
-  expect(first.local.get('homeTiles')).toEqual({ order: ['map', 'score', 'week', 'next', 'calories', 'protein', 'volume', 'weight', 'steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful'], wide: [], v: 2 });
+  // Home's starting tiles, then the health tiles it did not have, each saved as id, size, style and no options: no readings.
+  expect([...first.local.keys()]).toEqual(['tiles-home']);
+  const tiles = (first.local.get('tiles-home') as { tiles: [string, string, string, object][] }).tiles;
+  expect(tiles.map(([id]) => id).sort()).toEqual(['next', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful'].sort());
+  for (const [id, size, style, options] of tiles) {
+    expect(typeof id === 'string' && typeof size === 'string' && typeof style === 'string').toBe(true);
+    expect(options).toEqual({});
+  }
   const second = fakes('asked');
   await render(<Page repo={second.repo} source={second.source} />, { wrapper });
   await settle();

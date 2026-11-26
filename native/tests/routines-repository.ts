@@ -2,7 +2,7 @@ import type { Repository } from '../src/data/repository';
 import type { Row } from '../src/data/rows';
 import { DEFAULT_BLOCK_IDS, routineLogId, routinePlacementId, routineUuid } from '../src/features/routines/model/ids';
 import { emptyRoutineStore, type RoutineLog, type RoutineStore } from '../src/features/routines/model/shape';
-import { commitRoutineStore, readRoutineStore } from '../src/features/routines/store';
+import { commitRoutineStore, readRoutineStore } from '../src/features/routines/data/sqlite';
 import { memoryRepository } from './workout-repository';
 
 /* A phone's data in memory, with the two extra things the routine store asks of a repository.

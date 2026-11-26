@@ -6,7 +6,6 @@ import { tokens } from '@/design/tokens';
 import type { OuraRecovery } from '@/features/health/oura';
 import type { Night, Recovery as RecoveryData } from '@/features/health/recovery';
 import type { HealthAccess } from '@/features/health/source';
-import { StartedLegend, StartedLinesCard, startedSpoken, useStartedMarkers } from '@/features/routines-ui/started-lines';
 import { t } from '@/i18n/en';
 import { MiniChart } from './mini-chart';
 
@@ -14,13 +13,6 @@ const semibold = { fontWeight: '600' } as const;
 const hours = (minutes: number) => `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 const short = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const dayLabel = (back: number, now: Date) => short(new Date(now.getFullYear(), now.getMonth(), now.getDate() - back));
-/** The day each value of a chart stands for, oldest first, as YYYY-MM-DD: the last value is today. */
-function chartDays(count: number, now: Date): string[] {
-  return Array.from({ length: count }, (_, i) => {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (count - 1 - i));
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  });
-}
 const latest = (values: (number | null)[] | null) => values ? [...values].reverse().find((v): v is number => v !== null) ?? null : null;
 const mean = (values: (number | null)[]) => { const known = values.filter((v): v is number => v !== null); return known.length ? Math.round(known.reduce((a, b) => a + b, 0) / known.length) : null; };
 
@@ -52,19 +44,14 @@ function NightCard({ night, fromOura }: { night: Night; fromOura?: boolean }) {
   </Card>;
 }
 
-/** `started` asks for the "Started" lines the person switched on in Routines. Only the sleep and heart rate
- * variability charts ask. The lines are drawn here, on the phone; no reading goes to Routines and no name
- * leaves this card. */
-function DailyCard({ testID, title, unit, values, color, now, started = false }: { testID: string; title: string; unit?: string; values: (number | null)[]; color: string; now: Date; started?: boolean }) {
+function DailyCard({ testID, title, unit, values, color, now }: { testID: string; title: string; unit?: string; values: (number | null)[]; color: string; now: Date }) {
   const last = latest(values), average = mean(values);
-  const days = chartDays(values.length, now), found = useStartedMarkers(days), markers = started && last !== null ? found : [];
   const withUnit = (n: number | null) => unit ? `${n} ${unit}` : String(n);
   const summary = last === null ? t('recoveryNone') : `${t('recoveryLatest')} ${withUnit(last)} · ${t('recoveryWeekAverage')} ${withUnit(average)}`;
-  return <Card testID={testID} accessible accessibilityRole="image" accessibilityLabel={[`${title}. ${summary}`, startedSpoken(markers)].filter(Boolean).join('. ')} style={{ gap: tokens.spacing[1] }}>
+  return <Card testID={testID} accessible accessibilityRole="image" accessibilityLabel={`${title}. ${summary}`} style={{ gap: tokens.spacing[1] }}>
     <ThemedText variant="headline" style={semibold}>{title}</ThemedText>
     <ThemedText muted numeric variant="caption">{summary}</ThemedText>
-    {last !== null && <MiniChart values={values} color={color} first={dayLabel(values.length - 1, now)} last={dayLabel(0, now)} height={90} marks={markers.map(marker => days.indexOf(marker.date))} />}
-    <StartedLegend testID={`${testID}-started`} markers={markers} />
+    {last !== null && <MiniChart values={values} color={color} first={dayLabel(values.length - 1, now)} last={dayLabel(0, now)} height={90} />}
   </Card>;
 }
 
@@ -86,7 +73,7 @@ function pick(apple: (number | null)[] | null | undefined, oura: (number | null)
   return has(oura) ? oura : apple ?? null;
 }
 
-/** Progress › Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health, with Oura's readiness
+/** Insights › Recovery: last night's sleep stages and heart readings, straight from Apple Health, with Oura's readiness
  * and sleep scores when Oura is connected. Last night comes from Apple Health when it has one; each heart reading
  * comes from whichever of the two has the more recent day, Apple Health on a tie. Nothing is estimated: a reading that is not there is left out. */
 export function Recovery({ access, recovery, oura, now }: { access: HealthAccess; recovery: RecoveryData | null; oura?: OuraRecovery | null; now: Date }) {
@@ -105,14 +92,12 @@ export function Recovery({ access, recovery, oura, now }: { access: HealthAccess
   if (nothing) return <Message testID="recovery-empty" title={t('recoveryEmptyTitle')} body={t('recoveryEmptyBody')} />;
   return <View style={{ gap: tokens.spacing[3] }}>
     {ring && has(ring.readiness) && <DailyCard testID="recovery-readiness" title={t('recoveryReadiness')} values={ring.readiness} color={colors.sleep} now={now} />}
-    {ring && has(ring.sleepScore) && <DailyCard testID="recovery-sleep-score" title={t('recoverySleepScore')} values={ring.sleepScore} color={colors.sleep} now={now} started />}
+    {ring && has(ring.sleepScore) && <DailyCard testID="recovery-sleep-score" title={t('recoverySleepScore')} values={ring.sleepScore} color={colors.sleep} now={now} />}
     {night && <NightCard night={night} fromOura={nightFromOura} />}
     {restingHeartRate && <DailyCard testID="recovery-resting" title={t('recoveryResting')} unit="bpm" values={restingHeartRate} color={colors.sleep} now={now} />}
-    {hrv && <DailyCard testID="recovery-hrv" title={t('recoveryHrv')} unit="ms" values={hrv} color={colors.sleep} now={now} started />}
+    {hrv && <DailyCard testID="recovery-hrv" title={t('recoveryHrv')} unit="ms" values={hrv} color={colors.sleep} now={now} />}
     {heartToday && <Line testID="recovery-heart" title={t('recoveryHeart')} value={t('recoveryHeartValue').replace('{average}', String(heartToday.average)).replace('{min}', String(heartToday.min)).replace('{max}', String(heartToday.max))} />}
     {vo2Max && <Line testID="recovery-vo2" title={t('recoveryVo2')} value={t('recoveryVo2Value').replace('{value}', vo2Max.value.toFixed(1)).replace('{date}', short(vo2Max.at))} />}
-    {/* The switches sit under the charts they draw on, and only once something in Routines has a start day. */}
-    {((ring && has(ring.sleepScore)) || !!hrv) && <StartedLinesCard testID="recovery-started-lines" />}
     <ThemedText muted variant="caption">{ring ? t('recoveryFootnoteOura') : t('recoveryFootnote')}</ThemedText>
   </View>;
 }

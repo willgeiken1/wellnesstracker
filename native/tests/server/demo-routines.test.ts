@@ -8,7 +8,7 @@ import { promoteDemo } from '../../src/features/onboarding/demo-transfer';
 import { logItem } from '../../src/features/routines/model/actions';
 import { DEFAULT_BLOCK_IDS, routinePlacementId } from '../../src/features/routines/model/ids';
 import { nextUpWanted, routineTile, NEXT_UP_TILE_ID } from '../../src/features/routines/model/home-tiles';
-import { commitRoutineStore, readRoutineStore } from '../../src/features/routines/store';
+import { commitRoutineStore, readRoutineStore } from '../../src/features/routines/data/sqlite';
 
 /* The sample routine items of "Look around first". Everything is made up. */
 

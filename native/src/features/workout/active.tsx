@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { leave } from "./parts";
 import { Alert, AppState, ScrollView, View } from "react-native";
 import { Tappable as Pressable } from "@/components/tappable";
 import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
-import { router, useIsFocused, useLocalSearchParams } from "expo-router";
+import { useIsFocused, useLocalSearchParams } from "expo-router";
 import { Button } from "@/components/button";
 import { ThemedText } from "@/components/themed-text";
 import { tokens } from "@/design/tokens";
@@ -87,8 +88,10 @@ export function ActiveWorkout({ fixtureState }: { fixtureState?: string } = {}) 
     </SafeAreaView>
   );
 }
+// The logger is pushed, so closing it goes back to where it was opened (Training, Home or a summary), sliding out to
+// the right like the design's back button; opened cold, it lands on Training.
 function closeWorkout() {
-  router.replace("/");
+  leave();
 }
 function Logger({
   store,

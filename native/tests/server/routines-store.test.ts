@@ -2,7 +2,7 @@ import { localDatabase } from './sqlite';
 import { Repository } from '../../src/data/repository';
 import { DEVICE_A, OWNER_A, OWNER_B } from '../../fixtures/sync';
 import { FIXTURE_IDS, ROUTINE_SENTINELS, routineFixtureRows } from '../../fixtures/routines';
-import { commitRoutineStore, readRoutineStore, removedDefaultRoutines, seedDefaultRoutines } from '../../src/features/routines/store';
+import { commitRoutineStore, readRoutineStore, removedDefaultRoutines, seedDefaultRoutines } from '../../src/features/routines/data/sqlite';
 import { addBlock, moveBlock, saveBlock, blockDraft } from '../../src/features/routines/model/blocks';
 import { editLog } from '../../src/features/routines/model/edit-log';
 import { addRoutinePart, saveSetup } from '../../src/features/routines/model/setup';

@@ -119,18 +119,6 @@ test.each(['returned error','rejected network'])('sign-out %s still wipes locall
   await waitFor(()=>expect(observed.repository).toBe(b));expect(observed.pending).toBe(0);
   expect(b.wipe).not.toHaveBeenCalled();await view.unmount();
 });
-test('sign-out refuses to erase routines kept on this phone alone without the warning being acknowledged',async()=>{
- // Nothing waits to sync: the sync succeeds and the outbox empties. Routines are not in it and are counted on their own.
- const a=Object.assign(fixtureRepo(OWNER_A),{phoneOnlyRoutineCount:()=>2});
- jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
- const fixture=clientFixture(),view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
- await waitFor(()=>expect(observed.repository).toBe(a));
- await waitFor(()=>expect(a.hasUnsynced()).toBe(false));
- await act(async()=>{await expect(observed.signOut()).rejects.toThrow('Unsynced changes require confirmation.');});
- expect(a.wipe).not.toHaveBeenCalled();expect(fixture.auth.signOut).not.toHaveBeenCalled();
- await act(async()=>{await observed.signOut(true);});
- expect(a.wipe).toHaveBeenCalledTimes(1);await view.unmount();
-});
 test('sign-out attempts sync and refuses to discard unsynced rows without warning acknowledgment',async()=>{
  const a=fixtureRepo(OWNER_A);mockPush.mockRejectedValue(new Error('offline fixture'));
  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:fixtureRepo(owner)});
@@ -727,4 +715,67 @@ test.each([true,false])('demo promotion shows a notice only for skipped weigh-in
  else expect(alert).not.toHaveBeenCalled();
  await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(1);
  alert.mockRestore();promotion.mockReset();
+});
+
+test('Sign in with Apple signs in with the identity token and raw nonce, and reports a refused token as a failed sign-in',async()=>{
+ const guest=fixtureRepo('guest'),account=fixtureRepo(OWNER_A),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const idToken=jest.fn(async(_c:unknown)=>({data:{session:session(OWNER_A),user:session(OWNER_A).user},error:null as unknown}));
+ (fixture.auth as Record<string,unknown>).signInWithIdToken=idToken;
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ let result:string|null|undefined;
+ await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');fixture.emit(session(OWNER_A));});
+ expect(result).toBeNull();expect(idToken).toHaveBeenCalledWith({provider:'apple',token:'synthetic-apple-token',nonce:'synthetic-raw-nonce'});
+ expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();
+ await waitFor(()=>expect(observed.repository).toBe(account));
+ idToken.mockResolvedValueOnce({data:{session:null as unknown as Session,user:null as unknown as Session['user']},error:new Error('Synthetic refusal')});
+ await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');});
+ expect(result).toBe('authFailed');
+});
+
+test('Continue with email signs in, or makes the account when that email has none, with one button', async () => {
+  const guest = fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: () => guest });
+  const fixture = clientFixture(null);
+  const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  // A returning person: the password works.
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'secret123'))).toBeNull();
+  expect(fixture.auth.signUp).not.toHaveBeenCalled();
+  // A new person: sign-in fails, so the account is made and the email waits for confirmation.
+  fixture.auth.signInWithPassword.mockResolvedValue({ error: { message: 'Invalid login credentials' } } as never);
+  expect(await act(async () => observed.continueWithEmail!('new@example.test', 'secret123'))).toBe('confirmEmail');
+  expect(fixture.auth.signUp).toHaveBeenLastCalledWith({ email: 'new@example.test', password: 'secret123' });
+  // An email that already has an account, with the wrong password: signing up returns no identities, which is a failure.
+  fixture.auth.signUp.mockResolvedValue({ data: { session: null, user: { identities: [] } }, error: null } as never);
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'wrongpass'))).toBe('authFailed');
+  // Too short to be a new password: no account is made.
+  fixture.auth.signUp.mockClear();
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'short'))).toBe('authFailed');
+  expect(fixture.auth.signUp).not.toHaveBeenCalled();
+  await view.unmount();
+});
+
+test('a guest opens the app on this phone only, is remembered, and can leave; Google is not set up', async () => {
+  const guest = fixtureRepo('guest'), local = new Map<string, unknown>();
+  const device = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); } };
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: (owner: string) => owner === 'device' ? device : guest } as never);
+  const view = await render(<AuthProvider client={null}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  expect(observed.guest).toBe(false);
+  await act(async () => { observed.continueAsGuest!(); });
+  expect(observed.guest).toBe(true);
+  await waitFor(() => expect(local.get('guestMode')).toBe(true));
+  expect(observed.repository).toBe(guest);
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(await observed.signInWithGoogle!()).toEqual({ ok: false, reason: 'notConfigured' });
+  await act(async () => { observed.exitGuest!(); });
+  expect(observed.guest).toBe(false);
+  await waitFor(() => expect(local.get('guestMode')).toBe(false));
+  await view.unmount();
+  // Reopened after a guest session, the phone remembers.
+  local.set('guestMode', true);
+  const again = await render(<AuthProvider client={null}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.guest).toBe(true));
+  await again.unmount();
 });

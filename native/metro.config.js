@@ -7,6 +7,8 @@ const config = process.env.APP_VARIANT === 'freeiphone'
 // Shared, pure importer also runs in the Supabase edge function.
 config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, '../supabase/functions/_shared')];
 config.resolver.nodeModulesPaths = [path.resolve(__dirname, 'node_modules')];
+// expo-sqlite's web worker loads wa-sqlite as a .wasm asset (web screenshots for the design check).
+if (process.env.FIDELITY_WEB && config.resolver.assetExts && !config.resolver.assetExts.includes('wasm')) config.resolver.assetExts.push('wasm');
 if (process.env.APP_VARIANT === 'freeiphone') {
   config.cacheVersion = 'freeiphone-v1';
   config.resolver.resolveRequest = (context, name, platform) => {

@@ -12,6 +12,14 @@ import { createLoggerFixture } from "../src/features/workout/devFixture";
 import { WorkoutSummary } from "../src/features/workout/summary";
 import { RestContours } from "../src/features/workout/timer";
 import { Pill } from "../src/features/workout/primitives";
+import type { Repository } from "../src/data/repository";
+
+// A fresh install now starts Dark; these tests are about following the iPhone's appearance, so they save System first.
+const followsSystem = () => {
+  const repository = memoryRepository();
+  repository.save("settings", { theme_override: "system" });
+  return repository as unknown as Repository;
+};
 
 test.each(["dark", "light"] as const)(
   "demo defaults to %s system appearance and uses semantic fills",
@@ -19,10 +27,10 @@ test.each(["dark", "light"] as const)(
     const scheme = jest
       .spyOn(ReactNative, "useColorScheme")
       .mockReturnValue(mode);
-    const c = createTheme(mode, "seaGlassTide");
+    const c = createTheme(mode);
     try {
       await render(
-        <ThemeProvider>
+        <ThemeProvider repository={followsSystem()}>
           <SetRow
             exercise="Synthetic bench"
             index={0}
@@ -63,10 +71,10 @@ test.each(["dark", "light"] as const)(
     const scheme = jest
       .spyOn(ReactNative, "useColorScheme")
       .mockReturnValue(mode);
-    const c = createTheme(mode, "seaGlassTide");
+    const c = createTheme(mode);
     try {
       await render(
-        <ThemeProvider>
+        <ThemeProvider repository={followsSystem()}>
           <Keypad
             label="Bench Press · Set 3 · Weight"
             field="weight"
@@ -98,8 +106,8 @@ test.each(["dark", "light"] as const)("summary uses %s card and action tokens", 
  try {
   const store=new WorkoutStore(memoryRepository());
   const fixture=createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},"summary")!;
-  const c=createTheme(mode,"seaGlassTide");
-  await render(<ThemeProvider><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
+  const c=createTheme(mode);
+  await render(<ThemeProvider repository={followsSystem()}><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
   for (const id of ["summary-stats","summary-pr","summary-shelf"]) expect(screen.getByTestId(id)).toHaveStyle({backgroundColor:c.surface});
   expect(screen.getByTestId("summary-done")).toHaveStyle({backgroundColor:c.accent});
   expect(within(screen.getByTestId("summary-done")).getByText("Done")).toHaveStyle({color:c["on-accent"]});
@@ -114,19 +122,19 @@ test.each(['dark','light'] as const)('older shelf tokens are desaturated in %s w
  try {
   const store=new WorkoutStore(memoryRepository());
   const fixture=createLoggerFixture(store,{isDev:true,demo:true,signedIn:false},'summary')!;
-  await render(<ThemeProvider><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
+  await render(<ThemeProvider repository={followsSystem()}><WorkoutSummary store={store} id={fixture.sessionId}/></ThemeProvider>);
   const old=screen.getAllByTestId('summit-token-muted');
   expect(old).toHaveLength(4);
   for(const token of old){
    const gradients=token.queryAll(n=>n.type==='RNSVGRadialGradient'||n.type==='RNSVGLinearGradient');
    expect(gradients).toHaveLength(3);
    const colors=gradients.flatMap(n=>n.props.gradient);
-   expect(colors).not.toContain((ReactNative.processColor(createTheme(mode,'seaGlassTide').accent) as number) | 0);
-   expect(colors).toContain((ReactNative.processColor(createTheme(mode,'seaGlassTide')['token-muted']) as number) | 0);
+   expect(colors).not.toContain((ReactNative.processColor(createTheme(mode).accent) as number) | 0);
+   expect(colors).toContain((ReactNative.processColor(createTheme(mode)['token-muted']) as number) | 0);
   }
   expect(screen.getAllByTestId('summit-token-new')).toHaveLength(1);
   const newest=screen.getByTestId('summit-token-new').queryAll(n=>n.type==='RNSVGRadialGradient'||n.type==='RNSVGLinearGradient').flatMap(n=>n.props.gradient);
-  expect(newest).toContain((ReactNative.processColor(createTheme(mode,'seaGlassTide').accent) as number) | 0);
+  expect(newest).toContain((ReactNative.processColor(createTheme(mode).accent) as number) | 0);
  } finally {scheme.mockRestore();}
 });
 
@@ -134,9 +142,9 @@ test.each(['dark','light'] as const)('older shelf tokens are desaturated in %s w
 test.each(['dark', 'light'] as const)('rest ring track uses the %s semantic token', async mode => {
   const scheme = jest.spyOn(ReactNative, 'useColorScheme').mockReturnValue(mode);
   try {
-    await render(<ThemeProvider><RestContours seconds={60} duration={90} style="unwind" /></ThemeProvider>);
+    await render(<ThemeProvider repository={followsSystem()}><RestContours seconds={60} duration={90} style="unwind" /></ThemeProvider>);
     const track = screen.getByTestId('rest-contours').queryAll(n => n.type === 'RNSVGPath')[0];
-    const colors = createTheme(mode, 'seaGlassTide');
+    const colors = createTheme(mode);
     expect(track.props.stroke).toEqual({ type: 0, payload: ReactNative.processColor(colors[mode === 'dark' ? 'text-muted' : 'surface-2']) });
     expect(track.props.opacity ?? 1).toBe(mode === 'dark' ? 0.4 : 1);
   } finally { scheme.mockRestore(); }

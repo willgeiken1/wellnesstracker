@@ -1,6 +1,6 @@
-import { useContext, useEffect } from 'react';
+import { useEffect } from 'react';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { AuthContext } from '@/auth/provider';
+import { useAuth } from '@/auth/provider';
 import { Screen } from '@/components/screen';
 import { ConnectedServices } from '@/features/connections/screen';
 import { useAppleHealth } from '@/features/health/use-apple-health';
@@ -13,7 +13,7 @@ import { t } from '@/i18n/en';
 export default function OuraPreviewRoute() {
   const { state } = useLocalSearchParams<{ state?: string }>();
   const shown = OURA_PREVIEW_STATES.find(item => item === state);
-  const repository = useContext(AuthContext)?.repository;
+  const repository = useAuth().repository;
   const apple = useAppleHealth(repository);
   useEffect(() => { if (!__DEV__ || !shown) router.replace('/'); }, [shown]);
   if (!__DEV__ || !shown) return null;

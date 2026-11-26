@@ -5,7 +5,7 @@ import type { Repository } from '@/data/repository';
 import { routineDayKey } from '@/features/routines/model/dose';
 import { emptyRoutineStore, projectRoutineStore, type RoutineStore, type RoutineView } from '@/features/routines/model/shape';
 import type { RoutineClock } from '@/features/routines/model/write';
-import { commitRoutineStore, readRoutineStore, seedDefaultRoutines } from '@/features/routines/store';
+import { commitRoutineStore, readRoutineStore, seedDefaultRoutines } from '@/features/routines/data/sqlite';
 
 /* Routines as a screen reads them. Everything stays on the phone: this file
    reads and writes the routine tables through the store and sends nothing

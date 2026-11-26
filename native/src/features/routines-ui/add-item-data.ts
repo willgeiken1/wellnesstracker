@@ -10,7 +10,7 @@ import type { Repository } from '@/data/repository';
 import { routineDayKey } from '@/features/routines/model/dose';
 import { projectRoutineStore, type RoutineStore, type RoutineView } from '@/features/routines/model/shape';
 import type { RoutineClock } from '@/features/routines/model/write';
-import { commitRoutineStore, readRoutineStore } from '@/features/routines/store';
+import { commitRoutineStore, readRoutineStore } from '@/features/routines/data/sqlite';
 
 export interface RoutinesData {
   repository: Repository | null;

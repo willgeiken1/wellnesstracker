@@ -13,7 +13,7 @@ Rules for anyone building from this file:
 - Every example number here is synthetic. Real health values never appear in specs, shots, fixtures or analytics (AGENTS.md §4.1-4.2).
 - The 2D body map is built on **react-native-body-highlighter** (MIT licence).
 - Kai owns the body map component. No redesign task changes its component, frame size or props (CHECKLIST M8).
-- Tab labels (Will, Nov 22 2026, replaces Q3's five): Home, Workouts, Food, Progress. Insights is a view inside Progress (§3.4), which frees the fifth place in Apple's bar. This file uses "Train" for the Workouts tab and "Eat" for the Food tab, matching the task names. Nothing is renamed.
+- Tab labels stay as shipped (Q3): Home, Workouts, Food, Progress, Insights. This file uses "Train" for the Workouts tab and "Eat" for the Food tab, matching the task names. Nothing is renamed.
 
 ---
 
@@ -93,13 +93,13 @@ Every PWA extra survives as an optional tray widget. "Default" = on the starting
 | 9 | `headline` | Daily headline | none | no | panel | PWA extra |
 | 10 | `pattern` | Today's pattern | none | no | panel | PWA extra |
 | 11 | `weeklyGoal` | Weekly goal | none | no | panel | PWA extra |
-| 12 | `weeklyReport` | Weekly report | none | no | panel | Opens Progress › Insights › Weekly (`/progress?view=insights&section=weekly`) |
+| 12 | `weeklyReport` | Weekly report | none | no | panel | Opens Insights › Weekly |
 | 13 | `trendChips` | Trend chips | none | no | panel | Gaining / maintaining / losing chips (PWA) |
 | 14 | `foodYesterday` | Yesterday's food | none | no | panel | PWA extra |
 | 15 | `weightTrend` | Weight trend | none | no | panel | Sparkline only; no value in analytics |
 | 16 | `cardio` | Cardio | none | no | panel | PWA extra |
 | 17 | `cardioMinutes` | Cardio minutes | none | no | panel | PWA extra |
-| 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Progress › Insights › Muscles (`/progress?view=insights&section=muscles`) |
+| 18 | `musclesWeek` | Muscles this week | none | no | panel | PWA extra; links to Insights › Muscles |
 | 19 | `workoutPrint` | Workout print | none | no | panel | Contour fingerprint (D114) |
 | 20 | `checkIn` | Check in | none | no | panel | Optional tray tile: mood, energy and stress check-ins that sync for signed-in users (Will, Oct 28 2026 10:16 PM CT, supersedes Q47). **Unblocked for INS-02/INS-05.** Ships with the 988 crisis card, matched on-device with no network call (Will, Oct 29 2026 4:46 AM CT). The PWA importer also brings old check-ins over (Will, Oct 29 2026 4:47 AM CT). Egress-test gate for the tile and the import: see Q-A (§8). |
 | 21 | `steps` | Steps | Apple Health or Oura | no | panel | |
@@ -197,8 +197,7 @@ Shared across all tabs: large title, `Example data` chip in demo, the offline ba
   - [ ] Four states.
 
 ### 3.4 Insights
-- **Where it lives (Will, Nov 22 2026):** Insights is the second view of the Progress tab, not a tab of its own. Progress has a "Tracking | Insights" switch under its title and a row of section tabs under that (Tracking: Body / Photos / Goals & PRs). The last view and each view's last section are remembered on the phone. `/insights` redirects to `/progress?view=insights`.
-- **Layout:** large title "Progress", the view switch on Insights, then section tabs: Trends / Recovery / Muscles / Weekly.
+- **Layout:** large title "Insights". Segmented `Picker`: Trends / Recovery / Muscles / Weekly.
   - **Trends:** "What affects you" pattern panels first (effect direction arrow, plain sentence, "Correlation, not cause"), then 14-day chart panels (calories, training volume). Charts trace per §4.
   - **Recovery:** a sleep panel, HRV / sleep / steps tiles with source badges, and a 30-day band. Uses the Health no-data state (§2.5).
   - **Muscles:** the body atlas (Kai, unchanged).

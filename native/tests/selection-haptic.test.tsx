@@ -17,7 +17,7 @@ const mockNavigate = jest.fn();
 jest.mock('expo-router', () => {
   const React = require('react');
   const { View: Host } = require('react-native');
-  const names = ['index', 'workouts', 'food', 'progress'];
+  const names = ['index', 'workouts', 'food', 'progress', 'routines', 'insights'];
   const Tabs = ({ tabBar }: any) => React.createElement(Host, null,
     tabBar({ state: { index: 0, routes: names.map(name => ({ key: `${name}-key`, name })) }, emitter: { emit: () => ({ defaultPrevented: false }) }, navigateToTab: mockNavigate }));
   Tabs.Screen = function Screen() { return null; };

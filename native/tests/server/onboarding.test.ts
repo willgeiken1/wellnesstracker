@@ -11,10 +11,13 @@ test('calendar-valid DOB gate includes thirteenth birthday and rejects future/in
  expect(ageOn('2012-02-30','2026-10-27')).toBeNull();
  expect(ageOn('2027-01-01','2026-10-27')).toBeNull();
 });
-test('region defaults and lightly active estimated targets require all body stats',()=>{
+test('region defaults and lightly active estimated targets need height, weight and age; sex is optional',()=>{
  expect(defaultUnits('en-US')).toBe('lb');expect(defaultUnits('en-GB')).toBe('kg');
  expect(estimateTargets({...input,weight:''},'2026-10-27')).toBeNull();
- expect(estimateTargets({...input,sex:''},'2026-10-27')).toBeNull();
+ // Without sex the estimate uses the midpoint of the two offsets (-78).
+ const male=estimateTargets(input,'2026-10-27')!.energy_kj/4.184,none=estimateTargets({...input,sex:''},'2026-10-27')!.energy_kj/4.184;
+ expect(Math.abs(male-none-83*1.15)).toBeLessThanOrEqual(10);
+ expect(estimateTargets({...input,height:''},'2026-10-27')).toBeNull();
  expect(estimateTargets(input,'2026-10-27')?.energy_kj).toBeGreaterThan(0);
 });
 test('under-13 completion writes absolutely no rows or local preferences',async()=>{

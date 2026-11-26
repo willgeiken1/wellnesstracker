@@ -12,7 +12,11 @@ import { ScoreDetail } from '../src/features/score/detail';
 import { readScore } from '../src/features/score/read';
 import { SCORE_WEIGHTS_KEY } from '../src/features/score/model';
 import { appleHealth } from '../src/features/health/apple';
-import { HOME_TILES_KEY, loadTiles, scoreOn } from '../src/features/home/tiles';
+import { HOME_TILES_KEY, homeLayout, scoreOn, setScoreOn } from '../src/features/home/tiles';
+import { homeTileState } from '../src/features/home/tiles/state';
+import { tileStoreFor } from '../src/features/tiles/store';
+import { resetTileStores } from '../src/features/tiles';
+import { t } from '../src/i18n/en';
 import type { HealthSource } from '../src/features/health/source';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn(), AuthContext: jest.requireActual('react').createContext(null) }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn() }, Stack: { Screen: () => null }, useLocalSearchParams: jest.fn(() => ({ section: 'score' })) }));
@@ -20,7 +24,35 @@ jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
 jest.mock('../src/features/health/apple', () => ({ appleHealth: jest.fn() }));
 jest.mock('../src/features/home/use-focused', () => ({ useFocused: jest.fn(() => true) }));
-jest.mock('../src/features/food/ai/privacy', () => ({ FoodPrivacyScreen: () => null }));
+// A small stand-in for Reanimated: values settle at once, styles are computed once (as in tiles-ui).
+jest.mock('react-native-reanimated', () => {
+  const RN = require('react-native');
+  const React = require('react');
+  const id = (v: unknown) => v;
+  const ease = Object.assign(() => 0, { bezier: () => id, inOut: () => id, ease: id, linear: id, out: () => id });
+  return {
+    __esModule: true,
+    default: { View: RN.View, ScrollView: RN.ScrollView, Text: RN.Text, createAnimatedComponent: id },
+    Easing: ease,
+    cancelAnimation: () => {}, interpolate: (_v: number, _i: number[], o: number[]) => o[o.length - 1],
+    measure: () => null, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f, scrollTo: () => {},
+    useAnimatedRef: () => React.useRef(null), useAnimatedStyle: (f: () => unknown) => f(),
+    useFrameCallback: () => ({ setActive: () => {}, isActive: false, callbackId: 0 }),
+    useScrollOffset: () => ({ value: 0 }), useSharedValue: (v: unknown) => React.useRef({ value: v }).current,
+    withDelay: (_d: number, v: unknown) => v, withRepeat: (v: unknown) => v, withSequence: (...v: unknown[]) => v[v.length - 1], withTiming: id, withSpring: id, useAnimatedProps: (f: () => unknown) => f(),
+  };
+});
+// Gestures are exercised on a device; here the detectors just draw their child.
+jest.mock('react-native-gesture-handler', () => {
+  const RN = require('react-native');
+  const gesture = () => ({});
+  return { GestureDetector: ({ children }: { children: unknown }) => children, GestureHandlerRootView: RN.View,
+    usePanGesture: gesture, useTapGesture: gesture, useLongPressGesture: gesture };
+});
+// Skia draws the tile depth on a device; the tests only need the tile's contents.
+jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null }));
+
+jest.mock('../src/features/food/ai/privacy', () => ({ FoodPrivacyScreen: () => null, FoodAiPrivacy: () => null }));
 jest.mock('../src/features/importer/screen', () => ({ ImportScreen: () => null }));
 const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
@@ -30,13 +62,15 @@ beforeEach(() => {
   jest.useFakeTimers({ now: NOW, doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
   jest.mocked(router.push).mockClear();
   jest.mocked(appleHealth).mockReturnValue(null);
+  resetTileStores();
 });
 afterEach(() => { jest.useRealTimers(); });
 
 // Made-up sample data only.
 const oats = { name: 'Sample oats', energy_kj: 418.4, protein_g: 5, carbs_g: 20, fat_g: 2, fiber_g: null, sugar_g: null, sodium_mg: null, amount_g: null };
 const dayAgo = (n: number) => localDay(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - n));
-function open(repo = memoryRepository()) {
+function open(repo = memoryRepository(), score = true) {
+  if (score) setScoreOn(repo, true);
   jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle', demo: false } as ReturnType<typeof useAuth>);
   return repo;
 }
@@ -61,49 +95,49 @@ const health = (): HealthSource => ({
   }),
 });
 
-test('a new account sees the ring and the card counting down, and both open how it is worked out', async () => {
+// Home's Score is a tile: it starts once a week is logged, shows the score after that, and opens how it is worked out.
+const scoreTile = () => screen.getByRole('button', { name: /^Insight Score\. / });
+test('a new account with the Score on sees the tile say when it starts, and it opens how it is worked out', async () => {
   open();
   await render(<Home />, { wrapper });
-  const card = screen.getByTestId('home-score');
-  expect(within(card).getByText('Needs 7 more days')).toBeTruthy();
-  for (const pillar of ['training', 'food', 'recovery']) expect(within(card).getByTestId(`score-pillar-${pillar}`)).toBeTruthy();
-  const ring = screen.getByRole('button', { name: 'Insight Score. Needs 7 more days of logging' });
-  await fireEvent.press(ring);
-  await fireEvent.press(within(card).getByRole('button', { name: 'How it\'s worked out' }));
-  expect(jest.mocked(router.push).mock.calls).toEqual([['/score'], ['/score']]);
+  await settle();
+  expect(screen.getByText(t('homeEmptyScore'))).toBeTruthy();
+  expect(homeTileState()?.ready.score).toBe(false);
+  await fireEvent.press(scoreTile());
+  expect(jest.mocked(router.push).mock.calls).toEqual([['/score']]);
 });
 
-test('the countdown follows the days logged, and the score shows after 7', async () => {
+test('the Score tile follows the days logged, and the score shows after 7', async () => {
   const repo = open();
   logFood(repo, [5, 4, 3, 2, 1]);
   workout(repo);
   const view = await render(<Home />, { wrapper });
+  await settle();
   // Five food days plus today's workout: six days logged.
-  expect(within(screen.getByTestId('home-score')).getByText('Needs 1 more day')).toBeTruthy();
+  expect(screen.getByText(t('homeEmptyScore'))).toBeTruthy();
   logFood(repo, [6]);
-  await act(async () => {});
-  await view.rerender(<Home />);
-  const card = screen.getByTestId('home-score');
-  expect(within(card).queryByText(/Needs/)).toBeNull();
+  await view.unmount();
+  await render(<Home />, { wrapper });
+  await settle();
   const score = readScore(new WorkoutStore(repo), NOW, null);
   expect(score.ready).toBe(true);
   expect(score.value).not.toBeNull();
-  expect(within(card).getByText(String(score.value))).toBeTruthy();
-  expect(screen.getByRole('button', { name: `Insight Score, ${score.value} out of 100` })).toBeTruthy();
+  expect(screen.queryByText(t('homeEmptyScore'))).toBeNull();
+  expect(homeTileState()?.data.score.today).toBe(score.value);
+  expect(screen.getAllByText(String(score.value)).length).toBeGreaterThan(0);
 });
 
-test('removing the tile in Edit takes the card and the header ring away together', async () => {
+test('taking the Score tile off Home turns the Score off, and turning it on puts it first again', async () => {
   const repo = open();
   await render(<Home />, { wrapper });
-  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Remove, Insight Score' }));
-  expect(screen.queryByTestId('home-score')).toBeNull();
-  expect(screen.queryByTestId('home-score-ring')).toBeNull();
+  await settle();
+  expect(screen.getByText(t('homeEmptyScore'))).toBeTruthy();
+  await act(async () => { tileStoreFor(repo, 'home').remove('score'); });
+  expect(screen.queryByText(t('homeEmptyScore'))).toBeNull();
   expect(scoreOn(repo)).toBe(false);
-  await fireEvent.press(screen.getByRole('button', { name: 'Add, Insight Score' }));
-  expect(screen.getByTestId('home-score-ring')).toBeTruthy();
-  // It comes back under the map, where the Settings switch puts it too.
-  expect(loadTiles(repo).order.slice(0, 2)).toEqual(['map', 'score']);
+  await act(async () => { setScoreOn(repo, true); });
+  expect(screen.getByText(t('homeEmptyScore'))).toBeTruthy();
+  expect(homeLayout(repo)[0]).toMatchObject({ id: 'score', size: 'M' });
 });
 
 test('steps and sleep from Apple Health feed the score in memory, and nothing about them is saved', async () => {
@@ -115,7 +149,7 @@ test('steps and sleep from Apple Health feed the score in memory, and nothing ab
   await render(<Home />, { wrapper });
   await settle();
   // 5 h 30 min a night is halfway between 4 and 7 hours.
-  expect(within(screen.getByTestId('score-pillar-recovery')).getByText('50')).toBeTruthy();
+  expect(homeTileState()?.data.score.pillars.recovery).toBe(50);
   expect(save).not.toHaveBeenCalled();
   expect(local).not.toHaveBeenCalled();
 });
@@ -197,16 +231,20 @@ test('without sleep data the detail screen says recovery is left out', async () 
 
 test('the Settings switch and the Home tile are one state', async () => {
   const repo = memoryRepository();
+  // Settings reads the account through useAuth (the phone-only build keeps its context private).
+  jest.mocked(useAuth).mockReturnValue({ repository: repo } as never);
   const show = () => render(<AuthContext.Provider value={{ repository: repo } as never}><SettingsSection /></AuthContext.Provider>, { wrapper });
   const view = await show();
   const toggle = screen.getByTestId('settings-score-switch');
-  expect(toggle.props.value).toBe(true);
-  await fireEvent(toggle, 'valueChange', false);
-  expect(screen.getByTestId('settings-score-switch').props.value).toBe(false);
-  expect(loadTiles(repo).order).not.toContain('score');
-  expect(repo.localGet(HOME_TILES_KEY)).toMatchObject({ v: 2 });
-  await fireEvent(screen.getByTestId('settings-score-switch'), 'valueChange', true);
-  expect(loadTiles(repo).order.slice(0, 2)).toEqual(['map', 'score']);
+  // Home starts without the Score tile, so the switch starts off.
+  expect(toggle.props.value).toBe(false);
+  await fireEvent(toggle, 'valueChange', true);
+  expect(screen.getByTestId('settings-score-switch').props.value).toBe(true);
+  expect(homeLayout(repo)[0]).toMatchObject({ id: 'score', size: 'M' });
+  expect(JSON.stringify(repo.localGet(HOME_TILES_KEY))).toContain('score');
+  await fireEvent(screen.getByTestId('settings-score-switch'), 'valueChange', false);
+  expect(homeLayout(repo).map(e => e.id)).not.toContain('score');
+  expect(JSON.stringify(repo.localGet(HOME_TILES_KEY))).not.toContain('score');
   await fireEvent.press(screen.getByRole('button', { name: 'How it\'s worked out' }));
   expect(router.push).toHaveBeenCalledWith('/score');
   await view.unmount();

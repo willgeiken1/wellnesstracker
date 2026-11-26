@@ -16,7 +16,7 @@ export type BarLook = (typeof BAR_LOOKS)[number];
 /** The number keys in the logger: solid, or glass keys with a light rim. */
 export const KEYPAD_LOOKS = ["plain", "glass"] as const;
 export type KeypadLook = (typeof KEYPAD_LOOKS)[number];
-/** The choice controls (Workouts, Progress, Appearance): one track, the plan's default, or a row of
+/** The choice controls (Workouts, Progress, Insights, Appearance): one track, the plan's default, or a row of
  * separate pill chips that scrolls sideways when there are more than fit. */
 export const SELECTOR_LOOKS = ["standard", "pills"] as const;
 export type SelectorLook = (typeof SELECTOR_LOOKS)[number];

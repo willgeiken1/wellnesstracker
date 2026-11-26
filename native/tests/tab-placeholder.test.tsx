@@ -6,9 +6,9 @@ jest.mock('expo-router', () => ({ router: { navigate: jest.fn(), push: jest.fn()
 const wrap = (node: React.ReactNode) => <ThemeProvider>{node}</ThemeProvider>;
 
 test('an unbuilt tab is one title and one plain line, with no badge, milestone code or Back to Home button', async () => {
-  await render(wrap(<TabPlaceholder title="food" />));
+  await render(wrap(<TabPlaceholder title="insights" />));
   expect(screen.getAllByRole('header')).toHaveLength(1);
-  expect(screen.getByRole('header', { name: 'Food' })).toBeTruthy();
+  expect(screen.getByRole('header', { name: 'Insights' })).toBeTruthy();
   expect(within(screen.getByTestId('tab-empty')).getByText("This part of Insight isn't built yet.")).toBeTruthy();
   expect(screen.queryByText(/M2|M3|placeholder|coming soon/i)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();

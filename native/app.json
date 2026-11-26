@@ -2,7 +2,7 @@
   "expo": {
     "name": "Insight Wellness",
     "slug": "insight-daily",
-    "version": "1.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "insight",
@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.insightwellness.app",
       "supportsTablet": false,
       "deploymentTarget": "17.0",
+      "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -198,19 +199,27 @@
           }
         }
       ],
+      "expo-live-activity",
       "expo-status-bar",
+      "expo-apple-authentication",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Insight uses Face ID to unlock the app."
+        }
+      ],
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Insight Wellness to take a meal photo you choose for an estimate.",
-          "photosPermission": false,
+          "cameraPermission": "Insight uses the camera when you choose to scan a food barcode or take a progress or profile photo. Photos stay on this iPhone.",
+          "photosPermission": "Insight opens your photo library when you choose a profile photo. The photo you pick stays on this iPhone.",
           "microphonePermission": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Insight Wellness to scan food barcodes when you choose Scan.",
+          "cameraPermission": "Insight uses the camera when you choose to scan a food barcode or take a progress or profile photo. Photos stay on this iPhone.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Button } from '../../components/button';
 import { ThemedText } from '../../components/themed-text';
 import { useTheme } from '../../design/theme-provider';
@@ -8,9 +8,7 @@ import { t } from '../../i18n/en';
 import { fromKg } from '../../core/workout/rules';
 import type { Unit } from '../onboarding/model';
 import { dayStamp, friendlyDay, type TrendWeight } from './model';
-/** `started` are days to stand a thin upright line on. The chart only draws the line: what each one means is
- * said in words under the chart by the screen that asked for it. */
-export function BodyChart({points,raw,unit,started=[]}:{points:TrendWeight[];raw:{day:string;kg:number}[];unit:Unit;started?:readonly string[]}) {
+export function BodyChart({points,raw,unit}:{points:TrendWeight[];raw:{day:string;kg:number}[];unit:Unit}) {
   const {colors}=useTheme();
   const [selected,setSelected]=useState<string|null>(null),[width,setWidth]=useState(300);
   if(!points.length)return <ThemedText muted>{t('bodyRangeEmpty')}</ThemedText>;
@@ -33,7 +31,6 @@ export function BodyChart({points,raw,unit,started=[]}:{points:TrendWeight[];raw
         setSelected(nearest.day);
       }} style={{height:190}}>
       <Svg accessible={false} width="100%" height={190} viewBox="0 0 300 190" preserveAspectRatio="none">
-        {started.filter(day=>dayStamp(day)>=first&&dayStamp(day)<=last).map(day=><Line key={day} testID="body-chart-mark" x1={x(day)} x2={x(day)} y1={12} y2={172} stroke={colors['text-muted']} strokeWidth={1.5}/>)}
         {raw.map((p,i)=><Circle key={i} cx={x(p.day)} cy={y(p.kg)} r={3} fill={colors.text} opacity={0.22}/>)}
         {points.length>1&&<Path testID="body-chart-area" d={`${points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} L${x(points.at(-1)!.day)},190 L${x(points[0].day)},190 Z`} fill={colors.recovery} opacity={0.14}/>}
         <Path testID="body-chart-line" d={points.map((p,i)=>`${i?'L':'M'}${x(p.day)},${y(p.trendKg)}`).join(' ')} fill="none" stroke={colors.recovery} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"/>
