@@ -23,3 +23,11 @@ export function KitText({ weight = 500, size = 15, lineHeight, tracking, color =
   return <Text {...props} allowFontScaling maxFontSizeMultiplier={0}
     style={[font(weight, size, lineHeight, tracking), { color: tok(color) }, numeric && tabular, style]} />;
 }
+
+/**
+ * An exact gap inside a line of text, where the design sets a margin between a number and its unit
+ * (`small { margin-left: 3px }`). A space of the body face is 0.173 em wide; tracking makes up the rest.
+ */
+export function TextGap({ pt, size = 11 }: { pt: number; size?: number }) {
+  return <Text style={{ fontFamily: tokens.font.body, fontSize: size, letterSpacing: Math.round((pt - 0.173 * size) * 100) / 100 }}>{' '}</Text>;
+}

@@ -1,7 +1,7 @@
 /* The Insight kit: every shared building block of the mockup's kit (kit.css, kit.js, icons.js, motion.css), for the
    tabs to build screens from. See KIT.md for each piece, its props and the mockup class it mirrors. */
 export { Icon, ICON_NAMES, ICON_STROKE, type IconName } from './icon';
-export { KitText, ThemedText } from './themed-text';
+export { KitText, TextGap, ThemedText } from './themed-text';
 export { Button, ButtonRow, IconButton, touchTarget, type ButtonVariant } from './button';
 export { Card, Grid, Surface } from './card';
 export { Chip, Chips } from './chip';
