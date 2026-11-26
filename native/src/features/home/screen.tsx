@@ -1,11 +1,14 @@
 import { router, type Href } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useRef, type ComponentRef } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
 import { readProfile } from '@/features/onboarding/model';
+import { NudgeCard } from '@/features/onboarding/nudge/nudge-card';
+import { HomeTips } from '@/features/onboarding/tips/home-tips';
+import { SampleTour } from '@/features/onboarding/tour/sample-tour';
 import { useHealthDays } from '@/features/health/use-health-days';
 import { useOuraRecovery } from '@/features/health/use-oura-recovery';
 import { useRecovery } from '@/features/health/use-recovery';
@@ -55,6 +58,8 @@ export function Home() {
   const tiles = useHomeTiles({ store, focused, health, apple, oura });
   const repo = store?.repo ?? null;
   const name = useMemo(() => repo ? readProfile(repo).name : '', [repo, store]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The first-Home tips point at the hero and the initial.
+  const heroRef = useRef<ComponentRef<typeof View>>(null), avatarRef = useRef<ComponentRef<typeof View>>(null);
 
   const { editing } = useTileEdit('home');
   useShellEditMode('home', editing, () => tileEdit.end());
@@ -74,11 +79,14 @@ export function Home() {
     <Animated.ScrollView ref={scrollRef} testID="home-scroll" style={{ flex: 1 }}
       contentContainerStyle={{ paddingTop: Math.max(insets.top, MIN_TOP), paddingHorizontal: 16, paddingBottom: pageEndSpace(insets.bottom) }}
       showsVerticalScrollIndicator={false}>
-      <View>
-        <HomeHero scrollY={scrollY} />
-        <View style={{ position: 'absolute', top: 6, right: 0 }}><ProfileButton name={name} /></View>
+      <View ref={heroRef} collapsable={false}>
+        <HomeHero scrollY={scrollY} name={name.trim().split(/\s+/)[0]} />
+        <View ref={avatarRef} collapsable={false} style={{ position: 'absolute', top: 6, right: 0 }}><ProfileButton name={name} /></View>
       </View>
+      <NudgeCard store={repo} />
       <TileGrid page="home" scrollRef={scrollRef} />
     </Animated.ScrollView>
+    <HomeTips store={repo} hero={heroRef} avatar={avatarRef} />
+    <SampleTour demo={repo?.owner === 'demo'} />
   </View>;
 }

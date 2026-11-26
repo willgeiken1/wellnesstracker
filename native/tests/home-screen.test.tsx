@@ -95,6 +95,23 @@ test('the hero slot carries the date and greeting, and the profile button opens 
   expect(router.push).toHaveBeenCalledWith('/settings');
 });
 
+test('after setup Home greets by first name, and a skipped section puts the nudge between the hero and the tiles', async () => {
+  // A signed-in space, not sample data, which never shows the nudge.
+  const repo = open(Object.assign(memoryRepository(), { owner: 'test-user' }));
+  repo.save('profile', { name: 'Sample Person', dob: '1990-01-01', weight_unit: 'kg', height_m: 1.7 });
+  repo.localSave('onboardingComplete', true);
+  repo.localSave('onboardingSkipped', { about: false, goals: true });
+  await render(<Home />, { wrapper });
+  expect(screen.getByRole('header', { name: 'Good morning, Sample' })).toBeTruthy();
+  expect(screen.getByText('Set your targets')).toBeTruthy();
+  // The nudge sits in the scroll after the hero, before the tiles.
+  const tree = JSON.stringify(screen.toJSON());
+  expect(tree.indexOf('"home-hero"')).toBeGreaterThan(-1);
+  expect(tree.indexOf('"home-hero"')).toBeLessThan(tree.indexOf('"home-nudge"'));
+  expect(tree.indexOf('"home-nudge"')).toBeLessThan(tree.lastIndexOf('Steps'));
+  expect(screen.queryByTestId('coach-tips')).toBeNull();
+});
+
 test('Home reads only: opening it writes nothing to the outbox or the tables', async () => {
   const repo = open(), before = repo.getRevision();
   await render(<Home />, { wrapper });

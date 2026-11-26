@@ -48,7 +48,7 @@ function useReveal(delay: number, build: boolean) {
  * and This week. Real numbers from the day's logs and Health; an empty day shows a clear sky. Tapping an arc shows that
  * pillar's full readout; a day in the week turns the whole hero to that day. Frames stop while Home isn't in front.
  */
-export function HomeHero({ scrollY }: { scrollY?: SharedValue<number> } = {}) {
+export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; name?: string } = {}) {
   const { colors, mode, reduceMotion } = useTheme();
   const c = colors as unknown as Record<string, string>;
   const dark = mode === 'dark';
@@ -67,6 +67,8 @@ export function HomeHero({ scrollY }: { scrollY?: SharedValue<number> } = {}) {
   const dayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
   useEffect(() => { setSel(6); setFocus(-1); }, [dayKey]);
   const view = useMemo(() => heroView(input, sel), [input, sel]);
+  // Once setup has their first name, the greeting carries it.
+  const greet = name?.trim() ? t('obaGreeting').replace('{greeting}', view.greeting).replace('{name}', name.trim()) : view.greeting;
   const sky = useMemo(() => skyTokens(c, mode), [c, mode]);
   const calm = prefs.motion === 'calm';
   const build = !reduceMotion && !calm;
@@ -78,13 +80,13 @@ export function HomeHero({ scrollY }: { scrollY?: SharedValue<number> } = {}) {
 
   const head = <Animated.View style={[{ paddingRight: 56 }, headStyle]}>
     <KitText weight={600} size={11.5} lineHeight={1.2} tracking={0.14} color="text-muted" style={capitals}>{view.dateLine}</KitText>
-    <KitText weight={700} size={29} lineHeight={1.1} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 5 }}>{view.greeting}</KitText>
+    <KitText weight={700} size={29} lineHeight={1.1} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 5 }}>{greet}</KitText>
   </Animated.View>;
 
   // The whole hero off leaves a plain greeting.
   if (!prefs.hero) return <View testID="home-hero" style={{ paddingTop: 6, paddingBottom: 8 }}>
     <KitText weight={700} size={11.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{view.dateLine}</KitText>
-    <KitText weight={700} size={34} lineHeight={1.05} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 8, marginRight: 110 }}>{view.greeting}</KitText>
+    <KitText weight={700} size={34} lineHeight={1.05} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 8, marginRight: 110 }}>{greet}</KitText>
   </View>;
 
   const W = winW - 32, paused = !focused || !active;
