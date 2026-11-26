@@ -86,5 +86,5 @@ export function labelOffset(width: number, itemX: number, labelWidth: number): {
 /** The shell's springs, as stiffness and damping on a unit mass: the arc lands with a small overshoot, the open tab glides
  * and barely settles, sheets rise. */
 export const SPRINGS = { open: { stiffness: 330, damping: 21 }, tab: { stiffness: 420, damping: 34 }, sheet: { stiffness: 300, damping: 32 } } as const;
-/** How far a control shrinks under a finger, the way the mockup shows a press on the bar, the arc and the avatar (a shrink, not a dim). */
-export const PRESS_SCALE = 0.86, ITEM_PRESS_SCALE = 0.92, PROFILE_PRESS_SCALE = 0.94;
+/** How far a control shrinks under a finger, the way the mockup shows a press on the bar and the arc (a shrink, not a dim; see press.ts). */
+export const PRESS_SCALE = 0.86, ITEM_PRESS_SCALE = 0.92;

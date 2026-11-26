@@ -8,6 +8,8 @@ import { t } from '@/i18n/en';
 import { alpha, mix, shellColors } from './colors';
 import { ITEM_PRESS_SCALE, labelOffset, layoutArc, SPRINGS } from './geometry';
 import { ActionIcon, type ActionIconName } from './icons';
+import { useSpringPress } from './press';
+import Reanimated from 'react-native-reanimated';
 import type { PageColor } from './pages';
 
 export interface FanAction { id: string; label: string; hint: string; icon: ActionIconName }
@@ -41,6 +43,7 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
   const shell = shellColors(colors, mode);
   const travel = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0], fade = useState(() => new Animated.Value(0))[0];
   const [label, setLabel] = useState<{ w: number; h: number } | null>(null);
+  const press = useSpringPress(ITEM_PRESS_SCALE, reduceMotion);
   useEffect(() => {
     if (reduceMotion) {
       travel.setValue(1);
@@ -68,9 +71,11 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
       { scale: travel.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) },
     ] }}>
     <Tappable dim="none" testID={`fan-${action.id}`} accessibilityRole="menuitem" accessibilityLabel={`${action.label}, ${action.hint}`} onPress={onRun}
-      style={({ pressed }) => ({ width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: tint,
-        boxShadow: first ? shell.lift : `inset 0px 0px 0px 1px ${alpha(color, 0.3)}, ${shell.lift}`, transform: [{ scale: pressed ? ITEM_PRESS_SCALE : 1 }] })}>
-      <ActionIcon name={action.icon} color={ink} />
+      onPressIn={press.onPressIn} onPressOut={press.onPressOut}>
+      <Reanimated.View style={[{ width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: tint,
+        boxShadow: first ? shell.lift : `inset 0px 0px 0px 1px ${alpha(color, 0.3)}, ${shell.lift}` }, press.style]}>
+        <ActionIcon name={action.icon} color={ink} />
+      </Reanimated.View>
     </Tappable>
     <Tappable dim="none" accessible={false} onPress={onRun} onLayout={measure} hitSlop={10}
       style={({ pressed }) => ({ position: 'absolute', left: place.left, top: label ? 26 - label.h / 2 : 0, opacity: label ? 1 : 0,
