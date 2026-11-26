@@ -60,7 +60,7 @@ export function FoodTab({ repo }: { repo: Repository }) {
       hint: first ? `${first.name}, ${sizeText(first.oz, water.unit)}` : undefined },
     quick: { run: () => foodRoutes.quick(next) },
     saved: { run: () => foodRoutes.saved(next), hint: saved.length ? fill(t('foodNSaved'), { n: saved.length }) : undefined },
-    copy: { run: () => foodRoutes.copy(),
+    copy: { run: () => foodRoutes.copy(yesterday.logged),
       hint: yesterday.logged ? `${plural(yesterday.logged, t('foodMealWord'), t('foodMealsWord'))}, ${num(yesterday.eaten)} ${t('foodKcal')}` : undefined },
     tiles: { run: () => tileEdit.set('food', true) },
   });

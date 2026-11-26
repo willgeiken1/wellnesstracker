@@ -8,7 +8,7 @@ import type { NativeStackNavigationOptions } from 'expo-router';
 import { NavigationShell } from '../src/app/_layout';
 import SettingsLayout from '../src/app/settings/_layout';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { LARGE_SHARE, largeSheet, mediumSheet, tileEditSheet } from '../src/features/navigation/presentation';
+import { LARGE_SHARE, copyDaySheet, detentOf, largeSheet, mediumSheet, routeOptions, tileEditSheet } from '../src/features/navigation/presentation';
 import { tileSheetOptions } from '../src/features/tiles/nav';
 import { trainingSheetOptions } from '../src/features/workout/nav';
 import { sheetOptions as foodSheet } from '../src/features/food/sheet';
@@ -139,4 +139,18 @@ test.each([
   expect(def?.open).toBeTruthy();
   def!.open!({});
   expect(mockRouter.push).toHaveBeenCalledWith(href);
+});
+
+describe('Copy yesterday is as tall as its meals', () => {
+  const share = (meals?: unknown) => (copyDaySheet(meals).sheetAllowedDetents as number[])[0];
+  it('holds three meals at the design height', () => expect(share(3)).toBe(detentOf(0.563)));
+  it('defaults to three meals when the count is missing', () => expect(share(undefined)).toBe(detentOf(0.563)));
+  it('adds a row for a fourth meal', () => expect(share('4')).toBe(detentOf((0.563 * 852 + 69) / 852)));
+  it('takes a row away for two meals', () => expect(share(2)).toBe(detentOf((0.563 * 852 - 69) / 852)));
+  it('stops at 72 percent of the screen', () => expect(share(12)).toBe(detentOf(0.72)));
+  it('never grows to full height', () => expect(copyDaySheet(4).sheetExpandsWhenScrolledToEdge).toBe(false));
+  it('is sized from the meals the Food tab passes', () => {
+    const o = resolve(routeOptions('food/copy'), { meals: '4' });
+    expect(o.sheetAllowedDetents).toEqual([detentOf((0.563 * 852 + 69) / 852)]);
+  });
 });

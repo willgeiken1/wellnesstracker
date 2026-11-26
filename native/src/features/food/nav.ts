@@ -16,7 +16,8 @@ export const foodRoutes = {
   barcode: (meal?: string) => router.push({ pathname: '/food/barcode', params: meal ? { meal } : {} }),
   quick: (meal?: string, o: { name?: string; mine?: boolean } = {}) => router.push({ pathname: '/food/quick', params: { ...(meal ? { meal } : {}), ...(o.name ? { name: o.name } : {}), ...(o.mine ? { mine: '1' } : {}) } }),
   saved: (meal?: string, open?: string) => router.push({ pathname: '/food/saved', params: { ...(meal ? { meal } : {}), ...(open ? { open } : {}) } }),
-  copy: () => router.push('/food/copy'),
+  /** `meals` is how many of yesterday's meals have food, which sets the sheet's height. */
+  copy: (meals?: number) => router.push({ pathname: '/food/copy', params: meals ? { meals: String(meals) } : {} }),
   water: () => router.push('/food/water'),
   containers: () => router.push('/food/water-containers'),
   nutrition: () => router.push('/food/nutrition'),

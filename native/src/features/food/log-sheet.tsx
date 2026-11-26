@@ -7,7 +7,7 @@ import { fill } from '../tiles/ui';
 import { addMany, comboKcal, comboProtein, mealName } from './actions';
 import { addToCart, cartItem, cartTotals, closeCart, inCart, openCart, removeCartAt, removeFromCart, setCartMeal, useCart } from './cart';
 import { nextMealId, dayView, num, plural } from './day';
-import { combos, meals, recentFoods, type Combo, type Food } from './model';
+import { combos, meals, recentFoods, shiftDay, type Combo, type Food } from './model';
 import { foodRoutes } from './nav';
 import { searchableFoods } from './search';
 import { useFoodDay } from './selection';
@@ -47,7 +47,7 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
   };
 
   const tabs: [Tab, string][] = [['recent', t('foodTabRecent')], ['saved', t('foodTabSaved')], ['mine', t('foodTabMine')], ['results', t('foodTabResults')]];
-  const go = (to: 'barcode' | 'quick' | 'copy') => to === 'copy' ? foodRoutes.copy() : foodRoutes[to](meal);
+  const go = (to: 'barcode' | 'quick' | 'copy') => to === 'copy' ? foodRoutes.copy(dayView(repo, shiftDay(day, -1), { today }).logged) : foodRoutes[to](meal);
 
   let body;
   if (tab === 'recent') body = recent.length

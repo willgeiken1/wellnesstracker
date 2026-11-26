@@ -38,6 +38,17 @@ export function mediumSheet(id: MediumSheet): NativeStackNavigationOptions {
   return { ...sheet, sheetAllowedDetents: [detentOf(MEDIUM_SHARE[id])], sheetExpandsWhenScrolledToEdge: false };
 }
 
+/**
+ * Copy yesterday is sized by what it lists, as the design's medium sheet is (`max-height: 72%`): its measured height
+ * holds three meals, each further meal adds a 69 pt row (68 pt row and its line), fewer take rows away, and it never
+ * passes 72 percent of the screen, where the list scrolls instead.
+ */
+export function copyDaySheet(meals?: unknown): NativeStackNavigationOptions {
+  const n = Math.max(1, Math.round(Number(meals)) || 3);
+  const pt = Math.min(0.72 * 852, MEDIUM_SHARE['copy-day'] * 852 + (n - 3) * 69);
+  return { ...sheet, sheetAllowedDetents: [detentOf(pt / 852)], sheetExpandsWhenScrolledToEdge: false };
+}
+
 /** A medium sheet as tall as what it holds (the Tab bar sheet), which never needs to scroll. */
 export const fittedSheet: NativeStackNavigationOptions = { ...sheet, sheetAllowedDetents: 'fitToContents' };
 
@@ -73,7 +84,7 @@ export const ROOT_ROUTES: Record<string, { mock: string; options: NativeStackNav
   'food/barcode': { mock: 'barcode', options: largeSheet },
   'food/quick': { mock: 'quick-cal', options: mediumSheet('quick-cal') },
   'food/saved': { mock: 'saved-meals', options: largeSheet },
-  'food/copy': { mock: 'copy-day', options: mediumSheet('copy-day') },
+  'food/copy': { mock: 'copy-day', options: params => copyDaySheet(params?.meals) },
   'food/water': { mock: 'water', options: largeSheet },
   'food/water-containers': { mock: 'water-containers', options: largeSheet },
   // Progress
