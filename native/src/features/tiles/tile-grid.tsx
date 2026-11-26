@@ -22,12 +22,17 @@ import type { LayoutEntry, TileDef, TilePageConfig, TilePageId, TilePos, TileSiz
 import { EmptyBlock, fill, liftShadow } from './ui';
 import { useTileEdit, useTileRepository, useTileStore } from './use-tiles';
 import { Tappable } from '@/components/tappable';
+import { PressScale } from '@/components/press-scale';
 
 /* Motion from the design: reflow glides with a slight overshoot, other moves ease out. */
 const SPRING = Easing.bezier(0.3, 1.28, 0.5, 1);
 const EASE = Easing.bezier(0.2, 0.8, 0.2, 1);
 const ARC = 'M40.6 22 A23 23 0 0 1 22 40.6';
 const REFLOW_MS = 480, LIFT_MS = 240, REMOVE_MS = 240, OUTLINE_MS = 340;
+/** A page's first visit: its tiles fade and rise 10 pt one after another, 360 ms each and 60 ms apart (grid.js). Home's wait
+ * for its hero to build first, so they start at 520 ms; other pages start at 120 ms. */
+export const TILE_ENTRANCE = { ms: 360, step: 60, rise: 10, start: 120, homeStart: 520 } as const;
+export const entranceDelay = (index: number, home: boolean) => (home ? TILE_ENTRANCE.homeStart : TILE_ENTRANCE.start) + index * TILE_ENTRANCE.step;
 const SIZE_WORD: Record<TileSize, string> = { S: t('tilesSizeS'), M: t('tilesSizeM'), L: t('tilesSizeL') };
 /** Pages whose tiles already rose in once this session (the entrance plays on a page's first visit only). */
 const entered = new Set<TilePageId>();
@@ -284,7 +289,7 @@ const GridTile = memo(function GridTile(p: GridTileProps) {
   useEffect(() => { if (leaving) out.value = rm ? 1 : withTiming(1, { duration: REMOVE_MS, easing: EASE }); }, [leaving, rm, out]);
   const arrive = useSharedValue(p.entrance ? 0 : 1), arriveMode = useSharedValue(p.entrance ? 1 : 0);
   useEffect(() => {
-    if (p.entrance) arrive.value = withDelay(120 + index * 60, withTiming(1, { duration: 360, easing: EASE }));
+    if (p.entrance) arrive.value = withDelay(entranceDelay(index, p.cfg.variant === 'home'), withTiming(1, { duration: TILE_ENTRANCE.ms, easing: EASE }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!p.fresh || rm) return;
@@ -301,7 +306,7 @@ const GridTile = memo(function GridTile(p: GridTileProps) {
       tx = b.x + drag.t.value.x / kk; ty = b.y + (drag.t.value.y + drag.off.value - b.off) / kk;
     }
     const a = arrive.value, m = arriveMode.value;
-    const enterY = m === 1 ? 10 * (1 - a) : m === 2 ? interpolate(a, [0, 0.55, 1], [28, -2, 0]) : 0;
+    const enterY = m === 1 ? TILE_ENTRANCE.rise * (1 - a) : m === 2 ? interpolate(a, [0, 0.55, 1], [28, -2, 0]) : 0;
     const enterS = m === 2 ? interpolate(a, [0, 0.55, 1], [0.9, 1.012, 1]) : 1;
     const enterO = m === 1 ? a : m === 2 ? interpolate(a, [0, 0.55, 1], [0, 1, 1]) : 1;
     const scale = (1 + 0.04 * lift.value) * (1 - 0.02 * press.value) * (1 - 0.14 * out.value) * enterS;
@@ -451,11 +456,12 @@ export function TileEditBar({ colors, mode, hidden, onAdd, onDone }: { colors: T
   </View>;
 }
 function FootButton({ icon, label, colors, mode, onPress }: { icon: string; label: string; colors: ThemeColors; mode: ThemeMode; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" onPress={onPress}
-    style={({ pressed }) => [styles.footBtn, { backgroundColor: colors.surface }, mode !== 'dark' && { boxShadow: `0 0 0 1px ${colors.hair}` }, pressed && { opacity: 0.75 }]}>
+  // The mockup's .press: it dips to 97 percent and dims a little while held, then springs back.
+  return <PressScale accessibilityRole="button" onPress={onPress}
+    style={[styles.footBtn, { backgroundColor: colors.surface }, mode !== 'dark' && { boxShadow: `0 0 0 1px ${colors.hair}` }]}>
     <TileIcon name={icon} size={16} color={colors['text-muted']} />
     <Text style={[styles.footText, { color: colors['text-muted'] }]}>{label}</Text>
-  </Pressable>;
+  </PressScale>;
 }
 
 const styles = StyleSheet.create({

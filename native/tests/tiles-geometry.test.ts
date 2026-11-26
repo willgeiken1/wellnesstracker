@@ -49,3 +49,15 @@ describe('tile grid geometry', () => {
     expect(fitGrid(355).k).toBe(1);
   });
 });
+
+describe('first visit', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { TILE_ENTRANCE, entranceDelay } = require('../src/features/tiles/tile-grid') as typeof import('../src/features/tiles/tile-grid');
+  test('tiles rise 10 pt in 360 ms, 60 ms apart; Home waits for its hero and starts at 520 ms, other pages at 120 ms', () => {
+    expect(TILE_ENTRANCE).toMatchObject({ ms: 360, step: 60, rise: 10 });
+    expect(entranceDelay(0, false)).toBe(120);
+    expect(entranceDelay(3, false)).toBe(300);
+    expect(entranceDelay(0, true)).toBe(520);
+    expect(entranceDelay(2, true)).toBe(640);
+  });
+});
