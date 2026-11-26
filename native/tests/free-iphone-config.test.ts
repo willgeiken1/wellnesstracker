@@ -48,3 +48,14 @@ test('freeiphone enables an embedded dev-client bundle and the variant-only bund
   expect(result.plugins).toContainEqual(['expo-dev-client', { launchMode: 'most-recent', embeddedBundle: true }]);
   expect(result.plugins).toContain('./plugins/withPhoneOnlyBundle');
 });
+test('Sign in with Apple and plain photo permission text are in the store build; the phone-only build has no accounts, so neither the capability nor its plugin', () => {
+  const store = resolve();
+  expect(store.ios.usesAppleSignIn).toBe(true);
+  expect(store.plugins).toContain('expo-apple-authentication');
+  const picker = store.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-image-picker')[1];
+  expect(picker.photosPermission).toMatch(/profile photo/);
+  expect(picker.cameraPermission).not.toMatch(/estimate/i);
+  const phone = resolve(base, 'freeiphone');
+  expect(phone.ios.usesAppleSignIn).toBeUndefined();
+  expect(JSON.stringify(phone)).not.toMatch(/apple-authentication|applesignin/i);
+});

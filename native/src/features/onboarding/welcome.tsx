@@ -11,6 +11,7 @@ import { LEGAL_LINKS, openPage } from '@/features/settings/links';
 import { useSettingsPrefs } from '@/features/settings/prefs';
 import { t } from '@/i18n/en';
 import { Notice } from './parts';
+import { AppleSignIn } from './apple-sign-in';
 
 /* The welcome screen (pages/settings.js `welcome`): the contour map across the top, the app icon, the name and one line,
  * the four strands, then the ways in and the legal line. */
@@ -75,6 +76,7 @@ export function Welcome() {
     {!auth.configured && <Notice testID="welcome-unavailable" text={t('accountsUnavailable')} />}
     {auth.configError && <Notice testID="welcome-config-error" text={auth.configError} />}
     <View style={{ gap: 8, paddingTop: 16 }}>
+      <AppleSignIn />
       <Tappable testID="welcome-get-started" accessibilityRole="button" accessibilityLabel={t('getStarted')} disabled={!auth.configured} accessibilityState={{ disabled: !auth.configured }}
         onPress={() => router.push('/onboarding')}
         style={{ minHeight: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: k.c.text, opacity: auth.configured ? 1 : 0.4 }}>

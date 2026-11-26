@@ -22,6 +22,7 @@ import { LEGAL_LINKS, openPage } from './links';
 import { iconArt, iconId } from './app-icon';
 import { st } from './copy';
 import { APP_VERSION, Avatar, useWho } from './home';
+import { AvatarCameraButton } from './avatar-photo';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
 import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper, useOptionalAuth } from './ui';
@@ -230,7 +231,10 @@ export function AccountPage() {
   };
   return <SetPage back={st('settings')} title={st('settingsAccountTitle')} testID="settings-account">
     <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-      <Avatar name={who.name || who.email} size={92} />
+      <View>
+        <Avatar name={who.name || who.email} size={92} />
+        {auth.repository ? <AvatarCameraButton repo={auth.repository} /> : null}
+      </View>
       <KitText weight={700} size={24} tracking={-0.03} style={{ marginTop: 12 }}>{who.name || who.signIn}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
         {auth.session ? <Icon name="apple-fill" size={14} color={k.c['text-muted']} /> : null}

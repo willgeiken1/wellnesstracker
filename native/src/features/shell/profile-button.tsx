@@ -9,6 +9,7 @@ import { t } from '@/i18n/en';
 import { alpha, mix } from './colors';
 import { ActionIcon } from './icons';
 import { PROFILE_PRESS_SCALE } from './geometry';
+import { AvatarPhoto, useProfilePhoto } from '@/features/settings/avatar-photo';
 
 /** The round profile button at the top right of Home: the person's initial (or a person when there is no name yet) on a soft
  * accent gradient. It opens Settings. 44 points, so it is a full touch target. */
@@ -16,6 +17,7 @@ export function ProfileButton({ name, onPress = () => router.push('/settings') }
   const { colors, mode } = useTheme();
   const dark = mode === 'dark';
   const initial = name?.trim().charAt(0).toUpperCase();
+  const photo = useProfilePhoto();
   const from = mix(colors.accent, dark ? 0.34 : 0.16, colors.surface), to = mix(colors.sleep, dark ? 0.22 : 0.12, colors.surface);
   return <Tappable dim="none" testID="profile-button" accessibilityRole="button" accessibilityLabel={t('shellProfile')} onPress={onPress}
     style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
@@ -31,6 +33,7 @@ export function ProfileButton({ name, onPress = () => router.push('/settings') }
       {initial ? <ThemedText style={{ fontFamily: tokens.font.heading, fontSize: 17, lineHeight: 17, letterSpacing: -0.34, color: colors.text }}>{initial}</ThemedText>
         : <ActionIcon name="person" size={20} color={colors.text} />}
     </View>
+    {photo ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0 }}><AvatarPhoto uri={photo} size={44} /></View> : null}
     {/* The thin accent ring sits over the gradient, as the design's inset ring does over its fill. */}
     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22, borderWidth: 1, borderColor: alpha(colors.accent, dark ? 0.36 : 0.24) }} />
   </Tappable>;

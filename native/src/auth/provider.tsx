@@ -35,7 +35,11 @@ export interface AuthState {
   bootExportOwner?(): string | null;
   recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
-  createAccount(email: string,password: string,dob?: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  createAccount(email: string,password: string,dob?: string): Promise<string | null>;
+  /** Signs in (or creates the account) with the identity token from Sign in with Apple and the raw nonce whose hash Apple
+   * signed. Absent where there are no accounts. */
+  signInWithApple?(token: string, nonce: string): Promise<string | null>;
+  signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
   /** Permanently deletes the signed-in account on the server, then erases this phone's copy. */
   deleteAccount?(): Promise<void>;
 }
@@ -164,18 +168,21 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   useEffect(()=>{let active=true;if(!currentRepo||!userId||!initialPullComplete)return;
     void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;const guest=database.forOwner('guest'),plan=guest.localGet<ImportPlan>('pwaPendingAccountPlan');if(!plan)return;currentRepo.atomic(()=>{commitImport(currentRepo,previewImport(currentRepo,plan),true);guest.localSave('pwaPendingAccountPlan',null);});}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
   },[currentRepo,userId,initialPullComplete]);
-  const authenticate=async(email:string,password:string,dob?:string,create=false):Promise<string|null>=>{
+  const authenticate=async(email:string,password:string,dob?:string,create=false,apple?:{token:string;nonce:string}):Promise<string|null>=>{
+    // Sign in with Apple may create the account, so a session's under-13 block stops it too.
+    if(apple&&ageBlocked.current)return 'invalidProfile';
     if(create){const age=ageOn(dob??'');if(ageBlocked.current||age===null||age<13){if(age!==null&&age<13)ageBlocked.current=true;return 'invalidProfile';}}
     if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
     const request=++authRequest.current;authInFlight.current=true;setDemoTarget(null);setDemoTransferError(false);
     try {
       if(demo){const database=await openLocalDatabase();try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}}
-      const {data,error}=create?await client.auth.signUp({email,password}):await client.auth.signInWithPassword({email,password});
+      const {data,error}=apple?await client.auth.signInWithIdToken({provider:'apple',token:apple.token,nonce:apple.nonce}):create?await client.auth.signUp({email,password}):await client.auth.signInWithPassword({email,password});
       if(request!==authRequest.current)return 'authFailed';
       if(error)return 'authFailed';
       // A confirmation-only signup has no transfer intent. No durable device-wide flag.
       const target=data?.session?.user;
-      if(demo&&target&&(!activeSession.current||activeSession.current.user.id===target.id)&&target.email?.trim().toLowerCase()===email.trim().toLowerCase())setDemoTarget(target.id);
+      // Apple may hide the email behind a relay address, so its carry checks the account Apple's token named instead.
+      if(demo&&target&&(!activeSession.current||activeSession.current.user.id===target.id)&&(apple?data?.user?.id===target.id:target.email?.trim().toLowerCase()===email.trim().toLowerCase()))setDemoTarget(target.id);
       return create&&!data?.session?'confirmEmail':null;
     }catch{return 'authFailed';}
     finally {if(request===authRequest.current)authInFlight.current=false;}
@@ -219,6 +226,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     lookAround:()=>{if(bootReady&&!departingOwner.current&&!departureLocked.current)setDemo(true);},
     signIn:(email,password)=>authenticate(email,password),
     createAccount:(email,password,dob)=>authenticate(email,password,dob,true),
+    signInWithApple:(token,nonce)=>authenticate('','',undefined,false,{token,nonce}),
     signOut:async(discardUnsynced=false)=>{
       authRequest.current++;authInFlight.current=false;if(demoTarget)setDemoTarget(null);if(demoTransferError)setDemoTransferError(false);
       if(departurePending&&retryDeparture.current)return retryDeparture.current();
