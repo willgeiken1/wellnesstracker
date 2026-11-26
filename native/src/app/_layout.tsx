@@ -28,6 +28,7 @@ import { AuthProvider, useAuth } from '../auth/provider';
 import { LocalDataRecovery } from '../auth/screens';
 import { setAndroidCopy, t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
+import { PrivacyCover } from '@/features/privacy-lock/cover';
 
 import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
 void SplashScreen.preventAutoHideAsync();
@@ -82,6 +83,7 @@ function Application() {
     <TelemetryRuntime userId={auth.session?.user.id} />
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.phoneOnly === true} signedIn={!!auth.session} />}
+    {auth.ready && <PrivacyCover access={!!auth.session || auth.demo || auth.phoneOnly === true} />}
   </ThemeProvider>;
 }
 export default function RootLayout() {

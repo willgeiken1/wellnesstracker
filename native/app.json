@@ -202,6 +202,12 @@
       "expo-status-bar",
       "expo-apple-authentication",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Insight uses Face ID to unlock the app."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "cameraPermission": "Insight uses the camera when you choose to scan a food barcode or take a progress or profile photo. Photos stay on this iPhone.",

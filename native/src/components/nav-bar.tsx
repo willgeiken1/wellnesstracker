@@ -4,15 +4,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { t } from '@/i18n/en';
 import { Icon, type IconName } from './icon';
-import { alpha, capitals, StackGapContext, useKit } from './kit-style';
+import { capitals, StackGapContext, useKit } from './kit-style';
 import { KitText } from './themed-text';
 import { Tappable } from './tappable';
 import { LargeTitle } from './section';
+import { BarBackdrop } from './blur-bar';
 
 /**
  * The kit's `.nb` (`ui.navbar`) for a pushed screen: a back button in the accent (chevron and the previous screen's
  * name), the title centred in 700 17 pt, and actions on the right. It sits under the status bar on the page colour at
- * 88 percent. With `large`, the title is drawn big under the bar instead and shows in the bar only once `scrolled`.
+ * 88 percent over an 18 pt blur, so a page that scrolls under it (blur-bar's UnderBar) shows faintly through. With `large`, the title is drawn big under the bar instead and shows in the bar only once `scrolled`.
  */
 export function NavBar({ back, onBack, title, right, large = false, scrolled = false, safeTop = true, testID }: {
   /** The previous screen's name for the back button; leave out for no back button. */ back?: string;
@@ -27,7 +28,8 @@ export function NavBar({ back, onBack, title, right, large = false, scrolled = f
   const showTitle = !large || scrolled;
   return <>
     <View testID={testID} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingTop: safeTop ? insets.top : 0, paddingHorizontal: 8,
-      paddingBottom: 6, marginHorizontal: -16, backgroundColor: alpha(k.c.bg, 0.88), zIndex: 5 }}>
+      paddingBottom: 6, marginHorizontal: -16, zIndex: 5 }}>
+      <BarBackdrop color={k.c.bg} />
       <View style={{ flex: 1, minWidth: 88, alignItems: 'flex-start' }}>
         {back != null ? <Tappable dim="text" testID={testID ? `${testID}-back` : undefined} accessibilityRole="button"
           accessibilityLabel={t('kitBackTo').replace('{name}', back || t('kitBackPrevious'))} onPress={onBack ?? (() => router.back())}

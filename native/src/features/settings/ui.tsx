@@ -1,3 +1,4 @@
+import { UnderBar } from '@/components/blur-bar';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Modal, ScrollView, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Easing, ReduceMotion, cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
@@ -27,23 +28,24 @@ export function SetPage({ back, title, onBack, children, testID, right, large }:
   const [scrolled, setScrolled] = useState(false);
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
-  // The row lands 220 pt down the screen, as the design scrolls it (the bar takes the first part of that).
+  // The row lands 220 pt down the screen, as the design scrolls it (the page scrolls under the bar, so that counts from the top).
   const reveal = useCallback((node: ViewNode) => {
     const inner = (scroll.current as unknown as { getInnerViewRef?: () => unknown } | null)?.getInnerViewRef?.() ?? scroll.current;
     if (!inner) return;
     try { (node as unknown as { measureLayout(to: unknown, ok: (x: number, y: number) => void, fail?: () => void): void })
-      .measureLayout(inner, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - (220 - insets.top - 50)), animated: false }), () => {}); } catch { /* stays where it is */ }
-  }, [insets.top]);
+      .measureLayout(inner, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 220), animated: false }), () => {}); } catch { /* stays where it is */ }
+  }, []);
   const focusValue = useMemo(() => ({ focus: typeof focus === 'string' ? focus : undefined, reveal }), [focus, reveal]);
   return <View testID={testID} style={{ flex: 1, backgroundColor: k.c.bg }}>
-    <View style={{ paddingHorizontal: 16, zIndex: 5 }}><NavBar back={back} onBack={onBack} title={title} right={right} large={false} scrolled={!large || scrolled} /></View>
-    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" scrollEventThrottle={16}
-      onScroll={large ? e => setScrolled(e.nativeEvent.contentOffset.y > 46) : undefined}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 + insets.bottom, paddingTop: 0 }}>
-      <FocusContext.Provider value={focusValue}>
-        <StackGapContext.Provider value={0}><SurfaceContext.Provider value="page">{children}</SurfaceContext.Provider></StackGapContext.Provider>
-      </FocusContext.Provider>
-    </ScrollView>
+    <UnderBar bar={<NavBar back={back} onBack={onBack} title={title} right={right} large={false} scrolled={!large || scrolled} />}>{top =>
+      <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" scrollEventThrottle={16} scrollIndicatorInsets={{ top }}
+        onScroll={large ? e => setScrolled(e.nativeEvent.contentOffset.y > 46) : undefined}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 + insets.bottom, paddingTop: top }}>
+        <FocusContext.Provider value={focusValue}>
+          <StackGapContext.Provider value={0}><SurfaceContext.Provider value="page">{children}</SurfaceContext.Provider></StackGapContext.Provider>
+        </FocusContext.Provider>
+      </ScrollView>}
+    </UnderBar>
   </View>;
 }
 

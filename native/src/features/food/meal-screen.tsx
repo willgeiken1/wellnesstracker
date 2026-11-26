@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Card, EmptyState, Icon, KitText, List, ListFooter, ListRow, NavBar, NavButton, SectionHeader, Tappable, useKit } from '@/components/kit';
+import { UnderBar } from '@/components/blur-bar';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
@@ -21,9 +22,10 @@ import { capitals } from '@/components/kit-style';
 export function FoodPage({ back, title, right, children, testID }: { back: string; title?: string; right?: ReactNode; children: ReactNode; testID?: string }) {
   const k = useKit(), insets = useSafeAreaInsets();
   return <View testID={testID} style={{ flex: 1, backgroundColor: k.c.bg }}>
-    {/* The bar pulls itself out to the edges by the page's 16 pt margin, so it sits in that margin here. */}
-    <View style={{ paddingHorizontal: 16, zIndex: 5 }}><NavBar back={back} title={title} right={right} /></View>
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom }}>{children}</ScrollView>
+    {/* The page scrolls under the bar, which pulls itself out to the edges by the page's 16 pt margin. */}
+    <UnderBar bar={<NavBar back={back} title={title} right={right} />}>{top =>
+      <ScrollView scrollIndicatorInsets={{ top }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 40 + insets.bottom }}>{children}</ScrollView>}
+    </UnderBar>
   </View>;
 }
 

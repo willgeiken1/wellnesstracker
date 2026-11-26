@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from 'react';
 import { ScrollView, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { UnderBar } from '@/components/blur-bar';
 import { Card, Icon, NavBar, StackGapContext, SurfaceContext, PRETTY, prettyWeb, font, mix, useKit, type IconName } from '@/components/kit';
 
 /* The pieces the Progress screens and sheets share (the mockup's .pg-* classes). */
@@ -12,11 +13,12 @@ export interface Scroller { scrollTo(o: { y: number; animated?: boolean }): void
 export function Page({ back, title, right, children, testID, scrollRef }: { back: string; title: string; right?: ReactNode; children: ReactNode; testID?: string; scrollRef?: RefObject<Scroller | null> }) {
   const k = useKit(), insets = useSafeAreaInsets();
   return <View testID={testID} style={{ flex: 1, backgroundColor: k.c.bg }}>
-    {/* The bar reaches 16 pt past its parent's sides, as on a page with 16 pt margins. */}
-    <View style={{ paddingHorizontal: 16, zIndex: 5 }}><NavBar back={back} title={title} right={right} /></View>
-    <ScrollView ref={scrollRef as never} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom, gap: 12 }}>
-      <StackGapContext.Provider value={12}><SurfaceContext.Provider value="page">{children}</SurfaceContext.Provider></StackGapContext.Provider>
-    </ScrollView>
+    {/* The page scrolls under the bar, which reaches 16 pt past its parent's sides, as on a page with 16 pt margins. */}
+    <UnderBar bar={<NavBar back={back} title={title} right={right} />}>{top =>
+      <ScrollView ref={scrollRef as never} scrollIndicatorInsets={{ top }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 40 + insets.bottom, gap: 12 }}>
+        <StackGapContext.Provider value={12}><SurfaceContext.Provider value="page">{children}</SurfaceContext.Provider></StackGapContext.Provider>
+      </ScrollView>}
+    </UnderBar>
   </View>;
 }
 
