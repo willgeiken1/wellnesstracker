@@ -141,11 +141,10 @@ describe('Settings wiring', () => {
     mockSection = 'privacy';
     const repo = memoryRepository(), a = auth(repo);
     await show(<Section />, a);
-    const lock = await screen.findByRole('switch', { name: 'Face ID lock' });
-    await waitFor(() => expect(lock.props.accessibilityState?.checked ?? lock.props['aria-checked']).toBe(true));
-    await fireEvent(lock, 'valueChange', false);
+    // Off until it is turned on here.
     expect(prefsIn(repo).priv.lock).toBe(false);
-    expect(mockBio.authenticateAsync).not.toHaveBeenCalled();
+    const lock = await screen.findByRole('switch', { name: 'Face ID lock' });
+    await waitFor(() => expect(lock.props.accessibilityState?.checked ?? lock.props['aria-checked']).toBe(false));
     expect(screen.queryByText('Require Face ID')).toBeNull();
     mockBio.authenticateAsync.mockImplementationOnce(async () => ({ success: false, error: 'user_cancel' }));
     await act(async () => { await fireEvent(screen.getByRole('switch', { name: 'Face ID lock' }), 'valueChange', true); });
@@ -154,6 +153,10 @@ describe('Settings wiring', () => {
     expect(mockBio.authenticateAsync).toHaveBeenLastCalledWith({ promptMessage: 'Turn on Face ID lock', disableDeviceFallback: false });
     expect(prefsIn(repo).priv.lock).toBe(true);
     expect(await screen.findByText('Require Face ID')).toBeTruthy();
+    await fireEvent(screen.getByRole('switch', { name: 'Face ID lock' }), 'valueChange', false);
+    expect(prefsIn(repo).priv.lock).toBe(false);
+    expect(mockBio.authenticateAsync).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Require Face ID')).toBeNull();
   });
   test('Privacy: a phone without Face ID set up shows the lock as off', async () => {
     mockSection = 'privacy';
@@ -188,7 +191,7 @@ describe('the lock and app switcher covers', () => {
   test('with the lock on, opening Insight shows the lock and asks for Face ID; a match lets them in', async () => {
     let answer: (r: { success: boolean }) => void = () => {};
     mockBio.authenticateAsync.mockImplementationOnce(() => new Promise(r => { answer = r; }));
-    await show(<PrivacyCover access />);
+    await show(<PrivacyCover access />, auth(withPrefs('priv.lock', true)));
     expect(screen.getByTestId('privacy-lock')).toBeTruthy();
     expect(screen.getByText('Insight is locked')).toBeTruthy();
     await waitFor(() => expect(mockBio.authenticateAsync).toHaveBeenCalledWith({ promptMessage: 'Unlock Insight', disableDeviceFallback: false }));
@@ -198,20 +201,25 @@ describe('the lock and app switcher covers', () => {
   });
   test('a cancelled prompt keeps the lock with Unlock to try again', async () => {
     mockBio.authenticateAsync.mockImplementationOnce(async () => ({ success: false, error: 'user_cancel' }));
-    await show(<PrivacyCover access />);
+    await show(<PrivacyCover access />, auth(withPrefs('priv.lock', true)));
     expect(await screen.findByText("Face ID didn't go through. Tap Unlock to try again.")).toBeTruthy();
     await act(async () => { await fireEvent.press(screen.getByTestId('privacy-unlock')); });
     await waitFor(() => expect(screen.queryByTestId('privacy-lock')).toBeNull());
   });
   test('nobody is locked out on a phone without Face ID set up', async () => {
     mockBio.isEnrolledAsync.mockImplementation(async () => false);
-    await show(<PrivacyCover access />);
+    await show(<PrivacyCover access />, auth(withPrefs('priv.lock', true)));
     await waitFor(() => expect(screen.queryByTestId('privacy-lock')).toBeNull());
     expect(mockBio.authenticateAsync).not.toHaveBeenCalled();
   });
   test('nobody is locked out before they are in the app', async () => {
-    await show(<PrivacyCover access={false} />);
+    await show(<PrivacyCover access={false} />, auth(withPrefs('priv.lock', true)));
     expect(screen.queryByTestId('privacy-lock')).toBeNull();
+  });
+  test('a fresh install starts with the lock off, so nobody is asked for Face ID', async () => {
+    await show(<PrivacyCover access />);
+    expect(screen.queryByTestId('privacy-lock')).toBeNull();
+    expect(mockBio.authenticateAsync).not.toHaveBeenCalled();
   });
   test('nobody is locked out with the lock off', async () => {
     await show(<PrivacyCover access />, auth(withPrefs('priv.lock', false)));
@@ -220,7 +228,9 @@ describe('the lock and app switcher covers', () => {
   });
   test('locks again after the chosen time in the background, not after a short trip', async () => {
     const now = jest.fn(() => 0);
-    await show(<PrivacyCover access clock={now} />, auth(withPrefs('priv.blur', false)));
+    const repo = withPrefs('priv.blur', false);
+    repo.localSave(SETTINGS_PREFS_KEY, withPref(loadSettingsPrefs(repo as never), 'priv.lock', true));
+    await show(<PrivacyCover access clock={now} />, auth(repo));
     await waitFor(() => expect(mockBio.authenticateAsync).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByTestId('privacy-lock')).toBeNull());
     await act(async () => { change('background'); });

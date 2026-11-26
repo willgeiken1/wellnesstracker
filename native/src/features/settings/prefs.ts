@@ -18,7 +18,8 @@ export const DEFAULT_PREFS = {
     distance: 'mi' as 'mi' | 'km', clock: '12' as '12' | '24', week: 'mon' as 'mon' | 'sun' | 'sat' },
   goals: { kcal: 2200, protein: 165, train: 60, sleep: 480, weight: 178, pace: 0.5 },
   look: { density: 'balanced' as Density, icon: 'litPeaks' as AppIconId },
-  priv: { lock: true, after: '1', blur: true, hide: false, crash: true, analytics: false },
+  // Face ID lock starts off and is only turned on in Settings, Privacy (owner's decision).
+  priv: { lock: false, after: '1', blur: true, hide: false, crash: true, analytics: false },
   rem: { cap: true, workout: true, workoutTime: '5:30 PM', rest: true, weekly: true, food: false, breakfast: true, lunch: true, dinner: true, oura: true },
   work: { rest: 120, auto: true, warm: true, warmN: 2, awake: true, haptics: true, bar: '45', barKg: '20',
     plates: { '55': false, '45': true, '35': true, '25': true, '10': true, '5': true, '2_5': true } as Record<string, boolean>,
