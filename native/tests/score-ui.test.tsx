@@ -52,7 +52,7 @@ jest.mock('react-native-gesture-handler', () => {
 // Skia draws the tile depth on a device; the tests only need the tile's contents.
 jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null }));
 
-jest.mock('../src/features/food/ai/privacy', () => ({ FoodPrivacyScreen: () => null }));
+jest.mock('../src/features/food/ai/privacy', () => ({ FoodPrivacyScreen: () => null, FoodAiPrivacy: () => null }));
 jest.mock('../src/features/importer/screen', () => ({ ImportScreen: () => null }));
 const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });

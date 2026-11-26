@@ -295,7 +295,8 @@ export function RemindersPage() {
 }
 
 /* ---------- Privacy and security ---------- */
-export function PrivacyPage({ crash, analytics }: { crash?: ReactNode; analytics?: ReactNode }) {
+/** `ai`: the meal estimate and workout summary controls, only passed while those features are switched on. */
+export function PrivacyPage({ crash, analytics, ai }: { crash?: ReactNode; analytics?: ReactNode; ai?: ReactNode }) {
   const [p, set] = useSettingsPrefs();
   const after = [{ v: '0', l: st('settingsImmediately') }, { v: '1', l: st('settingsAfter1') }, { v: '5', l: st('settingsAfter5') }, { v: '15', l: st('settingsAfter15') }];
   const repo = useAuth().repository;
@@ -314,6 +315,7 @@ export function PrivacyPage({ crash, analytics }: { crash?: ReactNode; analytics
     <H>{st('settingsDiagnostics')}</H>
     {crash ?? null}{analytics ?? null}
     <ListFooter>{st('settingsDiagnosticsFoot')}</ListFooter>
+    {ai ?? null}
     <H>{st('settingsYourData')}</H>
     <List>
       <ListRow icon="shield" color="success" title={st('settingsPrivacyCenter')} sub={st('settingsPrivacyCenterSub')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'privacy-center' } })} />

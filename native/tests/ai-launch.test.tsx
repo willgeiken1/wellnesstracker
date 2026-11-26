@@ -19,8 +19,9 @@ test('every AI entry point is behind the launch switch', () => {
   expect(src('app/_layout.tsx')).toMatch(/AI_FEATURES_ENABLED && <FoodAiRuntime/);
   expect(src('features/workout/summary.tsx')).toMatch(/AI_FEATURES_ENABLED && <WorkoutAiCard/);
   expect(src('features/workout/settings.tsx')).toMatch(/AI_FEATURES_ENABLED && <>/);
-  // Settings redesign: with AI off, Privacy is the new Privacy page with its Diagnostics switches.
-  expect(src('app/settings/[section].tsx')).toMatch(/AI_FEATURES_ENABLED \? <FoodPrivacyScreen \/> : <PrivacyPage crash=\{<DiagnosticsList \/>\} \/>/);
+  // Settings redesign: Privacy is one page; the meal estimate controls join it only while AI is on.
+  expect(src('app/settings/[section].tsx')).toMatch(/<PrivacyPage crash=\{<DiagnosticsList \/>\} ai=\{AI_FEATURES_ENABLED \? <AiPrivacy \/> : null\} \/>/);
+  expect(src('app/settings/[section].tsx')).toMatch(/function AiPrivacy\(\) \{[\s\S]*?<FoodAiPrivacy repo=\{repository\} \/>/);
 });
 test('Privacy settings show the crash-report and analytics switches the privacy policy promises', async () => {
   await render(<ThemeProvider><PrivacySwitches /></ThemeProvider>);

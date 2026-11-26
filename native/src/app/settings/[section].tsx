@@ -13,7 +13,7 @@ import { Hero, SetPage } from '@/features/settings/ui';
 import { useDataActions } from '@/features/settings/data-actions';
 import { t } from '@/i18n/en';
 import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
-import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
+import { FoodAiPrivacy } from '@/features/food/ai/privacy';
 
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
@@ -35,6 +35,12 @@ function Data() {
   return <DataPage backup={actions.backup} restore={actions.restore} />;
 }
 
+/** What is sent for meal estimates and workout summaries, and the consent for it. */
+function AiPrivacy() {
+  const repository = useContext(AuthContext)?.repository;
+  return repository ? <FoodAiPrivacy repo={repository} /> : null;
+}
+
 /** The phone-only build has no Apple Health, Oura or notifications, so their pages say so calmly instead of offering them. */
 function NotInThisBuild({ title, empty, icon, color, testID }: { title: string; empty: string; icon: 'link' | 'bell'; color: string; testID: string }) {
   return <SetPage back={t('settings')} title={title} testID={testID}><Hero icon={icon} color={color} title={empty} body={t('notInVersion')} /></SetPage>;
@@ -53,7 +59,7 @@ export default function SettingsSection() {
     case 'account': return <AccountPage />;
     case 'reminders': case 'notifications': return <RemindersPage />;
     // AI meal estimates are off for launch; their privacy controls only show once they are on.
-    case 'privacy': return AI_FEATURES_ENABLED ? <FoodPrivacyScreen /> : <PrivacyPage crash={<DiagnosticsList />} />;
+    case 'privacy': return <PrivacyPage crash={<DiagnosticsList />} ai={AI_FEATURES_ENABLED ? <AiPrivacy /> : null} />;
     case 'units': return <UnitsPage />;
     case 'workout': return <WorkoutPage />;
     case 'data': return <Data />;
