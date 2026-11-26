@@ -26,6 +26,8 @@ import { HomeBackdrop, HomeHero } from './hero';
 import { DAYS } from './tiles/data';
 import { registerHomeTiles } from './tiles/register';
 import { useHomeTiles } from './tiles/use-home-tiles';
+import { withDemoSleep } from './demo-sleep';
+import { useAuth } from '@/auth/provider';
 import { useFocused } from './use-focused';
 
 registerHomeTiles();
@@ -52,11 +54,14 @@ export function Home() {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollY = useScrollOffset(scrollRef);
   // Health readings stay in memory for this screen only.
-  const health = useHealthDays(focused, undefined, DAYS);
+  const read = useHealthDays(focused, undefined, DAYS);
   const apple = useRecovery(focused, undefined, DAYS);
   const oura = useOuraRecovery(focused, undefined, DAYS);
-  const tiles = useHomeTiles({ store, focused, health, apple, oura });
   const repo = store?.repo ?? null;
+  // Sample data alone: the app's own flag, and its namespace, so no real account ever gets made-up sleep.
+  const sample = useAuth().demo === true && repo?.owner === 'demo';
+  const health = useMemo(() => withDemoSleep(read, sample ? 'demo' : null, DAYS), [read, sample]);
+  const tiles = useHomeTiles({ store, focused, health, apple, oura });
   const name = useMemo(() => repo ? readProfile(repo).name : '', [repo, store]); // eslint-disable-line react-hooks/exhaustive-deps
   // The first-Home tips point at the hero and the initial.
   const heroRef = useRef<ComponentRef<typeof View>>(null), avatarRef = useRef<ComponentRef<typeof View>>(null);
