@@ -66,7 +66,11 @@ export function OffRow({ i, first }: { i: Item; first?: boolean }) {
 }
 function RowShell({ children, first }: { children: ReactNode; first?: boolean }) {
   const k = useKit();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 58, borderTopWidth: first ? 0 : 1, borderTopColor: k.c.hair }}>{children}</View>;
+  // The design rules each row along its bottom edge, inside the row's 58 pt, so the text sits in the 57 pt above the line.
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 58, paddingBottom: 1 }}>
+    {first ? null : <View style={{ position: 'absolute', top: -1, left: 0, right: 0, height: 1, backgroundColor: k.c.hair }} />}
+    {children}
+  </View>;
 }
 /** The routine's list card (`.rt-ilist`): a coloured edge on the left. */
 export function ItemList({ color, children }: { color: string; children: ReactNode }) {
