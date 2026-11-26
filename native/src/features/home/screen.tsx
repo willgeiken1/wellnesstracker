@@ -1,7 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
-import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
+import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
@@ -39,7 +39,7 @@ export function Home() {
   const insets = useSafeAreaInsets();
   const focused = useFocused();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const scrollY = useScrollViewOffset(scrollRef);
+  const scrollY = useScrollOffset(scrollRef);
   // Health readings stay in memory for this screen only.
   const health = useHealthDays(focused, undefined, DAYS);
   const apple = useRecovery(focused, undefined, DAYS);
