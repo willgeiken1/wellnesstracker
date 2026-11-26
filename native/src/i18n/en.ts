@@ -1606,6 +1606,12 @@ export const en = {
   settingsRemHeroLater: 'Reminders arrive with notifications in a later version. Nothing here is sent yet.',
   settingsPlateLbA11y: '{n} pound plates', settingsPlateKgA11y: '{n} kilogram plates',
   settingsMapReset: 'Reset Insight map', settingsMapResetToast: 'Insight map is back to its defaults',
+  // P8 sign in with Apple and profile photo
+  appleSignInFailed: "Sign in with Apple didn't finish. Try again in a moment.",
+  settingsPhotoTitle: 'Profile photo', settingsPhotoChange: 'Change profile photo', settingsPhotoTake: 'Take photo',
+  settingsPhotoChoose: 'Choose from library', settingsPhotoRemove: 'Remove photo', settingsPhotoRemoved: 'Photo removed. Your initial shows instead.',
+  settingsPhotoCameraOff: 'Camera access is off for Insight. You can turn it on in iOS Settings.', settingsPhotoOpenSettings: 'Settings',
+  settingsPhotoFailed: "That photo couldn't be saved. Try again.",
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */

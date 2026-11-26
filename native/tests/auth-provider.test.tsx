@@ -716,3 +716,19 @@ test.each([true,false])('demo promotion shows a notice only for skipped weigh-in
  await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(1);
  alert.mockRestore();promotion.mockReset();
 });
+
+test('Sign in with Apple signs in with the identity token and raw nonce, and reports a refused token as a failed sign-in',async()=>{
+ const guest=fixtureRepo('guest'),account=fixtureRepo(OWNER_A),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const idToken=jest.fn(async(_c:unknown)=>({data:{session:session(OWNER_A),user:session(OWNER_A).user},error:null as unknown}));
+ (fixture.auth as Record<string,unknown>).signInWithIdToken=idToken;
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ let result:string|null|undefined;
+ await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');fixture.emit(session(OWNER_A));});
+ expect(result).toBeNull();expect(idToken).toHaveBeenCalledWith({provider:'apple',token:'synthetic-apple-token',nonce:'synthetic-raw-nonce'});
+ expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();
+ await waitFor(()=>expect(observed.repository).toBe(account));
+ idToken.mockResolvedValueOnce({data:{session:null as unknown as Session,user:null as unknown as Session['user']},error:new Error('Synthetic refusal')});
+ await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');});
+ expect(result).toBe('authFailed');
+});
