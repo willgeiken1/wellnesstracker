@@ -38,7 +38,7 @@ function Stats3({ items, top = 6 }: { items: [string, string, string][]; top?: n
   return <View style={{ flexDirection: 'row', gap: 8, paddingTop: top, paddingHorizontal: 8 }}>
     {items.map(([label, v, small]) => <View key={label} style={{ flex: 1, gap: 2 }} accessible accessibilityLabel={`${label} ${v} ${small}`}>
       <KitText weight={700} size={11} tracking={0.1} color="text-muted" style={capitals}>{label}</KitText>
-      <KitText weight={700} size={22} tracking={-0.03} numeric>{v}<KitText weight={600} size={12.5} color="text-muted">{` ${small}`}</KitText></KitText>
+      <KitText weight={700} size={22} tracking={-0.03} numeric>{v}<KitText weight={600} size={12.5} tracking={0} color="text-muted">{` ${small}`}</KitText></KitText>
     </View>)}
   </View>;
 }
@@ -86,7 +86,7 @@ export function PauseCard({ text, style, sheet }: { text: React.ReactNode; style
 
 /* ---------- Edit routines ---------- */
 
-const ROW_H = 68, ROW_GAP = 8;
+const ROW_H = 71, ROW_GAP = 8; // a row is its three text lines (55) and 8 pt above and below
 /** Edit routines: drag the grip to reorder, Edit opens a routine, + New routine, and hidden routines to restore. */
 export function RoutinesReorder({ store }: { store: RoutinesStore }) {
   const k = useKit(), { s, n } = useRoutines(store);
@@ -187,14 +187,17 @@ export function RoutineHistory({ store, initial }: { store: RoutinesStore; initi
       </View>
     </View>
     <SectionHeader title={t('routinesByItem')} aside={fill(t('routinesNItemsCount'), { n: items.length })} />
-    <View accessibilityLiveRegion="polite" style={{ minHeight: 40, marginTop: 2, marginBottom: 10, marginHorizontal: 6, justifyContent: 'center' }}>
+    <View accessibilityLiveRegion="polite" style={{ minHeight: 40, marginBottom: 10, marginHorizontal: 6, justifyContent: 'center' }}>
       {sel ? <KitText weight={600} size={13.5}>{sel.text}</KitText> : <KitText weight={500} size={13.5} color="text-muted">{t('routinesTapADay')}</KitText>}
     </View>
     <View style={{ gap: 8 }}>{items.map(i => {
       const hs = hist(s, i, n), sch = hs.filter(x => x !== 'o' && x !== 'u').length, dn = hs.filter(x => x === 'd').length, r = rById(s, i.routines[0]), color = k.c[r?.color ?? 'sleep'];
       return <View key={i.id} style={{ backgroundColor: k.c.surface, borderRadius: 18, paddingTop: 12, paddingHorizontal: 14, paddingBottom: 14, boxShadow: k.cardEdge }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-          <KitText weight={600} size={15.5} numberOfLines={1} style={{ flexShrink: 1 }}>{i.name}<KitText weight={500} size={13} color="text-muted">{`  ${i.dose} · ${h12(i.h)}`}</KitText></KitText>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', flexShrink: 1, minWidth: 0 }}>
+            <KitText weight={600} size={15.5} numberOfLines={1} style={{ flexShrink: 1 }}>{i.name}</KitText>
+            <KitText weight={500} size={13} color="text-muted" numberOfLines={1} style={{ marginLeft: 6, flexShrink: 0 }}>{`${i.dose} · ${h12(i.h)}`}</KitText>
+          </View>
           <KitText weight={700} size={15} numeric>{sch ? `${Math.round((dn / sch) * 100)}%` : t('routinesNew')}</KitText>
         </View>
         <View style={{ flexDirection: 'row', gap: 2, marginTop: 8 }}>{hs.map((x, d) => {

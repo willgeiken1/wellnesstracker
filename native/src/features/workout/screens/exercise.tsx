@@ -23,7 +23,7 @@ import { useTrainingData } from '../training-viz';
 import { exLabel } from '../logger/model';
 import { trainingNav } from '../nav';
 import { axisLabel, chartScale, exerciseHistory, type LiftSession } from './model';
-import { ColorEyebrow, EyebrowLine, Page } from './page';
+import { EyebrowLine, Page } from './page';
 import { Tappable } from '@/components/tappable';
 
 const RESTS = [60, 90, 120, 150, 180];
@@ -50,14 +50,14 @@ export function ExerciseDetail() {
   const live = !!active && data.workout.entries(active.id).some(e => String(e.data.exercise).toLowerCase() === name.toLowerCase());
   const rest = clock(data.workout.rest(name).seconds * 1000);
   return <Page testID="exercise-detail" nav={nav}>
-    <View style={{ marginTop: 12 }}>
+    <View style={{ marginTop: 8 }}>
       <EyebrowLine color={k.c['text-muted']}>{[...groups, equipmentName(ex.equipment)].join(' · ')}</EyebrowLine>
       <KitText weight={700} size={30} lineHeight={1.1} tracking={-0.03} accessibilityRole="header" style={{ marginTop: 4, marginBottom: 2 }}>{label}</KitText>
     </View>
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <View style={{ flexShrink: 1 }} accessible accessibilityLabel={`${tr('trainingEst1rm')}, ${fmt(bestEst.est)} ${u}`}>
-          <ColorEyebrow color={k.c['text-muted']}>{tr('trainingEst1rm')}</ColorEyebrow>
+          <EyebrowLine color={k.c['text-muted']}>{tr('trainingEst1rm')}</EyebrowLine>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 8 }}>
             <KitText weight={700} size={44} lineHeight={1} tracking={-0.045} numeric>{fmt(bestEst.est)}</KitText>
             <KitText weight={600} size={15} color="text-muted" style={{ paddingBottom: 5 }}>{u}</KitText>

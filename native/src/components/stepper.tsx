@@ -33,14 +33,15 @@ export function stepValue(current: number, direction: -1 | 1, { step = 1, min = 
  * toward the text colour so it still reads. Each button grows to 44 pt to touch. VoiceOver reads it as one adjustable control too.
  * `track` replaces the pill colour where a page keeps the plain surface 2 (Progress's Measurements sheet).
  */
-export function Stepper({ value, onChange, unit, label, testID, track, ...opts }: StepOptions & {
+export function Stepper({ value, onChange, unit, label, testID, track, lessLabel, moreLabel, ...opts }: StepOptions & {
+  /** What the minus and plus buttons say to VoiceOver when a screen has more than one stepper. */ lessLabel?: string; moreLabel?: string;
   value: number; onChange: (next: number) => void; unit?: string; /** Spoken name of the value. */ label?: string; testID?: string; track?: string;
 }) {
   const k = useKit();
   const haptic = useSelectionHaptic();
   const text = formatNumber(value, opts.dec ?? 0) + (unit ? ' ' + unit : '');
   const go = (d: -1 | 1) => { const v = stepValue(value, d, opts); if (v !== value) haptic(); onChange(v); };
-  const button = (d: -1 | 1) => <Tappable dim="none" accessibilityRole="button" accessibilityLabel={d < 0 ? t('kitLess') : t('kitMore')}
+  const button = (d: -1 | 1) => <Tappable dim="none" accessibilityRole="button" accessibilityLabel={d < 0 ? lessLabel ?? t('kitLess') : moreLabel ?? t('kitMore')}
     testID={testID ? `${testID}-${d < 0 ? 'less' : 'more'}` : undefined} onPress={() => go(d)} hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }}
     style={({ pressed }) => ({ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? k.c['hair-2'] : 'transparent' })}>
     <Icon name={d < 0 ? 'minus' : 'plus'} size={18} color={k.c.text} />

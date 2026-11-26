@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { tokens, type ThemeColors } from '@/design/tokens';
 import { t } from '@/i18n/en';
+import { font } from '@/components/kit-style';
 import { optionValues, pickStyle, sizesOf, trayDefs, trayGroups, trayStart } from './model';
 import { tileRoutes } from './nav';
 import { tilePageIds } from './registry';
@@ -121,7 +122,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   pad: { paddingHorizontal: 16 },
   intro: { marginHorizontal: 4, marginBottom: 4, fontFamily: tokens.font.body, fontSize: 14, lineHeight: 20.3 },
-  chipsWrap: { marginHorizontal: -16, marginTop: 9, marginBottom: 6, flexGrow: 0 },
+  chipsWrap: { marginHorizontal: -16, marginTop: 8, marginBottom: 8, flexGrow: 0 },
   chips: { gap: 8, paddingHorizontal: 16 },
   chip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   chipText: { fontFamily: tokens.font.bodyStrong, fontSize: 13.5 },
@@ -129,8 +130,7 @@ const s = StyleSheet.create({
   empty: { marginTop: 18, marginHorizontal: 4, marginBottom: 6, paddingVertical: 22, paddingHorizontal: 18, borderRadius: 18, alignItems: 'center' },
   emptyT: { fontFamily: tokens.font.bodyStrong, fontSize: 16, lineHeight: 20.8, textAlign: 'center' },
   emptyP: { marginTop: 6, fontFamily: tokens.font.body, fontSize: 14, lineHeight: 20.3, textAlign: 'center' },
-  // The design's 12.5 pt footnote is drawn at 13 pt, the app's smallest text size.
-  foot: { marginTop: 8, marginHorizontal: 16, fontFamily: tokens.font.body, fontSize: 13, lineHeight: 18.9 },
+  foot: { marginTop: 8, marginHorizontal: 16, ...font(500, 12.5, 1.45) },
   reset: { alignSelf: 'center', marginTop: 16, marginBottom: 4, minHeight: 44, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
   resetText: { fontFamily: tokens.font.bodyStrong, fontSize: 14 },
 });

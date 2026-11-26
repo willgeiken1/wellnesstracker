@@ -182,7 +182,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   const name = String(session.data.name ?? '') || tr('trainingEmptyWorkout');
 
   return <View style={{ flex: 1, backgroundColor: col.c.bg, paddingTop: insets.top }}>
-    <View testID="logger-header">
+    <View testID="logger-header" style={{ paddingBottom: 6 }}>
       <TopBar name={name} startedAt={Number(session.data.started_at)} past={past ? String(session.data.day) : undefined} col={col} onBack={leaveLogger} onFinish={finish} />
       {!reorder && <JumpStrip view={view} openId={openId} col={col} onJump={id => { glide(); setXo(id); scrollTo(id); }} />}
     </View>
@@ -197,7 +197,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
           const open = e.entry.id === openId, cu = view.current?.entryId === e.entry.id;
           const h = handlers(e);
           return <View key={e.entry.id} testID={`logger-card-${ei}`} onLayout={ev => { cardY.current[e.entry.id] = ev.nativeEvent.layout.y; }}
-            style={{ marginTop: 10, borderRadius: 20, overflow: 'hidden', backgroundColor: col.k.cardBg, boxShadow: col.k.cardEdge }}>
+            style={{ marginTop: 12, borderRadius: 20, overflow: 'hidden', backgroundColor: col.k.cardBg, boxShadow: col.k.cardEdge }}>
             <ExerciseHeader e={e} ei={ei} open={open} current={cu} col={col} onToggle={() => toggle(e.entry.id)} onMore={() => exerciseMore(e)} />
             {open && <View>
               {e.note != null && <NoteField value={e.note} name={e.label} col={col} onSave={text => saveNote(e, text)} />}

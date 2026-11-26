@@ -26,10 +26,10 @@ export function ElapsedClock({ startedAt, color, size = 13 }: { startedAt: numbe
 export function TopBar({ name, startedAt, past, col, onBack, onFinish }: {
   name: string; startedAt: number; past?: string; col: LoggerColors; onBack: () => void; onFinish: () => void;
 }) {
-  return <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 8 }}>
+  return <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 8 }}>
     <View style={{ flex: 1, alignItems: 'flex-start' }}>
       <Tappable dim="text" testID="logger-back" accessibilityRole="button" accessibilityLabel={tr('trainingMinimize')} onPress={onBack}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44, paddingRight: 8 }}>
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 1, minHeight: 44, minWidth: 44, paddingLeft: 2, paddingRight: 8 }}>
         <Icon name="tr-down" size={22} color={col.c.accent} />
         <LT w={500} s={17} tr={-0.01} color={col.c.accent}>{tr('trainingTitle')}</LT>
       </Tappable>
