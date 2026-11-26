@@ -1,4 +1,5 @@
 import { Text, type TextProps } from 'react-native';
+import { PRETTY, prettyWeb } from './kit-style';
 import { tokens } from '@/design/tokens';
 import { useTheme } from '@/design/theme-provider';
 import { font, tabular, useKit, type Weight } from './kit-style';
@@ -20,8 +21,8 @@ export function ThemedText({ variant = 'body', muted = false, numeric = false, s
 export function KitText({ weight = 500, size = 15, lineHeight, tracking, color = 'text', numeric = false, style, ...props }:
   TextProps & { weight?: Weight; size?: number; lineHeight?: number; tracking?: number; color?: string; numeric?: boolean }) {
   const { tok } = useKit();
-  return <Text {...props} allowFontScaling maxFontSizeMultiplier={0}
-    style={[font(weight, size, lineHeight, tracking), { color: tok(color) }, numeric && tabular, style]} />;
+  return <Text {...PRETTY} {...props} allowFontScaling maxFontSizeMultiplier={0}
+    style={[font(weight, size, lineHeight, tracking), prettyWeb, { color: tok(color) }, numeric && tabular, style]} />;
 }
 
 /**

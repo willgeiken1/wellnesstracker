@@ -20,12 +20,12 @@ export { BarChart, LineChart } from './charts';
 export { EmptyState } from './empty-state';
 export { ToastProvider, useToast, dockBottom, type ToastOptions } from './toast';
 export { NavBar, NavButton, PageHeader } from './nav-bar';
-export { Sheet, SheetGrabber, SheetHeader } from './sheet';
+export { Sheet, SheetGrabber, SheetHeader, GRABBER_ROOM } from './sheet';
 export { Screen } from './screen';
 export { Tappable, PRESSED_FILL_OPACITY, PRESSED_ROW_OPACITY, PRESSED_SEG_OPACITY, PRESSED_TEXT_OPACITY, type Dim } from './tappable';
 export { PressScale } from './press-scale';
 export { DISTANCES, FADES, SPRINGS, springConfig, usePressScale, type SpringName } from './kit-motion';
-export { KIT, MIN_TEXT, TOUCH, alpha, font, mix, slopFor, tabular, useKit, StackGapContext, SurfaceContext, type Surface as KitSurface, type Weight } from './kit-style';
+export { KIT, MIN_TEXT, PRETTY, prettyWeb, proportional, TOUCH, alpha, font, mix, slopFor, tabular, useKit, StackGapContext, SurfaceContext, type Surface as KitSurface, type Weight } from './kit-style';
 export { useSelectionHaptic } from './selection-haptic';
 export { useLayoutMotion } from './layout-motion';
 /* Reanimated presets live in './kit-motion-reanimated' (import it directly): tabPageEntering, listItemEntering,

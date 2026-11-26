@@ -24,7 +24,7 @@ export function List({ children, footer, style, testID }: { children: ReactNode;
           value={{ index: i, inset: hasIcon(i) || (i > 0 && hasIcon(i - 1)) ? 60 : 16 }}>{row}</RowPlace.Provider>)}
       </SurfaceContext.Provider>
     </View>
-    {footer ? <ListFooter>{footer}</ListFooter> : null}
+    {footer ? <StackGapContext.Provider value={0}><ListFooter>{footer}</ListFooter></StackGapContext.Provider> : null}
   </View>;
 }
 
