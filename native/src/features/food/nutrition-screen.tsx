@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { router } from 'expo-router';
-import { Badge, Card, Icon, KitText, List, ListFooter, ListRow, SectionHeader, SegmentedControl, Stat, Tappable, alpha, mix, useKit } from '@/components/kit';
+import { Badge, Card, Icon, KitText, List, ListFooter, ListRow, SectionHeader, SegmentedControl, Stat, Tappable, alpha, mix, useKit, proportional } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
@@ -55,7 +55,7 @@ function DayPart({ repo }: { repo: Repository }) {
         <View>
           <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{isToday ? t('foodEatenToday') : fill(t('foodEatenOn'), { day: weekdayName(day) })}</KitText>
           <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6 }}>{num(v.eaten)}
-            <KitText weight={600} tracking={0} size={13} color="text-muted">{` ${fill(t('foodOfGoalKcal'), { goal: num(v.goal) })}`}</KitText></KitText>
+            <KitText weight={600} tracking={0} size={13} color="text-muted" style={proportional}>{` ${fill(t('foodOfGoalKcal'), { goal: num(v.goal) })}`}</KitText></KitText>
         </View>
         {v.burned != null ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 22, paddingHorizontal: 8, borderRadius: 999, backgroundColor: k.tint(k.c['text-muted'], 0.16) }}>
           <Icon name="apple" size={12} color={k.c['text-muted']} /><KitText weight={600} size={12} color="text-muted">{fill(t('foodNBurned'), { v: num(v.burned) })}</KitText>
@@ -92,7 +92,7 @@ function NuRow({ x, first }: { x: Nu; first: boolean }) {
     {!first && <RowLine />}
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: known ? 8 : 0 }}>
       <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01}>{x.key}</KitText>
-      {known ? <KitText weight={700} size={15} tracking={-0.01} numeric>{num(x.v!)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` / ${num(x.goal)} ${x.u}${x.limit ? ` ${t('foodMax')}` : ''}`}</KitText></KitText>
+      {known ? <KitText weight={700} size={15} tracking={-0.01} numeric>{num(x.v!)}<KitText weight={600} tracking={0} size={12} color="text-muted" style={proportional}>{` / ${num(x.goal)} ${x.u}${x.limit ? ` ${t('foodMax')}` : ''}`}</KitText></KitText>
         : <KitText weight={700} size={15} color="text-muted">{t('foodUnknownVal')}</KitText>}
     </View>
     {known ? x.limit

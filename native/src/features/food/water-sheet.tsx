@@ -38,7 +38,7 @@ export function WaterSheet({ repo }: { repo: Repository }) {
   const setO = (oz: number) => { rememberOther(oz); setOther(oz); };
   const shown = u === 'ml' ? Math.round(otherOz / FLOZ * 1000 / 10) * 10 : Math.round(otherOz);
   return <FoodSheet testID="food-water-sheet" header={<SheetHeader title={t('foodWater')} left={t('shellDone')} onLeft={() => closeSheet()} />}>
-    <View style={{ alignItems: 'center', marginTop: 6, marginBottom: 4 }}>
+    <View style={{ alignItems: 'center', marginTop: 2 }}>{/* .fd-wr margin 6 0 4: both fold into the header's 4 and the caption's 10 */}
       <Ring value={l / g} size={168} stroke={14} color="water" label={`${waterNum(l, u)} ${ofLine}`}>
         <View style={{ alignItems: 'center' }}>
           <KitText weight={700} size={38} lineHeight={1} tracking={-0.02} numeric>{waterNum(l, u)}</KitText>
@@ -72,9 +72,9 @@ export function WaterSheet({ repo }: { repo: Repository }) {
         <View style={{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: k.tint(k.c.water, 0.16) }}><WaterIcon name={d.icon} size={18} color={k.c.water} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01} numberOfLines={1}>{d.name}</KitText>
-          <KitText weight={500} size={13} lineHeight={1.35} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 2 }}>{sizeText(d.oz, u)}</KitText>
+          <KitText weight={500} size={13} lineHeight={1.35} tracking={-0.02} color="text-muted" style={{ marginTop: 2 }}>{sizeText(d.oz, u)}</KitText>
         </View>
-        <KitText weight={500} size={13.5} tracking={-0.01} numeric color="text-muted">{clock(d.at)}</KitText>
+        <KitText weight={500} size={13.5} tracking={-0.01} color="text-muted">{clock(d.at)}</KitText>
         <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={fill(t('foodRemoveDrink'), { name: d.name, time: clock(d.at) })} onPress={() => dropWater(repo, day, d.id)}
           style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={16} color={k.c['text-muted']} /></Tappable>
       </View>)}
@@ -96,7 +96,7 @@ function ContainerButton({ c, u, onPress }: { c: Container; u: WaterUnit; onPres
     </View>
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
       <KitText weight={600} size={15} lineHeight={1.2} tracking={-0.01} numberOfLines={1}>{c.name}</KitText>
-      <KitText weight={500} size={13} tracking={-0.02} numeric color="text-muted">{`${sizeNum(c.oz, u)} ${unitLabel(u)}`}</KitText>
+      <KitText weight={500} size={13} tracking={-0.02} color="text-muted">{`${sizeNum(c.oz, u)} ${unitLabel(u)}`}</KitText>
     </View>
   </PressScale>;
 }

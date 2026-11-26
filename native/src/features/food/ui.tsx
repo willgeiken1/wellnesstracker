@@ -82,9 +82,10 @@ export function MealSeg({ meals, value, onChange, label }: { meals: { id: string
   return <SegmentedControl label={label} options={meals.map(m => ({ value: m.id, label: m.name }))} value={value} onChange={onChange} />;
 }
 
-/** The small capitals label over a list (`.fd-lh`), with an optional plain aside or a tappable one on the right. */
+/** The small capitals label over a list (`.fd-lh`), with an optional plain aside or a tappable one on the right. `first` sits right under a sheet
+ * header, whose own 4 pt margin folds into the label's; a tappable aside is 1 pt taller than its label and lifts the row by that much. */
 export function SectionLabel({ title, aside, onAside, asideColor, inset, first, asideNumeric }: { title: string; aside?: string; onAside?: () => void; asideColor?: string; inset?: boolean; first?: boolean; /** A count on the right (`.num`): tabular and a touch tighter. */ asideNumeric?: boolean }) {
-  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginTop: first ? 4 : inset ? 16 : 20, marginBottom: 8, marginHorizontal: inset ? 0 : 4 }}>
+  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginTop: first ? (inset ? 12 : 16) : onAside ? 19 : inset ? 16 : 20, marginBottom: onAside ? 7.5 : 8, marginHorizontal: inset ? 0 : 4 }}>
     <KitText accessibilityRole="header" weight={700} size={12} tracking={0.06} color="text-muted" style={capitals}>{title}</KitText>
     {aside ? onAside
       ? <Tappable dim="text" accessibilityRole="button" accessibilityLabel={aside} onPress={onAside} hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}>

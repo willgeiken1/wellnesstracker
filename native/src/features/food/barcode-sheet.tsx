@@ -154,16 +154,21 @@ function Waiting({ text }: { text: string }) {
   </View>;
 }
 
+/** A CSS `radial-gradient(rx ry at cx cy)` for an SVG fill, all as fractions of the box: a unit circle stretched about its centre,
+ * which draws the same oval on every platform. */
+const oval = (cx: number, cy: number, rx: number, ry: number) => ({ cx, cy, fx: cx, fy: cy, r: 1,
+  gradientTransform: `translate(${cx} ${cy}) scale(${rx} ${ry}) translate(${-cx} ${-cy})` });
+
 /** The camera's dim surroundings: soft light from the top left and a glow lower right; brighter with the torch on. */
 function Backdrop({ torch }: { torch: boolean }) {
   const k = useKit();
   return <Svg style={{ position: 'absolute', top: 0, left: 0 }} width="100%" height={CAM_H}>
     <Defs>
-      <RadialGradient id="a" cx={torch ? '50%' : '30%'} cy={torch ? '45%' : '20%'} rx={torch ? '70%' : '120%'} ry={torch ? '60%' : '70%'}>
+      <RadialGradient id="a" {...(torch ? oval(0.5, 0.45, 0.7, 0.6) : oval(0.3, 0.2, 1.2, 0.7))}>
         <Stop offset="0" stopColor={torch ? k.c.text : k.c['accent-tint']} stopOpacity={torch ? 0.22 : 1} /><Stop offset="0.6" stopColor={k.c.bg} stopOpacity={0} />
       </RadialGradient>
-      <RadialGradient id="b" cx="80%" cy="90%" rx="90%" ry="60%"><Stop offset="0" stopColor={k.c['surface-2']} /><Stop offset="0.7" stopColor={k.c.bg} stopOpacity={0} /></RadialGradient>
-      <RadialGradient id="c" cx="85%" cy="22%" rx="60" ry="60" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor={k.c.recovery} stopOpacity={0.18} /><Stop offset="1" stopColor={k.c.recovery} stopOpacity={0} /></RadialGradient>
+      <RadialGradient id="b" {...oval(0.8, 0.9, 0.9, 0.6)}><Stop offset="0" stopColor={k.c['surface-2']} /><Stop offset="0.7" stopColor={k.c.bg} stopOpacity={0} /></RadialGradient>
+      <RadialGradient id="c" cx="85%" cy="22%" r="60" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor={k.c.recovery} stopOpacity={0.18} /><Stop offset="1" stopColor={k.c.recovery} stopOpacity={0} /></RadialGradient>
     </Defs>
     <Rect width="100%" height="100%" fill={k.c.bg} />
     <Rect width="100%" height="100%" fill="url(#b)" />

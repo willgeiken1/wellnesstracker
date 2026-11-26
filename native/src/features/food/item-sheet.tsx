@@ -78,7 +78,7 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
 
   return <FoodSheet testID="food-item-sheet" footer={footer}
     header={<SheetHeader title={editing ? t('foodEditFood') : t('foodDetails')} left={t('cancel')} onLeft={() => closeSheet()} />}>
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginTop: 4, marginBottom: 16 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>{/* .fd-ih: its 4 pt top margin folds into the header's */}
       <View style={{ flex: 1, minWidth: 0 }}>
         <KitText accessibilityRole="header" weight={700} size={25} lineHeight={1.15} tracking={-0.03}>{name}</KitText>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -90,14 +90,14 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
     </View>
     <EnergyCard kcal={kcal} p={n(p.protein_g)} c={n(p.carbs_g)} f={n(p.fat_g)} />
     <SectionLabel title={t('foodServingSize')} />
-    <Chips style={{ marginBottom: -2 }}>
+    <Chips style={{ marginBottom: -6 }}>{/* .fd-sv's 4 pt folds into the list's 10 */}
       {options.map((o, i) => <Chip key={o.label} label={o.label} color="food" selected={i === si} onPress={() => setSi(i)} />)}
     </Chips>
-    <List style={{ marginTop: 12 }}>
+    <List style={{ marginTop: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, paddingLeft: 16, paddingRight: 10 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01}>{t('foodServingsCap')}</KitText>
-          <KitText weight={500} size={13} numeric color="text-muted" style={{ marginTop: 2 }}>{grams != null ? `${servingText} · ${num(grams)} g` : servingText}</KitText>
+          <KitText weight={500} size={13} lineHeight={1.35} tracking={-0.02} color="text-muted" style={{ marginTop: 2 }}>{grams != null ? `${servingText} · ${num(grams)} g` : servingText}</KitText>
         </View>
         <PillStepper label={t('foodServingsCap')} value={amount} onChange={setAmount} step={0.25} min={0.25} max={10} format={nice} />
       </View>
@@ -124,8 +124,8 @@ export function EnergyCard({ kcal, p, c, f }: { kcal: number | null; p: number |
   return <Card>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
       <View style={{ minWidth: 84 }}>
-        <KitText weight={700} size={32} lineHeight={1} tracking={-0.04} numeric>{kcal == null ? '–' : num(kcal)}</KitText>
-        <KitText weight={600} size={12} color="text-muted" style={{ marginTop: 4 }}>{t('foodKcal')}</KitText>
+        <KitText weight={700} size={32} lineHeight={1} tracking={-0.02} numeric>{kcal == null ? '–' : num(kcal)}</KitText>
+        <KitText weight={600} size={12} lineHeight={1.2} color="text-muted" style={{ marginTop: 4 }}>{t('foodKcal')}</KitText>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: (p ?? 0) * 4, color: k.c.food }, { v: (c ?? 0) * 4, color: k.c.accent }, { v: (f ?? 0) * 9, color: k.c.sleep }]} />
@@ -140,21 +140,21 @@ function FactsPanel({ food, grams, servingText, barcode }: { food: Food; grams: 
   const k = useKit(), kcal = kcalOf(food.energy_kj);
   const bar = (h: number, extra?: object) => <View style={[{ height: h, backgroundColor: k.c.text, borderRadius: 2 }, extra]} />;
   const row = (label: ReactNode, v: number | null, u: string, dv: number, indent = false) => <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, paddingVertical: 6, paddingLeft: indent ? 16 : 0, borderTopWidth: 1, borderTopColor: k.c.hair }}>
-    <KitText weight={500} size={14}>{label}<KitText weight={500} size={14} numeric>{` ${v == null ? '–' : `${v % 1 && v < 10 ? v.toFixed(1) : num(v)} ${u}`}`}</KitText></KitText>
-    <KitText weight={700} size={14} numeric>{v == null || !dv ? '' : `${Math.round(v / dv * 100)}%`}</KitText>
+    <KitText weight={500} size={14}>{label}<KitText weight={500} size={14} tracking={-0.02}>{` ${v == null ? '–' : `${v % 1 && v < 10 ? v.toFixed(1) : num(v)} ${u}`}`}</KitText></KitText>
+    <KitText weight={700} size={14} tracking={-0.02}>{v == null || !dv ? '' : `${Math.round(v / dv * 100)}%`}</KitText>
   </View>;
   const b = (s: string) => <KitText weight={700} size={14}>{s}</KitText>;
   return <View accessibilityLabel={t('foodNutritionFacts')} style={{ marginTop: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge, borderRadius: 20, paddingTop: 16, paddingHorizontal: 16, paddingBottom: 14 }}>
     <KitText accessibilityRole="header" weight={700} size={24} lineHeight={1} tracking={-0.03} style={{ marginBottom: 6 }}>{t('foodNutritionFacts')}</KitText>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
       <KitText weight={700} size={14}>{t('foodServingSizeCap')}</KitText>
-      <KitText weight={700} size={14} numeric>{grams != null ? `${servingText} (${num(grams)} g)` : servingText}</KitText>
+      <KitText weight={700} size={14} tracking={-0.02}>{grams != null ? `${servingText} (${num(grams)} g)` : servingText}</KitText>
     </View>
     {bar(8, { marginTop: 4, marginBottom: 6 })}
     <KitText weight={700} size={12}>{t('foodPerServing')}</KitText>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 2, paddingBottom: 4 }}>
       <KitText weight={700} size={22}>{t('foodCaloriesCap')}</KitText>
-      <KitText weight={700} size={28} numeric>{kcal == null ? '–' : num(kcal)}</KitText>
+      <KitText weight={700} size={28} tracking={-0.02}>{kcal == null ? '–' : num(kcal)}</KitText>
     </View>
     {bar(4)}
     <View style={{ alignItems: 'flex-end', paddingVertical: 6 }}><KitText weight={700} size={12}>{t('foodDailyValue')}</KitText></View>
@@ -180,7 +180,7 @@ export function EnergyLegend({ p, c, f }: { p: number | null; c: number | null; 
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.tok(color) }} />
       <KitText weight={500} size={13} color="text-muted" style={{ flex: 1 }}>{label}</KitText>
       <KitText weight={700} size={13.5} tracking={-0.02} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
-      <KitText weight={700} size={12.5} tracking={-0.02} numeric color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
+      <KitText weight={700} size={12.5} tracking={-0.02} color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
     </View>)}
   </View>;
 }

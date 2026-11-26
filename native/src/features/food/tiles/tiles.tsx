@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { Icon, KitText, Tappable, alpha, mix, useKit, TextGap } from '@/components/kit';
+import { Icon, KitText, Tappable, alpha, mix, tabular, useKit, TextGap } from '@/components/kit';
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../../tiles/ui';
@@ -113,7 +113,7 @@ const Macros: TileBody = ({ p, d }) => {
   if (p.size === 'M') return <View accessible accessibilityLabel={aria} style={col}>
     <View style={{ flexDirection: 'row', gap: 14 }}>{MAC.map(([key, name]) => <View key={key} style={{ flex: 1, minWidth: 0 }}>
       <Sub size={12}>{t(name)}{left ? ` ${t('foodLeft')}` : ''}</Sub>
-      <KitText weight={700} size={19} lineHeight={1.1} tracking={-0.02} numeric numberOfLines={1} style={{ marginTop: 4, marginBottom: 8 }}>
+      <KitText weight={700} size={19} lineHeight={1.1} tracking={-0.02} numberOfLines={1} style={{ marginTop: 4, marginBottom: 8 }}>
         {shown(key)}<TextGap pt={1} /><KitText weight={600} tracking={0} size={11} color="text-muted">/{goal(key)} g</KitText>
       </KitText>
       <Cells states={meter(g(key) / goal(key), 8)} color={c(key)} h={8} gap={2} r={2} />
@@ -248,7 +248,7 @@ const Meals: TileBody = ({ p, repo, d }) => {
           <Ic name={m.icon} outline={none} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Title size={14} style={{ flexShrink: 0 }}>{m.name}</Title>
-              {m.time && !none ? <Sub size={11.5}>{clock(m.time)}</Sub> : null}</View>
+              {m.time && !none ? <Sub size={11.5} style={tabular}>{clock(m.time)}</Sub> : null}</View>
             <Sub size={12}>{sub}</Sub>
           </View>
           {none ? null : <KitText weight={700} size={14.5} lineHeight={1} numeric>{val(m)}</KitText>}
