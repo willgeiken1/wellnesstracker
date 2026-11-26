@@ -25,7 +25,7 @@ export function validateRow(input: unknown): asserts input is Row {
   for (const [key, value] of Object.entries(r.data)) {
     if (!Object.hasOwn(fields, key)) return bad();
     if (value === null) continue;
-    if (['day','target_day','start_day','end_day','from_day','to_day','on_hand_day','mixed_day'].includes(key) &&
+    if (['day','target_day','start_day','end_day','from_day','to_day','on_hand_day','mixed_day','until_day'].includes(key) &&
         (typeof value !== 'string' || value.length !== 10 || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))) return bad();
     if (fields[key] === 'text' ? typeof value !== 'string' : typeof value !== 'number' || !Number.isFinite(value) || (fields[key] === 'integer' && !Number.isSafeInteger(value))) return bad();
   }
@@ -40,8 +40,9 @@ export function validateRow(input: unknown): asserts input is Row {
   if (r.table === 'purges' && ((r.data.from_day != null && r.data.to_day != null && r.data.from_day > r.data.to_day) || (r.data.cutoff_ms != null && Number(r.data.cutoff_ms)<0))) return bad();
   if (r.table === 'weigh_ins' && r.data.source !== 'app') return bad();
   const within = (key: string, min: number, max: number) => r.data[key] == null || (Number(r.data[key]) >= min && Number(r.data[key]) <= max);
-  if (r.table === 'daily_blocks' && !(within('start_min',0,1439) && within('end_min',1,2879) && within('days_mask',1,126) && within('hidden',0,1))) return bad();
-  if (r.table === 'daily_items' && !(within('time_min',0,1439) && within('on_hand',0,9999))) return bad();
+  if (r.table === 'daily_blocks' && !(within('start_min',0,1439) && within('end_min',1,2879) && within('days_mask',1,126) && within('hidden',0,1) && within('remind',0,1))) return bad();
+  // An item's days keep every day (127) and no day (0) apart from no mask, which is every day.
+  if (r.table === 'daily_items' && !(within('time_min',0,1439) && within('on_hand',0,999999) && within('days_mask',0,127))) return bad();
   if (r.table === 'daily_logs' && !(within('rest',0,1) && within('undone',0,1))) return bad();
   if (r.table === 'daily_compounds' && !within('chart_line',0,1)) return bad();
   if (r.table === 'daily_prefs' && !(within('day_rollover_hour',0,6) && within('focus_mode',0,1) && within('tips_hidden',0,1) && within('home_next_hidden',0,1))) return bad();

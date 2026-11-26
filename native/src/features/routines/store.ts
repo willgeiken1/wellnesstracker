@@ -4,6 +4,7 @@ import {
   ALL_DAYS, addDays, clock, demoState, emptyState, itemById, normalize, nowOf, pretty, rById,
   type HiddenRoutine, type Item, type ItemKind, type ItemType, type Mark, type Now, type Routine, type RoutineColor, type RoutinesState,
 } from './model';
+import { guardRoutinesStore, routineTablesIo } from './data/sqlite-store';
 
 /*
  * The Routines data adapter. The screens and tiles talk only to `RoutinesStore`; this file keeps it in the app's local
@@ -126,14 +127,13 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
 }
 function structuredCloneState(s: RoutinesState): RoutinesState { return JSON.parse(JSON.stringify(s)) as RoutinesState; }
 
-/** The store for one account, in the app's local storage. The demo account starts with the sample routines. */
+/** The store for one account, kept in the phone's daily_* tables (data/sqlite-store.ts). A document an earlier build
+ * left under ROUTINES_KEY is taken into the tables once. The demo account starts with the sample routines. */
 export function createLocalRoutinesStore(repo: Repository): RoutinesStore {
-  return createRoutinesStore({
-    get: () => repo.localGet(ROUTINES_KEY),
-    save: s => repo.localSave(ROUTINES_KEY, s),
-    subscribe: l => repo.subscribe(l),
+  return guardRoutinesStore(createRoutinesStore(routineTablesIo(repo, {
+    legacyKey: ROUTINES_KEY,
     seed: repo.owner === 'demo' ? () => demoState() : undefined,
-  });
+  })));
 }
 
 /* ---------- the store the tab, tiles and screens share ---------- */

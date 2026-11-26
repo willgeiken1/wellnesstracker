@@ -212,7 +212,10 @@ export const daily_blocks = sqliteTable('daily_blocks', {
   start_min: integer('start_min'),
   end_min: integer('end_min'),
   days_mask: integer('days_mask'),
-  hidden: integer('hidden')
+  hidden: integer('hidden'),
+  app_id: text('app_id'),
+  remind: integer('remind'),
+  hidden_sub: text('hidden_sub')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 
 export const daily_items = sqliteTable('daily_items', {
@@ -224,20 +227,30 @@ export const daily_items = sqliteTable('daily_items', {
   note: text('note'),
   time_min: integer('time_min'),
   start_day: text('start_day'),
-  on_hand: integer('on_hand'),
+  on_hand: real('on_hand'),
   on_hand_day: text('on_hand_day'),
   on_hand_at: integer('on_hand_at'),
   mixed_day: text('mixed_day'),
   calc_vial: real('calc_vial'),
   calc_vial_unit: text('calc_vial_unit'),
-  calc_water: real('calc_water')
+  calc_water: real('calc_water'),
+  app_id: text('app_id'),
+  position: integer('position'),
+  dose: text('dose'),
+  days_mask: integer('days_mask'),
+  per_day: real('per_day'),
+  vial: real('vial'),
+  supply_word: text('supply_word'),
+  site: text('site'),
+  mixed: text('mixed')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 
 export const daily_placements = sqliteTable('daily_placements', {
   owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
   block_id: text('block_id'),
   item_id: text('item_id'),
-  position: integer('position')
+  position: integer('position'),
+  item_rank: integer('item_rank')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
 
 export const daily_compounds = sqliteTable('daily_compounds', {
@@ -286,4 +299,14 @@ export const daily_prefs = sqliteTable('daily_prefs', {
   type_tabs: text('type_tabs'),
   collapsed_blocks: text('collapsed_blocks'),
   reveal_blocks: text('reveal_blocks')
+}, t => [primaryKey({ columns: [t.owner_id, t.id] })]);
+
+// Pauses of a daily routine: phone only, like the other daily_* tables.
+export const daily_pauses = sqliteTable('daily_pauses', {
+  owner_id: text('owner_id').notNull(), id: text('id').notNull(), updated_at: integer('updated_at').notNull(), deleted_at: integer('deleted_at'), device_id: text('device_id').notNull(),
+  block_id: text('block_id'),
+  from_day: text('from_day'),
+  until_day: text('until_day'),
+  why: text('why'),
+  position: integer('position')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] })]);

@@ -56,7 +56,7 @@ test('no telemetry or AI code reads a routine table or imports routine code', ()
 });
 
 test('routine tables are not in the list the sync engine pushes and pulls', () => {
-  expect(routineTables).toHaveLength(7);
+  expect(routineTables).toHaveLength(8);
   expect(DEFAULT_SYNC_FLAGS.dailyRoutines).toBe(false);
   for (const table of routineTables) {
     expect(syncedTables).not.toContain(table);

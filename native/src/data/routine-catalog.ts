@@ -1,7 +1,9 @@
 /* Daily routines (not workout templates, which are `routines`). Names, doses, units, notes, sites and
    supply are medication data: phone only, never to AI, Sentry, PostHog or logs.
    These tables are not in catalog.ts because that file is the wire catalog the server checks itself
-   against, and routines are not on the wire. */
+   against, and routines are not on the wire.
+   Migration 0006 added columns and daily_pauses on the phone only, for the Routines screens' store
+   (features/routines/data/sqlite-store.ts). The server schema has to gain them before routine sync is turned on. */
 export const routineColumns = {
   "daily_blocks": {
     "name": "text",
@@ -10,7 +12,10 @@ export const routineColumns = {
     "start_min": "integer",
     "end_min": "integer",
     "days_mask": "integer",
-    "hidden": "integer"
+    "hidden": "integer",
+    "app_id": "text",
+    "remind": "integer",
+    "hidden_sub": "text"
   },
   "daily_items": {
     "name": "text",
@@ -20,18 +25,28 @@ export const routineColumns = {
     "note": "text",
     "time_min": "integer",
     "start_day": "text",
-    "on_hand": "integer",
+    "on_hand": "real",
     "on_hand_day": "text",
     "on_hand_at": "integer",
     "mixed_day": "text",
     "calc_vial": "real",
     "calc_vial_unit": "text",
-    "calc_water": "real"
+    "calc_water": "real",
+    "app_id": "text",
+    "position": "integer",
+    "dose": "text",
+    "days_mask": "integer",
+    "per_day": "real",
+    "vial": "real",
+    "supply_word": "text",
+    "site": "text",
+    "mixed": "text"
   },
   "daily_placements": {
     "block_id": "text",
     "item_id": "text",
-    "position": "integer"
+    "position": "integer",
+    "item_rank": "integer"
   },
   "daily_compounds": {
     "name": "text",
@@ -72,5 +87,12 @@ export const routineColumns = {
     "type_tabs": "text",
     "collapsed_blocks": "text",
     "reveal_blocks": "text"
+  },
+  "daily_pauses": {
+    "block_id": "text",
+    "from_day": "text",
+    "until_day": "text",
+    "why": "text",
+    "position": "integer"
   }
 } as const;

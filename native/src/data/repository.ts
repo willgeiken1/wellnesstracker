@@ -233,6 +233,14 @@ export class Repository {
     return this.safe(() => routineTables.filter(table => this.phoneOnlyRoutines(table)).reduce((count, table) =>
       count + (this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM ${sql.identifier(table)} WHERE owner_id=${this.owner} AND deleted_at IS NULL`)?.count ?? 0), 0));
   }
+  /** Changes whenever a Routines row is written or erased: each daily_* table's row count and newest stamp. The
+   * Routines store keeps a copy in memory and reads this to learn that another writer changed its rows. */
+  routineTablesStamp(): string {
+    return this.safe(() => routineTables.map(table => {
+      const row = this.db.get<{n:number;m:number|null}>(sql`SELECT count(*) AS n, max(updated_at) AS m FROM ${this.table(table)} WHERE owner_id=${this.owner}`);
+      return `${row?.n ?? 0}:${row?.m ?? 0}`;
+    }).join('|'));
+  }
   hasUnsynced() {
     return this.safe(() => !!this.db.get(sql`SELECT 1 FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' LIMIT 1`));
   }

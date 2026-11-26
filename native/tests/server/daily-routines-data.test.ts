@@ -18,16 +18,16 @@ function seed(repo: Repository) {
 }
 const everyValue = (rows: Row[]) => JSON.stringify(rows.map(row => row.data));
 
-test('one local migration adds the seven tables, each with exactly its catalog columns', async () => {
+test('two local migrations add the eight tables, each with exactly its catalog columns', async () => {
   const { sqlite } = await localDatabase();
   try {
-    expect([...routineTables]).toEqual(['daily_blocks', 'daily_items', 'daily_placements', 'daily_compounds', 'daily_logs', 'daily_types', 'daily_prefs']);
+    expect([...routineTables]).toEqual(['daily_blocks', 'daily_items', 'daily_placements', 'daily_compounds', 'daily_logs', 'daily_types', 'daily_prefs', 'daily_pauses']);
     for (const table of routineTables) {
       const names = sqlite.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
       expect(names).toEqual(['owner_id', 'id', 'updated_at', 'deleted_at', 'device_id', ...Object.keys(columns[table])]);
     }
     const applied = sqlite.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get()?.n;
-    expect(applied).toBe(6);
+    expect(applied).toBe(7);
   } finally { sqlite.close(); }
 });
 
@@ -176,9 +176,9 @@ test('validation is fail-closed for routine rows', () => {
   for (const row of routineFixtureRows()) expect(() => validateRow({ ...base(row.table, row.data), id: row.id })).not.toThrow();
   const bad: [Table, Row['data']][] = [
     ['daily_logs', { day: '2026-11-1' }], ['daily_logs', { day: 20261119 }], ['daily_logs', { amount: '250' }], ['daily_logs', { undone: 2 }], ['daily_logs', { rest: -1 }],
-    ['daily_logs', { mood: 3 }], ['daily_items', { feeling: 'low' }], ['daily_items', { vendor: 'x' }], ['daily_items', { on_hand: 10000 }], ['daily_items', { on_hand: 1.5 }],
+    ['daily_logs', { mood: 3 }], ['daily_items', { feeling: 'low' }], ['daily_items', { vendor: 'x' }], ['daily_items', { on_hand: 1000000 }], ['daily_items', { on_hand: -1 }], ['daily_items', { days_mask: 128 }], ['daily_items', { per_day: '2' }],
     ['daily_items', { mixed_day: 'yesterday' }], ['daily_items', { time_min: 1440 }], ['daily_blocks', { start_min: -1 }], ['daily_blocks', { days_mask: 127 }], ['daily_blocks', { days_mask: 0 }],
-    ['daily_blocks', { hidden: 2 }], ['daily_compounds', { start_day: '2026-13' }], ['daily_compounds', { amount: Infinity }], ['daily_prefs', { day_rollover_hour: 7 }], ['daily_prefs', { setup: '{}' }],
+    ['daily_blocks', { hidden: 2 }], ['daily_blocks', { remind: 2 }], ['daily_pauses', { until_day: 'soon' }], ['daily_pauses', { reason: 'x' }], ['daily_compounds', { start_day: '2026-13' }], ['daily_compounds', { amount: Infinity }], ['daily_prefs', { day_rollover_hour: 7 }], ['daily_prefs', { setup: '{}' }],
   ];
   for (const [table, data] of bad) expect(() => validateRow(base(table, data))).toThrow('Invalid sync row.');
   expect(() => validateRow({ ...base('daily_items', {}), id: 'item_abc' })).toThrow('Invalid sync row.');
@@ -224,7 +224,8 @@ test('the phone-only and account backup files hold the routine rows of that owne
   } finally { local.sqlite.close(); }
 });
 
-test('routines made while looking around move to the new account once, and the demo copy is erased', async () => {
+test('routines kept while looking around stay behind when an account is made, and the demo copy is erased', async () => {
+  // The demo's routines start from the sample state, so none of them is carried into the new account.
   const local = await localDatabase();
   try {
     const demo = repoFor(local.db, 'demo'), account = repoFor(local.db, OWNER_A);
@@ -232,12 +233,11 @@ test('routines made while looking around move to the new account once, and the d
     seed(demo);
     promoteDemo(demo, account);
     for (const table of routineTables) {
-      expect(demo.list(table, true)).toEqual([]);
-      expect(account.list(table).map(row => [row.id, row.data])).toEqual(routineFixtureRows().filter(row => row.table === table).map(row => [row.id, { ...Object.fromEntries(Object.keys(columns[table]).map(key => [key, null])), ...row.data }]).sort((a, b) => String(a[0]) < String(b[0]) ? -1 : 1));
+      expect([table, demo.list(table, true)]).toEqual([table, []]);
+      expect([table, account.list(table, true)]).toEqual([table, []]);
     }
-    // They now belong to an account but still live on this phone alone: none is queued, and sign-out counts them.
     expect(account.unsyncedCount()).toBe(0);
-    expect(account.phoneOnlyRoutineCount()).toBe(routineFixtureRows().length);
+    expect(account.phoneOnlyRoutineCount()).toBe(0);
     expect(account.pending().filter(item => item.row.table.startsWith('daily_'))).toEqual([]);
   } finally { local.sqlite.close(); }
 });

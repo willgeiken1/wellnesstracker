@@ -16,7 +16,7 @@ export const ROUTINE_SENTINELS = [
 ] as const;
 
 const id = (kind: number, n: number) => `8${kind}000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-export const FIXTURE_IDS = { block: id(1, 1), item: id(2, 1), check: id(2, 2), placement: id(3, 1), compound: id(4, 1), log: id(5, 1), skip: id(5, 2), type: id(6, 1), prefs: ROUTINE_PREFS_ID } as const;
+export const FIXTURE_IDS = { block: id(1, 1), item: id(2, 1), check: id(2, 2), placement: id(3, 1), compound: id(4, 1), log: id(5, 1), skip: id(5, 2), type: id(6, 1), pause: id(7, 1), prefs: ROUTINE_PREFS_ID } as const;
 
 export function routineFixtureRows(): { table: Table; id: string; data: Row['data'] }[] {
   return [
@@ -28,6 +28,7 @@ export function routineFixtureRows(): { table: Table; id: string; data: Row['dat
     { table: 'daily_logs', id: FIXTURE_IDS.log, data: { item_id: FIXTURE_IDS.item, compound_id: FIXTURE_IDS.compound, day: '2026-11-19', status: 'done', amount: 13.25, unit: 'zq-unit', note: 'qq4419-scribble-text', at: 1794100000000, site: 'right-thigh', rest: 0, undone: 0 } },
     { table: 'daily_logs', id: FIXTURE_IDS.skip, data: { item_id: FIXTURE_IDS.check, day: '2026-11-19', status: 'skipped', at: 1794100000001 } },
     { table: 'daily_types', id: FIXTURE_IDS.type, data: { name: 'Zzyq Custom Type', position: 0 } },
+    { table: 'daily_pauses', id: FIXTURE_IDS.pause, data: { block_id: FIXTURE_IDS.block, from_day: '2026-11-10', until_day: '2026-11-12', why: 'qq4419-scribble-text', position: 0 } },
     { table: 'daily_prefs', id: FIXTURE_IDS.prefs, data: { last_block_id: FIXTURE_IDS.block, day_rollover_hour: 4, focus_mode: 0, setup_status: 'done', setup_answers: 'goals=enhancers;inject=yes', setup_at: 1794000000000, added: 'doses,calculator', type_tabs: 'peptide' } },
   ];
 }
