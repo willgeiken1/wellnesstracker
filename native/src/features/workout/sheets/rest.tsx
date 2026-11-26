@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Button } from '@/components/button';
@@ -14,6 +14,7 @@ import { tr } from '../tr';
 import { useWorkout } from '../use-workout';
 import { exLabel } from '../logger/model';
 import { useRest } from '../logger/chrome';
+import { liveActivitiesSupported, useRestLiveActivity } from '../live-activity';
 
 const PRESETS = [60, 90, 120, 150, 180];
 const SIZE = 232, STROKE = 14, R = (SIZE - STROKE) / 2, C = 2 * Math.PI * R;
@@ -27,6 +28,7 @@ export function startRest(store: WorkoutStore, seconds: number, entryId = '', no
 /** The rest timer sheet (`rest-timer`): a ring with the time, Start or Skip, and the rest length for this exercise. */
 export function RestTimerSheet({ entry }: { entry?: string }) {
   const { store } = useWorkout();
+  useRestLiveActivity();
   return store ? <RestBody store={store} entry={entry} /> : null;
 }
 function RestBody({ store, entry }: { store: WorkoutStore; entry?: string }) {
@@ -78,7 +80,7 @@ function RestBody({ store, entry }: { store: WorkoutStore; entry?: string }) {
       <View accessibilityLabel={tr('trainingRestLength')} style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 }}>
         {presets.map(p => <Chip key={p} label={clock(p * 1000)} accessibilityLabel={tr('trainingRestChip', { time: clock(p * 1000) })} selected={p === (on ? rest!.total : dflt)} color="training" onPress={() => pick(p)} />)}
       </View>
-      <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ textAlign: 'center', marginTop: 18, marginHorizontal: 8 }}>{tr('trainingRestFoot')}</KitText>
+      <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ textAlign: 'center', marginTop: 18, marginHorizontal: 8 }}>{tr(Platform.OS === 'ios' && liveActivitiesSupported() ? 'trainingRestFootLive' : 'trainingRestFoot')}</KitText>
     </View>
   </ScrollView></SurfaceContext.Provider>;
 }
