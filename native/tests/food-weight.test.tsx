@@ -5,6 +5,7 @@ import { ItemSheet, multipleFor, servingTextOf, servingsOf } from '../src/featur
 import { MealScreen } from '../src/features/food/meal-screen';
 import { saveFood } from '../src/features/food/model';
 import { foodRoutes } from '../src/features/food/nav';
+import { closeCart, openCart } from '../src/features/food/cart';
 import { resetFoodDay } from '../src/features/food/selection';
 import { foodAmount, foodSub } from '../src/features/food/sheet';
 import { OZ_G, foodWeightUnit, gramsOfOz, ozNum, ozOf, weightText } from '../src/features/food/weight';
@@ -104,5 +105,47 @@ describe('the Food screens', () => {
     const rows = repo.list('food_entries');
     expect(rows).toHaveLength(1);
     expect(rows[0].data.amount_g).toBeCloseTo(gramsOfOz(4), 6);
+  });
+});
+
+describe('food details: meal choice and source', () => {
+  const DINNER = 'fd000000-0000-4000-8000-000000000002';
+  afterEach(() => closeCart());
+
+  test('offers Add to with every meal, and logs into the meal picked', async () => {
+    const repo = memoryRepository();
+    foodRoutes.item({ food: chicken, meal: LUNCH, day: DAY });
+    await render(<ItemSheet repo={repo} />, { wrapper });
+    expect(screen.getByText('Add to')).toBeTruthy();
+    for (const meal of ['Breakfast', 'Lunch', 'Snack', 'Dinner']) expect(screen.getByText(meal)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Dinner'));
+    expect(screen.getByText(/^Add to dinner/)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('food-item-add'));
+    expect(repo.list('food_entries')[0].data.meal_id).toBe(DINNER);
+  });
+
+  test('inside the Log food tray the meal is the tray\'s, so Add to is left out', async () => {
+    openCart(LUNCH);
+    foodRoutes.item({ food: chicken, meal: LUNCH, day: DAY });
+    await render(<ItemSheet repo={memoryRepository()} />, { wrapper });
+    expect(screen.queryByText('Add to')).toBeNull();
+  });
+
+  test('shows a source only when one is known, never a guessed one', async () => {
+    foodRoutes.item({ food: chicken, meal: LUNCH, day: DAY });
+    const plain = await render(<ItemSheet repo={memoryRepository()} />, { wrapper });
+    expect(screen.queryByTestId('food-item-source')).toBeNull();
+    expect(screen.queryByText('USDA')).toBeNull();
+    expect(screen.queryByText('Logged')).toBeNull();
+    await plain.unmount();
+    foodRoutes.item({ food: { ...chicken, barcode: '0000000000017' }, meal: LUNCH, day: DAY, source: 'barcode' });
+    const scanned = await render(<ItemSheet repo={memoryRepository()} />, { wrapper });
+    expect(screen.getByText('Open Food Facts')).toBeTruthy();
+    expect(screen.getByText('0000000000017')).toBeTruthy();
+    await scanned.unmount();
+    foodRoutes.item({ food: chicken, meal: LUNCH, day: DAY, source: 'mine' });
+    await render(<ItemSheet repo={memoryRepository()} />, { wrapper });
+    expect(screen.getByText('My food')).toBeTruthy();
+    expect(screen.getByText('Entered by you')).toBeTruthy();
   });
 });

@@ -50,6 +50,17 @@ export function multipleFor(food: Food, grams: number | null, amount: number) {
 }
 
 /**
+ * Where a food's numbers came from (`.fd-src`), only when that is known: a scanned barcode reads Open Food Facts and
+ * the code, a food in My foods reads as entered by you. Anything else has no source on record, so the line is left out
+ * rather than guessed.
+ */
+export function sourceOf(source: string | undefined, food: Food, saved: boolean): { badge: string; line: string } | null {
+  if (source === 'barcode') return { badge: t('foodSrcOff'), line: String(food.barcode ?? t('foodSrcOffLine')) };
+  if (source === 'mine' || saved) return { badge: t('foodMyFood'), line: t('foodSrcMineLine') };
+  return null;
+}
+
+/**
  * Food details (`food-item`): energy and macros, serving size and amount, which meal, and a nutrition facts panel.
  * Adds to the Log food tray when that sheet is open, otherwise logs straight into the meal. Opened on a logged food,
  * it edits that entry instead, with Remove.
@@ -73,8 +84,7 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
   const pick = Math.min(si, options.length - 1), choice = options[pick], mult = multipleFor(food, choice.grams, amount), p = portion(food, mult);
   const kcal = kcalOf(p.energy_kj), grams = n(p.amount_g);
   const servingText = servingTextOf(choice, amount, unit);
-  const source = target.source === 'barcode' ? { badge: t('foodSrcOff'), line: String(food.barcode ?? t('foodSrcOffLine')) }
-    : saved ? { badge: t('foodMyFood'), line: t('foodSrcMineLine') } : { badge: t('foodSrcLog'), line: t('foodSrcLogLine') };
+  const source = sourceOf(target.source, food, saved);
 
   const toggleSave = () => {
     if (saved) { const row = savedRow(); if (row) repo.remove('saved_foods', row.id); setSaved(false); showToast(t('foodUnsavedMine'), { color: 'food' }); return; }
@@ -98,10 +108,10 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>{/* .fd-ih: its 4 pt top margin folds into the header's */}
       <View style={{ flex: 1, minWidth: 0 }}>
         <KitText accessibilityRole="header" weight={700} size={25} lineHeight={1.15} tracking={-0.03}>{name}</KitText>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+        {source ? <View testID="food-item-source" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
           <Badge label={source.badge} color="food" />
           <KitText weight={500} size={13} color="text-muted" numberOfLines={1} style={{ flexShrink: 1 }}>{source.line}</KitText>
-        </View>
+        </View> : null}
       </View>
       <SaveButton on={saved} onPress={toggleSave} />
     </View>
