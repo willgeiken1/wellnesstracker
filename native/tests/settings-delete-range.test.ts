@@ -73,3 +73,16 @@ describe('Last backup', () => {
     expect(backupWhen(new Date(2026, 10, 2).getTime(), now)).toBe('Nov 2');
   });
 });
+
+describe('Auth errors read without the auth module', () => {
+  test('match what the Account screen said for each error class', () => {
+    const { AccountDeletionFailed, AccountDeletionUncertain, DepartureFailure } = jest.requireActual('../src/auth/sign-out') as typeof import('../src/auth/sign-out');
+    const { deletionError, signOutError } = require('../src/features/settings/auth-errors') as typeof import('../src/features/settings/auth-errors');
+    expect(deletionError(new AccountDeletionFailed())).toBe('deleteAccountFailed');
+    expect(deletionError(new AccountDeletionUncertain())).toBe('deleteAccountUncertain');
+    expect(deletionError(new DepartureFailure())).toBe('signOutFailed');
+    expect(deletionError(new Error('x'))).toBe('deleteAccountUncertain');
+    expect(signOutError(new DepartureFailure())).toBe('signOutFailed');
+    expect(signOutError(new Error('x'))).toBe('signOutNotStarted');
+  });
+});

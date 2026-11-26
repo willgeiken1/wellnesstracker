@@ -1,7 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { DepartureFailure } from '@/auth/sign-out';
-import { syncBeforeSignOut } from '@/auth/sign-out-sync';
-import { SyncRecovery } from '@/auth/sync-recovery';
+import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
@@ -203,15 +201,15 @@ export function AccountPage() {
   const leave = async (discard: boolean) => {
     if (busy.current) return; busy.current = true;
     try { await (discard ? auth.signOut(true) : auth.signOut()); showToast(st('settingsSignedOut')); }
-    catch (cause) { setError(cause instanceof DepartureFailure ? 'signOutFailed' : 'signOutNotStarted'); }
+    catch (cause) { setError(signOutError(cause)); }
     finally { busy.current = false; }
   };
   /* Sync first; when changes would be lost, say how many and ask again (the sign-out rules in auth/screens). */
   const signOut = async () => {
     if (busy.current) return; busy.current = true; setError(null);
     let count = 0;
-    try { await (auth.prepareSignOut ? auth.prepareSignOut() : syncBeforeSignOut(auth.syncNow)); count = auth.repository?.unsyncedCount() ?? auth.pending; }
-    catch (cause) { busy.current = false; setError(cause instanceof DepartureFailure ? 'signOutFailed' : 'signOutNotStarted'); return; }
+    try { await auth.prepareSignOut?.(); count = auth.repository?.unsyncedCount() ?? auth.pending; }
+    catch (cause) { busy.current = false; setError(signOutError(cause)); return; }
     busy.current = false;
     if (count === 0) { void leave(false); return; }
     actionSheet({ title: t('signOutConfirm'), message: `${t('signOutBody')} ${signOutUnsynced(count)}`, cancel: t('signOutWait'),
@@ -257,7 +255,6 @@ export function AccountPage() {
         acts: [{ label: st('settingsSignOut'), destructive: true, onPress: () => { void signOut(); } }] })} /></List>
       : <List><ListRow title={st('settingsLookAround')} sub={st('settingsLookAroundSub')} onPress={() => { auth.lookAround(); router.replace('/'); }} /></List>}
     {error ? <KitText weight={500} size={13} color="danger" accessibilityRole="alert" style={{ marginTop: 8, marginHorizontal: 16 }}>{t(error)}</KitText> : null}
-    {syncs ? <SyncRecovery repository={auth.repository} /> : null}
   </SetPage>;
 }
 

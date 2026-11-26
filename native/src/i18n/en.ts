@@ -1476,6 +1476,9 @@ export const en = {
   settingsFeedbackPlaceholder: 'What would make Insight better for you?', settingsYourFeedback: 'Your feedback',
   settingsIncludeDetails: 'Include app details', settingsIncludeDetailsSub: 'Version {v} and your iPhone model. Never your health data.',
   settingsFeedbackFoot: 'We read every message and reply by email when you ask a question.', settingsFeedbackMail: 'Your feedback is ready to send in Mail',
+  welcomeName: 'Insight', welcomeLine: 'Training, food, sleep and routines side by side, so you can see what is working.',
+  welcomePillsLabel: 'Training, food, sleep and routines', welcomePillTraining: 'Training', welcomePillFood: 'Food', welcomePillSleep: 'Sleep', welcomePillRoutines: 'Routines',
+  welcomeLegal: 'By continuing you agree to the ', welcomeLegalAnd: ' and ',
   // P7 settings end
 } as const;
 export type MessageKey = keyof typeof en;

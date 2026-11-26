@@ -8,7 +8,7 @@ import { showToast } from '@/features/shell/toast';
 import { iconArt, iconId } from './app-icon';
 import { readPhotos } from '@/features/progress/local';
 import { st } from './copy';
-import { AccountDeletionFailed, AccountDeletionUncertain, DepartureFailure } from '@/auth/sign-out';
+import { deletionError } from './auth-errors';
 import { t } from '@/i18n/en';
 import { useDataActions } from './data-actions';
 import { RANGE_KINDS, canDeleteKind, deleteDateRange, isoDay, type RangeKind } from './delete-range';
@@ -88,8 +88,7 @@ export function DeleteAccountPage() {
     if (going.current || !ok || !auth.deleteAccount) return;
     going.current = true; setBusy(true); setFailure(null);
     void auth.deleteAccount().then(() => { router.replace('/'); showToast(st('settingsDeletedAccount')); })
-      .catch((cause: unknown) => { setFailure(cause instanceof AccountDeletionUncertain ? 'deleteAccountUncertain' : cause instanceof AccountDeletionFailed ? 'deleteAccountFailed'
-        : cause instanceof DepartureFailure ? 'signOutFailed' : 'deleteAccountUncertain'); })
+      .catch((cause: unknown) => { setFailure(deletionError(cause)); })
       .finally(() => { going.current = false; setBusy(false); });
   };
   const eyebrow = (n: number) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
