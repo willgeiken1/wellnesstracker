@@ -7,6 +7,7 @@ import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { iconArt, iconId } from './app-icon';
 import { readPhotos } from '@/features/progress/local';
+import { combos } from '@/features/food/model';
 import { st } from './copy';
 import { deletionError } from './auth-errors';
 import { t } from '@/i18n/en';
@@ -84,6 +85,10 @@ export function DeleteAccountPage() {
   const can = !!auth.deleteAccount && !!auth.session;
   const ok = typed.trim().toUpperCase() === 'DELETE';
   const { backup } = useDataActions();
+  // What goes with the account, counted where the app keeps a count: saved meals and progress photos.
+  let saved = 0, photos = 0;
+  try { saved = auth.repository ? combos(auth.repository).length : 0; } catch { saved = 0; }
+  try { photos = auth.repository ? readPhotos(auth.repository).length : 0; } catch { photos = 0; }
   const final = () => {
     if (going.current || !ok || !auth.deleteAccount) return;
     going.current = true; setBusy(true); setFailure(null);
@@ -116,12 +121,12 @@ export function DeleteAccountPage() {
         <Gap />
         <Panel>
           <Info first icon="workouts" color="training" title={st('settingsDel1')} />
-          <Info icon="food" color="food" title={st('settingsDel2')} />
-          <Info icon="scale" color="accent" title={st('settingsDel3')} />
+          <Info icon="food" color="food" title={st('settingsDel2')} value={saved ? st('settingsNSavedMeals', { n: saved }) : undefined} />
+          <Info icon="scale" color="accent" title={st('settingsDel3')} value={photos ? st('settingsNPhotos', { n: photos }) : undefined} />
           <Info icon="routines" color="sleep" title={st('settingsDel4')} />
           <Info icon="ring" color="recovery" title={st('settingsDel5')} />
         </Panel>
-        <ListFooter>{st('settingsDeleteFoot')}</ListFooter>
+        <KitText weight={500} size={15} lineHeight={1.5} color="text-muted" style={{ marginTop: 10 }}>{st('settingsDeleteFoot')}</KitText>
         <View style={{ gap: 10, marginTop: 22 }}>
           <Button label={st('settingsBackupFirst')} variant="secondary" icon="download" full disabled={!backup} onPress={() => backup?.()} />
           <Button testID="delete-continue" label={st('settingsContinue')} variant="destructive" full onPress={() => setStep(2)} />

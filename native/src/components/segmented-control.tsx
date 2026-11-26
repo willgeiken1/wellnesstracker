@@ -29,7 +29,8 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
         style={{ flex: 1, minHeight: compact ? 32 : 34, paddingHorizontal: compact ? 6 : 10, borderRadius: KIT.radius.segItem, alignItems: 'center', justifyContent: 'center',
           backgroundColor: on ? k.segOn : 'transparent',
           boxShadow: on ? '0px 1px 3px rgba(0, 0, 0, 0.14), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.06)' : undefined }}>
-        <KitText weight={600} size={compact ? 13 : 13.5} tracking={-0.005} color={on ? 'text' : 'text-muted'} style={{ textAlign: 'center' }}>{option.label}</KitText>
+        <KitText weight={600} size={compact ? 13 : 13.5} tracking={-0.005} color={on ? 'text' : 'text-muted'}
+          style={{ textAlign: 'center', marginHorizontal: compact ? -4 : -8 }}>{option.label}</KitText>
       </Tappable>;
     })}
   </View>;
