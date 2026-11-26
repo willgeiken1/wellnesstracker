@@ -50,10 +50,11 @@ test('the workout modal opened from Training provides a working exit back to Tra
 test('avatar opens Settings and Appearance in the stack', async () => {
   const result = await renderRouter(routes);
   await fireEvent.press(screen.getByRole('button', { name: 'Profile and settings' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Appearance' }));
+  // The Settings list row reads its title and current value, such as the palette.
+  await fireEvent.press(screen.getByRole('button', { name: /^Appearance\b/ }));
   expect(result.getPathname()).toBe('/settings/appearance');
-  await fireEvent.press(screen.getByRole('tab', { name: 'Light' }));
-  expect(screen.getByRole('tab', { name: 'Light' })).toBeSelected();
+  await fireEvent.press(screen.getByRole('radio', { name: 'Light' }));
+  expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
 });
 test.each([
   // A cold food link has nothing to go back to, so its header offers Close, which lands on the Food tab.
@@ -117,7 +118,8 @@ test('the food log page repeats no title: the stack header carries the only one'
 
 test('About opens Licenses, which lists the font, the credits and the packages with no "coming soon"', async () => {
   const result = await renderRouter(routes, { initialUrl: '/settings/about' });
-  await fireEvent.press(screen.getByRole('button', { name: 'Licenses' }));
+  // About names the licenses page Acknowledgements, as the design does.
+  await fireEvent.press(screen.getByRole('button', { name: 'Acknowledgements' }));
   expect(result.getPathname()).toBe('/settings/licenses');
   expect(screen.getByRole('button', { name: 'Lexend' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Exercise data by RepDB' })).toBeTruthy();
@@ -135,7 +137,11 @@ test.each(['/', '/settings', '/settings/appearance'])('rendered shell at %s labe
   expect(pressables.length).toBeGreaterThanOrEqual(7);
   const text = (node: TestInstance): string => node.children.map(child => typeof child === 'string' ? child : text(child)).join(' ');
   for (const node of pressables) {
-    expect(node.props.accessibilityRole).toMatch(/^(button|tab)$/);
+    {
+        // Appearance's theme, palette and icon choices are radios, as in the design, and True black is a switch; each says if it is on.
+        expect(node.props.accessibilityRole).toMatch(/^(button|tab|radio|switch)$/);
+        if (/^(radio|switch)$/.test(node.props.accessibilityRole)) expect(typeof node.props.accessibilityState?.checked).toBe('boolean');
+      }
     expect((node.props.accessibilityLabel ?? text(node)).trim().length).toBeGreaterThan(0);
   }
 });
