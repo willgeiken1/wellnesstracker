@@ -15,6 +15,8 @@ const list = (names) => names.map((n) => `'${n}'`).join(',');
 // roles and expressions, enabled triggers, index definitions, every table privilege of the API roles, the
 // sequence with its settings and privileges, and each function's arguments, security, settings, owner and a
 // hash of its body. compare.sql sets search_path to public first, because deparsed names depend on it.
+// NOT NULL constraints (contype 'n') are left out: Postgres 18 lists them in pg_constraint and older versions
+// don't, and each column's "not null" fact already compares nullability.
 const tablePrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'];
 const sequencePrivileges = ['USAGE', 'SELECT', 'UPDATE'];
 const privilegeList = (check, privileges) => `COALESCE(NULLIF(pg_catalog.concat_ws(',',
@@ -45,7 +47,7 @@ const shape = `
     FROM rel JOIN pg_catalog.pg_class c ON c.oid = rel.oid
   UNION ALL SELECT 'constraint ' || rel.name || '.' || k.conname || ' ' || k.contype::text || ' '
        || pg_catalog.md5(pg_catalog.pg_get_constraintdef(k.oid))
-    FROM rel JOIN pg_catalog.pg_constraint k ON k.conrelid = rel.oid
+    FROM rel JOIN pg_catalog.pg_constraint k ON k.conrelid = rel.oid AND k.contype <> 'n'
   UNION ALL SELECT 'policy ' || p.tablename || '.' || p.policyname || ' ' || p.cmd || ' ' || p.permissive
        || ' ' || pg_catalog.array_to_string(p.roles, ',') || ' using ' || COALESCE(p.qual, '-')
        || ' check ' || COALESCE(p.with_check, '-')
