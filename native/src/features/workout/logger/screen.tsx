@@ -20,6 +20,7 @@ import { trainingNav } from '../nav';
 import { SheetHost } from '../primitives';
 import { tr, trCount } from '../tr';
 import { useWorkout } from '../use-workout';
+import { useRestLiveActivity } from '../live-activity';
 import { RestBar, JumpStrip, StatusCard, TopBar } from './chrome';
 import { FocusMode } from './focus';
 import { checkSet, deleteSet, exLabel, discardSession, loggerView, noteOpenKey, plateText, removeExercise, rpeKey, type ExerciseView, type SetView } from './model';
@@ -37,6 +38,8 @@ export function TrainingLogger() {
   const { routine, id, day } = useLocalSearchParams<{ id?: string; day?: string; routine?: string }>();
   const [error, setError] = useState(false), [pastId, setPastId] = useState<string | null>(null), started = useRef(false);
   const col = useLoggerColors();
+  // The rest timer follows the person onto the Lock Screen and into the Dynamic Island.
+  useRestLiveActivity();
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(() => {

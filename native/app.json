@@ -199,6 +199,7 @@
           }
         }
       ],
+      "expo-live-activity",
       "expo-status-bar",
       "expo-apple-authentication",
       [

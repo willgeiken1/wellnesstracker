@@ -1622,6 +1622,9 @@ export const en = {
   privacyLockFailed: "Face ID didn't go through. Tap Unlock to try again.", privacyCoverLabel: 'Insight is hidden while you switch apps',
   settingsFaceIdUnavailable: "Face ID isn't set up on this iPhone. Set it up in iOS Settings first.",
   settingsFaceIdNotConfirmed: "Face ID didn't confirm, so the lock stays off.",
+  // LA live activity
+  trainingRestFootLive: 'The timer keeps running on the Lock Screen and in the Dynamic Island, with a gentle buzz at zero.',
+  // LA live activity end
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */
