@@ -9,7 +9,7 @@ import { Group, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
 import { LicenseNotice, Licenses, noticeTitle } from '@/features/settings/licenses/screen';
 import { AboutPage, AccountPage, ConnectionsPage, DataPage, DiagnosticsList, GoalsPage, PrivacyPage, RemindersPage, UnitsPage, WorkoutPage } from '@/features/settings/pages';
 import { DeleteAccountPage, DeleteRangePage, FeedbackPage, PrivacyCenterPage, WhatsNewPage } from '@/features/settings/more-pages';
-import { Hero, SetPage } from '@/features/settings/ui';
+import { SetPage } from '@/features/settings/ui';
 import { useDataActions } from '@/features/settings/data-actions';
 import { t } from '@/i18n/en';
 import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
@@ -41,23 +41,16 @@ function AiPrivacy() {
   return repository ? <FoodAiPrivacy repo={repository} /> : null;
 }
 
-/** The phone-only build has no Apple Health, Oura or notifications, so their pages say so calmly instead of offering them. */
-function NotInThisBuild({ title, empty, icon, color, testID }: { title: string; empty: string; icon: 'link' | 'bell'; color: string; testID: string }) {
-  return <SetPage back={t('settings')} title={title} testID={testID}><Hero icon={icon} color={color} title={empty} body={t('notInVersion')} /></SetPage>;
-}
-
 /** One Settings page, by its id. Every page draws its own bar with the back button and title. */
 export default function SettingsSection() {
   const { section, notice } = useLocalSearchParams<{ section: string; notice?: string; focus?: string }>();
-  if (Constants.expoConfig?.extra?.phoneOnly === true) {
-    if (section === 'connections' || section === 'health') return <NotInThisBuild testID="settings-health-empty" title={t('settingsConnectionsTitle')} empty={t('settingsHealthEmpty')} icon="link" color="recovery" />;
-    if (section === 'reminders' || section === 'notifications') return <NotInThisBuild testID="settings-notifications-empty" title={t('settingsRemindersTitle')} empty={t('settingsNotificationsEmpty')} icon="bell" color="danger" />;
-  }
+  // The phone-only build has no Apple Health, Oura or notifications: those pages keep their layout and offer nothing they cannot do.
+  const limited = Constants.expoConfig?.extra?.phoneOnly === true;
   switch (section) {
     case 'goals': return <GoalsPage />;
-    case 'connections': case 'health': return <ConnectionsPage />;
+    case 'connections': case 'health': return <ConnectionsPage limited={limited} />;
     case 'account': return <AccountPage />;
-    case 'reminders': case 'notifications': return <RemindersPage />;
+    case 'reminders': case 'notifications': return <RemindersPage limited={limited} />;
     // AI meal estimates are off for launch; their privacy controls only show once they are on.
     case 'privacy': return <PrivacyPage crash={<DiagnosticsList />} ai={AI_FEATURES_ENABLED ? <AiPrivacy /> : null} />;
     case 'units': return <UnitsPage />;
