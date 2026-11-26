@@ -11,20 +11,20 @@ const tab = { fontVariant: ['tabular-nums'] as TextStyle['fontVariant'] };
 
 /** A big number with its unit after it in small grey type (.prt-n). The unit is a sibling on the number's baseline, not
  * nested in it, so it keeps its own (untracked) spacing as `.prt-n small { letter-spacing: 0 }` asks. */
-export function Num({ v, unit, fs = 32, color, units }: { v: string | number; unit?: string; fs?: number; color?: string; units?: (readonly [string, string])[] }) {
-  const k = useKit(), us = fs <= 22 ? Math.max(11, fs * 0.52) : 13, gap = fs <= 22 ? 2 : 3;
+export function Num({ v, unit, fs = 32, color, units, tight }: { v: string | number; unit?: string; fs?: number; color?: string; units?: (readonly [string, string])[]; /** In the three columns (`.prt-cols`) hours and minutes sit 1 pt apart. */ tight?: boolean }) {
+  const k = useKit(), us = fs <= 22 ? Math.max(11, Math.round(fs * 1.04) / 2) : 13, gap = fs <= 22 ? 2 : 3;
   const groups: (readonly [string | number, string | undefined])[] = units ?? [[v, unit]];
   return <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'nowrap' }}>
-    {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? 4 : 0 }}>
+    {groups.map(([n, u], i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'baseline', marginLeft: i ? (tight ? 1 : 4) : 0 }}>
       <Text numberOfLines={1} style={[font(700, fs, 1, -0.03), tab, { color: color ?? k.c.text }]}>{n}</Text>
-      {u ? <Text numberOfLines={1} style={[font(600, us, 1), { color: k.c['text-muted'], marginLeft: units ? 1 : gap }]}>{u}</Text> : null}
+      {u ? <Text numberOfLines={1} style={[font(600, us, 1), { color: k.c['text-muted'], marginLeft: units && i < groups.length - 1 ? 1 : gap }]}>{u}</Text> : null}
     </View>)}
   </View>;
 }
 /** Hours and minutes as "6h 53m" in the big number style. */
-export const HM = ({ min, fs = 32 }: { min: number; fs?: number }) => {
+export const HM = ({ min, fs = 32, tight }: { min: number; fs?: number; tight?: boolean }) => {
   const h = Math.floor(min / 60), m = Math.round(min % 60);
-  return <Num v="" fs={fs} units={[[String(h), 'h'], [String(m), 'm']]} />;
+  return <Num v="" fs={fs} tight={tight} units={[[String(h), 'h'], [String(m), 'm']]} />;
 };
 /** "No data" in the place of a number: a missing reading is never shown as 0. */
 export const NoData = ({ fs = 32, text }: { fs?: number; text: string }) => { const k = useKit(); return <Text numberOfLines={1} style={[font(700, fs, 1, -0.03), { color: k.c['text-muted'] }]}>{text}</Text>; };
@@ -56,7 +56,7 @@ export const Row = ({ children, style }: { children: ReactNode; style?: StylePro
 export function Cols({ children, style }: { children: ReactNode[]; style?: StyleProp<ViewStyle> }) {
   const k = useKit(), n = children.length;
   return <View style={[{ flexDirection: 'row' }, style]}>{children.map((c, i) =>
-    <View key={i} style={{ flex: 1, minWidth: 0, paddingLeft: i ? 10 : 0, paddingRight: i < n - 1 ? 10 : 0, borderLeftWidth: i ? 1 : 0, borderLeftColor: k.c.hair }}>{c}</View>)}</View>;
+    <View key={i} style={{ width: `${100 / n}%`, minWidth: 0, paddingLeft: i ? 10 : 0, paddingRight: i < n - 1 ? 10 : 0, borderLeftWidth: i ? 1 : 0, borderLeftColor: k.c.hair }}>{c}</View>)}</View>;
 }
 
 /** A scale: a neutral track, the usual range tinted and the value as a marker (.prt-sc). */
@@ -87,7 +87,8 @@ export function Legend({ items, style, between }: { items: { color?: string; lab
   return <View style={[{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 4 }, between && { justifyContent: 'space-between' }, style]}>{items.map((x, i) =>
     <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
       {x.color ? <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: x.color }} /> : null}
-      <Text style={[font(600, 11, 1.2), { color: k.c['text-muted'] }]}>{x.label}{x.value != null ? <Text style={[font(700, 11), tab, { color: k.c.text }]}> {x.value}</Text> : null}</Text>
+      <Text style={[font(600, 11, 1.2), { color: k.c['text-muted'] }]}>{x.label}</Text>
+      {x.value != null ? <Text style={[font(700, 11, 1.2), tab, { color: k.c.text }]}>{x.value}</Text> : null}
     </View>)}</View>;
 }
 /** A small grey pill with a number (.prt-chip). */

@@ -126,10 +126,10 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
   const usual = (b: readonly [number, number] | null) => b ? fill(t('progressUsualRange'), { a: b[0], b: b[1] }) : t('progressNoUsualYet');
   const sleepCells = (hgt = 6) => <Cells states={meter((S?.min ?? 0) / goal, goal / 60)} color="sleep" h={hgt} gap={2} r={2} />;
   const scaleH = () => h != null ? <Scale v={h} lo={36} hi={72} band={hb} /> : null, scaleR = () => rh != null ? <Scale v={rh} lo={48} hi={66} band={rb} /> : null;
-  const col = (num: ReactNode, title: string, sub: string, viz: ReactNode) => <View>{num}<Sub style={{ marginTop: 3 }} color={k.c.text}>{title}</Sub><Sub size={11.5}>{sub}</Sub><View style={{ marginTop: 9 }}>{viz}</View></View>;
+  const col = (num: ReactNode, title: string, sub: string, viz: ReactNode) => <View>{num}<Sub size={12} style={{ marginTop: 5 }} color={k.c.text}>{title}</Sub><Sub size={11.5} style={{ marginTop: 3 }}>{sub}</Sub><View style={{ marginTop: 9 }}>{viz}</View></View>;
   const nd = (fs: number) => <NoData fs={fs * 0.8} text={t('progressNoData')} />;
   const cols = {
-    sleep: (fs: number) => col(S ? <HM min={S.min} fs={fs} /> : nd(fs), t('progressPSleep'), fill(t('progressGoalLower'), { v: `${goal / 60}h` }), sleepCells()),
+    sleep: (fs: number) => col(S ? <HM min={S.min} fs={fs} tight /> : nd(fs), t('progressPSleep'), fill(t('progressGoalLower'), { v: `${goal / 60}h` }), sleepCells()),
     hrv: (fs: number) => col(h != null ? <Num v={h} unit="ms" fs={fs} /> : nd(fs), HRV_NAME, usual(hb), scaleH()),
     rhr: (fs: number) => col(rh != null ? <Num v={rh} unit="bpm" fs={fs} /> : nd(fs), t('progressRhrShort'), usual(rb), scaleR()),
   };
