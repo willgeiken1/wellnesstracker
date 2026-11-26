@@ -5,6 +5,16 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { render } from '@testing-library/react-native';
 import type { NativeStackNavigationOptions } from 'expo-router';
+import { NavigationShell } from '../src/app/_layout';
+import SettingsLayout from '../src/app/settings/_layout';
+import { ThemeProvider } from '../src/design/theme-provider';
+import { LARGE_SHARE, largeSheet, mediumSheet, tileEditSheet } from '../src/features/navigation/presentation';
+import { tileSheetOptions } from '../src/features/tiles/nav';
+import { trainingSheetOptions } from '../src/features/workout/nav';
+import { sheetOptions as foodSheet } from '../src/features/food/sheet';
+import { sheetOptions as routinesSheet } from '../src/features/routines/route-parts';
+import { tilePage } from '../src/features/tiles/registry';
+import '../src/features/workout/tiles';
 
 jest.mock('../src/auth/provider', () => ({ useAuth: () => ({ repository: null }) }));
 const mockScreens: { name: string; options?: unknown }[] = [];
@@ -18,16 +28,6 @@ jest.mock('expo-router', () => {
 });
 const mockRouter = jest.requireMock('expo-router').router as { push: jest.Mock };
 
-import { NavigationShell } from '../src/app/_layout';
-import SettingsLayout from '../src/app/settings/_layout';
-import { ThemeProvider } from '../src/design/theme-provider';
-import { LARGE_SHARE, largeSheet, mediumSheet, tileEditSheet } from '../src/features/navigation/presentation';
-import { tileSheetOptions } from '../src/features/tiles/nav';
-import { trainingSheetOptions } from '../src/features/workout/nav';
-import { sheetOptions as foodSheet } from '../src/features/food/sheet';
-import { sheetOptions as routinesSheet } from '../src/features/routines/route-parts';
-import { tilePage } from '../src/features/tiles/registry';
-import '../src/features/workout/tiles';
 
 type Want = 'push' | 'large' | number | 'fit';
 /** The design's screens (id, type and detent from each INS.register), the app route that draws each, and how it opens.
