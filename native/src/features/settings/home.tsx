@@ -18,7 +18,11 @@ import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { AvatarPhoto, useProfilePhoto } from './avatar-photo';
 import { GROUPS, SECTIONS, searchSettings, type SectionId } from './sections';
 
-export const APP_VERSION = `${Constants.expoConfig?.version ?? '1.0'} (${Constants.expoConfig?.ios?.buildNumber ?? '1'})`;
+/** The version the way iOS shows it, "1.0 (1)": a zero patch number is left off ("1.0.0" reads 1.0), any other stays. */
+export function versionLabel(version: string | undefined, build: string | undefined) {
+  return `${(version || '1.0').replace(/^(\d+\.\d+)\.0$/, '$1')} (${build || '1'})`;
+}
+export const APP_VERSION = versionLabel(Constants.expoConfig?.version, Constants.expoConfig?.ios?.buildNumber);
 const mss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 /** Opens a Settings section, optionally flashing one setting in it. */

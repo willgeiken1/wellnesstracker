@@ -109,9 +109,20 @@ describe('Settings pages', () => {
   test('About shows the version and opens Acknowledgements', async () => {
     mockSection = 'about';
     await show(<Section />);
-    expect(screen.getByText('Version 1.0.0 (1)')).toBeTruthy();
+    // As iOS writes it: a zero patch number is left off.
+    expect(screen.getByText('Version 1.0 (1)')).toBeTruthy();
+    expect(screen.getAllByText('1.0 (1)').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/1\.0\.0/)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Acknowledgements' }));
     expect(router.push).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'licenses' } });
+  });
+  test('versionLabel drops only a zero patch number', () => {
+    const { versionLabel } = require('../src/features/settings/home') as typeof import('../src/features/settings/home');
+    expect(versionLabel('1.0.0', '1')).toBe('1.0 (1)');
+    expect(versionLabel('1.2.0', '7')).toBe('1.2 (7)');
+    expect(versionLabel('1.2.3', '7')).toBe('1.2.3 (7)');
+    expect(versionLabel('2.0', '3')).toBe('2.0 (3)');
+    expect(versionLabel(undefined, undefined)).toBe('1.0 (1)');
   });
   test('About links the published privacy policy, terms and support pages, and says when one fails to open', async () => {
     mockSection = 'about';
@@ -146,6 +157,21 @@ describe('Settings pages', () => {
     mockSection = 'reminders';
     await show(<Section />);
     expect(screen.getByText(/4 are on, and you will get at most 2 a day\./)).toBeTruthy();
+  });
+  test('Delete account offers Save a backup first whenever there is a log of your own to back up', async () => {
+    mockSection = 'delete-account';
+    const signedIn = await show(<Section />, { ...base(), repository: memoryRepository(), session: { user: { id: 'fixture' } } as AuthState['session'] } as AuthState);
+    expect(screen.getByRole('button', { name: 'Save a backup first' })).not.toBeDisabled();
+    await signedIn.unmount();
+    const phone = await show(<Section />, { ...base(), phoneOnly: true, repository: memoryRepository() });
+    expect(screen.getByRole('button', { name: 'Save a backup first' })).not.toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Save a backup first' }));
+    const { exportPhoneBackup } = require('../src/phone-only/export') as typeof import('../src/phone-only/export');
+    expect(exportPhoneBackup).toHaveBeenCalledTimes(1);
+    await phone.unmount();
+    // Example data is not yours, so there is nothing of yours to back up (Account hides Export backup there too).
+    await show(<Section />, { ...base(), demo: true, repository: memoryRepository() });
+    expect(screen.getByRole('button', { name: 'Save a backup first' })).toBeDisabled();
   });
   test('Delete account asks twice and only unlocks once DELETE is typed', async () => {
     const deleteAccount = jest.fn(async () => {});
