@@ -383,3 +383,69 @@ test('rows written before the store kept app_id still read, and the column step 
   expect(readRoutinesState(repo)!.items.map(i => i.id).sort()).toEqual(before.items.map(i => i.id).sort());
   expect(repo.get('daily_blocks', FIXTURE_IDS.block)!.data.name).toBe('Zzyq Evening Block');
 });
+
+describe('a value out of the range its column takes', () => {
+  test('is kept inside it, so one big on-hand count does not stop the saves after it', async () => {
+    const { repo } = await account();
+    const store = createLocalRoutinesStore(repo);
+    const good = store.addItem(draft({ name: 'Fixture good' })).item;
+    const big = store.addItem(draft({ name: 'Fixture big', hand: '1000000' })).item;
+    expect(repo.get('daily_items', itemRowId(big.id))!.data.on_hand).toBe(999999);
+    store.toggleDone(good.id);
+    expect(repo.get('daily_logs', routineLogId(itemRowId(good.id), TODAY))!.data).toMatchObject({ status: 'done', undone: 0 });
+    const back = reopened(repo);
+    expect(back.items.map(i => i.name)).toEqual(['Fixture good', 'Fixture big']);
+    expect(back.items.find(i => i.id === big.id)!.left).toBe(999999);
+    expect(back.items.find(i => i.id === good.id)!.left).toBe(29);
+    expect(back.log[TODAY]).toEqual({ [good.id]: 'd' });
+    // Ticking the big one saves too.
+    store.toggleDone(big.id);
+    expect(reopened(repo).log[TODAY]).toEqual({ [good.id]: 'd', [big.id]: 'd' });
+  });
+
+  test('every number is clamped to its column and a number that is not finite is kept as none', async () => {
+    const { repo } = await account();
+    const s = fixtureState();
+    Object.assign(s.routines[0], { from: -3, to: 99 });
+    Object.assign(s.routines[1], { from: NaN, to: Infinity });
+    Object.assign(s.items[0], { left: 5e9, perDay: -2, vial: Infinity, h: 30, amt: NaN });
+    Object.assign(s.items[1], { left: NaN, h: -1 });
+    Object.assign(s.items[2], { h: NaN });
+    expect(() => commitRoutinesState(repo, s, null)).not.toThrow();
+    expect(repo.get('daily_blocks', blockRowId(s.routines[0].id))!.data).toMatchObject({ start_min: 0, end_min: 2879 });
+    expect(repo.get('daily_blocks', blockRowId(s.routines[1].id))!.data).toMatchObject({ start_min: null, end_min: null });
+    expect(repo.get('daily_items', itemRowId('fa'))!.data).toMatchObject({ on_hand: 999999, per_day: 0, vial: null, time_min: 1439 });
+    expect(repo.get('daily_items', itemRowId('fb'))!.data).toMatchObject({ on_hand: null, time_min: 0 });
+    expect(repo.get('daily_items', itemRowId('fc'))!.data.time_min).toBeNull();
+    const back = readRoutinesState(repo)!;
+    expect(back.items.find(i => i.id === 'fa')).toMatchObject({ left: 999999, perDay: 0, amt: null, h: 23 + 59 / 60 });
+    expect(back.items.find(i => i.id === 'fa')!.vial).toBeUndefined();
+    expect(back.items.find(i => i.id === 'fb')!.left).toBeUndefined();
+    // An item with no time takes its routine's start, as one saved before times were kept.
+    expect(back.items.find(i => i.id === 'fc')!.h).toBe(back.routines.find(r => r.id === 'midday')!.from);
+    expect(back.routines[1]).toMatchObject({ from: 8, to: 9 });
+  });
+
+  test('an old document with values out of range, of the wrong kind or missing is taken in, and opens every time', async () => {
+    const { repo, live } = await account();
+    const s = fixtureState() as unknown as Record<string, unknown> & { routines: Record<string, unknown>[]; items: Record<string, unknown>[]; log: Record<string, unknown> };
+    Object.assign(s.routines[0], { from: '6', to: null, days: 'weekdays', pauses: [{ from: 'soon', until: TODAY }, null], color: 7, remind: 'yes' });
+    Object.assign(s.items[0], { left: 1e12, perDay: 'two', vial: -5, h: '7', amt: Infinity, unit: 4, created: 'long ago', days: [1, 9, 2.5, '3'] });
+    Object.assign(s.items[1], { type: 'constructor', kind: 'other', note: 12, dose: undefined, routines: ['night', 5, null] });
+    s.log = { ...s.log, 'not a day': { fa: 'd' }, [addDays(TODAY, -5)]: null, [addDays(TODAY, -6)]: { fa: 'x', fb: 's' } };
+    repo.localSave(ROUTINES_KEY, s);
+    const store = createLocalRoutinesStore(repo);
+    const read = store.read();
+    expect(repo.localGet(ROUTINES_KEY)).toBeNull();
+    expect(live('daily_items')).toBe(5);
+    expect(read.items.find(i => i.id === 'fa')).toMatchObject({ left: 999999, vial: 0, amt: null, unit: '', days: [1] });
+    expect(read.items.find(i => i.id === 'fa')!.perDay).toBeUndefined();
+    expect(read.items.find(i => i.id === 'fb')).toMatchObject({ type: 'Other', kind: 'check', routines: ['night'] });
+    expect(read.routines[0]).toMatchObject({ color: 'sleep', days: [0, 1, 2, 3, 4, 5, 6], pauses: [] });
+    expect(read.log['not a day']).toBeUndefined();
+    expect(read.log[addDays(TODAY, -6)]).toEqual({ fb: 's' });
+    // The store goes on saving, and the next open reads what it saved.
+    store.toggleDone('fa');
+    expect(reopened(repo).log[TODAY]).toEqual({ fa: 'd', fc: 'd', fe: 's' });
+  });
+});

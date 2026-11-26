@@ -42,16 +42,36 @@ const text = (v: Scalar | undefined): string | undefined => (typeof v === 'strin
 const num = (v: Scalar | undefined): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const orNull = <T>(v: T | undefined | null): T | null => (v === undefined || v === null ? null : v);
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const minutes = (h: number, lo: number, hi: number) => clamp(Math.round(h * 60), lo, hi);
+
+/* What a row is given. The phone's row check (src/data/rows.ts validateRow) refuses a whole save over one value out
+   of range, and the store keeps the state it tried to save, so every later save would be refused too. So each value
+   is made to fit its column here, on the way in: a number is kept inside the range its column takes, a number that is
+   not finite is no number, a text column gets text or nothing, and a day column gets a day or nothing. The same goes
+   for a document an earlier build left, which may hold anything. */
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+/** The most an on-hand count may be (the row check's range for on_hand); per day and vial keep to it too. */
+export const MAX_ON_HAND = 999999;
+const countOf = (v: unknown) => (finite(v) ? clamp(v, 0, MAX_ON_HAND) : null);
+const realOf = (v: unknown) => (finite(v) ? v : null);
+const minutesOf = (h: unknown, lo: number, hi: number) => (finite(h) ? clamp(Math.round(h * 60), lo, hi) : null);
+const wordsOf = (v: unknown) => (typeof v === 'string' ? v : null);
+const isDay = (v: unknown): v is string => typeof v === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v);
+const dayOf = (v: unknown) => (isDay(v) ? v : null);
+const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const idOf = (v: unknown) => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
+/** A check-off as the store keeps it: done or skipped. */
+const markOf = (v: unknown): Mark | null => (v === 'd' || v === 's' ? v : null);
 
 /* Weekdays as a mask, Monday bit 0 to Sunday bit 6, the order the web app's rows use. The screens count 0 as Sunday. */
 const bit = (wd: number) => 1 << ((wd + 6) % 7);
-function maskOf(days: readonly number[]): number { return [...new Set(days)].filter(d => d >= 0 && d <= 6).reduce((m, d) => m | bit(d), 0); }
+function maskOf(days: readonly unknown[]): number {
+  return [...new Set(days)].filter((d): d is number => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6).reduce((m, d) => m | bit(d), 0);
+}
 function daysOf(mask: number): number[] { return ALL_DAYS.filter(d => (mask & bit(d)) !== 0); }
 /** A routine's days: every day is stored as no mask. */
-const blockMask = (days: readonly number[]) => { const m = maskOf(days); return m === 0 || m === 127 ? null : m; };
+const blockMask = (days: unknown) => { const m = maskOf(listOf(days)); return m === 0 || m === 127 ? null : m; };
 /** An item's days: null is every day; a list keeps its exact days, all seven (127) and none (0) included. */
-const itemMask = (days: readonly number[] | null) => (days ? maskOf(days) : null);
+const itemMask = (days: unknown) => (Array.isArray(days) ? maskOf(days) : null);
 
 const TYPE_ROW: Record<ItemType, string> = { Supplement: 'supplement', Peptide: 'peptide', Medication: 'medication', Enhancer: 'enhancer', Other: 'other' };
 const TYPE_OF: Record<string, ItemType> = Object.fromEntries(Object.entries(TYPE_ROW).map(([k, v]) => [v, k as ItemType]));
@@ -140,40 +160,46 @@ function markOfRow(row: Row): Mark | null {
 
 /* ---------- writing ---------- */
 
-function encodeBlock(r: Routine, position: number, hiddenSub: string | null): Data {
-  const start = minutes(r.from, 0, 1439);
+function encodeBlock(r: Routine, id: string, position: number, hiddenSub: string | null): Data {
+  // No start reads back as the default window, so an end without its start is not kept either.
+  const start = minutesOf(r.from, 0, 1439), end = minutesOf(r.to, 1, 2879);
   return {
-    app_id: r.id, name: r.name, color: r.color, position, start_min: start, end_min: Math.max(start + 1, minutes(r.to, 1, 2879)),
+    app_id: id, name: wordsOf(r.name) ?? '', color: isColor(r.color) ? r.color : 'sleep', position,
+    start_min: start, end_min: start === null ? null : Math.max(start + 1, end ?? start + 60),
     days_mask: blockMask(r.days), hidden: hiddenSub === null ? 0 : 1, hidden_sub: hiddenSub, remind: r.remind ? 1 : 0,
   };
 }
-function encodeItem(i: Item, position: number, compoundId: string | null): Data {
+function encodeItem(i: Item, id: string, position: number, compoundId: string | null): Data {
   return {
-    app_id: i.id, name: i.name, kind: i.kind, type: TYPE_ROW[i.type] ?? 'other', compound_id: compoundId, note: orNull(i.note), dose: i.dose,
-    time_min: minutes(i.h, 0, 1439), start_day: i.created, days_mask: itemMask(i.days), position,
-    on_hand: orNull(i.left), per_day: orNull(i.perDay), vial: orNull(i.vial), supply_word: orNull(i.sup), site: orNull(i.site), mixed: orNull(i.mixed),
+    app_id: id, name: wordsOf(i.name) ?? '', kind: i.kind === 'dose' ? 'dose' : 'check', type: Object.hasOwn(TYPE_ROW, i.type) ? TYPE_ROW[i.type] : 'other',
+    compound_id: compoundId, note: wordsOf(i.note), dose: wordsOf(i.dose),
+    time_min: minutesOf(i.h, 0, 1439), start_day: dayOf(i.created), days_mask: itemMask(i.days), position,
+    on_hand: countOf(i.left), per_day: countOf(i.perDay), vial: countOf(i.vial), supply_word: wordsOf(i.sup), site: wordsOf(i.site), mixed: wordsOf(i.mixed),
   };
 }
-const hasAmount = (i: Item) => i.amt !== null || !!i.unit;
+const hasAmount = (i: Item) => realOf(i.amt) !== null || !!wordsOf(i.unit);
 
 /** Rows by table and id, as the state wants them. Logs are handled on their own. */
 function desiredRows(s: RoutinesState, itemRows: Map<string, Row>): Map<Table, Map<string, Data>> {
   const out = new Map<Table, Map<string, Data>>((['daily_blocks', 'daily_pauses', 'daily_items', 'daily_compounds', 'daily_placements'] as Table[]).map(t => [t, new Map()]));
   const put = (t: Table, id: string, d: Data) => out.get(t)!.set(id, d);
   const block = (r: Routine, k: number, sub: string | null) => {
-    const id = blockRowId(r.id);
-    put('daily_blocks', id, encodeBlock(r, k, sub));
-    r.pauses.forEach((p, n) => put('daily_pauses', pauseRowId(id, n), { block_id: id, from_day: p.from, until_day: p.until, why: orNull(p.why), position: n }));
+    const appId = idOf(r.id), id = blockRowId(appId);
+    put('daily_blocks', id, encodeBlock(r, appId, k, sub));
+    const pauses = listOf(r.pauses).filter((p): p is Pause => !!p && isDay((p as Pause).from) && isDay((p as Pause).until));
+    pauses.forEach((p, n) => put('daily_pauses', pauseRowId(id, n), { block_id: id, from_day: p.from, until_day: p.until, why: wordsOf(p.why), position: n }));
   };
   s.routines.forEach((r, k) => block(r, k, null));
-  s.hidden.forEach((r, k) => block(r, k, r.sub ?? ''));
+  s.hidden.forEach((r, k) => block(r, k, wordsOf(r.sub) ?? ''));
   const inBlock = new Map<string, number>();
+  // A place in a routine the state does not have would read back as a routine named by its row id: it is not kept.
+  const known = new Set([...s.routines, ...s.hidden].map(r => idOf(r.id)));
   s.items.forEach((i, k) => {
-    const id = itemRowId(i.id), current = itemRows.get(id);
+    const appId = idOf(i.id), id = itemRowId(appId), current = itemRows.get(id);
     const compound = hasAmount(i) ? text(current?.data.compound_id) ?? compoundRowId(id) : null;
-    put('daily_items', id, encodeItem(i, k, compound));
-    if (compound) put('daily_compounds', compound, { name: i.name, amount: i.amt, unit: i.unit || null, start_day: i.created });
-    [...new Set(i.routines)].forEach((rid, rankAt) => {
+    put('daily_items', id, encodeItem(i, appId, k, compound));
+    if (compound) put('daily_compounds', compound, { name: wordsOf(i.name) ?? '', amount: realOf(i.amt), unit: wordsOf(i.unit) || null, start_day: dayOf(i.created) });
+    [...new Set(listOf(i.routines).map(idOf).filter(rid => known.has(rid)))].forEach((rid, rankAt) => {
       const b = blockRowId(rid), at = inBlock.get(b) ?? 0;
       inBlock.set(b, at + 1);
       put('daily_placements', routinePlacementId(b, id), { block_id: b, item_id: id, position: at, item_rank: rankAt });
@@ -216,15 +242,17 @@ export function commitRoutinesState(repo: Repository, next: RoutinesState, prev:
     const keepFrom = addDays(nowOf().day, -KEEP_DAYS);
     const touch = new Map<string, [string, string]>();
     const add = (day: string, id: string) => touch.set(`${day}\u0000${id}`, [day, id]);
-    const markIn = (log: RoutinesState['log'], day: string, id: string) => log[day]?.[id] ?? null;
+    // A day's marks are read with care: a document an earlier build left may hold anything there.
+    const daysOf = (log: unknown) => Object.entries(log && typeof log === 'object' ? log : {}).filter(([, m]) => !!m && typeof m === 'object') as [string, Record<string, unknown>][];
+    const markIn = (log: RoutinesState['log'], day: string, id: string) => markOf((log as Record<string, Record<string, unknown> | undefined>)[day]?.[id]);
     if (prev) {
       // Only what changed since the state the rows held.
-      for (const log of [prev.log, next.log]) for (const [day, marks] of Object.entries(log)) for (const id of Object.keys(marks)) {
+      for (const log of [prev.log, next.log]) for (const [day, marks] of daysOf(log)) for (const id of Object.keys(marks)) {
         if (markIn(prev.log, day, id) !== markIn(next.log, day, id)) add(day, id);
       }
     } else {
       // Nothing known about the rows: every check-off in the state, and every live check-off row.
-      for (const [day, marks] of Object.entries(next.log)) for (const id of Object.keys(marks)) add(day, id);
+      for (const [day, marks] of daysOf(next.log)) for (const id of Object.keys(marks)) add(day, id);
       const appOf = new Map([...itemRows.values()].map(r => [r.id, text(r.data.app_id) ?? r.id]));
       for (const row of repo.list('daily_logs')) {
         const item = text(row.data.item_id), day = text(row.data.day);
@@ -232,8 +260,9 @@ export function commitRoutinesState(repo: Repository, next: RoutinesState, prev:
       }
     }
     for (const [day, id] of touch.values()) {
+      if (!isDay(day)) continue;
       const item = itemRowId(id), rowId = routineLogId(item, day);
-      const mark = next.log[day]?.[id] ?? null, have = repo.get('daily_logs', rowId);
+      const mark = markIn(next.log, day, id), have = repo.get('daily_logs', rowId);
       if (mark) {
         const status = mark === 'd' ? 'done' : 'skipped';
         if (have && have.deleted_at === null && have.data.status === status && have.data.undone !== 1) continue;
