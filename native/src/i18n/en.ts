@@ -1348,6 +1348,21 @@ export const en = {
   // P5 progress end
   // P7 settings
   settingsLicensesFonts: 'Fonts', settingsLicenseJakartaHint: 'SIL Open Font License 1.1, by the Plus Jakarta Sans Project Authors',
+  settingsDefault: 'Default', settingsDefaultLower: 'default', settingsTheme: 'Theme', settingsSystem: 'System', settingsDark: 'Dark', settingsLight: 'Light',
+  settingsTrueBlack: 'True black', settingsTrueBlackSub: 'Pure black backgrounds in Dark', settingsTrueBlackOnlyDark: 'Only in Dark',
+  settingsThemeFootSystem: 'Matches your iPhone. Right now that is {now}.', settingsThemeFootFixed: 'Always {now}, whatever your iPhone uses.',
+  settingsPalette: 'Palette', settingsPaletteFoot: 'Sets the accent, charts and rings across the app, in Dark and Light. Training, food, recovery, sleep and water each keep a colour of their own.',
+  settingsAppIcon: 'App icon', settingsAppIconFoot: 'Your icon takes its colours from your palette and follows Dark or Light.',
+  settingsTabBar: 'Tab bar', settingsTabsOnBar: 'Tabs on the bar', settingsNofM: '{n} of {m}',
+  settingsTabBarFootHidden: 'Hidden pages open from here. Touch and hold the bar for the same list.', settingsTabBarFoot: 'Hide the tabs you rarely use. Touch and hold the bar for the same list.',
+  settingsDensity: 'Density', settingsAiry: 'Airy', settingsBalanced: 'Balanced', settingsDense: 'Dense', settingsLunch: 'Lunch', settingsNightRoutine: 'Night routine',
+  settingsDensityFoot: 'Sets the spacing of list rows across the app. Every row keeps a full-size tap target.',
+  settingsAccessibility: 'Accessibility', settingsReduceTransparency: 'Reduce Transparency', settingsIosSettings: 'iOS Settings',
+  settingsReduceTransparencyFoot: 'Bars and sheets blur what is behind them. With Reduce Transparency on in iOS, Insight uses solid colours instead.',
+  settingsSignedInApple: 'Signed in with Apple',
+  settingsNConnected: '{n} connected', settingsSyncOn: 'Sync on', settingsSyncOff: 'Sync off', settingsNOn: '{n} on', settingsFaceId: 'Face ID', settingsNoLock: 'No lock',
+  settingsMetric: 'Metric', settingsRestValue: '{v} rest', settingsSyncedNow: 'Synced just now', settingsHomeBack: 'Home', settingsSearchPlaceholder: 'Search settings',
+  settingsNoMatchQ: 'No settings match “{q}”', settingsNoMatchHint: 'Try a word like theme, Oura, rest or export.',
   // P7 settings end
 } as const;
 export type MessageKey = keyof typeof en;

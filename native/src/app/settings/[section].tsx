@@ -1,30 +1,17 @@
 import { useState } from 'react';
-import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
-import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
-import { PrivacySwitches } from '@/features/settings/privacy-switches';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { Screen } from '@/components/screen';
-import { ThemedText } from '@/components/themed-text';
-import { Group, InfoRow, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
-import { scoreOn, setScoreOn } from '@/features/home/tiles';
-import { settingsSections } from '@/features/settings/sections';
-import { Profile } from '@/features/onboarding/profile';
-import { WorkoutSettings } from '@/features/workout/settings';
-import { t } from '@/i18n/en';
-import { ImportScreen } from '@/features/importer/screen';
 import { useAuth } from '@/auth/provider';
-import { ConnectedServices } from '@/features/connections/screen';
-import { useAppleHealth } from '@/features/health/use-apple-health';
-import { useOura } from '@/features/health/use-oura';
-import Constants from 'expo-constants';
+import { Screen } from '@/components/screen';
+import { scoreOn, setScoreOn } from '@/features/home/tiles';
+import { Profile } from '@/features/onboarding/profile';
+import { Group, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
 import { LicenseNotice, Licenses, noticeTitle } from '@/features/settings/licenses/screen';
-import { LEGAL_LINKS, openPage } from '@/features/settings/links';
-function HealthAndDevices() {
-  // Settings also opens with no account provider around it; Apple Health is simply not offered there.
-  const repository = useAuth().repository;
-  const apple = useAppleHealth(repository), ring = useOura(repository);
-  return <ConnectedServices apple={apple} oura={ring} />;
-}
+import { AboutPage, AccountPage, ConnectionsPage, DataPage, DiagnosticsList, GoalsPage, PrivacyPage, RemindersPage, UnitsPage, WorkoutPage } from '@/features/settings/pages';
+import { DeleteAccountPage, DeleteRangePage, FeedbackPage, PrivacyCenterPage, WhatsNewPage } from '@/features/settings/more-pages';
+import { SetPage } from '@/features/settings/ui';
+import { useDataActions } from '@/features/settings/data-actions';
+import { t } from '@/i18n/en';
+
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
   const repository = useAuth().repository;
@@ -38,50 +25,39 @@ function ScoreSettings() {
     <NavRow label={t('scoreHow')} onPress={() => router.push('/score')} />
   </Group>;
 }
-/** About: what the app is, the version, the public pages and the licences. */
-function About() {
-  const version = Constants.expoConfig?.version;
-  const [failed, setFailed] = useState(false);
-  const open = (url: string) => { setFailed(false); void openPage(url).then(opened => { if (!opened) setFailed(true); }); };
-  return <>
-    <Group testID="settings-about">
-      <InfoRow label="Insight" hint={t('settingsAboutBody')} />
-      {!!version && <InfoRow label={t('settingsVersion')} value={version} />}
-    </Group>
-    <Group testID="settings-about-links">
-      <NavRow label={t('privacyPolicy')} onPress={() => open(LEGAL_LINKS.privacy)} />
-      <NavRow label={t('termsOfUse')} onPress={() => open(LEGAL_LINKS.terms)} />
-      <NavRow label={t('supportPage')} onPress={() => open(LEGAL_LINKS.support)} />
-    </Group>
-    {failed && <ThemedText testID="settings-about-link-failed" muted accessibilityRole="alert" accessibilityLiveRegion="polite">{t('linkFailed')}</ThemedText>}
-    <Group>
-      <NavRow label={t('licenses')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'licenses' } })} />
-    </Group>
-    <ThemedText testID="settings-about-disclaimer" muted variant="caption">{t('aboutDisclaimer')}</ThemedText>
-  </>;
+
+function Data() {
+  const actions = useDataActions();
+  return <DataPage backup={actions.backup} restore={actions.restore} />;
 }
-/** One Settings page. The bar shows only Back; every page carries its own single title. */
+
+/** One Settings page, by its id. Every page draws its own bar with the back button and title. */
 export default function SettingsSection() {
-  const { section, notice } = useLocalSearchParams<{ section: string; notice?: string }>();
-  // Licenses and Notifications have no row on the Settings home (Notifications waits for reminders), so they are named here.
-  const title = section === 'licenses' ? notice ? noticeTitle(notice) : t('licenses')
-    : section === 'notifications' ? t('notifications') : t(settingsSections.find(item => item.route === section)?.label ?? 'settings');
-  // Names the page for VoiceOver and for the back button of whatever opens from it.
-  const named = <Stack.Screen options={{ title }} />;
-  const phoneOnly = Constants.expoConfig?.extra?.phoneOnly === true;
-  if (section === 'health' && phoneOnly) return <>{named}<Screen title={title}>
-    <QuietCard testID="settings-health-empty" title={t('settingsHealthEmpty')} body={t('notInVersion')} /></Screen></>;
-  if (section === 'notifications') return <>{named}<Screen title={title}>
-    <QuietCard testID="settings-notifications-empty" title={t('settingsNotificationsEmpty')} body={t('notInVersion')} /></Screen></>;
-  // Health & devices opens with its own headline, so the bar names the page here.
-  if (section === 'health') return <><Stack.Screen options={{ title, headerTitle: title }} /><Screen><HealthAndDevices /></Screen></>;
-  if (section === 'score') return <>{named}<Screen title={title}><ScoreSettings /></Screen></>;
-  if (section === 'data') return <>{named}<ImportScreen /></>;
-  // While AI is off for launch, Privacy holds only the crash-report and analytics switches.
-  if (section === 'privacy') return <>{named}{AI_FEATURES_ENABLED ? <FoodPrivacyScreen /> : <Screen title={title}><PrivacySwitches /></Screen>}</>;
-  if (section === 'profile') return <>{named}<Profile /></>;
-  if (section === 'workout') return <>{named}<WorkoutSettings /></>;
-  if (section === 'about') return <>{named}<Screen title={title}><About /></Screen></>;
-  if (section === 'licenses') return <>{named}<Screen title={title}>{notice ? <LicenseNotice notice={notice} /> : <Licenses />}</Screen></>;
-  return <>{named}<Screen title={title}><QuietCard title={t('notInVersion')} /></Screen></>;
+  const { section, notice } = useLocalSearchParams<{ section: string; notice?: string; focus?: string }>();
+  switch (section) {
+    case 'goals': return <GoalsPage />;
+    case 'connections': case 'health': return <ConnectionsPage />;
+    case 'account': return <AccountPage />;
+    case 'reminders': case 'notifications': return <RemindersPage />;
+    case 'privacy': return <PrivacyPage crash={<DiagnosticsList />} />;
+    case 'units': return <UnitsPage />;
+    case 'workout': return <WorkoutPage />;
+    case 'data': return <Data />;
+    case 'about': return <AboutPage />;
+    case 'privacy-center': return <PrivacyCenterPage />;
+    case 'delete-account': return <DeleteAccountPage />;
+    case 'delete-range': return <DeleteRangePage />;
+    case 'whats-new': return <WhatsNewPage />;
+    case 'feedback': return <FeedbackPage />;
+    case 'licenses': {
+      const title = notice ? noticeTitle(notice) : t('licenses');
+      return <SetPage back={notice ? t('licenses') : t('settingsAboutTitle')} title={title}>
+        <Stack.Screen options={{ title }} />
+        <Screen>{notice ? <LicenseNotice notice={notice} /> : <Licenses />}</Screen>
+      </SetPage>;
+    }
+    case 'profile': return <SetPage back={t('settings')} title={t('profile')}><Profile /></SetPage>;
+    case 'score': return <SetPage back={t('settings')} title={t('scoreSetting')}><ScoreSettings /></SetPage>;
+    default: return <SetPage back={t('settings')} title={t('settings')}><QuietCard title={t('notInVersion')} /></SetPage>;
+  }
 }
