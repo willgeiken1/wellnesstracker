@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { StyleSheet } from 'react-native';
-import { Onboarding, OnboardingDraftProvider } from '../src/features/onboarding/screen';
+import { OnboardingDraftProvider } from '../src/features/onboarding/screen';
 import { Welcome } from '../src/features/onboarding/welcome';
 import { AuthForm } from '../src/features/onboarding/auth-form';
 import { Profile } from '../src/features/onboarding/profile';
@@ -122,69 +122,7 @@ describe('Sign in',()=>{
  });
 });
 
-describe('About you and Start',()=>{
- test('date of birth has a plain label, a helper line and its own inline error',async()=>{
-  const auth=await wrap(<Onboarding/>);
-  expect(t('birthDate')).toBe('Date of birth');expect(screen.getByText(t('birthDateHelp'))).toBeTruthy();
-  expect(screen.getByRole('progressbar',{name:'Step 2 of 3'})).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-13-45');
-  await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
-  expect(screen.getByRole('alert')).toHaveTextContent(t('birthDateInvalid'));expect(auth.createAccount).not.toHaveBeenCalled();
-  // Typing again clears the message until the next check.
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');expect(screen.queryByRole('alert')).toBeNull();
-  await fireEvent.changeText(screen.getByLabelText(t('profileHeight').replace('{unit}',screen.queryByLabelText('Height (cm, optional)')?'cm':'in')),'-4');
-  await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
-  expect(screen.getByRole('alert')).toHaveTextContent(t('statsInvalid'));
- });
- test('Back on About you clears the draft and returns to welcome, or to Account in the demo',async()=>{
-  await wrap(<Onboarding/>);await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('onboardingBack')}));
-  expect(router.replace).toHaveBeenLastCalledWith('/auth');expect(screen.getByLabelText(t('birthDate'))).toHaveDisplayValue('');
-  await screen.unmount();
-  await wrap(<Onboarding/>,{...state(),demo:true});await fireEvent.press(screen.getByRole('button',{name:t('onboardingBack')}));
-  expect(router.replace).toHaveBeenLastCalledWith('/settings/account');
- });
- test('Start offers two labelled routine choices and stores the same values as before',async()=>{
-  const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
-  const repository=memoryRepository(),device=memoryRepository();
-  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>device,wipeAll:()=>{}});
-  await wrap(<Onboarding/>,{...state(),repository,session:{user:{id:'synthetic'}} as AuthState['session']});
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
-  expect(screen.getByRole('progressbar',{name:'Step 3 of 3'})).toBeTruthy();
-  expect(screen.getByRole('radio',{name:t('starterNone')})).toBeChecked();
-  expect(screen.getByRole('radio',{name:t('starterFullBody')})).not.toBeChecked();
-  expect(screen.getByText(t('starterFullBodyBody'))).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button',{name:t('finishOnboarding')}));
-  expect(repository.list('routines')).toHaveLength(0);expect(repository.localGet('onboardingComplete')).toBe(true);
-  expect(router.replace).toHaveBeenLastCalledWith('/');
- });
- test('a failed save shows a quiet row whose Retry runs the same save',async()=>{
-  const {openLocalDatabase}=require('../src/data/database') as typeof import('../src/data/database');
-  const repository=memoryRepository(),device=memoryRepository();
-  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:()=>device,wipeAll:()=>{}});
-  const atomic=jest.spyOn(repository,'atomic').mockImplementationOnce(()=>{throw new Error('synthetic write failure');});
-  await wrap(<Onboarding/>,{...state(),repository,session:{user:{id:'synthetic'}} as AuthState['session']});
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
-  await fireEvent.press(screen.getByRole('button',{name:t('finishOnboarding')}));
-  expect(screen.getByRole('alert')).toHaveTextContent(t('workoutSaveError'));expect(repository.list('profile')).toHaveLength(0);
-  await fireEvent.press(screen.getByRole('button',{name:t('bootRetry')}));
-  expect(atomic).toHaveBeenCalled();expect(repository.list('profile')).toHaveLength(1);expect(router.replace).toHaveBeenLastCalledWith('/');
- });
- test('while the account is still loading the button is off and a line says why',async()=>{
-  await wrap(<Onboarding/>,{...state(),initialPullComplete:false,repository:memoryRepository(),session:{user:{id:'synthetic'}} as AuthState['session']});
-  await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2000-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('continueOnboarding')}));
-  expect(screen.getByText(t('onboardingPreparing'))).toBeTruthy();expect(screen.getByRole('button',{name:t('finishOnboarding')})).toBeDisabled();
- });
- test('the ages 13+ screen is plain and offers only the way back',async()=>{
-  await wrap(<Onboarding/>);await fireEvent.changeText(screen.getByLabelText(t('birthDate')),'2020-01-01');
-  await fireEvent.press(screen.getByRole('button',{name:t('createAccount')}));
-  expect(screen.getByRole('header')).toHaveTextContent(t('ages13Title'));expect(t('ages13Body')).not.toMatch(/thanks/i);
-  expect(screen.getAllByRole('button')).toHaveLength(1);
- });
-});
+// The setup steps after sign-in are covered in onboarding-flow.test.tsx.
 
 describe('Settings profile',()=>{
  test('an invalid date shows under the date field, and a good save says Saved',async()=>{

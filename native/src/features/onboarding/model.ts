@@ -29,14 +29,16 @@ export function canonicalStats(input:ProfileInput) {
   return {height_m:input.height.trim()?Number(input.height)*(input.unit==='kg'?0.01:0.0254):null,
     weight_kg:input.weight.trim()?Number(input.weight)/(input.unit==='kg'?1:2.2046226218487757):null};
 }
-/** Same BMR + baseline/steps model as the PWA, with K-6's lightly-active fallback.
+/** Same BMR + baseline/steps model as the PWA, with K-6's lightly-active fallback. Mifflin-St Jeor: +5 for male, -161
+ * for female, and the midpoint -78 when sex isn't given. A plan scales maintenance: Cut x0.85, Bulk x1.10.
  * No Health/Oura reads; maintenance only until a person overrides their targets. */
-export function estimateTargets(input:ProfileInput,day=today()):Targets|null {
-  if(!validProfile(input,day)||!input.sex)return null;
+export function estimateTargets(input:ProfileInput,day=today(),plan:'cut'|'maintain'|'bulk'='maintain'):Targets|null {
+  if(!validProfile(input,day))return null;
   const {height_m,weight_kg}=canonicalStats(input);if(!height_m||!weight_kg)return null;
-  const bmr=10*weight_kg+6.25*height_m*100-5*ageOn(input.dob,day)!+(input.sex==='male'?5:-161);
+  const bmr=10*weight_kg+6.25*height_m*100-5*ageOn(input.dob,day)!+(input.sex==='male'?5:input.sex==='female'?-161:-78);
   const steps={sitting:4000,light:7000,active:10000,very:14000}[input.activity];
-  const kcal=Math.round((bmr*1.15+steps*0.0005*weight_kg)/10)*10;
+  const maintenance=Math.round((bmr*1.15+steps*0.0005*weight_kg)/10)*10;
+  const kcal=Math.round(maintenance*{cut:0.85,maintain:1,bulk:1.1}[plan]/10)*10;
   if(kcal<=0)return null;
   const protein_g=Math.round(2*weight_kg),fat_g=Math.round(kcal*0.25/9);
   return {energy_kj:kcal*4.184,protein_g,fat_g,carbs_g:Math.max(0,Math.round((kcal-protein_g*4-fat_g*9)/4))};

@@ -9,7 +9,7 @@ export function reanimatedMock() {
     __esModule: true,
     default: { View: RN.View, ScrollView: RN.ScrollView, Text: RN.Text, createAnimatedComponent: id },
     Easing: ease,
-    cancelAnimation: () => {}, interpolate: (_v: number, _i: number[], o: number[]) => o[o.length - 1],
+    cancelAnimation: () => {}, interpolate: (_v: number, _i: number[], o: number[]) => o[o.length - 1], interpolateColor: (_v: number, _i: number[], o: string[]) => o[o.length - 1],
     measure: () => null, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f, scrollTo: () => {},
     useAnimatedRef: () => React.useRef(null), useAnimatedStyle: (f: () => unknown) => f(),
     useFrameCallback: () => ({ setActive: () => {}, isActive: false, callbackId: 0 }),
