@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import { ActionSheetIOS } from 'react-native';
+import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { TrainingData } from '../src/features/workout/training-data';
@@ -11,11 +12,14 @@ import { memoryRepository } from './workout-repository';
 let mockRepository: ReturnType<typeof memoryRepository>;
 let mockParams: Record<string, string> = {};
 jest.mock('../src/auth/provider', () => ({ useAuth: () => ({ pending: 0, syncStatus: 'idle', demo: false, repository: mockRepository }) }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: () => true }, useIsFocused: () => true, useLocalSearchParams: () => mockParams }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: () => true }, useIsFocused: () => true, useLocalSearchParams: () => mockParams,
+  useNavigation: () => mockNavigation }));
 jest.mock('../src/features/shell/toast', () => ({ showToast: jest.fn(), ShellToast: () => null }));
 
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 const DAY = 86_400_000;
+// The root stack under this screen: the logger when it was opened from a workout, the tabs otherwise.
+const mockNavigation = { goBack: jest.fn(), getState: jest.fn(() => ({ index: 1, routes: [{ name: '(tabs)' }, { name: 'training/exercise' }] })) };
 
 /** Made-up sample: three squat days, 225 × 5, 235 × 5 and 245 × 3. */
 function sample() {
@@ -67,4 +71,20 @@ test('an exercise with no finished sets says so', async () => {
   mockParams = { name: 'Leg press' };
   await render(<ExerciseDetail />, { wrapper });
   expect(screen.getByText('No sets of Leg press yet')).toBeTruthy();
+});
+
+test('Back to workout goes back to the logger when it opened this screen, and opens it from anywhere else', async () => {
+  const store = sample();
+  const live = store.start();
+  store.addExercise(live.id, 'Squat', 2);
+  mockParams = { name: 'Squat' };
+  mockNavigation.getState.mockReturnValue({ index: 2, routes: [{ name: '(tabs)' }, { name: 'workout' }, { name: 'training/exercise' }] });
+  await render(<ExerciseDetail />, { wrapper });
+  await fireEvent.press(screen.getByRole('button', { name: 'Back to workout' }));
+  expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
+  expect(router.push).not.toHaveBeenCalled();
+  mockNavigation.getState.mockReturnValue({ index: 1, routes: [{ name: '(tabs)' }, { name: 'training/exercise' }] });
+  await fireEvent.press(screen.getByRole('button', { name: 'Back to workout' }));
+  expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
+  expect(router.push).toHaveBeenCalledWith('/workout');
 });

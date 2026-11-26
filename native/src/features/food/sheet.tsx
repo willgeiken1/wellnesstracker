@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { router, useNavigation } from 'expo-router';
+import { router, useNavigation, type NativeStackNavigationOptions } from 'expo-router';
+import { largeSheet, mediumSheet } from '../navigation/presentation';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState, Icon, type IconName, KitText, SheetHeader, SurfaceContext, Tappable, alpha, useKit } from '@/components/kit';
@@ -17,10 +18,10 @@ export function useLatest<T>(value: T): () => T {
 
 /* The frame every Food sheet shares, and the food rows its lists are made of (`.fd-frow`). */
 
-/** Native form sheet options: a large sheet fills the screen, a medium one opens at about 60% and can be pulled up. */
-export function sheetOptions(size: 'large' | 'medium') {
-  return { headerShown: false, presentation: 'formSheet', sheetGrabberVisible: true, sheetCornerRadius: 28,
-    sheetAllowedDetents: size === 'large' ? [1] : [0.68, 1], contentStyle: { flex: 1 } } as const;
+/** Native form sheet options: a large sheet stops just short of the top; Quick add and Copy a day are medium sheets at
+ * their own heights from the design, as their only detent. */
+export function sheetOptions(size: 'large' | 'quick-cal' | 'copy-day'): NativeStackNavigationOptions {
+  return { ...(size === 'large' ? largeSheet : mediumSheet(size)), contentStyle: { flex: 1 } };
 }
 /** Everything inside reads its colours as on a sheet, so cards and fields step up from the sheet in dark mode. */
 export function SheetSurface({ children }: { children: ReactNode }) {

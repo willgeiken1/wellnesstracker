@@ -1,5 +1,6 @@
 import { router, type Href, type NativeStackNavigationOptions } from 'expo-router';
 import type { TilePageId } from './types';
+import { largeSheet, mediumSheet, tileEditSheet } from '../navigation/presentation';
 
 /**
  * Where the grid sends a person: the tile tray, the customize sheet and a page section's sheet. They default to
@@ -22,9 +23,11 @@ let routes: TileRoutes = {
 export function configureTileRoutes(next: Partial<TileRoutes>) { routes = { ...routes, ...next }; }
 export const tileRoutes = (): TileRoutes => routes;
 
-/** Stack options for the three sheet routes (tray full height, the other two at half height, like the design). */
+/** Stack options for the three sheet routes (registered in app/_layout.tsx): the tray is a large sheet; Customize and a
+ * page section are medium sheets at the design's height (Home's Customize is taller). */
 export const tileSheetOptions: Record<'tray' | 'edit' | 'section', NativeStackNavigationOptions> = {
-  tray: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
-  edit: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [0.56, 1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
-  section: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [0.56, 1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
+  tray: largeSheet,
+  edit: tileEditSheet(),
+  section: mediumSheet('page-section'),
 };
+export { tileEditSheet };

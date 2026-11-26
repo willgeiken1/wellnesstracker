@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Button } from '@/components/button';
 import { Chip } from '@/components/chip';
@@ -29,7 +30,7 @@ export function RestTimerSheet({ entry }: { entry?: string }) {
   return store ? <RestBody store={store} entry={entry} /> : null;
 }
 function RestBody({ store, entry }: { store: WorkoutStore; entry?: string }) {
-  const k = useKit(), train = k.c.training;
+  const k = useKit(), train = k.c.training, insets = useSafeAreaInsets();
   const active = store.active(), rest = useRest(store, active?.id ?? '');
   const next = active ? store.nextSet(active.id) : undefined;
   const entryId = entry || store.timer()?.entryId || next?.entryId || '';
@@ -50,7 +51,9 @@ function RestBody({ store, entry }: { store: WorkoutStore; entry?: string }) {
   </Tappable>;
   const label = exLabel(name);
   const nextLine = on ? (next && row ? tr('trainingRestNext', { name: label }) : '') : name ? tr('trainingDefaultRestFor', { name: label }) : tr('trainingPickLength');
-  return <SurfaceContext.Provider value="sheet"><View style={{ flex: 1, backgroundColor: k.sheetBg, paddingHorizontal: 16 }}>
+  // The sheet sits at the design's height; on a shorter phone the rest of it scrolls, with the header pinned.
+  return <SurfaceContext.Provider value="sheet"><ScrollView style={{ flex: 1, backgroundColor: k.sheetBg }} alwaysBounceVertical={false} stickyHeaderIndices={[0]}
+    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom }}>
     <SheetHeader title={tr('trainingRestTimer')} left={tr('trainingClose')} />
     <View style={{ alignItems: 'center', paddingTop: 8 }}>
       <View accessible accessibilityRole="timer" accessibilityLabel={`${tr('trainingRestLeft')}: ${on ? clock(Math.ceil(rest!.left) * 1000) : clock(dflt * 1000)}`} style={{ width: SIZE, height: SIZE }}>
@@ -77,5 +80,5 @@ function RestBody({ store, entry }: { store: WorkoutStore; entry?: string }) {
       </View>
       <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ textAlign: 'center', marginTop: 18, marginHorizontal: 8 }}>{tr('trainingRestFoot')}</KitText>
     </View>
-  </View></SurfaceContext.Provider>;
+  </ScrollView></SurfaceContext.Provider>;
 }

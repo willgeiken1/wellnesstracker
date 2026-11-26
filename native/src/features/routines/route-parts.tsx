@@ -4,6 +4,7 @@ import { router, useNavigation, type NativeStackNavigationOptions } from 'expo-r
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { EmptyState, Icon, KitText, Sheet, SheetHeader, Tappable, alpha, font, useKit } from '@/components/kit';
 import { GRABBER_ROOM } from '@/components/sheet';
+import { largeSheet } from '../navigation/presentation';
 import { capitals } from '@/components/kit-style';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
@@ -13,8 +14,7 @@ import { nudge, pretty, parseAmt, smallSteps, stepsFor } from './model';
 /* The frame and the small parts the Routines sheets share (`.rt-sheet` and friends in the mockup). */
 
 /** Native form sheet options for the Routines sheets: all open large. */
-export const sheetOptions: NativeStackNavigationOptions = { headerShown: false, presentation: 'formSheet', sheetGrabberVisible: true, sheetCornerRadius: 28,
-  sheetAllowedDetents: [1], contentStyle: { flex: 1 } };
+export const sheetOptions: NativeStackNavigationOptions = { ...largeSheet, contentStyle: { flex: 1 } };
 
 /** Whether this screen was opened cold (a link or a widget), with nothing under it to go back to. */
 export function useCold() {

@@ -344,7 +344,7 @@ export function PrivacyPage({ crash, analytics, ai }: { crash?: ReactNode; analy
     <H>{st('settingsYourData')}</H>
     <List>
       <ListRow icon="shield" color="success" title={st('settingsPrivacyCenter')} sub={st('settingsPrivacyCenterSub')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'privacy-center' } })} />
-      <ListRow icon="trash" color="danger" title={st('settingsDeleteRange')} sub={st('settingsDeleteRangeSub')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'delete-range' } })} />
+      <ListRow icon="trash" color="danger" title={st('settingsDeleteRange')} sub={st('settingsDeleteRangeSub')} onPress={() => router.push('/settings/delete-range')} />
     </List>
   </SetPage>;
 }
@@ -492,7 +492,7 @@ export function DataPage({ backup, restore, exportCsv }: { backup?: () => void; 
     </List>
     <H>{st('settingsRemove')}</H>
     <List footer={st('settingsRemoveFoot')}>
-      <ListRow icon="cal" color="warning" title={st('settingsDeleteRange')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'delete-range' } })} />
+      <ListRow icon="cal" color="warning" title={st('settingsDeleteRange')} onPress={() => router.push('/settings/delete-range')} />
       <ListRow icon="trash" color="danger" title={st('settingsDeleteAccount')} danger onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'delete-account' } })} />
     </List>
   </SetPage>;
@@ -515,8 +515,8 @@ export function AboutPage() {
     </View>
     <Gap />
     <List>
-      <ListRow icon="gift" color="accent-2" title={st('settingsWhatsNew')} onPress={sub('whats-new')} />
-      <ListRow icon="chat" color="training" title={st('settingsSendFeedback')} onPress={sub('feedback')} />
+      <ListRow icon="gift" color="accent-2" title={st('settingsWhatsNew')} onPress={() => router.push('/settings/whats-new')} />
+      <ListRow icon="chat" color="training" title={st('settingsSendFeedback')} onPress={() => router.push('/settings/feedback')} />
     </List>
     <Gap />
     <List>
