@@ -19,19 +19,16 @@ const flat=(node:{props:{style?:unknown}})=>StyleSheet.flatten(node.props.style 
 beforeEach(()=>{jest.mocked(router.push).mockClear();jest.mocked(router.replace).mockClear();});
 
 describe('Welcome',()=>{
- test('says what the app is for under one title, with step 1 of 3',async()=>{
+ test('says what the app is for under one title, over the contour map, with the four strands and the legal line',async()=>{
   await wrap(<Welcome/>);
   expect(screen.getAllByRole('header')).toHaveLength(1);
-  expect(screen.getByRole('header')).toHaveTextContent(t('welcomeTitle'));
-  expect(screen.getByRole('progressbar',{name:'Step 1 of 3'})).toBeTruthy();
-  expect(screen.getAllByTestId('onboarding-progress-done')).toHaveLength(1);
-  expect(screen.getAllByTestId('onboarding-progress-todo')).toHaveLength(2);
+  expect(screen.getByRole('header')).toHaveTextContent('Insight');
+  expect(screen.getByText(t('welcomeLine'))).toBeTruthy();
   expect(screen.getByRole('image',{name:t('welcomeMapLabel')})).toBeTruthy();
-  for(const key of ['welcomeWorkouts','welcomeFood','welcomeHealth'] as const)expect(screen.getByText(t(key))).toBeTruthy();
-  // Apple Health and Oura connect in v1, so the screen offers them and only says Fitbit and WHOOP come later.
-  expect(screen.getByText(t('welcomeHealthBody'))).toBeTruthy();
-  expect(t('welcomeHealthBody')).toMatch(/Apple Health/);expect(t('welcomeHealthBody')).toMatch(/Oura/);
-  expect(screen.queryByText(/Connecting opens in a later update/)).toBeNull();
+  expect(screen.getByTestId('welcome-strands')).toHaveProp('accessibilityLabel','Training, food, sleep and routines');
+  for(const word of ['Training','Food','Sleep','Routines'])expect(screen.getByText(word)).toBeTruthy();
+  expect(screen.getByText(/By continuing you agree to the/)).toBeTruthy();
+  expect(screen.queryByText(/Plus|Subscribe/)).toBeNull();
  });
  test('one main button and three quieter ways in, each firing its own handler',async()=>{
   const auth=await wrap(<Welcome/>);

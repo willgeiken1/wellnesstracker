@@ -5,8 +5,13 @@ const safePlugins = new Set([
   'expo-build-properties', 'expo-dev-client', './plugins/withDevSchemeDebugOnly',
   'expo-camera', 'expo-font', 'expo-sqlite', 'expo-secure-store', 'expo-sharing', 'expo-status-bar',
 ]);
+const appIcons = require('./plugins/app-icons');
+/** The app icon picker (Settings, Appearance): Lit Peaks in the default palette is the primary, every other style,
+ * palette and look an alternate. Added to every variant. */
+const withAppIcons = config => ({ ...config, ios: { ...config.ios, icon: appIcons.PRIMARY_ART },
+  plugins: [...(config.plugins ?? []).filter(p => (Array.isArray(p) ? p[0] : p) !== 'expo-alternate-app-icons'), appIcons.plugin] });
 module.exports = (context) => {
-  const resolved = build(context);
+  const resolved = withAppIcons(build(context));
   // Design check only: a static web build (one HTML page) for side-by-side screenshots against the mockup.
   return process.env.FIDELITY_WEB ? { ...resolved, web: { ...resolved.web, output: 'single' } } : resolved;
 };
