@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { GRABBER_ROOM } from '@/components/sheet';
 import { tokens, type ThemeColors, type ThemeMode } from '@/design/tokens';
 import { colorMix, rgba } from './depth';
 import { TileIcon } from './tile-icon';
@@ -51,7 +52,7 @@ export function EmptyBlock({ icon, color, title, body, colors, style }: { icon?:
 export function Row({ children, style }: { children: ReactNode; style?: object }) { return <View style={[s.row, style]}>{children}</View>; }
 
 const s = StyleSheet.create({
-  sh: { flexDirection: 'row', alignItems: 'center', minHeight: 56, marginHorizontal: -16, marginBottom: 4, paddingVertical: 4, paddingHorizontal: 8 },
+  sh: { flexDirection: 'row', alignItems: 'center', minHeight: 56 + GRABBER_ROOM, marginHorizontal: -16, marginBottom: 4, paddingTop: 4 + GRABBER_ROOM, paddingBottom: 4, paddingHorizontal: 8 },
   side: { flex: 1, minWidth: 80, alignItems: 'flex-start' },
   shBtn: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: 'center' },
   shL: { fontFamily: tokens.font.body, fontSize: 17, letterSpacing: -0.17 },

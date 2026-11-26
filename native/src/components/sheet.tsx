@@ -14,6 +14,10 @@ export function SheetGrabber() {
   return <View accessible={false} importantForAccessibility="no" style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 2.5, marginTop: 5, backgroundColor: alpha(k.c.text, 0.22) }} />;
 }
 
+/** The room the design leaves above a sheet's header for its grabber (5 pt margin and the 5 pt handle). A native form
+ * sheet draws its grabber over the top of the content, so headers keep this room clear whether or not they draw it. */
+export const GRABBER_ROOM = 10;
+
 /**
  * The kit's `.sh` (`ui.sheetHead`): a 56 pt bar at the top of a sheet on the sheet's own colour, Cancel on the left,
  * the title in 700 17 pt in the middle and a bold action (Done, Save, Add) on the right, ghosted while disabled.
@@ -31,7 +35,7 @@ export function SheetHeader({ title, left, onLeft, right, onRight, rightDisabled
     style={{ minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: 'center', alignItems: strong ? 'flex-end' : 'flex-start' }}>
     <KitText weight={strong ? 700 : 500} size={17} tracking={-0.01} color={disabled ? 'ghost' : 'accent'}>{label}</KitText>
   </Tappable>;
-  return <View testID={testID} style={{ backgroundColor: k.sheetBg, marginHorizontal: -16, marginBottom: 4, zIndex: 5 }}>
+  return <View testID={testID} style={{ backgroundColor: k.sheetBg, marginHorizontal: -16, marginBottom: 4, zIndex: 5, paddingTop: grabber ? 0 : GRABBER_ROOM }}>
     {grabber ? <SheetGrabber /> : null}
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 4, paddingHorizontal: 8 }}>
       <View style={{ flex: 1, minWidth: 80, alignItems: 'flex-start' }}>{left === null ? null : side(left ?? t('kitCancel'), onLeft ?? close, false)}</View>

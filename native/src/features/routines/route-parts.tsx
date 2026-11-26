@@ -3,6 +3,7 @@ import { TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { router, useNavigation, type NativeStackNavigationOptions } from 'expo-router';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { EmptyState, Icon, KitText, Sheet, SheetHeader, Tappable, alpha, font, useKit } from '@/components/kit';
+import { GRABBER_ROOM } from '@/components/sheet';
 import { capitals } from '@/components/kit-style';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
@@ -62,7 +63,7 @@ export function SheetTitle({ title, onClose, back, onBack, size = 24, closeLabel
 }) {
   const k = useKit(), rt = useRt();
   return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: back ? 'flex-start' : 'center', gap: 12,
-    paddingTop: 14, paddingBottom: 8, backgroundColor: k.sheetBg }}>
+    paddingTop: 8 + GRABBER_ROOM, paddingBottom: 8, backgroundColor: k.sheetBg }}>
     <View style={{ gap: 2, flexShrink: 1 }}>
       {back ? <Tappable dim="text" accessibilityRole="button" accessibilityLabel={back} onPress={onBack ?? onClose}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 32 }}>

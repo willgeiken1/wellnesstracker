@@ -1,4 +1,5 @@
 import { ScrollView, Switch, View } from 'react-native';
+import { GRABBER_ROOM } from '@/components/sheet';
 import { Tappable } from '@/components/tappable';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/design/theme-provider';
@@ -19,7 +20,7 @@ export function TabBarSheet({ current, onDone, onOpen }: { current: PageKey | nu
   const [prefs, save] = useShellPrefs();
   const body = { fontFamily: tokens.font.body, color: colors['text-muted'] };
   return <View style={{ flexShrink: 1, backgroundColor: shell.sheet }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 4, paddingHorizontal: 8 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 + GRABBER_ROOM, paddingTop: 4 + GRABBER_ROOM, paddingBottom: 4, paddingHorizontal: 8 }}>
       <View style={{ flex: 1, alignItems: 'flex-start' }}>
         <Tappable accessibilityRole="button" accessibilityLabel={t('shellDone')} onPress={onDone}
           style={{ minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: 'center' }}>
