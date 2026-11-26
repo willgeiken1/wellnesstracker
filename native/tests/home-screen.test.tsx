@@ -35,7 +35,7 @@ jest.mock('react-native-reanimated', () => {
     useAnimatedRef: () => React.useRef(null), useAnimatedStyle: (f: () => unknown) => f(),
     useFrameCallback: () => ({ setActive: () => {}, isActive: false, callbackId: 0 }),
     useScrollOffset: () => ({ value: 0 }), useSharedValue: (v: unknown) => React.useRef({ value: v }).current,
-    withDelay: (_d: number, v: unknown) => v, withRepeat: (v: unknown) => v, withSequence: (...v: unknown[]) => v[v.length - 1], withTiming: id,
+    withDelay: (_d: number, v: unknown) => v, withRepeat: (v: unknown) => v, withSequence: (...v: unknown[]) => v[v.length - 1], withTiming: id, withSpring: id, useAnimatedProps: (f: () => unknown) => f(),
   };
 });
 // Gestures are exercised on a device; here the detectors just draw their child.

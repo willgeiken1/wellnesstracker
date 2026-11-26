@@ -6,6 +6,7 @@ import { alpha, capitals } from '@/components/kit-style';
 import { KitText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
 import type { HeroPillar, HeroView } from './model';
+import { FadeUp, TEXT_MOTION, useCountTo } from './text-motion';
 
 /**
  * Numbers only (the map turned off, or a phone that can't draw it): the day score, then the three pillars side by side, each
@@ -26,6 +27,8 @@ function Bar({ p, color, bg, reduceMotion }: { p: HeroPillar; color: string; bg:
 }
 
 export function PlainHero({ view, colors, reduceMotion }: { view: HeroView; colors: Record<string, string>; reduceMotion: boolean }) {
+  // The score counts up from 0 when the numbers first show and to each new day's value after; a changed value fades up.
+  const pct = useCountTo(view.pct, !reduceMotion, reduceMotion ? view.pct : 0);
   return <View style={{ height: PLAIN_H, marginTop: 2, marginBottom: 6, alignItems: 'center', paddingTop: 16 }} accessible accessibilityRole="summary"
     accessibilityLabel={view.label} testID="home-hero-plain">
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
@@ -35,13 +38,15 @@ export function PlainHero({ view, colors, reduceMotion }: { view: HeroView; colo
       </Svg>
       <KitText weight={600} size={13} lineHeight={1} color="text-muted">{view.caption}</KitText>
     </View>
-    {view.empty ? <View style={{ height: 68 }} /> : <KitText weight={700} size={60} lineHeight={1} tracking={-0.045} numeric style={{ marginTop: 8 }}>{String(view.pct)}</KitText>}
+    {view.empty ? <View style={{ height: 68 }} /> : <KitText weight={700} size={60} lineHeight={1} tracking={-0.045} numeric style={{ marginTop: 8 }}>{String(pct)}</KitText>}
     <View style={{ alignSelf: 'stretch', flexDirection: 'row', gap: 14, marginTop: 26 }}>
       {view.pillars.map((p, i) => <View key={p.key} style={{ flex: 1, minWidth: 0 }}>
         <KitText weight={700} size={11} lineHeight={1} tracking={0.13} color={KEYS[i]} style={capitals}>{p.label}</KitText>
-        <KitText weight={700} size={19} lineHeight={1} tracking={-0.02} numeric numberOfLines={1} style={{ marginTop: 8 }}>
-          {p.arc.map(([s, kind], j) => kind === 'u' ? <KitText key={j} weight={700} size={11} lineHeight={1} color="text-muted">{` ${s}`}</KitText> : s)}
-        </KitText>
+        <FadeUp k={p.arc.map(a => a[0]).join(' ')} animate={!reduceMotion} ms={TEXT_MOTION.value}>
+          <KitText weight={700} size={19} lineHeight={1} tracking={-0.02} numeric numberOfLines={1} style={{ marginTop: 8 }}>
+            {p.arc.map(([s, kind], j) => kind === 'u' ? <KitText key={j} weight={700} size={11} lineHeight={1} color="text-muted">{` ${s}`}</KitText> : s)}
+          </KitText>
+        </FadeUp>
         <KitText weight={500} size={11.5} lineHeight={1} color="text-muted" numberOfLines={1} style={{ marginTop: 5 }}>{p.rest ? t('homeHeroRestDay') : `${t('homeHeroOf')}${p.goal}`}</KitText>
         <Bar p={p} color={colors[KEYS[i]]} bg={colors.bg} reduceMotion={reduceMotion} />
       </View>)}

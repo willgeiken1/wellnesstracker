@@ -1,8 +1,8 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Tappable } from '@/components/tappable';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { KitText } from '@/components/themed-text';
 import type { HeroWeekDay } from './model';
@@ -26,6 +26,40 @@ export function dayGeometry(i: number, RW: number) {
   return { cx, beams: [0, 1, 2].map(k => WK.pad + (i + 0.5 + WOFF[k]) * dw) };
 }
 
+/** The week's motion (s9.js): the glow springs onto a day in 500 ms (overshooting a touch); a day's beams and gauges light up
+ * from 42 and 62 percent in 340 ms; its name grows to 110 percent on a springy curve in 420 ms, with a quick 120 percent tick
+ * (220 ms) as it is chosen. Under Reduce Motion each of these is instant. */
+export const WEEK_MOTION = {
+  settle: { duration: 500, easing: Easing.bezier(0.34, 1.3, 0.5, 1) },
+  light: { duration: 340, easing: Easing.linear }, beamsOff: 0.42, gaugesOff: 0.62,
+  grow: { duration: 420, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }, on: 1.1,
+  tick: { up: 1.2, duration: 110, easing: Easing.bezier(0.3, 0.7, 0.3, 1) },
+} as const;
+
+const AnimatedG = Animated.createAnimatedComponent(G);
+/** One day's beams or gauges, lighting up or dimming as the day is chosen or left. */
+function DayLayer({ opacity, still, children }: { opacity: number; still: boolean; children: ReactNode }) {
+  const v = useSharedValue(opacity);
+  useEffect(() => { v.value = still ? opacity : withTiming(opacity, WEEK_MOTION.light); }, [opacity, still, v]);
+  const props = useAnimatedProps(() => ({ opacity: v.value }));
+  return <AnimatedG animatedProps={props}>{children}</AnimatedG>;
+}
+/** A day's name: it grows when its day is chosen, with a quick tick up as it lands, and settles back when another is. */
+function DayLabel({ on, still, children }: { on: boolean; still: boolean; children: ReactNode }) {
+  const v = useSharedValue(on ? WEEK_MOTION.on : 1);
+  const was = useRef(on);
+  useEffect(() => {
+    const chosen = on && !was.current;
+    was.current = on;
+    if (still) { v.value = on ? WEEK_MOTION.on : 1; return; }
+    v.value = chosen
+      ? withSequence(withTiming(WEEK_MOTION.tick.up, WEEK_MOTION.tick), withTiming(WEEK_MOTION.on, WEEK_MOTION.tick))
+      : withTiming(on ? WEEK_MOTION.on : 1, WEEK_MOTION.grow);
+  }, [on, still, v]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: v.value }] }));
+  return <Animated.View style={[{ alignItems: 'center', transformOrigin: 'bottom' }, style]}>{children}</Animated.View>;
+}
+
 export interface WeekProps {
   width: number; week: HeroWeekDay[]; sel: number; colors: Record<string, string>; sky: SkyTokens; dark: boolean; glow: number;
   reduceMotion: boolean; build: boolean; onSelect: (i: number) => void;
@@ -36,7 +70,7 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
   const cx0 = RW / 2, H = WK.H;
   // The selection glow follows the finger while sliding and springs onto the chosen day.
   const selX = useSharedValue(sel), dragging = useSharedValue(0), shown = useSharedValue(build && !reduceMotion ? 0 : 1);
-  useEffect(() => { if (!dragging.value) selX.value = reduceMotion ? sel : withTiming(sel, { duration: 440, easing: Easing.bezier(0.3, 0.75, 0.2, 1) }); }, [sel, reduceMotion]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!dragging.value) selX.value = reduceMotion ? sel : withTiming(sel, WEEK_MOTION.settle); }, [sel, reduceMotion]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (build && !reduceMotion) shown.value = withDelay(380, withTiming(1, { duration: 640, easing: Easing.out(Easing.cubic) })); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const selStyle = useAnimatedStyle(() => {
     const dw = RW / 7, x = (selX.value + 0.5) * dw, dx = x - RW / 2;
@@ -45,7 +79,7 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
   const fade = useAnimatedStyle(() => ({ opacity: shown.value, transform: [{ translateY: (1 - shown.value) * 10 }] }));
 
   const pick = (x: number) => { const i = dayAt(x, RW); if (i !== sel) onSelect(i); };
-  const settle = () => { dragging.value = 0; selX.value = reduceMotion ? sel : withTiming(sel, { duration: 500, easing: Easing.bezier(0.34, 1.3, 0.5, 1) }); };
+  const settle = () => { dragging.value = 0; selX.value = reduceMotion ? sel : withTiming(sel, WEEK_MOTION.settle); };
   const pan = usePanGesture({
     activeOffsetX: [-6, 6], failOffsetY: [-12, 12],
     onActivate: e => { 'worklet'; dragging.value = 1; runOnJS(pick)(e.x); },
@@ -104,8 +138,8 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
       <View style={{ width: RW, height: H }}>
         <Svg width={RW} height={H} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }} pointerEvents="none">
           {defs}{globe}{grat}{limbArc}
-          {days.map(({ on, beams }, i) => <G key={`b${i}`} opacity={on ? 1 : 0.42}>{beams}</G>)}
-          {days.map(({ on, gauges }, i) => <G key={`g${i}`} opacity={on ? 1 : 0.62}>{gauges}</G>)}
+          {days.map(({ on, beams }, i) => <DayLayer key={`b${i}`} opacity={on ? 1 : WEEK_MOTION.beamsOff} still={reduceMotion}>{beams}</DayLayer>)}
+          {days.map(({ on, gauges }, i) => <DayLayer key={`g${i}`} opacity={on ? 1 : WEEK_MOTION.gaugesOff} still={reduceMotion}>{gauges}</DayLayer>)}
           {days.map(({ on, g, wd }, i) => wd.empty ? null : <SvgText key={`n${i}`} x={g.cx} y={weekArcY(g.cx, RW) + 15} textAnchor="middle"
             fontFamily="PlusJakartaSans_700Bold" fontSize={11} letterSpacing={-0.11} fill={on ? colors.text : colors['text-muted']}>{String(wd.pct)}</SvgText>)}
         </Svg>
@@ -120,10 +154,10 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
           return <Tappable dim="none" key={i} onPress={() => { if (i !== sel) onSelect(i); }} accessibilityRole="button" accessibilityLabel={wd.label}
             accessibilityState={{ selected: on }} testID={`home-hero-day-${i}`}
             style={{ position: 'absolute', top: 0, bottom: 0, left: i * RW / 7, width: RW / 7, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: pb, borderRadius: 12 }}>
-            <View style={{ alignItems: 'center', transform: [{ scale: on ? 1.1 : 1 }], transformOrigin: 'bottom' }}>
+            <DayLabel on={on} still={reduceMotion}>
               <KitText weight={600} size={12} lineHeight={1} color={wd.today ? 'accent' : on ? 'text' : 'text-muted'}>{wd.short}</KitText>
               {wd.today ? <View style={{ position: 'absolute', top: '100%', marginTop: 5, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accent }} /> : null}
-            </View>
+            </DayLabel>
           </Tappable>;
         })}
       </View>

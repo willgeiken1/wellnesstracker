@@ -15,6 +15,7 @@ import { PlainHero } from './plain';
 import { useMapPrefs } from './prefs';
 import { RidgeHero } from './ridge';
 import { skyTokens } from './tones';
+import { FadeUp } from './text-motion';
 import { HeroWeek } from './week';
 
 export { dateLine, greeting } from './model';
@@ -100,7 +101,9 @@ export function HomeHero({ scrollY }: { scrollY?: SharedValue<number> } = {}) {
     {prefs.week ? <>
       <Animated.View style={[{ marginTop: 28, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }, secStyle]}>
         <KitText weight={700} size={16} lineHeight={1.1} tracking={-0.02} accessibilityRole="header">{t('homeHeroThisWeek')}</KitText>
-        <KitText weight={500} size={12.5} lineHeight={1.2} color="text-muted" style={{ textAlign: 'right', flexShrink: 1 }} testID="home-hero-week-note">{view.weekNote}</KitText>
+        <FadeUp k={view.weekNote} animate={touched && !reduceMotion} style={{ flexShrink: 1 }}>
+          <KitText weight={500} size={12.5} lineHeight={1.2} color="text-muted" style={{ textAlign: 'right' }} testID="home-hero-week-note">{view.weekNote}</KitText>
+        </FadeUp>
       </Animated.View>
       <HeroWeek width={W + 32} week={view.week} sel={sel} colors={c} sky={sky} dark={dark} glow={prefs.glow} reduceMotion={reduceMotion} build={build} onSelect={select} />
     </> : null}
