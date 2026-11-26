@@ -36,26 +36,27 @@ export const HomeTileView = memo(function HomeTileView(p: TileRenderProps) {
 const render = (p: TileRenderProps) => <HomeTileView {...p} />;
 
 type Open = (options: TileOptionValues) => void;
+// What a tap opens, as in the design: a tab, a pushed screen (a trend, Body, Sleep, Nutrition, the weekly report) or a sheet.
 const OPEN: Record<string, { open: Open; label?: string }> = {
   score: { open: () => go('/score') },
-  week: { open: () => go('/insights') },
+  week: { open: () => go('/progress/weekly') },
   next: { open: () => go(homeTileState()?.data.next?.mode === 'workout' ? '/workout' : '/food/log'), label: 'Open what is next' },
   nextup: { open: () => go('/routines') },
   volume: { open: () => go('/workouts') },
-  exercise: { open: () => go('/insights') },
-  active: { open: () => go('/insights') },
-  steps: { open: () => go('/insights') },
+  exercise: { open: () => go('/progress/trend?metric=training') },
+  active: { open: () => go('/progress/trend?metric=kcal') },
+  steps: { open: () => go('/progress/trend?metric=steps') },
   calories: { open: () => go('/food') },
-  protein: { open: () => go('/food') },
+  protein: { open: () => go('/food/nutrition') },
   water: { open: () => showToast(t('homeWaterFromHealth'), { color: 'water' }), label: t('homeWaterFromHealth') },
   logMeal: { open: () => go('/food/log') },
-  weight: { open: () => go('/progress') },
-  bodyFat: { open: () => go('/progress') },
-  sleep: { open: () => go('/insights') },
-  sleepScore: { open: () => go('/insights') },
+  weight: { open: () => go('/progress/body') },
+  bodyFat: { open: () => go('/progress/body') },
+  sleep: { open: () => go('/progress/sleep') },
+  sleepScore: { open: () => go('/progress/sleep') },
   mindful: { open: () => showToast(t('homeMindfulFromHealth'), { color: 'sleep' }), label: t('homeMindfulFromHealth') },
-  hrv: { open: () => go('/insights') },
-  rhr: { open: () => go('/insights') },
+  hrv: { open: () => go('/progress/trend?metric=hrv') },
+  rhr: { open: () => go('/progress/trend?metric=rhr') },
 };
 
 /** Puts every Home tile's renderer and tap in the tile catalogue. Safe to call more than once. */
