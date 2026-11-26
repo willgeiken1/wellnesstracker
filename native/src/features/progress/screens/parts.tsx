@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from 'react';
 import { ScrollView, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card, Icon, NavBar, StackGapContext, SurfaceContext, font, mix, useKit, type IconName } from '@/components/kit';
+import { Card, Icon, NavBar, StackGapContext, SurfaceContext, PRETTY, prettyWeb, font, mix, useKit, type IconName } from '@/components/kit';
 
 /* The pieces the Progress screens and sheets share (the mockup's .pg-* classes). */
 
@@ -22,11 +22,11 @@ export function Page({ back, title, right, children, testID, scrollRef }: { back
 
 /** Grey small text (.pg-cap); `B` inside it is bold. */
 export function Cap({ children, style, size = 12.5 }: { children: ReactNode; style?: StyleProp<TextStyle>; size?: number }) {
-  const k = useKit(); return <Text style={[font(600, size, 1.35), { color: k.c['text-muted'] }, style]}>{children}</Text>;
+  const k = useKit(); return <Text {...PRETTY} style={[font(600, size, 1.35), prettyWeb, { color: k.c['text-muted'] }, style]}>{children}</Text>;
 }
 /** Body text (.pg-txt). */
 export function Txt({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
-  const k = useKit(); return <Text style={[font(500, 14, 1.45), { color: k.c['text-muted'] }, style]}>{children}</Text>;
+  const k = useKit(); return <Text {...PRETTY} style={[font(500, 14, 1.45), prettyWeb, { color: k.c['text-muted'] }, style]}>{children}</Text>;
 }
 /** Bold text inside Cap or Txt. */
 export const Bold = ({ children }: { children: ReactNode }) => { const k = useKit(); return <Text style={[font(700, 14), { color: k.c.text }]}>{children}</Text>; };

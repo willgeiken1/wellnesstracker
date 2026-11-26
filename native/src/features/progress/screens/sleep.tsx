@@ -96,7 +96,7 @@ export function SleepScreen() {
               <View style={{ position: 'absolute', top: 1, bottom: 1, left: pos(x.bed), width: `${(x.wake - x.bed) / (A1 - A0) * 100}%`, borderRadius: 6, backgroundColor: on ? k.c.sleep : mix(k.c.sleep, k.c['surface-2'], 0.5) }} />
             </> : null}
           </View>
-          <Text style={[font(700, 12.5, undefined, -0.02), { width: 52, textAlign: 'right', fontVariant: ['tabular-nums'], color: on ? k.c.text : k.c['text-muted'] }]}>{x ? hm(x.h) : ''}</Text>
+          <Text style={[font(700, 12.5, undefined, -0.02), { width: 52, textAlign: 'right', color: on ? k.c.text : k.c['text-muted'] }]}>{x ? hm(x.h) : ''}</Text>
         </Tappable>; })}
         <View style={{ flexDirection: 'row', gap: 8, minHeight: 18 }} importantForAccessibility="no-hide-descendants"><View style={{ width: 34 }} />
           <View style={{ flex: 1 }}>{[-120, 0, 120, 240, 360, 480].map(m => <Text key={m} style={[font(600, 11), { position: 'absolute', top: 0, left: pos(m), transform: [{ translateX: -10 }], color: k.c['text-muted'] }]}>{m === 0 ? '12a' : m < 0 ? `${12 + m / 60}p` : `${m / 60}a`}</Text>)}</View><View style={{ width: 52 }} /></View>

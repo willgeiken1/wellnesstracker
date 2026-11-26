@@ -35,7 +35,7 @@ export function Sub({ children, wrap, style, color, size = 12.5 }: { children: R
   return <Text numberOfLines={wrap ? undefined : 1} style={[font(500, size, 1.35), { color: color ?? k.c['text-muted'] }, style]}>{children}</Text>;
 }
 /** Bold text inside a grey line. */
-export const B = ({ children }: { children: ReactNode }) => { const k = useKit(); return <Text style={[font(600, 12.5), tab, { color: k.c.text }]}>{children}</Text>; };
+export const B = ({ children }: { children: ReactNode }) => { const k = useKit(); return <Text style={[font(600, 12.5), { color: k.c.text }]}>{children}</Text>; };
 /** A title line (.prt-t). */
 export function T({ children, style, size = 14, wrap }: { children: ReactNode; style?: StyleProp<TextStyle>; size?: number; wrap?: boolean }) {
   const k = useKit();
