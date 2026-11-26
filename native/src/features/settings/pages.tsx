@@ -1,11 +1,11 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useContext, useRef, useState, type ReactNode } from 'react';
 import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Badge, Chip, Eyebrow, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
-import { useAuth } from '@/auth/provider';
+import { AuthContext, useAuth } from '@/auth/provider';
 import { FLOZ } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { readGoalsData, saveFoodTarget, saveGoalWeight, saveWaterGoal, type GoalsData } from './goals-data';
@@ -125,9 +125,10 @@ function Conn({ icon, color, name, meta, badge, body, children }: { icon: IconNa
 const READS: [string, string][] = [['Weight and body fat', 'accent-2'], ['Steps', 'recovery'], ['Active energy', 'food'], ['Sleep', 'sleep'], ['Heart rate and HRV', 'danger'], ['Workouts', 'training'], ['Water', 'water']];
 export function ConnectionsPage() {
   const k = useKit();
-  const who = useWho();
+  // Settings also opens with no account provider around it; Apple Health and Oura are then simply not offered.
+  const repository = useContext(AuthContext)?.repository ?? null;
   const [p, set] = useSettingsPrefs();
-  const apple = useAppleHealth(who.auth.repository), ring = useOura(who.auth.repository);
+  const apple = useAppleHealth(repository), ring = useOura(repository);
   const appleOn = apple.access === 'asked', ou = ring.state === 'on' || ring.state === 'expired', ouraOffered = ring.state !== 'unavailable';
   return <SetPage back={st('settings')} title={st('settingsConnectionsTitle')} testID="settings-connections">
     <H first>Apple Health</H>
