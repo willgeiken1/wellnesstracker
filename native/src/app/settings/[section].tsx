@@ -11,6 +11,8 @@ import { DeleteAccountPage, DeleteRangePage, FeedbackPage, PrivacyCenterPage, Wh
 import { SetPage } from '@/features/settings/ui';
 import { useDataActions } from '@/features/settings/data-actions';
 import { t } from '@/i18n/en';
+import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
+import { FoodPrivacyScreen } from '@/features/food/ai/privacy';
 
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
@@ -39,7 +41,8 @@ export default function SettingsSection() {
     case 'connections': case 'health': return <ConnectionsPage />;
     case 'account': return <AccountPage />;
     case 'reminders': case 'notifications': return <RemindersPage />;
-    case 'privacy': return <PrivacyPage crash={<DiagnosticsList />} />;
+    // AI meal estimates are off for launch; their privacy controls only show once they are on.
+    case 'privacy': return AI_FEATURES_ENABLED ? <FoodPrivacyScreen /> : <PrivacyPage crash={<DiagnosticsList />} />;
     case 'units': return <UnitsPage />;
     case 'workout': return <WorkoutPage />;
     case 'data': return <Data />;
