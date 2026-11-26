@@ -1,4 +1,5 @@
 import { router, type NativeStackNavigationOptions } from 'expo-router';
+import { largeSheet, mediumSheet } from '../navigation/presentation';
 
 /** Every Training route in one place. The logger and its summary live in the workout modal; workout detail, exercise
  * detail and the plan push as cards at the app root, and the picker, rest timer and cardio log open as sheets there,
@@ -25,8 +26,8 @@ export const trainingNav = {
   cardio: () => router.push(trainingRoutes.cardio),
 };
 
-/** Training's form sheets: the picker opens tall, the rest timer and cardio log at their natural height. */
+/** Training's form sheets: the picker and cardio log open large, the rest timer at the design's medium height. */
 export const trainingSheetOptions: Record<'large' | 'medium', NativeStackNavigationOptions> = {
-  large: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
-  medium: { presentation: 'formSheet', headerShown: false, sheetAllowedDetents: [0.86, 1], sheetGrabberVisible: true, sheetCornerRadius: 28 },
+  large: largeSheet,
+  medium: mediumSheet('rest-timer'),
 };

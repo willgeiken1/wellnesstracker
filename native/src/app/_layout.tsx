@@ -14,8 +14,7 @@ import { PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans/70
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { configureTileToast } from '@/features/tiles/store';
-import { tileSheetOptions } from '@/features/tiles/nav';
-import { trainingSheetOptions } from '@/features/workout/nav';
+import { ROOT_ROUTES, routeOptions } from '@/features/navigation/presentation';
 // Every page's tiles register at startup, so each page and Home's tray can draw any of them on first open.
 import '@/features/food/tiles';
 import '@/features/progress/tiles';
@@ -37,6 +36,8 @@ setAndroidCopy(Platform.OS === 'android');
 // The tile grid's removes and resets use the shell's toast, with Undo.
 configureTileToast((message, action) => showToast(message, { color: 'accent', action }));
 registerHomeTiles();
+/** Names VoiceOver reads for screens whose own bar is hidden. */
+const TITLES: Record<string, () => { title: string }> = { 'food/log': () => ({ title: t('foodLog') }), score: () => ({ title: t('scoreTitle') }) };
 export function NavigationShell({ access = false, signedIn = false }: {access?: boolean;signedIn?:boolean}) {
   const { colors, mode, reduceMotion, motion } = useTheme();
   const base = mode === 'dark' ? DarkTheme : DefaultTheme;
@@ -52,24 +53,13 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
       </Stack.Protected>
       <Stack.Protected guard={access}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="dev/sample-data" options={{ headerShown: false }} />
       <Stack.Screen name="dev/logger-fixture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-      <Stack.Screen name="workout" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-      {/* Training's detail screens draw their own nav bar and push as cards; its sheets open over the tab or a workout. */}
-      <Stack.Screen name="training/detail" options={{ headerShown: false }} />
-      <Stack.Screen name="training/exercise" options={{ headerShown: false }} />
-      <Stack.Screen name="training/plan" options={{ headerShown: false }} />
-      <Stack.Screen name="training/picker" options={trainingSheetOptions.large} />
-      <Stack.Screen name="training/rest" options={trainingSheetOptions.medium} />
-      <Stack.Screen name="training/cardio" options={trainingSheetOptions.large} />
-      <Stack.Screen name="food/log" options={{ title: t('foodLog') }} />
-      <Stack.Screen name="score" options={{ title: t('scoreTitle'), headerTitle: '', headerShadowVisible: false, headerStyle: { backgroundColor: colors.bg } }} />
+      {/* Every screen and sheet that opens over the tabs, set before it opens: the design's pushes slide in from the right
+          (the workout logger too) and its sheets rise with a grabber, large ones just short of the top, medium ones at
+          their own height. Training's and Food's sheets sit here so they open the same way over a tab or a workout. */}
+      {Object.keys(ROOT_ROUTES).map(name => <Stack.Screen key={name} name={name} options={routeOptions(name, TITLES[name]?.())} />)}
       <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="tab-bar" options={{ headerShown: false, presentation: 'formSheet', sheetAllowedDetents: 'fitToContents', sheetGrabberVisible: true, sheetCornerRadius: 24 }} />
-      <Stack.Screen name="tiles/tray" options={tileSheetOptions.tray} />
-      <Stack.Screen name="tiles/edit" options={tileSheetOptions.edit} />
-      <Stack.Screen name="tiles/section" options={tileSheetOptions.section} />
       </Stack.Protected>
       <Stack.Screen name="import" options={{ title: t('importTitle') }} />
       <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" options={{ headerShown: false }} /></Stack.Protected>

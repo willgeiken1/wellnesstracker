@@ -8,7 +8,7 @@ export default function FoodSheetRoute() {
   const { repository } = useAuth();
   const params = useLocalSearchParams<{ meal?: string; name?: string; mine?: string }>();
   return <SheetSurface>
-    <Stack.Screen options={sheetOptions('medium')} />
+    <Stack.Screen options={sheetOptions('quick-cal')} />
     {repository ? <QuickSheet key={repository.owner} repo={repository} meal={params.meal} name={params.name} mine={params.mine === '1'} /> : <NoFood />}
   </SheetSurface>;
 }
