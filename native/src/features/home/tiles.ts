@@ -11,8 +11,8 @@ import type { LayoutEntry } from '@/features/tiles/types';
  */
 export type { TileStorage };
 export const HOME_TILES_KEY = tileLayoutKey('home');
-/** Tiles fed by Apple Health. They start off Home and are added when the person connects it. */
-export const HEALTH_TILES: readonly string[] = ['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful'];
+/** Tiles fed by Apple Health. They start off Home and are added when the person connects it. Water is logged in the app. */
+export const HEALTH_TILES: readonly string[] = ['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful'];
 /** The health tiles an Oura ring can fill. On Android, where Apple Health does not exist, these are the only ones. */
 export const RING_TILES: readonly string[] = ['steps', 'sleep'];
 

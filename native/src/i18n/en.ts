@@ -1004,7 +1004,6 @@ export const en = {
   homeFoodRemoved: 'Removed from {meal}',
   homeFoodNotSaved: 'That food could not be added. Try again.',
   homeUndo: 'Undo',
-  homeWaterFromHealth: 'Water comes from your health app for now',
   homeMindfulFromHealth: 'Mindful minutes come from your health app',
   // P3 Training
   trainingTitle: 'Training', trainingLogCardio: 'Log cardio', trainingStartEmpty: 'Start empty workout',
@@ -1625,6 +1624,8 @@ export const en = {
   // LA live activity
   trainingRestFootLive: 'The timer keeps running on the Lock Screen and in the Dynamic Island, with a gentle buzz at zero.',
   // LA live activity end
+  // hw Home water
+  homeLogWater: 'Log water', homeWaterHint: '{v} of {goal} today',
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */

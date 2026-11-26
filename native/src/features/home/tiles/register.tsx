@@ -48,7 +48,7 @@ const OPEN: Record<string, { open: Open; label?: string }> = {
   steps: { open: () => go('/progress/trend?metric=steps') },
   calories: { open: () => go('/food') },
   protein: { open: () => go('/food/nutrition') },
-  water: { open: () => showToast(t('homeWaterFromHealth'), { color: 'water' }), label: t('homeWaterFromHealth') },
+  water: { open: () => go('/food/water'), label: t('homeLogWater') },
   logMeal: { open: () => go('/food/log') },
   weight: { open: () => go('/progress/body') },
   bodyFat: { open: () => go('/progress/body') },

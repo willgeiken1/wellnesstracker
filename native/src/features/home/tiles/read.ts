@@ -3,12 +3,13 @@ import { exerciseFor } from '@/core/workout/library';
 import type { WorkoutStore } from '@/data/workout/store';
 import { dailyWeights } from '@/features/body/model';
 import { attributedDay, foodTargets, meals as mealList, recentFoods, totals } from '@/features/food/model';
+import { drinksOn, litresOn, readWater } from '@/features/food/water';
 import type { HealthDays } from '@/features/health/days';
 import { PlanStore } from '@/features/plans/store';
 import { readScore } from '@/features/score/read';
 import { entryVolumeKg } from '@/features/workout/volume';
 import { pluralize } from '@/i18n/en';
-import { DAYS, type ActiveWorkoutIn, type FoodDayIn, type HomeInput, type ScoreDayIn } from './data';
+import { DAYS, type ActiveWorkoutIn, type FoodDayIn, type HomeInput, type ScoreDayIn, type WaterIn } from './data';
 
 const KJ = 4.184;
 const num = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -105,6 +106,22 @@ function readScores(store: WorkoutStore, days: string[], now: Date, health: Heal
   });
 }
 
+/**
+ * Water from the app's own water model, the one the Food tab's tile and the water sheet read. The last day is the Food
+ * tab's own day, which runs until 4 a.m., so a drink logged there shows here too.
+ */
+export function readWaterIn(repo: WorkoutStore['repo'], days: string[], now: Date): WaterIn {
+  const s = readWater(repo), today = attributedDay(now);
+  // Before 4 a.m. today's column holds yesterday's drinks, so yesterday's own column leaves them out rather than count them twice.
+  const end = days.length - 1;
+  const litres = days.map((day, i) => i === end ? litresOn(s, today) : day === today && today !== days[end] ? 0 : litresOn(s, day));
+  return {
+    unit: s.unit, goal: s.goal, litres,
+    drinks: drinksOn(s, today).map(d => ({ at: new Date(d.at), oz: d.oz })),
+    containers: s.containers.map(c => ({ id: c.id, name: c.name, oz: c.oz, icon: c.icon, quick: c.quick })),
+  };
+}
+
 /** Everything Home's tiles read from the app's own stores (food, workouts, weigh-ins, plans), for the window ending today. */
 export function readAppData(store: WorkoutStore, now: Date, health: HealthDays | null) {
   const days = windowDays(now);
@@ -116,7 +133,7 @@ export function readAppData(store: WorkoutStore, now: Date, health: HealthDays |
     kcal: (num(f.energy_kj) ?? 0) / KJ, protein: num(f.protein_g) ?? 0,
   })).filter(f => f.name);
   return {
-    days, food, nextMeal, recentFoods: recent, weighIns,
+    days, food, nextMeal, recentFoods: recent, weighIns, water: readWaterIn(store.repo, days, now),
     volumeKg: training.volumeKg, volumeByGroupKg: training.byGroup, volumeLastWeekKg: training.lastWeek, workoutsThisWeek: training.workouts,
     active: readActive(store), upNext: readUpNext(store), score: readScores(store, days, now, health),
     weightUnit: store.unit(),

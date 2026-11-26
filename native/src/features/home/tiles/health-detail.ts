@@ -68,16 +68,15 @@ export async function readHealthDetail(source: HealthSource | null, days: readon
   const today = days[days.length - 1], night = nightOf(today), cap = new Date(Math.min(night.to.getTime(), now.getTime()));
   const settle = async <T>(read: () => Promise<T>): Promise<T | null> => { try { return await read(); } catch { return null; } };
   const since = dayStart(days[0]);
-  const [stepsHourly, activeHourly, exerciseHourly, waterHourly, spans, beds, mindful, bodyFat] = await Promise.all([
+  const [stepsHourly, activeHourly, exerciseHourly, spans, beds, mindful, bodyFat] = await Promise.all([
     hours((f, t) => source.steps(f, t), today, now),
     hours((f, t) => source.activeEnergy(f, t), today, now),
     hours((f, t) => source.exerciseMinutes(f, t), today, now),
-    hours(async (f, t) => source.water(f, t), today, now),
     settle(() => source.sleep(night.from, cap)),
     settle(() => bedtimes(source, days, now)),
     settle(async () => (await source.mindful(dayStart(today), new Date(Math.min(dayEnd(today).getTime(), now.getTime()))))
       .map(s => ({ start: s.start, minutes: (s.end.getTime() - s.start.getTime()) / MINUTE })).filter(s => s.minutes > 0)),
     settle(async () => (await source.bodyFat(since)).filter(r => Number.isFinite(r.percent) && r.percent > 0 && r.at <= now)),
   ]);
-  return { stepsHourly, activeHourly, exerciseHourly, waterHourly, night: spans ? nightTimeline(spans, night.from, cap) : null, bedtimes: beds, mindful, bodyFat };
+  return { stepsHourly, activeHourly, exerciseHourly, night: spans ? nightTimeline(spans, night.from, cap) : null, bedtimes: beds, mindful, bodyFat };
 }

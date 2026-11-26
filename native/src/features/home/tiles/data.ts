@@ -8,7 +8,7 @@ import type { HomeTileData } from './data-types';
  * missing reading is never drawn as 0. Earlier days with no reading stay empty in the series (no bar, no point).
  */
 export const DAYS = 30;
-const KG_PER_LB = 0.45359237, ML_PER_L = 1000;
+const KG_PER_LB = 0.45359237, FLOZ = 33.814;
 
 /** One day of food, as the Food tab files it. Nutrients are null when nothing logged carries them. */
 export interface FoodDayIn {
@@ -19,11 +19,11 @@ export interface FoodDayIn {
 export interface ActiveWorkoutIn { name: string; startedAt: Date | null; setsDone: number; setsTotal: number }
 export interface HealthIn {
   steps: (number | null)[] | null; activeKcal: (number | null)[] | null; exerciseMinutes: (number | null)[] | null;
-  sleepHours: (number | null)[] | null; waterMl: (number | null)[] | null; mindfulMinutes: (number | null)[] | null;
+  sleepHours: (number | null)[] | null; mindfulMinutes: (number | null)[] | null;
 }
 /** Today hour by hour and last night in detail, when the health source could be read that finely. */
 export interface HealthDetailIn {
-  stepsHourly: (number | null)[] | null; activeHourly: (number | null)[] | null; exerciseHourly: (number | null)[] | null; waterHourly: (number | null)[] | null;
+  stepsHourly: (number | null)[] | null; activeHourly: (number | null)[] | null; exerciseHourly: (number | null)[] | null;
   night: { bed: Date; wake: Date; stages: [stage: 'awake' | 'core' | 'deep' | 'rem', from: number, to: number][] } | null;
   bedtimes: (number | null)[] | null;
   mindful: { start: Date; minutes: number }[] | null;
@@ -31,13 +31,27 @@ export interface HealthDetailIn {
   bodyFat: { at: Date; percent: number }[] | null;
 }
 export interface RecoveryIn { hrv: (number | null)[] | null; rhr: (number | null)[] | null; sleepScore: (number | null)[] | null; source: string }
+/**
+ * Water as the Food tab keeps it (features/food/water.ts), the one model every water surface reads: the unit and goal set
+ * in the water section, litres drunk on each day in `days`, today's drinks and the containers on quick add.
+ */
+export interface WaterIn {
+  unit: 'oz' | 'ml';
+  /** Litres a day. */
+  goal: number;
+  /** One per day in `days`; the last is the Food tab's own day. */
+  litres: number[];
+  /** Today's drinks, in the order they were logged. */
+  drinks: { at: Date; oz: number }[];
+  containers: { id: string; name: string; oz: number; icon: string; quick: boolean }[];
+}
 export interface ScoreDayIn { value: number | null; training: number | null; food: number | null; recovery: number | null }
 export interface HomeInput {
   now: Date;
   /** 30 local days, oldest first, the last one today. */
   days: string[];
   weightUnit: 'lb' | 'kg';
-  waterUnit: 'oz' | 'ml';
+  water: WaterIn;
   /** One per day in `days`; today's is the Food tab's own day. */
   food: FoodDayIn[];
   /** The meal Home offers to log next, and quick picks for it. */
@@ -60,7 +74,7 @@ export interface HomeInput {
   /** One per day in `days`. */
   score: ScoreDayIn[] | null;
   sources: { activity: string; sleep: string; body: string };
-  goals: { water: number; steps: number; exercise: number; active: number; sleepHours: number; mindful: number };
+  goals: { steps: number; exercise: number; active: number; sleepHours: number; mindful: number };
 }
 export type TileReady = Record<string, boolean>;
 
@@ -114,7 +128,8 @@ export function tileReady(input: HomeInput): TileReady {
     calories: foodGoal,
     logMeal: foodGoal && !!input.nextMeal,
     protein: proteinGoal,
-    water: has(h?.waterMl),
+    // Water is logged in the app, so the tile always has today's total (0 before the first drink).
+    water: true,
     weight: input.weighIns.some(w => input.days.includes(w.day)),
     bodyFat: !!input.detail?.bodyFat?.some(r => input.days.includes(localDayOf(r.at))),
     sleep: has(h?.sleepHours) && !!input.detail?.night,
@@ -144,7 +159,11 @@ export function buildTileData(input: HomeInput): HomeTileData {
   const fatSeries = days.map(day => { const r = bodyFat.filter(x => localDayOf(x.at) === day); return r.length ? round1(r[r.length - 1].percent) : null; });
 
   const steps = series(h?.steps), active = series(h?.activeKcal), exercise = series(h?.exerciseMinutes);
-  const sleepH = series(h?.sleepHours), waterL = series(h?.waterMl).map(v => v === null ? null : v / ML_PER_L), mindful = series(h?.mindfulMinutes);
+  const sleepH = series(h?.sleepHours), mindful = series(h?.mindfulMinutes);
+  const water = input.water, waterL = days.map((_, i) => { const v = water.litres[water.litres.length - days.length + i]; return finite(v) ? v : 0; });
+  // The clock style draws each of today's drinks at its hour.
+  const waterHourly = Array.from({ length: 24 }, () => 0);
+  for (const d of water.drinks) waterHourly[d.at.getHours()] += d.oz / FLOZ;
   const hrv = series(recovery?.hrv), rhr = series(recovery?.rhr), sleepScore = series(recovery?.sleepScore);
   const night = detail?.night ?? null;
   const nightMinutes = night ? night.stages.filter(s => s[0] !== 'awake').reduce((t, s) => t + s[2] - s[1], 0) : 0;
@@ -176,7 +195,11 @@ export function buildTileData(input: HomeInput): HomeTileData {
       macros: { protein: Math.round(today?.protein ?? 0), carbs: Math.round(today?.carbs ?? 0), fat: Math.round(today?.fat ?? 0) },
     },
     protein: { unit: 'g', goal: goalProtein, today: Math.round(today?.protein ?? 0), series: series(protein) as number[], byMeal: meals.map(m => Math.round(m.protein ?? 0)) },
-    water: { unit: input.waterUnit, goal: goals.water, today: last(waterL) ?? 0, series: waterL as number[], hourly: hourly(detail?.waterHourly).map(v => v / ML_PER_L), log: null, containers: null },
+    water: {
+      unit: water.unit, goal: water.goal, today: last(waterL) ?? 0, series: waterL, hourly: waterHourly,
+      log: water.drinks.map(d => ({ t: clock12(d.at), oz: d.oz })),
+      containers: water.containers.filter(c => c.quick).map(c => ({ id: c.id, name: c.name, oz: c.oz, icon: c.icon, quick: true })),
+    },
     weight: {
       unit: 'lb', goal: input.weightGoalKg ? round1(lb(input.weightGoalKg)) : 0,
       today: lastWeigh ? round1(lb(lastWeigh.kg)) : 0, series: weightSeries as number[],

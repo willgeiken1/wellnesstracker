@@ -131,7 +131,9 @@ test('with no Apple Health on the device the health tiles say how to fill them',
   open();
   await render(<Home />, { wrapper });
   await settle();
-  expect(within(tile('Water')).getByText('Connect a health source in Settings to see this here.')).toBeTruthy();
+  expect(within(tile('Steps')).getByText('Connect a health source in Settings to see this here.')).toBeTruthy();
+  // Water is logged in the app, so it never waits for a health source.
+  expect(within(tile('Water')).queryByText('Connect a health source in Settings to see this here.')).toBeNull();
 });
 
 test('tiles added while Home is behind another screen show when Home comes back', async () => {

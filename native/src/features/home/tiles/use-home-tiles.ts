@@ -4,7 +4,9 @@ import { AppState } from 'react-native';
 import { cachedReads } from '@/data/read-cache';
 import { WorkoutStore } from '@/data/workout/store';
 import type { Repository } from '@/data/repository';
+import { addWater } from '@/features/food/actions';
 import { attributedDay, deleteFood, recentFoods, saveFood } from '@/features/food/model';
+import { quickContainers, readWater } from '@/features/food/water';
 import { appleHealth } from '@/features/health/apple';
 import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
@@ -19,7 +21,7 @@ import { buildState, setHomeTileState, type HomeTileState } from './state';
 import { DEFAULT_UNITS } from './studio';
 
 /** Daily goals the tiles measure against until the app keeps its own for these readings. */
-export const HOME_GOALS: HomeInput['goals'] = { water: 2.5, steps: STEP_GOAL, exercise: 30, active: 500, sleepHours: 8, mindful: 10 };
+export const HOME_GOALS: HomeInput['goals'] = { steps: STEP_GOAL, exercise: 30, active: 500, sleepHours: 8, mindful: 10 };
 
 /** HRV, resting heart rate and sleep score from one source only: Oura when it is connected, otherwise Apple Health. */
 export function pickRecovery(oura: OuraRecovery | null, apple: RecoveryRead): RecoveryIn | null {
@@ -52,9 +54,17 @@ function useHealthDetail(focused: boolean, refresh: unknown): HealthDetailIn | n
   return detail;
 }
 
-/** One-tap logging from inside the tiles: a recent food goes into the meal due next, with Undo. */
+/**
+ * One-tap logging from inside the tiles: a container of water goes into today's water, through the same model the Food tab
+ * uses; a recent food goes into the meal due next. Both say so with Undo.
+ */
 export function homeTileAction(repo: Repository | null, nextMeal: HomeInput['nextMeal'], data: Record<string, string>) {
-  if (data.ql === 'water') { showToast(t('homeWaterFromHealth'), { color: 'water' }); return; }
+  if (data.ql === 'water') {
+    const c = repo ? quickContainers(readWater(repo)).find(x => x.id === data.wc) : undefined;
+    if (repo && c) addWater(repo, attributedDay(), { c });
+    else router.push('/food/water' as unknown as Href);
+    return;
+  }
   if (data.ql === 'meal' || !repo || !nextMeal) { router.push('/food/log' as unknown as Href); return; }
   if (data.ql !== 'food') return;
   const wanted = String(data.food ?? '').trim().toLowerCase();
@@ -106,8 +116,8 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
     const app = readAppData(reader, now, health);
     const recovery = pickRecovery(oura, { access: appleAccess, recovery: appleRecovery });
     const input: HomeInput = {
-      now, ...app, weightGoalKg: null, waterUnit: 'oz',
-      health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, waterMl: health.waterMl, mindfulMinutes: health.mindfulMinutes } : null,
+      now, ...app, weightGoalKg: null,
+      health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, mindfulMinutes: health.mindfulMinutes } : null,
       detail: detailFor(detailRaw, !!oura), recovery,
       sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', sleep: oura ? 'Oura' : 'Apple Health', body: 'Apple Health' },
       goals: HOME_GOALS,

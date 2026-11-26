@@ -14,12 +14,12 @@ export interface HomeTileState {
   why: Record<string, EmptyReason>;
   units: StudioUnits;
   /** Which finer readings could be read, for the styles that need them. */
-  has: { stepsHourly: boolean; activeHourly: boolean; exerciseHourly: boolean; waterHourly: boolean; mindfulSessions: boolean; sleepScore: boolean; weightGoal: boolean };
+  has: { stepsHourly: boolean; activeHourly: boolean; exerciseHourly: boolean; mindfulSessions: boolean; sleepScore: boolean; weightGoal: boolean };
   /** Quick-log buttons inside tiles. */
   onAction: (data: Record<string, string>) => void;
 }
 
-const HEALTH = new Set(['steps', 'active', 'exercise', 'water', 'mindful']), NIGHT = new Set(['sleep', 'sleepScore', 'hrv', 'rhr']);
+const HEALTH = new Set(['steps', 'active', 'exercise', 'mindful']), NIGHT = new Set(['sleep', 'sleepScore', 'hrv', 'rhr']);
 /** The empty-state reason for each tile that is not ready. */
 export function reasons(input: HomeInput, ready: TileReady): Record<string, EmptyReason> {
   const connected = !!input.health || !!input.recovery;
@@ -42,7 +42,7 @@ export function buildState(input: HomeInput, units: StudioUnits, onAction: HomeT
   return {
     data: buildTileData(input), ready, why: reasons(input, ready), units, onAction,
     has: {
-      stepsHourly: !!d?.stepsHourly, activeHourly: !!d?.activeHourly, exerciseHourly: !!d?.exerciseHourly, waterHourly: !!d?.waterHourly,
+      stepsHourly: !!d?.stepsHourly, activeHourly: !!d?.activeHourly, exerciseHourly: !!d?.exerciseHourly,
       mindfulSessions: !!d?.mindful, sleepScore: !!input.recovery?.sleepScore?.some(v => v !== null), weightGoal: !!input.weightGoalKg,
     },
   };
@@ -57,7 +57,7 @@ export function tileView(s: HomeTileState, id: string, style: string, size: Tile
   if (!s.ready[id]) return { empty: s.why[id] ?? 'today' };
   const h = s.has, A = style === 'A', B = style === 'B', D = style === 'D';
   const detail = (id === 'steps' && !h.stepsHourly) || (id === 'active' && (A || B || D) && !h.activeHourly)
-    || (id === 'exercise' && B && !h.exerciseHourly) || (id === 'water' && B && !h.waterHourly)
+    || (id === 'exercise' && B && !h.exerciseHourly)
     || (id === 'mindful' && (A || B || D) && !h.mindfulSessions)
     // Sleep score parts (duration, stages, consistency) are not read from any source yet.
     || (id === 'sleepScore' && (A || B || (style === 'C' && size === 'L')));

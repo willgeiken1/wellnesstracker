@@ -16,19 +16,19 @@ const days = Array.from({ length: DAYS }, (_, i) => { const d = new Date(2026, 1
 const emptyDay = { kcal: null, protein: null, carbs: null, fat: null, goalKcal: null, goalProtein: null, meals: [] };
 function input(over: Partial<HomeInput> = {}): HomeInput {
   return {
-    now: NOW, days, weightUnit: 'lb', waterUnit: 'oz', food: days.map(() => emptyDay), nextMeal: null, recentFoods: [], weighIns: [], weightGoalKg: null,
+    now: NOW, days, weightUnit: 'lb', water: { unit: 'oz', goal: 100 / 33.814, litres: days.map(() => 0), drinks: [], containers: [] }, food: days.map(() => emptyDay), nextMeal: null, recentFoods: [], weighIns: [], weightGoalKg: null,
     volumeKg: days.map(() => 0), volumeByGroupKg: {}, volumeLastWeekKg: 0, workoutsThisWeek: 0, active: null, upNext: null,
     health: null, detail: null, recovery: null, score: null, sources: { activity: 'Apple Health', sleep: 'Apple Health', body: 'Apple Health' },
-    goals: { water: 2.5, steps: 8000, exercise: 30, active: 500, sleepHours: 8, mindful: 10 }, ...over,
+    goals: { steps: 8000, exercise: 30, active: 500, sleepHours: 8, mindful: 10 }, ...over,
   };
 }
 const series = (today: number | null, before: number | null = 5000) => days.map((_, i) => i === DAYS - 1 ? today : i % 4 === 0 ? null : before);
-const health = (over: Partial<NonNullable<HomeInput['health']>> = {}) => ({ steps: null, activeKcal: null, exerciseMinutes: null, sleepHours: null, waterMl: null, mindfulMinutes: null, ...over });
+const health = (over: Partial<NonNullable<HomeInput['health']>> = {}) => ({ steps: null, activeKcal: null, exerciseMinutes: null, sleepHours: null, mindfulMinutes: null, ...over });
 
 describe('which tiles have a reading to draw', () => {
-  test('with nothing logged or connected, only Volume draws; every other tile shows its empty state', () => {
+  test('with nothing logged or connected, only Volume and Water (logged in the app) draw; every other tile shows its empty state', () => {
     const ready = tileReady(input());
-    expect(Object.entries(ready).filter(([, ok]) => ok).map(([id]) => id)).toEqual(['volume']);
+    expect(Object.entries(ready).filter(([, ok]) => ok).map(([id]) => id)).toEqual(['volume', 'water']);
     const s = buildState(input(), DEFAULT_UNITS, () => {});
     expect(tileView(s, 'steps', 'A', 'S', {})).toEqual({ empty: 'connect' });
     expect(tileView(s, 'calories', 'A', 'S', {})).toEqual({ empty: 'targets' });
@@ -78,6 +78,24 @@ describe('which tiles have a reading to draw', () => {
     expect(html).toContain('–');
     expect(html).not.toMatch(/NaN|>null</);
   });
+  test('water draws from the app\'s own water model: today, goal, week, drinks by the hour and quick containers', () => {
+    const glass = { id: 'glass', name: 'Glass', oz: 8, icon: 'glass', quick: true }, bottle = { id: 'bottle', name: 'Bottle', oz: 16.9, icon: 'bottle', quick: false };
+    const i = input({ water: { unit: 'ml', goal: 2.5, litres: days.map((_, k) => k === DAYS - 1 ? 0.71 : k === DAYS - 2 ? 2.6 : 0),
+      drinks: [{ at: new Date(2026, 10, 22, 8, 5), oz: 8 }, { at: new Date(2026, 10, 22, 8, 40), oz: 16 }], containers: [glass, bottle] } });
+    expect(tileReady(i).water).toBe(true);
+    const w = buildTileData(i).water;
+    expect([w.unit, w.goal, w.today]).toEqual(['ml', 2.5, 0.71]);
+    expect(w.series).toHaveLength(DAYS);
+    expect(w.series.slice(-2)).toEqual([2.6, 0.71]);
+    expect(w.hourly[8]).toBeCloseTo(24 / 33.814, 5);
+    expect(w.hourly.filter(v => v > 0)).toHaveLength(1);
+    expect(w.log).toEqual([{ t: '8:05 AM', oz: 8 }, { t: '8:40 AM', oz: 16 }]);
+    expect(w.containers).toEqual([glass]);
+    // No health source is needed: the clock style draws from the drinks themselves.
+    const s = buildState(i, DEFAULT_UNITS, () => {});
+    expect(tileView(s, 'water', 'B', 'S', {})).toEqual({ options: {} });
+    expect(tileView(s, 'water', 'E', 'S', {})).toEqual({ options: {} });
+  });
   test('styles that need hour-by-hour detail say so when the source gives none', () => {
     const s = buildState(input({ health: health({ steps: series(7940), activeKcal: series(520) }) }), DEFAULT_UNITS, () => {});
     expect(tileView(s, 'steps', 'A', 'S', {})).toEqual({ empty: 'detail' });
@@ -95,7 +113,7 @@ describe('health sources stay apart', () => {
     expect(pickRecovery(null, { access: 'ask', recovery: null })).toBeNull();
   });
   test('with Oura as the sleep source, Apple\'s night stages are left out and the sleep tile says why', () => {
-    const detail = { stepsHourly: null, activeHourly: null, exerciseHourly: null, waterHourly: null, bedtimes: [23], mindful: null, bodyFat: null,
+    const detail = { stepsHourly: null, activeHourly: null, exerciseHourly: null, bedtimes: [23], mindful: null, bodyFat: null,
       night: { bed: new Date(2026, 10, 21, 23), wake: new Date(2026, 10, 22, 6), stages: [['core', 0, 420]] as [ 'core', number, number][] } };
     expect(detailFor(detail, false)).toBe(detail);
     const only = detailFor(detail, true)!;
@@ -145,12 +163,14 @@ describe('drawing', () => {
       weighIns: days.filter((_, k) => k % 3 !== 1).map((day, k) => ({ day, kg: 83 - k * 0.05, at: null })),
       volumeKg: days.map((_, k) => k % 3 === 0 ? 0 : 3000), volumeByGroupKg: { Legs: 3000, Back: 2000 }, volumeLastWeekKg: 20000, workoutsThisWeek: 4,
       upNext: 'Push day B · 6 exercises',
-      health: health({ steps: series(7940), activeKcal: series(520, 480), exerciseMinutes: series(24, 30), sleepHours: series(6.9, 7.4), waterMl: series(1700, 2400), mindfulMinutes: series(12, 9) }),
-      detail: { stepsHourly: hourly, activeHourly: hourly, exerciseHourly: hourly, waterHourly: hourly,
+      health: health({ steps: series(7940), activeKcal: series(520, 480), exerciseMinutes: series(24, 30), sleepHours: series(6.9, 7.4), mindfulMinutes: series(12, 9) }),
+      detail: { stepsHourly: hourly, activeHourly: hourly, exerciseHourly: hourly,
         night: { bed: new Date(2026, 10, 21, 23, 28), wake: new Date(2026, 10, 22, 6, 21), stages: [['core', 0, 100], ['deep', 100, 180], ['awake', 180, 190], ['rem', 190, 413]] },
         bedtimes: series(23.5, 23), mindful: [{ start: new Date(2026, 10, 22, 7, 5), minutes: 7 }],
         bodyFat: [{ at: new Date(2026, 10, 12, 7), percent: 18.4 }, { at: new Date(2026, 10, 21, 7), percent: 17.8 }] },
       recovery: { hrv: series(54, 50), rhr: series(56, 58), sleepScore: series(86, 80), source: 'Oura' },
+      water: { unit: 'oz', goal: 2.5, litres: days.map((_, k) => k % 4 === 0 ? 0 : 2.1), drinks: [{ at: new Date(2026, 10, 22, 8, 5), oz: 16.9 }, { at: new Date(2026, 10, 22, 12, 30), oz: 24 }],
+        containers: [{ id: 'glass', name: 'Glass', oz: 8, icon: 'glass', quick: true }, { id: 'bottle', name: 'Bottle', oz: 16.9, icon: 'bottle', quick: true }] },
       score: days.map((_, k) => k % 6 === 0 ? { value: null, training: null, food: null, recovery: null } : { value: 63, training: 40, food: 62, recovery: k === DAYS - 2 ? null : 86 }),
     });
     const s = buildState(i, DEFAULT_UNITS, () => {});

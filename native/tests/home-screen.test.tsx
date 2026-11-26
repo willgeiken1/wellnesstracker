@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { memoryRepository } from './workout-repository';
@@ -8,6 +8,8 @@ import Home from '../src/app/(tabs)/index';
 import { dateLine, greeting } from '../src/features/home/hero';
 import { MINI, terrain } from '../src/features/home/contour';
 import { homeTileAction } from '../src/features/home/tiles/use-home-tiles';
+import { readWaterIn } from '../src/features/home/tiles/read';
+import { addDrink, DEFAULT_CONTAINERS, litresOn, readWater, setContainers, setWaterUnit } from '../src/features/food/water';
 import { pageHandlers, useShellEdit } from '../src/features/shell/registry';
 import { showToast } from '../src/features/shell/toast';
 import { tileEdit } from '../src/features/tiles/store';
@@ -16,7 +18,7 @@ import { resetTileStores } from '../src/features/tiles';
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
 jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
-jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), selectionAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(async () => {}), selectionAsync: jest.fn(async () => {}), ImpactFeedbackStyle: { Light: 'light' } }));
 jest.mock('../src/features/health/apple', () => ({ appleHealth: () => null }));
 jest.mock('../src/features/health/oura-client', () => ({ oura: () => null }));
 jest.mock('../src/features/shell/toast', () => ({ showToast: jest.fn() }));
@@ -100,16 +102,20 @@ test('Home reads only: opening it writes nothing to the outbox or the tables', a
   expect(repo.getRevision()).toBe(before);
 });
 
-test('a new account gets the starting tiles, each saying what fills it, and no reading shown as 0', async () => {
+test('a new account gets the starting tiles, each saying what fills it, and no health reading shown as 0', async () => {
   open();
   await render(<Home />, { wrapper });
   await settle();
   for (const title of ['Next', 'Protein', 'Water', 'Steps', 'Weight']) expect(screen.getByText(title)).toBeTruthy();
   expect(screen.getByText('Set your food targets in Food, or start a workout.')).toBeTruthy();
   expect(screen.getByText('Set your food targets in Food to see this.')).toBeTruthy();
-  expect(screen.getAllByText('Connect a health source in Settings to see this here.')).toHaveLength(2);
+  // Steps waits for a health source; Water is logged in the app, so it draws today's total against the goal.
+  expect(screen.getAllByText('Connect a health source in Settings to see this here.')).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Add Glass, 8 fluid ounces' })).toBeTruthy();
   expect(screen.getByText('Weigh in to see your trend.')).toBeTruthy();
-  expect(screen.queryByText('0')).toBeNull();
+  // The only 0 is Water's total: nothing drunk yet is a real amount the person logs here.
+  expect(screen.getAllByText('0')).toHaveLength(1);
+  expect(within(screen.getByRole('button', { name: 'Water. Log water' })).getByText('0')).toBeTruthy();
 });
 
 test('logged food and targets fill the Protein and Next tiles from real entries', async () => {
@@ -138,7 +144,20 @@ describe('the + actions and edit mode', () => {
     await act(async () => { h.weigh?.run?.(); });
     expect(router.push).toHaveBeenLastCalledWith('/progress');
     await act(async () => { h.water?.run?.(); });
-    expect(showToast).toHaveBeenLastCalledWith('Water comes from your health app for now', { color: 'water' });
+    expect(router.push).toHaveBeenLastCalledWith('/food/water');
+    expect(showToast).not.toHaveBeenCalled();
+  });
+  test('Log water in the + shows today\'s water against the goal, in the water unit set in Food', async () => {
+    const repo = open();
+    await render(<Home />, { wrapper });
+    await settle();
+    expect(pageHandlers('home').water).toMatchObject({ label: 'Log water', hint: '0 of 100 oz today' });
+    await act(async () => { addDrink(repo, attributedDay(), { c: DEFAULT_CONTAINERS[1] }); });
+    await settle();
+    expect(pageHandlers('home').water?.hint).toBe('17 of 100 oz today');
+    await act(async () => { setWaterUnit(repo, 'ml'); });
+    await settle();
+    expect(pageHandlers('home').water?.hint).toBe('500 of 2,960 mL today');
   });
   test('Edit tiles turns on edit mode, the shell\'s Done ends it', async () => {
     open();
@@ -151,6 +170,67 @@ describe('the + actions and edit mode', () => {
     await act(async () => { shell!.onDone(); });
     expect(tileEdit.get().page).toBeNull();
     expect(shell).toBeNull();
+  });
+});
+
+describe('water on Home', () => {
+  test('reads the app\'s own water model: unit, goal, each day\'s litres, today\'s drinks and the containers', () => {
+    const repo = memoryRepository(), now = new Date(2026, 10, 22, 16, 12), today = attributedDay(now);
+    const days = Array.from({ length: 30 }, (_, i) => { const d = new Date(2026, 10, 22 - (29 - i)); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    addDrink(repo, days[27], { oz: 33.814 }, new Date(2026, 10, 20, 9).getTime());
+    addDrink(repo, today, { c: DEFAULT_CONTAINERS[0] }, new Date(2026, 10, 22, 8, 5).getTime());
+    addDrink(repo, today, { c: DEFAULT_CONTAINERS[2] }, new Date(2026, 10, 22, 13, 40).getTime());
+    setContainers(repo, DEFAULT_CONTAINERS.map((c, i) => ({ ...c, quick: i !== 1 })), 'ml');
+    const w = readWaterIn(repo, days, now);
+    expect(w.unit).toBe('ml');
+    expect(w.goal).toBeCloseTo(100 / 33.814, 5);
+    expect(w.litres).toHaveLength(30);
+    expect(w.litres[27]).toBeCloseTo(1, 5);
+    expect(w.litres[29]).toBeCloseTo(32 / 33.814, 5);
+    expect(w.drinks.map(d => [d.at.getTime(), d.oz])).toEqual([[new Date(2026, 10, 22, 8, 5).getTime(), 8], [new Date(2026, 10, 22, 13, 40).getTime(), 24]]);
+    expect(w.containers.filter(c => c.quick).map(c => c.id)).toEqual(['glass', 'tumbler', 'large']);
+  });
+  test('before 4 a.m. the drinks of the Food tab\'s day count once, under today', () => {
+    const repo = memoryRepository(), now = new Date(2026, 10, 23, 1, 30), food = attributedDay(now);
+    const days = Array.from({ length: 30 }, (_, i) => { const d = new Date(2026, 10, 23 - (29 - i)); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    expect(food).toBe(days[28]);
+    addDrink(repo, food, { c: DEFAULT_CONTAINERS[0] });
+    const w = readWaterIn(repo, days, now);
+    expect(w.litres[29]).toBeCloseTo(8 / 33.814, 5);
+    expect(w.litres[28]).toBe(0);
+  });
+  test('a tap on the tile opens the water sheet; its label reads Log water', async () => {
+    open();
+    await render(<Home />, { wrapper });
+    await settle();
+    const tile = screen.getByRole('button', { name: 'Water. Log water' });
+    await fireEvent.press(tile);
+    expect(router.push).toHaveBeenLastCalledWith('/food/water');
+    expect(showToast).not.toHaveBeenCalled();
+  });
+  test('a container button logs that container with Undo, and the tile redraws', async () => {
+    const repo = open();
+    await render(<Home />, { wrapper });
+    await settle();
+    const water = () => within(screen.getByRole('button', { name: 'Water. Log water' }));
+    expect(water().getByText('0')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Add Bottle, 16.9 fluid ounces' }));
+    await settle();
+    expect(litresOn(readWater(repo), attributedDay())).toBeCloseTo(16.9 / 33.814, 5);
+    const [text, options] = jest.mocked(showToast).mock.calls.at(-1)!;
+    expect(text).toBe('Added Bottle, 16.9 oz · 17 oz today');
+    expect(options).toMatchObject({ color: 'water', action: { label: 'Undo' } });
+    expect(water().getByText('17')).toBeTruthy();
+    await act(async () => { options?.action?.onAction(); });
+    await settle();
+    expect(litresOn(readWater(repo), attributedDay())).toBe(0);
+    expect(water().getByText('0')).toBeTruthy();
+  });
+  test('a container that is no longer on quick add opens the water sheet instead of logging', () => {
+    const repo = memoryRepository();
+    homeTileAction(repo, null, { ql: 'water', wc: 'gone' });
+    expect(router.push).toHaveBeenLastCalledWith('/food/water');
+    expect(litresOn(readWater(repo), attributedDay())).toBe(0);
   });
 });
 
