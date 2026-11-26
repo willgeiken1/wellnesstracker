@@ -55,20 +55,18 @@ test.each(RING_LOOKS)('%s draws a track with no arc at zero and an arc once ther
   expect(paths().length).toBeGreaterThan(0);
 });
 
-test('picking a ring look saves beside the theme and survives a restart', async () => {
-  const repo = settingsRepository({ theme_override: 'dark', accent: 'goldenHour', rest_seconds: 90 });
+// Appearance has no ring picker any more (the redesign dropped it); picking a palette keeps a saved ring look and the rest.
+test('picking a palette saves beside the theme, keeps the saved ring look and survives a restart', async () => {
+  const repo = settingsRepository({ theme_override: 'dark', accent: 'goldenHour;ring=liquid', rest_seconds: 90 });
   let view = await render(<ThemeProvider repository={repo}><Appearance /></ThemeProvider>);
-  expect(screen.getByRole('button', { name: 'Contour' })).toBeSelected();
-  await fireEvent.press(screen.getByRole('button', { name: 'Liquid' }));
-  expect(repo.list('settings')[0].data).toMatchObject({ theme_override: 'dark', accent: 'goldenHour;ring=liquid', rest_seconds: 90 });
+  expect(screen.getByRole('radio', { name: 'Golden Hour' })).toBeChecked();
+  await fireEvent.press(screen.getByRole('radio', { name: 'Berry Meadow' }));
+  expect(repo.list('settings')[0].data).toMatchObject({ theme_override: 'dark', accent: 'berryMeadow;ring=liquid', rest_seconds: 90 });
   await view.unmount();
   view = await render(<ThemeProvider repository={repo}><Appearance /></ThemeProvider>);
-  expect(screen.getByRole('button', { name: 'Liquid' })).toBeSelected();
-  expect(screen.getByRole('button', { name: 'Golden Hour' })).toBeSelected();
-  await fireEvent.press(screen.getByRole('button', { name: 'Berry Meadow' }));
-  expect(repo.list('settings')[0].data.accent).toBe('berryMeadow;ring=liquid');
-  await fireEvent.press(screen.getByRole('button', { name: 'Contour' }));
-  expect(repo.list('settings')[0].data.accent).toBe('berryMeadow');
+  expect(screen.getByRole('radio', { name: 'Berry Meadow' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Golden Hour' })).not.toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
 });
 
 test.each(RING_LOOKS)('the food ring follows the %s look and keeps its spoken summary', async look => {
