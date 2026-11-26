@@ -1,7 +1,6 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import Constants from 'expo-constants';
-import { AuthContext } from '@/auth/provider';
 import { Screen } from '@/components/screen';
 import { scoreOn, setScoreOn } from '@/features/home/tiles';
 import { Profile } from '@/features/onboarding/profile';
@@ -9,7 +8,7 @@ import { Group, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
 import { LicenseNotice, Licenses, noticeTitle } from '@/features/settings/licenses/screen';
 import { AboutPage, AccountPage, ConnectionsPage, DataPage, DiagnosticsList, GoalsPage, PrivacyPage, RemindersPage, UnitsPage, WorkoutPage } from '@/features/settings/pages';
 import { DeleteAccountPage, DeleteRangePage, FeedbackPage, PrivacyCenterPage, WhatsNewPage } from '@/features/settings/more-pages';
-import { SetPage } from '@/features/settings/ui';
+import { SetPage, useOptionalAuth } from '@/features/settings/ui';
 import { useDataActions } from '@/features/settings/data-actions';
 import { t } from '@/i18n/en';
 import { AI_FEATURES_ENABLED } from '@/features/ai-launch';
@@ -18,7 +17,7 @@ import { FoodAiPrivacy } from '@/features/food/ai/privacy';
 /** Insight Score: one switch for the card on Home and the header ring, and the way to how it is worked out. */
 function ScoreSettings() {
   // Settings also opens with no account provider around it; the switch is then not offered.
-  const repository = useContext(AuthContext)?.repository ?? null;
+  const repository = useOptionalAuth()?.repository ?? null;
   const [on, setOn] = useState(() => scoreOn(repository));
   if (!repository) return <QuietCard title={t('notInVersion')} />;
   return <Group testID="settings-score">
@@ -37,7 +36,7 @@ function Data() {
 
 /** What is sent for meal estimates and workout summaries, and the consent for it. */
 function AiPrivacy() {
-  const repository = useContext(AuthContext)?.repository;
+  const repository = useOptionalAuth()?.repository;
   return repository ? <FoodAiPrivacy repo={repository} /> : null;
 }
 

@@ -1,11 +1,11 @@
-import { useContext, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
-import { AuthContext, useAuth } from '@/auth/provider';
+import { useAuth } from '@/auth/provider';
 import { FLOZ } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { useWorkoutStore } from '@/features/workout/use-workout';
@@ -24,7 +24,7 @@ import { st } from './copy';
 import { APP_VERSION, Avatar, useWho } from './home';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
-import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper } from './ui';
+import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper, useOptionalAuth } from './ui';
 import { backupWhen } from './data-actions';
 
 const KG = 2.20462;
@@ -135,7 +135,7 @@ const READS: [string, string][] = [['Weight and body fat', 'accent-2'], ['Steps'
 export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
   const k = useKit();
   // Settings also opens with no account provider around it; Apple Health and Oura are then simply not offered.
-  const repository = useContext(AuthContext)?.repository ?? null;
+  const repository = useOptionalAuth()?.repository ?? null;
   const [p, set] = useSettingsPrefs();
   const apple = useAppleHealth(repository), ring = useOura(repository);
   const appleOn = apple.access === 'asked', ou = ring.state === 'on' || ring.state === 'expired', ouraOffered = ring.state !== 'unavailable';
@@ -393,7 +393,7 @@ export function WorkoutPage() {
   const k = useKit();
   const [p, set] = useSettingsPrefs();
   // The phone-only build sends no reminders, so the rest timer alert reads Off there.
-  const phoneOnly = useContext(AuthContext)?.phoneOnly === true;
+  const phoneOnly = useOptionalAuth()?.phoneOnly === true;
   const w = p.work, kg = p.units.weight === 'kg', u = kg ? 'kg' : 'lb';
   const plates = kg ? [25, 20, 15, 10, 5, 2.5, 1.25] : [55, 45, 35, 25, 10, 5, 2.5], pset = kg ? w.platesKg : w.plates;
   const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar, rnd = kg ? 2.5 : 5;

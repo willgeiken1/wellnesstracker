@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { stepValue } from '@/components/stepper';
 import { useSelectionHaptic } from '@/components/selection-haptic';
 import { t } from '@/i18n/en';
+import { useAuth } from '@/auth/provider';
 import { Icon, KitText, ListRow, NavBar, StackGapContext, SurfaceContext, Tappable, alpha, mix, useKit, type IconName } from '@/components/kit';
 
 /* The pieces every Settings screen shares (the mockup's .st-* classes in pages/settings.js). */
@@ -134,4 +135,10 @@ export function TimeStepper({ value, onChange, label, step = 15, min = 30, max =
     </View>
     {button(1)}
   </View>;
+}
+
+/** The account state, or null where Settings opens with no account provider around it. Reads it through useAuth, which
+ * both builds export (the phone-only build keeps its context private, so reading the context directly finds nothing). */
+export function useOptionalAuth() {
+  try { return useAuth(); } catch { return null; }
 }
