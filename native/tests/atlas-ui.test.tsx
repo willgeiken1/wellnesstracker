@@ -6,11 +6,16 @@ import { BodyAtlas, atlasLabel } from '../src/features/atlas/body-atlas';
 import { heatmap, heatFill } from '../src/features/atlas/volume';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { t } from '../src/i18n/en';
+import type { Repository } from '../src/data/repository';
+import { memoryRepository } from './workout-repository';
 jest.mock('expo-router',()=>({router:{push:jest.fn()}}));
 jest.mock('expo-haptics',()=>({impactAsync:jest.fn().mockResolvedValue(undefined),ImpactFeedbackStyle:{Light:'light'}}));
 const now=Date.UTC(2026,9,28,12);
 const sessions=[{at:now-86400000,exercises:[{main:'chest',helpers:['triceps'],sets:12}]}];
 const wrapper=({children}:{children:React.ReactNode})=><ThemeProvider>{children}</ThemeProvider>;
+// A fresh install now starts Dark; the light/dark snapshot follows the iPhone, so it saves System first.
+const followsSystem=()=>{const repository=memoryRepository();repository.save('settings',{theme_override:'system'});return repository as unknown as Repository;};
+const systemWrapper=({children}:{children:React.ReactNode})=><ThemeProvider repository={followsSystem()}>{children}</ThemeProvider>;
 beforeEach(()=>{
  jest.clearAllMocks();
  jest.spyOn(RN.AccessibilityInfo,'isReduceMotionEnabled').mockResolvedValue(false);
@@ -44,7 +49,7 @@ test('accessible list covers all 44 heatmap entries with identical labels and va
 test.each(['light','dark'] as const)('%s rendered heatmap snapshot, body controls and list colors',async mode=>{
  const scheme=jest.spyOn(RN,'useColorScheme').mockReturnValue(mode);
  try{
-  await render(<BodyAtlas sessions={sessions} now={now} compact/>,{wrapper});
+  await render(<BodyAtlas sessions={sessions} now={now} compact/>,{wrapper:systemWrapper});
   const snapshot:unknown[]=[];
   for(const side of ['atlasFront','atlasBack'] as const){
    await fireEvent.press(screen.getByRole('button',{name:t(side)}));

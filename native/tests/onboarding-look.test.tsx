@@ -71,7 +71,8 @@ describe('Sign in',()=>{
   expect(screen.getByText(t('passwordHelp'))).toBeTruthy();
  });
  test('the focused field shows the accent border and loses it on blur',async()=>{
-  await wrap(<AuthForm/>);const colors=createTheme('light');
+  // A fresh install now starts Dark, so sign-in shows the dark field border and accent.
+  await wrap(<AuthForm/>);const colors=createTheme('dark');
   expect(flat(screen.getByLabelText(t('email'))).borderColor).toBe(colors['hair-2']);
   await fireEvent(screen.getByLabelText(t('email')),'focus');
   expect(flat(screen.getByLabelText(t('email'))).borderColor).toBe(colors.accent);

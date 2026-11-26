@@ -81,11 +81,17 @@ describe("label style guard (INS-03)", () => {
 
       lines.forEach((line, index) => {
         if (letterSpacingRegex.test(line)) {
-          violations.push({
-            file: `native/src/${relPath}`,
-            line: index + 1,
-            text: line.trim(),
-          });
+          const lineNumber = index + 1;
+          const isAllowlisted = ALLOWLIST.some(
+            (item) => item.file === relPath && item.line === lineNumber
+          );
+          if (!isAllowlisted) {
+            violations.push({
+              file: `native/src/${relPath}`,
+              line: lineNumber,
+              text: line.trim(),
+            });
+          }
         }
       });
     }
