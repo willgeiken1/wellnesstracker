@@ -11,6 +11,7 @@ import { APP_ICONS, applyAppIcon, iconArt, iconId, iconsSupported } from './app-
 import { st } from './copy';
 import { useSettingsPrefs, type AppIconId, type Density } from './prefs';
 import { Cl, H, Panel, SetPage } from './ui';
+import { MapSection } from './map-section';
 
 /** `.st-tp`: a 78 x 128 pt phone in one look, drawn in the palette's colours for that look. */
 function MiniPhone({ palette, look, half, selected }: { palette: Palette; look: 'dark' | 'light' | 'system'; half?: boolean; selected: boolean }) {
@@ -96,7 +97,7 @@ function IconOption({ id, name, selected, onPress }: { id: AppIconId; name: stri
 
 const DENSITY_PAD: Record<Density, number> = { airy: 14, balanced: 10, dense: 6 };
 
-/** Settings › Appearance: Theme, Palette and App icon, then Tab bar, Density and Accessibility. */
+/** Settings › Appearance: Theme, Palette and App icon, then Home (the Insight map), Tab bar, Density and Accessibility. */
 export default function Appearance() {
   const k = useKit();
   const { override, setOverride, palette, setPalette, mode, trueBlack, setTrueBlack, persistenceError } = useTheme();
@@ -150,6 +151,8 @@ export default function Appearance() {
       </Panel>
       <ListFooter>{st('settingsAppIconFoot')}</ListFooter>
     </>}
+
+    <MapSection />
 
     <H>{st('settingsTabBar')}</H>
     <List footer={st(shown < all ? 'settingsTabBarFootHidden' : 'settingsTabBarFoot')}>

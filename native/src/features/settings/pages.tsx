@@ -1,13 +1,16 @@
-import { useContext, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Badge, Chip, Eyebrow, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
+import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ListRow, ProgressBar, SegmentedControl, Stepper, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
-import { AuthContext, useAuth } from '@/auth/provider';
+import { useAuth } from '@/auth/provider';
 import { FLOZ } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
+import { useWorkoutStore } from '@/features/workout/use-workout';
+import { trainingMinutes } from '@/features/home/hero/data';
+import { localDay } from '@/core/workout/rules';
 import { readGoalsData, saveFoodTarget, saveGoalWeight, saveWaterGoal, type GoalsData } from './goals-data';
 import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
@@ -21,7 +24,7 @@ import { st } from './copy';
 import { APP_VERSION, Avatar, useWho } from './home';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
-import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper } from './ui';
+import { Cl, Gap, H, Hero, Panel, PickRow, SetPage, TimeStepper, useOptionalAuth } from './ui';
 import { backupWhen } from './data-actions';
 
 const KG = 2.20462;
@@ -65,6 +68,10 @@ export function GoalsPage() {
   const foot = nowLb == null ? st('settingsPaceFootNoWeight') : !left ? st('settingsAtGoal')
     : st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(goalLb, p), date: `${MONTHS[eta!.getMonth()]} ${eta!.getDate()}` });
   const lost = nowLb != null && startLb != null ? startLb - nowLb : null, total = startLb != null ? startLb - goalLb : null;
+  // Minutes trained today, as Home's Insight map counts them (finished sessions and the one running now).
+  const store = useWorkoutStore(repo);
+  let trained: number | null = null;
+  try { trained = store ? trainingMinutes(store, [localDay(new Date())], new Date())[0] : null; } catch { trained = null; }
   const waterV = g ? (ml ? Math.round(g.waterL * 10) * 100 : Math.round(g.waterL * FLOZ)) : null;
   return <SetPage back={st('settings')} title={st('settingsGoalsTitle')} testID="settings-goals">
     <H first>{st('settingsDailyTargets')}</H>
@@ -76,7 +83,7 @@ export function GoalsPage() {
       <ListRow title={st('settingsProtein')} sub={g ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
         right={<Stepper label={st('settingsDailyProtein')} value={protein} step={5} min={40} max={300} unit="g"
         onChange={v => { if (repo) save(() => saveFoodTarget(repo, 'protein', v)); else set('goals.protein', v); }} />} />
-      <ListRow title={st('settingsTraining')} right={<Stepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />
+      <ListRow title={st('settingsTraining')} sub={trained != null ? st('settingsMinToday', { v: trained }) : undefined} right={<Stepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />
       <PickRow title={st('settingsSleep')} value={p.goals.sleep} options={sleep} onPick={v => set('goals.sleep', v)} />
       {g && waterV != null ? <ListRow title={st('settingsWater')} sub={st('settingsSoFar', { v: ml ? `${formatNumber(Math.round(g.drankL * 1000))} mL` : `${Math.round(g.drankL * FLOZ)} oz` })}
         right={<Stepper label={st(ml ? 'settingsDailyWaterMl' : 'settingsDailyWaterOz')} value={waterV} step={ml ? 100 : 4} min={ml ? 1000 : 32} max={ml ? 6000 : 200} unit={ml ? 'mL' : 'oz'}
@@ -116,25 +123,28 @@ function Conn({ icon, color, name, meta, badge, body, children }: { icon: IconNa
         <KitText weight={700} size={18} tracking={-0.02}>{name}</KitText>
         <KitText weight={500} size={13} color="text-muted" style={{ marginTop: 1 }}>{meta}</KitText>
       </View>
-      {badge}
+      {/* The kit badge sits at the top of a column; here it centres on the name and its line. */}
+      <View>{badge}</View>
     </View>
     <KitText weight={500} size={13.5} lineHeight={1.45} color="text-muted" style={{ marginTop: 12 }}>{body}</KitText>
     {children}
   </View>;
 }
 const READS: [string, string][] = [['Weight and body fat', 'accent-2'], ['Steps', 'recovery'], ['Active energy', 'food'], ['Sleep', 'sleep'], ['Heart rate and HRV', 'danger'], ['Workouts', 'training'], ['Water', 'water']];
-export function ConnectionsPage() {
+/** `limited`: the phone-only build, which has no Apple Health, Oura or notifications. The page keeps its layout but offers
+ * nothing it cannot do: Apple Health says it comes later, Oura stays off, and Coming later has no "Tell me". */
+export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
   const k = useKit();
   // Settings also opens with no account provider around it; Apple Health and Oura are then simply not offered.
-  const repository = useContext(AuthContext)?.repository ?? null;
+  const repository = useOptionalAuth()?.repository ?? null;
   const [p, set] = useSettingsPrefs();
   const apple = useAppleHealth(repository), ring = useOura(repository);
   const appleOn = apple.access === 'asked', ou = ring.state === 'on' || ring.state === 'expired', ouraOffered = ring.state !== 'unavailable';
   return <SetPage back={st('settings')} title={st('settingsConnectionsTitle')} testID="settings-connections">
     <H first>Apple Health</H>
     <Panel>
-      <Conn icon="heart" color="danger" name="Apple Health" meta={appleOn ? st('settingsReadOnOpen') : st('settingsNotConnected')}
-        badge={<Badge label={st('settingsReadsOnly')} color="success" />} body={st('settingsHealthBody')}>
+      <Conn icon="heart" color="danger" name="Apple Health" meta={limited ? st('settingsLaterVersion') : appleOn ? st('settingsReadOnOpen') : st('settingsNotConnected')}
+        badge={limited ? <Badge label={st('settingsOff')} color="warning" /> : <Badge label={st('settingsReadsOnly')} color="success" />} body={st(limited ? 'settingsHealthBodyLater' : 'settingsHealthBody')}>
         <View accessibilityLabel={st('settingsWhatReads')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
           {READS.map(([label, color]) => <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: 28, paddingHorizontal: 10, borderRadius: 999,
             backgroundColor: k.dark ? k.c['surface-2'] : k.c.bg }}>
@@ -143,14 +153,14 @@ export function ConnectionsPage() {
           </View>)}
         </View>
       </Conn>
-      <Cl>
+      {limited ? null : <Cl>
         <ListRow title={st(appleOn ? 'settingsReadHealthNow' : 'settingsConnectHealth')} chevron={false} right={<Icon name="repeat" size={18} color={k.c.ghost} />}
           disabled={apple.access === 'unavailable' || apple.busy} onPress={() => apple.connect()} />
         <ListRow title={st('settingsChooseReads')} sub={st('settingsInHealthApp')} chevron={false} right={<Ext />}
           onPress={() => actionSheet({ title: st('settingsChooseReads'), message: st('settingsChooseReadsMsg'), acts: [{ label: st('settingsOpenHealth'), onPress: () => { void Linking.openURL('x-apple-health://').catch(() => {}); } }] })} />
-      </Cl>
+      </Cl>}
     </Panel>
-    {apple.access === 'unavailable' && <ListFooter>{st('settingsHealthUnavailable')}</ListFooter>}
+    {apple.access === 'unavailable' && !limited && <ListFooter>{st('settingsHealthUnavailable')}</ListFooter>}
     <H>Oura</H>
     <Panel>
       <Conn icon="ring" color="recovery" name="Oura" meta={ou ? (ring.state === 'expired' ? st('settingsOuraExpired') : st('settingsConnected')) : st('settingsNotConnected')}
@@ -168,6 +178,8 @@ export function ConnectionsPage() {
     <List footer={st('settingsLaterFoot')}>
       {['Fitbit', 'WHOOP', 'Garmin'].map(n => {
         const on = !!p.later[n];
+        // Nothing can tell the person later without notifications, so the phone-only build only names what is coming.
+        if (limited) return <ListRow key={n} title={n} sub={st('settingsComingLater')} chevron={false} />;
         return <ListRow key={n} title={n} sub={on ? st('settingsLaterOn') : st('settingsComingLater')} chevron={false}
           accessibilityLabel={`${n}, ${st('settingsComingLaterLower')}. ${on ? st('settingsLaterOnA11y') : st('settingsLaterOffA11y')}`}
           right={on ? <Badge label={st('settingsOnTheList')} color="success" /> : <View style={{ minHeight: 34, paddingHorizontal: 12, borderRadius: 999, justifyContent: 'center', backgroundColor: k.c['accent-tint'] }}>
@@ -260,14 +272,17 @@ export function AccountPage() {
 }
 
 /* ---------- Reminders ---------- */
-export function RemindersPage() {
+const REM_OFF: SettingsPrefs['rem'] = { cap: false, workout: false, workoutTime: '5:30 PM', rest: false, weekly: false, food: false, breakfast: false, lunch: false, dinner: false, oura: false };
+/** `limited`: the phone-only build, which cannot send notifications. Every reminder is shown as it will be, switched off
+ * and greyed out, and the hero says they come later, so no switch claims to do something it cannot. */
+export function RemindersPage({ limited = false }: { limited?: boolean }) {
   const [p, set] = useSettingsPrefs();
-  const r = p.rem, n = (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => r[key]).length;
+  const r = limited ? REM_OFF : p.rem, n = (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => r[key]).length;
   const times = ['6:00 AM', '7:00 AM', '12:00 PM', '5:30 PM', '7:00 PM'].map(v => ({ v, l: clock(v, p) }));
   const tog = (title: string, key: keyof SettingsPrefs['rem'], sub?: string, value?: string) =>
-    <ListRow key={key} title={title} sub={sub} value={value} toggle={!!r[key]} onToggle={v => set(`rem.${key}`, v)} />;
+    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!!r[key]} disabled={limited} onToggle={v => set(`rem.${key}`, v)} />;
   return <SetPage back={st('settings')} title={st('settingsRemindersTitle')} testID="settings-reminders">
-    <Hero icon="bell" color="danger" title={st('settingsOnlyWhatHelps')} body={st(r.cap ? 'settingsRemHeroCap' : 'settingsRemHero', { n })} />
+    <Hero icon="bell" color="danger" title={st('settingsOnlyWhatHelps')} body={limited ? st('settingsRemHeroLater') : st(r.cap ? 'settingsRemHeroCap' : 'settingsRemHero', { n })} />
     <Gap />
     <List>{tog(st('settingsAtMost2'), 'cap', st('settingsAtMost2Sub'))}</List>
     <H>{st('settingsTraining')}</H>
@@ -287,10 +302,12 @@ export function RemindersPage() {
     </List>
     <H>{st('settingsConnectionsTitle')}</H>
     <List>{tog(st('settingsOuraAlert'), 'oura', st('settingsOuraAlertSub'))}</List>
-    <Gap />
-    <List footer={st('settingsIosNotifFoot')}>
-      <ListRow title={st('settingsIosNotifications')} chevron={false} right={<Ext />} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
-    </List>
+    {limited ? null : <>
+      <Gap />
+      <List footer={st('settingsIosNotifFoot')}>
+        <ListRow title={st('settingsIosNotifications')} chevron={false} right={<Ext />} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
+      </List>
+    </>}
   </SetPage>;
 }
 
@@ -364,9 +381,20 @@ export function UnitsPage() {
 }
 
 /* ---------- Workout settings ---------- */
+/** `.st-plates .chip`: a 40 pt plate pill in the display face with even figures, on the grouped list's inner fill; Training when you have it. */
+function PlateChip({ label, a11y, selected, onPress }: { label: string; a11y: string; selected: boolean; onPress: () => void }) {
+  const k = useKit();
+  return <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={a11y} accessibilityState={{ selected }} onPress={onPress} hitSlop={{ top: 4, bottom: 4 }}
+    style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center',
+      backgroundColor: selected ? k.c.training : k.dark ? k.c['surface-2'] : k.c.bg, boxShadow: selected || k.dark ? undefined : k.cardEdge }}>
+    <KitText weight={700} size={13.5} numeric color={selected ? 'on-accent' : 'text'}>{label}</KitText>
+  </Tappable>;
+}
 export function WorkoutPage() {
   const k = useKit();
   const [p, set] = useSettingsPrefs();
+  // The phone-only build sends no reminders, so the rest timer alert reads Off there.
+  const phoneOnly = useOptionalAuth()?.phoneOnly === true;
   const w = p.work, kg = p.units.weight === 'kg', u = kg ? 'kg' : 'lb';
   const plates = kg ? [25, 20, 15, 10, 5, 2.5, 1.25] : [55, 45, 35, 25, 10, 5, 2.5], pset = kg ? w.platesKg : w.plates;
   const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar, rnd = kg ? 2.5 : 5;
@@ -380,13 +408,14 @@ export function WorkoutPage() {
     <List>
       <ListRow title={st('settingsDefaultRest')} sub={st('settingsDefaultRestSub')} right={<TimeStepper label={st('settingsDefaultRestA11y')} value={w.rest} onChange={v => set('work.rest', v)} />} />
       <ListRow title={st('settingsStartAuto')} sub={st('settingsStartAutoSub')} toggle={w.auto} onToggle={v => set('work.auto', v)} />
-      <ListRow title={st('settingsRestAlert')} value={st(p.rem.rest ? 'settingsOn' : 'settingsOff')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'reminders', focus: 'Rest timer alert' } })} />
+      <ListRow title={st('settingsRestAlert')} value={st(p.rem.rest && !phoneOnly ? 'settingsOn' : 'settingsOff')} onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'reminders', focus: 'Rest timer alert' } })} />
     </List>
     <H>{st('settingsPlates')}</H>
     <Panel>
       <View accessibilityLabel={st('settingsPlatesYouHave')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 14, paddingHorizontal: 16 }}>
         {plates.map(pl => { const id = String(pl).replace('.', '_'), on = !!pset[id];
-          return <Chip key={id} label={`${pl} ${u}`} selected={on} color="training" onPress={() => set(`work.${kg ? 'platesKg' : 'plates'}.${id}`, !on)} />; })}
+          return <PlateChip key={id} label={`${pl} ${u}`} a11y={st(kg ? 'settingsPlateKgA11y' : 'settingsPlateLbA11y', { n: pl })} selected={on}
+            onPress={() => set(`work.${kg ? 'platesKg' : 'plates'}.${id}`, !on)} />; })}
       </View>
       <Cl><PickRow title={st('settingsBar')} value={kg ? w.barKg : w.bar} options={bars} onPick={v => set(kg ? 'work.barKg' : 'work.bar', v)} /></Cl>
     </Panel>

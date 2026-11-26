@@ -231,6 +231,8 @@ test('without sleep data the detail screen says recovery is left out', async () 
 
 test('the Settings switch and the Home tile are one state', async () => {
   const repo = memoryRepository();
+  // Settings reads the account through useAuth (the phone-only build keeps its context private).
+  jest.mocked(useAuth).mockReturnValue({ repository: repo } as never);
   const show = () => render(<AuthContext.Provider value={{ repository: repo } as never}><SettingsSection /></AuthContext.Provider>, { wrapper });
   const view = await show();
   const toggle = screen.getByTestId('settings-score-switch');

@@ -5,6 +5,7 @@ import Svg, { Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useAuth } from '@/auth/provider';
+import { readGoalsData } from './goals-data';
 import { EmptyState, Icon, KitText, LargeTitle, List, ListRow, NavBar, SearchField, StackGapContext, SurfaceContext, Tappable, mix, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
 import { useAppleHealth } from '@/features/health/use-apple-health';
@@ -57,12 +58,15 @@ export function useWho() {
 }
 
 /** The value at the end of each section's row (SUM in the mockup). */
-function summary(id: SectionId, p: SettingsPrefs, theme: string, connected: number, syncs: boolean): string {
+export function summary(id: SectionId, p: SettingsPrefs, theme: string, connected: number, syncs: boolean, o: { kcal?: number; limited?: boolean } = {}): string {
+  // The calorie target is the one Goals and targets edits (the food targets), not a copy kept in Settings.
+  const kcal = o.kcal ?? p.goals.kcal;
   switch (id) {
-    case 'goals': return p.units.energy === 'kJ' ? `${Math.round(p.goals.kcal * 4.184 / 10) * 10} kJ`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `${p.goals.kcal.toLocaleString('en-US')} kcal`;
+    case 'goals': return p.units.energy === 'kJ' ? `${Math.round(kcal * 4.184 / 10) * 10} kJ`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `${kcal.toLocaleString('en-US')} kcal`;
     case 'connections': return st('settingsNConnected', { n: connected });
     case 'account': return st(syncs ? 'settingsSyncOn' : 'settingsSyncOff');
-    case 'reminders': return st('settingsNOn', { n: (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => p.rem[key]).length });
+    // Without notifications (the phone-only build) no reminder is on, whatever was chosen before.
+    case 'reminders': if (o.limited) return st('settingsOff'); return st('settingsNOn', { n: (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => p.rem[key]).length });
     case 'privacy': return st(p.priv.lock ? 'settingsFaceId' : 'settingsNoLock');
     case 'appearance': return theme;
     case 'units': return p.units.weight === 'lb' ? 'US' : st('settingsMetric');
@@ -85,6 +89,8 @@ export function SettingsHome() {
   const connected = (apple.access === 'asked' ? 1 : 0) + (ring.state === 'on' || ring.state === 'expired' ? 1 : 0);
   const hits = searchSettings(query);
   const syncs = !!who.auth.session && !who.auth.phoneOnly && prefs.sync.on;
+  let goalKcal: number | undefined;
+  try { goalKcal = who.auth.repository ? readGoalsData(who.auth.repository).kcal : undefined; } catch { goalKcal = undefined; }
   const line1 = who.name ? who.signIn : who.detail;
   const line2 = who.auth.session ? st(syncs ? 'settingsSyncedNow' : 'settingsSyncOff') : who.name ? who.detail : '';
   const leave = () => router.canGoBack() ? router.back() : router.replace('/');
@@ -120,7 +126,7 @@ export function SettingsHome() {
           <View style={{ height: 20 }} />
           {GROUPS.map((group, gi) => <View key={gi} style={{ marginTop: gi ? 20 : 0 }}>
             <List testID={`settings-group-${gi}`}>{group.map(id => {
-              const s = SECTIONS[id], v = summary(id, prefs, theme, connected, syncs);
+              const s = SECTIONS[id], v = summary(id, prefs, theme, connected, syncs, { kcal: goalKcal, limited: !!who.auth.phoneOnly });
               return <ListRow key={id} testID={`settings-row-${id}`} icon={s.icon} color={s.color === 'muted' ? 'text-muted' : s.color} title={s.title} value={v || undefined} onPress={() => openSection(id)} />;
             })}</List>
           </View>)}
