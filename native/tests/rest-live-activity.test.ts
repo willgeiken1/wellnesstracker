@@ -1,7 +1,8 @@
 import { AppState, Platform } from 'react-native';
 import * as LiveActivity from 'expo-live-activity';
 import { WorkoutStore } from '../src/data/workout/store';
-import { startRest } from '../src/features/workout/sheets/rest';
+import { restFootKey, startRest } from '../src/features/workout/sheets/rest';
+import { tr } from '../src/features/workout/tr';
 import {
   REST_ACTIVITY_KEY, RestActivity, liveActivitiesSupported, restActivityContent, restActivityTint, stopWatchingRestActivity, watchRestActivity,
 } from '../src/features/workout/live-activity';
@@ -196,4 +197,12 @@ describe('rest Live Activity', () => {
     startRest(store, 90, '', NOW);
     expect(restActivityContent(repo, store.timer(), NOW)).toMatchObject({ title: 'Rest timer', endAt: NOW + 90_000 });
   });
+});
+
+test('the rest timer footnote is the design line wherever the Live Activity runs', () => {
+  expect(tr(restFootKey('ios', () => true))).toBe('The timer keeps running on the Lock Screen and in the Dynamic Island, with a gentle buzz at zero.');
+  expect(restFootKey('ios', () => false)).toBe('trainingRestFoot');
+  expect(restFootKey('android', () => true)).toBe('trainingRestFoot');
+  // This build has the native module and the phone runs iOS 17.
+  expect(restFootKey('ios')).toBe('trainingRestFootLive');
 });

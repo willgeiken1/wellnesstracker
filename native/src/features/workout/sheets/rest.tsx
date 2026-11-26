@@ -80,7 +80,15 @@ function RestBody({ store, entry }: { store: WorkoutStore; entry?: string }) {
       <View accessibilityLabel={tr('trainingRestLength')} style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 }}>
         {presets.map(p => <Chip key={p} label={clock(p * 1000)} accessibilityLabel={tr('trainingRestChip', { time: clock(p * 1000) })} selected={p === (on ? rest!.total : dflt)} color="training" onPress={() => pick(p)} />)}
       </View>
-      <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ textAlign: 'center', marginTop: 18, marginHorizontal: 8 }}>{tr(Platform.OS === 'ios' && liveActivitiesSupported() ? 'trainingRestFootLive' : 'trainingRestFoot')}</KitText>
+      <KitText weight={500} size={12.5} lineHeight={1.45} color="text-muted" style={{ textAlign: 'center', marginTop: 18, marginHorizontal: 8 }}>{tr(restFootKey())}</KitText>
     </View>
   </ScrollView></SurfaceContext.Provider>;
+}
+
+/**
+ * The footnote under the rest timer. The design's one line (Lock Screen and Dynamic Island) shows wherever the timer
+ * really does run there as a Live Activity; on a phone without Live Activities it says what still holds instead.
+ */
+export function restFootKey(os: string = Platform.OS, live: () => boolean = liveActivitiesSupported): 'trainingRestFootLive' | 'trainingRestFoot' {
+  return os === 'ios' && live() ? 'trainingRestFootLive' : 'trainingRestFoot';
 }
