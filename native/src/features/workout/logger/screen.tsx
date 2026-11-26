@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BarBackdrop, UnderBar, useTopBarEstimate } from '@/components/blur-bar';
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
 import { Icon } from '@/components/icon';
@@ -68,6 +69,8 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   const [focus, setFocus] = useState(false), [reorder, setReorder] = useState(false), [finishSheet, setFinishSheet] = useState(false);
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null), cardY = useRef<Record<string, number>>({});
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // The header's height: the status bar, the 44 pt bar and its 6 pt below, and the 38 pt jump strip when it shows.
+  const headerGuess = useTopBarEstimate(view.exercises.length > 1 && !reorder ? 38 : 0), headerH = useRef(headerGuess);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const ids = view.exercises.map(e => e.entry.id);
@@ -76,7 +79,8 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   const later = (fn: () => void, ms: number) => { timers.current.push(setTimeout(fn, reduceMotion ? 0 : ms)); };
   const scrollTo = (entryId: string) => later(() => {
     const y = cardY.current[entryId];
-    if (y != null) scroll.current?.scrollTo({ y: Math.max(0, y - 10), animated: !reduceMotion });
+    // The cards scroll under the see-through header, so a card lands 10 pt below it.
+    if (y != null) scroll.current?.scrollTo({ y: Math.max(0, y - headerH.current - 10), animated: !reduceMotion });
   }, 60);
   const run = (fn: () => void) => { try { fn(); } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); } };
 
@@ -181,13 +185,17 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   const addExercise = () => trainingNav.picker({ mode: 'add' });
   const name = String(session.data.name ?? '') || tr('trainingEmptyWorkout');
 
-  return <View style={{ flex: 1, backgroundColor: col.c.bg, paddingTop: insets.top }}>
-    <View testID="logger-header" style={{ paddingBottom: 6 }}>
-      <TopBar name={name} startedAt={Number(session.data.started_at)} past={past ? String(session.data.day) : undefined} col={col} onBack={leaveLogger} onFinish={finish} />
-      {!reorder && <JumpStrip view={view} openId={openId} col={col} onJump={id => { glide(); setXo(id); scrollTo(id); }} />}
-    </View>
-    <ScrollView ref={scroll} testID="logger-exercises" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
-      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 132 + insets.bottom }}>
+  // The header (`.nb.tr-nb`, with the jump strip inside it) floats over the exercises, which show faintly through it.
+  const header = <View testID="logger-header" style={{ paddingTop: insets.top, paddingBottom: 6 }}>
+    <BarBackdrop color={col.c.bg} />
+    <TopBar name={name} startedAt={Number(session.data.started_at)} past={past ? String(session.data.day) : undefined} col={col} onBack={leaveLogger} onFinish={finish} />
+    {!reorder && <JumpStrip view={view} openId={openId} col={col} onJump={id => { glide(); setXo(id); scrollTo(id); }} />}
+  </View>;
+
+  return <View style={{ flex: 1, backgroundColor: col.c.bg }}>
+    <UnderBar bar={header} gutter={0} estimate={headerGuess} onTop={h => { headerH.current = h; }}>{top =>
+    <ScrollView ref={scroll} testID="logger-exercises" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets scrollIndicatorInsets={{ top }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 132 + insets.bottom }}>
       {reorder ? <Reorder store={store} exercises={view.exercises} col={col} onDone={() => setReorder(false)} /> : <>
         {view.exercises.length > 0 ? <StatusCard view={view} col={col} onFocus={() => setFocus(true)} />
           : <View style={{ marginTop: 12, borderRadius: 20, padding: 16, backgroundColor: col.k.cardBg, boxShadow: col.k.cardEdge }}>
@@ -221,7 +229,8 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
           </View> : <Button label={tr('trainingDiscardWorkout')} full variant="destructive" icon="trash" onPress={discard} />}
         </View>
       </>}
-    </ScrollView>
+    </ScrollView>}
+    </UnderBar>
     {!past && !focus && <RestBar store={store} sessionId={session.id} name={exName(store, session.id)} bottom={Math.max(12, insets.bottom - 8)} col={col}
       onExpand={() => trainingNav.rest(store.timer()?.entryId)} />}
     {focus && <FocusMode store={store} view={view} sessionId={session.id} startedAt={Number(session.data.started_at)} col={col} plates={plates}

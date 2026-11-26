@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
-import { Image, Linking, TextInput, View } from 'react-native';
+import { Image, Linking, Platform, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ProgressBar, SegmentedControl, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
@@ -28,6 +28,9 @@ import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
 import { Cl, Gap, H, Hero, ListRow, Panel, PickRow, RowStepper, SetPage, TimeStepper, useOptionalAuth } from './ui';
 import { backupWhen } from './data-actions';
+import { rateInsight } from './rate';
+import { switchLock } from '@/features/privacy-lock/turn-on';
+import { useLockAvailable } from '@/features/privacy-lock/cover';
 
 const KG = 2.20462;
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h} h${m ? ` ${m} m` : ''}`; };
@@ -324,14 +327,17 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
 /** `ai`: the meal estimate and workout summary controls, only passed while those features are switched on. */
 export function PrivacyPage({ crash, analytics, ai }: { crash?: ReactNode; analytics?: ReactNode; ai?: ReactNode }) {
   const [p, set] = useSettingsPrefs();
+  // A phone without Face ID or Touch ID set up can't lock, so its switch reads off (the web keeps the choice as it is).
+  const canLock = useLockAvailable() !== false || Platform.OS === 'web', lockOn = p.priv.lock && canLock;
+  const toggleLock = (v: boolean) => { void switchLock(v, on => set('priv.lock', on)).then(say => { if (say) showToast(st(say), { color: 'warning' }); }); };
   const after = [{ v: '0', l: st('settingsImmediately') }, { v: '1', l: st('settingsAfter1') }, { v: '5', l: st('settingsAfter5') }, { v: '15', l: st('settingsAfter15') }];
   const repo = useAuth().repository;
   let lastKg: number | null = null;
   try { lastKg = repo ? lastWeight(repo.list('weigh_ins')) : null; } catch { lastKg = null; }
   return <SetPage back={st('settings')} title={st('settingsPrivacyTitle')} testID="settings-privacy">
     <List>
-      <ListRow icon="faceid" color="success" title={st('settingsFaceIdLock')} sub={st('settingsFaceIdLockSub')} toggle={p.priv.lock} onToggle={v => set('priv.lock', v)} />
-      {p.priv.lock ? <PickRow title={st('settingsRequireFaceId')} value={p.priv.after} options={after} onPick={v => set('priv.after', v)} /> : null}
+      <ListRow icon="faceid" color="success" title={st('settingsFaceIdLock')} sub={st('settingsFaceIdLockSub')} toggle={lockOn} onToggle={toggleLock} />
+      {lockOn ? <PickRow title={st('settingsRequireFaceId')} value={p.priv.after} options={after} onPick={v => set('priv.after', v)} /> : null}
       <ListRow icon="blur" color="recovery" title={st('settingsBlur')} sub={st('settingsBlurSub')} toggle={p.priv.blur}
         onToggle={v => { set('priv.blur', v); showToast(v ? st('settingsBlurOnToast') : st('settingsBlurOffToast')); }} />
       <ListRow icon="eyeoff" color="accent-2" title={st('settingsHideNumbers')} sub={st('settingsHideNumbersSub')} toggle={p.priv.hide} onToggle={v => set('priv.hide', v)} />
@@ -516,6 +522,7 @@ export function AboutPage() {
     <Gap />
     <List>
       <ListRow icon="gift" color="accent-2" title={st('settingsWhatsNew')} onPress={() => router.push('/settings/whats-new')} />
+      <ListRow icon="star" color="warning" title={st('settingsRateInsight')} chevron={false} testID="settings-rate" onPress={() => { void rateInsight(); }} />
       <ListRow icon="chat" color="training" title={st('settingsSendFeedback')} onPress={() => router.push('/settings/feedback')} />
     </List>
     <Gap />

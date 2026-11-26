@@ -1614,6 +1614,12 @@ export const en = {
   settingsPhotoFailed: "That photo couldn't be saved. Try again.",
   // FC settings final polish
   settingsPcWorkoutsPlanSub: 'Sets, reps, weights and your {plan} plan.', settingsPcFoodNSub: 'Meals, water and {n} saved meals.',
+  // NB privacy lock, app switcher blur and Rate Insight
+  privacyLockTitle: 'Insight is locked', privacyLockBody: 'Unlock with Face ID to see your training, food and sleep.',
+  privacyLockUnlock: 'Unlock', privacyLockReason: 'Unlock Insight', privacyLockTurnOnReason: 'Turn on Face ID lock',
+  privacyLockFailed: "Face ID didn't go through. Tap Unlock to try again.", privacyCoverLabel: 'Insight is hidden while you switch apps',
+  settingsFaceIdUnavailable: "Face ID isn't set up on this iPhone. Set it up in iOS Settings first.",
+  settingsFaceIdNotConfirmed: "Face ID didn't confirm, so the lock stays off.",
 } as const;
 export type MessageKey = keyof typeof en;
 /** Android has no Apple Health in v1 (Health Connect comes in a later update), so copy that names it reads differently there. */

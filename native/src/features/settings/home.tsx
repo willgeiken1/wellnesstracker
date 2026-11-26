@@ -1,3 +1,4 @@
+import { UnderBar } from '@/components/blur-bar';
 import { useId, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -99,9 +100,9 @@ export function SettingsHome() {
   const line2 = who.auth.session ? st(syncs ? 'settingsSyncedNow' : 'settingsSyncOff') : who.name ? who.detail : '';
   const leave = () => router.canGoBack() ? router.back() : router.replace('/');
   return <View testID="settings-home" style={{ flex: 1, backgroundColor: k.c.bg }}>
-    <View style={{ paddingHorizontal: 16, zIndex: 5 }}><NavBar testID="settings" back={st('settingsHomeBack')} onBack={leave} title={scrolled ? st('settings') : ''} /></View>
-    <ScrollView testID="screen-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" scrollEventThrottle={16}
-      onScroll={e => setScrolled(e.nativeEvent.contentOffset.y > 46)} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 + insets.bottom }}>
+    <UnderBar bar={<NavBar testID="settings" back={st('settingsHomeBack')} onBack={leave} title={scrolled ? st('settings') : ''} />}>{top =>
+    <ScrollView testID="screen-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" scrollEventThrottle={16} scrollIndicatorInsets={{ top }}
+      onScroll={e => setScrolled(e.nativeEvent.contentOffset.y > 46)} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 48 + insets.bottom }}>
       <StackGapContext.Provider value={0}><SurfaceContext.Provider value="page">
         <LargeTitle display>{st('settings')}</LargeTitle>
         <View style={{ marginBottom: 16 }}>
@@ -137,6 +138,7 @@ export function SettingsHome() {
           <KitText weight={500} size={12.5} color="ghost" style={{ textAlign: 'center', marginTop: 24 }}>{`Insight ${APP_VERSION}`}</KitText>
         </>}
       </SurfaceContext.Provider></StackGapContext.Provider>
-    </ScrollView>
+    </ScrollView>}
+    </UnderBar>
   </View>;
 }

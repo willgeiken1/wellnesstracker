@@ -1,3 +1,4 @@
+import { BarBackdrop } from '@/components/blur-bar';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Linking, Platform, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, RadialGradient, Stop } from 'react-native-svg';
@@ -76,7 +77,8 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
       {!live && (web || found || phase === 'busy') ? <Package code={code} /> : null}
       <Frame done={found} scanning={phase === 'looking'} />
       <View style={{ position: 'absolute', top: 302, left: 0, right: 0, alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: k.tint(k.c.bg, 0.72) }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, overflow: 'hidden' }}>
+          <BarBackdrop color={k.c.bg} amount={0.72} blur={12} saturate={1} />
           {found ? <Icon name="check" size={16} color={k.c.success} /> : null}
           <KitText weight={600} size={13.5} color={found ? 'success' : 'text'} accessibilityLiveRegion="polite">{hint}</KitText>
         </View>
@@ -89,11 +91,13 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
       <View style={{ position: 'absolute', left: 16, right: 16, bottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={t(torch ? 'barcodeTorchOff' : 'barcodeTorchOn')} accessibilityState={{ selected: torch }}
           disabled={!live} onPress={() => setTorch(!torch)}
-          style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: torch ? k.c.text : k.tint(k.c['surface-2'], 0.8) }}>
+          style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: torch ? k.c.text : undefined }}>
+          {torch ? null : <BarBackdrop color={k.c['surface-2']} amount={0.8} blur={12} saturate={1} />}
           <Icon name="fd-torch" size={20} color={torch ? k.c.bg : k.c.text} />
         </Tappable>
         <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={t('foodTypeNumber')} onPress={() => setTyping(true)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 16, borderRadius: 999, backgroundColor: k.tint(k.c['surface-2'], 0.8) }}>
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 16, borderRadius: 999, overflow: 'hidden' }}>
+          <BarBackdrop color={k.c['surface-2']} amount={0.8} blur={12} saturate={1} />
           <Icon name="fd-keypad" size={18} color={k.c.text} />
           <KitText weight={600} size={14}>{t('foodTypeNumber')}</KitText>
         </Tappable>

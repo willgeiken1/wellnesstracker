@@ -4,6 +4,8 @@ const safePlugins = new Set([
   'expo-router', './plugins/withStripLocalNetworkingRelease', 'expo-splash-screen',
   'expo-build-properties', 'expo-dev-client', './plugins/withDevSchemeDebugOnly',
   'expo-camera', 'expo-font', 'expo-sqlite', 'expo-secure-store', 'expo-sharing', 'expo-status-bar',
+  // Face ID lock: only the Face ID usage line, no entitlement, so the Personal Team build keeps it.
+  'expo-local-authentication',
 ]);
 const appIcons = require('./plugins/app-icons');
 /** The app icon picker (Settings, Appearance): Lit Peaks in the default palette is the primary, every other style,

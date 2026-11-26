@@ -1,3 +1,4 @@
+import { UnderBar } from '@/components/blur-bar';
 import { useMemo, useState } from 'react';
 import { ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -22,8 +23,9 @@ import { useRoutines, type RoutinesStore } from './store';
 function Page({ children, bar, testID }: { children: React.ReactNode; bar: React.ReactNode; testID?: string }) {
   const k = useKit(), insets = useSafeAreaInsets();
   return <View testID={testID} style={{ flex: 1, backgroundColor: k.c.bg }}>
-    <View style={{ paddingHorizontal: 16 }}>{bar}</View>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom }}>{children}</ScrollView>
+    <UnderBar bar={bar}>{top =>
+      <ScrollView style={{ flex: 1 }} scrollIndicatorInsets={{ top }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 40 + insets.bottom }}>{children}</ScrollView>}
+    </UnderBar>
   </View>;
 }
 /** The big title and line under it (`.rt-big`, `.rt-bsub`). */

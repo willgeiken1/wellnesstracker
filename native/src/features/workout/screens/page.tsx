@@ -1,3 +1,4 @@
+import { UnderBar } from '@/components/blur-bar';
 import type { ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,11 +13,12 @@ import { tr } from '../tr';
 export function Page({ nav, children, testID }: { nav: ReactNode; children: ReactNode; testID?: string }) {
   const k = useKit(), insets = useSafeAreaInsets();
   return <View style={{ flex: 1, backgroundColor: k.c.bg }}>
-    <View style={{ paddingHorizontal: 16 }}>{nav}</View>
-    <ScrollView testID={testID} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets
-      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 28, gap: KIT.gap }}>
-      <StackGapContext.Provider value={KIT.gap}>{children}</StackGapContext.Provider>
-    </ScrollView>
+    <UnderBar bar={nav}>{top =>
+      <ScrollView testID={testID} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets scrollIndicatorInsets={{ top }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top + 4, paddingBottom: insets.bottom + 28, gap: KIT.gap }}>
+        <StackGapContext.Provider value={KIT.gap}>{children}</StackGapContext.Provider>
+      </ScrollView>}
+    </UnderBar>
     <ShellToast bottom={Math.max(0, insets.bottom - 8)} />
   </View>;
 }
