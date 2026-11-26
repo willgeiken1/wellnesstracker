@@ -34,7 +34,7 @@ function Info({ icon, color, title, sub, value, first }: { icon: IconName; color
 /** Where Send feedback goes: the support address on the public support page. */
 const FEEDBACK_EMAIL = 'insight.wellnessos@gmail.com';
 const Ext = () => { const k = useKit(); return <View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>; };
-const openRange = () => router.push({ pathname: '/settings/[section]', params: { section: 'delete-range' } });
+const openRange = () => router.push('/settings/delete-range');
 
 /* ---------- Privacy center ---------- */
 export function PrivacyCenterPage() {

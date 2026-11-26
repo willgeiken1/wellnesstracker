@@ -7,7 +7,7 @@ import { Profile } from '@/features/onboarding/profile';
 import { Group, NavRow, QuietCard, ToggleRow } from '@/features/settings/parts';
 import { LicenseNotice, Licenses, noticeTitle } from '@/features/settings/licenses/screen';
 import { AboutPage, AccountPage, ConnectionsPage, DataPage, DiagnosticsList, GoalsPage, PrivacyPage, RemindersPage, UnitsPage, WorkoutPage } from '@/features/settings/pages';
-import { DeleteAccountPage, DeleteRangePage, FeedbackPage, PrivacyCenterPage, WhatsNewPage } from '@/features/settings/more-pages';
+import { DeleteAccountPage, PrivacyCenterPage } from '@/features/settings/more-pages';
 import { SetPage, useOptionalAuth } from '@/features/settings/ui';
 import { useDataActions } from '@/features/settings/data-actions';
 import { t } from '@/i18n/en';
@@ -58,9 +58,6 @@ export default function SettingsSection() {
     case 'about': return <AboutPage />;
     case 'privacy-center': return <PrivacyCenterPage />;
     case 'delete-account': return <DeleteAccountPage />;
-    case 'delete-range': return <DeleteRangePage />;
-    case 'whats-new': return <WhatsNewPage />;
-    case 'feedback': return <FeedbackPage />;
     case 'licenses': {
       const title = notice ? noticeTitle(notice) : t('licenses');
       return <SetPage back={notice ? t('licenses') : t('settingsAboutTitle')} title={title}>
