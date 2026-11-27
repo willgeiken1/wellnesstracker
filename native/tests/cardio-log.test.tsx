@@ -6,6 +6,7 @@ import { CardioStore } from '../src/features/cardio/store';
 import { CardioLogSheet } from '../src/features/workout/sheets/cardio';
 import { showToast } from '../src/features/shell/toast';
 import { memoryRepository } from './workout-repository';
+import { DEFAULT_PREFS, SETTINGS_PREFS_KEY, withPref } from '../src/features/settings/prefs';
 
 let mockRepository: ReturnType<typeof memoryRepository>;
 jest.mock('../src/auth/provider', () => ({ useAuth: () => ({ pending: 0, syncStatus: 'idle', demo: false, repository: mockRepository }) }));
@@ -50,6 +51,14 @@ describe('Log cardio sheet', () => {
     expect(mockRepository.localGet(`cardio.effort.${rows[0].id}`)).toBe('moderate');
     expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/^Run saved/), expect.anything());
     expect(router.back).toHaveBeenCalled();
+  });
+  test('takes the distance in kilometres when Settings says km', async () => {
+    mockRepository.localSave(SETTINGS_PREFS_KEY, withPref(DEFAULT_PREFS, 'units.distance', 'km'));
+    await render(<CardioLogSheet at={at} />, { wrapper });
+    expect(screen.getByRole('button', { name: /^More: Distance in kilometres/ })).toBeTruthy();
+    expect(screen.queryByText('mi')).toBeNull();
+    await fireEvent.press(screen.getByText('Save'));
+    expect(mockRepository.list('cardio_sessions')[0].data).toMatchObject({ distance_m: 5000 });
   });
   test('the steppers change the minutes, and stairs save with no distance', async () => {
     await render(<CardioLogSheet at={at} />, { wrapper });

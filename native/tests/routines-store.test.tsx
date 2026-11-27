@@ -1,5 +1,5 @@
 import {
-  MAX_ON_HAND, addDays, bestRun, clock, convert, demoState, emptyState, hist, markOf, nowOf, peptides, rById, rItems, stats, todayItems, weekData, weekdayOf,
+  MAX_ON_HAND, addDays, bestRun, daysLeft, supplies, clock, convert, demoState, emptyState, hist, markOf, nowOf, peptides, rById, rItems, stats, todayItems, weekData, weekdayOf,
   type Item, type RoutinesState,
 } from '../src/features/routines/model';
 import { createRoutinesStore, type NewItem } from '../src/features/routines/store';
@@ -76,6 +76,14 @@ describe('routines store', () => {
     expect(store.read().items.some(i => i.id === item.id)).toBe(true);
     undo();
     expect(store.read().items.some(i => i.id === item.id)).toBe(false);
+  });
+
+  it('counts a powder in grams by its dose: 300 g at 5 g a day lasts 60 days', () => {
+    const store = createRoutinesStore(memory(() => demoState()).io);
+    const { item } = store.addItem(draft({ name: 'Synthetic powder', amt: 5, unit: 'g', hand: '300' }));
+    expect(item).toMatchObject({ left: 300, perDay: 5 });
+    expect(daysLeft(item)).toBe(60);
+    expect(supplies(store.read()).find(x => x.i.id === item.id)!.days).toBe(60);
   });
 
   it('adds a check item at a time of its own, with no amount', () => {

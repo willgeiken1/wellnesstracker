@@ -15,19 +15,22 @@ import { localDay } from '@/core/workout/rules';
 import { CardioStore, MANUAL_KINDS, type Effort, type ManualKind } from '@/features/cardio/store';
 import { useHealthWorkouts } from '@/features/cardio/use-health-workouts';
 import { showToast } from '@/features/shell/toast';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { cardioName, clockTime, dayLabel, TrainingData } from '../training-data';
 import { tr } from '../tr';
 
 const EFFORTS: readonly Effort[] = ['easy', 'light', 'moderate', 'hard', 'max'];
 const EFFORT_NAME: Record<Effort, string> = { easy: 'Easy', light: 'Light', moderate: 'Moderate', hard: 'Hard', max: 'Max' };
-const MI = 1609.344;
+const MI = 1609.344, KM = 1000;
 const OUTDOOR: Record<string, string> = { run: 'Outdoor run', walk: 'Outdoor walk', cycle: 'Outdoor cycle', hike: 'Hike', swim: 'Swim' };
 
 /** The Log cardio sheet (`cardio-log`): type, duration, distance, start time, effort, notes, and this week's Apple Health workouts. */
 export function CardioLogSheet({ at }: { at?: number }) {
   const k = useKit(), { repository } = useAuth();
   const [now] = useState(() => at ?? Date.now());
-  const [kind, setKind] = useState<ManualKind>('run'), [min, setMin] = useState(30), [mi, setMi] = useState(3);
+  // Distance is typed in the unit from Settings and kept in metres.
+  const [{ units: { distance: du } }] = useSettingsPrefs(), km = du === 'km';
+  const [kind, setKind] = useState<ManualKind>('run'), [min, setMin] = useState(30), [mi, setMi] = useState(() => km ? 5 : 3);
   const [effort, setEffort] = useState<Effort>('moderate'), [notes, setNotes] = useState(''), [saving, setSaving] = useState(false);
   const health = useHealthWorkouts();
   const imported = useMemo(() => (health ?? []).filter(w => !['strength', 'yoga', 'other'].includes(w.kind)).slice(0, 6), [health]);
@@ -36,7 +39,7 @@ export function CardioLogSheet({ at }: { at?: number }) {
     if (!repository || saving) return;
     setSaving(true);
     try {
-      new CardioStore(repository).logManual({ kind, day: localDay(new Date(now)), durationMs: min * 60_000, distanceM: hasDistance && mi > 0 ? Math.round(mi * MI) : null,
+      new CardioStore(repository).logManual({ kind, day: localDay(new Date(now)), durationMs: min * 60_000, distanceM: hasDistance && mi > 0 ? Math.round(mi * (km ? KM : MI)) : null,
         notes: notes.trim(), effort, startedAt: now });
       const data = new TrainingData(repository, Date.now());
       showToast(tr('trainingCardioSaved', { name: cardioName(kind), min: data.todayMin(), goal: data.goalMin() }), { color: 'training' });
@@ -70,8 +73,8 @@ export function CardioLogSheet({ at }: { at?: number }) {
       <SurfaceContext.Provider value="sheet-inset">
         {field(tr('trainingDuration'), tr('trainingDurationSub'), <Stepper value={min} onChange={setMin} step={5} min={5} max={360} unit="min" label={tr('trainingDurationLabel')}
           lessLabel={tr('trainingLess', { what: tr('trainingDurationLabel') })} moreLabel={tr('trainingMore', { what: tr('trainingDurationLabel') })} />, true)}
-        {hasDistance && field(tr('trainingDistance'), tr('trainingOptional'), <Stepper value={mi} onChange={setMi} step={0.1} dec={1} min={0} max={100} unit="mi" label={tr('trainingDistanceLabel')}
-          lessLabel={tr('trainingLess', { what: tr('trainingDistanceLabel') })} moreLabel={tr('trainingMore', { what: tr('trainingDistanceLabel') })} />)}
+        {hasDistance && field(tr('trainingDistance'), tr('trainingOptional'), <Stepper value={mi} onChange={setMi} step={0.1} dec={1} min={0} max={km ? 160 : 100} unit={km ? 'km' : 'mi'} label={tr(km ? 'trainingDistanceLabelKm' : 'trainingDistanceLabel')}
+          lessLabel={tr('trainingLess', { what: tr(km ? 'trainingDistanceLabelKm' : 'trainingDistanceLabel') })} moreLabel={tr('trainingMore', { what: tr(km ? 'trainingDistanceLabelKm' : 'trainingDistanceLabel') })} />)}
         {field(tr('trainingStartedRow'), tr('trainingToday'), <KitText weight={600} size={12.5} lineHeight={1.26} tracking={-0.02} numeric color="text-muted" style={{ paddingRight: 8 }}>{clockTime(now)}</KitText>)}
       </SurfaceContext.Provider>
     </View>

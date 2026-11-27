@@ -43,6 +43,8 @@ export interface RoutinesStore {
 }
 
 function onHandStep(i: Item) { return i.vial ? 1 : i.perDay ? (i.unit === 'g' ? (i.amt ?? 1) : 1) : 0; }
+/** What a day uses of a new supply, the same as a tick takes off: the dose for a powder kept in grams, otherwise one. */
+const dailyUse = (i: Pick<Item, 'unit' | 'amt'>) => i.unit === 'g' && i.amt != null && i.amt > 0 ? i.amt : 1;
 
 /** The last id handed out, so two made in the same millisecond still differ. */
 let lastId = { base: '', k: 0 };
@@ -121,7 +123,7 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
         routines: [...d.routines], h: d.time ?? first?.from ?? 9, days: null, created: nowOf(now).day, note: d.note,
         ...(d.mixed.trim() && dose ? { mixed: d.mixed.trim() } : {}),
       };
-      if (d.hand) { item.left = Math.min(MAX_ON_HAND, Number(d.hand) || 0); if (d.type === 'Peptide') item.vial = Math.max(item.left, 1); else item.perDay = 1; }
+      if (d.hand) { item.left = Math.min(MAX_ON_HAND, Number(d.hand) || 0); if (d.type === 'Peptide') item.vial = Math.max(item.left, 1); else item.perDay = dailyUse(item); }
       edit(s => { s.items.push(item); });
       return { item, undo: () => edit(s => { s.items = s.items.filter(i => i.id !== item.id); }) };
     },
