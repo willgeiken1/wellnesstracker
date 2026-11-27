@@ -141,6 +141,18 @@ describe('which tiles have a reading to draw', () => {
     expect(tileView(s, 'active', 'C', 'S', {})).toEqual({ options: {} });
     expect(tileView(s, 'active', 'A', 'S', {})).toEqual({ empty: 'detail' });
   });
+  test('an hour the source failed to read is unknown, so hour-by-hour styles say so rather than draw it as a quiet hour', () => {
+    const hours = Array.from({ length: 24 }, (_, h) => h > 16 ? 0 : 300);
+    const gap = hours.map((v, h) => h === 9 ? null : v);
+    const detail = (stepsHourly: (number | null)[]) => ({ stepsHourly, activeHourly: stepsHourly, exerciseHourly: stepsHourly, night: null, bedtimes: null, mindful: null, bodyFat: null });
+    const at = (list: (number | null)[]) => buildState(input({ health: health({ steps: series(7940), activeKcal: series(520), exerciseMinutes: series(24) }), detail: detail(list) }), DEFAULT_UNITS, () => {});
+    expect(tileView(at(hours), 'steps', 'A', 'S', {})).toEqual({ options: {} });
+    const s = at(gap);
+    expect(tileView(s, 'steps', 'A', 'S', {})).toEqual({ empty: 'detail' });
+    expect(tileView(s, 'active', 'A', 'S', {})).toEqual({ empty: 'detail' });
+    expect(tileView(s, 'exercise', 'B', 'S', {})).toEqual({ empty: 'detail' });
+    expect(tileView(s, 'active', 'C', 'S', {})).toEqual({ options: {} });
+  });
 });
 
 describe('health sources stay apart', () => {

@@ -46,12 +46,15 @@ export function reasons(input: HomeInput, ready: TileReady): Record<string, Empt
   return out;
 }
 
+const complete = (list: readonly (number | null)[] | null | undefined) => !!list && list.length >= 24 && list.every(v => typeof v === 'number' && Number.isFinite(v));
+
 export function buildState(input: HomeInput, units: StudioUnits, onAction: HomeTileState['onAction'], hide = false): HomeTileState {
   const ready = tileReady(input), d = input.detail, unknown = foodUnknown(input);
   return {
     data: buildTileData(input), ready, why: reasons(input, ready), units, onAction, hide,
     has: {
-      stepsHourly: !!d?.stepsHourly, activeHourly: !!d?.activeHourly, exerciseHourly: !!d?.exerciseHourly,
+      // An hour whose reading failed is unknown, never a quiet hour: a style that draws every hour waits for all of them.
+      stepsHourly: complete(d?.stepsHourly), activeHourly: complete(d?.activeHourly), exerciseHourly: complete(d?.exerciseHourly),
       mindfulSessions: !!d?.mindful, sleepScore: !!input.recovery?.sleepScore?.some(v => v !== null), weightGoal: !!input.weightGoalKg,
       foodKcal: !unknown.kcal, foodProtein: !unknown.protein, foodMacros: !unknown.macros,
     },
