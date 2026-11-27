@@ -130,6 +130,15 @@ describe('logger model', () => {
     expect(store.entries(session.id)).toHaveLength(2);
     expect(store.sets(squat.id)).toHaveLength(1);
   });
+  test('Undo after removing one of a superset of two puts the superset back', () => {
+    const { store, session, squat, lunge } = sample();
+    store.linkSuperset([squat.id, lunge.id]);
+    const group = store.supersetGroup(store.repo.get('entries', squat.id)!);
+    const undo = removeExercise(store, lunge.id);
+    expect(store.supersetGroup(store.repo.get('entries', squat.id)!)).toBeNull();
+    undo();
+    expect(store.entries(session.id).map(e => store.supersetGroup(e))).toEqual([group, group]);
+  });
   test('discarding removes the session, its exercises and sets', () => {
     const { store, session, squat } = sample();
     const e = loggerView(store, session).exercises[0];
@@ -157,6 +166,27 @@ describe('logger screen', () => {
     expect(set.left_reps).toBe(10);
     expect(set.right_reps).toBe(8);
     expect(Number(set.right_weight_kg)).toBeLessThan(Number(set.left_weight_kg));
+  });
+  test('an exercise can be set to log each side on its own before any set is saved, and back', async () => {
+    const { store, squat } = sample();
+    const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions');
+    const pick = (label: string) => sheet.mockImplementationOnce((o, cb) => cb(o.options.indexOf(label)));
+    try {
+      await render(<TrainingLogger />, { wrapper });
+      await act(async () => {});
+      pick('Log left and right separately');
+      await fireEvent.press(screen.getByRole('button', { name: 'Exercise options for Squat' }));
+      expect(store.isUnilateral(squat.id)).toBe(true);
+      expect(screen.getByLabelText('Squat, set 1, Right, weight in pounds')).toBeTruthy();
+      pick('Log both sides together');
+      await fireEvent.press(screen.getByRole('button', { name: 'Exercise options for Squat' }));
+      expect(store.isUnilateral(squat.id)).toBe(false);
+      // Once a set is saved the choice is fixed, so the sheet no longer offers it.
+      store.editDraft(squat.id, 0, { weight: '200', reps: '5' }); store.toggleDone(squat.id, 0);
+      sheet.mockImplementationOnce(() => {});
+      await fireEvent.press(screen.getByRole('button', { name: 'Exercise options for Squat' }));
+      expect(sheet.mock.calls.at(-1)![0].options).not.toContain('Log left and right separately');
+    } finally { sheet.mockRestore(); }
   });
   test('a change to a checked-off set is saved when the field is left', async () => {
     const { store, squat } = sample();

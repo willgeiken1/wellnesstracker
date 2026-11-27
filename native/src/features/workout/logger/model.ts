@@ -1,6 +1,7 @@
 import { exerciseFor, exerciseLibrary } from '@/core/workout/library';
 import { displayWeight, fromKg, plates, toKg, validateSet, type Unit } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
+import { WorkoutOptions } from '@/data/workout/options';
 import type { Draft, WorkoutStore } from '@/data/workout/store';
 import { loadSettingsPrefs } from '@/features/settings/prefs-model';
 import { clock, epley, muscleGroup } from '../training-data';
@@ -187,11 +188,16 @@ export function removeExercise(store: WorkoutStore, entryId: string) {
   const repo = store.repo, entry = repo.get('entries', entryId);
   if (!entry) return () => {};
   const rows = store.sets(entryId).map(r => ({ id: r.id, data: { ...r.data } })), drafts = store.drafts(entryId);
+  // A superset of two comes apart when one of them goes, so Undo puts the whole group back as it was.
+  const group = store.supersetGroup(entry);
+  const members = group ? store.entries(String(entry.data.session_id)).filter(e => store.supersetGroup(e) === group).map(e => e.id) : [];
   store.removeExercise(entryId);
   return () => repo.atomic(() => {
     repo.save('entries', { ...entry.data }, entry.id);
     for (const r of rows) repo.save('sets', r.data, r.id);
     repo.localSave(`draft:${entryId}`, drafts);
+    const options = new WorkoutOptions(repo);
+    for (const id of members) { const row = repo.get('entries', id); if (row && row.deleted_at === null) options.write(row, { superset_group: group }); }
     store.recompute();
   });
 }
