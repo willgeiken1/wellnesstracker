@@ -69,7 +69,8 @@ export interface ProgressData {
     next: { name: string; exercises: number; estMin: number; when: string } | null;
     records: LiftBest[]; streak: number;
   };
-  food: { goalKcal: number | null; eatenKcal: number | null; proteinG: number | null; proteinGoal: number | null };
+  /** `goalByDay` is each day's own calorie target, as it stood that day (same order as `days`); unset falls back to today's. */
+  food: { goalKcal: number | null; eatenKcal: number | null; proteinG: number | null; proteinGoal: number | null; goalByDay?: (number | null)[] };
 }
 
 /* ---------- numbers ---------- */
@@ -198,9 +199,10 @@ export interface WeekReport {
 /** This week's numbers: the last 7 days, today last. */
 export function weekReport(d: ProgressData): WeekReport {
   const days = daysEnding(d.today, 7), score = d.days.score.slice(-7), sleep = d.days.sleep.slice(-7), food = d.days.kcal.slice(-7, -1);
-  const goal = d.food.goalKcal, w = d.days.weight.slice(-8);
-  const loggedFood = food.filter(finite);
-  const onTarget = goal ? loggedFood.filter(k => k >= goal * 0.8 && k <= goal * 1.15).length : 0;
+  const w = d.days.weight.slice(-8), loggedFood = food.filter(finite);
+  // Each day is held to the calorie target it had then, so raising today's target doesn't rewrite the week, as the day scores don't.
+  const goals = d.food.goalByDay?.slice(-7, -1), goalOn = (i: number) => { const g = goals?.[i]; return finite(g) && g > 0 ? g : d.food.goalKcal; };
+  const onTarget = food.filter((k, i) => { const g = goalOn(i); return finite(k) && !!g && k >= g * 0.8 && k <= g * 1.15; }).length;
   const steps = d.days.steps.slice(-7, -1);
   const wa = w.find(finite), wb = w[lastIndex(w)];
   const t = d.training;

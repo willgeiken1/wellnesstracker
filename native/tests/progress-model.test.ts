@@ -5,6 +5,7 @@ import { metricView } from '../src/features/progress/metric';
 import { addPhoto, readMeasures, readPhotos, saveMeasures } from '../src/features/progress/local';
 import { fill } from '../src/features/progress/format';
 import { saveWeighIn } from '../src/features/body/model';
+import { setTargets } from '../src/features/food/model';
 import { memoryRepository } from './workout-repository';
 
 const NOW = new Date(2026, 10, 11, 12), TODAY = '2026-11-11';
@@ -69,6 +70,30 @@ describe('weekReport', () => {
   test('an empty week has nulls where there is nothing to average, not zeros', () => {
     const r = weekReport(blank());
     expect(r).toMatchObject({ avgScore: null, sleepAvg: null, kcalAvg: null, wDeltaKg: null, volPct: null, stepsAvg: null, workouts: 0, logged: 0 });
+  });
+});
+
+describe('weekReport against dated targets', () => {
+  test("each day is held to the calorie target it had then, so raising today's target doesn't rewrite the week", () => {
+    const d = blank();
+    d.food.goalKcal = 2600;
+    d.food.goalByDay = d.days.kcal.map(() => 2000);
+    for (let k = 1; k <= 6; k++) d.days.kcal[at(d, k)] = 2000;
+    expect(weekReport(d).onTarget).toBe(6);
+    // Without dated targets the week falls back to today's.
+    delete d.food.goalByDay;
+    expect(weekReport(d).onTarget).toBe(0);
+  });
+  test('buildProgress keeps each logged day\'s own target', () => {
+    const repo = memoryRepository();
+    repo.localSave('targetBasis', 'manual');
+    setTargets(repo as never, '2026-11-01', { energy_kj: 2000 * 4.184, protein_g: 150, carbs_g: 200, fat_g: 70 });
+    setTargets(repo as never, TODAY, { energy_kj: 2600 * 4.184, protein_g: 150, carbs_g: 200, fat_g: 70 });
+    for (let k = 1; k <= 6; k++) repo.save('food_entries', { name: 'Synthetic meal', day: addDays(TODAY, -k), energy_kj: 2000 * 4.184 });
+    const d = buildProgress({ store: new WorkoutStore(repo), now: NOW, demo: false, health: null, recovery: null, ring: null });
+    expect(d.food.goalKcal).toBe(2600);
+    expect(weekReport(d).logged).toBe(6);
+    expect(weekReport(d).onTarget).toBe(6);
   });
 });
 
