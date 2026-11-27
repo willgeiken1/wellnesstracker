@@ -135,7 +135,7 @@ function LiftChart({ hist, mode, unit }: { hist: LiftSession[]; mode: Mode; unit
         {vol ? hist.map((x, i) => {
           let y = Y(0);
           const lastCol = i === n - 1, cx = X(i);
-          const blocks = x.sets.map((s, j) => { const bh = (H - 12) * (s.w * s.r) / sp; y -= bh;
+          const blocks = x.sets.map((s, j) => { const bh = (H - 12) * s.v / sp; y -= bh;
             return <Rect key={j} x={cx - bw / 2} y={y + 2} width={bw} height={Math.max(1, bh - 2)} rx={3} fill={lastCol ? c : mix(c, k.c['surface-2'], 0.42)} />; });
           return <G key={x.id}>{blocks}{lastCol ? <SvgText x={cx} y={y - 4} textAnchor="middle" fill={k.c.text} {...bold}>{fmt(top[i])}</SvgText> : null}</G>;
         }) : <>

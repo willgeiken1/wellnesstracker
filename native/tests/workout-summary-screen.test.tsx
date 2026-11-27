@@ -64,6 +64,8 @@ describe('session result', () => {
     expect(res.exercises[0].volume).toBe(side * 2);
     expect(res.volume).toBe(side * 2);
     expect(exerciseHistory(data, 'Bulgarian Split Squat').at(-1)!.volume).toBe(side * 2);
+    // The Volume chart stacks one block per set, so each block carries both sides too, and the top set keeps the weaker side.
+    expect(exerciseHistory(data, 'Bulgarian Split Squat').at(-1)!.sets).toEqual([{ w: data.kg(20), r: 10, v: side * 2 }]);
   });
   test('a first time doing a lift is not a record, and an unfinished workout has no result', () => {
     const { store } = sample();
