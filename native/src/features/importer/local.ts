@@ -116,6 +116,18 @@ export function commitPendingAccountImport(guest: Repository, account: Repositor
     return added;
   });
 }
+/** Two plans waiting for the account as one: a row both hold keeps the first file's copy, as the guest's merge did. */
+function joinPlans(first: ImportPlan, second: ImportPlan): ImportPlan {
+  const held = new Set(first.rows.map((r) => r.table + ":" + r.id));
+  return {
+    ...first,
+    rows: [...first.rows, ...second.rows.filter((r) => !held.has(r.table + ":" + r.id))],
+    issues: [...first.issues, ...second.issues],
+    unmapped: [...new Set([...first.unmapped, ...second.unmapped])],
+    legacy: { ...second.legacy, ...first.legacy },
+    ...(first.home !== undefined || second.home !== undefined ? { home: first.home ?? second.home } : {}),
+  };
+}
 export function commitImport(
   repo: Repository,
   preview: ImportPreview,
@@ -132,9 +144,15 @@ export function commitImport(
   let added = 0;
   repo.atomic(() => {
     if (repo.owner === "guest") {
-      repo.localSave("pwaPendingAccountPlan", preview.plan);
+      // A second file merged in while signed out joins the first one waiting for the account, as it joined the
+      // guest's rows; a Replace leaves only its own file waiting.
+      const prior = preview.mode === "merge" ? repo.localGet<ImportPlan>("pwaPendingAccountPlan") : null;
+      repo.localSave("pwaPendingAccountPlan", prior ? joinPlans(prior, preview.plan) : preview.plan);
       // A plan from this app's own backup holds tables a web app import can't, so the account import must know it.
-      repo.localSave("pwaPendingAccountNative", preview.native === true);
+      repo.localSave(
+        "pwaPendingAccountNative",
+        preview.native === true || (!!prior && repo.localGet<boolean>("pwaPendingAccountNative") === true),
+      );
     }
     if (preview.mode === "replace")
       for (const table of syncedTables.filter(
@@ -353,10 +371,18 @@ export function restoreNativeLocal<T>(
     }
     // A Replace can write over photo addresses; their files go too, and one that won't delete keeps its address.
     photos.settle(repo, before);
-    if (repo.owner === "guest")
-      repo.localSave(
-        "pwaPendingAccountLocal",
-        Object.fromEntries(Object.entries(backup.local).filter(([key]) => !skipped(key) && !PHOTO_ADDRESS_KEYS.includes(key))),
-      );
+    if (repo.owner === "guest") {
+      const kept = Object.entries(backup.local).filter(([key]) => !skipped(key) && !PHOTO_ADDRESS_KEYS.includes(key));
+      // A merge while signed out adds to what an earlier file left waiting, record by record as on the phone; a
+      // Replace leaves only this file's details waiting.
+      const prior = mode === "merge" ? repo.localGet<unknown>("pwaPendingAccountLocal") : null;
+      const waiting: Record<string, unknown> = isObj(prior) ? { ...prior } : {};
+      for (const [key, value] of kept) {
+        const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
+        if (!isObj(prior) || fresh || !Object.hasOwn(waiting, key)) waiting[key] = value;
+        else waiting[key] = mergeHistory(key, waiting[key], value) ?? waiting[key];
+      }
+      repo.localSave("pwaPendingAccountLocal", waiting);
+    }
   });
 }

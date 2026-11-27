@@ -11,6 +11,11 @@ import { DEVICE_A } from '../../fixtures/sync';
 /** Photo files are kept in their own test; this restore holds no photo addresses. */
 const noPhotos = { names: () => null, settle: () => {} };
 const ids = { custom: '30000000-0000-4000-8000-000000000011', plan: '30000000-0000-4000-8000-000000000012', pause: '30000000-0000-4000-8000-000000000013', session: '30000000-0000-4000-8000-000000000014' };
+/** A backup made on another phone, signed out, holding the rows that save writes. */
+async function backupOf(save: (r: Repository) => void, local: Record<string, unknown>) {
+  const { sqlite, repo } = await setup();
+  try { save(repo); return { ...nativeBackup(JSON.parse(createPhoneBackup(repo)))!, local }; } finally { sqlite.close(); }
+}
 async function setup() {
   const sqlite = new DatabaseSync(':memory:');
   const db = drizzle(sqliteClient(sqlite));
@@ -143,5 +148,48 @@ test('a merge keeps one copy of a routine the phone shows that the file still ha
     const merged = repo.localGet<{ routines: { id: string }[]; hidden: { id: string }[] }>('routines')!;
     expect(merged.routines.map(r => r.id)).toEqual(['r1', 'r3']);
     expect(merged.hidden.map(r => r.id)).toEqual(['r2', 'r4']);
+  } finally { sqlite.close(); }
+});
+
+test('two backups merged in while signed out both follow the first account, rows and histories alike', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000003', DEVICE_A, () => '30000000-0000-4000-8000-000000000888');
+    const drink = (id: string, oz: number) => ({ id, c: 'glass', name: 'Glass', oz, icon: 'glass', at: 1 });
+    const restore = async (rows: (r: Repository) => void, local: Record<string, unknown>) => {
+      const backup = await backupOf(rows, local);
+      commitImport(guest, previewImport(guest, nativeBackupPlan(backup), 'merge', true), true);
+      restoreNativeLocal(guest, backup, new Set(), 'merge', noPhotos);
+    };
+    await restore((r) => r.save('custom_exercises', { name: 'Fixture press' }, ids.custom),
+      { foodWater: { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-09': [drink('w1', 16)] } }, timer: { seconds: 90 } });
+    await restore((r) => r.save('plans', { mode: 'fixed', days_per_week: 4 }, ids.plan),
+      { foodWater: { v: 1, unit: 'ml', goal: 3, containers: [], log: { '2026-01-10': [drink('w2', 8)] } }, timer: { seconds: 30 } });
+    expect(commitPendingAccountImport(guest, account)).toBe(2);
+    expect(account.get('custom_exercises', ids.custom)?.data.name).toBe('Fixture press');
+    expect(account.get('plans', ids.plan)?.data.days_per_week).toBe(4);
+    // The first file's settings stay, as they did on the phone, and both days of water come.
+    expect(account.localGet('foodWater')).toEqual({ v: 1, unit: 'oz', goal: 2, containers: [],
+      log: { '2026-01-09': [drink('w1', 16)], '2026-01-10': [drink('w2', 8)] } });
+    expect(account.localGet('timer')).toEqual({ seconds: 90 });
+  } finally { sqlite.close(); }
+});
+
+test('a Replace while signed out leaves only its own file waiting for the account', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000004', DEVICE_A, () => '30000000-0000-4000-8000-000000000889');
+    const first = await backupOf((r) => r.save('custom_exercises', { name: 'Fixture press' }, ids.custom), { progressNeck: [{ day: '2026-01-09', cm: 38 }] });
+    commitImport(guest, previewImport(guest, nativeBackupPlan(first), 'merge', true), true);
+    restoreNativeLocal(guest, first, new Set(), 'merge', noPhotos);
+    const second = await backupOf((r) => r.save('plans', { mode: 'fixed', days_per_week: 4 }, ids.plan), { progressNeck: [{ day: '2026-01-10', cm: 37 }] });
+    commitImport(guest, previewImport(guest, nativeBackupPlan(second), 'replace', true), true, true);
+    restoreNativeLocal(guest, second, new Set(), 'replace', noPhotos);
+    expect(commitPendingAccountImport(guest, account)).toBe(1);
+    expect(account.get('custom_exercises', ids.custom)).toBeUndefined();
+    expect(account.get('plans', ids.plan)?.data.days_per_week).toBe(4);
+    expect(account.localGet('progressNeck')).toEqual([{ day: '2026-01-10', cm: 37 }]);
   } finally { sqlite.close(); }
 });
